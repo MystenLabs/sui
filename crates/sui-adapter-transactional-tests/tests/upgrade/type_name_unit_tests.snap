@@ -22,14 +22,14 @@ task 4, lines 29-173:
 //# upgrade --package A1 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 57760000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 57896800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 5, line 175:
 //# run A2::m::cases --args @A0 @A1
 mutated: object(0,1)
-gas summary: computation_cost: 1920000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1240000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 6, line 177:
 //# run A2::m::generic_cases --args @A0 @A1
 mutated: object(0,1)
-gas summary: computation_cost: 123600000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 42600000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

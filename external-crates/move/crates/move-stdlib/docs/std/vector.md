@@ -19,6 +19,10 @@ vectors are growable. This module has many native functions.
 -  [Function `singleton`](#std_vector_singleton)
 -  [Function `reverse`](#std_vector_reverse)
 -  [Function `append`](#std_vector_append)
+-  [Function `truncate`](#std_vector_truncate)
+-  [Function `drain`](#std_vector_drain)
+-  [Function `slice`](#std_vector_slice)
+-  [Function `splice`](#std_vector_splice)
 -  [Function `is_empty`](#std_vector_is_empty)
 -  [Function `contains`](#std_vector_contains)
 -  [Function `index_of`](#std_vector_index_of)
@@ -341,8 +345,114 @@ Pushes all of the elements of the <code>other</code> vector into the <code>lhs</
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_append">append</a>&lt;Element&gt;(lhs: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, other: <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;) {
-    other.<a href="../std/vector.md#std_vector_do">do</a>!(|e| lhs.<a href="../std/vector.md#std_vector_push_back">push_back</a>(e));
+    <b>let</b> len = lhs.<a href="../std/vector.md#std_vector_length">length</a>();
+    lhs.<a href="../std/vector.md#std_vector_splice">splice</a>(len, len, other).<a href="../std/vector.md#std_vector_destroy_empty">destroy_empty</a>();
 }
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_truncate"></a>
+
+## Function `truncate`
+
+Retains the first <code>n</code> elements of <code>v</code>. If <code>n &gt;= v.<a href="../std/vector.md#std_vector_length">length</a>()</code> the vector is left
+unchanged.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_truncate">truncate</a>&lt;T: drop&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;T&gt;, n: <a href="../std/u64.md#std_u64">u64</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/vector.md#std_vector_truncate">truncate</a>&lt;T: drop&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;T&gt;, n: <a href="../std/u64.md#std_u64">u64</a>);
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_drain"></a>
+
+## Function `drain`
+
+Removes <code>v[i..j)</code> and returns it, preserving the order of the remaining elements.
+Aborts if <code>i &gt; j</code> or <code>j &gt; v.<a href="../std/vector.md#std_vector_length">length</a>()</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_drain">drain</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, i: <a href="../std/u64.md#std_u64">u64</a>, j: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_drain">drain</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, i: <a href="../std/u64.md#std_u64">u64</a>, j: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt; {
+    v.<a href="../std/vector.md#std_vector_splice">splice</a>(i, j, <a href="../std/vector.md#std_vector">vector</a>[])
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_slice"></a>
+
+## Function `slice`
+
+Copies <code>v[i..j)</code> into a new vector; <code>v</code> is untouched.
+Aborts if <code>i &gt; j</code> or <code>j &gt; v.<a href="../std/vector.md#std_vector_length">length</a>()</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_slice">slice</a>&lt;Element: <b>copy</b>&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, i: <a href="../std/u64.md#std_u64">u64</a>, j: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/vector.md#std_vector_slice">slice</a>&lt;Element: <b>copy</b>&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, i: <a href="../std/u64.md#std_u64">u64</a>, j: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;;
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_splice"></a>
+
+## Function `splice`
+
+The general form of the bulk operations: removes <code>v[i..j)</code>, inserts all elements of
+<code>other</code> at position <code>i</code>, and returns the removed elements. The vector grows or shrinks
+by <code>other.<a href="../std/vector.md#std_vector_length">length</a>() - (j - i)</code>.
+Aborts if <code>i &gt; j</code> or <code>j &gt; v.<a href="../std/vector.md#std_vector_length">length</a>()</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_splice">splice</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, i: <a href="../std/u64.md#std_u64">u64</a>, j: <a href="../std/u64.md#std_u64">u64</a>, other: <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/vector.md#std_vector_splice">splice</a>&lt;Element&gt;(
+    v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;,
+    i: <a href="../std/u64.md#std_u64">u64</a>,
+    j: <a href="../std/u64.md#std_u64">u64</a>,
+    other: <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;,
+): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;;
 </code></pre>
 
 
@@ -456,15 +566,13 @@ Aborts if <code>i</code> is out of bounds.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_remove">remove</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, <b>mut</b> i: <a href="../std/u64.md#std_u64">u64</a>): Element {
-    <b>let</b> <b>mut</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_remove">remove</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, i: <a href="../std/u64.md#std_u64">u64</a>): Element {
     // i out of bounds; <b>abort</b>
-    <b>if</b> (i &gt;= len) <b>abort</b> <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>;
-    len = len - 1;
-    <b>while</b> (i &lt; len) {
-        v.<a href="../std/vector.md#std_vector_swap">swap</a>(i, { i = i + 1; i });
-    };
-    v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>()
+    <b>if</b> (i &gt;= v.<a href="../std/vector.md#std_vector_length">length</a>()) <b>abort</b> <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>;
+    <b>let</b> <b>mut</b> removed = v.<a href="../std/vector.md#std_vector_drain">drain</a>(i, i + 1);
+    <b>let</b> e = removed.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>();
+    removed.<a href="../std/vector.md#std_vector_destroy_empty">destroy_empty</a>();
+    e
 }
 </code></pre>
 
@@ -492,15 +600,10 @@ Aborts if <code>i &gt; v.<a href="../std/vector.md#std_vector_length">length</a>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_insert">insert</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: Element, <b>mut</b> i: <a href="../std/u64.md#std_u64">u64</a>) {
-    <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_insert">insert</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: Element, i: <a href="../std/u64.md#std_u64">u64</a>) {
     // i too big <b>abort</b>
-    <b>if</b> (i &gt; len) <b>abort</b> <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>;
-    v.<a href="../std/vector.md#std_vector_push_back">push_back</a>(e);
-    <b>while</b> (i &lt; len) {
-        v.<a href="../std/vector.md#std_vector_swap">swap</a>(i, len);
-        i = i + 1
-    }
+    <b>if</b> (i &gt; v.<a href="../std/vector.md#std_vector_length">length</a>()) <b>abort</b> <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>;
+    v.<a href="../std/vector.md#std_vector_splice">splice</a>(i, i, <a href="../std/vector.md#std_vector">vector</a>[e]).<a href="../std/vector.md#std_vector_destroy_empty">destroy_empty</a>();
 }
 </code></pre>
 
@@ -558,9 +661,8 @@ If <code>n &gt; <a href="../std/vector.md#std_vector_length">length</a></code>, 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_skip">skip</a>&lt;T: drop&gt;(<b>mut</b> v: <a href="../std/vector.md#std_vector">vector</a>&lt;T&gt;, n: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;T&gt; {
     <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
     <b>if</b> (n &gt;= len) <b>return</b> <a href="../std/vector.md#std_vector">vector</a>[];
-    <b>let</b> <b>mut</b> r = <a href="../std/vector.md#std_vector_tabulate">tabulate</a>!(len - n, |_| v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>());
-    r.<a href="../std/vector.md#std_vector_reverse">reverse</a>();
-    r
+    <b>let</b> _dropped = v.<a href="../std/vector.md#std_vector_drain">drain</a>(0, n);
+    v
 }
 </code></pre>
 
@@ -587,9 +689,8 @@ Aborts if <code>n</code> is greater than the length of <code>v</code>.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_take">take</a>&lt;T: drop&gt;(<b>mut</b> v: <a href="../std/vector.md#std_vector">vector</a>&lt;T&gt;, n: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;T&gt; {
     <b>assert</b>!(n &lt;= v.<a href="../std/vector.md#std_vector_length">length</a>());
-    <b>if</b> (n == v.<a href="../std/vector.md#std_vector_length">length</a>()) <b>return</b> v;
-    v.<a href="../std/vector.md#std_vector_reverse">reverse</a>();
-    <a href="../std/vector.md#std_vector_tabulate">tabulate</a>!(n, |_| v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>())
+    v.<a href="../std/vector.md#std_vector_truncate">truncate</a>(n);
+    v
 }
 </code></pre>
 
@@ -1452,12 +1553,12 @@ empty vector.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_take_while">take_while</a>&lt;$T: drop&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $p: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt; {
-    <b>let</b> v = $v;
-    '<a href="../std/vector.md#std_vector_take">take</a>: {
-        <b>let</b> <b>mut</b> r = <a href="../std/vector.md#std_vector">vector</a>[];
-        v.<a href="../std/vector.md#std_vector_do">do</a>!(|e| <b>if</b> ($p(&e)) r.<a href="../std/vector.md#std_vector_push_back">push_back</a>(e) <b>else</b> <b>return</b> '<a href="../std/vector.md#std_vector_take">take</a> r);
-        r
-    }
+    <b>let</b> <b>mut</b> v = $v;
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
+    <b>while</b> (i &lt; len && $p(&v[i])) i = i + 1;
+    v.<a href="../std/vector.md#std_vector_truncate">truncate</a>(i);
+    v
 }
 </code></pre>
 
@@ -1484,13 +1585,10 @@ the predicate <code>p</code> and drop the rest, where <code>n &lt;= v.<a href=".
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_skip_while">skip_while</a>&lt;$T: drop&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $p: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt; {
     <b>let</b> <b>mut</b> v = $v;
-    v.<a href="../std/vector.md#std_vector_reverse">reverse</a>();
-    <b>let</b> <b>mut</b> i = v.<a href="../std/vector.md#std_vector_length">length</a>();
-    <b>while</b> (i &gt; 0) {
-        i = i - 1;
-        <b>if</b> ($p(&v[i])) v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>() <b>else</b> <b>break</b>;
-    };
-    v.<a href="../std/vector.md#std_vector_reverse">reverse</a>();
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
+    <b>while</b> (i &lt; len && $p(&v[i])) i = i + 1;
+    <b>let</b> _dropped = v.<a href="../std/vector.md#std_vector_drain">drain</a>(0, i);
     v
 }
 </code></pre>

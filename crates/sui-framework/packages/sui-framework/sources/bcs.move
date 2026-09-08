@@ -172,7 +172,13 @@ public fun peel_vec_bool(bcs: &mut BCS): vector<bool> {
 
 /// Peel a vector of `u8` (eg string) from serialized bytes.
 public fun peel_vec_u8(bcs: &mut BCS): vector<u8> {
-    bcs.peel_vec!(|bcs| bcs.peel_u8())
+    let n = bcs.peel_vec_length();
+    let len = bcs.bytes.length();
+    assert!(len >= n, EOutOfRange);
+    // bytes are stored reversed: one bulk tail extraction, then restore stream order
+    let mut out = bcs.bytes.drain(len - n, len);
+    out.reverse();
+    out
 }
 
 /// Peel a `vector<vector<u8>>` (eg vec of string) from serialized bytes.

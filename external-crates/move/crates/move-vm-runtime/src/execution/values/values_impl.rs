@@ -1879,6 +1879,63 @@ pub const POP_EMPTY_VEC: u64 = NFE_VECTOR_ERROR_BASE + 2;
 pub const VEC_UNPACK_PARITY_MISMATCH: u64 = NFE_VECTOR_ERROR_BASE + 3;
 pub const VEC_SIZE_LIMIT_REACHED: u64 = NFE_VECTOR_ERROR_BASE + 4;
 
+fn check_vector_range(i: usize, j: usize, len: usize) -> PartialVMResult<()> {
+    if i > j || j > len {
+        return Err(partial_vm_error!(
+            VECTOR_OPERATION_ERROR,
+            "range [{i}, {j}) out of bounds for vector of length {len}",
+        )
+        .with_sub_status(INDEX_OUT_OF_BOUNDS));
+    }
+    Ok(())
+}
+
+fn checked_range<T>(v: &[T], i: usize, j: usize) -> PartialVMResult<&[T]> {
+    let len = v.len();
+    v.get(i..j).ok_or_else(|| {
+        partial_vm_error!(
+            VECTOR_OPERATION_ERROR,
+            "range [{i}, {j}) out of bounds for vector of length {len}",
+        )
+        .with_sub_status(INDEX_OUT_OF_BOUNDS)
+    })
+}
+
+/// Vec-to-Vec splice on pre-validated bounds: removes `v[i..j)`, inserts `other` at `i`,
+/// returns the removed elements.
+fn splice_impl<T>(v: &mut Vec<T>, i: usize, j: usize, other: Vec<T>) -> Vec<T> {
+    let len = v.len();
+    let n_removed = j.saturating_sub(i);
+    let n_in = other.len();
+    if i == 0 && j == len {
+        return std::mem::replace(v, other);
+    }
+    if n_in == n_removed {
+        let mut other = other;
+        if let Some(range) = v.get_mut(i..j) {
+            range.swap_with_slice(other.as_mut_slice());
+        }
+        return other;
+    }
+    if n_in == 0 {
+        if j == len {
+            return v.split_off(i);
+        }
+        return v.drain(i..j).collect();
+    }
+    if i == len {
+        let mut other = other;
+        v.append(&mut other);
+        return vec![];
+    }
+    let mut other = other;
+    let mut tail = v.split_off(j);
+    let removed = v.split_off(i);
+    v.append(&mut other);
+    v.append(&mut tail);
+    removed
+}
+
 fn check_elem_layout(ty: &Type, v: &Value) -> PartialVMResult<()> {
     macro_rules! allowed_types {
         ($ty:expr; $v:expr; $allowed:pat) => {
@@ -2030,6 +2087,245 @@ impl VectorRef {
             vec r => r.push(MemBox::new(e));
         );
         Ok(())
+    }
+
+    pub fn append(&self, other: Vector, type_param: &Type, capacity: u64) -> PartialVMResult<()> {
+        let lhs = &mut *self.0.try_borrow_mut()?;
+        check_elem_layout(type_param, lhs)?;
+        let Vector(other) = other;
+        let capacity = checked_as!(capacity, usize)?;
+
+        fn append_checked<T>(
+            lhs: &mut Vec<T>,
+            mut rhs: Vec<T>,
+            capacity: usize,
+        ) -> PartialVMResult<()> {
+            let len = lhs.len().checked_add(rhs.len()).ok_or_else(|| {
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "vector length overflow during append"
+                )
+            })?;
+            if len > capacity {
+                return Err(partial_vm_error!(
+                    VECTOR_OPERATION_ERROR,
+                    "vector size limit is {capacity}",
+                )
+                .with_sub_status(VEC_SIZE_LIMIT_REACHED));
+            }
+            lhs.append(&mut rhs);
+            Ok(())
+        }
+
+        match (lhs, other) {
+            (Value::PrimVec(PrimVec::VecU8(lhs)), Value::PrimVec(PrimVec::VecU8(rhs))) => {
+                append_checked(lhs, rhs, capacity)
+            }
+            (Value::PrimVec(PrimVec::VecU16(lhs)), Value::PrimVec(PrimVec::VecU16(rhs))) => {
+                append_checked(lhs, rhs, capacity)
+            }
+            (Value::PrimVec(PrimVec::VecU32(lhs)), Value::PrimVec(PrimVec::VecU32(rhs))) => {
+                append_checked(lhs, rhs, capacity)
+            }
+            (Value::PrimVec(PrimVec::VecU64(lhs)), Value::PrimVec(PrimVec::VecU64(rhs))) => {
+                append_checked(lhs, rhs, capacity)
+            }
+            (Value::PrimVec(PrimVec::VecU128(lhs)), Value::PrimVec(PrimVec::VecU128(rhs))) => {
+                append_checked(lhs, rhs, capacity)
+            }
+            (Value::PrimVec(PrimVec::VecU256(lhs)), Value::PrimVec(PrimVec::VecU256(rhs))) => {
+                append_checked(lhs, rhs, capacity)
+            }
+            (Value::PrimVec(PrimVec::VecBool(lhs)), Value::PrimVec(PrimVec::VecBool(rhs))) => {
+                append_checked(lhs, rhs, capacity)
+            }
+            (
+                Value::PrimVec(PrimVec::VecAddress(lhs)),
+                Value::PrimVec(PrimVec::VecAddress(rhs)),
+            ) => append_checked(lhs, rhs, capacity),
+            (Value::Vec(lhs), Value::Vec(rhs)) => append_checked(lhs, rhs, capacity),
+            _ => Err(partial_vm_error!(
+                INTERNAL_TYPE_ERROR,
+                "vector::append called on mismatched or non-vector containers"
+            )),
+        }
+    }
+
+    pub fn truncate(&self, new_len: usize, type_param: &Type) -> PartialVMResult<()> {
+        let value = &mut *self.0.try_borrow_mut()?;
+        check_elem_layout(type_param, value)?;
+
+        macro_rules! truncate_vec {
+            ($vec:expr) => {{
+                let vec = $vec;
+                vec.truncate(new_len);
+            }};
+        }
+
+        use PrimVec as PV;
+        use VectorMatch as V;
+
+        match value.vector_mut_ref()?.0 {
+            V::PrimVec(PV::VecU8(xs)) => truncate_vec!(xs),
+            V::PrimVec(PV::VecU16(xs)) => truncate_vec!(xs),
+            V::PrimVec(PV::VecU32(xs)) => truncate_vec!(xs),
+            V::PrimVec(PV::VecU64(xs)) => truncate_vec!(xs),
+            V::PrimVec(PV::VecU128(xs)) => truncate_vec!(xs),
+            V::PrimVec(PV::VecU256(xs)) => truncate_vec!(xs),
+            V::PrimVec(PV::VecBool(xs)) => truncate_vec!(xs),
+            V::PrimVec(PV::VecAddress(xs)) => truncate_vec!(xs),
+            V::Vec(items) => truncate_vec!(items),
+        }
+
+        Ok(())
+    }
+
+    /// Removes `v[i..j)` and returns it.
+    pub fn drain(&self, i: usize, j: usize, type_param: &Type) -> PartialVMResult<Vector> {
+        let value = &mut *self.0.try_borrow_mut()?;
+        check_elem_layout(type_param, value)?;
+
+        macro_rules! drain_vec {
+            ($vec:expr, $mk:expr) => {{
+                let vec = $vec;
+                check_vector_range(i, j, vec.len())?;
+                Vector($mk(vec.drain(i..j).collect()))
+            }};
+        }
+
+        use PrimVec as PV;
+        use VectorMatch as V;
+
+        Ok(match value.vector_mut_ref()?.0 {
+            V::PrimVec(PV::VecU8(xs)) => drain_vec!(xs, |v| Value::PrimVec(PV::VecU8(v))),
+            V::PrimVec(PV::VecU16(xs)) => drain_vec!(xs, |v| Value::PrimVec(PV::VecU16(v))),
+            V::PrimVec(PV::VecU32(xs)) => drain_vec!(xs, |v| Value::PrimVec(PV::VecU32(v))),
+            V::PrimVec(PV::VecU64(xs)) => drain_vec!(xs, |v| Value::PrimVec(PV::VecU64(v))),
+            V::PrimVec(PV::VecU128(xs)) => drain_vec!(xs, |v| Value::PrimVec(PV::VecU128(v))),
+            V::PrimVec(PV::VecU256(xs)) => drain_vec!(xs, |v| Value::PrimVec(PV::VecU256(v))),
+            V::PrimVec(PV::VecBool(xs)) => drain_vec!(xs, |v| Value::PrimVec(PV::VecBool(v))),
+            V::PrimVec(PV::VecAddress(xs)) => {
+                drain_vec!(xs, |v| Value::PrimVec(PV::VecAddress(v)))
+            }
+            V::Vec(items) => drain_vec!(items, Value::Vec),
+        })
+    }
+
+    /// Copies `v[i..j)` into a new vector; `v` is untouched. Elements of boxed vectors are
+    /// deep-copied.
+    pub fn slice(&self, i: usize, j: usize, type_param: &Type) -> PartialVMResult<Vector> {
+        let value = &*self.0.try_borrow()?;
+        check_elem_layout(type_param, value)?;
+
+        macro_rules! slice_vec {
+            ($vec:expr, $mk:expr) => {{ Vector($mk(checked_range($vec, i, j)?.to_vec())) }};
+        }
+
+        use PrimVec as PV;
+        use VectorMatch as V;
+
+        Ok(match value.vector_ref()?.0 {
+            V::PrimVec(PV::VecU8(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecU8(v))),
+            V::PrimVec(PV::VecU16(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecU16(v))),
+            V::PrimVec(PV::VecU32(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecU32(v))),
+            V::PrimVec(PV::VecU64(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecU64(v))),
+            V::PrimVec(PV::VecU128(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecU128(v))),
+            V::PrimVec(PV::VecU256(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecU256(v))),
+            V::PrimVec(PV::VecBool(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecBool(v))),
+            V::PrimVec(PV::VecAddress(xs)) => {
+                slice_vec!(xs, |v| Value::PrimVec(PV::VecAddress(v)))
+            }
+            V::Vec(items) => Vector(Value::Vec(
+                checked_range(items, i, j)?
+                    .iter()
+                    .map(|m| m.copy_value())
+                    .collect(),
+            )),
+        })
+    }
+
+    /// Removes `v[i..j)`, inserts all elements of `other` at position `i`, and returns the
+    /// removed elements. The vector grows or shrinks by `other.len() - (j - i)`.
+    pub fn splice(
+        &self,
+        i: usize,
+        j: usize,
+        other: Vector,
+        type_param: &Type,
+        capacity: u64,
+    ) -> PartialVMResult<Vector> {
+        let lhs = &mut *self.0.try_borrow_mut()?;
+        check_elem_layout(type_param, lhs)?;
+        let Vector(other) = other;
+        let capacity = checked_as!(capacity, usize)?;
+
+        fn splice_checked<T>(
+            v: &mut Vec<T>,
+            i: usize,
+            j: usize,
+            other: Vec<T>,
+            capacity: usize,
+        ) -> PartialVMResult<Vec<T>> {
+            check_vector_range(i, j, v.len())?;
+            let new_len = v
+                .len()
+                .checked_sub(j.saturating_sub(i))
+                .and_then(|len| len.checked_add(other.len()))
+                .ok_or_else(|| {
+                    partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "vector length overflow during splice"
+                    )
+                })?;
+            if new_len > capacity {
+                return Err(partial_vm_error!(
+                    VECTOR_OPERATION_ERROR,
+                    "vector size limit is {capacity}",
+                )
+                .with_sub_status(VEC_SIZE_LIMIT_REACHED));
+            }
+            Ok(splice_impl(v, i, j, other))
+        }
+
+        use PrimVec as PV;
+
+        macro_rules! splice_arm {
+            ($lhs:expr, $rhs:expr, $mk:expr) => {
+                Ok(Vector($mk(splice_checked($lhs, i, j, $rhs, capacity)?)))
+            };
+        }
+
+        match (lhs, other) {
+            (Value::PrimVec(PV::VecU8(lhs)), Value::PrimVec(PV::VecU8(rhs))) => {
+                splice_arm!(lhs, rhs, |v| Value::PrimVec(PV::VecU8(v)))
+            }
+            (Value::PrimVec(PV::VecU16(lhs)), Value::PrimVec(PV::VecU16(rhs))) => {
+                splice_arm!(lhs, rhs, |v| Value::PrimVec(PV::VecU16(v)))
+            }
+            (Value::PrimVec(PV::VecU32(lhs)), Value::PrimVec(PV::VecU32(rhs))) => {
+                splice_arm!(lhs, rhs, |v| Value::PrimVec(PV::VecU32(v)))
+            }
+            (Value::PrimVec(PV::VecU64(lhs)), Value::PrimVec(PV::VecU64(rhs))) => {
+                splice_arm!(lhs, rhs, |v| Value::PrimVec(PV::VecU64(v)))
+            }
+            (Value::PrimVec(PV::VecU128(lhs)), Value::PrimVec(PV::VecU128(rhs))) => {
+                splice_arm!(lhs, rhs, |v| Value::PrimVec(PV::VecU128(v)))
+            }
+            (Value::PrimVec(PV::VecU256(lhs)), Value::PrimVec(PV::VecU256(rhs))) => {
+                splice_arm!(lhs, rhs, |v| Value::PrimVec(PV::VecU256(v)))
+            }
+            (Value::PrimVec(PV::VecBool(lhs)), Value::PrimVec(PV::VecBool(rhs))) => {
+                splice_arm!(lhs, rhs, |v| Value::PrimVec(PV::VecBool(v)))
+            }
+            (Value::PrimVec(PV::VecAddress(lhs)), Value::PrimVec(PV::VecAddress(rhs))) => {
+                splice_arm!(lhs, rhs, |v| Value::PrimVec(PV::VecAddress(v)))
+            }
+            (Value::Vec(lhs), Value::Vec(rhs)) => splice_arm!(lhs, rhs, Value::Vec),
+            _ => Err(partial_vm_error!(
+                INTERNAL_TYPE_ERROR,
+                "vector::splice called on mismatched or non-vector containers"
+            )),
+        }
     }
 
     pub fn as_bytes_ref(&self) -> PartialVMResult<std::cell::Ref<'_, Vec<u8>>> {
@@ -2216,6 +2512,10 @@ impl Vector {
 
     pub fn empty(specialization: VectorSpecialization) -> PartialVMResult<Value> {
         Self::pack(specialization, vec![])
+    }
+
+    pub fn into_value(self) -> Value {
+        self.0
     }
 
     pub fn unpack(self, type_param: &Type, expected_num: u64) -> PartialVMResult<Vec<Value>> {

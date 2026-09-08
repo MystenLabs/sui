@@ -391,6 +391,7 @@ const MAINNET_USDB: &str =
 // Version 137: Lower the per-bit cost of bulletproofs range proof verification, and raise the
 //              bound on batch size * range bits from 512 to 1024.
 //              Enable allowances.
+//              Make vector::append, truncate, drain, slice and splice native functions.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2026,6 +2027,15 @@ pub struct ProtocolConfig {
     vector_pop_back_base_cost: Option<u64>,
     vector_destroy_empty_base_cost: Option<u64>,
     vector_swap_base_cost: Option<u64>,
+    vector_append_base_cost: Option<u64>,
+    vector_truncate_base_cost: Option<u64>,
+    vector_drain_base_cost: Option<u64>,
+    vector_slice_base_cost: Option<u64>,
+    vector_splice_base_cost: Option<u64>,
+    vector_append_per_elem_cost: Option<u64>,
+    vector_truncate_per_elem_cost: Option<u64>,
+    vector_drain_per_elem_cost: Option<u64>,
+    vector_splice_per_elem_cost: Option<u64>,
     debug_print_base_cost: Option<u64>,
     debug_print_stack_trace_base_cost: Option<u64>,
 
@@ -2949,6 +2959,15 @@ impl ProtocolConfig {
             vector_pop_back_base_cost: None,
             vector_destroy_empty_base_cost: None,
             vector_swap_base_cost: None,
+            vector_append_base_cost: None,
+            vector_truncate_base_cost: None,
+            vector_drain_base_cost: None,
+            vector_slice_base_cost: None,
+            vector_splice_base_cost: None,
+            vector_append_per_elem_cost: None,
+            vector_truncate_per_elem_cost: None,
+            vector_drain_per_elem_cost: None,
+            vector_splice_per_elem_cost: None,
             debug_print_base_cost: None,
             debug_print_stack_trace_base_cost: None,
 
@@ -4709,6 +4728,16 @@ impl ProtocolConfig {
                     cfg.max_bulletproofs_total_bits = Some(1024);
 
                     cfg.feature_flags.enable_allowances = true;
+
+                    cfg.vector_append_base_cost = Some(52);
+                    cfg.vector_truncate_base_cost = Some(52);
+                    cfg.vector_drain_base_cost = Some(52);
+                    cfg.vector_slice_base_cost = Some(52);
+                    cfg.vector_splice_base_cost = Some(52);
+                    cfg.vector_append_per_elem_cost = Some(8);
+                    cfg.vector_truncate_per_elem_cost = Some(1);
+                    cfg.vector_drain_per_elem_cost = Some(8);
+                    cfg.vector_splice_per_elem_cost = Some(8);
                 }
                 // Use this template when making changes:
                 //
