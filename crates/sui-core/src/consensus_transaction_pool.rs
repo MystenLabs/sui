@@ -26,7 +26,7 @@ use crate::consensus_adapter::{
     processing_error,
 };
 use crate::consensus_handler::{SequencedConsensusTransactionKey, tx_type_label};
-use crate::staggered_submission::{StaggerQuota, StaggeredSlot};
+use crate::staggered_submission::{StaggerQuota, StaggeredSlot, proposers_metric_label};
 use async_trait::async_trait;
 use consensus_core::{BlockStatus, ClientError, LimitReached, Transaction, TransactionPool};
 use consensus_types::block::{
@@ -209,6 +209,8 @@ struct PoolEntry {
     total_bytes: usize,
     gas_price: u64,
     tx_type: &'static str, // tx label for metrics
+    /// See `proposers_metric_label`.
+    proposers: &'static str,
     ack: PendingAck,
     metrics: Arc<AdmissionQueueMetrics>,
     /// Empty for system and ping submissions: the `ConsensusAdapter` already
@@ -302,6 +304,8 @@ struct ProposedBlock {
 struct ProposedEntry {
     lane: TakenLane,
     tx_type: &'static str,
+    /// See `proposers_metric_label`.
+    proposers: &'static str,
     created: Instant,
 }
 
@@ -438,6 +442,7 @@ impl ConsensusTransactionPool {
             total_bytes,
             gas_price,
             tx_type,
+            proposers: proposers_metric_label(&transactions, &self.epoch_store),
             ack: PendingAck::new(EntryAck::User(sender), keys),
             metrics: self.metrics.clone(),
             processed,
@@ -523,6 +528,7 @@ impl ConsensusTransactionPool {
             total_bytes,
             gas_price: 0,
             tx_type: tx_type_label(transactions),
+            proposers: "na",
             ack: PendingAck::new(
                 EntryAck::SystemOrPing(sender),
                 transactions.iter().map(ConsensusTransaction::key).collect(),
@@ -814,6 +820,7 @@ impl TakenTransactionsGuard {
             block.entries.push(ProposedEntry {
                 lane,
                 tx_type: entry.tx_type,
+                proposers: entry.proposers,
                 created: entry.ack.created,
             });
             watches_to_drop.push(std::mem::take(&mut entry.processed));
@@ -1195,19 +1202,15 @@ impl ConsensusTransactionPool {
 
     fn report_commit_latency(&self, entries: &[ProposedEntry]) {
         let now = Instant::now();
-        let user = self
-            .metrics
-            .pool_commit_latency
-            .with_label_values(&["user"]);
-        let system = self
-            .metrics
-            .pool_commit_latency
-            .with_label_values(&["system"]);
         for entry in entries {
-            let histogram = match entry.lane {
-                TakenLane::User => &user,
-                TakenLane::System => &system,
+            let lane = match entry.lane {
+                TakenLane::User => "user",
+                TakenLane::System => "system",
             };
+            let histogram = self
+                .metrics
+                .pool_commit_latency
+                .with_label_values(&[lane, entry.proposers]);
             histogram.observe(now.saturating_duration_since(entry.created).as_secs_f64());
         }
     }
@@ -1527,6 +1530,7 @@ mod tests {
             total_bytes: serialized.len(),
             gas_price: 1,
             tx_type: tx_type_label(std::slice::from_ref(&consensus_transaction)),
+            proposers: "na",
             ack: PendingAck::new(EntryAck::User(sender), vec![consensus_transaction.key()]),
             metrics,
             processed: Vec::new(),
@@ -1893,10 +1897,10 @@ mod tests {
                 .with_label_values(&["owned_user_transaction_v2", status])
                 .get()
         };
-        let commit_latency_count = |lane: &str| {
+        let commit_latency_count = |lane: &str, proposers: &str| {
             pool.metrics
                 .pool_commit_latency
-                .with_label_values(&[lane])
+                .with_label_values(&[lane, proposers])
                 .get_sample_count()
         };
 
@@ -1915,8 +1919,8 @@ mod tests {
         assert_eq!(status("sequenced"), 1);
         assert_eq!(status("garbage_collected"), 1);
         // System entries report through the adapter; only their latency is recorded here.
-        assert_eq!(commit_latency_count("user"), 1);
-        assert_eq!(commit_latency_count("system"), 1);
+        assert_eq!(commit_latency_count("user", "unrestricted"), 1);
+        assert_eq!(commit_latency_count("system", "na"), 1);
     }
 
     #[tokio::test]

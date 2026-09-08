@@ -50,7 +50,7 @@ use crate::authority::consensus_tx_status_cache::{
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_handler::{SequencedConsensusTransactionKey, classify, tx_type_label};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
-use crate::staggered_submission::{StaggerQuota, StaggeredSlot};
+use crate::staggered_submission::{StaggerQuota, StaggeredSlot, proposers_metric_label};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -132,7 +132,7 @@ impl ConsensusAdapterMetrics {
             sequencing_certificate_latency: register_histogram_vec_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
-                &["submitted", "tx_type", "processed_method"],
+                &["submitted", "tx_type", "processed_method", "proposers"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
@@ -559,7 +559,12 @@ impl ConsensusAdapter {
         tracing::Span::current().record("tx_type", tx_type);
         tracing::Span::current().record("tx_keys", tracing::field::debug(&transaction_keys));
 
-        let mut guard = InflightDropGuard::acquire(&self, tx_type, transactions.len() as u64);
+        let mut guard = InflightDropGuard::acquire(
+            &self,
+            tx_type,
+            proposers_metric_label(&transactions, epoch_store),
+            transactions.len() as u64,
+        );
 
         let make_processing_error =
             |method: ProcessedMethod| -> SuiError { processing_error(&transaction_keys, method) };
@@ -1207,6 +1212,8 @@ struct InflightDropGuard<'a> {
     start: Instant,
     submitted: bool,
     tx_type: &'static str,
+    /// See `proposers_metric_label`.
+    proposers: &'static str,
     processed_method: ProcessedMethod,
     /// Number of transactions this guard accounts for.
     /// > 1 for soft bundles.
@@ -1217,6 +1224,7 @@ impl<'a> InflightDropGuard<'a> {
     pub fn acquire(
         adapter: &'a ConsensusAdapter,
         tx_type: &'static str,
+        proposers: &'static str,
         inflight_count: u64,
     ) -> Self {
         adapter
@@ -1237,6 +1245,7 @@ impl<'a> InflightDropGuard<'a> {
             start: Instant::now(),
             submitted: false,
             tx_type,
+            proposers,
             processed_method: ProcessedMethod::ConsensusMessageProcessed,
             inflight_count,
         }
@@ -1270,6 +1279,7 @@ impl Drop for InflightDropGuard<'_> {
                 submitted,
                 self.tx_type,
                 self.processed_method.metric_label(),
+                self.proposers,
             ])
             .observe(latency.as_secs_f64());
     }
