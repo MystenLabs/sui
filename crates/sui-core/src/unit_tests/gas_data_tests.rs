@@ -14,7 +14,6 @@ use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_framework::BuiltInFramework;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_move_build::BuildConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::FullObjectRef;
@@ -40,9 +39,6 @@ use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NodeEntryPoint {
     Validator, // submit_and_execute() -> try_execute_executable_for_test() -> try_execute_immediately()
-    DryRun,    // dry_exec_transaction()
-    DevInspectSkipChecks, // dev_inspect_transaction_block(skip_checks=true)
-    DevInspectFullChecks, // dev_inspect_transaction_block(skip_checks=false)
     SimulateFullChecks, // simulate_transaction(TransactionChecks::Enabled, mock_gas=false)
     SimulateFullChecksMockGas, // simulate_transaction(TransactionChecks::Enabled, mock_gas=true)
     SimulateSkipChecks, // simulate_transaction(TransactionChecks::Disabled, mock_gas=false)
@@ -59,7 +55,6 @@ const TEST_GAS_BUDGET: u64 = 500_000_000;
 
 // Different forms of dev inspect
 const DEV_INSPECT_ENTRY_POINTS: &[NodeEntryPoint] = &[
-    NodeEntryPoint::DevInspectSkipChecks,
     NodeEntryPoint::SimulateSkipChecks,
     NodeEntryPoint::SimulateSkipChecksMockGas,
 ];
@@ -67,8 +62,6 @@ const DEV_INSPECT_ENTRY_POINTS: &[NodeEntryPoint] = &[
 // API that perform more rigorous transaction data checks
 const CHECKED_ENTRY_POINTS: &[NodeEntryPoint] = &[
     NodeEntryPoint::Validator,
-    NodeEntryPoint::DryRun,
-    NodeEntryPoint::DevInspectFullChecks,
     NodeEntryPoint::SimulateFullChecks,
     NodeEntryPoint::SimulateFullChecksMockGas,
 ];
@@ -197,7 +190,6 @@ fn build_transfer(env: &TestEnv, budget: u64, gas_price: u64) -> TransactionData
 type EntryPointResult = (NodeEntryPoint, Result<GasCostSummary, SuiError>);
 
 async fn run_all_entry_points(env: &TestEnv, data: TransactionData) -> Vec<EntryPointResult> {
-    let sender = env.sender;
     let mut results: Vec<EntryPointResult> = Vec::new();
 
     // Path 1: Validator execute
@@ -208,60 +200,7 @@ async fn run_all_entry_points(env: &TestEnv, data: TransactionData) -> Vec<Entry
     };
     results.push((NodeEntryPoint::Validator, mapped));
 
-    // Path 2: Fullnode dry_exec_transaction
-    let mapped = match env.fullnode.dry_exec_transaction(data.clone()).await {
-        Ok((_, _, effects, _)) => Ok(effects.gas_cost_summary().clone()),
-        Err(e) => Err(e),
-    };
-    results.push((NodeEntryPoint::DryRun, mapped));
-
-    // Path 3: Fullnode dev_inspect_transaction_block (skip_checks=true)
-    {
-        let dev_kind = data.clone().into_kind();
-        let mapped = match env
-            .fullnode
-            .dev_inspect_transaction_block(
-                sender,
-                dev_kind,
-                Some(data.gas_data().price),
-                Some(data.gas_data().budget),
-                None,
-                Some(data.gas_data().payment.clone()),
-                None,
-                Some(true),
-            )
-            .await
-        {
-            Ok(r) => Ok(r.effects.gas_cost_summary().clone()),
-            Err(e) => Err(e),
-        };
-        results.push((NodeEntryPoint::DevInspectSkipChecks, mapped));
-    }
-
-    // Path 4: Fullnode dev_inspect_transaction_block (skip_checks=false)
-    {
-        let dev_kind = data.clone().into_kind();
-        let mapped = match env
-            .fullnode
-            .dev_inspect_transaction_block(
-                sender,
-                dev_kind,
-                Some(data.gas_data().price),
-                Some(data.gas_data().budget),
-                None,
-                Some(data.gas_data().payment.clone()),
-                None,
-                Some(false),
-            )
-            .await
-        {
-            Ok(r) => Ok(r.effects.gas_cost_summary().clone()),
-            Err(e) => Err(e),
-        };
-        results.push((NodeEntryPoint::DevInspectFullChecks, mapped));
-    }
-
-    // Path 5-8: Fullnode simulate_transaction — all combos
+    // Fullnode simulate_transaction, all combos
     for (entry_point, checks, mock_gas) in [
         (
             NodeEntryPoint::SimulateFullChecks,
@@ -667,9 +606,6 @@ async fn test_bad_gas_payment_all_paths() {
             check_withdraw,
             "InvalidWithdrawReservation",
         );
-        assert_ok(&results, NodeEntryPoint::DryRun);
-        assert_ok(&results, NodeEntryPoint::DevInspectSkipChecks);
-        assert_ok(&results, NodeEntryPoint::DevInspectFullChecks);
         assert_err(
             &results,
             NodeEntryPoint::SimulateFullChecks,
@@ -877,23 +813,6 @@ async fn test_gas_coin_smash_with_pure_arg() {
 
     for &entry_point in DEV_INSPECT_ENTRY_POINTS {
         let result = match entry_point {
-            NodeEntryPoint::DevInspectSkipChecks => {
-                let kind = TransactionKind::programmable(pt.clone());
-                env.fullnode
-                    .dev_inspect_transaction_block(
-                        env.sender,
-                        kind,
-                        Some(env.rgp),
-                        Some(TEST_GAS_BUDGET),
-                        None,
-                        Some(payment.clone()),
-                        None,
-                        Some(true),
-                    )
-                    .await
-                    .map(|r| format!("{:?}", r.effects.status()))
-                    .map_err(|e| format!("{e:?}"))
-            }
             NodeEntryPoint::SimulateSkipChecks | NodeEntryPoint::SimulateSkipChecksMockGas => {
                 let mock_gas = entry_point == NodeEntryPoint::SimulateSkipChecksMockGas;
                 let mut data = TransactionData::new(
