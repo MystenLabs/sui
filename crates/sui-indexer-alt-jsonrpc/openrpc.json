@@ -5478,10 +5478,38 @@
         }
       },
       "SuiWithdrawFrom": {
-        "type": "string",
-        "enum": [
-          "sender",
-          "sponsor"
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "sender",
+              "sponsor"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "senderAllowance"
+            ],
+            "properties": {
+              "senderAllowance": {
+                "type": "object",
+                "required": [
+                  "allowance",
+                  "funder"
+                ],
+                "properties": {
+                  "allowance": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "funder": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
         ]
       },
       "SuiWithdrawalTypeArg": {
