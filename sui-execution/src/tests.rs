@@ -14,9 +14,9 @@ type PackageGraph<'p> = DiGraphMap<&'p str, ()>;
 struct Packages(HashMap<String, Package>);
 
 #[test]
-/// Make sure that all accesses to execution layer crates in the `sui-node` and `sui-replay` crates
-/// go via the `sui-execution` crate (in other words, the `sui-execution` crate dominates execution
-/// layer crates in the dependency graphs of `sui-node` and `sui-replay`).
+/// Make sure that all accesses to execution layer crates in the `sui-node` and `sui-replay-2`
+/// crates go via the `sui-execution` crate (in other words, the `sui-execution` crate dominates
+/// execution layer crates in the dependency graphs of `sui-node` and `sui-replay-2`).
 ///
 /// This helps ensures that execution that may be committed on-chain respects the execution version
 /// that is stated in the protocol config.
@@ -47,7 +47,7 @@ fn test_encapsulation() {
     // Capture problematic paths from roots to execution crates
     let mut examples = vec![];
 
-    for root in ["sui-node", "sui-replay"] {
+    for root in ["sui-node", "sui-replay-2"] {
         let mut graph = packages.graph(root);
 
         // If we can still create a path from `root` to an execution crate after removing these
