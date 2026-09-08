@@ -148,6 +148,7 @@ feature_flags:
   private_generics_verifier_v2: true
   deprecate_global_storage_ops: true
   normalize_depth_formula: true
+  charge_ld_const_abstract_size: true
   consensus_skip_gced_accept_votes: true
   include_cancelled_randomness_txns_in_prologue: true
   address_aliases: true

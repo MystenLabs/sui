@@ -392,6 +392,8 @@ const MAINNET_USDB: &str =
 //              bound on batch size * range bits from 512 to 1024.
 //              Enable allowances.
 //              Enable fix_ptb_generated_reads.
+//              Charge `LdConst` for the abstract value size of the constant instead of its
+//              serialized byte length.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1103,6 +1105,11 @@ struct FeatureFlags {
     // If true, normalize depth formula to not be empty for zero depth.
     #[serde(skip_serializing_if = "is_false")]
     normalize_depth_formula: bool,
+
+    // If true, `LdConst` charges for the abstract value size of the constant instead of its
+    // serialized byte length.
+    #[serde(skip_serializing_if = "is_false")]
+    charge_ld_const_abstract_size: bool,
 
     // If true, skip GC'ed accept votes in CommitFinalizer.
     #[serde(skip_serializing_if = "is_false")]
@@ -4715,6 +4722,7 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.enable_allowances = true;
                     cfg.feature_flags.fix_ptb_generated_reads = true;
+                    cfg.feature_flags.charge_ld_const_abstract_size = true;
                 }
                 // Use this template when making changes:
                 //
