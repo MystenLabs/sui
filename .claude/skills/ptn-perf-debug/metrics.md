@@ -188,6 +188,8 @@ Storage (typed-store/src/metrics.rs, labels `cf_name`, `db_name`)
 Process level (mysten-metrics)
 - `thread_stall_duration_sec`: the tokio runtime was blocked; any sizeable value shows up as latency everywhere.
 - `monitored_tasks{callsite}` / `monitored_futures{callsite}`: see "Task and future counts per spawn site" above.
-- `uptime` (and `consensus_uptime`) reset => process restarted; explains sudden discontinuities.
+- `uptime{process,version,chain_identifier}`: defines the time window a version was active (see SKILL.md step 1);
+  a reset means the process restarted and explains sudden discontinuities. `consensus_uptime` is the consensus-side
+  equivalent without the version label.
 - `process_cpu_seconds_total`, `process_resident_memory_bytes`, `process_open_fds`; node-exporter (:9091) for
   disk, NIC, load per host. `system_invariant_violations{name}`: always investigate.

@@ -37,10 +37,20 @@ Reference files in this directory:
 
 ## Process
 
-### 1. Establish the symptom and the baseline
-Ask the user what changed and when (deploy SHA, load change, host changes). Compare the current window against the
-last known-good window in Grafana. The continuous regression check config in sui-operations defines "healthy"
-(client p50 latency and per-workload TPS thresholds).
+### 1. Establish the symptom, the version, and the time window
+Ask the user what changed and when (deploy SHA, load change, host changes). Every metrics or log query needs a time
+window, and the window is defined by when a given version was running. Get the version from the user or from
+context such as a Slack thread, then derive the window from the `uptime` metric, which is labelled
+`process`, `version` (`semver-gitrevision`), and `chain_identifier`:
+```
+uptime{network="private-testnet", version=~".*<gitrev>.*"}            # nonzero only while that build ran
+min by (host) (timestamp(uptime{...}) - uptime{...})                   # start time per host
+count by (version) (uptime{network="private-testnet"})                 # what is deployed right now, and mixed fleets
+```
+Record the window (and the comparison window for the last known-good version) in the notebook and use it for
+every query that follows. Rerun this whenever hosts are updated during the investigation. Compare the current
+window against the known-good window in Grafana. The continuous regression check config in sui-operations defines
+"healthy" (client p50 latency and per-workload TPS thresholds).
 
 ### 2. Check the whole stack end to end before going deep
 The bottleneck can be anywhere between the stress client and the disk. Walk it in order, at cluster-average level:
