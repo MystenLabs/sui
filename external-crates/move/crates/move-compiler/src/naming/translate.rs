@@ -910,7 +910,14 @@ impl<'outer, 'env> Context<'outer, 'env> {
                 self.add_diag(diag);
                 ResolvedType::Unbound
             }
-            Some(rn) => rn.clone(),
+            Some(rn) => {
+                if let ResolvedType::BuiltinType(bt) = rn
+                    && bt.is_signed_numeric()
+                {
+                    self.check_feature(self.current_package, FeatureGate::SignedIntegers, loc);
+                }
+                rn.clone()
+            }
         }
     }
 

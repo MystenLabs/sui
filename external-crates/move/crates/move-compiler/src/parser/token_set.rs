@@ -97,6 +97,7 @@ const EXP_STARTS: &[Tok] = &[
     Tok::AmpMut,
     Tok::Star,
     Tok::Exclaim,
+    Tok::Minus,
     Tok::LParen,
     Tok::LBrace,
     Tok::Abort,
