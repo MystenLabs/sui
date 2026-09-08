@@ -79,7 +79,6 @@ use sui_types::layout_resolver::into_struct_layout;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::node_role::NodeRole;
 use sui_types::storage::InputKey;
-use sui_types::storage::OverlayBackingPackageStore;
 use sui_types::storage::RuntimeObjectResolver;
 use sui_types::storage::TrackingBackingStore;
 use sui_types::traffic_control::{
@@ -106,10 +105,6 @@ use shared_crypto::intent::{Intent, IntentScope};
 use sui_config::genesis::Genesis;
 use sui_config::node::{DBCheckpointConfig, ExpensiveSafetyCheckConfig};
 use sui_framework::{BuiltInFramework, SystemPackage};
-use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockData,
-    SuiTransactionBlockEvents,
-};
 use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
 use sui_rpc_store::Store as RpcStore;
 use sui_types::authenticator_state::get_authenticator_state;
@@ -143,7 +138,7 @@ use sui_types::object::MoveObject;
 use sui_types::object::{OBJECT_START_VERSION, Owner, PastObjectRead};
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{
-    BackingPackageStore, BackingStore, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind,
+    BackingPackageStore, BackingStore, ObjectKey, ObjectOrTombstone, ObjectStore,
 };
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -2187,163 +2182,6 @@ impl AuthorityState {
         Ok((transaction_outputs, execution_error_opt))
     }
 
-    #[instrument(skip_all)]
-    #[allow(clippy::type_complexity)]
-    pub async fn dry_exec_transaction(
-        &self,
-        transaction: TransactionData,
-    ) -> SuiResult<(
-        DryRunTransactionBlockResponse,
-        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
-        TransactionEffects,
-        Option<ObjectID>,
-    )> {
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-        if !self.is_fullnode(&epoch_store) {
-            return Err(SuiErrorKind::UnsupportedFeatureError {
-                error: "dry-exec is only supported on fullnodes".to_string(),
-            }
-            .into());
-        }
-
-        if transaction.kind().is_system_tx() {
-            return Err(SuiErrorKind::UnsupportedFeatureError {
-                error: "dry-exec does not support system transactions".to_string(),
-            }
-            .into());
-        }
-
-        self.dry_exec_transaction_impl(&epoch_store, transaction)
-    }
-
-    #[allow(clippy::type_complexity)]
-    fn dry_exec_transaction_impl(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        transaction: TransactionData,
-    ) -> SuiResult<(
-        DryRunTransactionBlockResponse,
-        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
-        TransactionEffects,
-        Option<ObjectID>,
-    )> {
-        // Route through `simulate_transaction` -- `dry-exec` matches
-        // `simulate_transaction(_, TransactionChecks::Enabled, _)`. The deny-config
-        // check runs inside `simulate_transaction` via `pre_object_load_checks`, so we
-        // don't need to invoke it directly here.
-        let sim = self.simulate_transaction(
-            transaction.clone(),
-            TransactionChecks::Enabled,
-            /* allow_mock_gas_coin */ true,
-        )?;
-
-        self.build_dry_run_response(epoch_store, transaction, sim)
-    }
-
-    /// Adapt a `SimulateTransactionResult` into the
-    /// `(DryRunTransactionBlockResponse, written_objects_with_kind, effects, mock_gas_id)`
-    /// tuple that the JSON-RPC dry-run layer consumes. Shared between
-    /// `dry_exec_transaction_impl` and `dry_exec_transaction_for_benchmark`'s
-    /// callers; pulls together:
-    ///   - layout resolution over the simulate-produced `ObjectSet`,
-    ///   - `(ObjectRef, Object, WriteKind)` derivation by walking
-    ///     `effects.created / unwrapped / mutated` against that `ObjectSet`,
-    ///   - `execution_error_source` from `sim.execution_result`,
-    ///   - the `SuiTransactionBlockData` / `SuiTransactionBlockEffects` /
-    ///     `SuiTransactionBlockEvents` conversions.
-    #[allow(clippy::type_complexity)]
-    fn build_dry_run_response(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        transaction: TransactionData,
-        sim: SimulateTransactionResult,
-    ) -> SuiResult<(
-        DryRunTransactionBlockResponse,
-        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
-        TransactionEffects,
-        Option<ObjectID>,
-    )> {
-        let SimulateTransactionResult {
-            effects,
-            events,
-            objects,
-            execution_result,
-            mock_gas_id,
-            suggested_gas_price,
-            ..
-        } = sim;
-
-        let tx_digest = *effects.transaction_digest();
-
-        // Walk effects' created / unwrapped / mutated lists against the
-        // simulate-produced ObjectSet (which carries both input and written
-        // objects). Refs missing from `objects` are dropped silently — that
-        // would indicate a simulate-vs-effects inconsistency.
-        let written_with_kind: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> = effects
-            .created()
-            .into_iter()
-            .map(|(oref, _)| (oref, WriteKind::Create))
-            .chain(
-                effects
-                    .unwrapped()
-                    .into_iter()
-                    .map(|(oref, _)| (oref, WriteKind::Unwrap)),
-            )
-            .chain(
-                effects
-                    .mutated()
-                    .into_iter()
-                    .map(|(oref, _)| (oref, WriteKind::Mutate)),
-            )
-            .filter_map(|(oref, kind)| {
-                objects
-                    .get(&ObjectKey(oref.0, oref.1))
-                    .map(|obj| (oref.0, (oref, obj.clone(), kind)))
-            })
-            .collect();
-
-        // Resolve event/object layouts against the simulate-produced ObjectSet
-        // (newly-published packages from the simulation appear there), with the
-        // node's backing package store as fallback for already-on-chain packages.
-        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
-            epoch_store.protocol_config(),
-            Box::new(OverlayBackingPackageStore::new(
-                &objects,
-                self.get_backing_package_store(),
-            )),
-        );
-
-        let execution_error_source = execution_result
-            .as_ref()
-            .err()
-            .and_then(|e| e.source().as_ref().map(|e| e.to_string()));
-
-        let response = DryRunTransactionBlockResponse {
-            suggested_gas_price,
-            input: SuiTransactionBlockData::try_from_with_module_cache(
-                transaction,
-                &epoch_store.module_cache().clone(),
-            )
-            .map_err(|e| SuiErrorKind::TransactionSerializationError {
-                error: format!("Failed to convert transaction to SuiTransactionBlockData: {e}"),
-            })?,
-            effects: effects.clone().try_into()?,
-            events: SuiTransactionBlockEvents::try_from(
-                events.unwrap_or_default(),
-                tx_digest,
-                None,
-                layout_resolver.as_mut(),
-            )?,
-            // The RPC layer recalculates object_changes / balance_changes from
-            // the written_objects map and effects.
-            object_changes: Vec::new(),
-            balance_changes: Vec::new(),
-            execution_error_source,
-        };
-
-        Ok((response, written_with_kind, effects, mock_gas_id))
-    }
-
     pub fn simulate_transaction(
         &self,
         transaction: TransactionData,
@@ -2401,99 +2239,6 @@ impl AuthorityState {
             &self.config.verifier_signing_config,
             &self.metrics.bytecode_verifier_metrics,
             &self.metrics.execution_metrics,
-        )
-    }
-
-    /// The object ID for gas can be any object ID, even for an uncreated object
-    #[instrument(skip_all)]
-    pub async fn dev_inspect_transaction_block(
-        &self,
-        sender: SuiAddress,
-        transaction_kind: TransactionKind,
-        gas_price: Option<u64>,
-        gas_budget: Option<u64>,
-        gas_sponsor: Option<SuiAddress>,
-        gas_objects: Option<Vec<ObjectRef>>,
-        show_raw_txn_data_and_effects: Option<bool>,
-        skip_checks: Option<bool>,
-    ) -> SuiResult<DevInspectResults> {
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-        let protocol_config = epoch_store.protocol_config();
-        let reference_gas_price = epoch_store.reference_gas_price();
-
-        let skip_checks = skip_checks.unwrap_or(true);
-        let show_raw_txn_data_and_effects = show_raw_txn_data_and_effects.unwrap_or(false);
-
-        // Synthesize the full TransactionData the caller would have signed.
-        let price = gas_price.unwrap_or(reference_gas_price);
-        let budget = gas_budget.unwrap_or(protocol_config.max_tx_gas());
-        let owner = gas_sponsor.unwrap_or(sender);
-        let payment = gas_objects.unwrap_or_default();
-        let transaction = TransactionData::V1(TransactionDataV1 {
-            kind: transaction_kind,
-            sender,
-            gas_data: GasData {
-                payment,
-                owner,
-                price,
-                budget,
-            },
-            expiration: TransactionExpiration::None,
-        });
-
-        // Capture raw bytes before simulate (which may mutate gas_data for mock
-        // gas injection).
-        let raw_txn_data = if show_raw_txn_data_and_effects {
-            bcs::to_bytes(&transaction).map_err(|_| {
-                SuiErrorKind::TransactionSerializationError {
-                    error: "Failed to serialize transaction during dev inspect".to_string(),
-                }
-            })?
-        } else {
-            vec![]
-        };
-
-        // Route through `simulate_transaction`:
-        //   skip_checks = true  → TransactionChecks::Disabled
-        //   skip_checks = false → TransactionChecks::Enabled
-        // The deny-config check runs inside `simulate_transaction` via
-        // `pre_object_load_checks`, so we don't invoke it directly here.
-        let checks = if skip_checks {
-            TransactionChecks::Disabled
-        } else {
-            TransactionChecks::Enabled
-        };
-        let sim =
-            self.simulate_transaction(transaction, checks, /* allow_mock_gas_coin */ true)?;
-
-        let raw_effects = if show_raw_txn_data_and_effects {
-            bcs::to_bytes(&sim.effects).map_err(|_| {
-                SuiErrorKind::TransactionSerializationError {
-                    error: "Failed to serialize transaction effects during dev inspect".to_string(),
-                }
-            })?
-        } else {
-            vec![]
-        };
-
-        // Resolve event/object layouts against the simulate-produced ObjectSet
-        // (newly-published packages from the simulation appear there), with the
-        // node's backing package store as fallback for already-on-chain packages.
-        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
-            epoch_store.protocol_config(),
-            Box::new(OverlayBackingPackageStore::new(
-                &sim.objects,
-                self.get_backing_package_store(),
-            )),
-        );
-
-        DevInspectResults::new(
-            sim.effects,
-            sim.events.unwrap_or_default(),
-            sim.execution_result,
-            raw_txn_data,
-            raw_effects,
-            layout_resolver.as_mut(),
         )
     }
 

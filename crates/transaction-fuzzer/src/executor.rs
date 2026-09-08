@@ -7,7 +7,7 @@
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use sui_core::authority::AuthorityState;
-use sui_core::authority::authority_test_utils::submit_and_execute;
+use sui_core::authority::authority_test_utils::{dev_inspect_for_testing, submit_and_execute};
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_move_build::BuildConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
@@ -17,6 +17,7 @@ use sui_types::error::SuiError;
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
 use sui_types::object::Object;
 use sui_types::transaction::{Transaction, TransactionData, TransactionKind};
+use sui_types::transaction_executor::TransactionChecks;
 use sui_types::utils::to_sender_signed_transaction;
 use tokio::runtime::Runtime;
 
@@ -166,8 +167,8 @@ impl Executor {
     }
 
     pub fn dry_run_transaction(&self, tx_data: TransactionData) -> Result<(), SuiError> {
-        self.rt
-            .block_on(self.state.dry_exec_transaction(tx_data))
+        self.state
+            .simulate_transaction(tx_data, TransactionChecks::Enabled, true)
             .map(|_| ())
     }
 
@@ -181,17 +182,21 @@ impl Executor {
         gas_objects: Option<Vec<ObjectRef>>,
         skip_checks: Option<bool>,
     ) -> Result<(), SuiError> {
-        self.rt
-            .block_on(self.state.dev_inspect_transaction_block(
-                sender,
-                kind,
-                gas_price,
-                gas_budget,
-                gas_sponsor,
-                gas_objects,
-                None,
-                skip_checks,
-            ))
-            .map(|_| ())
+        let checks = if skip_checks.unwrap_or(true) {
+            TransactionChecks::Disabled
+        } else {
+            TransactionChecks::Enabled
+        };
+        dev_inspect_for_testing(
+            &self.state,
+            sender,
+            kind,
+            gas_price,
+            gas_budget,
+            gas_sponsor,
+            gas_objects,
+            checks,
+        )
+        .map(|_| ())
     }
 }

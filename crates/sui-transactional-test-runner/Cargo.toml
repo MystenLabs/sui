@@ -54,7 +54,6 @@ sui-core.workspace = true
 sui-framework.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
-sui-json-rpc-types.workspace = true
 sui-json-rpc-api.workspace = true
 sui-framework-snapshot.workspace = true
 typed-store.workspace = true

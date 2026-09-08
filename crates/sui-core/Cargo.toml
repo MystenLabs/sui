@@ -88,7 +88,6 @@ sui-framework.workspace = true
 sui-swarm-config.workspace = true
 sui-genesis-builder.workspace = true
 sui-indexer-alt-framework = { workspace = true, default-features = false }
-sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
 sui-network.workspace = true
 sui-protocol-config.workspace = true
