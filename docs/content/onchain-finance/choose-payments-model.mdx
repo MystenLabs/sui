@@ -119,7 +119,7 @@ Use [Payment Kit](/onchain-finance/payment-kit) when you need structured receipt
 The registry entry point takes a nonce, the expected amount, and the payment coin:
 
 ```move
-module sui::payment_kit;
+module payment_kit::payment_kit;
 
 public fun process_registry_payment<T>(
     registry: &mut PaymentRegistry,
@@ -129,7 +129,7 @@ public fun process_registry_payment<T>(
     receiver: Option<address>,
     clock: &Clock,
     ctx: &mut TxContext
-)
+): PaymentReceipt
 ```
 
 The function verifies that the coin value matches `payment_amount`, checks the composite key for a duplicate, records the payment, transfers funds to `receiver` or the registry, returns a `PaymentReceipt`, and emits an event. It aborts with `EDuplicatePayment` when the same key was already processed, and with `EPaymentAmountMismatch` when the coin value differs from the expected amount.

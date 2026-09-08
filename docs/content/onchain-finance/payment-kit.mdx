@@ -169,13 +169,13 @@ A `PaymentRecord` cannot be deleted before its expiration epoch, ensuring a mini
 To create a new payment registry, you need to provide a `name`, which is an ASCII-based string used to derive an address for the registry. In addition to a `name`, you must also provide the package `Namespace` object. `Namespace` provides a higher-order organizational structure for managing multiple payment registries.
 
 ```move
-module sui::payment_kit;
+module payment_kit::payment_kit;
 
 public fun create_registry(
     namespace: &mut Namespace,
     name: String,
     ctx: &mut TxContext
-)
+): (PaymentRegistry, RegistryAdminCap)
 ```
 
 This function creates a `PaymentRegistry` and a `RegistryAdminCap` for administrative control. The `RegistryAdminCap` is initially owned by the creator and can be shared or transferred as needed.
@@ -195,7 +195,7 @@ testnet: 0xa5016862fdccba7cc576b56cc5a391eda6775200aaa03a6b3c97d512312878db
 Process payments through a registry with duplicate prevention:
 
 ```move
-module sui::payment_kit;
+module payment_kit::payment_kit;
 
 public fun process_registry_payment<T>(
     registry: &mut PaymentRegistry,
@@ -205,7 +205,7 @@ public fun process_registry_payment<T>(
     receiver: Option<address>,
     clock: &Clock,
     ctx: &mut TxContext
-)
+): PaymentReceipt
 ```
 
 **Parameters:**
@@ -237,7 +237,7 @@ The function:
 Delete an expired `PaymentRecord` to free up storage:
 
 ```move
-module sui::payment_kit;
+module payment_kit::payment_kit;
 
 public fun delete_payment_record<T>(
     registry: &mut PaymentRegistry,
@@ -255,7 +255,7 @@ Registry administrators can update configuration settings using the `RegistryAdm
 **Set expiration duration:**
 
 ```move
-module sui::payment_kit;
+module payment_kit::payment_kit;
 
 public fun set_config_epoch_expiration_duration(
     registry: &mut PaymentRegistry,
@@ -268,7 +268,7 @@ public fun set_config_epoch_expiration_duration(
 **Set `PaymentRegistry` to receive funds:**
 
 ```move
-module sui::payment_kit;
+module payment_kit::payment_kit;
 
 public fun set_config_registry_managed_funds(
     registry: &mut PaymentRegistry,
@@ -285,13 +285,13 @@ When `registry_managed_funds` is `true`, payments accumulate in the registry for
 If a `PaymentRegistry` is set to manage funds, an administrator can withdraw accumulated funds:
 
 ```move
-module sui::payment_kit;
+module payment_kit::payment_kit;
 
 public fun withdraw_from_registry<T>(
     registry: &mut PaymentRegistry,
     cap: &RegistryAdminCap,
     ctx: &mut TxContext
-)
+): Coin<T>
 ```
 
 This function requires the `RegistryAdminCap` and returns all accumulated coins of type `T` from the registry. Only use this when the registry is configured to retain funds (controlled by the `registry_managed_funds` configuration setting).
@@ -301,7 +301,7 @@ This function requires the `RegistryAdminCap` and returns all accumulated coins 
 For scenarios that don't require duplicate prevention or persistent records, use ephemeral payments:
 
 ```move
-module sui::payment_kit;
+module payment_kit::payment_kit;
 
 public fun process_ephemeral_payment<T>(
     nonce: String,
@@ -310,7 +310,7 @@ public fun process_ephemeral_payment<T>(
     receiver: address,
     clock: &Clock,
     ctx: &mut TxContext
-)
+): PaymentReceipt
 ```
 
 Ephemeral payments:
