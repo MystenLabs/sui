@@ -5,4 +5,3 @@ guarded
 temperature
 guard_with_loop_control
 guarded_unrecovered
-pattern_mut

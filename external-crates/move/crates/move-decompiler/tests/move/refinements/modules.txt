@@ -5,3 +5,4 @@ lift_terminating_arm
 negate_comparison
 simplify_borrow_deref
 simplify_zero_compare
+needs_mut
