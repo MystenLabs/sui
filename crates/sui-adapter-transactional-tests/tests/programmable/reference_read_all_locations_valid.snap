@@ -8,11 +8,13 @@ processed 14 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-71:
+task 1, lines 8-69:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 10032000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// Move call value parameter
 
 task 2, lines 73-75:
 //# programmable --sender A --inputs 112u64
