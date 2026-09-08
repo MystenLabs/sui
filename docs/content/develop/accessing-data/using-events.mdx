@@ -213,7 +213,7 @@ Event connection
 Use the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) crate to read events over gRPC. Use `LedgerService.ListEvents` with an `EventFilter` for paginated historical queries, `SubscriptionService.SubscribeEvents` for live streaming, or fetch a specific transaction's events through `LedgerService.GetTransaction`. See the [sui-rust-sdk README](https://github.com/MystenLabs/sui-rust-sdk) for client setup and the [gRPC service reference](/references/fullnode-protocol) for the available RPCs.
 
 :::info
-The legacy `sui_sdk::SuiClientBuilder` JSON-RPC client is deprecated. Use `sui-rust-sdk` for new integrations.
+The legacy `sui_sdk::SuiClientBuilder` JSON-RPC client has been removed. Use `sui-rust-sdk` instead.
 :::
 
 ### JSON-RPC `suix_queryEvents` (deprecated) {#queryevents-deprecated}

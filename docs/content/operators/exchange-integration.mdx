@@ -84,7 +84,7 @@ The public endpoints at `https://fullnode.<network>.sui.io` and `https://graphql
 
 gRPC is the recommended high-performance API for backend services. It supports `FieldMask`-based projection so you only fetch the fields you need, and includes checkpoint subscriptions that stream finalized checkpoints along with the transaction and event data you select through the response mask. For a complete tutorial including `grpcurl`, TypeScript, Go, and Python examples, see [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc).
 
-For the Rust client, use the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) crate (gRPC) for new code. The legacy [`sui-sdk` JSON-RPC client](/references/rust-sdk) remains available for migration purposes only.
+For the Rust client, use the [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sdk) crate (gRPC).
 
 ### GraphQL RPC
 
