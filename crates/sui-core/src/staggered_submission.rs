@@ -36,6 +36,7 @@ use sui_types::committee::{Committee, CommitteeTrait as _, EpochId};
 use sui_types::crypto::DefaultHash;
 use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiErrorKind, SuiResult};
+use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::transaction::{MAX_UNPAID_ALLOWED_PROPOSERS, Transaction, TransactionDataAPI as _};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -47,6 +48,37 @@ const DEFAULT_STAGGER_MAX_DELAY: Duration = Duration::from_secs(5);
 /// Held (staggered) submissions may occupy at most `capacity / this` of the owner's
 /// pending-transaction capacity; see [`StaggerQuota`].
 const STAGGERED_HELD_QUOTA_DIVISOR: usize = 4;
+
+/// Metric label splitting submissions by allowed-proposers restriction:
+/// "unrestricted" when any user transaction in the group could have named its
+/// proposers and did not (the class staggering targets), "restricted" when all of
+/// them did, and "na" for groups without user transactions (system messages).
+pub fn proposers_metric_label(
+    transactions: &[ConsensusTransaction],
+    epoch_store: &AuthorityPerEpochStore,
+) -> &'static str {
+    let epoch = epoch_store.epoch();
+    let mut saw_user_transaction = false;
+    for transaction in transactions
+        .iter()
+        .filter_map(|transaction| transaction.kind.as_user_transaction())
+    {
+        saw_user_transaction = true;
+        if !transaction
+            .data()
+            .transaction_data()
+            .expiration()
+            .restricts_proposers(epoch)
+        {
+            return "unrestricted";
+        }
+    }
+    if saw_user_transaction {
+        "restricted"
+    } else {
+        "na"
+    }
+}
 
 /// Parameters of the staggering schedule.
 #[derive(Debug, Clone)]
