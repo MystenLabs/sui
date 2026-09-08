@@ -18,6 +18,7 @@ use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::AffectedAddressFilter;
 use sui_rpc::proto::sui::rpc::v2::AffectedObjectFilter;
+use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::EmitModuleFilter;
 use sui_rpc::proto::sui::rpc::v2::EventFilter;
 use sui_rpc::proto::sui::rpc::v2::EventLiteral;
@@ -46,6 +47,7 @@ use sui_rpc::proto::sui::rpc::v2::TransactionTerm;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
 use sui_rpc::proto::sui::rpc::v2::event_literal;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
+use sui_rpc::proto::sui::rpc::v2::get_object_result;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_literal;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -1169,6 +1171,181 @@ async fn test_json_read_mask() {
                 assert_eq!(s, "1", "TestEvent.value should be 1");
             }
             other => panic!("expected value to be a string, got: {other:?}"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_batch_get_objects() {
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
+
+    let (pkg_id, gas) =
+        publish_package(&mut cluster, sender, &kp, gas, emit_test_event_pkg_path()).await;
+
+    cluster.create_checkpoint().await;
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    let non_existent_id_1 = ObjectID::random();
+    let non_existent_id_2 = ObjectID::random();
+
+    let make_req = |id: &ObjectID, version: Option<u64>| {
+        let mut req = GetObjectRequest::default();
+        req.object_id = Some(id.to_canonical_string(true));
+        req.version = version;
+        req
+    };
+
+    // 1. A batch containing only unversioned (version: None) requests.
+    {
+        let mut req = BatchGetObjectsRequest::default();
+        req.requests = vec![make_req(&pkg_id, None), make_req(&gas.0, None)];
+        req.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+
+        let response = client.batch_get_objects(req).await.unwrap().into_inner();
+
+        assert_eq!(response.objects.len(), 2);
+
+        match &response.objects[0].result {
+            Some(get_object_result::Result::Object(obj)) => {
+                assert_eq!(
+                    obj.object_id.as_deref(),
+                    Some(pkg_id.to_canonical_string(true).as_str())
+                );
+            }
+            other => panic!("expected object for pkg_id, got: {other:?}"),
+        }
+
+        match &response.objects[1].result {
+            Some(get_object_result::Result::Object(obj)) => {
+                assert_eq!(
+                    obj.object_id.as_deref(),
+                    Some(gas.0.to_canonical_string(true).as_str())
+                );
+                assert_eq!(obj.version, Some(gas.1.value()));
+            }
+            other => panic!("expected object for gas, got: {other:?}"),
+        }
+    }
+
+    // 2. A mixed batch containing both exact-version and unversioned requests.
+    {
+        let mut req = BatchGetObjectsRequest::default();
+        req.requests = vec![
+            make_req(&pkg_id, None),
+            make_req(&gas.0, Some(gas.1.value())),
+        ];
+        req.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+
+        let response = client.batch_get_objects(req).await.unwrap().into_inner();
+
+        assert_eq!(response.objects.len(), 2);
+
+        match &response.objects[0].result {
+            Some(get_object_result::Result::Object(obj)) => {
+                assert_eq!(
+                    obj.object_id.as_deref(),
+                    Some(pkg_id.to_canonical_string(true).as_str())
+                );
+            }
+            other => panic!("expected object for unversioned pkg_id, got: {other:?}"),
+        }
+
+        match &response.objects[1].result {
+            Some(get_object_result::Result::Object(obj)) => {
+                assert_eq!(
+                    obj.object_id.as_deref(),
+                    Some(gas.0.to_canonical_string(true).as_str())
+                );
+                assert_eq!(obj.version, Some(gas.1.value()));
+            }
+            other => panic!("expected object for versioned gas, got: {other:?}"),
+        }
+    }
+
+    // 3. Proper error reporting for non-existent objects in both versioned and unversioned modes.
+    {
+        let wrong_version = gas.1.value() + 100;
+        let mut req = BatchGetObjectsRequest::default();
+        req.requests = vec![
+            // unversioned existing
+            make_req(&pkg_id, None),
+            // unversioned non-existent
+            make_req(&non_existent_id_1, None),
+            // exact-version existing
+            make_req(&gas.0, Some(gas.1.value())),
+            // exact-version non-existent object ID
+            make_req(&non_existent_id_2, Some(1)),
+            // exact-version non-existent version for existing object
+            make_req(&gas.0, Some(wrong_version)),
+        ];
+        req.read_mask = Some(FieldMask::from_paths(["object_id", "version"]));
+
+        let response = client.batch_get_objects(req).await.unwrap().into_inner();
+
+        assert_eq!(response.objects.len(), 5);
+
+        // 0: unversioned existing
+        match &response.objects[0].result {
+            Some(get_object_result::Result::Object(obj)) => {
+                assert_eq!(
+                    obj.object_id.as_deref(),
+                    Some(pkg_id.to_canonical_string(true).as_str())
+                );
+            }
+            other => panic!("expected object at index 0, got: {other:?}"),
+        }
+
+        // 1: unversioned non-existent -> NotFound error
+        match &response.objects[1].result {
+            Some(get_object_result::Result::Error(status)) => {
+                assert_eq!(status.code, tonic::Code::NotFound as i32);
+                assert!(
+                    status
+                        .message
+                        .contains(&non_existent_id_1.to_canonical_string(true))
+                );
+            }
+            other => panic!("expected NotFound error at index 1, got: {other:?}"),
+        }
+
+        // 2: exact-version existing
+        match &response.objects[2].result {
+            Some(get_object_result::Result::Object(obj)) => {
+                assert_eq!(
+                    obj.object_id.as_deref(),
+                    Some(gas.0.to_canonical_string(true).as_str())
+                );
+                assert_eq!(obj.version, Some(gas.1.value()));
+            }
+            other => panic!("expected object at index 2, got: {other:?}"),
+        }
+
+        // 3: exact-version non-existent object ID -> NotFound error
+        match &response.objects[3].result {
+            Some(get_object_result::Result::Error(status)) => {
+                assert_eq!(status.code, tonic::Code::NotFound as i32);
+                assert!(
+                    status
+                        .message
+                        .contains(&non_existent_id_2.to_canonical_string(true))
+                );
+                assert!(status.message.contains("version 1"));
+            }
+            other => panic!("expected NotFound error at index 3, got: {other:?}"),
+        }
+
+        // 4: exact-version non-existent version for existing object -> NotFound error
+        match &response.objects[4].result {
+            Some(get_object_result::Result::Error(status)) => {
+                assert_eq!(status.code, tonic::Code::NotFound as i32);
+                assert!(status.message.contains(&gas.0.to_canonical_string(true)));
+                assert!(status.message.contains(&format!("version {wrong_version}")));
+            }
+            other => panic!("expected NotFound error at index 4, got: {other:?}"),
         }
     }
 }
