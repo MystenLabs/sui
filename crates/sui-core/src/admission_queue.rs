@@ -282,7 +282,7 @@ impl AdmissionQueueMetrics {
             pool_commit_latency: register_histogram_vec_with_registry!(
                 "consensus_transaction_pool_commit_latency",
                 "Time from insert into the transaction pool to commit of the block that proposed the entry",
-                &["lane"],
+                &["lane", "proposers"],
                 mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
