@@ -71,9 +71,9 @@ answer: >-
   prompt={"Prepare an upgrade for this published Sui package. Check compatibility rules, build the upgrade transaction, identify the UpgradeCap, and document the exact upgrade steps."}
 />
 
-Sui smart contracts are immutable package objects consisting of a collection of Move modules. Because packages are immutable, transactions can safely access their contents without full consensus (fastpath transactions). If packages were mutable, they would become [shared objects](/develop/objects/object-ownership/shared), which would require full consensus before completing a transaction.
+Sui smart contracts are immutable package objects consisting of a collection of Move modules. Because packages are immutable, a transaction references a package by ID alone and loads it at its latest version, rather than passing it as a versioned input. If packages were mutable, they would be [shared objects](/develop/objects/object-ownership/shared), and every call into a package would contend on that object.
 
-The inability to change packages, however, becomes a problem when considering the iterative nature of code development. Builders require the ability to update their code and pull changes from other developers while still being able to benefit from fastpath transactions. The Sui network provides a method for upgrading your packages while still retaining their immutable properties.
+The inability to change packages, however, becomes a problem when considering the iterative nature of code development. Builders require the ability to update their code and pull changes from other developers while keeping the properties that immutability provides. The Sui network provides a method for upgrading your packages while still retaining their immutable properties.
 
 ## Upgrade considerations
 
@@ -101,7 +101,7 @@ To upgrade a package, your package must satisfy the following requirements:
 
   - You can change function implementations.
 
-  - You can change non-`public` function signatures, including `friend` and `entry` function signatures.
+  - You can change non-`public` function signatures, including `public(package)` and `entry` function signatures.
 
 :::info
 
@@ -118,7 +118,7 @@ Use the `sui client upgrade` command to upgrade packages that meet the previous 
 - `--gas-budget`: The maximum number of gas units that can be expended before the network cancels the transaction.
 - `--cap`: The ID of the `UpgradeCap`. You receive this ID as a return from the publish command.
 
-Developers upgrading packages using Move code have access to types and functions to define [custom upgrade policies](/develop/publish-upgrade-packages/custom-policies). For example, a Move developer might want to disallow upgrading a package, regardless of the current package owner. The [`make_immutable` function](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/package.md#0x2_package_make_immutable) is available to them to create this behavior. More advanced policies using available types like `UpgradeTicket` and `Upgrade Receipt` are also possible. For an example, see this [custom upgrade policy](https://github.com/MystenLabs/sui/issues/2045#:~:text=Implement%20a%20custom%20upgrade%20policy) on GitHub.
+Developers upgrading packages using Move code have access to types and functions to define [custom upgrade policies](/develop/publish-upgrade-packages/custom-policies). For example, a Move developer might want to disallow upgrading a package, regardless of the current package owner. The [`make_immutable` function](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/package.md#0x2_package_make_immutable) is available to them to create this behavior. More advanced policies using available types like `UpgradeTicket` and `UpgradeReceipt` are also possible. For an example, see this [custom upgrade policy](https://github.com/MystenLabs/sui/issues/2045#:~:text=Implement%20a%20custom%20upgrade%20policy) on GitHub.
 
 When you use the Sui client CLI, the `upgrade` command handles generating the upgrade digest, authorizing the upgrade with the `UpgradeCap` to get an `UpgradeTicket`, and updating the `UpgradeCap` with the `UpgradeReceipt` after a successful upgrade. To learn more about these processes, see the Move documentation for the [package module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/package.md).
 
