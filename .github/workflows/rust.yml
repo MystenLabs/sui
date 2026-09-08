@@ -319,11 +319,11 @@ jobs:
           target/release/sui start --network.config "$CFG" &
           SUI_PID=$!
           for i in $(seq 1 60); do
-            if curl -sf -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","method":"rpc.discover","id":1}' http://127.0.0.1:9000 -o /dev/null 2>&1; then echo "RPC is ready"; break; fi
+            if curl -sf http://127.0.0.1:9000/health -o /dev/null 2>&1; then echo "RPC is ready"; break; fi
             if ! kill -0 $SUI_PID 2>/dev/null; then echo "sui start died"; exit 1; fi
             sleep 2
           done
-          curl -sf -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","method":"rpc.discover","id":1}' http://127.0.0.1:9000 -o /dev/null || { echo "RPC not ready after 120s"; exit 1; }
+          curl -sf http://127.0.0.1:9000/health -o /dev/null || { echo "RPC not ready after 120s"; exit 1; }
           echo "SUI_PID=$SUI_PID" >> "$GITHUB_ENV"
           echo "SUI_CONFIG_DIR=$CFG" >> "$GITHUB_ENV"
       - name: sui-benchmark stress (smoke)

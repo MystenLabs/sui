@@ -4,8 +4,6 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use sui_json_rpc_types::Page as PageResponse;
-use sui_open_rpc::Module;
-use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::SuiAddress;
 
 use crate::api::name_service::error::Error;
@@ -16,14 +14,13 @@ use crate::error::InternalContext as _;
 mod error;
 mod response;
 
-#[open_rpc(namespace = "suix", tag = "Name Service API")]
 #[rpc(server, namespace = "suix")]
 trait NameServiceApi {
     /// Resolve a SuiNS name to its address
     #[method(name = "resolveNameServiceAddress")]
     async fn resolve_name_service_address(
         &self,
-        /// The name to resolve
+        // The name to resolve
         name: String,
     ) -> RpcResult<Option<SuiAddress>>;
 
@@ -33,11 +30,11 @@ trait NameServiceApi {
     #[method(name = "resolveNameServiceNames")]
     async fn resolve_name_service_names(
         &self,
-        /// The address to resolve
+        // The address to resolve
         address: SuiAddress,
-        /// Unused pagination cursor
+        // Unused pagination cursor
         cursor: Option<String>,
-        /// Unused pagination limit
+        // Unused pagination limit
         limit: Option<usize>,
     ) -> RpcResult<PageResponse<String, String>>;
 }
@@ -74,10 +71,6 @@ impl NameServiceApiServer for NameService {
 }
 
 impl RpcModule for NameService {
-    fn schema(&self) -> Module {
-        NameServiceApiOpenRpc::module_doc()
-    }
-
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }

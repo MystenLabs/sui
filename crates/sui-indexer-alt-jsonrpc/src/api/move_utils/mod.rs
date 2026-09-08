@@ -4,8 +4,6 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use sui_json_rpc_types::SuiMoveNormalizedFunction;
-use sui_open_rpc::Module;
-use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::ObjectID;
 
 use crate::api::rpc_module::RpcModule;
@@ -14,7 +12,6 @@ use crate::context::Context;
 mod error;
 mod response;
 
-#[open_rpc(namespace = "sui", tag = "Move APIs")]
 #[rpc(server, namespace = "sui")]
 trait MoveApi {
     #[method(name = "getNormalizedMoveFunction")]
@@ -42,10 +39,6 @@ impl MoveApiServer for MoveUtils {
 }
 
 impl RpcModule for MoveUtils {
-    fn schema(&self) -> Module {
-        MoveApiOpenRpc::module_doc()
-    }
-
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }

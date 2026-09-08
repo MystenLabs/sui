@@ -119,8 +119,7 @@ jobs:
           git add \
             Cargo.toml \
             Cargo.lock \
-            crates/sui-open-rpc/spec/openrpc.json \
-            crates/sui-open-rpc/tests/snapshots/generate_spec__openrpc.snap.json
+            crates/sui-indexer-alt-jsonrpc/openrpc.json
           BODY="Sui v${NEW_VERSION} Version Bump"
           git commit -m "$BODY"
           # Push using the app token URL so the push is attributed to the GitHub App,
@@ -151,7 +150,6 @@ jobs:
           git add \
             Cargo.toml \
             Cargo.lock \
-            crates/sui-open-rpc/spec/openrpc.json \
-            crates/sui-open-rpc/tests/snapshots/generate_spec__openrpc.snap.json
+            crates/sui-indexer-alt-jsonrpc/openrpc.json
           git commit -m "$BODY"
           git push origin HEAD:"$REF_NAME"

@@ -61,11 +61,5 @@ export default {
 };
 EOF
 
-ENV="$(readlink -f ../cli)/$ENV.env"
-cat > $ENV <<-EOF
-PKG=$PACKAGE_ID
-CAP=$UPGRADE_CAP
-EOF
-
 echo "Contract Deployment finished!"
-echo "Details written to $CONFIG and $ENV."
+echo "Details written to $CONFIG."

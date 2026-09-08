@@ -196,13 +196,6 @@ impl WriteTestCluster {
             .await
     }
 
-    /// Send a JSON-RPC request to the fullnode's legacy JSON-RPC server (rather than the
-    /// indexer's JSON-RPC server), to compare implementations of the same method.
-    async fn execute_fullnode_jsonrpc(&self, method: &str, params: Value) -> anyhow::Result<Value> {
-        let url = Url::parse(self.onchain_cluster.rpc_url()).context("Invalid fullnode URL")?;
-        self.execute_jsonrpc_at(url, method, params).await
-    }
-
     async fn execute_jsonrpc_at(
         &self,
         url: Url,
@@ -876,70 +869,6 @@ async fn test_dev_inspect_execution_failure() {
     assert_eq!(result["effects"]["status"]["status"], "failure");
     assert!(!result["error"].is_null(), "Expected an execution error");
     assert!(result["results"].is_null());
-}
-
-#[tokio::test]
-async fn test_dev_inspect_matches_fullnode_jsonrpc() {
-    telemetry_subscribers::init_for_testing();
-    let cluster = WriteTestCluster::new().await.unwrap();
-    let sender = cluster.onchain_cluster.wallet.get_addresses()[0];
-
-    // Successful execution: the responses must match in full, including the raw transaction
-    // bytes (proving the synthesized TransactionData is identical) and effects.
-    let params = json!({
-        "sender_address": sender.to_string(),
-        "tx_bytes": encode_transaction_kind(&option_none_transaction_kind()),
-        "additional_args": { "showRawTxnDataAndEffects": true },
-    });
-
-    let indexer = cluster
-        .execute_jsonrpc("sui_devInspectTransactionBlock", params.clone())
-        .await
-        .unwrap();
-    let fullnode = cluster
-        .execute_fullnode_jsonrpc("sui_devInspectTransactionBlock", params)
-        .await
-        .unwrap();
-
-    assert!(
-        indexer["error"].is_null(),
-        "indexer RPC error: {}",
-        indexer["error"]
-    );
-    assert!(
-        fullnode["error"].is_null(),
-        "fullnode RPC error: {}",
-        fullnode["error"]
-    );
-    assert_eq!(indexer["result"], fullnode["result"]);
-
-    // Failed execution: the responses must match except for the `error` message -- the fullnode
-    // stringifies the executor's error, which is not part of the gRPC simulate response that the
-    // indexer's implementation is built on, so the indexer recovers a differently-formatted
-    // message from the effects' execution status.
-    let params = json!({
-        "sender_address": sender.to_string(),
-        "tx_bytes": encode_transaction_kind(&divide_by_zero_transaction_kind()),
-    });
-
-    let indexer = cluster
-        .execute_jsonrpc("sui_devInspectTransactionBlock", params.clone())
-        .await
-        .unwrap();
-    let fullnode = cluster
-        .execute_fullnode_jsonrpc("sui_devInspectTransactionBlock", params)
-        .await
-        .unwrap();
-
-    let mut indexer_result = indexer["result"].clone();
-    let mut fullnode_result = fullnode["result"].clone();
-
-    let indexer_error = indexer_result.as_object_mut().unwrap().remove("error");
-    let fullnode_error = fullnode_result.as_object_mut().unwrap().remove("error");
-    assert!(indexer_error.is_some_and(|e| !e.is_null()));
-    assert!(fullnode_error.is_some_and(|e| !e.is_null()));
-
-    assert_eq!(indexer_result, fullnode_result);
 }
 
 #[tokio::test]

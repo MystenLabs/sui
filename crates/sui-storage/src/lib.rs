@@ -27,13 +27,9 @@ use sui_types::storage::WriteStore;
 use tracing::debug;
 
 pub mod blob;
-pub mod http_key_value_store;
-pub mod key_value_store;
-pub mod key_value_store_metrics;
 pub mod mutex_table;
 pub mod object_store;
 pub mod package_object_cache;
-pub mod sharded_lru;
 pub mod write_path_pending_tx_log;
 
 pub const SHA3_BYTES: usize = 32;

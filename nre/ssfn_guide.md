@@ -33,12 +33,10 @@ $ vim /opt/sui/config/sui-node.yaml #on validator host
 #       peer-id: abcdefg2
 ```
 
-2. State sync fullnodes should have indexing disabled, run with pruning, and push metrics to Mysten's metric proxy
+2. State sync fullnodes should run with pruning and push metrics to Mysten's metric proxy
 
 This is a simple change, just add the following configs to your fullnode:
 ```
-enable-index-processing: false
-
 authority-store-pruning-config:
   num-latest-epoch-dbs-to-retain: 3
   epoch-db-pruning-period-secs: 3600

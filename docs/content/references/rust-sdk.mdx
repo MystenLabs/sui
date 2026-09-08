@@ -45,7 +45,7 @@ For new projects, use [`sui-rust-sdk`](https://github.com/MystenLabs/sui-rust-sd
 
 ## Legacy `sui-sdk` crate
 
-The legacy SDK crate lives in the [`crates/sui-sdk` directory](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) of the main Sui repository. It is forward and backwards compatible with `sui-rust-sdk`.
+The legacy SDK crate lives in the [`crates/sui-sdk` directory](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) of the main Sui repository. It no longer includes a JSON-RPC client; it provides the wallet and client configuration layer used by the Sui CLI, which talks to Sui over gRPC.
 
 ### Installation
 
@@ -58,6 +58,6 @@ sui-sdk = { git = "https://github.com/MystenLabs/sui.git", package = "sui-sdk" }
 
 ### SDK reference
 
-The legacy SDK README contains usage examples for connecting to a network, querying objects, and submitting transactions:
+The legacy SDK README describes what the crate provides and how to use the wallet from Rust:
 
 <ImportContent source="crates/sui-sdk/README.md" mode="code" style="md" />

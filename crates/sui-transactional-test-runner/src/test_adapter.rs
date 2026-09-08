@@ -58,18 +58,9 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
-use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, SuiAccumulatorOperation,
-    SuiAccumulatorValue, SuiExecutionStatus, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
-};
 use sui_protocol_config::{
     Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
     ProtocolVersion,
-};
-use sui_storage::{
-    key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::KeyPairWrapper;
@@ -96,6 +87,7 @@ use sui_types::storage::ReadStore;
 use sui_types::storage::{ObjectStore, RpcStateReader};
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
+use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID};
 use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
@@ -135,6 +127,10 @@ pub enum FakeID {
 }
 
 const DEFAULT_GAS_PRICE: u64 = 1_000;
+
+/// The maximum number of events summarized for a transaction, matching the page size the
+/// JSON-RPC event query used to apply.
+const QUERY_MAX_RESULT_LIMIT: usize = 50;
 
 const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     MOVE_STDLIB_PACKAGE_ID,
@@ -2156,7 +2152,7 @@ impl SuiTestAdapter {
             ExecutionStatus::Success => {
                 let events = self
                     .executor
-                    .query_tx_events_asc(digest, *QUERY_MAX_RESULT_LIMIT)
+                    .query_tx_events_asc(digest, QUERY_MAX_RESULT_LIMIT)
                     .await?;
                 Ok(TxnSummary {
                     events,
@@ -2199,12 +2195,11 @@ impl SuiTestAdapter {
     }
 
     async fn dry_run(&mut self, transaction: TransactionData) -> anyhow::Result<TxnSummary> {
-        let results = self.executor.dry_run_transaction_block(transaction).await?;
-        let DryRunTransactionBlockResponse {
+        let SimulateTransactionResult {
             effects, events, ..
-        } = results;
+        } = self.executor.dry_run_transaction_block(transaction).await?;
 
-        self.tx_summary_from_effects(effects, events)
+        self.tx_summary_from_effects(effects, events.unwrap_or_default())
     }
 
     async fn dev_inspect(
@@ -2213,65 +2208,66 @@ impl SuiTestAdapter {
         transaction_kind: TransactionKind,
         gas_price: Option<u64>,
     ) -> anyhow::Result<TxnSummary> {
-        let results = self
+        let SimulateTransactionResult {
+            effects, events, ..
+        } = self
             .executor
             .dev_inspect_transaction_block(sender, transaction_kind, gas_price)
             .await?;
-        let DevInspectResults {
-            effects, events, ..
-        } = results;
 
-        self.tx_summary_from_effects(effects, events)
+        self.tx_summary_from_effects(effects, events.unwrap_or_default())
     }
 
+    /// Summarize the effects of a simulated (dry-run or dev-inspect) transaction.
     fn tx_summary_from_effects(
         &mut self,
-        effects: SuiTransactionBlockEffects,
-        events: SuiTransactionBlockEvents,
+        effects: TransactionEffects,
+        events: TransactionEvents,
     ) -> anyhow::Result<TxnSummary> {
-        if let SuiExecutionStatus::Failure { error } = effects.status() {
+        if let ExecutionStatus::Failure(ExecutionFailure { error, command }) = effects.status() {
+            // Match the error rendering of the JSON-RPC effects these summaries used to be
+            // built from, so the expected test output is unchanged.
+            let error = match command {
+                Some(command) => format!("{error:?} in command {command}"),
+                None => format!("{error:?}"),
+            };
             return Err(anyhow::anyhow!(self.stabilize_str(format!(
                 "Transaction Effects Status: {error}\nExecution Error: {error}",
             ))));
         }
 
-        let mut created_ids: Vec<_> = effects.created().iter().map(|o| o.object_id()).collect();
-        let mut mutated_ids: Vec<_> = effects.mutated().iter().map(|o| o.object_id()).collect();
-        let mut unwrapped_ids: Vec<_> = effects.unwrapped().iter().map(|o| o.object_id()).collect();
-        let mut deleted_ids: Vec<_> = effects.deleted().iter().map(|o| o.object_id).collect();
+        let mut created_ids: Vec<_> = effects
+            .created()
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut mutated_ids: Vec<_> = effects
+            .mutated()
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut unwrapped_ids: Vec<_> = effects
+            .unwrapped()
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut deleted_ids: Vec<_> = effects.deleted().iter().map(|(id, _, _)| *id).collect();
         let mut unwrapped_then_deleted_ids: Vec<_> = effects
             .unwrapped_then_deleted()
             .iter()
-            .map(|o| o.object_id)
+            .map(|(id, _, _)| *id)
             .collect();
-        let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|o| o.object_id).collect();
+        let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|(id, _, _)| *id).collect();
         let accumulator_events = effects.accumulator_events();
         let mut accumulators_written: Vec<_> = accumulator_events
             .iter()
             .map(|event| {
-                let operation = match event.operation {
-                    SuiAccumulatorOperation::Merge => AccumulatorOperation::Merge,
-                    SuiAccumulatorOperation::Split => AccumulatorOperation::Split,
-                };
-                let value = match &event.value {
-                    SuiAccumulatorValue::Integer(v) => EffectsAccumulatorValue::Integer(*v),
-                    SuiAccumulatorValue::IntegerTuple(a, b) => {
-                        EffectsAccumulatorValue::IntegerTuple(*a, *b)
-                    }
-                    SuiAccumulatorValue::EventDigest(digests) => {
-                        EffectsAccumulatorValue::EventDigest(digests.clone())
-                    }
-                };
                 (
-                    event.accumulator_obj,
-                    event.address,
-                    event
-                        .ty
-                        .clone()
-                        .try_into()
-                        .expect("Failed to parse accumulator type tag"),
-                    operation,
-                    value,
+                    *event.accumulator_obj.inner(),
+                    event.write.address.address,
+                    event.write.address.ty.clone(),
+                    event.write.operation.clone(),
+                    event.write.value.clone(),
                 )
             })
             .collect();
@@ -2318,14 +2314,8 @@ impl SuiTestAdapter {
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         accumulators_written.sort_by_key(|(id, _, _, _, _)| self.real_to_fake_object_id(id));
 
-        let events = events
-            .data
-            .into_iter()
-            .map(|sui_event| sui_event.into())
-            .collect();
-
         Ok(TxnSummary {
-            events,
+            events: events.data,
             gas_summary: gas_summary.clone(),
             created: created_ids,
             mutated: mutated_ids,
@@ -2844,7 +2834,6 @@ async fn create_validator_fullnode(
         .with_starting_objects(objects)
         .with_shared_network_config(&network_config)
         .insert_genesis_checkpoint()
-        .skip_genesis_owner_index()
         .build()
         .await;
 
@@ -2855,7 +2844,6 @@ async fn create_validator_fullnode(
         .with_shared_network_config(&network_config)
         .with_keypair(&fullnode_key_pair)
         .insert_genesis_checkpoint()
-        .skip_genesis_owner_index()
         .build()
         .await;
 
@@ -2870,17 +2858,9 @@ async fn create_val_fullnode_executor(
     let (validator, fullnode) =
         create_validator_fullnode(protocol_config, objects, reference_gas_price).await;
 
-    let metrics = KeyValueStoreMetrics::new_for_tests();
-    let kv_store = Arc::new(TransactionKeyValueStore::new(
-        "rocksdb",
-        metrics,
-        validator.clone(),
-    ));
-
     ValidatorWithFullnode {
         validator,
         fullnode,
-        kv_store,
         pending_effects: Vec::new(),
         next_checkpoint_seq: 1, // 0 is genesis
     }

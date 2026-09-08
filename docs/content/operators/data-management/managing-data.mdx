@@ -210,9 +210,6 @@ Use the examples in this section to configure your Sui full node. You can copy t
 This configuration keeps disk usage to a minimum. It is suitable for validators and state sync full nodes that do not serve read traffic. Full nodes with this configuration cannot answer queries that require indexing or historic data.
 
 ```yaml
-# Do not generate or maintain indexing of Sui data on the node
-enable-index-processing: false
-
 authority-store-pruning-config:
   # Prune obsolete object versions immediately.
   num-epochs-to-retain: 0

@@ -9,7 +9,6 @@ use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     file_format_common::BinaryConstants,
 };
-use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
@@ -17,17 +16,11 @@ use move_core_types::{
 use mysten_common::ZipDebugEqIteratorExt;
 use rand::seq::SliceRandom;
 use rand::{SeedableRng, prelude::StdRng};
-use serde_json::json;
 use std::collections::HashSet;
 use std::fs;
-use std::str::FromStr;
 use std::{convert::TryInto, env};
 use sui_test_transaction_builder::TestTransactionBuilder;
 
-use sui_json_rpc_types::{
-    SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockEffectsV1, SuiTypeTag,
-};
 use sui_macros::{register_fail_point_arg, sim_test};
 use sui_move_build::BuildConfig;
 use sui_protocol_config::{
@@ -40,6 +33,7 @@ use sui_types::error::UserInputError;
 use sui_types::execution::SharedInput;
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
+use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_consensus::{
     AuthorityCapabilitiesV2, ConsensusDeterminedVersionAssignments,
 };
@@ -48,6 +42,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
+use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
@@ -61,7 +56,6 @@ use sui_types::{
     transaction::PlainTransactionWithClaims,
 };
 use sui_types::{SUI_CLOCK_OBJECT_SHARED_VERSION, digests::Digest};
-use sui_types::{dynamic_field::DynamicFieldType, messages_consensus::ConsensusTransaction};
 
 use crate::authority::authority_store::ObjectLockStatus;
 use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
@@ -263,12 +257,15 @@ async fn test_dry_run_transaction_block() {
         construct_shared_object_transaction_with_sequence_number(None).await;
     let initial_shared_object_version = validator.get_object(&shared_object_id).unwrap().version();
 
-    let (response, _, _, _) = fullnode
-        .dry_exec_transaction(transaction.data().intent_message().value.clone())
-        .await
+    let sim = fullnode
+        .simulate_transaction(
+            transaction.data().intent_message().value.clone(),
+            TransactionChecks::Enabled,
+            /* allow_mock_gas_coin */ true,
+        )
         .unwrap();
-    assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
-    let gas_usage = response.effects.gas_cost_summary();
+    assert_eq!(*sim.effects.status(), ExecutionStatus::Success);
+    let gas_usage = sim.effects.gas_cost_summary().clone();
 
     // Make sure that objects are not mutated after dry run.
     let gas_object_version = fullnode.get_object(&gas_object_id).unwrap().version();
@@ -284,9 +281,11 @@ async fn test_dry_run_transaction_block() {
         txn_data.gas_budget(),
         txn_data.gas_price(),
     );
-    let (response, _, _, _) = fullnode.dry_exec_transaction(txn_data).await.unwrap();
-    let gas_usage_no_gas = response.effects.gas_cost_summary();
-    assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
+    let sim = fullnode
+        .simulate_transaction(txn_data, TransactionChecks::Enabled, true)
+        .unwrap();
+    let gas_usage_no_gas = sim.effects.gas_cost_summary().clone();
+    assert_eq!(*sim.effects.status(), ExecutionStatus::Success);
     assert_eq!(gas_usage, gas_usage_no_gas);
 }
 
@@ -312,11 +311,14 @@ async fn test_dry_run_no_gas_big_transfer() {
 
     let signed = to_sender_signed_transaction(data, &sender_key);
 
-    let (dry_run_res, _, _, _) = fullnode
-        .dry_exec_transaction(signed.data().intent_message().value.clone())
-        .await
+    let sim = fullnode
+        .simulate_transaction(
+            signed.data().intent_message().value.clone(),
+            TransactionChecks::Enabled,
+            true,
+        )
         .unwrap();
-    assert_eq!(*dry_run_res.effects.status(), SuiExecutionStatus::Success);
+    assert_eq!(*sim.effects.status(), ExecutionStatus::Success);
 }
 
 #[tokio::test]
@@ -327,8 +329,10 @@ async fn test_dev_inspect_object_by_bytes() {
         init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
 
     // test normal call
-    let DevInspectResults {
-        effects, results, ..
+    let SimulateTransactionResult {
+        effects,
+        execution_result,
+        ..
     } = call_dev_inspect(
         &fullnode,
         &sender,
@@ -348,13 +352,10 @@ async fn test_dev_inspect_object_by_bytes() {
     assert_eq!(effects.mutated().len(), 1);
     assert!(effects.deleted().is_empty());
     assert!(effects.gas_cost_summary().computation_cost > 0);
-    let mut results = results.unwrap();
+    let mut results = execution_result.unwrap();
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
-    let SuiExecutionResult {
-        mutable_reference_outputs,
-        return_values,
-    } = exec_results;
+    let (mutable_reference_outputs, return_values) = exec_results;
     assert!(mutable_reference_outputs.is_empty());
     assert!(return_values.is_empty());
     let dev_inspect_gas_summary = effects.gas_cost_summary().clone();
@@ -389,8 +390,10 @@ async fn test_dev_inspect_object_by_bytes() {
     assert_eq!(effects.gas_cost_summary(), &dev_inspect_gas_summary);
 
     // use the created object directly, via its bytes
-    let DevInspectResults {
-        effects, results, ..
+    let SimulateTransactionResult {
+        effects,
+        execution_result,
+        ..
     } = call_dev_inspect(
         &fullnode,
         &sender,
@@ -412,13 +415,10 @@ async fn test_dev_inspect_object_by_bytes() {
     assert!(effects.deleted().is_empty());
     assert!(effects.gas_cost_summary().computation_cost > 0);
 
-    let mut results = results.unwrap();
+    let mut results = execution_result.unwrap();
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
-    let SuiExecutionResult {
-        mutable_reference_outputs,
-        return_values,
-    } = exec_results;
+    let (mutable_reference_outputs, return_values) = exec_results;
     assert_eq!(mutable_reference_outputs.len(), 1);
     assert!(return_values.is_empty());
     let updated_reference_bytes = &mutable_reference_outputs[0].1;
@@ -484,8 +484,10 @@ async fn test_dev_inspect_unowned_object() {
     assert_eq!(created_object.owner, Owner::AddressOwner(bob));
 
     // alice uses the object with dev inspect, despite not being the owner
-    let DevInspectResults {
-        effects, results, ..
+    let SimulateTransactionResult {
+        effects,
+        execution_result,
+        ..
     } = call_dev_inspect(
         &fullnode,
         &alice,
@@ -506,13 +508,10 @@ async fn test_dev_inspect_unowned_object() {
     assert!(effects.deleted().is_empty());
     assert!(effects.gas_cost_summary().computation_cost > 0);
 
-    let mut results = results.unwrap();
+    let mut results = execution_result.unwrap();
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
-    let SuiExecutionResult {
-        mutable_reference_outputs,
-        return_values,
-    } = exec_results;
+    let (mutable_reference_outputs, return_values) = exec_results;
     assert_eq!(mutable_reference_outputs.len(), 1);
     assert!(return_values.is_empty());
 }
@@ -578,12 +577,19 @@ async fn test_dev_inspect_dynamic_field() {
         )],
     };
     let kind = TransactionKind::programmable(pt);
-    let DevInspectResults { error, .. } = fullnode
-        .dev_inspect_transaction_block(sender, kind, None, None, None, None, None, None)
-        .await
-        .unwrap();
+    let sim = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        kind,
+        None,
+        None,
+        None,
+        None,
+        TransactionChecks::Disabled,
+    )
+    .unwrap();
     // produces an error
-    let err = error.unwrap();
+    let err = sim.execution_result.unwrap_err().to_string();
     assert!(
         err.contains("kind: CircularObjectOwnership"),
         "unexpected error: {}",
@@ -591,8 +597,10 @@ async fn test_dev_inspect_dynamic_field() {
     );
 
     // add a dynamic field to an object
-    let DevInspectResults {
-        effects, results, ..
+    let SimulateTransactionResult {
+        effects,
+        execution_result,
+        ..
     } = call_dev_inspect(
         &fullnode,
         &sender,
@@ -607,7 +615,7 @@ async fn test_dev_inspect_dynamic_field() {
     )
     .await
     .unwrap();
-    let mut results = results.unwrap();
+    let mut results = execution_result.unwrap();
     assert_eq!(effects.created().len(), 1);
     // random gas is mutated
     assert_eq!(effects.mutated().len(), 1);
@@ -616,10 +624,7 @@ async fn test_dev_inspect_dynamic_field() {
     assert!(effects.gas_cost_summary().computation_cost > 0);
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
-    let SuiExecutionResult {
-        mutable_reference_outputs,
-        return_values,
-    } = exec_results;
+    let (mutable_reference_outputs, return_values) = exec_results;
     assert_eq!(mutable_reference_outputs.len(), 1);
     assert!(return_values.is_empty());
 }
@@ -660,7 +665,9 @@ async fn test_dev_inspect_return_values() {
         .to_vec();
 
     // mutably borrow a value from it's bytes
-    let DevInspectResults { results, .. } = call_dev_inspect(
+    let SimulateTransactionResult {
+        execution_result, ..
+    } = call_dev_inspect(
         &fullnode,
         &sender,
         &object_basics.0,
@@ -671,23 +678,21 @@ async fn test_dev_inspect_return_values() {
     )
     .await
     .unwrap();
-    let mut results = results.unwrap();
+    let mut results = execution_result.unwrap();
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
-    let SuiExecutionResult {
-        mutable_reference_outputs,
-        mut return_values,
-    } = exec_results;
+    let (mutable_reference_outputs, mut return_values) = exec_results;
     assert_eq!(mutable_reference_outputs.len(), 1);
     assert_eq!(return_values.len(), 1);
     let (return_value_1, return_type) = return_values.pop().unwrap();
     let deserialized_rv1: u64 = bcs::from_bytes(&return_value_1).unwrap();
     assert_eq!(init_value, deserialized_rv1);
-    let type_tag: TypeTag = return_type.try_into().unwrap();
-    assert!(matches!(type_tag, TypeTag::U64));
+    assert!(matches!(return_type, TypeTag::U64));
 
     // borrow a value from it's bytes
-    let DevInspectResults { results, .. } = call_dev_inspect(
+    let SimulateTransactionResult {
+        execution_result, ..
+    } = call_dev_inspect(
         &fullnode,
         &sender,
         &object_basics.0,
@@ -698,23 +703,21 @@ async fn test_dev_inspect_return_values() {
     )
     .await
     .unwrap();
-    let mut results = results.unwrap();
+    let mut results = execution_result.unwrap();
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
-    let SuiExecutionResult {
-        mutable_reference_outputs,
-        mut return_values,
-    } = exec_results;
+    let (mutable_reference_outputs, mut return_values) = exec_results;
     assert!(mutable_reference_outputs.is_empty());
     assert_eq!(return_values.len(), 1);
     let (return_value_1, return_type) = return_values.pop().unwrap();
     let deserialized_rv1: u64 = bcs::from_bytes(&return_value_1).unwrap();
     assert_eq!(init_value, deserialized_rv1);
-    let type_tag: TypeTag = return_type.try_into().unwrap();
-    assert!(matches!(type_tag, TypeTag::U64));
+    assert!(matches!(return_type, TypeTag::U64));
 
     // read one value from it's bytes
-    let DevInspectResults { results, .. } = call_dev_inspect(
+    let SimulateTransactionResult {
+        execution_result, ..
+    } = call_dev_inspect(
         &fullnode,
         &sender,
         &object_basics.0,
@@ -725,20 +728,16 @@ async fn test_dev_inspect_return_values() {
     )
     .await
     .unwrap();
-    let mut results = results.unwrap();
+    let mut results = execution_result.unwrap();
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
-    let SuiExecutionResult {
-        mutable_reference_outputs,
-        mut return_values,
-    } = exec_results;
+    let (mutable_reference_outputs, mut return_values) = exec_results;
     assert!(mutable_reference_outputs.is_empty());
     assert_eq!(return_values.len(), 1);
     let (return_value_1, return_type) = return_values.pop().unwrap();
     let deserialized_rv1: u64 = bcs::from_bytes(&return_value_1).unwrap();
     assert_eq!(init_value, deserialized_rv1);
-    let type_tag: TypeTag = return_type.try_into().unwrap();
-    assert!(matches!(type_tag, TypeTag::U64));
+    assert!(matches!(return_type, TypeTag::U64));
 
     // An unused value without drop is an error normally
     let effects = call_move_(
@@ -767,7 +766,9 @@ async fn test_dev_inspect_return_values() {
     );
 
     // An unused value without drop is not an error in dev inspect
-    let DevInspectResults { results, .. } = call_dev_inspect(
+    let SimulateTransactionResult {
+        execution_result, ..
+    } = call_dev_inspect(
         &fullnode,
         &sender,
         &object_basics.0,
@@ -778,13 +779,10 @@ async fn test_dev_inspect_return_values() {
     )
     .await
     .unwrap();
-    let mut results = results.unwrap();
+    let mut results = execution_result.unwrap();
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
-    let SuiExecutionResult {
-        mutable_reference_outputs,
-        mut return_values,
-    } = exec_results;
+    let (mutable_reference_outputs, mut return_values) = exec_results;
     assert!(mutable_reference_outputs.is_empty());
     assert_eq!(return_values.len(), 1);
     let (_return_value, return_type) = return_values.pop().unwrap();
@@ -794,7 +792,6 @@ async fn test_dev_inspect_return_values() {
         name: Identifier::new("Wrapper").unwrap(),
         type_params: vec![],
     }));
-    let return_type: TypeTag = return_type.try_into().unwrap();
     assert_eq!(return_type, expected_type);
 }
 
@@ -814,22 +811,26 @@ async fn test_dev_inspect_gas_coin_argument() {
         builder.finish()
     };
     let kind = TransactionKind::programmable(pt);
-    let results = fullnode
-        .dev_inspect_transaction_block(sender, kind, None, None, None, None, None, None)
-        .await
-        .unwrap()
-        .results
-        .unwrap();
+    let results = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        kind,
+        None,
+        None,
+        None,
+        None,
+        TransactionChecks::Disabled,
+    )
+    .unwrap()
+    .execution_result
+    .unwrap();
     assert_eq!(results.len(), 2);
     // Split results
-    let SuiExecutionResult {
-        mutable_reference_outputs,
-        return_values,
-    } = &results[0];
+    let (mutable_reference_outputs, return_values) = &results[0];
     // check argument is the gas coin updated
     assert_eq!(mutable_reference_outputs.len(), 1);
     let (arg, arg_value, arg_type) = &mutable_reference_outputs[0];
-    assert_eq!(arg, &SuiArgument::GasCoin);
+    assert_eq!(arg, &Argument::GasCoin);
     check_coin_value(
         arg_value,
         arg_type,
@@ -841,10 +842,7 @@ async fn test_dev_inspect_gas_coin_argument() {
     check_coin_value(ret_value, ret_type, amount);
 
     // Transfer results
-    let SuiExecutionResult {
-        mutable_reference_outputs,
-        return_values,
-    } = &results[1];
+    let (mutable_reference_outputs, return_values) = &results[1];
     assert!(mutable_reference_outputs.is_empty());
     assert!(return_values.is_empty());
 }
@@ -863,10 +861,17 @@ async fn test_dev_inspect_gas_price() {
         builder.finish()
     };
     let kind = TransactionKind::programmable(pt);
-    let error = fullnode
-        .dev_inspect_transaction_block(sender, kind.clone(), Some(1), None, None, None, None, None)
-        .await
-        .unwrap_err();
+    let error = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        kind.clone(),
+        Some(1),
+        None,
+        None,
+        None,
+        TransactionChecks::Disabled,
+    )
+    .unwrap_err();
     assert!(
         matches!(
             UserInputError::try_from(error.clone()).unwrap(),
@@ -877,19 +882,17 @@ async fn test_dev_inspect_gas_price() {
     );
     let epoch_store = fullnode.epoch_store_for_testing();
     let protocol_config = epoch_store.protocol_config();
-    let error = fullnode
-        .dev_inspect_transaction_block(
-            sender,
-            kind,
-            Some(protocol_config.max_gas_price() + 1),
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap_err();
+    let error = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        kind,
+        Some(protocol_config.max_gas_price() + 1),
+        None,
+        None,
+        None,
+        TransactionChecks::Disabled,
+    )
+    .unwrap_err();
     assert!(
         matches!(
             UserInputError::try_from(error.clone()).unwrap(),
@@ -900,9 +903,16 @@ async fn test_dev_inspect_gas_price() {
     );
 }
 
-fn check_coin_value(actual_value: &[u8], actual_type: &SuiTypeTag, expected_value: u64) {
-    let actual_type: TypeTag = actual_type.clone().try_into().unwrap();
-    assert_eq!(actual_type, TypeTag::Struct(Box::new(GasCoin::type_())));
+/// The source of the execution error, as the removed dry-run response reported it.
+fn simulated_error_source(sim: &SimulateTransactionResult) -> Option<String> {
+    sim.execution_result
+        .as_ref()
+        .err()
+        .and_then(|e| e.source().as_ref().map(|source| source.to_string()))
+}
+
+fn check_coin_value(actual_value: &[u8], actual_type: &TypeTag, expected_value: u64) {
+    assert_eq!(*actual_type, TypeTag::Struct(Box::new(GasCoin::type_())));
     let actual_coin: GasCoin = bcs::from_bytes(actual_value).unwrap();
     assert_eq!(actual_coin.value(), expected_value);
 }
@@ -931,20 +941,18 @@ async fn test_dev_inspect_uses_unbound_object() {
     };
     let kind = TransactionKind::programmable(pt);
 
-    let err = fullnode
-        .dev_inspect_transaction_block(
-            sender,
-            kind,
-            Some(fullnode.reference_gas_price_for_testing().unwrap()),
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap_err()
-        .to_string();
+    let err = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        kind,
+        Some(fullnode.reference_gas_price_for_testing().unwrap()),
+        None,
+        None,
+        None,
+        TransactionChecks::Disabled,
+    )
+    .unwrap_err()
+    .to_string();
 
     assert!(
         err.contains("Could not find the referenced object"),
@@ -980,9 +988,11 @@ async fn test_dev_inspect_on_validator() {
 async fn test_dry_run_on_validator() {
     let (validator, _fullnode, transaction, _gas_object_id, _shared_object_id) =
         construct_shared_object_transaction_with_sequence_number(None).await;
-    let response = validator
-        .dry_exec_transaction(transaction.data().intent_message().value.clone())
-        .await;
+    let response = validator.simulate_transaction(
+        transaction.data().intent_message().value.clone(),
+        TransactionChecks::Enabled,
+        true,
+    );
     assert!(response.is_err());
 }
 
@@ -1079,11 +1089,18 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
     let kind = TransactionKind::programmable(pt.clone());
     let rgp = fullnode.reference_gas_price_for_testing().unwrap();
     // dev inspect
-    let DevInspectResults { effects, .. } = fullnode
-        .dev_inspect_transaction_block(sender, kind, Some(rgp), None, None, None, None, None)
-        .await
-        .unwrap();
-    assert_eq!(effects.deleted().len(), 0);
+    let sim = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        kind,
+        Some(rgp),
+        None,
+        None,
+        None,
+        TransactionChecks::Disabled,
+    )
+    .unwrap();
+    assert_eq!(sim.effects.deleted().len(), 0);
     // dry run
     let rgp = fullnode.reference_gas_price_for_testing().unwrap();
     let data = TransactionData::new_programmable(
@@ -1093,22 +1110,14 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
         rgp,
     );
-    let DryRunTransactionBlockResponse {
-        effects,
-        execution_error_source,
-        ..
-    } = fullnode.dry_exec_transaction(data).await.unwrap().0;
+    let sim = fullnode
+        .simulate_transaction(data, TransactionChecks::Enabled, true)
+        .unwrap();
 
-    assert_eq!(effects.deleted().len(), 0);
+    assert_eq!(sim.effects.deleted().len(), 0);
+    let execution_error_source = simulated_error_source(&sim);
     assert!(execution_error_source.is_some());
     assert_snapshot!(execution_error_source.unwrap());
-
-    match effects {
-        SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
-            assert!(abort_error.is_some());
-            assert_snapshot!(abort_error.unwrap());
-        }
-    }
 }
 
 // tests using a gas coin with version MAX - 1
@@ -1143,11 +1152,18 @@ async fn test_dry_run_dev_inspect_max_gas_version() {
     };
     let kind = TransactionKind::programmable(pt.clone());
     // dev inspect
-    let DevInspectResults { effects, .. } = fullnode
-        .dev_inspect_transaction_block(sender, kind, Some(rgp + 100), None, None, None, None, None)
-        .await
-        .unwrap();
-    assert_eq!(effects.status(), &SuiExecutionStatus::Success);
+    let sim = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        kind,
+        Some(rgp + 100),
+        None,
+        None,
+        None,
+        TransactionChecks::Disabled,
+    )
+    .unwrap();
+    assert_eq!(sim.effects.status(), &ExecutionStatus::Success);
 
     // dry run
     let data = TransactionData::new_programmable(
@@ -1157,9 +1173,10 @@ async fn test_dry_run_dev_inspect_max_gas_version() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
         rgp,
     );
-    let DryRunTransactionBlockResponse { effects, .. } =
-        fullnode.dry_exec_transaction(data).await.unwrap().0;
-    assert_eq!(effects.status(), &SuiExecutionStatus::Success);
+    let sim = fullnode
+        .simulate_transaction(data, TransactionChecks::Enabled, true)
+        .unwrap();
+    assert_eq!(sim.effects.status(), &ExecutionStatus::Success);
 }
 
 #[tokio::test]
@@ -3263,179 +3280,6 @@ async fn test_clear_cache_reverts_unwrap_move_call() {
 }
 
 #[tokio::test]
-async fn test_store_get_dynamic_object() {
-    let (_, fields) = create_and_retrieve_df_info(ident_str!("add_ofield")).await;
-    assert_eq!(fields.len(), 1);
-    assert_eq!(fields[0].type_, DynamicFieldType::DynamicObject);
-}
-
-#[tokio::test]
-async fn test_store_get_dynamic_field() {
-    let (_, fields) = create_and_retrieve_df_info(ident_str!("add_field")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!(json!(true), fields[0].name.value);
-    assert_eq!(TypeTag::Bool, fields[0].name.type_)
-}
-
-async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<DynamicFieldInfo>) {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_id = ObjectID::random();
-    let (authority_state, object_basics) =
-        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
-
-    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-    let create_outer_effects = create_move_object(
-        &object_basics.0,
-        &authority_state,
-        &gas_object_id,
-        &sender,
-        &sender_key,
-    )
-    .await
-    .unwrap();
-
-    assert!(
-        create_outer_effects.status().is_ok(),
-        "{:?}",
-        create_outer_effects
-    );
-    assert_eq!(create_outer_effects.created().len(), 1);
-
-    let create_inner_effects = create_move_object(
-        &object_basics.0,
-        &authority_state,
-        &gas_object_id,
-        &sender,
-        &sender_key,
-    )
-    .await
-    .unwrap();
-
-    assert!(create_inner_effects.status().is_ok());
-    assert_eq!(create_inner_effects.created().len(), 1);
-
-    let outer_v0 = create_outer_effects.created()[0].0;
-    let inner_v0 = create_inner_effects.created()[0].0;
-
-    let add_txn = to_sender_signed_transaction(
-        TransactionData::new_move_call(
-            sender,
-            object_basics.0,
-            ident_str!("object_basics").to_owned(),
-            function.to_owned(),
-            vec![],
-            create_inner_effects.gas_object().unwrap().0,
-            vec![
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(outer_v0)),
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(inner_v0)),
-            ],
-            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-            rgp,
-        )
-        .unwrap(),
-        &sender_key,
-    );
-
-    let add_executable = create_executable_transaction(&authority_state, add_txn).unwrap();
-
-    let (add_result, _) = authority_state
-        .try_execute_executable_for_test(&add_executable, ExecutionEnv::new())
-        .await;
-    let add_effects = add_result.into_message();
-
-    assert!(add_effects.status().is_ok(), "{:?}", add_effects.status());
-    assert_eq!(add_effects.created().len(), 1);
-
-    (
-        sender,
-        authority_state
-            .get_dynamic_fields(outer_v0.0, None, usize::MAX)
-            .unwrap()
-            .into_iter()
-            .map(|x| x.1)
-            .collect(),
-    )
-}
-
-#[tokio::test]
-async fn test_dynamic_field_struct_name_parsing() {
-    let (_, fields) = create_and_retrieve_df_info(ident_str!("add_field_with_struct_name")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!(json!({"name_str": "Test Name"}), fields[0].name.value);
-    assert_eq!(
-        TypeTag::from_str("0x0::object_basics::Name").unwrap(),
-        fields[0].name.type_
-    )
-}
-
-#[tokio::test]
-async fn test_dynamic_field_bytearray_name_parsing() {
-    let (_, fields) =
-        create_and_retrieve_df_info(ident_str!("add_field_with_bytearray_name")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!(
-        TypeTag::from_str("vector<u8>").unwrap(),
-        fields[0].name.type_
-    );
-    assert_eq!(json!("Test Name".as_bytes()), fields[0].name.value);
-}
-
-#[tokio::test]
-async fn test_dynamic_field_address_name_parsing() {
-    let (sender, fields) =
-        create_and_retrieve_df_info(ident_str!("add_field_with_address_name")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicField));
-    assert_eq!(TypeTag::from_str("address").unwrap(), fields[0].name.type_);
-    assert_eq!(json!(sender), fields[0].name.value);
-}
-
-#[tokio::test]
-async fn test_dynamic_object_field_struct_name_parsing() {
-    let (_, fields) = create_and_retrieve_df_info(ident_str!("add_ofield_with_struct_name")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
-    assert_eq!(json!({"name_str": "Test Name"}), fields[0].name.value);
-    assert_eq!(
-        TypeTag::from_str("0x0::object_basics::Name").unwrap(),
-        fields[0].name.type_
-    )
-}
-
-#[tokio::test]
-async fn test_dynamic_object_field_bytearray_name_parsing() {
-    let (_, fields) =
-        create_and_retrieve_df_info(ident_str!("add_ofield_with_bytearray_name")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
-    assert_eq!(
-        TypeTag::from_str("vector<u8>").unwrap(),
-        fields[0].name.type_
-    );
-    assert_eq!(json!("Test Name".as_bytes()), fields[0].name.value);
-}
-
-#[tokio::test]
-async fn test_dynamic_object_field_address_name_parsing() {
-    let (sender, fields) =
-        create_and_retrieve_df_info(ident_str!("add_ofield_with_address_name")).await;
-
-    assert_eq!(fields.len(), 1);
-    assert!(matches!(fields[0].type_, DynamicFieldType::DynamicObject));
-    assert_eq!(TypeTag::from_str("address").unwrap(), fields[0].name.type_);
-    assert_eq!(json!(sender), fields[0].name.value);
-}
-
-#[tokio::test]
 async fn test_clear_cache_removes_added_ofield() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -3867,26 +3711,16 @@ async fn test_clever_abort_error() {
         rgp,
     );
 
-    let DryRunTransactionBlockResponse {
-        effects,
-        execution_error_source,
-        ..
-    } = fullnode.dry_exec_transaction(txn_data).await.unwrap().0;
+    let sim = fullnode
+        .simulate_transaction(txn_data, TransactionChecks::Enabled, true)
+        .unwrap();
+    let execution_error_source = simulated_error_source(&sim);
 
-    assert!(matches!(
-        effects.status(),
-        SuiExecutionStatus::Failure { .. }
-    ));
+    assert!(sim.effects.status().is_err());
     assert_snapshot!(
         "clever_only_abort_execution_error_source",
         execution_error_source.unwrap()
     );
-    match effects {
-        SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
-            assert!(abort_error.is_some());
-            assert_snapshot!("clever_only_abort_abort_error", abort_error.unwrap());
-        }
-    }
 
     // abort_with_code
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -3908,28 +3742,17 @@ async fn test_clever_abort_error() {
         rgp,
     );
 
-    let DryRunTransactionBlockResponse {
-        effects,
-        execution_error_source,
-        ..
-    } = fullnode.dry_exec_transaction(txn_data).await.unwrap().0;
+    let sim = fullnode
+        .simulate_transaction(txn_data, TransactionChecks::Enabled, true)
+        .unwrap();
+    let execution_error_source = simulated_error_source(&sim);
 
-    assert!(matches!(
-        effects.status(),
-        SuiExecutionStatus::Failure { .. }
-    ));
+    assert!(sim.effects.status().is_err());
     assert!(execution_error_source.is_some());
     assert_snapshot!(
         "clever_abort_with_code_execution_error_source",
         execution_error_source.unwrap(),
     );
-
-    match effects {
-        SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
-            assert!(abort_error.is_some());
-            assert_snapshot!("clever_abort_with_code_abort_error", abort_error.unwrap())
-        }
-    }
 
     // abort with const
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -3951,28 +3774,18 @@ async fn test_clever_abort_error() {
         rgp,
     );
 
-    let DryRunTransactionBlockResponse {
-        effects,
-        execution_error_source,
-        ..
-    } = fullnode.dry_exec_transaction(txn_data).await.unwrap().0;
+    let sim = fullnode
+        .simulate_transaction(txn_data, TransactionChecks::Enabled, true)
+        .unwrap();
+    let execution_error_source = simulated_error_source(&sim);
 
-    assert!(matches!(
-        effects.status(),
-        SuiExecutionStatus::Failure { .. }
-    ));
+    assert!(sim.effects.status().is_err());
     assert!(execution_error_source.is_some());
     assert_snapshot!(
         "clever_abort_with_const_execution_error_source",
         execution_error_source.unwrap()
     );
 
-    match effects {
-        SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
-            assert!(abort_error.is_some());
-            assert_snapshot!("clever_abort_with_const_abort_error", abort_error.unwrap());
-        }
-    }
     // abort with const and code
     let mut builder = ProgrammableTransactionBuilder::new();
     builder
@@ -3993,30 +3806,17 @@ async fn test_clever_abort_error() {
         rgp,
     );
 
-    let DryRunTransactionBlockResponse {
-        effects,
-        execution_error_source,
-        ..
-    } = fullnode.dry_exec_transaction(txn_data).await.unwrap().0;
+    let sim = fullnode
+        .simulate_transaction(txn_data, TransactionChecks::Enabled, true)
+        .unwrap();
+    let execution_error_source = simulated_error_source(&sim);
 
-    assert!(matches!(
-        effects.status(),
-        SuiExecutionStatus::Failure { .. }
-    ));
+    assert!(sim.effects.status().is_err());
     assert!(execution_error_source.is_some());
     assert_snapshot!(
         "clever_abort_with_const_and_code_execution_error_source",
         execution_error_source.unwrap(),
     );
-    match effects {
-        SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
-            assert!(abort_error.is_some());
-            assert_snapshot!(
-                "clever_abort_with_const_and_code_abort_error",
-                abort_error.unwrap(),
-            )
-        }
-    }
 }
 
 // helpers
@@ -4457,7 +4257,7 @@ pub async fn call_dev_inspect(
     function: &str,
     type_arguments: Vec<TypeTag>,
     test_args: Vec<TestCallArg>,
-) -> SuiResult<DevInspectResults> {
+) -> SuiResult<SimulateTransactionResult> {
     let mut builder = ProgrammableTransactionBuilder::new();
     let mut arguments = Vec::with_capacity(test_args.len());
     for a in test_args {
@@ -4473,9 +4273,16 @@ pub async fn call_dev_inspect(
     ));
     let kind = TransactionKind::programmable(builder.finish());
     let rgp = authority.reference_gas_price_for_testing().unwrap();
-    authority
-        .dev_inspect_transaction_block(*sender, kind, Some(rgp), None, None, None, None, None)
-        .await
+    dev_inspect_for_testing(
+        authority,
+        *sender,
+        kind,
+        Some(rgp),
+        None,
+        None,
+        None,
+        TransactionChecks::Disabled,
+    )
 }
 
 /// This function creates a transaction that calls a 0x02::object_basics::set_value function.
@@ -5209,26 +5016,25 @@ async fn test_for_inc_201_dev_inspect() {
         BuiltInFramework::all_package_ids(),
     ));
     let kind = TransactionKind::programmable(builder.finish());
-    let DevInspectResults { events, .. } = fullnode
-        .dev_inspect_transaction_block(
-            sender,
-            kind,
-            Some(fullnode.reference_gas_price_for_testing().unwrap() + 1000),
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .await
-        .unwrap();
+    let events = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        kind,
+        Some(fullnode.reference_gas_price_for_testing().unwrap() + 1000),
+        None,
+        None,
+        None,
+        TransactionChecks::Disabled,
+    )
+    .unwrap()
+    .events
+    .unwrap_or_default();
 
     assert_eq!(1, events.data.len());
     assert_eq!(
         "PublishEvent".to_string(),
         events.data[0].type_.name.to_string()
     );
-    assert_eq!(json!({"foo":"bar"}), events.data[0].parsed_json);
 }
 
 #[tokio::test]
@@ -5260,25 +5066,23 @@ async fn test_for_inc_201_dry_run() {
     );
 
     let signed = to_sender_signed_transaction(txn_data, &sender_key);
-    let (
-        DryRunTransactionBlockResponse {
-            events, effects, ..
-        },
-        _,
-        _,
-        _,
-    ) = fullnode
-        .dry_exec_transaction(signed.data().intent_message().value.clone())
-        .await
+    let SimulateTransactionResult {
+        events, effects, ..
+    } = fullnode
+        .simulate_transaction(
+            signed.data().intent_message().value.clone(),
+            TransactionChecks::Enabled,
+            true,
+        )
         .unwrap();
-    assert_eq!(effects.status(), &SuiExecutionStatus::Success);
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
 
+    let events = events.unwrap_or_default();
     assert_eq!(1, events.data.len());
     assert_eq!(
         "PublishEvent".to_string(),
         events.data[0].type_.name.to_string()
     );
-    assert_eq!(json!({"foo":"bar"}), events.data[0].parsed_json);
 }
 
 #[tokio::test]
@@ -5310,24 +5114,20 @@ async fn test_function_not_found() {
     );
 
     let signed = to_sender_signed_transaction(txn_data, &sender_key);
-    let (
-        DryRunTransactionBlockResponse {
-            effects,
-            execution_error_source,
-            ..
-        },
-        _,
-        _,
-        _,
-    ) = fullnode
-        .dry_exec_transaction(signed.data().intent_message().value.clone())
-        .await
+    let sim = fullnode
+        .simulate_transaction(
+            signed.data().intent_message().value.clone(),
+            TransactionChecks::Enabled,
+            true,
+        )
         .unwrap();
+    let execution_error_source = simulated_error_source(&sim);
     assert_eq!(
-        effects.status(),
-        &SuiExecutionStatus::Failure {
-            error: "FunctionNotFound in command 0".to_string(),
-        }
+        sim.effects.status(),
+        &ExecutionStatus::Failure(ExecutionFailure {
+            error: ExecutionErrorKind::FunctionNotFound,
+            command: Some(0),
+        })
     );
 
     assert_eq!(execution_error_source, Some("Could not resolve function 'bad_function' in module '0x0000000000000000000000000000000000000000000000000000000000000001::option'".to_string()),)
@@ -5364,24 +5164,20 @@ async fn test_arity_mismatch() {
     );
 
     let signed = to_sender_signed_transaction(txn_data, &sender_key);
-    let (
-        DryRunTransactionBlockResponse {
-            effects,
-            execution_error_source,
-            ..
-        },
-        _,
-        _,
-        _,
-    ) = authority
-        .dry_exec_transaction(signed.data().intent_message().value.clone())
-        .await
+    let sim = authority
+        .simulate_transaction(
+            signed.data().intent_message().value.clone(),
+            TransactionChecks::Enabled,
+            true,
+        )
         .unwrap();
+    let execution_error_source = simulated_error_source(&sim);
     assert_eq!(
-        effects.status(),
-        &SuiExecutionStatus::Failure {
-            error: "ArityMismatch in command 0".to_string(),
-        }
+        sim.effects.status(),
+        &ExecutionStatus::Failure(ExecutionFailure {
+            error: ExecutionErrorKind::ArityMismatch,
+            command: Some(0),
+        })
     );
 
     assert_eq!(
