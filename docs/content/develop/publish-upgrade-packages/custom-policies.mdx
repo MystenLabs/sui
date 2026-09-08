@@ -59,7 +59,7 @@ Sui comes with a set of built-in package compatibility policies, listed here fro
 | Immutable       | No one can upgrade the package.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Dependency-only | You can only modify the dependencies of the package.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Additive        | You can add new functionality to the package (for example, new public functions or structs) but you can't change any of the existing functionality (for example, the code in existing public functions cannot change).                                                                                                                                                                                                                                                                                                                                                                        |
-| Compatible      | The most relaxed policy. In addition to what the more restrictive policies allow, in an upgraded version of the package: <ul><li>You can change all function implementations.</li><li>You can remove the ability constraints on generic type parameters in function signatures.</li><li>You can change, remove, or make `public` any `private`, `public(friend)`, and `entry` function signatures.</li><li>You cannot change `public` function signatures (except in the case of ability constraints mentioned previously).</li><li>You cannot change existing types.</li></ul> |
+| Compatible      | The most relaxed policy. In addition to what the more restrictive policies allow, in an upgraded version of the package: <ul><li>You can change all function implementations.</li><li>You can remove the ability constraints on generic type parameters in function signatures.</li><li>You can change, remove, or make `public` any `private`, `public(package)`, and `entry` function signatures.</li><li>You cannot change `public` function signatures (except in the case of ability constraints mentioned previously).</li><li>You cannot change existing types.</li></ul> |
 
 Each of these policies, in the order listed, is a superset of the previous one in the type of changes allowed in the upgraded package.
 
@@ -81,7 +81,7 @@ While step 2 is a built-in command, steps 1 and 3 are implemented as Move functi
 
 These are the functions that `sui client upgrade` calls for authorization and commit. Custom upgrade policies work by guarding access to a package `UpgradeCap` (and therefore to calls of these functions) behind extra conditions that are specific to that policy (such as voting, governance, permission lists, timelocks, and so on).
 
-Any pair of functions that produces an `UpgradeTicket` from an `UpgradeCap` and consumes an `UpgradeReceipt`. To update an `UpgradeCap` constitutes a custom upgrade policy.
+Any pair of functions that produces an `UpgradeTicket` from an `UpgradeCap`, and consumes an `UpgradeReceipt` to update that `UpgradeCap`, constitutes a custom upgrade policy.
 
 ## `UpgradeCap` {#upgradecap}
 
@@ -234,7 +234,7 @@ fun week_day(ctx: &TxContext): u8 {
 
 ```
 
-This function uses the epoch timestamp from `TxContext` rather than `Clock` because it needs only daily granularity, which means the upgrade transactions don't require consensus.
+This function uses the epoch timestamp from `TxContext` rather than `Clock` because it needs only daily granularity, so the upgrade transaction does not have to take the `Clock` shared object as an input.
 
 Next, add an `authorize_upgrade` function that calls the previous function to get the current day of the week, then checks whether that value violates the policy, returning the `ENotAllowedDay` error value if it does.
 
