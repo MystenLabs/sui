@@ -263,10 +263,10 @@ The signature for the `token::new_request` function is:
 
 ```move
 public fun new_request<T>(
-    name: vector<u8>,
+    name: String,
     amount: u64,
-    recipient: option<address>,
-    spent_balance: option<Balance<T>>,
-    ctx: &mut TxContext
+    recipient: Option<address>,
+    spent_balance: Option<Balance<T>>,
+    ctx: &TxContext
 ): ActionRequest<T>;
 ```
