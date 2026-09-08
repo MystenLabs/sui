@@ -22,19 +22,19 @@ use tracing::{debug, info, warn};
 
 /// static map of method names to the index of their cursor parameter
 static METHOD_CURSOR_POSITIONS: phf::Map<&'static str, usize> = phf_map! {
-    // based on function headers in crates/sui-json-rpc-api/src/indexer.rs
+    // based on function headers in the `suix` indexer JSON-RPC methods
     "suix_getOwnedObjects" => 2,
     "suix_queryTransactionBlocks" => 1,
-    // based on function headers in crates/sui-json-rpc-api/src/coin.rs
+    // based on function headers in the `suix` coin JSON-RPC methods
     "suix_getCoins" => 2,
     "suix_getAllCoins" => 1,
 };
 
 static METHOD_LENGTHS: phf::Map<&'static str, usize> = phf_map! {
-    // based on function headers in crates/sui-json-rpc-api/src/indexer.rs
+    // based on function headers in the `suix` indexer JSON-RPC methods
     "suix_getOwnedObjects" => 4,
     "suix_queryTransactionBlocks" => 4,
-    // based on function headers in crates/sui-json-rpc-api/src/coin.rs
+    // based on function headers in the `suix` coin JSON-RPC methods
     "suix_getCoins" => 4,
     "suix_getAllCoins" => 3,
 };
