@@ -1,0 +1,15 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module needs_mut_borrowed_let {
+    public fun add_one () {
+        *l0 = *l0 + 1u64
+    }
+
+    public fun mut_borrowed_let () {
+        let l1 = l0;
+        needs_mut_borrowed_let::add_one(&mut l1)
+        return l1
+    }
+
+}

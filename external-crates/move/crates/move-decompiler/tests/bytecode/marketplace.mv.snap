@@ -439,11 +439,11 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
     let l53 = (&linked_table::remove(&mut (linked_table::borrow_mut(&mut l1.user_activity, l51)).listings, l5)).last_points_claimed_at;
     assert!(linked_table::contains(&l1.user_activity, l7), C21);
     let l29 = linked_table::borrow_mut(&mut l1.user_activity, l7);
-    let l32 = 0u64;
+    let mut l32 = 0u64;
     if (l8) {
         assert!(linked_table::contains(&l29.collection_bids, l45), C17);
         let l34 = linked_table::borrow_mut(&mut l29.collection_bids, l45);
-        let l39 = 0u64;
+        let mut l39 = 0u64;
         loop {
             if (l39 < (freeze(l34)).length()) {
                 if ((&(freeze(l34))[l39]).bid_id != l6) {
@@ -469,7 +469,7 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
     let l24 = x2_balance::zero();
     if (l8) {
         let l35 = linked_table::borrow_mut(&mut l36.collection_bids, l7);
-        let l40 = 0u64;
+        let mut l40 = 0u64;
         loop {
             if (l40 < (freeze(l35)).length()) {
                 if (object::uid_to_inner(&(&(freeze(l35))[l40]).id) != l6) {
@@ -502,7 +502,7 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
     if (linked_table::contains(&l1.pending_claims, l7)) {
         linked_table::push_back(&mut (linked_table::borrow_mut(&mut l1.pending_claims, l7)).pending_claims, l5, l46)
     } else {
-        let l47 = PendingClaims { pending_claims: linked_table::new(l12) };
+        let mut l47 = PendingClaims { pending_claims: linked_table::new(l12) };
         linked_table::push_back(&mut (&mut l47).pending_claims, l5, l46);
         linked_table::push_back(&mut l1.pending_claims, l7, l47)
     };
@@ -567,7 +567,7 @@ public fun accept_trait_bid<T0: key + store, T1: key + store>(l0: &mut MarketPla
 public fun accept_trait_bid_settle<T0: key + store, T1: key + store>(l0: &mut MarketPlaceStore, l1: T1, l2: TraitBidsPotato, l3: &mut Kiosk, l4: &TransferPolicy<T0>, l5: ActiveTraitBid, l6: T0, l7: &mut AnimaIONs, l8: &Clock, l9: &mut AnimaChef, l10: &mut TxContext) {
     marketplace::validation_check(freeze(l0));
     let TraitBidsPotato { id: reg_3 } = l2;
-    assert!(object::id(&l1) == reg_3 : 0x2::object::ID, C24);
+    assert!(object::id(&l1) == reg_3, C24);
     let l37 = tx_context::sender(freeze(l10));
     let l33 = type_name::into_string(type_name::get());
     let l41 = clock::timestamp_ms(l8);
@@ -578,9 +578,9 @@ public fun accept_trait_bid_settle<T0: key + store, T1: key + store>(l0: &mut Ma
     let l32 = object::id(&l6);
     assert!(linked_table::contains(&l0.user_activity, l22), C21);
     let l23 = linked_table::borrow_mut(&mut l0.user_activity, l22);
-    let l26 = 0u64;
+    let mut l26 = 0u64;
     let l43 = linked_table::borrow_mut(&mut l23.trait_bids, l33);
-    let l31 = 0u64;
+    let mut l31 = 0u64;
     loop {
         if (l31 < (freeze(l43)).length()) {
             if ((&(freeze(l43))[l31]).bid_id != l18) {
@@ -602,7 +602,7 @@ public fun accept_trait_bid_settle<T0: key + store, T1: key + store>(l0: &mut Ma
     if (linked_table::contains(&l0.pending_claims, l22)) {
         linked_table::push_back(&mut (linked_table::borrow_mut(&mut l0.pending_claims, l22)).pending_claims, l32, l34)
     } else {
-        let l35 = PendingClaims { pending_claims: linked_table::new(l10) };
+        let mut l35 = PendingClaims { pending_claims: linked_table::new(l10) };
         linked_table::push_back(&mut (&mut l35).pending_claims, l32, l34);
         linked_table::push_back(&mut l0.pending_claims, l22, l35)
     };
@@ -649,11 +649,11 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
     assert!(kiosk::has_item_with_type(freeze(l2), l5), C19);
     assert!(linked_table::contains(&l1.user_activity, l6), C21);
     let l26 = linked_table::borrow_mut(&mut l1.user_activity, l6);
-    let l29 = 0u64;
+    let mut l29 = 0u64;
     if (l9) {
         assert!(linked_table::contains(&l26.collection_bids, l39), C17);
         let l31 = linked_table::borrow_mut(&mut l26.collection_bids, l39);
-        let l36 = 0u64;
+        let mut l36 = 0u64;
         loop {
             if (l36 < (freeze(l31)).length()) {
                 if ((&(freeze(l31))[l36]).bid_id != l7) {
@@ -670,10 +670,10 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
         l29 = (&linked_table::remove(&mut l26.bids, l5)).last_points_claimed_at;
     };
     let l33 = dynamic_object_field::borrow_mut(&mut l1.id, l39);
-    let l21 = x2_balance::zero();
+    let mut l21 = x2_balance::zero();
     if (l9) {
         let l32 = linked_table::borrow_mut(&mut l33.collection_bids, l6);
-        let l37 = 0u64;
+        let mut l37 = 0u64;
         loop {
             if (l37 < (freeze(l32)).length()) {
                 if (object::uid_to_inner(&(&(freeze(l32))[l37]).id) != l7) {
@@ -699,7 +699,7 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
     let l17 = x2_balance::value(&l21) - l8;
     kiosk::list(l2, l4, l5, l17);
     let (reg_244, reg_245) = kiosk::purchase(l2, l5, coin::from_balance(x2_balance::split(&mut l21, l17), l13));
-    let l47 = reg_245;
+    let mut l47 = reg_245;
     royalty_rule::pay(l10, &mut l47, coin::from_balance(x2_balance::split(&mut l21, l8), l13));
     let l42 = x2_balance::value(&l21);
     helpers::destroy_or_transfer_balance(l21, l43, l13);
@@ -708,7 +708,7 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
     if (linked_table::contains(&l1.pending_claims, l6)) {
         linked_table::push_back(&mut (linked_table::borrow_mut(&mut l1.pending_claims, l6)).pending_claims, l5, l40)
     } else {
-        let l41 = PendingClaims { pending_claims: linked_table::new(l13) };
+        let mut l41 = PendingClaims { pending_claims: linked_table::new(l13) };
         linked_table::push_back(&mut (&mut l41).pending_claims, l5, l40);
         linked_table::push_back(&mut l1.pending_claims, l6, l41)
     };
@@ -795,9 +795,9 @@ public fun award_bid_ion_points<T0: key + store>(l0: &mut MarketPlaceStore, l1: 
 }
 
 fun award_ion_points_with_referral(l0: address, l1: &mut MarketPlaceStore, l2: &mut AnimaIONs, l3: u64, l4: &Clock, l5: &mut AnimaChef) {
-    let l9 = option::none();
-    let l8 = 0u64;
-    let l6 = 0u64;
+    let mut l9 = option::none();
+    let mut l8 = 0u64;
+    let mut l6 = 0u64;
     if (ions::has_referrer(freeze(l2))) {
         let l10 = ions::get_referrer(freeze(l2));
         if (option::is_some(&l10)) {
@@ -869,7 +869,7 @@ public fun buy<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2: &mut 
     *(&mut l25.lifetime_volume) = l25.lifetime_volume + l48as u128;
     marketplace::update_collection_avg_price(l25, l48);
     assert!(coin::value(&l4) >= l48, C13);
-    let l43 = coin::into_balance(l4);
+    let mut l43 = coin::into_balance(l4);
     let (reg_116, reg_117, reg_118, reg_119) = marketplace::destroy_listing(l30);
     let l27 = reg_119;
     let l34 = reg_118;
@@ -942,7 +942,7 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
     } else {
         assert!(linked_table::contains(&l28.collection_bids, l27), C17);
         let l20 = linked_table::borrow_mut(&mut l28.collection_bids, l27);
-        let l30 = 0u64;
+        let mut l30 = 0u64;
         loop {
             if (l30 < (freeze(l20)).length()) {
                 if (object::uid_to_inner(&(&(freeze(l20))[l30]).id) != l2) {
@@ -962,12 +962,12 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
     helpers::destroy_or_transfer_balance(l40, l27, l6);
     assert!(linked_table::contains(&l0.user_activity, l27), C10);
     let l44 = linked_table::borrow_mut(&mut l0.user_activity, l27);
-    let l26 = 0u64;
-    let l34 = 0u64;
+    let mut l26 = 0u64;
+    let mut l34 = 0u64;
     if (l33) {
         assert!(linked_table::contains(&l44.collection_bids, l37), C17);
         let l25 = linked_table::borrow_mut(&mut l44.collection_bids, l37);
-        let l31 = 0u64;
+        let mut l31 = 0u64;
         loop {
             if (l31 < (freeze(l25)).length()) {
                 if ((&(freeze(l25))[l31]).bid_id != l2) {
@@ -1034,7 +1034,7 @@ public fun cancel_trait_bid<T0: key + store, T1: key + store>(l0: &mut MarketPla
 public fun cancel_trait_bid_settle<T0: key + store, T1: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2: ActiveTraitBid, l3: T1, l4: TraitBidsPotato, l5: &mut AnimaIONs, l6: &mut AnimaChef, l7: &mut TxContext) {
     marketplace::validation_check(freeze(l1));
     let TraitBidsPotato { id: reg_3 } = l4;
-    assert!(object::id(&l3) == reg_3 : 0x2::object::ID, C24);
+    assert!(object::id(&l3) == reg_3, C24);
     let l23 = type_name::into_string(type_name::get());
     let l27 = clock::timestamp_ms(l0);
     let l15 = (&l2).bidder;
@@ -1042,10 +1042,10 @@ public fun cancel_trait_bid_settle<T0: key + store, T1: key + store>(l0: &Clock,
     let l14 = object::id(&l2);
     assert!(linked_table::contains(&l1.user_activity, l15), C10);
     let l30 = linked_table::borrow_mut(&mut l1.user_activity, l15);
-    let l22 = 0u64;
+    let mut l22 = 0u64;
     if (linked_table::contains(&l30.trait_bids, l23)) {
         let l29 = linked_table::borrow_mut(&mut l30.trait_bids, l23);
-        let l20 = 0u64;
+        let mut l20 = 0u64;
         loop {
             if (l20 < (freeze(l29)).length()) {
                 if ((&(freeze(l29))[l20]).bid_id != l14) {
@@ -1092,9 +1092,9 @@ public fun cancel_trait_bid_settle<T0: key + store, T1: key + store>(l0: &Clock,
 public fun claim_referral_points(l0: &Clock, l1: &mut AnimaChef, l2: &mut MarketPlaceStore, l3: &mut AnimaIONs, l4: &mut TxContext) {
     marketplace::validation_check(freeze(l2));
     let l7 = tx_context::sender(freeze(l4));
-    let l10 = option::none();
-    let l9 = 0u64;
-    let l5 = 0u64;
+    let mut l10 = option::none();
+    let mut l9 = 0u64;
+    let mut l5 = 0u64;
     assert!(linked_table::contains(&l2.referrals, l7), C10);
     let l6 = *(linked_table::borrow(&l2.referrals, l7));
     *(linked_table::borrow_mut(&mut l2.referrals, l7)) = 0u64;
@@ -1126,14 +1126,14 @@ public fun collect_commissions(l0: &mut MarketPlaceStore, l1: &CollectorCap, l2:
 public fun complete_trait_bid<T0: key + store, T1: key + store>(l0: &mut MarketPlaceStore, l1: T1, l2: TraitBidsPotato, l3: &mut TxContext) {
     marketplace::validation_check(freeze(l0));
     let TraitBidsPotato { id: reg_3 } = l2;
-    assert!(object::id(&l1) == reg_3 : 0x2::object::ID, C24);
+    assert!(object::id(&l1) == reg_3, C24);
     let l5 = type_name::into_string(type_name::get());
     dynamic_object_field::add(&mut (dynamic_object_field::borrow_mut(&mut l0.id, l5)).id, C1, l1)
 }
 
 fun create_trait_summary(l0: Option<String>, l1: Option<String>, l2: Option<String>): String {
-    let l4 = ascii::string(C2);
-    let l3 = true;
+    let mut l4 = ascii::string(C2);
+    let mut l3 = true;
     if (option::is_some(&l0)) {
         if (!(l3)) {
             ascii::append(&mut l4, ascii::string(C63))
@@ -1159,19 +1159,19 @@ fun create_trait_summary(l0: Option<String>, l1: Option<String>, l2: Option<Stri
 
 fun destroy_active_bid(l0: ActiveBid): Balance<SUI> {
     let ActiveBid { id: reg_1, bidder: reg_2, bid_price: reg_3, balance: reg_4, bid_at: reg_5 } = l0;
-    object::delete(reg_1 : 0x2::object::UID);
-    return reg_4 : 0x2::balance::Balance<0x2::sui::SUI>
+    object::delete(reg_1);
+    return reg_4
 }
 
 fun destroy_active_trait_bid(l0: ActiveTraitBid): u64 {
     let ActiveTraitBid { id: reg_1, bidder: reg_2, bid_price: reg_3, bid_at: reg_4, trait_key1: reg_5, trait_value1: reg_6, trait_key2: reg_7, trait_value2: reg_8, trait_key3: reg_9, trait_value3: reg_10 } = l0;
-    object::delete(reg_1 : 0x2::object::UID);
-    return reg_3 : u64
+    object::delete(reg_1);
+    return reg_3
 }
 
 fun destroy_listing<T0: key + store>(l0: Listing<T0>): ( PurchaseCap<T0>, ID, u64, u64) {
     let Listing { seller: reg_1, kiosk_id: reg_2, nft_id: reg_3, cap: reg_4, price: reg_5, commission: reg_6, listed_at: reg_7 } = l0;
-    return (reg_4 : 0x2::kiosk::PurchaseCap<T0>, reg_2 : 0x2::object::ID, reg_5 : u64, reg_6 : u64)
+    return (reg_4, reg_2, reg_5, reg_6)
 }
 
 fun ensure_user_activity_exists(l0: &mut LinkedTable<address, UserInfo>, l1: address, l2: &mut TxContext) {
@@ -1196,10 +1196,10 @@ public fun get_active_bid_info(l0: &ActiveTraitBid): (
 
 public fun get_bids_for_any_nft<T0: key + store>(l0: &MarketPlaceStore, l1: ID, l2: Option<address>, l3: u64): ( vector<address>, vector<ID>, vector<u64>, vector<u64>, u64, bool) {
     let l16 = type_name::into_string(type_name::get());
-    let l11 = vector[];
-    let l9 = vector[];
-    let l10 = vector[];
-    let l7 = vector[];
+    let mut l11 = vector[];
+    let mut l9 = vector[];
+    let mut l10 = vector[];
+    let mut l7 = vector[];
     if (!(dynamic_object_field::exists_(&l0.id, l16))) {
         return (l11, l9, l10, l7, 0u64, false)
     };
@@ -1209,12 +1209,12 @@ public fun get_bids_for_any_nft<T0: key + store>(l0: &MarketPlaceStore, l1: ID, 
         return (l11, l9, l10, l7, 0u64, l15)
     };
     let l6 = linked_table::borrow(&l12.bids, l1);
-    let l13 = if (option::is_some(&l2)) {
+    let mut l13 = if (option::is_some(&l2)) {
         l2
     } else {
         *(linked_table::front(&l6.bids))
     };
-    let l14 = 0u64;
+    let mut l14 = 0u64;
     while (option::is_some(&l13) && l14 < l3) {
         let l17 = option::borrow(&l13);
         let l8 = linked_table::borrow(&l6.bids, *l17);
@@ -1230,10 +1230,10 @@ public fun get_bids_for_any_nft<T0: key + store>(l0: &MarketPlaceStore, l1: ID, 
 
 public fun get_bids_for_listing<T0: key + store>(l0: &MarketPlaceStore, l1: ID, l2: Option<address>, l3: u64): ( vector<address>, vector<ID>, vector<u64>, vector<u64>, u64) {
     let l15 = type_name::into_string(type_name::get());
-    let l11 = vector[];
-    let l9 = vector[];
-    let l10 = vector[];
-    let l7 = vector[];
+    let mut l11 = vector[];
+    let mut l9 = vector[];
+    let mut l10 = vector[];
+    let mut l7 = vector[];
     if (!(dynamic_object_field::exists_(&l0.id, l15))) {
         return (l11, l9, l10, l7, 0u64)
     };
@@ -1242,12 +1242,12 @@ public fun get_bids_for_listing<T0: key + store>(l0: &MarketPlaceStore, l1: ID, 
         return (l11, l9, l10, l7, 0u64)
     };
     let l6 = linked_table::borrow(&l12.bids, l1);
-    let l13 = if (option::is_some(&l2)) {
+    let mut l13 = if (option::is_some(&l2)) {
         l2
     } else {
         *(linked_table::front(&l6.bids))
     };
-    let l14 = 0u64;
+    let mut l14 = 0u64;
     while (option::is_some(&l13) && l14 < l3) {
         let l16 = option::borrow(&l13);
         let l8 = linked_table::borrow(&l6.bids, *l16);
@@ -1263,18 +1263,18 @@ public fun get_bids_for_listing<T0: key + store>(l0: &MarketPlaceStore, l1: ID, 
 
 public fun get_collection_bidders_for_collection<T0: key + store>(l0: &MarketPlaceStore, l1: Option<address>, l2: u64): ( vector<address>, vector<u64>, u64) {
     let l11 = type_name::into_string(type_name::get());
-    let l5 = vector[];
-    let l6 = vector[];
+    let mut l5 = vector[];
+    let mut l6 = vector[];
     if (!(dynamic_object_field::exists_(&l0.id, l11))) {
         return (l5, l6, 0u64)
     };
     let l8 = dynamic_object_field::borrow(&l0.id, l11);
-    let l9 = if (option::is_some(&l1)) {
+    let mut l9 = if (option::is_some(&l1)) {
         l1
     } else {
         *(linked_table::front(&l8.collection_bids))
     };
-    let l10 = 0u64;
+    let mut l10 = 0u64;
     while (option::is_some(&l9) && l10 < l2) {
         let l12 = option::borrow(&l9);
         let l7 = linked_table::borrow(&l8.collection_bids, *l12);
@@ -1288,10 +1288,10 @@ public fun get_collection_bidders_for_collection<T0: key + store>(l0: &MarketPla
 
 public fun get_collection_bids_by_user_for_collection<T0: key + store>(l0: &MarketPlaceStore, l1: address, l2: u64, l3: u64): ( vector<ID>, vector<u64>, vector<u64>, vector<u64>, u64) {
     let l13 = type_name::into_string(type_name::get());
-    let l9 = vector[];
-    let l10 = vector[];
-    let l7 = vector[];
-    let l8 = vector[];
+    let mut l9 = vector[];
+    let mut l10 = vector[];
+    let mut l7 = vector[];
+    let mut l8 = vector[];
     if (!(dynamic_object_field::exists_(&l0.id, l13))) {
         return (l9, l10, l7, l8, 0u64)
     };
@@ -1300,7 +1300,7 @@ public fun get_collection_bids_by_user_for_collection<T0: key + store>(l0: &Mark
         return (l9, l10, l7, l8, 0u64)
     };
     let l6 = linked_table::borrow(&l11.collection_bids, l1);
-    let l12 = l2;
+    let mut l12 = l2;
     while (l12 < l6.length() && l12 < l3) {
         let l5 = &l6[l12];
         l9.push_back(object::uid_to_inner(&l5.id));
@@ -1327,21 +1327,21 @@ public fun get_collection_marketplace_info<T0: key + store>(l0: &MarketPlaceStor
 
 public fun get_listings_for_marketplace<T0: key + store>(l0: &MarketPlaceStore, l1: Option<ID>, l2: u64): ( vector<address>, vector<ID>, vector<ID>, vector<u64>, vector<u64>, u64) {
     let l13 = type_name::into_string(type_name::get());
-    let l15 = vector[];
-    let l9 = vector[];
-    let l12 = vector[];
-    let l14 = vector[];
-    let l6 = vector[];
+    let mut l15 = vector[];
+    let mut l9 = vector[];
+    let mut l12 = vector[];
+    let mut l14 = vector[];
+    let mut l6 = vector[];
     if (!(dynamic_object_field::exists_(&l0.id, l13))) {
         return (l15, l9, l12, l14, l6, 0u64)
     };
     let l5 = dynamic_object_field::borrow(&l0.id, l13);
-    let l7 = if (option::is_some(&l1)) {
+    let mut l7 = if (option::is_some(&l1)) {
         l1
     } else {
         *(linked_table::front(&l5.listings))
     };
-    let l8 = 0u64;
+    let mut l8 = 0u64;
     while (option::is_some(&l7) && l8 < l2) {
         let l11 = option::borrow(&l7);
         let l10 = linked_table::borrow(&l5.listings, *l11);
@@ -1377,14 +1377,14 @@ public fun get_trait_bid_details(l0: &MarketPlaceStore, l1: address, l2: ID): (
         return (ascii::string(C2), 0u64, option::none(), option::none(), option::none(), option::none(), option::none(), option::none(), 0u64, 0u64)
     };
     let l8 = linked_table::borrow(&l0.user_activity, l1);
-    let l3 = *(linked_table::front(&l8.trait_bids));
+    let mut l3 = *(linked_table::front(&l8.trait_bids));
     loop {
         if (!(option::is_some(&l3))) {
             return (ascii::string(C2), 0u64, option::none(), option::none(), option::none(), option::none(), option::none(), option::none(), 0u64, 0u64)
         };
         let l5 = option::borrow(&l3);
         let l7 = linked_table::borrow(&l8.trait_bids, *l5);
-        let l4 = 0u64;
+        let mut l4 = 0u64;
         loop {
             if (l4 >= l7.length()) {
                 l3 = *(linked_table::next(&l8.trait_bids, *l5));
@@ -1420,13 +1420,13 @@ public fun get_user_activity_overview(l0: &MarketPlaceStore, l1: address): ( u64
 }
 
 public fun get_user_addresses_list(l0: &MarketPlaceStore, l1: Option<address>, l2: u64): ( vector<address>, u64) {
-    let l8 = vector[];
-    let l5 = if (option::is_some(&l1)) {
+    let mut l8 = vector[];
+    let mut l5 = if (option::is_some(&l1)) {
         l1
     } else {
         *(linked_table::front(&l0.user_activity))
     };
-    let l6 = 0u64;
+    let mut l6 = 0u64;
     while (option::is_some(&l5) && l6 < l2) {
         let l7 = option::borrow(&l5);
         l8.push_back(*l7);
@@ -1437,22 +1437,22 @@ public fun get_user_addresses_list(l0: &MarketPlaceStore, l1: Option<address>, l
 }
 
 public fun get_user_bids_info(l0: &MarketPlaceStore, l1: address, l2: Option<ID>, l3: u64): ( vector<ID>, vector<String>, vector<ID>, vector<u64>, vector<u64>, vector<u64>, u64) {
-    let l14 = vector[];
-    let l15 = vector[];
-    let l7 = vector[];
-    let l9 = vector[];
-    let l6 = vector[];
-    let l12 = vector[];
+    let mut l14 = vector[];
+    let mut l15 = vector[];
+    let mut l7 = vector[];
+    let mut l9 = vector[];
+    let mut l6 = vector[];
+    let mut l12 = vector[];
     if (!(linked_table::contains(&l0.user_activity, l1))) {
         return (l14, l15, l7, l9, l6, l12, 0u64)
     };
     let l16 = linked_table::borrow(&l0.user_activity, l1);
-    let l10 = if (option::is_some(&l2)) {
+    let mut l10 = if (option::is_some(&l2)) {
         l2
     } else {
         *(linked_table::front(&l16.bids))
     };
-    let l11 = 0u64;
+    let mut l11 = 0u64;
     while (option::is_some(&l10) && l11 < l3) {
         let l13 = option::borrow(&l10);
         let l8 = linked_table::borrow(&l16.bids, *l13);
@@ -1469,10 +1469,10 @@ public fun get_user_bids_info(l0: &MarketPlaceStore, l1: address, l2: Option<ID>
 }
 
 public fun get_user_collection_bids_for_type(l0: &MarketPlaceStore, l1: address, l2: String, l3: u64, l4: u64): ( vector<ID>, vector<u64>, vector<u64>, vector<u64>, u64) {
-    let l7 = vector[];
-    let l9 = vector[];
-    let l6 = vector[];
-    let l12 = vector[];
+    let mut l7 = vector[];
+    let mut l9 = vector[];
+    let mut l6 = vector[];
+    let mut l12 = vector[];
     if (!(linked_table::contains(&l0.user_activity, l1))) {
         return (l7, l9, l6, l12, 0u64)
     };
@@ -1481,7 +1481,7 @@ public fun get_user_collection_bids_for_type(l0: &MarketPlaceStore, l1: address,
         return (l7, l9, l6, l12, 0u64)
     };
     let l10 = linked_table::borrow(&l14.collection_bids, l2);
-    let l11 = l3;
+    let mut l11 = l3;
     let l13 = l10.length();
     while (l11 < l13 && l11 < l4) {
         let l8 = &l10[l11];
@@ -1495,18 +1495,18 @@ public fun get_user_collection_bids_for_type(l0: &MarketPlaceStore, l1: address,
 }
 
 public fun get_user_collection_bids_info(l0: &MarketPlaceStore, l1: address, l2: Option<String>, l3: u64): ( vector<String>, vector<u64>, u64) {
-    let l11 = vector[];
-    let l6 = vector[];
+    let mut l11 = vector[];
+    let mut l6 = vector[];
     if (!(linked_table::contains(&l0.user_activity, l1))) {
         return (l11, l6, 0u64)
     };
     let l12 = linked_table::borrow(&l0.user_activity, l1);
-    let l8 = if (option::is_some(&l2)) {
+    let mut l8 = if (option::is_some(&l2)) {
         l2
     } else {
         *(linked_table::front(&l12.collection_bids))
     };
-    let l9 = 0u64;
+    let mut l9 = 0u64;
     while (option::is_some(&l8) && l9 < l3) {
         let l10 = option::borrow(&l8);
         let l7 = linked_table::borrow(&l12.collection_bids, *l10);
@@ -1519,20 +1519,20 @@ public fun get_user_collection_bids_info(l0: &MarketPlaceStore, l1: address, l2:
 }
 
 public fun get_user_listings_info(l0: &MarketPlaceStore, l1: address, l2: Option<ID>, l3: u64): ( vector<ID>, vector<String>, vector<u64>, vector<u64>, u64) {
-    let l11 = vector[];
-    let l13 = vector[];
-    let l12 = vector[];
-    let l8 = vector[];
+    let mut l11 = vector[];
+    let mut l13 = vector[];
+    let mut l12 = vector[];
+    let mut l8 = vector[];
     if (!(linked_table::contains(&l0.user_activity, l1))) {
         return (l11, l13, l12, l8, 0u64)
     };
     let l14 = linked_table::borrow(&l0.user_activity, l1);
-    let l6 = if (option::is_some(&l2)) {
+    let mut l6 = if (option::is_some(&l2)) {
         l2
     } else {
         *(linked_table::front(&l14.listings))
     };
-    let l7 = 0u64;
+    let mut l7 = 0u64;
     while (option::is_some(&l6) && l7 < l3) {
         let l10 = option::borrow(&l6);
         let l9 = linked_table::borrow(&l14.listings, *l10);
@@ -1547,19 +1547,19 @@ public fun get_user_listings_info(l0: &MarketPlaceStore, l1: address, l2: Option
 }
 
 public fun get_user_pending_claims(l0: &MarketPlaceStore, l1: address, l2: Option<ID>, l3: u64): ( vector<ID>, vector<String>, u64) {
-    let l12 = vector[];
-    let l11 = vector[];
-    let l13 = vector[];
+    let mut l12 = vector[];
+    let mut l11 = vector[];
+    let mut l13 = vector[];
     if (!(linked_table::contains(&l0.pending_claims, l1))) {
         return (vector[], vector[], 0u64)
     };
     let l10 = linked_table::borrow(&l0.pending_claims, l1);
-    let l6 = if (option::is_some(&l2)) {
+    let mut l6 = if (option::is_some(&l2)) {
         l2
     } else {
         *(linked_table::front(&l10.pending_claims))
     };
-    let l8 = 0u64;
+    let mut l8 = 0u64;
     while (option::is_some(&l6) && l8 < l3) {
         let l7 = option::borrow(&l6);
         let l9 = linked_table::borrow(&l10.pending_claims, *l7);
@@ -1573,25 +1573,25 @@ public fun get_user_pending_claims(l0: &MarketPlaceStore, l1: address, l2: Optio
 }
 
 public fun get_user_trait_bids_info(l0: &MarketPlaceStore, l1: address, l2: Option<String>, l3: u64): ( vector<ID>, vector<String>, vector<u64>, vector<String>, u64) {
-    let l7 = vector[];
-    let l15 = vector[];
-    let l8 = vector[];
-    let l22 = vector[];
-    let l17 = 0u64;
+    let mut l7 = vector[];
+    let mut l15 = vector[];
+    let mut l8 = vector[];
+    let mut l22 = vector[];
+    let mut l17 = 0u64;
     if (!(linked_table::contains(&l0.user_activity, l1))) {
         return (l7, l15, l8, l22, 0u64)
     };
     let l24 = linked_table::borrow(&l0.user_activity, l1);
-    let l11 = if (option::is_some(&l2)) {
+    let mut l11 = if (option::is_some(&l2)) {
         l2
     } else {
         *(linked_table::front(&l24.trait_bids))
     };
-    let l9 = 0u64;
+    let mut l9 = 0u64;
     while (option::is_some(&l11) && l9 < l3) {
         let l12 = option::borrow(&l11);
         let l20 = linked_table::borrow(&l24.trait_bids, *l12);
-        let l13 = 0u64;
+        let mut l13 = 0u64;
         while (l13 < l20.length() && l9 < l3) {
             let l19 = &l20[l13];
             l7.push_back(l19.bid_id);
@@ -1605,8 +1605,8 @@ public fun get_user_trait_bids_info(l0: &MarketPlaceStore, l1: address, l2: Opti
         };
         l11 = *(linked_table::next(&l24.trait_bids, *l12));
     };
-    let l16 = 0u64;
-    let l10 = *(linked_table::front(&l24.trait_bids));
+    let mut l16 = 0u64;
+    let mut l10 = *(linked_table::front(&l24.trait_bids));
     while (option::is_some(&l10)) {
         let l14 = option::borrow(&l10);
         let l21 = linked_table::borrow(&l24.trait_bids, *l14);
@@ -1685,7 +1685,7 @@ public entry fun make_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option
     debug::print(&l21);
     marketplace::validate_collection_exists(freeze(l0));
     let l17 = dynamic_object_field::borrow_mut(&mut l0.id, l21);
-    let l22 = coin::into_balance(l3);
+    let mut l22 = coin::into_balance(l3);
     let l9 = ActiveBid { id: object::new(l5), bidder: l16, bid_price: l2, balance: x2_balance::split(&mut l22, l2), bid_at: l23 };
     let l14 = object::id(&l9);
     debug::print(&string::utf8(C43));
@@ -1697,7 +1697,7 @@ public entry fun make_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option
             assert!(!(linked_table::contains(&l10.bids, l16)), C16);
             linked_table::push_back(&mut l10.bids, l16, l9)
         } else {
-            let l11 = ActiveBids { id: object::new(l5), bids: linked_table::new(l5) };
+            let mut l11 = ActiveBids { id: object::new(l5), bids: linked_table::new(l5) };
             linked_table::push_back(&mut (&mut l11).bids, l16, l9);
             linked_table::push_back(&mut l17.bids, l19, l11)
         }
@@ -1705,7 +1705,7 @@ public entry fun make_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option
         if (linked_table::contains(&l17.collection_bids, l16)) {
             (linked_table::borrow_mut(&mut l17.collection_bids, l16)).push_back(l9)
         } else {
-            let l12 = vector[];
+            let mut l12 = vector[];
             l12.push_back(l9);
             linked_table::push_back(&mut l17.collection_bids, l16, l12)
         }
@@ -1717,7 +1717,7 @@ public entry fun make_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option
         if (linked_table::contains(&l24.collection_bids, l21)) {
             (linked_table::borrow_mut(&mut l24.collection_bids, l21)).push_back(l15)
         } else {
-            let l13 = vector[];
+            let mut l13 = vector[];
             l13.push_back(l15);
             linked_table::push_back(&mut l24.collection_bids, l21, l13)
         }
@@ -1750,7 +1750,7 @@ public fun make_trait_bid<T0: key + store, T1: key + store>(l0: &Clock, l1: &mut
     if (linked_table::contains(&l22.trait_bids, l17)) {
         (linked_table::borrow_mut(&mut l22.trait_bids, l17)).push_back(l19)
     } else {
-        let l20 = vector[];
+        let mut l20 = vector[];
         l20.push_back(l19);
         linked_table::push_back(&mut l22.trait_bids, l17, l20)
     };
@@ -1796,7 +1796,7 @@ public fun process_pending_claim<T0: key + store>(l0: &Clock, l1: &mut MarketPla
     let (reg_84, reg_85) = kiosk::purchase_with_cap(l2, l15, coin::from_balance(x2_balance::zero(), l6));
     kiosk::place(l3, l4, reg_84);
     debug::print(&string::utf8(C62));
-    event::emit(NFTClaimedEvent { nft_type: reg_54 : 0x1::ascii::String, nft_id: l5, buyer: l10, buyer_kiosk: object::id(freeze(l3)), claimed_at: l16 });
+    event::emit(NFTClaimedEvent { nft_type: reg_54, nft_id: l5, buyer: l10, buyer_kiosk: object::id(freeze(l3)), claimed_at: l16 });
     return reg_85
 }
 
@@ -1864,7 +1864,7 @@ public fun unlist<T0: key + store>(l0: &mut MarketPlaceStore, l1: &mut Kiosk, l2
     debug::print(&l20);
     event::emit(UnlistEvent { nft_type: l24, seller: l28, nft_id: l2, kiosk_id: object::id(freeze(l1)), price: (&l22).price, unlisted_at: l31, ion_points_awarded: l20 });
     let Listing { seller: reg_150, kiosk_id: reg_151, nft_id: reg_152, cap: reg_153, price: reg_154, commission: reg_155, listed_at: reg_156 } = l22;
-    kiosk::return_purchase_cap(l1, reg_153 : 0x2::kiosk::PurchaseCap<T0>);
+    kiosk::return_purchase_cap(l1, reg_153);
     debug::print(&string::utf8(C41))
 }
 
@@ -1890,8 +1890,8 @@ public fun update_active_collections<T0: key + store>(l0: &mut MarketPlaceStore,
 fun update_collection_avg_price<T0: key + store>(l0: &mut CollectionMarketPlace<T0>, l1: u64) {
     let __c0 = (&l0.recent_sale_prices).length() >= C3;
     (&mut l0.recent_sale_prices).push_back(l1);
-    let l3 = 0u64;
-    let l2 = 0u64;
+    let mut l3 = 0u64;
+    let mut l2 = 0u64;
     while (l2 < (&l0.recent_sale_prices).length()) {
         l3 = l3 + (&l0.recent_sale_prices)[l2];
         l2 = l2 + 1u64;
