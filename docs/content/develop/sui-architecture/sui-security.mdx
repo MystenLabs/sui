@@ -58,7 +58,7 @@ Sui's security features guarantee certain properties for objects:
 
 The Sui network is operated by a [set of validators](/develop/sui-architecture/consensus) that process [transactions](/develop/transactions/txn-overview). They reach agreement on which transactions submitted and processed on the network are valid and should be finalized through [consensus](/develop/sui-architecture/consensus).
 
-Consensus tolerates a fraction of faulty validators through the use of Byzantine fault tolerant broadcast. Sui maintains all security properties if validators holding over 2/3 of the voting power operate properly. However, a number of auditing properties are maintained even if this number becomes greater than 2/3.
+Consensus tolerates a fraction of faulty validators through the use of Byzantine fault tolerant broadcast. Sui maintains all security properties if validators holding over 2/3 of the voting power operate properly. However, the network maintains a number of auditing properties even if this number becomes greater than 2/3.
 
 ### Addresses and ownership {#addresses-and-ownership}
 
@@ -80,7 +80,7 @@ Shared objects allow multiple users to operate on them through transactions that
 
 ### Transaction finality {#transaction-finality}
 
-A valid transaction is submitted to a validator, which proposes it for [consensus](/develop/sui-architecture/consensus). Validators holding more than 2/3 of the voting power must commit the block carrying it, and the transaction itself must gather enough accept votes, before validators execute it and its result becomes available to other transactions. Inclusion in a certified [checkpoint](/develop/sui-architecture/checkpoint-verification) then makes it part of the network's permanent history. This process ensures safety, meaning that faulty validators cannot convince correct validators of incorrect state, and liveness, meaning that faulty validators cannot prevent transaction processing.
+You submit a valid transaction to a full node, which forwards it to a validator that proposes it for [consensus](/develop/sui-architecture/consensus). Validators holding more than 2/3 of the voting power must commit the block carrying it, and the transaction itself must gather enough accept votes, before validators execute it and make its result available to other transactions. Inclusion in a certified [checkpoint](/develop/sui-architecture/checkpoint-verification) then makes it part of the network's permanent history. This process ensures safety, meaning that faulty validators cannot convince correct validators of incorrect state, and liveness, meaning that faulty validators cannot prevent transaction processing.
 
 All transactions cost gas, a type of object required to cover the cost of processing by the network. A valid transaction might result in successful execution or an aborted execution. An execution might abort because of a condition within the smart contract defining the object or because it has run out of sufficient gas to pay for the cost of execution.
 

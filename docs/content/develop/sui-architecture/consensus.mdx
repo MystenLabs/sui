@@ -45,7 +45,7 @@ An [epoch](/develop/sui-architecture/epochs) is a duration of time where the Sui
 
 A quorum is a set of [validators](/operators/validator/validator-config) whose combined voting power is greater than two-thirds (>2/3) of the total during a particular epoch. For example, in a Sui instance operated by 4 validators that all have the same voting power, any group containing 3 validators is a quorum.
 
-The quorum size of >2/3 ensures Byzantine fault tolerance (BFT). Committing the block that carries a transaction is not on its own enough for that transaction to take effect. Peers vote on the transactions inside a block as they reference it, and only transactions that gather enough accept votes are accepted. That threshold is what makes the guarantee hold: if validators holding >2/3 of the voting power follow the protocol, they eventually agree on both the set of accepted transactions and their effects.
+The quorum size of >2/3 ensures Byzantine fault tolerance (BFT). Committing the block that carries a transaction is not on its own enough for that transaction to take effect. Peers vote on the transactions inside a block as they reference it, and the protocol accepts only transactions that gather enough accept votes. That threshold is what makes the guarantee hold: if validators holding >2/3 of the voting power follow the protocol, they eventually agree on both the set of accepted transactions and their effects.
 
 ## Submitting transactions
 
@@ -53,15 +53,15 @@ A validator exposes a single write entry point for user transactions. A client d
 
 ### Submission
 
-The user sends a signed transaction to a [full node](/operators/full-node/sui-full-node). The full node runs *Transaction Driver*, which picks a validator and submits the transaction to it. The receiving validator checks that the signature is valid, that the inputs exist and the sender may use them, and that the sender can cover the gas budget. If those checks pass, the validator includes the transaction in its next proposed consensus block.
+The user sends a signed transaction to a [full node](/operators/full-node/sui-full-node). The full node runs **Transaction Driver**, which picks a validator and submits the transaction to it. The receiving validator checks that the signature is valid, that the inputs exist and the sender is allowed to use them, and that the sender can cover the gas budget. If those checks pass, the validator includes the transaction in its next proposed consensus block.
 
 Peer validators run the same checks when they receive that block, so a transaction that fails them is not accepted no matter which validator it entered through. This is what stops a single validator from admitting a double spend.
 
 ### Execution and finality
 
-Consensus sequences the block, and every validator executes the accepted transactions in it against the same ordered state. A transaction that a committed block carries but that consensus rejected does not execute. Execution is deterministic, so honest validators produce identical effects. Execution either succeeds and commits all of its effects, or aborts with no effect other than debiting the gas input. A transaction might abort because of an explicit abort instruction, a runtime error such as division by zero, or exceeding the maximum gas budget.
+Consensus sequences the block, and every validator executes the accepted transactions in it against the same ordered state. Validators do not execute a transaction that a committed block carries but that consensus rejected. Execution is deterministic, so honest validators produce identical effects. Execution either succeeds and commits all of its effects, or aborts with no effect other than debiting the gas input. A transaction might abort because of an explicit abort instruction, a runtime error such as division by zero, or exceeding the maximum gas budget.
 
-*Transaction Driver* then certifies the result: it takes the full effects from one validator and quorum acknowledgments of the same effects digest from the others. Holding those certified effects is proof of settlement finality, and the transaction is irreversible from that point. If the acknowledgments do not arrive, the full node waits for the transaction to appear in a certified checkpoint, which is itself proof of finality.
+**Transaction Driver** then certifies the result: it takes the full effects from one validator and quorum acknowledgments of the same effects digest from the others. Holding those certified effects is proof of settlement finality, and the transaction is irreversible from that point. If the acknowledgments do not arrive, the full node waits for the transaction to appear in a certified checkpoint, which is itself proof of finality.
 
 For the full path from signing through checkpoint inclusion, see [Transaction Lifecycle](/develop/transactions/transaction-lifecycle).
 ## Mysticeti
