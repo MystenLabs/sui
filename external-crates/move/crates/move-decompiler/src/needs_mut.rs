@@ -143,14 +143,6 @@ impl Use {
         }
     }
 
-    /// Sequential paths: `self`'s uses, then `later`'s.
-    fn then(self, later: Use) -> Use {
-        Use {
-            assigns: (self.assigns + later.assigns).min(MANY),
-            borrowed: self.borrowed || later.borrowed,
-        }
-    }
-
     fn forces_mut(self, initialized: bool) -> bool {
         let threshold = if initialized { 1 } else { MANY };
         self.borrowed || self.assigns >= threshold
@@ -267,20 +259,23 @@ impl Context {
 // Backward walk
 
 /// Backward walk of a scope's rendered statement list; `after` is the fact at the scope's
-/// exit. A rebinding shadows only to the end of the list: on the way out, a rebound name's
-/// uses resume with the outer binding's, sequentially.
+/// exit.
 fn scope_env(context: &mut Context, root: &Exp, after: Env) -> Env {
     let stmts = flatten_scope(root);
-    let mut env = after.clone();
+    // `hoist_declarations` lifts a name touched from two scopes to their common ancestor, so
+    // a binder here dominates its uses and `after` holds none of them. Were that to break,
+    // this scope's binders would read uses belonging to an outer binding.
+    debug_assert!(
+        stmts
+            .iter()
+            .filter_map(|stmt| binder(stmt))
+            .flat_map(|binder| binder.names().collect::<Vec<_>>())
+            .all(|name| after.get(name) == Use::default()),
+        "a binding's uses outlived its scope"
+    );
+    let mut env = after;
     for stmt in stmts.iter().rev() {
         env = stmt_env(context, stmt, env);
-    }
-    for stmt in &stmts {
-        let Some(binder) = binder(stmt) else { continue };
-        for name in binder.names() {
-            let u = env.get(name).then(after.get(name));
-            env.set(name, u);
-        }
     }
     env
 }
