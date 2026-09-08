@@ -61,17 +61,15 @@ Sui full nodes:
 - Serve read requests from clients.
 
 ## State synchronization 
-Sui full nodes sync with validators to receive new transactions on the network.
+Sui full nodes sync through the state sync protocol, which disseminates certified [checkpoints](/develop/sui-architecture/checkpoint-verification) between nodes. A full node does not need to follow individual validators to learn about new transactions.
 
-A transaction requires a few round trips to 2f+1 validators to form a transaction certificate (TxCert).
+The synchronization process includes:
 
-This synchronization process includes:
+1. Receiving certified checkpoints over state sync, from validators or from other full nodes.
+1. Verifying the checkpoint signatures against the current validator committee, which the node learns from the last checkpoint of the previous epoch.
+1. Executing the transactions the checkpoint contains and comparing the resulting effects digests against the ones the checkpoint records.
 
-1. Following 2f+1 validators and listening for newly committed transactions.
-1. Making sure that 2f+1 validators recognize the transaction and that it reaches finality.
-1. Executing the transaction locally and updating the local DB.
-
-This synchronization process requires listening to at a minimum `2f+1` validators to ensure that a full node has properly processed all new transactions. Sui improves the synchronization process with the introduction of checkpoints and the ability to synchronize with other full nodes.
+Because a checkpoint carries a quorum of validator signatures, a full node that verifies one has proof the network committed those transactions, without trusting the peer it received the checkpoint from.
 
 ## Architecture 
 
