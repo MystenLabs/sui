@@ -45,7 +45,7 @@ questions:
 answer: Versioning provides the ability to upgrade packages on the Sui network.
 ---
 
-[Move packages](/develop/publish-upgrade-packages) are versioned and stored onchain, but follow a different scheme because they are immutable from inception. Package transaction inputs are referenced by ID alone, with no separate version number.
+[Move packages](/develop/publish-upgrade-packages) are versioned and stored onchain, but follow a different scheme because they are immutable from inception. A transaction references a package input by ID alone, with no separate version number.
 
 ## User packages
 
@@ -61,7 +61,7 @@ All 3 versions are at different IDs and remain callable, including `v1` even aft
 
 ## Framework packages
 
-Framework packages, such as the [Move standard library](https://move-book.com/reference/) at `0x1`, the [Sui framework](/references/framework/sui_sui) at `0x2`, the [Sui system library](/references/framework/sui_sui_system) at `0x3`, and [DeepBook](/onchain-finance/deepbook/deepbookv3/deepbook) at `0xdee9`, are a special case. Their IDs must remain stable across upgrades. The network upgrades them through a system transaction at epoch boundaries, preserving IDs while incrementing versions:
+Framework packages, such as the [Move standard library](https://move-book.com/reference/) at `0x1`, the [Sui framework](/references/framework/sui_sui) at `0x2`, the [Sui system library](/references/framework/sui_sui_system) at `0x3`, and [DeepBook](/onchain-finance/deepbook/deepbookv3/deepbook) at `0xdee9`, are a special case. Their IDs must stay the same across upgrades. The network upgrades them through a system transaction at epoch boundaries, preserving IDs while incrementing versions:
 
 ```
 (0x1, 1) => MoveStdlib v1
