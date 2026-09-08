@@ -4,6 +4,7 @@
 use crate::authority::auth_unit_test_utils::{
     publish_package_on_single_authority, upgrade_package_on_single_authority,
 };
+use crate::authority::authority_test_utils::dev_inspect_for_testing;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::test_utils::make_transfer_sui_transaction;
@@ -29,6 +30,7 @@ use sui_types::transaction::{
     TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration, TransactionKind,
     VerifiedTransaction,
 };
+use sui_types::transaction_executor::TransactionChecks;
 use sui_types::utils::get_zklogin_user_address;
 use sui_types::utils::{
     make_zklogin_tx, to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
@@ -880,19 +882,33 @@ async fn test_dev_inspect_disabled() {
     };
     let kind = TransactionKind::programmable(pt);
 
-    // With skip_checks=true (default), should be denied
-    let result = fullnode
-        .dev_inspect_transaction_block(sender, kind.clone(), None, None, None, None, None, None)
-        .await;
+    // With checks disabled (classic dev inspect), should be denied
+    let result = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        kind.clone(),
+        None,
+        None,
+        None,
+        None,
+        TransactionChecks::Disabled,
+    );
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err().as_inner(),
         SuiErrorKind::UnsupportedFeatureError { .. }
     ));
 
-    // With skip_checks=false, should pass our guard
-    let result = fullnode
-        .dev_inspect_transaction_block(sender, kind, None, None, None, None, None, Some(false))
-        .await;
+    // With checks enabled, should pass our guard
+    let result = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        kind,
+        None,
+        None,
+        None,
+        None,
+        TransactionChecks::Enabled,
+    );
     assert!(result.is_ok());
 }

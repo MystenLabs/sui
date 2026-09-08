@@ -65,6 +65,7 @@ mod sim_only_tests {
         atomic::{AtomicUsize, Ordering},
     };
     use std::{fs, io, path::Path};
+    use sui_core::authority::authority_test_utils::dev_inspect_for_testing;
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
     use sui_macros::*;
@@ -85,6 +86,7 @@ mod sim_only_tests {
         CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
         TEST_ONLY_GAS_UNIT_FOR_GENERIC, TransactionData,
     };
+    use sui_types::transaction_executor::TransactionChecks;
     use sui_types::{
         MOVE_STDLIB_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
         SUI_SYSTEM_PACKAGE_ID,
@@ -604,22 +606,23 @@ mod sim_only_tests {
         };
         let txn = TransactionKind::programmable(pt);
 
-        let response = cluster
-            .fullnode_handle
-            .sui_node
-            .state()
-            .dev_inspect_transaction_block(
-                sender, txn, /* gas_price */ None, /* gas_budget */ None,
-                /* gas_sponsor */ None, /* gas_objects */ None,
-                /* show_raw_txn_data_and_effects */ None, /* skip_checks */ None,
-            )
-            .await
-            .unwrap();
+        let response = dev_inspect_for_testing(
+            &cluster.fullnode_handle.sui_node.state(),
+            sender,
+            txn,
+            None,
+            None,
+            None,
+            None,
+            TransactionChecks::Disabled,
+        )
+        .unwrap();
 
-        let results = response.results.unwrap();
-        let return_ = &results.first().unwrap().return_values.first().unwrap().0;
+        let results = response.execution_result.unwrap();
+        let (_, return_values) = results.first().unwrap();
+        let (return_, _) = return_values.first().unwrap();
 
-        bcs::from_bytes(&return_).unwrap()
+        bcs::from_bytes(return_).unwrap()
     }
 
     async fn execute_creating(
