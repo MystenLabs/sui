@@ -107,8 +107,14 @@ fn argument<E: ExecutionErrorTrait>(
             true
         }
         T::Argument__::Read(u) => {
-            let usage_is_ref = usage::<E>(context, u, ty)?;
-            assert_invariant!(usage_is_ref, "read argument must be a reference type");
+            if context.protocol_config.fix_ptb_generated_reads() {
+                // `ty` is the dereferenced value type, so the location's type must be
+                // a reference
+                reference_usage::<E>(context, u)?;
+            } else {
+                let usage_is_ref = usage::<E>(context, u, ty)?;
+                assert_invariant!(usage_is_ref, "read argument must be a reference type");
+            }
             context.free::<E>()?;
             false
         }
@@ -126,12 +132,16 @@ fn usage<E: ExecutionErrorTrait>(
     if !ty.is_reference() {
         return Ok(false);
     }
+    reference_usage::<E>(context, u)?;
+    Ok(true)
+}
+
+/// Tracks the usage of a reference location.
+/// Counts the creation of a new reference for `Copy`
+fn reference_usage<E: ExecutionErrorTrait>(context: &mut Context, u: &T::Usage) -> Result<(), E> {
     match u {
-        T::Usage::Move(_) => Ok(true),
-        T::Usage::Copy { .. } => {
-            context.create::<E>()?;
-            Ok(true)
-        }
+        T::Usage::Move(_) => Ok(()),
+        T::Usage::Copy { .. } => context.create::<E>(),
     }
 }
 

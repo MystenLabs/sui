@@ -391,6 +391,7 @@ const MAINNET_USDB: &str =
 // Version 137: Lower the per-bit cost of bulletproofs range proof verification, and raise the
 //              bound on batch size * range bits from 512 to 1024.
 //              Enable allowances.
+//              Enable fix_ptb_generated_reads.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1255,6 +1256,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     #[skip_protocol_config_accessor]
     enable_allowances: bool,
+
+    // Fixes last-use scoping and live-reference metering for generated `Read` PTB arguments.
+    #[serde(skip_serializing_if = "is_false")]
+    fix_ptb_generated_reads: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4709,6 +4714,7 @@ impl ProtocolConfig {
                     cfg.max_bulletproofs_total_bits = Some(1024);
 
                     cfg.feature_flags.enable_allowances = true;
+                    cfg.feature_flags.fix_ptb_generated_reads = true;
                 }
                 // Use this template when making changes:
                 //

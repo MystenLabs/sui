@@ -376,7 +376,7 @@ pub fn transaction<Mode: ExecutionMode>(
     }
     let mut ast = context.finish();
     // mark the last usage of references as Move instead of Copy
-    scope_references::transaction(&mut ast);
+    scope_references::transaction(env.protocol_config, &mut ast);
     // mark unused results to be dropped
     unused_results::transaction(&mut ast)?;
     // track shared object IDs
@@ -1142,44 +1142,92 @@ mod scope_references {
         static_programmable_transactions::typing::ast::{self as T, Type},
     };
     use std::collections::BTreeSet;
+    use sui_protocol_config::ProtocolConfig;
+
+    struct Context<'pc> {
+        protocol_config: &'pc ProtocolConfig,
+        used: BTreeSet<(u16, u16)>,
+    }
 
     /// To mimic proper scoping of references, the last usage of a reference is made a Move instead
     /// of a Copy.
-    pub fn transaction(ast: &mut T::Transaction) {
-        let mut used: BTreeSet<(u16, u16)> = BTreeSet::new();
+    pub fn transaction(protocol_config: &ProtocolConfig, ast: &mut T::Transaction) {
+        let mut context = Context {
+            protocol_config,
+            used: BTreeSet::new(),
+        };
         for c in ast.commands.iter_mut().rev() {
-            command(&mut used, c);
+            command(&mut context, c);
         }
     }
 
-    fn command(used: &mut BTreeSet<(u16, u16)>, sp!(_, c): &mut T::Command) {
+    fn command(context: &mut Context, sp!(_, c): &mut T::Command) {
         match &mut c.command {
-            T::Command__::MoveCall(mc) => arguments(used, &mut mc.arguments),
+            T::Command__::MoveCall(mc) => arguments(context, &mut mc.arguments),
             T::Command__::TransferObjects(objects, recipient) => {
-                argument(used, recipient);
-                arguments(used, objects);
+                argument(context, recipient);
+                arguments(context, objects);
             }
             T::Command__::SplitCoins(_, coin, amounts) => {
-                arguments(used, amounts);
-                argument(used, coin);
+                arguments(context, amounts);
+                argument(context, coin);
             }
             T::Command__::MergeCoins(_, target, coins) => {
-                arguments(used, coins);
-                argument(used, target);
+                arguments(context, coins);
+                argument(context, target);
             }
-            T::Command__::MakeMoveVec(_, xs) => arguments(used, xs),
+            T::Command__::MakeMoveVec(_, xs) => arguments(context, xs),
             T::Command__::Publish(_, _, _) => (),
-            T::Command__::Upgrade(_, _, _, x, _) => argument(used, x),
+            T::Command__::Upgrade(_, _, _, x, _) => argument(context, x),
         }
     }
 
-    fn arguments(used: &mut BTreeSet<(u16, u16)>, args: &mut [T::Argument]) {
+    fn arguments(context: &mut Context, args: &mut [T::Argument]) {
         for arg in args.iter_mut().rev() {
-            argument(used, arg)
+            argument(context, arg)
         }
     }
 
-    fn argument(used: &mut BTreeSet<(u16, u16)>, sp!(_, (arg_, ty)): &mut T::Argument) {
+    fn argument(context: &mut Context, arg: &mut T::Argument) {
+        if context.protocol_config.fix_ptb_generated_reads() {
+            argument_v2(context, arg)
+        } else {
+            argument_v1(context, arg)
+        }
+    }
+
+    fn argument_v2(context: &mut Context, sp!(_, (arg_, ty)): &mut T::Argument) {
+        use T::Argument__ as TArg;
+        let usage = match arg_ {
+            // `Read` has the referenced value's type, while its usage location has a reference type
+            TArg::Read(u) => u,
+            TArg::Use(_) | TArg::Freeze(_) if !ty.is_reference() => return,
+            TArg::Use(u) | TArg::Freeze(u) => u,
+            // Cannot borrow a reference
+            TArg::Borrow(_, _) => return,
+        };
+        match usage {
+            T::Usage::Move(T::Location::Result(i, j)) => {
+                debug_assert!(false, "No reference should be moved at this point");
+                context.used.insert((*i, *j));
+            }
+            T::Usage::Copy {
+                location: T::Location::Result(i, j),
+                ..
+            } => {
+                // we are at the last usage of a reference result if it was not yet added to the set
+                let last_usage = context.used.insert((*i, *j));
+                if last_usage {
+                    // if it was the last usage, we need to change the Copy to a Move
+                    let loc = T::Location::Result(*i, *j);
+                    *usage = T::Usage::Move(loc);
+                }
+            }
+            _ => (),
+        }
+    }
+
+    fn argument_v1(context: &mut Context, sp!(_, (arg_, ty)): &mut T::Argument) {
         let usage = match arg_ {
             T::Argument__::Use(u) | T::Argument__::Read(u) | T::Argument__::Freeze(u) => u,
             T::Argument__::Borrow(_, _) => return,
@@ -1187,7 +1235,7 @@ mod scope_references {
         match (&usage, ty) {
             (T::Usage::Move(T::Location::Result(i, j)), Type::Reference(_, _)) => {
                 debug_assert!(false, "No reference should be moved at this point");
-                used.insert((*i, *j));
+                context.used.insert((*i, *j));
             }
             (
                 T::Usage::Copy {
@@ -1197,7 +1245,7 @@ mod scope_references {
                 Type::Reference(_, _),
             ) => {
                 // we are at the last usage of a reference result if it was not yet added to the set
-                let last_usage = used.insert((*i, *j));
+                let last_usage = context.used.insert((*i, *j));
                 if last_usage {
                     // if it was the last usage, we need to change the Copy to a Move
                     let loc = T::Location::Result(*i, *j);
