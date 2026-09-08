@@ -2,8 +2,6 @@
 resolver = "2"
 
 exclude = [
-  "examples/tic-tac-toe/cli",
-  "examples/regulated-coin/rust-client",
   "examples/custom-indexer/rust",
   "examples/rust/basic-sui-indexer",
   "examples/rust/clickhouse-sui-indexer",
