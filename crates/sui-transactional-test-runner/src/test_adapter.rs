@@ -58,7 +58,6 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_protocol_config::{
     Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
     ProtocolVersion,
@@ -128,6 +127,10 @@ pub enum FakeID {
 }
 
 const DEFAULT_GAS_PRICE: u64 = 1_000;
+
+/// The maximum number of events summarized for a transaction, matching the page size the
+/// JSON-RPC event query used to apply.
+const QUERY_MAX_RESULT_LIMIT: usize = 50;
 
 const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     MOVE_STDLIB_PACKAGE_ID,
@@ -2149,7 +2152,7 @@ impl SuiTestAdapter {
             ExecutionStatus::Success => {
                 let events = self
                     .executor
-                    .query_tx_events_asc(digest, *QUERY_MAX_RESULT_LIMIT)
+                    .query_tx_events_asc(digest, QUERY_MAX_RESULT_LIMIT)
                     .await?;
                 Ok(TxnSummary {
                     events,

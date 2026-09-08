@@ -15376,23 +15376,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-json-rpc-api"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "fastcrypto",
- "jsonrpsee",
- "mysten-metrics",
- "once_cell",
- "prometheus",
- "sui-json",
- "sui-json-rpc-types",
- "sui-types",
- "tap",
- "tracing",
-]
-
-[[package]]
 name = "sui-json-rpc-types"
 version = "0.0.0"
 dependencies = [
@@ -16927,7 +16910,6 @@ dependencies = [
  "sui-core",
  "sui-framework",
  "sui-framework-snapshot",
- "sui-json-rpc-api",
  "sui-protocol-config",
  "sui-rpc-api",
  "sui-swarm-config",
