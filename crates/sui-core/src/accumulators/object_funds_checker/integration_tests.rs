@@ -2,8 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Testing the integration of the object funds withdraw scheduler with the execution scheduler.
+//!
+//! Funds-withdrawing transactions are executed through the execution scheduler, in the
+//! shape consensus produces: all transactions of one accumulator root version are
+//! enqueued together as a single batch (see `execution_scheduler::causal_order`). Since
+//! withdrawing mutates the vault, several withdraws at one version need a shared vault,
+//! which consensus sequences within the batch.
 
-use std::sync::Arc;
+use std::{cell::Cell, sync::Arc};
 
 use fastcrypto::ed25519::Ed25519KeyPair;
 use sui_protocol_config::ProtocolConfig;
@@ -12,14 +18,13 @@ use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, TypeTag,
     accumulator_root::AccumulatorValue,
     balance::Balance,
-    base_types::{ObjectID, ObjectRef, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::get_account_key_pair,
     effects::{TransactionEffects, TransactionEffectsAPI},
     executable_transaction::VerifiedExecutableTransaction,
-    execution::ExecutionOutput,
     execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
     gas_coin::GAS,
-    object::Object,
+    object::{Object, Owner},
 };
 
 use crate::authority::{
@@ -27,14 +32,25 @@ use crate::authority::{
     shared_object_version_manager::AssignedVersions, test_authority_builder::TestAuthorityBuilder,
 };
 
+/// Gas coins available to scheduled transactions; each takes a fresh one so a batch
+/// never reuses an owned input.
+const GAS_POOL_SIZE: usize = 16;
+
 struct TestEnv {
     authority: Arc<AuthorityState>,
     epoch_store: Arc<AuthorityPerEpochStore>,
     sender: SuiAddress,
     keypair: Ed25519KeyPair,
+    /// Gas for the directly executed setup transactions, chained through their effects.
     gas_obj: ObjectID,
+    gas_pool: Vec<ObjectID>,
+    next_gas: Cell<usize>,
     package_id: ObjectID,
+    /// An owned vault, for single-transaction version groups.
     vault_obj: ObjectID,
+    /// A shared vault, for version groups with several withdraws.
+    shared_vault: ObjectID,
+    shared_vault_initial_version: SequenceNumber,
 }
 
 impl TestEnv {
@@ -57,10 +73,15 @@ impl TestEnv {
 
         let (sender, keypair) = get_account_key_pair();
         let gas_obj = Object::with_owner_for_testing(sender);
+        let gas_pool: Vec<_> = (0..GAS_POOL_SIZE)
+            .map(|_| Object::with_owner_for_testing(sender))
+            .collect();
+        let mut starting_objects = vec![gas_obj.clone()];
+        starting_objects.extend(gas_pool.iter().cloned());
 
         let authority = TestAuthorityBuilder::new()
             .with_protocol_config(protocol_config)
-            .with_starting_objects(std::slice::from_ref(&gas_obj))
+            .with_starting_objects(&starting_objects)
             .build()
             .await;
         let epoch_store = authority.epoch_store_for_testing().clone();
@@ -94,14 +115,40 @@ impl TestEnv {
             .unwrap();
         assert!(effects.status().is_ok());
         let vault_obj = effects.created().into_iter().next().unwrap().0;
+        let gas = effects.gas_object().unwrap().0;
+
+        let tx = TestTransactionBuilder::new(sender, gas, rgp)
+            .move_call(package_id, "object_balance", "new_shared", vec![])
+            .build();
+        let cert = VerifiedExecutableTransaction::new_for_testing(tx, &keypair);
+        let (effects, ..) = authority
+            .try_execute_immediately(&cert, ExecutionEnv::new(), &epoch_store)
+            .unwrap();
+        assert!(effects.status().is_ok());
+        let (shared_vault, shared_vault_initial_version) = effects
+            .created()
+            .into_iter()
+            .find_map(|(oref, owner)| match owner {
+                Owner::Shared {
+                    initial_shared_version,
+                } => Some((oref.0, initial_shared_version)),
+                _ => None,
+            })
+            .unwrap();
+        let gas = effects.gas_object().unwrap().0;
+
         Self {
             authority,
             epoch_store,
             sender,
             keypair,
             gas_obj: gas.0,
+            gas_pool: gas_pool.iter().map(|o| o.id()).collect(),
+            next_gas: Cell::new(0),
             package_id,
             vault_obj: vault_obj.0,
+            shared_vault,
+            shared_vault_initial_version,
         }
     }
 
@@ -127,6 +174,13 @@ impl TestEnv {
             .compute_object_reference()
     }
 
+    /// A gas coin not used by any earlier transaction.
+    pub fn fresh_gas(&self) -> ObjectRef {
+        let i = self.next_gas.get();
+        self.next_gas.set(i + 1);
+        self.oref(&self.gas_pool[i])
+    }
+
     pub fn rgp(&self) -> u64 {
         self.epoch_store.reference_gas_price()
     }
@@ -149,74 +203,94 @@ impl TestEnv {
             .await;
     }
 
-    pub fn get_latest_balance(&self, type_tag: TypeTag) -> u128 {
+    pub fn vault_balance(&self, vault: ObjectID, type_tag: TypeTag) -> u128 {
         let account_id =
-            AccumulatorValue::get_field_id(self.vault_obj.into(), &Balance::type_tag(type_tag))
-                .unwrap();
+            AccumulatorValue::get_field_id(vault.into(), &Balance::type_tag(type_tag)).unwrap();
         let balance_read = self.authority.get_account_funds_read();
         balance_read.get_latest_account_amount(&account_id)
     }
 
     /// Builds a transaction that, for each `(amount, recipient)`, withdraws `amount` from
-    /// the vault object account and deposits it to the recipient's address balance.
-    pub fn vault_withdraw_tx(
+    /// the shared vault object account and deposits it to the recipient's address balance.
+    pub fn shared_vault_withdraw_tx(
         &self,
         transfers: &[(u64, SuiAddress)],
     ) -> VerifiedExecutableTransaction {
-        let gas = self.oref(&self.gas_obj);
-        let mut builder = TestTransactionBuilder::new(self.sender, gas, self.rgp());
+        let mut builder = TestTransactionBuilder::new(self.sender, self.fresh_gas(), self.rgp());
         for (amount, recipient) in transfers {
             builder = builder.transfer_sui_to_address_balance(
-                FundSource::object_fund_owned(self.package_id, self.oref(&self.vault_obj)),
+                FundSource::object_fund_shared(
+                    self.package_id,
+                    self.shared_vault,
+                    self.shared_vault_initial_version,
+                ),
                 vec![(*amount, *recipient)],
             );
         }
         VerifiedExecutableTransaction::new_for_testing(builder.build(), &self.keypair)
     }
 
-    fn execution_env(&self) -> ExecutionEnv {
-        let accumulator_version = self.oref(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).1;
-        ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
-            vec![],
-            Some(accumulator_version),
-        ))
-    }
-
-    /// Executes at the current accumulator version, expecting success.
-    pub async fn execute_ok(&self, cert: &VerifiedExecutableTransaction) -> TransactionEffects {
-        let effects = self
-            .authority
-            .try_execute_immediately(cert, self.execution_env(), &self.epoch_store)
-            .unwrap()
-            .0;
-        assert!(effects.status().is_ok());
-        effects
-    }
-
-    /// Executes at the current accumulator version, expecting the object funds check to
-    /// reject the transaction with InsufficientFundsForWithdraw.
-    pub async fn execute_insufficient(
+    /// Enqueues `certs` as one version group at the current accumulator root version and
+    /// returns their effects in order.
+    pub async fn execute_batch(
         &self,
-        cert: &VerifiedExecutableTransaction,
-    ) -> TransactionEffects {
-        let digest = *cert.digest();
-        let output =
-            self.authority
-                .try_execute_immediately(cert, self.execution_env(), &self.epoch_store);
-        assert!(matches!(output, ExecutionOutput::RetryLater));
-        let effects = self
-            .authority
-            .notify_read_effects_for_testing("test", digest)
-            .await;
-        assert!(matches!(
+        certs: &[VerifiedExecutableTransaction],
+    ) -> Vec<TransactionEffects> {
+        let assigned = self
+            .epoch_store
+            .assign_shared_object_versions_for_tests(
+                self.authority.get_object_cache_reader().as_ref(),
+                certs,
+            )
+            .unwrap()
+            .into_map();
+        let accumulator_version = self.oref(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).1;
+        let batch = certs
+            .iter()
+            .map(|cert| {
+                let shared_versions = assigned[&cert.key()].shared_object_versions.clone();
+                (
+                    cert.clone().into(),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
+                        shared_versions,
+                        Some(accumulator_version),
+                    )),
+                )
+            })
+            .collect();
+        self.authority
+            .execution_scheduler()
+            .enqueue(batch, &self.epoch_store);
+
+        let mut all_effects = Vec::with_capacity(certs.len());
+        for cert in certs {
+            all_effects.push(
+                self.authority
+                    .notify_read_effects_for_testing("test", *cert.digest())
+                    .await,
+            );
+        }
+        all_effects
+    }
+}
+
+fn assert_ok(effects: &TransactionEffects) {
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+}
+
+/// The object funds check rejected the transaction with InsufficientFundsForWithdraw.
+fn assert_insufficient(effects: &TransactionEffects) {
+    assert!(
+        matches!(
             effects.status(),
             ExecutionStatus::Failure(ExecutionFailure {
                 error: ExecutionErrorKind::InsufficientFundsForWithdraw,
                 ..
             })
-        ));
-        effects
-    }
+        ),
+        "{:?}",
+        effects.status()
+    );
 }
 
 #[tokio::test]
@@ -225,8 +299,7 @@ async fn test_object_withdraw_basic_flow() {
 
     env.fund_address(env.vault_obj.into(), 1000).await;
 
-    let gas = env.oref(&env.gas_obj);
-    let tx = TestTransactionBuilder::new(env.sender, gas, env.rgp())
+    let tx = TestTransactionBuilder::new(env.sender, env.fresh_gas(), env.rgp())
         .transfer_sui_to_address_balance(
             FundSource::object_fund_owned(env.package_id, env.oref(&env.vault_obj)),
             vec![(1000, env.sender)],
@@ -234,119 +307,48 @@ async fn test_object_withdraw_basic_flow() {
         .build();
     let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
 
-    let accumulator_version = env.oref(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).1;
-    let effects = env
-        .authority
-        .try_execute_immediately(
-            &cert,
-            ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
-                vec![],
-                Some(accumulator_version),
-            )),
-            &env.epoch_store,
-        )
-        .unwrap()
-        .0;
-    assert!(effects.status().is_ok());
+    let effects = env.execute_batch(&[cert]).await;
+    assert_ok(&effects[0]);
 }
 
 #[tokio::test]
 async fn test_object_withdraw_multiple_withdraws() {
     let env = TestEnv::new().await;
+    let vault = env.shared_vault;
 
-    env.fund_address(env.vault_obj.into(), 1000).await;
+    env.fund_address(vault.into(), 1000).await;
 
-    let mut all_effects = Vec::new();
     // Withdraw from the same object account 3 times, each 300.
     // All withdraws should be sufficient.
-    for _ in 0..3 {
-        let gas = env.oref(&env.gas_obj);
-        let tx = TestTransactionBuilder::new(env.sender, gas, env.rgp())
-            .transfer_sui_to_address_balance(
-                FundSource::object_fund_owned(env.package_id, env.oref(&env.vault_obj)),
-                vec![(300, env.sender)],
-            )
-            .build();
-        let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
-
-        let accumulator_version = env.oref(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).1;
-        let effects = env
-            .authority
-            // Fastpath execution
-            .try_execute_immediately(
-                &cert,
-                ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
-                    vec![],
-                    Some(accumulator_version),
-                )),
-                &env.epoch_store,
-            )
-            .unwrap()
-            .0;
-        assert!(effects.status().is_ok());
-        all_effects.push(effects);
+    let certs: Vec<_> = (0..3)
+        .map(|_| env.shared_vault_withdraw_tx(&[(300, env.sender)]))
+        .collect();
+    let all_effects = env.execute_batch(&certs).await;
+    for effects in &all_effects {
+        assert_ok(effects);
     }
     env.authority
         .settle_accumulator_for_testing(&all_effects, None)
         .await;
 
-    assert_eq!(env.get_latest_balance(GAS::type_tag()), 1000 - 300 * 3);
-
-    all_effects.clear();
+    assert_eq!(env.vault_balance(vault, GAS::type_tag()), 1000 - 300 * 3);
 
     // Withdraw from the same object account 3 times, each 40.
     // The first 2 withdraws should be sufficient, the last one should be insufficient.
     // This test exercises the case where we have to track unsettled balance withdraws from the same consensus commit.
-    for i in 0..3 {
-        let gas = env.oref(&env.gas_obj);
-        let tx = TestTransactionBuilder::new(env.sender, gas, env.rgp())
-            .transfer_sui_to_address_balance(
-                FundSource::object_fund_owned(env.package_id, env.oref(&env.vault_obj)),
-                vec![(40, env.sender)],
-            )
-            .build();
-        let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
-        let digest = *cert.digest();
-
-        let accumulator_version = env.oref(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).1;
-        let output = env
-            .authority
-            // Fastpath execution
-            .try_execute_immediately(
-                &cert,
-                ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
-                    vec![],
-                    Some(accumulator_version),
-                )),
-                &env.epoch_store,
-            );
-        let effects = if i < 2 {
-            let effects = output.unwrap().0;
-            assert!(effects.status().is_ok());
-            effects
-        } else {
-            assert!(matches!(output, ExecutionOutput::RetryLater));
-            let effects = env
-                .authority
-                .notify_read_effects_for_testing("test", digest)
-                .await;
-            assert!(matches!(
-                effects.status(),
-                ExecutionStatus::Failure(ExecutionFailure {
-                    error: ExecutionErrorKind::InsufficientFundsForWithdraw,
-                    ..
-                })
-            ));
-            effects
-        };
-        all_effects.push(effects);
-    }
+    let certs: Vec<_> = (0..3)
+        .map(|_| env.shared_vault_withdraw_tx(&[(40, env.sender)]))
+        .collect();
+    let all_effects = env.execute_batch(&certs).await;
+    assert_ok(&all_effects[0]);
+    assert_ok(&all_effects[1]);
+    assert_insufficient(&all_effects[2]);
     env.authority
         .settle_accumulator_for_testing(&all_effects, None)
         .await;
 
     assert_eq!(
-        env.get_latest_balance(GAS::type_tag()),
+        env.vault_balance(vault, GAS::type_tag()),
         1000 - 300 * 3 - 40 * 2
     );
 }
@@ -355,79 +357,81 @@ async fn test_object_withdraw_multiple_withdraws() {
 async fn test_object_withdraw_and_deposit_same_transaction() {
     telemetry_subscribers::init_for_testing();
     let env = TestEnv::new().await;
-    let vault: SuiAddress = env.vault_obj.into();
+    let vault: SuiAddress = env.shared_vault.into();
     env.fund_address(vault, 2).await;
-    let mut all_effects = Vec::new();
 
-    // Withdraw 3 and deposit 3 back to the same object account. Even though this nets
-    // out to 0, the running max withdraw of 3 exceeds the balance of 2, so it fails.
-    let tx = env.vault_withdraw_tx(&[(3, vault)]);
-    all_effects.push(env.execute_insufficient(&tx).await);
-
-    // Withdraw 2 and deposit 2 back, twice within the same transaction. The running
-    // net withdraw never exceeds 2, so this succeeds.
-    let tx = env.vault_withdraw_tx(&[(2, vault), (2, vault)]);
-    all_effects.push(env.execute_ok(&tx).await);
-
-    // The previous transaction's withdraws netted out to 0, so the full balance of 2
-    // is still available at the same version.
-    let tx = env.vault_withdraw_tx(&[(1, vault)]);
-    all_effects.push(env.execute_ok(&tx).await);
-
-    // Withdraw the full balance of 2 without depositing back.
-    let tx = env.vault_withdraw_tx(&[(2, env.sender)]);
-    all_effects.push(env.execute_ok(&tx).await);
-
-    // The balance is now fully reserved; even a withdraw of 1 that deposits back
-    // must fail.
-    let tx = env.vault_withdraw_tx(&[(1, vault)]);
-    all_effects.push(env.execute_insufficient(&tx).await);
+    let certs = vec![
+        // Withdraw 3 and deposit 3 back to the same object account. Even though this nets
+        // out to 0, the running max withdraw of 3 exceeds the balance of 2, so it fails.
+        env.shared_vault_withdraw_tx(&[(3, vault)]),
+        // Withdraw 2 and deposit 2 back, twice within the same transaction. The running
+        // net withdraw never exceeds 2, so this succeeds.
+        env.shared_vault_withdraw_tx(&[(2, vault), (2, vault)]),
+        // The previous transaction's withdraws netted out to 0, so the full balance of 2
+        // is still available at the same version.
+        env.shared_vault_withdraw_tx(&[(1, vault)]),
+        // Withdraw the full balance of 2 without depositing back.
+        env.shared_vault_withdraw_tx(&[(2, env.sender)]),
+        // The balance is now fully reserved; even a withdraw of 1 that deposits back
+        // must fail.
+        env.shared_vault_withdraw_tx(&[(1, vault)]),
+    ];
+    let all_effects = env.execute_batch(&certs).await;
+    assert_insufficient(&all_effects[0]);
+    assert_ok(&all_effects[1]);
+    assert_ok(&all_effects[2]);
+    assert_ok(&all_effects[3]);
+    assert_insufficient(&all_effects[4]);
 
     // Settlement applies the net amounts: only the full-balance withdraw of 2
     // actually deducted funds.
     env.authority
         .settle_accumulator_for_testing(&all_effects, None)
         .await;
-    assert_eq!(env.get_latest_balance(GAS::type_tag()), 0);
+    assert_eq!(env.vault_balance(env.shared_vault, GAS::type_tag()), 0);
 }
 
 #[tokio::test]
 async fn test_object_net_deposit_same_transaction() {
     telemetry_subscribers::init_for_testing();
     let env = TestEnv::new().await;
-    let vault: SuiAddress = env.vault_obj.into();
+    let vault: SuiAddress = env.shared_vault.into();
     env.fund_address(vault, 2).await;
-    let mut all_effects = Vec::new();
 
     // In one transaction, withdraw 2 from the vault and deposit it back, plus deposit
     // 3 more from a coin. The vault's folded accumulator event is a net deposit, which
     // is recorded as 0 unsettled withdraw, while the withdraw of 2 is still checked
     // against the running max.
-    let gas = env.oref(&env.gas_obj);
+    let gas = env.fresh_gas();
     let tx = TestTransactionBuilder::new(env.sender, gas, env.rgp())
         .transfer_sui_to_address_balance(
-            FundSource::object_fund_owned(env.package_id, env.oref(&env.vault_obj)),
+            FundSource::object_fund_shared(
+                env.package_id,
+                env.shared_vault,
+                env.shared_vault_initial_version,
+            ),
             vec![(2, vault)],
         )
         .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(3, vault)])
         .build();
-    let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
-    all_effects.push(env.execute_ok(&cert).await);
-
-    // The net deposit consumed no unsettled balance: the full balance of 2 is still
-    // available at the same version.
-    let tx = env.vault_withdraw_tx(&[(2, env.sender)]);
-    all_effects.push(env.execute_ok(&tx).await);
-
-    // But the unsettled deposit of 3 is not credited before settlement.
-    let tx = env.vault_withdraw_tx(&[(1, env.sender)]);
-    all_effects.push(env.execute_insufficient(&tx).await);
+    let certs = vec![
+        VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair),
+        // The net deposit consumed no unsettled balance: the full balance of 2 is still
+        // available at the same version.
+        env.shared_vault_withdraw_tx(&[(2, env.sender)]),
+        // But the unsettled deposit of 3 is not credited before settlement.
+        env.shared_vault_withdraw_tx(&[(1, env.sender)]),
+    ];
+    let all_effects = env.execute_batch(&certs).await;
+    assert_ok(&all_effects[0]);
+    assert_ok(&all_effects[1]);
+    assert_insufficient(&all_effects[2]);
 
     // After settlement the net deposit materializes: 2 + 3 - 2 = 3.
     env.authority
         .settle_accumulator_for_testing(&all_effects, None)
         .await;
-    assert_eq!(env.get_latest_balance(GAS::type_tag()), 3);
+    assert_eq!(env.vault_balance(env.shared_vault, GAS::type_tag()), 3);
 }
 
 #[tokio::test]
@@ -446,8 +450,7 @@ async fn test_object_zero_amount_withdraw() {
     // One transaction: withdraw 0 from zero_vault and 2 from the funded vault. The
     // positive withdraw makes the running max map non-empty, so the zero withdraw
     // reaches the unsettled recording path.
-    let gas = env.oref(&env.gas_obj);
-    let tx = TestTransactionBuilder::new(env.sender, gas, env.rgp())
+    let tx = TestTransactionBuilder::new(env.sender, env.fresh_gas(), env.rgp())
         .transfer_sui_to_address_balance(
             FundSource::object_fund_owned(env.package_id, env.oref(&zero_vault)),
             vec![(0, env.sender)],
@@ -458,12 +461,13 @@ async fn test_object_zero_amount_withdraw() {
         )
         .build();
     let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
-    let effects = env.execute_ok(&cert).await;
+    let effects = env.execute_batch(&[cert]).await;
+    assert_ok(&effects[0]);
 
     env.authority
-        .settle_accumulator_for_testing(&[effects], None)
+        .settle_accumulator_for_testing(&effects, None)
         .await;
-    assert_eq!(env.get_latest_balance(GAS::type_tag()), 0);
+    assert_eq!(env.vault_balance(env.vault_obj, GAS::type_tag()), 0);
 }
 
 #[tokio::test]
@@ -474,15 +478,17 @@ async fn test_object_withdraw_and_deposit_same_transaction_legacy() {
     // accumulator version.
     telemetry_subscribers::init_for_testing();
     let env = TestEnv::new_with_legacy_unsettled_withdraws().await;
-    let vault: SuiAddress = env.vault_obj.into();
+    let vault: SuiAddress = env.shared_vault.into();
     env.fund_address(vault, 2).await;
 
-    // Withdraw 2 and deposit 2 back to the same object account.
-    let tx = env.vault_withdraw_tx(&[(2, vault)]);
-    env.execute_ok(&tx).await;
-
-    // Even though the previous transaction netted out to 0, its running max withdraw
-    // of 2 is recorded as unsettled, so no balance remains available.
-    let tx = env.vault_withdraw_tx(&[(1, vault)]);
-    env.execute_insufficient(&tx).await;
+    let certs = vec![
+        // Withdraw 2 and deposit 2 back to the same object account.
+        env.shared_vault_withdraw_tx(&[(2, vault)]),
+        // Even though the previous transaction netted out to 0, its running max withdraw
+        // of 2 is recorded as unsettled, so no balance remains available.
+        env.shared_vault_withdraw_tx(&[(1, vault)]),
+    ];
+    let all_effects = env.execute_batch(&certs).await;
+    assert_ok(&all_effects[0]);
+    assert_insufficient(&all_effects[1]);
 }
