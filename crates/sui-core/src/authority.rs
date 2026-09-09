@@ -944,6 +944,14 @@ impl ExecutionEnv {
         self
     }
 
+    /// For tests that drive scheduler-internal paths directly, standing in for the
+    /// index the ExecutionScheduler assigns at enqueue time.
+    #[cfg(test)]
+    pub(crate) fn with_causal_index(mut self, index: u64) -> Self {
+        self.causal_index = Some(index);
+        self
+    }
+
     pub fn with_barrier_dependencies(
         mut self,
         barrier_dependencies: BTreeSet<TransactionDigest>,
@@ -3977,6 +3985,21 @@ impl AuthorityState {
             })
             .collect();
 
+        // The test version-assignment helper assigns no accumulator root version;
+        // settlements are the one test-driven version group that needs it (the
+        // barrier settles object funds at the version it writes).
+        let with_root_version = |assigned: shared_object_version_manager::AssignedVersions| {
+            shared_object_version_manager::AssignedVersions::new(
+                assigned.shared_object_versions,
+                sui_types::base_types::SystemObjectVersions::new(Some(
+                    sui_types::base_types::ConsensusObjectVersion {
+                        initial_shared_version: accumulator_root_obj_initial_shared_version,
+                        version: accumulator_version,
+                    },
+                )),
+            )
+        };
+
         let assigned_versions = epoch_store
             .assign_shared_object_versions_for_tests(
                 self.get_object_cache_reader().as_ref(),
@@ -3988,7 +4011,7 @@ impl AuthorityState {
         let mut replay_txns = Vec::new();
         let mut settlement_effects = Vec::with_capacity(settlements.len());
         for tx in settlements {
-            let assigned = version_map.get(&tx.key()).unwrap().clone();
+            let assigned = with_root_version(version_map.get(&tx.key()).unwrap().clone());
             let env = ExecutionEnv::new().with_assigned_versions(assigned);
             let (effects, _) = self
                 .try_execute_immediately(&tx.clone(), env.clone(), &epoch_store)
@@ -4017,7 +4040,7 @@ impl AuthorityState {
             .unwrap();
         let version_map = assigned_versions.into_map();
 
-        let barrier_assigned = version_map.get(&barrier.key()).unwrap().clone();
+        let barrier_assigned = with_root_version(version_map.get(&barrier.key()).unwrap().clone());
         let env = ExecutionEnv::new().with_assigned_versions(barrier_assigned);
         let (effects, _) = self
             .try_execute_immediately(&barrier.clone(), env.clone(), &epoch_store)
