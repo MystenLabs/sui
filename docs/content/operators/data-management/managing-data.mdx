@@ -58,7 +58,7 @@ The preceding image shows how data flows through a full node:
    - Executes the transactions locally to verify that effects match the effects certified by the quorum of the validators.
    - Updates the local state with the latest object values accordingly.
 2. **RPCs:** A Sui full node exposes Sui RPC endpoints for querying the latest state of the system, including both the latest state metadata (such as `sui_getProtocolConfig`) and the latest state object data (`sui_getObject`).
-3. **Transaction submission:** Each Sui full node orchestrates transaction submission to the quorum of the Sui validators and, optionally if configured, locally executes the finalized transactions (called fast path execution), which circumvents the wait for checkpoint synchronization.
+3. **Transaction submission:** Each Sui full node orchestrates transaction submission to the quorum of the Sui validators and, optionally if configured, locally executes the finalized transactions (called local execution), which circumvents the wait for checkpoint synchronization.
 
 ## Sui full node data and RPC types
 
