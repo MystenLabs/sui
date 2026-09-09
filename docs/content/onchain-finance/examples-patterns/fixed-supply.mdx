@@ -71,6 +71,6 @@ To deploy a fixed-supply coin:
    ```sh
    $ sui client publish
    ```
-3. Verify the total supply by querying the `CoinMetadata` object returned in the publish transaction. The `supply` field should match your intended total.
+3. Verify the total supply by calling `coin::total_supply` on the `TreasuryCap`. The value should match your intended total. `CoinMetadata` carries the coin's display fields (`decimals`, `name`, `symbol`, `description`, `icon_url`) and does not track supply.
 
 [View the full example on GitHub](https://github.com/MystenLabs/sui-move-bootcamp/tree/solution/I2).
