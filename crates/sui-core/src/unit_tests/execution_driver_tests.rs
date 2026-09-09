@@ -484,32 +484,27 @@ async fn test_execution_with_dependencies() {
         ));
     }
 
-    // Enqueue executables in causal (dependency) order. This is a contract of the
-    // execution scheduler: enqueue order defines the causal index used for execution
-    // admission, and every dependency must point at an earlier-enqueued unit (see
-    // `execution_scheduler::causal_order`). Production sources (consensus handler,
-    // checkpoint executor) enqueue in this order by construction. Here the causal
-    // order is the order the certs were originally executed in: the two setup certs,
-    // then each iteration's owned cert followed by its shared cert (the chains
+    // Enqueue executables in causal (dependency) order, as one batch. This is a
+    // contract of the execution scheduler: enqueue order defines the causal index used
+    // for execution admission, and every dependency must point at an earlier-enqueued
+    // unit (see `execution_scheduler::causal_order`). Production sources (consensus
+    // handler, checkpoint executor) enqueue in this order by construction. Here the
+    // causal order is the order the certs were originally executed in: the two setup
+    // certs, then each iteration's owned cert followed by its shared cert (the chains
     // cross-link through reused gas objects, so neither chain may be enqueued ahead
     // of the other wholesale).
+    let mut batch: Vec<(Schedulable, ExecutionEnv)> = Vec::new();
     let mut owned_iter = executed_owned_certs.iter();
     for executable in owned_iter.by_ref().take(2) {
-        authorities[3].execution_scheduler().enqueue(
-            vec![(executable.clone().into(), ExecutionEnv::new())],
-            &authorities[3].epoch_store_for_testing(),
-        );
+        batch.push((executable.clone().into(), ExecutionEnv::new()));
     }
     for (owned, (shared, env)) in owned_iter.zip_debug_eq(executables_with_env.iter()) {
-        authorities[3].execution_scheduler().enqueue(
-            vec![(owned.clone().into(), ExecutionEnv::new())],
-            &authorities[3].epoch_store_for_testing(),
-        );
-        authorities[3].execution_scheduler().enqueue(
-            vec![(shared.clone(), env.clone())],
-            &authorities[3].epoch_store_for_testing(),
-        );
+        batch.push((owned.clone().into(), ExecutionEnv::new()));
+        batch.push((shared.clone(), env.clone()));
     }
+    authorities[3]
+        .execution_scheduler()
+        .enqueue(batch, &authorities[3].epoch_store_for_testing());
 
     // All certs should get executed eventually.
     let digests: Vec<_> = executed_shared_certs
