@@ -393,6 +393,7 @@ const MAINNET_USDB: &str =
 //              Enable allowances.
 //              Enable fix_ptb_generated_reads.
 //              Enable check_object_funds_withdraw_in_execution on devnet and charge for reads.
+//              Enable allowed_proposers on testnet and mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4736,6 +4737,8 @@ impl ProtocolConfig {
                     // Equivalent to the fixed portion of a dynamic-field lookup (52 + 52) plus
                     // loading the 80-byte accumulator field contents at one gas unit per byte.
                     cfg.reserve_object_funds_for_withdrawal_cold_read_cost = Some(184);
+
+                    cfg.feature_flags.allowed_proposers = true;
                 }
                 // Use this template when making changes:
                 //
