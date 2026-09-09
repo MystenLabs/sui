@@ -407,6 +407,7 @@ const MAINNET_USDB: &str =
 //              Enable allowed_proposers on testnet and mainnet.
 //              Validate PTB indices at signing time.
 //              Enable memory_safety_invariant_check_v2.
+//              Disable effects transaction dependencies on devnet.
 // Version 138: Enable BumpOnly
 //              Enable check_object_funds_withdraw_in_execution on testnet.
 
@@ -1292,6 +1293,10 @@ struct FeatureFlags {
     // If true, use the bitset implementation for PTB memory safety invariant check.
     #[serde(skip_serializing_if = "is_false")]
     memory_safety_invariant_check_v2: bool,
+
+    // Keep the effects wire representation, but stop collecting transaction dependencies.
+    #[serde(skip_serializing_if = "is_false")]
+    disable_effects_dependencies: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4762,6 +4767,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.charge_ld_const_abstract_size = true;
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
+                        cfg.feature_flags.disable_effects_dependencies = true;
                     }
                     cfg.reserve_object_funds_for_withdrawal_cost_base = Some(52);
                     // Equivalent to the fixed portion of a dynamic-field lookup (52 + 52) plus

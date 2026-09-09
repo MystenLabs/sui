@@ -6417,44 +6417,71 @@ async fn test_single_authority_reconfigure() {
 #[tokio::test]
 async fn test_insufficient_balance_for_withdraw_early_error() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object = Object::with_owner_for_testing(sender);
+    let mut gas_object = Object::with_owner_for_testing(sender);
+    let previous_transaction = TransactionDigest::random();
+    gas_object.previous_transaction = previous_transaction;
     let gas_object_ref = gas_object.compute_object_reference();
-
-    let state = TestAuthorityBuilder::new()
-        .with_starting_objects(&[gas_object])
-        .build()
-        .await;
-    let epoch_store = state.load_epoch_store_one_call_per_task();
-
     let tx_data = TestTransactionBuilder::new(sender, gas_object_ref, 1000)
         .transfer_sui(None, sender)
         .build();
-
     let certificate = VerifiedExecutableTransaction::new_for_testing(tx_data, &sender_key);
 
-    // Create an execution environment with insufficient balance status
-    let mut execution_env = ExecutionEnv::new();
-    execution_env.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
+    // Exercise both the legacy IFFW short-circuit and bump-only finalization.
+    for gas_model_version in [14, 15] {
+        let mut legacy_effects_bytes = None;
+        for disable_dependencies in [false, true] {
+            let mut config =
+                ProtocolConfig::get_for_version(ProtocolVersion::new(137), Chain::Unknown);
+            config.set_gas_model_version_for_testing(gas_model_version);
+            config.set_disable_effects_dependencies_for_testing(disable_dependencies);
+            let state = TestAuthorityBuilder::new()
+                .with_protocol_config(config)
+                .with_starting_objects(&[gas_object.clone()])
+                .build()
+                .await;
+            let epoch_store = state.load_epoch_store_one_call_per_task();
+            let mut execution_env = ExecutionEnv::new();
+            execution_env.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
+            let (effects, execution_error) = state
+                .try_execute_immediately(&certificate, execution_env, &epoch_store)
+                .unwrap();
 
-    // Test that the transaction fails with InsufficientFundsForWithdraw error
-    let (effects, execution_error) = state
-        .try_execute_immediately(&certificate, execution_env, &epoch_store)
-        .unwrap();
+            assert_eq!(
+                execution_error.unwrap().kind(),
+                &ExecutionErrorKind::InsufficientFundsForWithdraw
+            );
+            assert!(matches!(
+                effects.status(),
+                ExecutionStatus::Failure(ExecutionFailure {
+                    error: ExecutionErrorKind::InsufficientFundsForWithdraw,
+                    ..
+                })
+            ));
+            if disable_dependencies {
+                assert!(effects.dependencies().is_empty());
+            } else {
+                assert_eq!(effects.dependencies(), &[previous_transaction]);
+            }
 
-    // Check that we got an execution error due to insufficient balance
-    assert!(execution_error.is_some());
-    let error = execution_error.unwrap();
-    assert_eq!(
-        error.kind(),
-        &ExecutionErrorKind::InsufficientFundsForWithdraw
-    );
+            let output_gas = state.get_object(&gas_object_ref.0).unwrap();
+            assert_eq!(output_gas.previous_transaction, *certificate.digest());
+            assert_eq!(output_gas.version(), gas_object_ref.1.next());
 
-    // Check that the transaction status shows failure
-    assert!(effects.status().is_err());
-    if let ExecutionStatus::Failure(ExecutionFailure { error, .. }) = effects.status() {
-        assert_eq!(error, &ExecutionErrorKind::InsufficientFundsForWithdraw);
-    } else {
-        panic!("Expected execution status to be Failure");
+            let mut effects = effects;
+            let encoded = bcs::to_bytes(&effects).unwrap();
+            assert_eq!(
+                bcs::from_bytes::<TransactionEffects>(&encoded).unwrap(),
+                effects
+            );
+            // The flag changes only dependencies, including on the early-failure paths.
+            effects.dependencies_mut_for_testing().clear();
+            let encoded_without_dependencies = bcs::to_bytes(&effects).unwrap();
+            if let Some(legacy) = &legacy_effects_bytes {
+                assert_eq!(&encoded_without_dependencies, legacy);
+            } else {
+                legacy_effects_bytes = Some(encoded_without_dependencies);
+            }
+        }
     }
 }
 
