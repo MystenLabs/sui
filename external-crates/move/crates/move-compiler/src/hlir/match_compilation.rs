@@ -258,7 +258,7 @@ fn build_match_tree(
 
     // If this is all just binders or wildcards, we just bind them and keep going; no need to
     // determine the type for discrimination.
-    if matrix.first_column_binders_only() {
+    if matrix.first_column_all_binders() {
         let (subject_binders, default) = matrix.specialize_default(context);
         let next = build_match_tree(context, fringe, default);
         MatchTree::continue_node(subject, subject_binders, next)

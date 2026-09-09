@@ -584,7 +584,7 @@ impl PatternMatrix {
 
     /// Returns true if each row's head pattern is a binder or wildcard
     /// (e.g., none discriminate the subject)
-    pub fn first_column_binders_only(&self) -> bool {
+    pub fn first_column_all_binders(&self) -> bool {
         self.patterns.iter().all(|pat| pat.head_is_bindable_only())
     }
 

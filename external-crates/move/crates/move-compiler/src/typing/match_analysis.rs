@@ -612,7 +612,7 @@ fn find_counterexample_impl(
         let result = if matrix.patterns_empty() {
             None
         } else if let Some(ty) = matrix.tys.first() {
-            if matrix.first_column_binders_only() {
+            if matrix.first_column_all_binders() {
                 let (_, default) = matrix.specialize_default(context);
                 counterexample_rec(context, default, arity - 1, ndx).map(|counterexample| {
                     [CounterExample::Wildcard]
