@@ -2132,27 +2132,27 @@ impl KeyValueStoreReader for BigTableClient {
             end_version,
         ));
 
-        // Over-fetch to account for versions beyond cp_bound that need filtering out.
-        let fetch_limit = (limit as i64).saturating_mul(2).min(200);
         let rows = self
-            .range_scan(
+            .range_scan_stream(
                 tables::packages::NAME,
                 Some(start_key),
                 Some(end_key),
-                fetch_limit,
+                0,
                 descending,
                 None,
             )
             .await?;
 
-        let mut results = Vec::with_capacity(limit);
-        for (key, row) in rows {
-            if results.len() >= limit {
-                break;
-            }
-            let pkg = tables::packages::decode(key.as_ref(), &row)?;
+        futures::pin_mut!(rows);
+        let mut results = Vec::with_capacity(limit.min(1000));
+        while let Some(row) = rows.next().await {
+            let (key, cells) = row?;
+            let pkg = tables::packages::decode(key.as_ref(), &cells)?;
             if pkg.cp_sequence_number <= cp_bound {
                 results.push(pkg);
+                if results.len() >= limit {
+                    break;
+                }
             }
         }
         Ok(results)
@@ -2821,5 +2821,47 @@ mod tests {
             tx_read_calls(&mock).await.is_empty(),
             "empty digest list must not issue a transactions ReadRows"
         );
+    }
+
+    #[tokio::test]
+    async fn get_package_versions_past_200_versions() {
+        let mock = crate::bigtable::mock_server::MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let mut client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
+
+        let original_id = sui_types::base_types::ObjectID::random();
+        let total_versions = 250u64;
+
+        for v in 1..=total_versions {
+            let row_key = tables::packages::encode_key(original_id.as_ref(), v);
+            let cells = tables::packages::encode(100, original_id.as_ref(), false);
+            mock.insert_row(
+                tables::packages::NAME,
+                row_key,
+                cells.into_iter().map(|(c, b)| (c, b)),
+            )
+            .await;
+        }
+
+        let versions = client
+            .get_package_versions(original_id, u64::MAX, None, None, 250, false)
+            .await
+            .unwrap();
+        assert_eq!(versions.len(), 250);
+        let version_numbers: Vec<u64> = versions.iter().map(|p| p.package_version).collect();
+        assert_eq!(version_numbers, (1..=250).collect::<Vec<_>>());
+
+        // Resuming after version 150 with a limit of 100 returns versions 151..=250.
+        let next_page = client
+            .get_package_versions(original_id, u64::MAX, Some(150), None, 100, false)
+            .await
+            .unwrap();
+        assert_eq!(next_page.len(), 100);
+        let next_version_numbers: Vec<u64> =
+            next_page.iter().map(|p| p.package_version).collect();
+        assert_eq!(next_version_numbers, (151..=250).collect::<Vec<_>>());
     }
 }

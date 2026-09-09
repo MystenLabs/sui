@@ -143,16 +143,8 @@ async fn list_package_versions(
             .with_description("missing package_id")
             .with_reason(ErrorReason::FieldMissing)
     })?;
-    let package_id = parse_package_id(package_id_str)?;
-
-    let original_package_id = client
-        .get_package_original_ids(&[package_id])
-        .await
-        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-        .into_iter()
-        .next()
-        .map(|(_, original_id)| original_id)
-        .ok_or_else(RpcError::not_found)?;
+    let package = load_package(client.clone(), package_id_str).await?;
+    let original_package_id = package.original_package_id();
 
     let page_size = request
         .page_size
