@@ -7,9 +7,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::LiveObject;
-use sui_core::authority::shared_object_version_manager::{
-    AssignedTxAndVersions, AssignedVersions, Schedulable,
-};
+use sui_core::authority::shared_object_version_manager::{AssignedTxAndVersions, AssignedVersions};
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::{AuthorityState, ExecutionEnv};
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
@@ -296,11 +294,13 @@ impl SingleValidator {
             .iter()
             .map(|tx| self.create_executable(tx.clone()))
             .collect();
-        let assignables: Vec<_> = executables.iter().map(Schedulable::Transaction).collect();
+        // The benchmark runs no settlements, so it must not claim an accumulator root
+        // version: transactions are enqueued one at a time, and a version group is only
+        // enqueued once (see `execution_scheduler::causal_order`).
         self.epoch_store
-            .assign_shared_object_versions_idempotent(
+            .assign_shared_object_versions_for_tests(
                 self.get_validator().get_object_cache_reader().as_ref(),
-                assignables.iter(),
+                &executables,
             )
             .unwrap()
     }
