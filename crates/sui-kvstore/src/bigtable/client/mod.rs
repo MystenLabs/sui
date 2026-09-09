@@ -2860,8 +2860,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(next_page.len(), 100);
-        let next_version_numbers: Vec<u64> =
-            next_page.iter().map(|p| p.package_version).collect();
+        let next_version_numbers: Vec<u64> = next_page.iter().map(|p| p.package_version).collect();
         assert_eq!(next_version_numbers, (151..=250).collect::<Vec<_>>());
     }
 }
