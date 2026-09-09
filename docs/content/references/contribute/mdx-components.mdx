@@ -97,7 +97,7 @@ Use `UnsafeLink` to skip the Docusaurus link checker for a URL.
 This is **necessary** for pages that the Docusaurus build auto-generates, as they are generated after the link checker runs and thus will result in a build error.
 
 :::caution
-Nothing validates an `UnsafeLink` target. `onBrokenLinks` is set to `throw`, so an ordinary broken link fails the build, but a wrong `href` inside an `UnsafeLink` is published as a silent 404. Check the target by hand, and prefer an ordinary link wherever the destination is not an auto-generated page.
+Nothing validates an `UnsafeLink` target. `onBrokenLinks` is set to `throw`, so an ordinary broken link fails the build, but a wrong `href` inside an `UnsafeLink` silently produces a 404. Check the target by hand, and prefer an ordinary link wherever the destination is not an auto-generated page.
 
 `onBrokenAnchors` is also set to `warn`, so a link to a `#fragment` that does not exist on the target page does not fail the build either.
 :::
@@ -247,7 +247,7 @@ Reference files through their path from the repository root, without a leading `
 
 #### Referencing files from other repos 
 
-To reference a file in another repository, add the `org` and `repo` arguments. The `source` path is then relative to that repository's root. Add `branch` to pin a ref other than the default branch.
+To reference a file in another repository, add the `org` and `repo` arguments. The `source` path is then relative to that repository's root. Add `branch` to pin a specific branch instead of the default.
 
 ```jsx
 <ImportContent
