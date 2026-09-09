@@ -314,7 +314,8 @@ fn find_counterexample_impl(
         arity: u32,
         ndx: &mut u32,
     ) -> Option<Vec<CounterExample>> {
-        let literals = bool_lits(context, matrix.first_lits(), matrix.loc);
+        let lits = matrix.first_lits(context);
+        let literals = bool_lits(context, lits, matrix.loc);
         if literals.len() == 2 {
             // Saturated
             for lit in literals {
@@ -371,7 +372,7 @@ fn find_counterexample_impl(
     ) -> Option<Vec<CounterExample>> {
         // For all other non-literals, we don't consider a case where the constructors are
         // saturated.
-        let literals = matrix.first_lits();
+        let literals = matrix.first_lits(context);
         let (_, default) = matrix.specialize_default(context);
         if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
             if literals.is_empty() {
@@ -428,7 +429,7 @@ fn find_counterexample_impl(
             DatatypeKind::Struct => {
                 // For a struct, we only care if we destructure it. If we do, we want to specialize and
                 // recur. If we don't, we check it as a default specialization.
-                if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
+                if let Some((ploc, arg_types)) = matrix.first_struct_ctors(context) {
                     let ctor_arity = arg_types.len() as u32;
                     // Native structs have no fields. An error for destructuring a native struct
                     // should have already been reported during typing.
@@ -498,12 +499,8 @@ fn find_counterexample_impl(
                     .into_iter()
                     .collect::<BTreeSet<_>>();
 
-                let ctors = subject_enum_ctors(
-                    context,
-                    &mident,
-                    &datatype_name,
-                    matrix.first_variant_ctors(),
-                );
+                let variant_ctors = matrix.first_variant_ctors(context);
+                let ctors = subject_enum_ctors(context, &mident, &datatype_name, variant_ctors);
                 for ctor in ctors.keys() {
                     unmatched_variants.remove(ctor);
                 }
@@ -612,7 +609,7 @@ fn find_counterexample_impl(
         let result = if matrix.patterns_empty() {
             None
         } else if let Some(ty) = matrix.tys.first() {
-            if matrix.first_column_all_binders() {
+            if matrix.first_column_all_binders(context) {
                 let (_, default) = matrix.specialize_default(context);
                 counterexample_rec(context, default, arity - 1, ndx).map(|counterexample| {
                     [CounterExample::Wildcard]
@@ -694,7 +691,8 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
     // IDE add an arm to address that missing one.
 
     fn report_bool(context: &mut Context, loc: Loc, matrix: &PatternMatrix) {
-        let literals = bool_lits(context, matrix.first_lits(), loc);
+        let lits = matrix.first_lits(context);
+        let literals = bool_lits(context, lits, loc);
         // Figure out which are missing
         let mut unused = BTreeSet::from([Value_::Bool(true), Value_::Bool(false)]);
         for lit in literals {
@@ -793,7 +791,7 @@ fn ide_report_missing_arms(context: &mut Context, loc: Loc, matrix: &PatternMatr
             .enum_variants(&mident, &name)
             .into_iter()
             .collect::<BTreeSet<_>>();
-        let ctors = matrix.first_variant_ctors();
+        let ctors = matrix.first_variant_ctors(context);
         for ctor in ctors.keys() {
             unmatched_variants.remove(ctor);
         }

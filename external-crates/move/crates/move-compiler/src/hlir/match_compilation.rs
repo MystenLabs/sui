@@ -258,7 +258,7 @@ fn build_match_tree(
 
     // If this is all just binders or wildcards, we just bind them and keep going; no need to
     // determine the type for discrimination.
-    if matrix.first_column_all_binders() {
+    if matrix.first_column_all_binders(context) {
         let (subject_binders, default) = matrix.specialize_default(context);
         let next = build_match_tree(context, fringe, default);
         MatchTree::continue_node(subject, subject_binders, next)
@@ -317,7 +317,7 @@ fn compile_match_literal(
     matrix: PatternMatrix,
 ) -> MatchTree {
     let mut subject_binders = vec![];
-    let lits = matrix.first_lits();
+    let lits = matrix.first_lits(context);
     ice_assert!(
         context.reporter,
         !lits.is_empty() || context.env.has_errors(),
@@ -362,7 +362,8 @@ fn compile_match_struct(
         );
         return MatchTree::Failure;
     };
-    let (subject_binders, unpack) = if let Some((ploc, arg_types)) = matrix.first_struct_ctors() {
+    let struct_ctors = matrix.first_struct_ctors(context);
+    let (subject_binders, unpack) = if let Some((ploc, arg_types)) = struct_ctors {
         let fringe_binders = context.make_imm_ref_match_binders(decl_fields, ploc, arg_types);
         let fringe_exps = make_fringe_entries(&fringe_binders);
         let inner_fringe = fringe_exps.into_iter().chain(fringe.clone()).collect();
@@ -411,7 +412,7 @@ fn compile_enum_switch(
         .into_iter()
         .collect::<BTreeSet<_>>();
 
-    let ctors = matrix.first_variant_ctors();
+    let ctors = matrix.first_variant_ctors(context);
     ice_assert!(
         context.reporter,
         !ctors.is_empty() || context.env.has_errors(),
