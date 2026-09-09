@@ -80,7 +80,7 @@ Fastpath is a good fit for applications that are extremely sensitive to latency 
 
 ## Consensus objects
 
-Consensus objects can be [address-owned](/develop/objects/object-ownership/address-owned), owned by a [party](/develop/objects/object-ownership/party), or [shared](/develop/objects/object-ownership/shared). Consensus sequences reads and writes on these objects and assigns their versions, which can raise latency when an object is contended, but version management is simpler, especially for frequently accessed or multi-party objects.
+Consensus objects can be [address-owned](/develop/objects/object-ownership/address-owned), owned by a [party](/develop/objects/object-ownership/party), or [shared](/develop/objects/object-ownership/shared). Consensus sequences reads and writes on these objects and assigns their versions, which can raise latency when multiple transactions contend for an object, but version management is simpler, especially for frequently accessed or multi-party objects.
 
 Transactions accessing multiple consensus objects or particularly popular objects might see increased latency due to contention. The trade-off is flexibility: multiple addresses can access the same object in a coordinated way without offchain coordination.
 
