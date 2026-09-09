@@ -86,7 +86,7 @@ All transactions cost gas, a type of object required to cover the cost of proces
 
 In cases of success, the effects of the operation are finalized; otherwise, the state of objects in the transaction is not changed. However, some amount of gas is always charged to alleviate denial-of-service attacks on the system as a whole.
 
-A user client can submit a transaction itself or rely on third-party services to submit it and interact with validators. Such third parties do not need private signature keys and cannot forge transactions on the users' behalf. They can reassure a user client that validators finalized a transaction by relaying the certified effects the validators return, which attest to the transaction's finality and its effects. After that point, you can be assured the transaction's result is persisted onchain.
+A user client can submit a transaction itself or rely on third-party services to submit it and interact with validators. Such third parties do not need private signature keys and cannot forge transactions on the users' behalf. They can reassure a user client that validators finalized a transaction by relaying the certified effects the validators return, which attest to the transaction's finality and its effects. After that point, you can be assured the network persists the transaction's result onchain.
 
 ### Auditing and privacy {#auditing-and-privacy}
 
