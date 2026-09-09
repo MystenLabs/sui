@@ -58,7 +58,7 @@ The process for protocol upgrades includes the following steps:
 
 1. As validators are upgraded, they signal to the validator committee that they are prepared to switch to the new version of the configuration (flag enabled).
 
-1. If 2/3 or more of validators vote to switch to the new protocol version, the new version takes effect at the beginning of the next epoch.
+1. If validators holding the required voting power vote to switch to the new protocol version, the new version takes effect at the beginning of the next epoch. That bar is at least a quorum, and the protocol config can raise it with a stake buffer, so it is not a fixed fraction.
 
 1. The new feature becomes active.
 
@@ -72,5 +72,5 @@ Not all new Sui functionality comes from validator code changes. Developers also
 
 Instead of feature flags, Sui objects coordinate framework changes. The Sui framework is a special object with ID `0x2`. The Move source code for the framework is built into the validator binary.
 
-If a validator notices that its built-in framework differs from the framework in object `0x2`, it signals to other validators that it wants to upgrade the framework to a new version. As with `ProtocolConfig`, if 2/3 or more of validators agree, the new framework object is written at the end of the current epoch. Transactions executed in the new epoch then use the new version of the framework.
+If a validator notices that its built-in framework differs from the framework in object `0x2`, it signals to other validators that it wants to upgrade the framework to a new version. As with `ProtocolConfig`, if validators holding the required voting power agree, the network writes the new framework object at the end of the current epoch. Transactions executed in the new epoch then use the new version of the framework.
 
