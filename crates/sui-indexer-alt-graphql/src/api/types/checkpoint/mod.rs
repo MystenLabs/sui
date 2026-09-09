@@ -420,7 +420,6 @@ impl CCheckpoint {
 
     /// The underlying checkpoint cursor token. A legacy JSON cursor carries only the sequence
     /// number, so it is reproduced as an `Item` token.
-    #[cfg(feature = "staging")]
     pub(crate) fn token(&self) -> CheckpointToken {
         match self {
             CCheckpoint::Primary(c) => (**c).clone(),
@@ -442,7 +441,6 @@ impl ByteCursor for CheckpointToken {
     }
 }
 
-#[cfg(feature = "staging")]
 impl From<&CCheckpoint> for CursorToken {
     fn from(cursor: &CCheckpoint) -> Self {
         CursorToken::from(&cursor.token())
