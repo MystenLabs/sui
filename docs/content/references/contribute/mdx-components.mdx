@@ -99,7 +99,7 @@ This is **necessary** for pages that the Docusaurus build auto-generates, as the
 :::caution
 Nothing validates an `UnsafeLink` target. `onBrokenLinks` is set to `throw`, so an ordinary broken link fails the build, but a wrong `href` inside an `UnsafeLink` is published as a silent 404. Check the target by hand, and prefer an ordinary link wherever the destination is not an auto-generated page.
 
-Note also that `onBrokenAnchors` is set to `warn`, so a link to a `#fragment` that does not exist on the target page does not fail the build either.
+`onBrokenAnchors` is also set to `warn`, so a link to a `#fragment` that does not exist on the target page does not fail the build either.
 :::
 
 **Example:**
