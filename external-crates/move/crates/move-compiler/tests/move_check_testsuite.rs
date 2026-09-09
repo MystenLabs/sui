@@ -14,8 +14,10 @@ use move_command_line_common::{
     insta_assert,
     testing::{InstaOptions, OUT_EXT},
 };
+mod test_utils;
+
 use move_compiler::{
-    Compiler, PASS_PARSER,
+    Compiler, PASS_HLIR, PASS_PARSER,
     command_line::compiler::move_check_for_errors,
     diagnostics::filter::{empty_filter_scope, unused_for_test_filter_scope},
     diagnostics::*,
@@ -36,6 +38,7 @@ const MIGRATION_EXT: &str = "migration";
 const IDE_EXT: &str = "ide";
 const NO_STDLIB_EXT: &str = "no_std";
 const MODE_EXT: &str = "mode";
+const SPANS_EXT: &str = "spans";
 
 const LINTER_DIR: &str = "linter";
 const SUI_MODE_DIR: &str = "sui_mode";
@@ -65,6 +68,8 @@ enum TestKind {
     NoStd,
     // Tests with a mode enabled
     Mode(Vec<Symbol>),
+    // Snapshots every span in the HLIR instead of diagnostics
+    Spans,
 }
 
 impl TestKind {
@@ -76,6 +81,7 @@ impl TestKind {
             _ if path_extension == MIGRATION_EXT => TestKind::Migration,
             _ if path_extension == IDE_EXT => TestKind::IDE,
             _ if path_extension == NO_STDLIB_EXT => TestKind::NoStd,
+            _ if path_extension == SPANS_EXT => TestKind::Spans,
             _ if path_extension.to_string_lossy().starts_with(MODE_EXT) => {
                 let pe_str = path_extension.to_string_lossy();
                 let mode_str = pe_str.strip_prefix(MODE_EXT).unwrap();
@@ -97,6 +103,7 @@ impl TestKind {
             TestKind::Migration => Some(MIGRATION_EXT.to_string()),
             TestKind::IDE => Some(IDE_EXT.to_string()),
             TestKind::NoStd => Some(NO_STDLIB_EXT.to_string()),
+            TestKind::Spans => Some(SPANS_EXT.to_string()),
             TestKind::Mode(modes) => Some(format!(
                 "{MODE_EXT}{}",
                 modes
@@ -180,7 +187,7 @@ fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
     // flags
     let flags = match &test_kind {
         // no flags for normal tests and no-stdlib tests
-        TestKind::Normal | TestKind::NoStd => Flags::empty(),
+        TestKind::Normal | TestKind::NoStd | TestKind::Spans => Flags::empty(),
         // we want to be able to see test/test_only elements in these modes
         TestKind::Test | TestKind::Unused | TestKind::Migration => Flags::testing(),
         // additional flags for IDE
@@ -255,6 +262,26 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     }
 
     let (files, comments_and_compiler_res) = compiler.run::<PASS_PARSER>()?;
+
+    if matches!(test_kind, TestKind::Spans) {
+        let contents = match comments_and_compiler_res.and_then(|c| c.run::<PASS_HLIR>()) {
+            Ok(stepped) => test_utils::span_dump::dump(&stepped.into_ast().1, &files),
+            Err((_pass, diags)) => {
+                String::from_utf8(report_diagnostics_to_buffer(&files, diags, false))?
+            }
+        };
+        let mut options = InstaOptions::new();
+        options.info(test_info);
+        options.suffix(suffix.unwrap());
+        options.name(test_name);
+        insta_assert! {
+            input_path: move_path,
+            contents: contents,
+            options: options,
+        };
+        return Ok(());
+    }
+
     let diags = move_check_for_errors(comments_and_compiler_res);
 
     let has_diags = !diags.is_empty();
@@ -311,4 +338,7 @@ datatest_stable::harness!(
     run_test,
     "tests/",
     r".*\.mode-.*$",
+    run_test,
+    "tests/",
+    r".*\.spans$",
 );

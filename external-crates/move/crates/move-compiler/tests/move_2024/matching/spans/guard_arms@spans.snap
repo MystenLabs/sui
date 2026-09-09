@@ -1,0 +1,32 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+module 0x42::m
+  fun guarded
+5:16-17         Assign                     x
+5:16-17           Copy                     x
+5:19-8:10       Assign                     { 1 if (y > 0) => 10, _ => 20, }
+5:19-8:10         BorrowLocal              { 1 if (y > 0) => 10, _ => 20, }
+5:19-8:10       IfElse                     { 1 if (y > 0) => 10, _ => 20, }
+6:13-14           BinopExp                 1
+5:19-8:10           Dereference            { 1 if (y > 0) => 10, _ => 20, }
+5:19-8:10             Copy                 { 1 if (y > 0) => 10, _ => 20, }
+6:13-14             Value                  1
+6:19-24           IfElse                   y > 0
+6:19-24             BinopExp               y > 0
+6:19-20               Copy                 y
+6:23-24               Value                0
+6:29-31             Assign                 10
+6:29-31               Value                10
+7:18-20             Assign                 20
+7:18-20               Value                20
+6:19-24           Assign                   y > 0
+6:19-24             Move                   y > 0
+7:18-20           Assign                   20
+7:18-20             Value                  20
+5:19-8:10       Return                     { 1 if (y > 0) => 10, _ => 20, }
+5:19-8:10         Move                     { 1 if (y > 0) => 10, _ => 20, }
