@@ -78,7 +78,7 @@ async fn get_package(
             .with_reason(ErrorReason::FieldMissing)
     })?;
 
-    let package = load_package(client, package_id_str).await?;
+    let package = load_package(client, parse_package_id(package_id_str)?).await?;
     get_package_response(&package)
 }
 
@@ -104,7 +104,7 @@ async fn get_datatype(
             .with_reason(ErrorReason::FieldMissing)
     })?;
 
-    let package = load_package(client, package_id_str).await?;
+    let package = load_package(client, parse_package_id(package_id_str)?).await?;
     get_datatype_response(&package, module_name, datatype_name)
 }
 
@@ -130,7 +130,7 @@ async fn get_function(
             .with_reason(ErrorReason::FieldMissing)
     })?;
 
-    let package = load_package(client, package_id_str).await?;
+    let package = load_package(client, parse_package_id(package_id_str)?).await?;
     get_function_response(&package, module_name, function_name)
 }
 
@@ -143,8 +143,8 @@ async fn list_package_versions(
             .with_description("missing package_id")
             .with_reason(ErrorReason::FieldMissing)
     })?;
-    let package = load_package(client.clone(), package_id_str).await?;
-    let original_package_id = package.original_package_id();
+    let original_package_id =
+        resolve_original_package_id(client.clone(), parse_package_id(package_id_str)?).await?;
 
     let page_size = request
         .page_size
@@ -209,10 +209,8 @@ async fn list_package_versions(
 /// version, so the latest object at that ID is the package itself.
 async fn load_package(
     mut client: BigTableClient,
-    package_id_str: &str,
+    package_id: ObjectID,
 ) -> Result<MovePackage, RpcError> {
-    let package_id = parse_package_id(package_id_str)?;
-
     let object = client
         .get_latest_object(&package_id)
         .await
@@ -224,6 +222,30 @@ async fn load_package(
         .data
         .try_into_package()
         .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "object is not a package"))
+}
+
+/// Resolve the original (first-version) package ID for a storage ID. `packages_by_id` answers
+/// with a 32-byte point lookup; on a miss the object itself is read so the error matches what a
+/// full node returns (`NotFound` vs "object is not a package"), and so a package whose
+/// `packages_by_id` row is not yet written is still served.
+async fn resolve_original_package_id(
+    mut client: BigTableClient,
+    package_id: ObjectID,
+) -> Result<ObjectID, RpcError> {
+    let pairs = client
+        .get_package_original_ids(&[package_id])
+        .await
+        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+    if let Some((_, original_id)) = pairs
+        .iter()
+        .find(|(storage_id, _)| *storage_id == package_id)
+    {
+        return Ok(*original_id);
+    }
+
+    load_package(client, package_id)
+        .await
+        .map(|package| package.original_package_id())
 }
 
 fn parse_package_id(package_id_str: &str) -> Result<ObjectID, RpcError> {
@@ -250,7 +272,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_list_package_versions() {
+    async fn list_package_versions_falls_back_to_object_when_packages_by_id_missing() {
         let mock = MockBigtableServer::new();
         let (addr, _handle) = mock.start().await.unwrap();
         let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
@@ -292,5 +314,68 @@ mod tests {
         assert_eq!(resp.versions[1].version, Some(2));
         assert_eq!(resp.versions[2].version, Some(3));
         assert!(resp.next_page_token.is_none());
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_resolves_original_id_without_reading_objects() {
+        let mock = MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .unwrap();
+
+        let storage_id = ObjectID::random();
+        let original_id = ObjectID::random();
+
+        // Insert ONLY the `packages_by_id` mapping and the `packages` version rows; no
+        // `objects` row exists, so resolution must come from the mapping alone.
+        mock.insert_row(
+            tables::packages_by_id::NAME,
+            tables::packages_by_id::encode_key(storage_id.as_ref()),
+            tables::packages_by_id::encode(original_id.as_ref()),
+        )
+        .await;
+        for (v, cp) in [(1, 10), (2, 20), (3, 30)] {
+            let row_key = tables::packages::encode_key(original_id.as_ref(), v);
+            let cells = tables::packages::encode(cp, original_id.as_ref(), false);
+            mock.insert_row(tables::packages::NAME, row_key, cells)
+                .await;
+        }
+
+        let mut req = ListPackageVersionsRequest::default();
+        req.package_id = Some(storage_id.to_string());
+        req.page_size = Some(10);
+        let resp = list_package_versions(client.clone(), req).await.unwrap();
+        assert_eq!(resp.versions.len(), 3);
+        assert_eq!(resp.versions[0].version, Some(1));
+        assert_eq!(resp.versions[1].version, Some(2));
+        assert_eq!(resp.versions[2].version, Some(3));
+        assert!(resp.next_page_token.is_none());
+
+        assert!(
+            mock.read_rows_calls()
+                .await
+                .into_iter()
+                .all(|call| call.table != tables::objects::NAME),
+            "no objects ReadRows should be issued when packages_by_id has the row"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_unknown_package_is_not_found() {
+        let mock = MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .unwrap();
+
+        let mut req = ListPackageVersionsRequest::default();
+        req.package_id = Some(ObjectID::random().to_string());
+        req.page_size = Some(10);
+        let err = list_package_versions(client.clone(), req)
+            .await
+            .unwrap_err();
+        let status: tonic::Status = err.into();
+        assert_eq!(status.code(), tonic::Code::NotFound);
     }
 }

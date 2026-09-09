@@ -2143,12 +2143,19 @@ impl KeyValueStoreReader for BigTableClient {
             end_version,
         ));
 
+        // Every row passes the checkpoint filter when it is unbounded, so the server can stop at
+        // `limit`; otherwise the scan must run past rows above `cp_bound` client-side.
+        let rows_limit = if cp_bound == u64::MAX {
+            limit as i64
+        } else {
+            0
+        };
         let rows = self
             .range_scan_stream(
                 tables::packages::NAME,
                 Some(start_key),
                 Some(end_key),
-                0,
+                rows_limit,
                 descending,
                 None,
             )
@@ -2892,6 +2899,36 @@ mod tests {
         assert_eq!(version_numbers, (1..=250).collect::<Vec<_>>());
 
         // Resuming after version 150 with a limit of 100 returns versions 151..=250.
+        // With an unbounded checkpoint filter every row qualifies, so the server-side cap makes
+        // the scan stop at exactly `limit` rows; a bounded filter can reject rows, so the scan
+        // runs unbounded and the client-side break enforces the limit.
+        let rows = client
+            .get_package_versions(original_id, u64::MAX, None, None, 100, false)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 100);
+        let packages_calls = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|c| c.table == tables::packages::NAME)
+            .collect::<Vec<_>>();
+        assert_eq!(packages_calls.last().unwrap().row_keys.len(), 100);
+
+        // With a bounded filter every row still qualifies (cp 100 <= 100), so the recorded scan
+        // is not truncated by a server-side cap.
+        let rows = client
+            .get_package_versions(original_id, 100, None, None, 100, false)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 100);
+        let packages_calls = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|c| c.table == tables::packages::NAME)
+            .collect::<Vec<_>>();
+        assert_eq!(packages_calls.last().unwrap().row_keys.len(), 250);
         let next_page = client
             .get_package_versions(original_id, u64::MAX, Some(150), None, 100, false)
             .await
@@ -2920,9 +2957,8 @@ mod tests {
                 .await;
         }
 
-        // With cp_bound = 10, the newest 60 versions are all > 10.
-        // Old implementation capped at 50 versions and returned None.
-        // Streaming implementation finds version 10.
+        // With cp_bound = 10 the newest 60 versions are all above the bound; the reversed scan
+        // streams past them and returns version 10.
         let pkg = client
             .get_package_latest(original_id, 10)
             .await
@@ -2944,6 +2980,12 @@ mod tests {
     async fn get_packages_by_checkpoint_range_preserves_order() {
         let mock = crate::bigtable::mock_server::MockBigtableServer::new();
         let (addr, _handle) = mock.start().await.unwrap();
+        // The mock emits row_keys lookups in reverse request order, so this test fails unless
+        // get_packages_by_checkpoint_range restores checkpoint order itself.
+        mock.set_read_rows_response_order(
+            crate::bigtable::mock_server::ReadRowsResponseOrder::ReverseRequestOrder,
+        )
+        .await;
         let mut client =
             BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
                 .await
@@ -3044,10 +3086,8 @@ mod tests {
                 .await;
         }
 
-        // Query with cp_bound = 30 and limit = 2.
-        // Packages 0x02 and 0x03 have first_cp > 30 and are filtered out.
-        // Old range_scan with limit=2 would have stopped after 0x01 and 0x02, returning only 1 result.
-        // The streaming implementation continues to 0x04 and returns both valid packages.
+        // With cp_bound = 30 and limit = 2, packages 0x02 and 0x03 (first_cp > 30) are filtered
+        // out; the scan continues past them to 0x04 and fills the limit.
         let pkgs = client.get_system_packages(30, None, 2).await.unwrap();
         assert_eq!(pkgs.len(), 2);
         assert_eq!(pkgs[0].original_id[31], 1);

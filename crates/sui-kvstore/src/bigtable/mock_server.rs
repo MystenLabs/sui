@@ -693,7 +693,9 @@ impl Bigtable for MockBigtableServer {
             table: table.clone(),
             row_keys: requested_keys.clone(),
         });
-        if state.read_rows_response_order == ReadRowsResponseOrder::ReverseRequestOrder {
+        if ranges.is_empty()
+            && state.read_rows_response_order == ReadRowsResponseOrder::ReverseRequestOrder
+        {
             requested_keys.reverse();
         }
 
