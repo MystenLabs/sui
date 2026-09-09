@@ -460,7 +460,7 @@ If `--build-env <env>` is omitted, it defaults to the `build-env` name of the fi
 For example, if you want to build and publish the Testnet version of your package on Localnet, you would switch your CLI's active environment to Localnet, and run with `--build-env testnet`:
 
 ```sh
-sui client env switch localnet
+sui client switch --env localnet
 sui client test-publish --build-env testnet
 ```
 
