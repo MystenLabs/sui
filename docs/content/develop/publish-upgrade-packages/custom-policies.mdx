@@ -437,7 +437,7 @@ The rest of this example uses a minimal `example.move` module in `example/source
 
 ```move
 module example::example {
-    struct Event has copy, drop { x: u64 }
+    public struct Event has copy, drop { x: u64 }
     entry fun nudge() {
         sui::event::emit(Event { x: 41 })
     }

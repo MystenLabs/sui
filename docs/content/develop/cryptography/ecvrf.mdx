@@ -89,7 +89,7 @@ module math::ecvrf_test {
     use sui::event;
 
     /// Event on whether the output is verified
-    struct VerifiedEvent has copy, drop {
+    public struct VerifiedEvent has copy, drop {
         is_verified: bool,
     }
 
