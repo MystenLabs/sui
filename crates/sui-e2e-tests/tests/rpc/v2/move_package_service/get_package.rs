@@ -5,7 +5,8 @@ use move_core_types::ident_str;
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
 use sui_rpc::proto::sui::rpc::v2::{
-    GetPackageRequest, move_package_service_client::MovePackageServiceClient,
+    GetPackageRequest, get_package_request::Selector,
+    move_package_service_client::MovePackageServiceClient,
 };
 use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID,
@@ -174,7 +175,7 @@ async fn test_get_package_lineage_lookups() {
     // Fetch first version which should be the original id.
     let mut request = GetPackageRequest::default();
     request.package_id = Some(upgraded_id.to_string());
-    request.version = Some(1);
+    request.selector = Some(Selector::Version(1));
     let package = service
         .get_package(request)
         .await
@@ -191,7 +192,7 @@ async fn test_get_package_lineage_lookups() {
     // Exact version through the original id resolves forward to the upgrade.
     let mut request = GetPackageRequest::default();
     request.package_id = Some(original_id.to_string());
-    request.version = Some(upgraded_version);
+    request.selector = Some(Selector::Version(upgraded_version));
     let package = service
         .get_package(request)
         .await
@@ -208,14 +209,14 @@ async fn test_get_package_lineage_lookups() {
     // A version that was never published is not found.
     let mut request = GetPackageRequest::default();
     request.package_id = Some(original_id.to_string());
-    request.version = Some(100);
+    request.selector = Some(Selector::Version(100));
     let error = service.get_package(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::NotFound);
 
     // A checkpoint upper-bound above the tip resolves to the latest version.
     let mut request = GetPackageRequest::default();
     request.package_id = Some(original_id.to_string());
-    request.at_checkpoint = Some(u64::MAX);
+    request.selector = Some(Selector::AtCheckpoint(u64::MAX));
     let package = service
         .get_package(request)
         .await
@@ -233,7 +234,7 @@ async fn test_get_package_lineage_lookups() {
     // that lineage as of the checkpoint.
     let mut request = GetPackageRequest::default();
     request.package_id = Some(upgraded_id.to_string());
-    request.at_checkpoint = Some(u64::MAX);
+    request.selector = Some(Selector::AtCheckpoint(u64::MAX));
     let package = service
         .get_package(request)
         .await
@@ -250,7 +251,7 @@ async fn test_get_package_lineage_lookups() {
     // The package did not exist as of the genesis checkpoint.
     let mut request = GetPackageRequest::default();
     request.package_id = Some(original_id.to_string());
-    request.at_checkpoint = Some(0);
+    request.selector = Some(Selector::AtCheckpoint(0));
     let error = service.get_package(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::NotFound);
 
@@ -270,13 +271,6 @@ async fn test_get_package_lineage_lookups() {
     );
     assert_eq!(package.version, Some(1));
 
-    // Setting both bounds is rejected.
-    let mut request = GetPackageRequest::default();
-    request.package_id = Some(original_id.to_string());
-    request.version = Some(1);
-    request.at_checkpoint = Some(0);
-    let error = service.get_package(request).await.unwrap_err();
-    assert_eq!(error.code(), tonic::Code::InvalidArgument);
 }
 
 #[sim_test]
@@ -309,7 +303,7 @@ async fn test_get_package_at_checkpoint_below_available_floor() {
     // Assert on system package before bumping the floor.
     let mut request = GetPackageRequest::default();
     request.package_id = Some("0x3".to_string());
-    request.at_checkpoint = Some(0);
+    request.selector = Some(Selector::AtCheckpoint(0));
     let package = service
         .get_package(request)
         .await
@@ -345,7 +339,7 @@ async fn test_get_package_at_checkpoint_below_available_floor() {
     // Request now below the floor, should be rejected.
     let mut request = GetPackageRequest::default();
     request.package_id = Some("0x3".to_string());
-    request.at_checkpoint = Some(pruned_to);
+    request.selector = Some(Selector::AtCheckpoint(pruned_to));
     let error = service.get_package(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::NotFound);
     assert!(error.message().contains("has been pruned"));
@@ -353,7 +347,7 @@ async fn test_get_package_at_checkpoint_below_available_floor() {
     // Bounds at or above the floor still resolve.
     let mut request = GetPackageRequest::default();
     request.package_id = Some("0x3".to_string());
-    request.at_checkpoint = Some(u64::MAX);
+    request.selector = Some(Selector::AtCheckpoint(u64::MAX));
     let package = service
         .get_package(request)
         .await
