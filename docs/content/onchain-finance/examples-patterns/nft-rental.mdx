@@ -99,7 +99,7 @@ To add rental support to an existing NFT type, follow these steps:
 2. **Install the kiosk extension.** Both the lender and borrower must install the rental extension in their respective kiosks. If a user does not have a kiosk, create one first.
 3. **List for renting.** The lender calls `list` to make their NFT available for rent. The listing specifies the rental duration and fee (denominated in SUI or another coin type).
 4. **Rent the NFT.** The borrower calls `rent`, paying the rental fee. The NFT remains in the lender's kiosk but the borrower gains access through the extension.
-5. **Use the rented NFT.** The borrower accesses the NFT through `borrow` (an immutable reference) or `borrow_val` (the item itself, returned with a `Promise` that must be resolved in the same transaction, for use cases where the NFT state changes during rental).
+5. **Use the rented NFT.** The borrower accesses the NFT through `borrow` (an immutable reference) or `borrow_val` (the item itself, which arrives with a `Promise` the caller must resolve in the same transaction, for use cases where the NFT state changes during rental).
 6. **Reclaim after expiry.** After the rental period ends, the lender calls `reclaim` to regain full control of the NFT. The NFT can then be sold, rented again, or transferred normally.
 
 
