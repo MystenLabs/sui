@@ -145,7 +145,7 @@ To serve the [gRPC API](/develop/accessing-data/grpc), you must enable it on you
 
 Enable gRPC indexing on your full node by adding the following entry to the `fullnode.yaml` configuration:
 
-```sh
+```yaml
 
 rpc:
   enable-indexing: true
@@ -216,7 +216,7 @@ rpc:
 
 You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. Sui Foundation disabled JSON-RPC on Mainnet full nodes the week of July 27, 2026, and plans full decommission, including code removal, for mid-October 2026. See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) for the complete timeline. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
 
-```sh
+```yaml
 
 enable-index-processing: false
 
@@ -226,7 +226,7 @@ enable-index-processing: false
 
 You can configure the retention window for the gRPC index on your full node by adding the following to its `fullnode.yaml` configuration:
 
-```sh
+```yaml
 
 authority-store-pruning-config:
   num-epochs-to-retain: 14
@@ -482,7 +482,7 @@ When you are ready to run `sui-node` in your production environment, you can set
 1. Update the `db-path` field with the path to the full node database.
     `db-path: "/db-files/sui-fullnode"`
 1. Update the `genesis-file-location` with the path to genesis.blob.
-    ```sh
+    ```yaml
     genesis:
         genesis-file-location: "/sui-fullnode/genesis.blob"
     ```
@@ -512,7 +512,7 @@ panicked at error binding to 0.0.0.0:9184: error creating server listener: Addre
 
 Then update the metrics address in your `fullnode.yaml` file to use port `9180`.
 
-```sh
+```yaml
 metrics-address: "0.0.0.0:9180"
 ```
 
