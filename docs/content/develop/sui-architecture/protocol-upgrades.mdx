@@ -72,5 +72,5 @@ Not all new Sui functionality comes from validator code changes. Developers also
 
 Instead of feature flags, Sui objects coordinate framework changes. The Sui framework is a special object with ID `0x2`. The Move source code for the framework is built into the validator binary.
 
-If a validator notices that its built-in framework differs from the framework in object `0x2`, it signals to other validators that it wants to upgrade the framework to a new version. As with `ProtocolConfig`, if validators holding the required voting power agree, the new framework object is written at the end of the current epoch. Transactions executed in the new epoch then use the new version of the framework.
+If a validator notices that its built-in framework differs from the framework in object `0x2`, it signals to other validators that it wants to upgrade the framework to a new version. As with `ProtocolConfig`, if validators holding the required voting power agree, the network writes the new framework object at the end of the current epoch. Transactions executed in the new epoch then use the new version of the framework.
 
