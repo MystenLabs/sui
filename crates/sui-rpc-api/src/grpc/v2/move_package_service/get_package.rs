@@ -9,6 +9,7 @@ use crate::{
     },
 };
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2::get_package_request::Selector;
 use sui_rpc::proto::sui::rpc::v2::{GetPackageRequest, GetPackageResponse, Package};
 use sui_types::move_package::MovePackage;
 
@@ -20,18 +21,20 @@ pub fn get_package(service: &RpcService, request: GetPackageRequest) -> Result<G
             .with_reason(ErrorReason::FieldMissing)
     })?;
 
-    let package = match (request.version, request.at_checkpoint) {
-        (Some(_), Some(_)) => {
-            return Err(FieldViolation::new("at_checkpoint")
-                .with_description("at most one of `version` and `at_checkpoint` may be set")
+    let package = match request.selector {
+        Some(Selector::Version(version)) => {
+            load_package_at_version(service, package_id_str, version)?
+        }
+        Some(Selector::AtCheckpoint(at_checkpoint)) => {
+            load_package_at_checkpoint(service, package_id_str, at_checkpoint)?
+        }
+        None => load_package(service, package_id_str)?,
+        _ => {
+            return Err(FieldViolation::new("selector")
+                .with_description("unknown selector variant")
                 .with_reason(ErrorReason::FieldInvalid)
                 .into());
         }
-        (Some(version), None) => load_package_at_version(service, package_id_str, version)?,
-        (None, Some(at_checkpoint)) => {
-            load_package_at_checkpoint(service, package_id_str, at_checkpoint)?
-        }
-        (None, None) => load_package(service, package_id_str)?,
     };
 
     get_package_response(&package)
