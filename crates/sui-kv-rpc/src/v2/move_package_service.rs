@@ -8,6 +8,7 @@ use sui_rpc::proto::sui::rpc::v2::GetDatatypeRequest;
 use sui_rpc::proto::sui::rpc::v2::GetDatatypeResponse;
 use sui_rpc::proto::sui::rpc::v2::GetFunctionRequest;
 use sui_rpc::proto::sui::rpc::v2::GetFunctionResponse;
+use sui_rpc::proto::sui::rpc::v2::get_package_request::Selector;
 use sui_rpc::proto::sui::rpc::v2::GetPackageRequest;
 use sui_rpc::proto::sui::rpc::v2::GetPackageResponse;
 use sui_rpc::proto::sui::rpc::v2::ListPackageVersionsRequest;
@@ -81,32 +82,36 @@ async fn get_package(
     })?;
     let package_id = parse_package_id(package_id_str)?;
 
-    if request.version.is_some() && request.at_checkpoint.is_some() {
-        return Err(FieldViolation::new("at_checkpoint")
-            .with_description("at most one of `version` and `at_checkpoint` may be set")
-            .with_reason(ErrorReason::FieldInvalid)
-            .into());
-    }
-
-    if request.version.is_none() && request.at_checkpoint.is_none() {
-        let package = load_package(client, package_id).await?;
-        return get_package_response(&package);
-    }
+    let selector = match request.selector {
+        None => {
+            let package = load_package(client, package_id).await?;
+            return get_package_response(&package);
+        }
+        Some(selector) => selector,
+    };
 
     let original_id = resolve_original_package_id(client.clone(), package_id).await?;
 
-    // Expect either one of version or checkpoint but not both.
-    let data = if let Some(version) = request.version {
-        client
-            .get_packages_by_version(&[(original_id, version)])
-            .await
-            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-            .pop()
-    } else {
-        client
-            .get_package_latest(original_id, request.at_checkpoint.unwrap_or(u64::MAX))
-            .await
-            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+    let data = match selector {
+        Selector::Version(version) => {
+            client
+                .get_packages_by_version(&[(original_id, version)])
+                .await
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+                .pop()
+        }
+        Selector::AtCheckpoint(at_checkpoint) => {
+            client
+                .get_package_latest(original_id, at_checkpoint)
+                .await
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+        }
+        _ => {
+            return Err(FieldViolation::new("selector")
+                .with_description("unknown selector variant")
+                .with_reason(ErrorReason::FieldInvalid)
+                .into());
+        }
     }
     .ok_or_else(RpcError::not_found)?;
 
@@ -573,7 +578,7 @@ mod tests {
 
         // Exact version through the upgraded id resolves back to v1.
         let mut req = get_package_req(fixture.upgraded_id);
-        req.version = Some(1);
+        req.selector = Some(Selector::Version(1));
         let package = fetch_pkg(&fixture, req).await;
         assert_eq!(
             package.storage_id,
@@ -583,7 +588,7 @@ mod tests {
 
         // Exact version through the original id resolves forward to v2.
         let mut req = get_package_req(fixture.original_id);
-        req.version = Some(2);
+        req.selector = Some(Selector::Version(2));
         let package = fetch_pkg(&fixture, req).await;
         assert_eq!(
             package.storage_id,
@@ -593,7 +598,7 @@ mod tests {
 
         // A checkpoint bound between the two publishes resolves v1.
         let mut req = get_package_req(fixture.upgraded_id);
-        req.at_checkpoint = Some(19);
+        req.selector = Some(Selector::AtCheckpoint(19));
         let package = fetch_pkg(&fixture, req).await;
         assert_eq!(
             package.storage_id,
@@ -603,7 +608,7 @@ mod tests {
 
         // A bound above the tip resolves the latest version.
         let mut req = get_package_req(fixture.original_id);
-        req.at_checkpoint = Some(u64::MAX);
+        req.selector = Some(Selector::AtCheckpoint(u64::MAX));
         let package = fetch_pkg(&fixture, req).await;
         assert_eq!(
             package.storage_id,
@@ -619,17 +624,17 @@ mod tests {
 
         let unknown_versioned = {
             let mut req = get_package_req(unknown);
-            req.version = Some(1);
+            req.selector = Some(Selector::Version(1));
             req
         };
         let missing_version = {
             let mut req = get_package_req(fixture.original_id);
-            req.version = Some(3);
+            req.selector = Some(Selector::Version(3));
             req
         };
         let before_first_publish = {
             let mut req = get_package_req(fixture.original_id);
-            req.at_checkpoint = Some(4);
+            req.selector = Some(Selector::AtCheckpoint(4));
             req
         };
         for req in [
@@ -650,12 +655,5 @@ mod tests {
         let status = fetch_pkg_err(&fixture, get_package_req(fixture.plain_object_id)).await;
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
         assert!(status.message().contains("not a package"));
-
-        // Setting both bounds is rejected before any lookup.
-        let mut req = get_package_req(fixture.original_id);
-        req.version = Some(1);
-        req.at_checkpoint = Some(1);
-        let status = fetch_pkg_err(&fixture, req).await;
-        assert_eq!(status.code(), tonic::Code::InvalidArgument);
     }
 }
