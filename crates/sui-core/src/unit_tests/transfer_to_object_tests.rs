@@ -1,12 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashSet},
+    sync::Arc,
+};
 
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
-    digests::ObjectDigest,
+    digests::{ObjectDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{SuiError, SuiErrorKind, UserInputError},
     executable_transaction::VerifiedExecutableTransaction,
@@ -42,22 +46,61 @@ use move_core_types::ident_str;
 
 // Run the test twice -- once with aggressive pruning enabled, and the other with it not enabled.
 macro_rules! transfer_test_runner {
+    (protocol_config: $protocol_config:expr, gas_objects: $num:expr, $expr:expr) => {
+        let protocol_config = $protocol_config;
+        let runner = TestRunner::new_with_objects_and_protocol_config(
+            "tto",
+            $num,
+            false,
+            protocol_config.clone(),
+        )
+        .await;
+        #[allow(clippy::redundant_closure_call)]
+        $expr(runner).await;
+        let runner =
+            TestRunner::new_with_objects_and_protocol_config("tto", $num, true, protocol_config)
+                .await;
+        #[allow(clippy::redundant_closure_call)]
+        $expr(runner).await;
+    };
     (gas_objects: $num:expr, $expr:expr) => {
-        let runner = TestRunner::new_with_objects("tto", $num, false).await;
-        #[allow(clippy::redundant_closure_call)]
-        $expr(runner).await;
-        let runner = TestRunner::new_with_objects("tto", $num, true).await;
-        #[allow(clippy::redundant_closure_call)]
-        $expr(runner).await;
+        transfer_test_runner! {
+            protocol_config: effects_dependencies_protocol_config(false),
+            gas_objects: $num,
+            $expr
+        }
     };
     ($expr:expr) => {
-        let runner = TestRunner::new("tto", false).await;
-        #[allow(clippy::redundant_closure_call)]
-        $expr(runner).await;
-        let runner = TestRunner::new("tto", true).await;
-        #[allow(clippy::redundant_closure_call)]
-        $expr(runner).await;
+        transfer_test_runner! {
+            protocol_config: effects_dependencies_protocol_config(false),
+            gas_objects: 1,
+            $expr
+        }
     };
+}
+
+fn effects_dependencies_protocol_config(disable_effects_dependencies: bool) -> ProtocolConfig {
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.set_disable_effects_dependencies_for_testing(disable_effects_dependencies);
+    protocol_config
+}
+
+fn assert_effects_dependencies(
+    disable_effects_dependencies: bool,
+    effects: &TransactionEffects,
+    expected: impl IntoIterator<Item = TransactionDigest>,
+) {
+    if disable_effects_dependencies {
+        assert!(effects.dependencies().is_empty());
+    } else {
+        let expected = expected
+            .into_iter()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        assert_eq!(effects.dependencies(), expected.as_slice());
+    }
 }
 
 struct TestRunner {
@@ -72,15 +115,19 @@ struct TestRunner {
 }
 
 impl TestRunner {
-    pub async fn new_with_objects(
+    pub async fn new_with_objects_and_protocol_config(
         base_package_name: &str,
         num: usize,
         aggressive_pruning_enabled: bool,
+        protocol_config: ProtocolConfig,
     ) -> Self {
         telemetry_subscribers::init_for_testing();
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
 
-        let authority_state = TestAuthorityBuilder::new().build().await;
+        let authority_state = TestAuthorityBuilder::new()
+            .with_protocol_config(protocol_config)
+            .build()
+            .await;
 
         let rgp = authority_state.reference_gas_price_for_testing().unwrap();
         let mut gas_object_ids = vec![];
@@ -111,10 +158,6 @@ impl TestRunner {
             rgp,
             aggressive_pruning_enabled,
         }
-    }
-
-    pub async fn new(base_package_name: &str, aggressive_pruning_enabled: bool) -> Self {
-        Self::new_with_objects(base_package_name, 1, aggressive_pruning_enabled).await
     }
 
     pub async fn signing_error(&mut self, pt: ProgrammableTransaction) -> SuiError {
@@ -911,7 +954,13 @@ async fn verify_tto_not_locked(
     should_delete: bool,
     aggressive_pruning: bool,
 ) -> (TransactionEffects, TransactionEffects) {
-    let mut runner = TestRunner::new_with_objects("tto", 2, aggressive_pruning).await;
+    let mut runner = TestRunner::new_with_objects_and_protocol_config(
+        "tto",
+        2,
+        aggressive_pruning,
+        effects_dependencies_protocol_config(false),
+    )
+    .await;
     let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -1040,101 +1089,115 @@ async fn test_tto_not_locked() {
 
 #[tokio::test]
 async fn test_tto_valid_dependencies() {
-    transfer_test_runner! {gas_objects: 3, |mut runner: TestRunner| async move {
-        let effects = runner
-            .run({
-                let mut builder = ProgrammableTransactionBuilder::new();
-                move_call! {
-                    builder,
-                    (runner.package.0)::M4::start1()
-                };
-                builder.finish()
-            })
-            .await;
-        let parent = effects.created()[0].clone();
-
-        let effects = runner
-            .run({
-                let mut builder = ProgrammableTransactionBuilder::new();
-                move_call! {
-                    builder,
-                    (runner.package.0)::M4::start2()
-                };
-                builder.finish()
-            })
-            .await;
-        let child = effects.created()[0].clone();
-
-        // Use a different gas coin than for all the other transactions. This serves two purposes:
-        // 1. Makes sure that we are registering the dependency on the transaction that transferred the
-        //    object solely because of the fact that we received it in this transaction.
-        // 2. Since the gas coin is fresh it will have a smaller version, so this will test that we
-        //    properly compute and update the lamport version that we should use for the transaction.
-        let effects = runner
-            .run_with_gas_object(
-                {
+    for disable_effects_dependencies in [false, true] {
+        transfer_test_runner! {
+            protocol_config: effects_dependencies_protocol_config(disable_effects_dependencies),
+            gas_objects: 3,
+            |mut runner: TestRunner| async move {
+            let effects = runner
+                .run({
                     let mut builder = ProgrammableTransactionBuilder::new();
-                    builder
-                        .transfer_object(SuiAddress::from(parent.0 .0), FullObjectRef::from_object_ref_and_owner(child.0, &child.1))
-                        .unwrap();
-                    builder.finish()
-                },
-                1,
-            )
-            .await;
-
-        let child = effects
-            .mutated()
-            .iter()
-            .find(|(o, _)| o.0 == child.0 .0)
-            .cloned()
-            .unwrap();
-        let transfer_digest = effects.transaction_digest();
-
-        // No receive the sent object
-        let effects = runner
-            .run_with_gas_object(
-                {
-                    let mut builder = ProgrammableTransactionBuilder::new();
-                    let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
-                    let child = builder.obj(ObjectArg::Receiving(child.0)).unwrap();
                     move_call! {
                         builder,
-                        (runner.package.0)::M4::receiver(parent, child)
+                        (runner.package.0)::M4::start1()
                     };
                     builder.finish()
-                },
-                2,
-            )
-            .await;
+                })
+                .await;
+            let parent_digest = *effects.transaction_digest();
+            let parent = effects.created()[0].clone();
 
-        assert!(effects.status().is_ok());
-        assert!(effects.created().is_empty());
-        assert!(effects.unwrapped().is_empty());
-        assert!(effects.deleted().is_empty());
-        assert!(effects.unwrapped_then_deleted().is_empty());
-        assert!(effects.wrapped().is_empty());
-        assert!(effects.dependencies().contains(transfer_digest));
+            let effects = runner
+                .run({
+                    let mut builder = ProgrammableTransactionBuilder::new();
+                    move_call! {
+                        builder,
+                        (runner.package.0)::M4::start2()
+                    };
+                    builder.finish()
+                })
+                .await;
+            let child = effects.created()[0].clone();
 
-        for (obj_ref, owner) in effects.mutated().iter() {
-            if obj_ref.0 == child.0 .0 {
-                // Child should be sent to 0x0
-                assert_eq!(owner, &Owner::AddressOwner(SuiAddress::ZERO));
-                // It's version should be bumped as well
-                assert!(obj_ref.1 > child.0 .1);
-                // The child should be the max version
-                assert_eq!(obj_ref.1.value(), child.0 .1.value() + 1);
-            }
-            if obj_ref.0 == parent.0 .0 {
-                // owner of the parent stays the same
-                assert_eq!(owner, &parent.1);
-                // parent version is also bumped
-                assert!(obj_ref.1 > parent.0 .1);
-                // The child should be the max version
-                assert_eq!(obj_ref.1.value(), child.0 .1.value() + 1);
+            // Use a different gas coin than for all the other transactions. This serves two purposes:
+            // 1. Makes sure that we are registering the dependency on the transaction that transferred the
+            //    object solely because of the fact that we received it in this transaction.
+            // 2. Since the gas coin is fresh it will have a smaller version, so this will test that we
+            //    properly compute and update the lamport version that we should use for the transaction.
+            let effects = runner
+                .run_with_gas_object(
+                    {
+                        let mut builder = ProgrammableTransactionBuilder::new();
+                        builder
+                            .transfer_object(SuiAddress::from(parent.0 .0), FullObjectRef::from_object_ref_and_owner(child.0, &child.1))
+                            .unwrap();
+                        builder.finish()
+                    },
+                    1,
+                )
+                .await;
+
+            let child = effects
+                .mutated()
+                .iter()
+                .find(|(o, _)| o.0 == child.0 .0)
+                .cloned()
+                .unwrap();
+            let transfer_digest = effects.transaction_digest();
+
+            // No receive the sent object
+            let effects = runner
+                .run_with_gas_object(
+                    {
+                        let mut builder = ProgrammableTransactionBuilder::new();
+                        let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
+                        let child = builder.obj(ObjectArg::Receiving(child.0)).unwrap();
+                        move_call! {
+                            builder,
+                            (runner.package.0)::M4::receiver(parent, child)
+                        };
+                        builder.finish()
+                    },
+                    2,
+                )
+                .await;
+
+            assert!(effects.status().is_ok());
+            assert!(effects.created().is_empty());
+            assert!(effects.unwrapped().is_empty());
+            assert!(effects.deleted().is_empty());
+            assert!(effects.unwrapped_then_deleted().is_empty());
+            assert!(effects.wrapped().is_empty());
+            assert_effects_dependencies(
+                disable_effects_dependencies,
+                &effects,
+                [
+                    parent_digest,
+                    *transfer_digest,
+                    runner.authority_state.get_object(&runner.package.0).unwrap().previous_transaction,
+                ],
+            );
+
+            for (obj_ref, owner) in effects.mutated().iter() {
+                if obj_ref.0 == child.0 .0 {
+                    // Child should be sent to 0x0
+                    assert_eq!(owner, &Owner::AddressOwner(SuiAddress::ZERO));
+                    // It's version should be bumped as well
+                    assert!(obj_ref.1 > child.0 .1);
+                    // The child should be the max version
+                    assert_eq!(obj_ref.1.value(), child.0 .1.value() + 1);
+                }
+                if obj_ref.0 == parent.0 .0 {
+                    // owner of the parent stays the same
+                    assert_eq!(owner, &parent.1);
+                    // parent version is also bumped
+                    assert!(obj_ref.1 > parent.0 .1);
+                    // The child should be the max version
+                    assert_eq!(obj_ref.1.value(), child.0 .1.value() + 1);
+                }
             }
         }
-    }
+        }
     }
 }
 
@@ -1430,287 +1493,320 @@ async fn test_tto_dependencies_dont_receive_but_abort() {
 
 #[tokio::test]
 async fn test_tto_dependencies_receive_and_abort() {
-    transfer_test_runner! {gas_objects: 3, |mut runner: TestRunner| async move {
-        let effects = runner
-            .run({
-                let mut builder = ProgrammableTransactionBuilder::new();
-                move_call! {
-                    builder,
-                    (runner.package.0)::M4::start1()
-                };
-                builder.finish()
-            })
-            .await;
-        let parent = effects.created()[0].clone();
-
-        let effects = runner
-            .run({
-                let mut builder = ProgrammableTransactionBuilder::new();
-                move_call! {
-                    builder,
-                    (runner.package.0)::M4::start2()
-                };
-                builder.finish()
-            })
-            .await;
-        let old_child = effects.created()[0].clone();
-
-        // Use a different gas coin than for all the other transactions. This:
-        // 1. Makes sure that we are registering the dependency on the transaction that transferred the
-        //    object solely because of the fact that we received it in this transaction.
-        // 2. Since the gas coin is fresh it will have a smaller version, so this will test that we
-        //    properly compute and update the lamport version that we should use for the transaction.
-        let effects = runner
-            .run_with_gas_object(
-                {
+    for disable_effects_dependencies in [false, true] {
+        transfer_test_runner! {
+            protocol_config: effects_dependencies_protocol_config(disable_effects_dependencies),
+            gas_objects: 3,
+            |mut runner: TestRunner| async move {
+            let effects = runner
+                .run({
                     let mut builder = ProgrammableTransactionBuilder::new();
-                    builder
-                        .transfer_object(SuiAddress::from(parent.0 .0), FullObjectRef::from_object_ref_and_owner(old_child.0, &old_child.1))
-                        .unwrap();
-                    builder.finish()
-                },
-                1,
-            )
-            .await;
-
-        let child = effects
-            .mutated()
-            .iter()
-            .find(|(o, _)| o.0 == old_child.0 .0)
-            .cloned()
-            .unwrap();
-        let transfer_digest = effects.transaction_digest();
-
-        assert!(parent.0 .1.value() < child.0 .1.value());
-
-        let effects = runner
-            .run_with_gas_object(
-                {
-                    let mut builder = ProgrammableTransactionBuilder::new();
-                    let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
-                    let child = builder.obj(ObjectArg::Receiving(child.0)).unwrap();
                     move_call! {
                         builder,
-                        (runner.package.0)::M4::receive_abort(parent, child)
+                        (runner.package.0)::M4::start1()
                     };
                     builder.finish()
-                },
-                2,
-            )
-            .await;
+                })
+                .await;
+            let parent_digest = *effects.transaction_digest();
+            let parent = effects.created()[0].clone();
 
-        assert!(effects.status().is_err());
-        assert!(effects.created().is_empty());
-        assert!(effects.unwrapped().is_empty());
-        assert!(effects.deleted().is_empty());
-        assert!(effects.unwrapped_then_deleted().is_empty());
-        assert!(effects.wrapped().is_empty());
-        // Received but aborted -- dependency is still added.
-        assert!(effects.dependencies().contains(transfer_digest));
+            let effects = runner
+                .run({
+                    let mut builder = ProgrammableTransactionBuilder::new();
+                    move_call! {
+                        builder,
+                        (runner.package.0)::M4::start2()
+                    };
+                    builder.finish()
+                })
+                .await;
+            let old_child = effects.created()[0].clone();
 
-        for (obj_ref, owner) in effects.mutated().iter() {
-            assert_ne!(obj_ref.0, child.0 .0);
-            if obj_ref.0 == parent.0 .0 {
-                // owner of the parent stays the same
-                assert_eq!(owner, &parent.1);
-                // parent version is also bumped
-                assert!(obj_ref.1 > parent.0 .1);
-                // Child version is the largest in this transaction even though it's not received
-                assert_eq!(obj_ref.1.value(), child.0 .1.value() + 1);
+            // Use a different gas coin than for all the other transactions. This:
+            // 1. Makes sure that we are registering the dependency on the transaction that transferred the
+            //    object solely because of the fact that we received it in this transaction.
+            // 2. Since the gas coin is fresh it will have a smaller version, so this will test that we
+            //    properly compute and update the lamport version that we should use for the transaction.
+            let effects = runner
+                .run_with_gas_object(
+                    {
+                        let mut builder = ProgrammableTransactionBuilder::new();
+                        builder
+                            .transfer_object(SuiAddress::from(parent.0 .0), FullObjectRef::from_object_ref_and_owner(old_child.0, &old_child.1))
+                            .unwrap();
+                        builder.finish()
+                    },
+                    1,
+                )
+                .await;
+
+            let child = effects
+                .mutated()
+                .iter()
+                .find(|(o, _)| o.0 == old_child.0 .0)
+                .cloned()
+                .unwrap();
+            let transfer_digest = effects.transaction_digest();
+
+            assert!(parent.0 .1.value() < child.0 .1.value());
+
+            let effects = runner
+                .run_with_gas_object(
+                    {
+                        let mut builder = ProgrammableTransactionBuilder::new();
+                        let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
+                        let child = builder.obj(ObjectArg::Receiving(child.0)).unwrap();
+                        move_call! {
+                            builder,
+                            (runner.package.0)::M4::receive_abort(parent, child)
+                        };
+                        builder.finish()
+                    },
+                    2,
+                )
+                .await;
+
+            assert!(effects.status().is_err());
+            assert!(effects.created().is_empty());
+            assert!(effects.unwrapped().is_empty());
+            assert!(effects.deleted().is_empty());
+            assert!(effects.unwrapped_then_deleted().is_empty());
+            assert!(effects.wrapped().is_empty());
+            assert_effects_dependencies(
+                disable_effects_dependencies,
+                &effects,
+                [
+                    parent_digest,
+                    *transfer_digest,
+                    runner.authority_state.get_object(&runner.package.0).unwrap().previous_transaction,
+                ],
+            );
+
+            for (obj_ref, owner) in effects.mutated().iter() {
+                assert_ne!(obj_ref.0, child.0 .0);
+                if obj_ref.0 == parent.0 .0 {
+                    // owner of the parent stays the same
+                    assert_eq!(owner, &parent.1);
+                    // parent version is also bumped
+                    assert!(obj_ref.1 > parent.0 .1);
+                    // Child version is the largest in this transaction even though it's not received
+                    assert_eq!(obj_ref.1.value(), child.0 .1.value() + 1);
+                }
             }
         }
-    }
+        }
     }
 }
 
 #[tokio::test]
 async fn test_tto_dependencies_receive_and_type_mismatch() {
-    transfer_test_runner! {gas_objects: 3, |mut runner: TestRunner| async move {
-        let effects = runner
-            .run({
-                let mut builder = ProgrammableTransactionBuilder::new();
-                move_call! {
-                    builder,
-                    (runner.package.0)::M4::start1()
-                };
-                builder.finish()
-            })
-            .await;
-        let parent = effects.created()[0].clone();
-
-        let effects = runner
-            .run({
-                let mut builder = ProgrammableTransactionBuilder::new();
-                move_call! {
-                    builder,
-                    (runner.package.0)::M4::start2()
-                };
-                builder.finish()
-            })
-            .await;
-        let old_child = effects.created()[0].clone();
-
-        // Use a different gas coin than for all the other transactions. This:
-        // 1. Makes sure that we are registering the dependency on the transaction that transferred the
-        //    object solely because of the fact that we received it in this transaction.
-        // 2. Since the gas coin is fresh it will have a smaller version, so this will test that we
-        //    properly compute and update the lamport version that we should use for the transaction.
-        let effects = runner
-            .run_with_gas_object(
-                {
+    for disable_effects_dependencies in [false, true] {
+        transfer_test_runner! {
+            protocol_config: effects_dependencies_protocol_config(disable_effects_dependencies),
+            gas_objects: 3,
+            |mut runner: TestRunner| async move {
+            let effects = runner
+                .run({
                     let mut builder = ProgrammableTransactionBuilder::new();
-                    builder
-                        .transfer_object(SuiAddress::from(parent.0 .0), FullObjectRef::from_object_ref_and_owner(old_child.0, &old_child.1))
-                        .unwrap();
-                    builder.finish()
-                },
-                1,
-            )
-            .await;
-
-        let child = effects
-            .mutated()
-            .iter()
-            .find(|(o, _)| o.0 == old_child.0 .0)
-            .cloned()
-            .unwrap();
-        let transfer_digest = effects.transaction_digest();
-
-        assert!(parent.0 .1.value() < child.0 .1.value());
-
-        let effects = runner
-            .run_with_gas_object(
-                {
-                    let mut builder = ProgrammableTransactionBuilder::new();
-                    let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
-                    let child = builder.obj(ObjectArg::Receiving(child.0)).unwrap();
                     move_call! {
                         builder,
-                        (runner.package.0)::M4::receive_type_mismatch(parent, child)
+                        (runner.package.0)::M4::start1()
                     };
                     builder.finish()
-                },
-                2,
-            )
-            .await;
+                })
+                .await;
+            let parent_digest = *effects.transaction_digest();
+            let parent = effects.created()[0].clone();
 
-        assert!(effects.status().is_err());
+            let effects = runner
+                .run({
+                    let mut builder = ProgrammableTransactionBuilder::new();
+                    move_call! {
+                        builder,
+                        (runner.package.0)::M4::start2()
+                    };
+                    builder.finish()
+                })
+                .await;
+            let old_child = effects.created()[0].clone();
 
-        // Type mismatch is an abort code of 2 from `receive_impl`
-        let is_type_mismatch_error = matches!(
-            effects.status().clone().unwrap_err().0,
-            ExecutionErrorKind::MoveAbort(x, 2) if x.function_name == Some("receive_impl".to_string())
-        );
-        assert!(is_type_mismatch_error);
-        assert!(effects.created().is_empty());
-        assert!(effects.unwrapped().is_empty());
-        assert!(effects.deleted().is_empty());
-        assert!(effects.unwrapped_then_deleted().is_empty());
-        assert!(effects.wrapped().is_empty());
-        // Received but there was a type mismatch -- dependency is still added.
-        assert!(effects.dependencies().contains(transfer_digest));
+            // Use a different gas coin than for all the other transactions. This:
+            // 1. Makes sure that we are registering the dependency on the transaction that transferred the
+            //    object solely because of the fact that we received it in this transaction.
+            // 2. Since the gas coin is fresh it will have a smaller version, so this will test that we
+            //    properly compute and update the lamport version that we should use for the transaction.
+            let effects = runner
+                .run_with_gas_object(
+                    {
+                        let mut builder = ProgrammableTransactionBuilder::new();
+                        builder
+                            .transfer_object(SuiAddress::from(parent.0 .0), FullObjectRef::from_object_ref_and_owner(old_child.0, &old_child.1))
+                            .unwrap();
+                        builder.finish()
+                    },
+                    1,
+                )
+                .await;
 
-        for (obj_ref, owner) in effects.mutated().iter() {
-            assert_ne!(obj_ref.0, child.0 .0);
-            if obj_ref.0 == parent.0 .0 {
-                // owner of the parent stays the same
-                assert_eq!(owner, &parent.1);
-                // parent version is also bumped
-                assert!(obj_ref.1 > parent.0 .1);
-                // Child version is the largest in this transaction even though it's not received
-                assert_eq!(obj_ref.1.value(), child.0 .1.value() + 1);
+            let child = effects
+                .mutated()
+                .iter()
+                .find(|(o, _)| o.0 == old_child.0 .0)
+                .cloned()
+                .unwrap();
+            let transfer_digest = effects.transaction_digest();
+
+            assert!(parent.0 .1.value() < child.0 .1.value());
+
+            let effects = runner
+                .run_with_gas_object(
+                    {
+                        let mut builder = ProgrammableTransactionBuilder::new();
+                        let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
+                        let child = builder.obj(ObjectArg::Receiving(child.0)).unwrap();
+                        move_call! {
+                            builder,
+                            (runner.package.0)::M4::receive_type_mismatch(parent, child)
+                        };
+                        builder.finish()
+                    },
+                    2,
+                )
+                .await;
+
+            assert!(effects.status().is_err());
+
+            // Type mismatch is an abort code of 2 from `receive_impl`
+            let is_type_mismatch_error = matches!(
+                effects.status().clone().unwrap_err().0,
+                ExecutionErrorKind::MoveAbort(x, 2) if x.function_name == Some("receive_impl".to_string())
+            );
+            assert!(is_type_mismatch_error);
+            assert!(effects.created().is_empty());
+            assert!(effects.unwrapped().is_empty());
+            assert!(effects.deleted().is_empty());
+            assert!(effects.unwrapped_then_deleted().is_empty());
+            assert!(effects.wrapped().is_empty());
+            assert_effects_dependencies(
+                disable_effects_dependencies,
+                &effects,
+                [
+                    parent_digest,
+                    *transfer_digest,
+                    runner.authority_state.get_object(&runner.package.0).unwrap().previous_transaction,
+                ],
+            );
+
+            for (obj_ref, owner) in effects.mutated().iter() {
+                assert_ne!(obj_ref.0, child.0 .0);
+                if obj_ref.0 == parent.0 .0 {
+                    // owner of the parent stays the same
+                    assert_eq!(owner, &parent.1);
+                    // parent version is also bumped
+                    assert!(obj_ref.1 > parent.0 .1);
+                    // Child version is the largest in this transaction even though it's not received
+                    assert_eq!(obj_ref.1.value(), child.0 .1.value() + 1);
+                }
             }
         }
-    }
+        }
     }
 }
 
 #[tokio::test]
 async fn receive_and_dof_interleave() {
-    transfer_test_runner! {gas_objects: 3, |mut runner: TestRunner| async move {
-        // step 1 & 2
-        let effects = runner
-            .run_with_gas_object(
-                {
-                    let mut builder = ProgrammableTransactionBuilder::new();
-                    move_call! {
-                        builder,
-                        (runner.package.0)::M5::start()
-                    };
-                    builder.finish()
-                },
-                0,
-            )
-            .await;
+    for disable_effects_dependencies in [false, true] {
+        transfer_test_runner! {
+            protocol_config: effects_dependencies_protocol_config(disable_effects_dependencies),
+            gas_objects: 3,
+            |mut runner: TestRunner| async move {
+            // step 1 & 2
+            let effects = runner
+                .run_with_gas_object(
+                    {
+                        let mut builder = ProgrammableTransactionBuilder::new();
+                        move_call! {
+                            builder,
+                            (runner.package.0)::M5::start()
+                        };
+                        builder.finish()
+                    },
+                    0,
+                )
+                .await;
 
-        let shared = effects
-            .created()
-            .iter()
-            .find(|(_, owner)| matches!(owner, Owner::Shared { .. }))
-            .cloned()
-            .unwrap();
-        let owned = effects
-            .created()
-            .iter()
-            .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
-            .cloned()
-            .unwrap();
-        let Owner::Shared { initial_shared_version } = shared.1 else { unreachable!() };
+            let shared = effects
+                .created()
+                .iter()
+                .find(|(_, owner)| matches!(owner, Owner::Shared { .. }))
+                .cloned()
+                .unwrap();
+            let owned = effects
+                .created()
+                .iter()
+                .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+                .cloned()
+                .unwrap();
+            let Owner::Shared { initial_shared_version } = shared.1 else { unreachable!() };
 
-        let init_digest = effects.transaction_digest();
+            let init_digest = effects.transaction_digest();
 
-        let executable = runner
-            .lock_and_create_executable(
-                {
-                    let mut builder = ProgrammableTransactionBuilder::new();
-                    let parent = builder
-                        .obj(ObjectArg::SharedObject {
-                            id: shared.0 .0,
-                            initial_shared_version,
-                            mutability: SharedObjectMutability::Mutable,
-                        })
-                        .unwrap();
-                    let child = builder.obj(ObjectArg::Receiving(owned.0)).unwrap();
-                    move_call! {
-                        builder,
-                        (runner.package.0)::M5::deleter(parent, child)
-                    };
-                    builder.finish()
-                },
-                1,
-            )
-            .await;
+            let executable = runner
+                .lock_and_create_executable(
+                    {
+                        let mut builder = ProgrammableTransactionBuilder::new();
+                        let parent = builder
+                            .obj(ObjectArg::SharedObject {
+                                id: shared.0 .0,
+                                initial_shared_version,
+                                mutability: SharedObjectMutability::Mutable,
+                            })
+                            .unwrap();
+                        let child = builder.obj(ObjectArg::Receiving(owned.0)).unwrap();
+                        move_call! {
+                            builder,
+                            (runner.package.0)::M5::deleter(parent, child)
+                        };
+                        builder.finish()
+                    },
+                    1,
+                )
+                .await;
 
-        let dof_effects = runner
-            .run_with_gas_object_shared(
-                {
-                    let mut builder = ProgrammableTransactionBuilder::new();
-                    let parent = builder
-                        .obj(ObjectArg::SharedObject {
-                            id: shared.0 .0,
-                            initial_shared_version,
-                            mutability: SharedObjectMutability::Mutable,
-                        })
-                        .unwrap();
-                    let child = builder.obj(ObjectArg::ImmOrOwnedObject(owned.0)).unwrap();
-                    move_call! {
-                        builder,
-                        (runner.package.0)::M5::add_dof(parent, child)
-                    };
-                    builder.finish()
-                },
-                2,
-            )
-            .await;
+            let dof_effects = runner
+                .run_with_gas_object_shared(
+                    {
+                        let mut builder = ProgrammableTransactionBuilder::new();
+                        let parent = builder
+                            .obj(ObjectArg::SharedObject {
+                                id: shared.0 .0,
+                                initial_shared_version,
+                                mutability: SharedObjectMutability::Mutable,
+                            })
+                            .unwrap();
+                        let child = builder.obj(ObjectArg::ImmOrOwnedObject(owned.0)).unwrap();
+                        move_call! {
+                            builder,
+                            (runner.package.0)::M5::add_dof(parent, child)
+                        };
+                        builder.finish()
+                    },
+                    2,
+                )
+                .await;
 
-        assert!(dof_effects.status().is_ok());
+            assert!(dof_effects.status().is_ok());
 
-        let recv_effects = runner.execute_executable(executable).await;
-        assert!(recv_effects.status().is_ok());
-        // The recv_effects should not contain the dependency on the initial transaction since we
-        // didn't actually receive the object -- it was loaded via the dynamic field instead.
-        assert!(!recv_effects.dependencies().contains(init_digest));
-    }
+            let recv_effects = runner.execute_executable(executable).await;
+            assert!(recv_effects.status().is_ok());
+            // The object was loaded through the dynamic field rather than received.
+            assert!(!recv_effects.dependencies().contains(init_digest));
+            if disable_effects_dependencies {
+                assert!(recv_effects.dependencies().is_empty());
+            }
+            }
+        }
     }
 }
 

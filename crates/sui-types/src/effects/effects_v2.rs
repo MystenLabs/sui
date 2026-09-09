@@ -43,6 +43,7 @@ pub struct TransactionEffectsV2 {
     /// can be None if the transaction does not emit any event.
     pub(crate) events_digest: Option<TransactionEventsDigest>,
     /// The set of transaction digests this transaction depends on.
+    /// Empty when the protocol disables effects dependencies.
     pub(crate) dependencies: Vec<TransactionDigest>,
 
     /// The version number of all the written Move objects by this transaction.

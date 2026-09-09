@@ -1641,7 +1641,14 @@ impl CheckpointBuilder {
 
             let _scope = monitored_scope("CheckpointBuilder::causal_sort");
             let ccp_digest = consensus_commit_prologue.map(|(d, _)| d);
-            let mut sorted = CausalOrder::causal_sort_with_ccp(root_effects, ccp_digest);
+            let mut sorted = CausalOrder::causal_sort_with_ccp(
+                root_effects,
+                ccp_digest,
+                self.epoch_store
+                    .protocol_config()
+                    .disable_effects_dependencies()
+                    .then(|| self.state.get_transaction_cache_reader().as_ref()),
+            );
 
             if let Some(settlement_key) = &checkpoint_roots.settlement_root {
                 let checkpoint_seq = pending.details.checkpoint_seq;
