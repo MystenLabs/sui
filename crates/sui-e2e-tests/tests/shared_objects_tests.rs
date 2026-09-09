@@ -287,7 +287,11 @@ async fn shared_object_deletion_multi_certs() {
 /// but tests the end-to-end flow from Sui to consensus.
 #[sim_test]
 async fn call_shared_object_contract() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    // Preserve coverage of the historical transaction-dependency representation.
+    let test_cluster = TestClusterBuilder::new()
+        .with_protocol_version(sui_protocol_config::ProtocolVersion::new(136))
+        .build()
+        .await;
     let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
     let package_id = package.0;
     let counter_id = counter.0;

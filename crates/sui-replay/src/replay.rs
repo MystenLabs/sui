@@ -1747,6 +1747,17 @@ impl LocalExec {
         // for deleted shared objects, we need to look at the transaction dependencies to find the
         // correct transaction dependency for a deleted shared object.
         if !deleted_shared_objects.is_empty() {
+            if ProtocolConfig::get_for_version(tx_info.protocol_version, tx_info.chain)
+                .disable_effects_dependencies()
+            {
+                return Err(ReplayEngineError::GeneralError {
+                    err:
+                        "Legacy JSON-RPC replay cannot resolve deleted shared-object predecessors \
+                          when effects dependencies are disabled; use sui-replay-2 with object \
+                          metadata instead."
+                            .to_string(),
+                });
+            }
             for tx_digest in tx_info.dependencies.iter() {
                 let tx_info = self.resolve_tx_components(tx_digest).await?;
                 for (obj_id, version, _) in tx_info.shared_object_refs.iter() {
