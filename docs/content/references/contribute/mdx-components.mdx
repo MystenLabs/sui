@@ -96,8 +96,10 @@ Use `UnsafeLink` to skip the Docusaurus link checker for a URL.
 
 This is **necessary** for pages that the Docusaurus build auto-generates, as they are generated after the link checker runs and thus will result in a build error.
 
-:::info
-In local development, the setting `onBrokenMarkdownLinks: "warn"` remains at `"warn"`, but in production the build process still throws a build error.
+:::caution
+Nothing validates an `UnsafeLink` target. `onBrokenLinks` is set to `throw`, so an ordinary broken link fails the build, but a wrong `href` inside an `UnsafeLink` is published as a silent 404. Check the target by hand, and prefer an ordinary link wherever the destination is not an auto-generated page.
+
+Note also that `onBrokenAnchors` is set to `warn`, so a link to a `#fragment` that does not exist on the target page does not fail the build either.
 :::
 
 **Example:**
@@ -241,19 +243,26 @@ When including sections of code, understand that the code might change from what
 
 #### Referencing files within the Sui monorepo 
 
-Reference files through their relative path:
+Reference files through their path from the repository root, without a leading `sui/`. For example, `source="examples/move/hero/sources/example.move"`.
 
 #### Referencing files from other repos 
 
-If several code files located in another repo need to be referenced across multiple documentation pages, the Sui documentation team might have added it as a **submodule** of the Sui repo. Submodules are a GitHub feature that creates symlinks across repositories. 
+To reference a file in another repository, add the `org` and `repo` arguments. The `source` path is then relative to that repository's root. Add `branch` to pin a ref other than the default branch.
 
-Current submodules within the Sui docs include:
+```jsx
+<ImportContent
+  source="/move/hello-world/sources/greeting.move"
+  org="MystenLabs"
+  repo="sui-stack-hello-world"
+  mode="code"
+/>
+```
 
-- [TS SDK](https://github.com/MystenLabs/ts-sdks): `/docs/submodules/ts-sdks`
+Pin a branch whenever the example must stay stable, because the default branch can change underneath the page:
 
-- [DeepBook](https://github.com/MystenLabs/deepbookv3): `/docs/submodules/deepbookv3`
-
-The Sui documentation team decides whether to add submodules. Community contributions should not attempt to add submodules.
+```jsx
+<ImportContent source="I2/fixed_supply/sources/silver.move" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" mode="code" />
+```
 
 #### How to use
 
@@ -278,6 +287,11 @@ To include specific components or sections, use the following arguments in the c
 - React component: `component="ComponentName"`
 - Type declaration: `type="TypeName"`
 - Enum declaration: `enumeration="EnumName"`
+
+Two further arguments control how much of the selected code appears:
+
+- `noComments`: strip comments from the injected code.
+- `signatureOnly`: inject only a function's signature, not its body.
 
 **Example:**  
 ```
