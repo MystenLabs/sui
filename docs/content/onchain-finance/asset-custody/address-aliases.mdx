@@ -56,7 +56,14 @@ Traditional key rotation on Sui requires transferring all objects and balances f
 1. Generate a new keypair (new address).
 2. If alias configuration is not already enabled for the old address, enable it and save the created `AddressAliases` object ID.
 3. Add the new address as an alias of the old address:
-   
+
+   ```sh
+   $ sui client ptb \
+       --move-call sui::address_alias::add \
+           @<ADDRESS_ALIASES_OBJECT_ID> \
+           @<NEW_ALIAS_ADDRESS> \
+       --gas-budget 50000000
+   ```
 
 No asset migration needed. All objects and balances stay at the original address.
 
