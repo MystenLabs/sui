@@ -206,6 +206,10 @@ impl ObjectFundsCheckerDEPRECATED {
                 // RetryLater outcome) - a freshly assigned, higher index could be
                 // unreachable for admission while earlier-enqueued transactions block
                 // waiting on this one.
+                debug_assert!(
+                    execution_env.causal_index.is_some(),
+                    "funds-withdraw retry requires an indexed env: execute via the scheduler"
+                );
                 let mut execution_env = execution_env.clone();
                 let epoch_store = epoch_store.clone();
                 tokio::task::spawn(async move {
