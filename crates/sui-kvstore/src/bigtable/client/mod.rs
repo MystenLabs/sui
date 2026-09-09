@@ -2838,12 +2838,8 @@ mod tests {
         for v in 1..=total_versions {
             let row_key = tables::packages::encode_key(original_id.as_ref(), v);
             let cells = tables::packages::encode(100, original_id.as_ref(), false);
-            mock.insert_row(
-                tables::packages::NAME,
-                row_key,
-                cells.into_iter().map(|(c, b)| (c, b)),
-            )
-            .await;
+            mock.insert_row(tables::packages::NAME, row_key, cells.into_iter())
+                .await;
         }
 
         let versions = client
