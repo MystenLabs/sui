@@ -654,7 +654,7 @@ For network-specific upgrade instructions, see [Node Updates](/operators/full-no
 | Node cannot start after upgrade | Configuration format changed between versions | Check release notes for `fullnode.yaml` changes. Compare your config with the [template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml). |
 | Node falls behind after restart | Node is syncing from last checkpoint, not from tip | Restore from a recent [snapshot](/operators/snapshots) instead of waiting for catch-up. |
 | `Address already in use` on port 9184 | Another process is using the metrics port | Change `metrics-address` in `fullnode.yaml` to a different port (for example, `0.0.0.0:9180`). |
-| Disk full (7TB+) | Pruning not configured or not active | Apply a [pruning configuration](/operators/data-management/managing-data#pruning-quickstart) and wait 3 to 5 days for compaction. |
+| Disk full (7TB+) | Pruning not configured or not active | Apply a [pruning configuration](/operators/data-management/managing-data#pruning) and wait 3 to 5 days for compaction. |
 | `genesis.blob` chain mismatch | Wrong genesis file for target network | Download the correct `genesis.blob` from [sui-genesis](https://github.com/MystenLabs/sui-genesis). See [Genesis](/operators/genesis#network-identity). |
 | Peer connections rejected | Firewall blocking P2P ports | Open ports 8080 (P2P) and 8084 (discovery) in your firewall. See [Node Updates](/operators/full-node/updates) for port requirements. |
 | gRPC queries return `NOT_FOUND` for old data | Data pruned beyond retention window | Query the [Archival Service](/develop/accessing-data/archival-store) for historical data, or increase `num-epochs-to-retain` in your pruning config. |
