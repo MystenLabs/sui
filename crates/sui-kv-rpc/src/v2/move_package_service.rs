@@ -234,3 +234,63 @@ fn parse_package_id(package_id_str: &str) -> Result<ObjectID, RpcError> {
             .into()
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use sui_kvstore::tables;
+    use sui_kvstore::testing::MockBigtableServer;
+    use sui_types::base_types::{ObjectID, SequenceNumber};
+    use sui_types::digests::TransactionDigest;
+    use sui_types::move_package::MovePackage;
+    use sui_types::object::{Data, Object};
+    use sui_types::storage::ObjectKey;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_list_package_versions() {
+        let mock = MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .unwrap();
+
+        let original_id = ObjectID::random();
+        let pkg = MovePackage::new(
+            original_id,
+            SequenceNumber::from(1),
+            BTreeMap::new(),
+            100_000,
+            vec![],
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let obj = Object::new_package_from_data(Data::Package(pkg), TransactionDigest::ZERO);
+
+        // Insert package object into `objects` table
+        let obj_key = tables::objects::encode_key(&ObjectKey(original_id, SequenceNumber::from(1)));
+        let obj_cells = tables::objects::encode(&obj).unwrap();
+        mock.insert_row(tables::objects::NAME, obj_key, obj_cells)
+            .await;
+
+        // Insert 3 versions into `packages` table: v1 at cp 10, v2 at cp 20, v3 at cp 30
+        for (v, cp) in [(1, 10), (2, 20), (3, 30)] {
+            let row_key = tables::packages::encode_key(original_id.as_ref(), v);
+            let cells = tables::packages::encode(cp, original_id.as_ref(), false);
+            mock.insert_row(tables::packages::NAME, row_key, cells)
+                .await;
+        }
+
+        let mut req = ListPackageVersionsRequest::default();
+        req.package_id = Some(original_id.to_string());
+        req.page_size = Some(10);
+        let resp = list_package_versions(client.clone(), req).await.unwrap();
+        assert_eq!(resp.versions.len(), 3);
+        assert_eq!(resp.versions[0].version, Some(1));
+        assert_eq!(resp.versions[1].version, Some(2));
+        assert_eq!(resp.versions[2].version, Some(3));
+        assert!(resp.next_page_token.is_none());
+    }
+}

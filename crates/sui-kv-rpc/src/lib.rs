@@ -18,6 +18,7 @@ use sui_kvstore::EPOCH_START_PIPELINE;
 use sui_kvstore::EVENT_BITMAP_INDEX_PIPELINE;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::OBJECTS_PIPELINE;
+use sui_kvstore::PACKAGES_PIPELINE;
 pub use sui_kvstore::PoolConfig;
 use sui_kvstore::TRANSACTIONS_PIPELINE;
 use sui_kvstore::TX_SEQ_DIGEST_PIPELINE;
@@ -63,13 +64,14 @@ use package_store::BigTablePackageStore;
 
 /// Pipelines whose watermarks always bound the `GetServiceInfo` checkpoint
 /// height, because every instance serves the point-lookup APIs that read them.
-pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 6] = [
+pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 7] = [
     CHECKPOINTS_PIPELINE,
     CHECKPOINTS_BY_DIGEST_PIPELINE,
     TRANSACTIONS_PIPELINE,
     OBJECTS_PIPELINE,
     EPOCH_START_PIPELINE,
     EPOCH_END_PIPELINE,
+    PACKAGES_PIPELINE,
 ];
 
 /// Pipelines that only back the List APIs. Folded into the `GetServiceInfo`
