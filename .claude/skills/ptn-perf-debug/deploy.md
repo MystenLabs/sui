@@ -66,6 +66,15 @@ gh workflow run environment-lock-unlock.yml -R MystenLabs/sui-operations -f envi
 
 Watch progress with `gh run list -R MystenLabs/sui-operations -w <file>` and `gh run watch <id>`.
 
+For a handful of hosts it is also fine to skip the workflow: build the binary yourself and push it over ssh. Hosts
+are x86_64 Ubuntu, so build on Linux (or cross-compile) with the release profile, then:
+```
+scp target/release/sui-node ubuntu@<host>.private-testnet.sui.io:/tmp/sui-node
+ssh ubuntu@<host>.private-testnet.sui.io 'sudo systemctl stop sui-node && sudo install -m755 /tmp/sui-node /opt/sui/bin/sui-node && sudo systemctl start sui-node'
+```
+Same pattern for `/opt/sui/bin/stress` and `stress.service`. Note the local build's `version` label on `uptime` so
+you can tell those hosts apart, and remember the next workflow deploy overwrites the binary.
+
 ## Choosing how many hosts to update
 
 - CPU/storage/local-path changes: 2 to 4 validators (pick the outlier plus a healthy peer) or one fullnode. Compare
