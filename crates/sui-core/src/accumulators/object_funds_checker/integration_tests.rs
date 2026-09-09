@@ -53,6 +53,7 @@ impl TestEnv {
         protocol_config.set_record_net_unsettled_object_withdraws_for_testing(
             record_net_unsettled_object_withdraws,
         );
+        protocol_config.set_check_object_funds_withdraw_in_execution_for_testing(false);
 
         let (sender, keypair) = get_account_key_pair();
         let gas_obj = Object::with_owner_for_testing(sender);

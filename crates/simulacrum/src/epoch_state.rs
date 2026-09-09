@@ -9,19 +9,22 @@ use sui_config::{
     transaction_deny_config::TransactionDenyConfig, verifier_signing_config::VerifierSigningConfig,
 };
 use sui_core::{
-    accumulators::funds_read::AccountFundsRead,
+    accumulators::{
+        funds_read::AccountFundsRead, object_funds_checker::metrics::ObjectFundsCheckerMetrics,
+        unsettled_object_withdrawals::UnsettledObjectWithdrawals,
+    },
     transaction_simulation::{SimulationInputLoader, simulate_transaction},
 };
 use sui_execution::Executor;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    accumulator_root::{AccumulatorObjId, AccumulatorValue, U128},
+    accumulator_root::{AccumulatorObjId, AccumulatorValue, U128, UnsettledObjectFundsRead},
     base_types::{ObjectRef, SequenceNumber, TransactionDigest},
     coin_reservation::BorrowedCoinReservationResolver,
     committee::{Committee, EpochId},
     digests::ChainIdentifier,
-    effects::TransactionEffects,
+    effects::{TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
     execution_params::ExecutionOrEarlyError,
     gas::SuiGasStatus,
@@ -54,6 +57,7 @@ pub struct EpochState {
     /// Keeps arbitrary simulated packages out of committed execution's VM cache.
     simulation_executor: Arc<dyn Executor + Send + Sync>,
     chain_identifier: ChainIdentifier,
+    unsettled_object_withdrawals: Arc<UnsettledObjectWithdrawals>,
     /// A counter that advances each time we advance the clock in order to ensure that each update
     /// txn has a unique digest. This is reset on epoch changes
     next_consensus_round: u64,
@@ -78,6 +82,9 @@ impl EpochState {
         let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(&registry));
         let executor = sui_execution::executor(&protocol_config, true).unwrap();
         let simulation_executor = sui_execution::executor(&protocol_config, true).unwrap();
+        let unsettled_object_withdrawals = Arc::new(UnsettledObjectWithdrawals::new(Arc::new(
+            ObjectFundsCheckerMetrics::new(&registry),
+        )));
 
         Self {
             epoch_start_state,
@@ -88,6 +95,7 @@ impl EpochState {
             executor,
             simulation_executor,
             chain_identifier,
+            unsettled_object_withdrawals,
             next_consensus_round: 0,
         }
     }
@@ -172,6 +180,10 @@ impl EpochState {
 
         let transaction_data = transaction.data().transaction_data();
         let (kind, signer, gas_data) = transaction_data.execution_parts();
+        let system_object_versions =
+            sui_types::base_types::SystemObjectVersions::from_latest_in_store(
+                store.backing_store(),
+            );
         let (inner_temp_store, gas_status, effects, _timings, result) = self
             .executor
             .execute_transaction_to_effects_and_execution_error(
@@ -184,9 +196,8 @@ impl EpochState {
                 &self.epoch_start_state.epoch(),
                 self.epoch_start_state.epoch_start_timestamp_ms(),
                 checked_input_objects,
-                sui_types::base_types::SystemObjectVersions::from_latest_in_store(
-                    store.backing_store(),
-                ),
+                system_object_versions,
+                self.unsettled_object_withdrawals.as_ref() as &dyn UnsettledObjectFundsRead,
                 gas_data,
                 gas_status,
                 kind,
@@ -195,7 +206,31 @@ impl EpochState {
                 tx_digest,
                 &mut None,
             );
+        if self
+            .protocol_config
+            .check_object_funds_withdraw_in_execution()
+            && effects.status().is_ok()
+            && let Some(accumulator_version) =
+                system_object_versions.get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+        {
+            self.unsettled_object_withdrawals
+                .record_object_funds_withdraws(
+                    transaction.transaction_data(),
+                    &effects,
+                    &inner_temp_store.accumulator_running_max_withdraws,
+                    accumulator_version.version,
+                    self.chain_identifier,
+                );
+        }
         Ok((inner_temp_store, gas_status, effects, result))
+    }
+
+    pub(crate) fn commit_accumulator_versions(
+        &self,
+        committed_accumulator_versions: Vec<SequenceNumber>,
+    ) {
+        self.unsettled_object_withdrawals
+            .commit_accumulator_versions(committed_accumulator_versions);
     }
 
     pub(crate) fn simulate_transaction<S: SimulatorStore + Send + Sync>(
