@@ -34,7 +34,7 @@ use sui_protocol_config::{
     Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
     ProtocolVersion,
 };
-use sui_types::effects::TransactionEffects;
+use sui_types::effects::{InputConsensusObject, TransactionEffects};
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
 use sui_types::execution::SharedInput;
@@ -68,6 +68,7 @@ use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTr
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::CheckpointServiceNotify;
+use crate::checkpoints::causal_order::CausalOrder;
 use crate::consensus_handler::ConsensusHandler;
 use crate::consensus_test_utils;
 use crate::test_utils::init_state_parameters_from_rng;
@@ -4796,6 +4797,285 @@ async fn test_consensus_commit_prologue_generation() {
     assert!(clock_v1 < clock_v2);
 }
 
+#[tokio::test]
+async fn test_checkpoint_order_uses_consensus_schedule_without_effect_dependencies() {
+    telemetry_subscribers::init_for_testing();
+
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.set_disable_effects_tx_dependencies_for_testing(true);
+
+    let mut reader_gas = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+    reader_gas
+        .data
+        .try_as_move_mut()
+        .unwrap()
+        .increment_version_to(SequenceNumber::from(100));
+    let writer_gas = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+    let independent_gas = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+    let share_gas = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+
+    let authority = TestAuthorityBuilder::new()
+        .with_protocol_config(protocol_config.clone())
+        .build()
+        .await;
+    authority.insert_genesis_objects(&[
+        reader_gas.clone(),
+        writer_gas.clone(),
+        independent_gas.clone(),
+        share_gas.clone(),
+    ]);
+    let (_, package) = publish_object_basics(authority.clone()).await;
+
+    let share_effects = call_move(
+        &authority,
+        &share_gas.id(),
+        &sender,
+        &sender_key,
+        &package.0,
+        "object_basics",
+        "share",
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+    build_and_commit(
+        authority.get_cache_commit(),
+        authority.epoch_store_for_testing().epoch(),
+        &[*share_effects.transaction_digest()],
+    );
+    let (shared_object_ref, owner) = share_effects.created()[0].clone();
+    let Owner::Shared {
+        initial_shared_version,
+    } = owner
+    else {
+        panic!("object_basics::share must create a shared object");
+    };
+    let shared_object_id = shared_object_ref.0;
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
+
+    let reader = to_sender_signed_transaction(
+        TransactionData::new_move_call(
+            sender,
+            SUI_FRAMEWORK_PACKAGE_ID,
+            ident_str!("object").to_owned(),
+            ident_str!("id").to_owned(),
+            vec![TypeTag::Struct(Box::new(StructTag {
+                address: package.0.into(),
+                module: ident_str!("object_basics").to_owned(),
+                name: ident_str!("Object").to_owned(),
+                type_params: vec![],
+            }))],
+            reader_gas.compute_object_reference(),
+            vec![CallArg::Object(ObjectArg::SharedObject {
+                id: shared_object_id,
+                initial_shared_version,
+                mutability: SharedObjectMutability::Immutable,
+            })],
+            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+            rgp * 3,
+        )
+        .unwrap(),
+        &sender_key,
+    );
+    let writer = to_sender_signed_transaction(
+        TransactionData::new_move_call(
+            sender,
+            package.0,
+            ident_str!("object_basics").to_owned(),
+            ident_str!("set_value").to_owned(),
+            vec![],
+            writer_gas.compute_object_reference(),
+            vec![
+                CallArg::Object(ObjectArg::SharedObject {
+                    id: shared_object_id,
+                    initial_shared_version,
+                    mutability: SharedObjectMutability::Mutable,
+                }),
+                CallArg::Pure(77_u64.to_le_bytes().to_vec()),
+            ],
+            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+            rgp * 2,
+        )
+        .unwrap(),
+        &sender_key,
+    );
+    let independent = to_sender_signed_transaction(
+        TransactionData::new_move_call(
+            sender,
+            package.0,
+            ident_str!("object_basics").to_owned(),
+            ident_str!("create").to_owned(),
+            vec![],
+            independent_gas.compute_object_reference(),
+            vec![
+                CallArg::Pure(9_u64.to_le_bytes().to_vec()),
+                CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
+            ],
+            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+            rgp,
+        )
+        .unwrap(),
+        &sender_key,
+    );
+
+    let consensus_setup =
+        crate::consensus_test_utils::setup_consensus_handler_for_testing(&authority).await;
+    let mut consensus_handler = consensus_setup.consensus_handler;
+    let captured_transactions = consensus_setup.captured_transactions;
+    let (scheduled, assigned_versions) = process_transactions_through_consensus_handler(
+        &mut consensus_handler,
+        &authority,
+        &[reader.clone(), writer.clone(), independent.clone()],
+        1,
+        &captured_transactions,
+    )
+    .await;
+
+    let scheduled_digests: Vec<_> = scheduled
+        .iter()
+        .map(|schedulable| *schedulable.as_tx().unwrap().digest())
+        .collect();
+    assert_eq!(
+        scheduled_digests,
+        vec![*reader.digest(), *writer.digest(), *independent.digest()],
+        "the checkpoint order must be the post-consensus schedule order"
+    );
+
+    // Complete an independent transaction first; effects are then read back in consensus order.
+    for digest in [*independent.digest(), *reader.digest(), *writer.digest()] {
+        let schedulable = scheduled
+            .iter()
+            .find(|schedulable| schedulable.as_tx().unwrap().digest() == &digest)
+            .unwrap();
+        let (_, execution_error) = authority
+            .try_execute_executable_for_test(
+                schedulable.as_tx().unwrap(),
+                ExecutionEnv::new().with_assigned_versions(
+                    assigned_versions.get(&schedulable.key()).unwrap().clone(),
+                ),
+            )
+            .await;
+        assert!(
+            execution_error.is_none(),
+            "scheduled transaction {digest} must execute successfully"
+        );
+    }
+
+    let effects = authority
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(
+            "test_checkpoint_order_uses_consensus_schedule_without_effect_dependencies",
+            &scheduled_digests,
+        )
+        .await;
+    assert_eq!(
+        effects
+            .iter()
+            .map(|effects| *effects.transaction_digest())
+            .collect::<Vec<_>>(),
+        scheduled_digests
+    );
+    let reader_effects = &effects[0];
+    let writer_effects = &effects[1];
+    let independent_effects = &effects[2];
+    assert!(
+        reader_effects
+            .accessed_consensus_objects()
+            .iter()
+            .any(|input| matches!(
+                input,
+                InputConsensusObject::ReadOnly((id, version, _))
+                    if id == &shared_object_id && version == &initial_shared_version
+            )),
+        "the first scheduled transaction must read the assigned shared version"
+    );
+    assert!(
+        writer_effects
+            .accessed_consensus_objects()
+            .iter()
+            .any(|input| matches!(
+                input,
+                InputConsensusObject::Mutate((id, version, _))
+                    if id == &shared_object_id && version == &initial_shared_version
+            )),
+        "the second scheduled transaction must write the same shared version"
+    );
+    assert!(
+        reader_effects.lamport_version() > writer_effects.lamport_version(),
+        "the reader deliberately has the higher input Lamport version"
+    );
+
+    let ordered = CausalOrder::order_for_checkpoint(effects.clone(), None, &protocol_config);
+    assert_eq!(
+        ordered
+            .iter()
+            .map(|effects| *effects.transaction_digest())
+            .collect::<Vec<_>>(),
+        scheduled_digests,
+        "disabling effects dependencies must retain the scheduled order"
+    );
+
+    let mut adversarial = effects.clone();
+    adversarial.swap(0, 1);
+    let mut flag_off_config = protocol_config.clone();
+    flag_off_config.set_disable_effects_tx_dependencies_for_testing(false);
+    let historical = CausalOrder::order_for_checkpoint(adversarial, None, &flag_off_config);
+    let reader_index = historical
+        .iter()
+        .position(|effects| effects.transaction_digest() == reader.digest())
+        .unwrap();
+    let writer_index = historical
+        .iter()
+        .position(|effects| effects.transaction_digest() == writer.digest())
+        .unwrap();
+    assert!(
+        reader_index < writer_index,
+        "the historical causal sort keeps the shared read before its overwrite"
+    );
+
+    let shared_write = writer_effects
+        .mutated()
+        .iter()
+        .find(|((id, _, _), owner)| {
+            id == &shared_object_id && matches!(owner, Owner::Shared { .. })
+        })
+        .unwrap()
+        .0;
+    let independent_created = independent_effects.created()[0].0;
+    build_and_commit(
+        authority.get_cache_commit(),
+        authority.epoch_store_for_testing().epoch(),
+        &ordered
+            .iter()
+            .map(|effects| *effects.transaction_digest())
+            .collect::<Vec<_>>(),
+    );
+
+    let cache = authority.get_object_cache_reader();
+    authority
+        .get_reconfig_api()
+        .clear_state_end_of_epoch(&authority.execution_lock_for_reconfiguration().await);
+    assert_eq!(
+        cache
+            .get_latest_object_ref_or_tombstone(shared_object_id)
+            .unwrap(),
+        shared_write
+    );
+    assert_eq!(
+        cache.get_object(&shared_object_id).unwrap().version(),
+        shared_write.1
+    );
+    assert_eq!(
+        cache
+            .get_latest_object_ref_or_tombstone(independent_created.0)
+            .unwrap(),
+        independent_created
+    );
+}
+
 #[test]
 fn test_choose_next_system_packages() {
     telemetry_subscribers::init_for_testing();
@@ -6433,7 +6713,7 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
             let mut config =
                 ProtocolConfig::get_for_version(ProtocolVersion::new(137), Chain::Unknown);
             config.set_gas_model_version_for_testing(gas_model_version);
-            config.set_disable_effects_dependencies_for_testing(disable_dependencies);
+            config.set_disable_effects_tx_dependencies_for_testing(disable_dependencies);
             let state = TestAuthorityBuilder::new()
                 .with_protocol_config(config)
                 .with_starting_objects(&[gas_object.clone()])
