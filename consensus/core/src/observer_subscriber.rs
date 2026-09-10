@@ -23,7 +23,10 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::ConsensusError,
-    network::{ObserverNetworkClient, ObserverNetworkService, PeerId, RandomnessSignatureHandler},
+    network::{
+        BlockStreamFilter, ObserverNetworkClient, ObserverNetworkService, PeerId,
+        RandomnessSignatureHandler,
+    },
     task::{join_and_propagate_panic, reap_finished_task, shutdown_join_set},
 };
 
@@ -290,7 +293,13 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             // Subscribe to stream blocks from the peer.
             let request_timeout = MIN_TIMEOUT.max(delay);
             let mut blocks = match network_client
-                .stream_blocks(peer.clone(), highest_round_per_authority, request_timeout)
+                .stream_blocks(
+                    peer.clone(),
+                    highest_round_per_authority,
+                    // The node's own subscription needs blocks from all authorities.
+                    BlockStreamFilter::default(),
+                    request_timeout,
+                )
                 .await
             {
                 Ok(blocks) => {
@@ -537,6 +546,7 @@ mod tests {
             &self,
             peer: PeerId,
             _highest_round_per_authority: Vec<Round>,
+            _filter: BlockStreamFilter,
             _timeout: Duration,
         ) -> ConsensusResult<ObserverBlockStream> {
             self.stream_blocks_calls
@@ -623,6 +633,7 @@ mod tests {
             &self,
             _peer: NodeId,
             _highest_round_per_authority: Vec<Round>,
+            _filter: BlockStreamFilter,
         ) -> ConsensusResult<ObserverBlockStream> {
             unimplemented!("Unimplemented")
         }

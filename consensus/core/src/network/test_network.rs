@@ -13,8 +13,8 @@ use crate::{
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
     network::{
-        BlockStream, NodeId, ObserverBlockStream, ObserverNetworkService, ObserverStreamItem,
-        PeerId, ValidatorNetworkService,
+        BlockStream, BlockStreamFilter, NodeId, ObserverBlockStream, ObserverNetworkService,
+        ObserverStreamItem, PeerId, ValidatorNetworkService,
     },
 };
 
@@ -122,6 +122,7 @@ impl ObserverNetworkService for Mutex<TestService> {
         &self,
         peer: NodeId,
         highest_round_per_authority: Vec<Round>,
+        _filter: BlockStreamFilter,
     ) -> ConsensusResult<ObserverBlockStream> {
         use futures::stream;
 
