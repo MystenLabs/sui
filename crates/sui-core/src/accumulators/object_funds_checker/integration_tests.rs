@@ -269,12 +269,12 @@ impl TestEnv {
             .enqueue(batch, &self.epoch_store);
 
         let mut all_effects = Vec::with_capacity(certs.len());
-        for (cert, expect) in certs.iter().zip(expected) {
+        for (i, cert) in certs.iter().enumerate() {
             let effects = self
                 .authority
                 .notify_read_effects_for_testing("test", *cert.digest())
                 .await;
-            match expect {
+            match expected[i] {
                 Expect::Ok => assert_ok(&effects),
                 Expect::Insufficient => assert_insufficient(&effects),
             }
