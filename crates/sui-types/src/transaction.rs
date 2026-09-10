@@ -1040,25 +1040,23 @@ impl ProgrammableTransaction {
     pub fn validate_argument_indices(&self) -> UserInputResult {
         for (command_idx, command) in self.commands.iter().enumerate() {
             for (argument_idx, argument) in command.arguments().enumerate() {
-                let invalid_index = match argument {
-                    Argument::Input(index) if *index as usize >= self.inputs.len() => Some(*index),
+                let index = match argument {
+                    Argument::Input(index) if *index as usize >= self.inputs.len() => *index,
                     Argument::Result(index) | Argument::NestedResult(index, _)
                         if *index as usize >= command_idx =>
                     {
-                        Some(*index)
+                        *index
                     }
                     Argument::GasCoin
                     | Argument::Input(_)
                     | Argument::Result(_)
-                    | Argument::NestedResult(_, _) => None,
+                    | Argument::NestedResult(_, _) => continue,
                 };
-                if let Some(index) = invalid_index {
-                    return Err(UserInputError::InvalidArgumentIndex {
-                        command_idx,
-                        argument_idx,
-                        index,
-                    });
-                }
+                return Err(UserInputError::InvalidArgumentIndex {
+                    command_idx,
+                    argument_idx,
+                    index,
+                });
             }
         }
         Ok(())
