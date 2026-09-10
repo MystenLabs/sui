@@ -452,6 +452,7 @@ async fn zklogin_v1_to_v2_migration_scenario_test() {
             config.verify_legacy_zklogin_address(),
             config.accept_zklogin_in_multisig(),
             config.accept_passkey_in_multisig(),
+            config.accept_mldsa65_in_multisig(),
             config.zklogin_max_epoch_upper_bound_delta(),
             config.additional_multisig_checks(),
             config.validate_zklogin_public_identifier(),

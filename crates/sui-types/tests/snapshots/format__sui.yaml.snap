@@ -351,6 +351,12 @@ CompressedSignature:
       ZkLogin:
         NEWTYPE:
           TYPENAME: ZkLoginAuthenticatorAsBytes
+    5:
+      MLDSA65:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 3309
 CongestedObjects:
   NEWTYPESTRUCT:
     SEQ:

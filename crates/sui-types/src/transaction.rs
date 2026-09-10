@@ -19,7 +19,7 @@ use crate::coin_reservation::{
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
     AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, AuthorityStrongQuorumSignInfo,
-    DefaultHash, Ed25519SuiSignature, EmptySignInfo, PublicKey, RandomnessRound, Signature, Signer,
+    DefaultHash, Ed25519SuiSignature, EmptySignInfo, RandomnessRound, Signature, Signer,
     SuiSignatureInner, ToFromBytes, default_hash,
 };
 use crate::digests::{AdditionalConsensusStateDigest, SenderSignedDataDigest};
@@ -4027,28 +4027,9 @@ impl SenderSignedData {
     }
 
     fn check_user_signature_protocol_compatibility(&self, config: &ProtocolConfig) -> SuiResult {
-        // Gate ML-DSA multisig members separately, like zkLogin/passkey.
-        // Otherwise, an ML-DSA key could sit in a committee as an unverifiable member.
-        // Compressed ML-DSA multisig signatures enable this flag.
-        let check_members = |members: &[(PublicKey, u8)]| -> SuiResult {
-            if !config.accept_mldsa65_in_multisig()
-                && members
-                    .iter()
-                    .any(|(pk, _)| matches!(pk, PublicKey::MLDSA65(_)))
-            {
-                return Err(SuiErrorKind::UserInputError {
-                    error: UserInputError::Unsupported(
-                        "ML-DSA-65 multisig members are not enabled on this network".to_string(),
-                    ),
-                }
-                .into());
-            }
-            Ok(())
-        };
-
         for sig in &self.inner().tx_signatures {
             match sig {
-                GenericSignature::MultiSig(m) => {
+                GenericSignature::MultiSig(_) => {
                     if !config.upgraded_multisig_supported() {
                         return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
@@ -4057,7 +4038,6 @@ impl SenderSignedData {
                         }
                         .into());
                     }
-                    check_members(m.get_pk().pubkeys())?;
                 }
                 GenericSignature::ZkLoginAuthenticator(_) => {
                     if !config.zklogin_auth() {
@@ -4090,9 +4070,7 @@ impl SenderSignedData {
                         .into());
                     }
                 }
-                GenericSignature::MultiSigLegacy(m) => {
-                    check_members(m.get_pk().pubkeys())?;
-                }
+                GenericSignature::MultiSigLegacy(_) => (),
             }
         }
 

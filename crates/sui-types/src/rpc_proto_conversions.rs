@@ -1699,14 +1699,6 @@ impl TryFrom<crate::crypto::SignatureScheme> for SignatureScheme {
     }
 }
 
-/// Schemes without a proto variant leave the field unset; the gRPC wire
-/// representation lands with the dedicated RPC support PR.
-fn signature_scheme_to_proto_i32(value: crate::crypto::SignatureScheme) -> Option<i32> {
-    SignatureScheme::try_from(value)
-        .ok()
-        .map(|proto| proto as i32)
-}
-
 //
 // SimpleSignature
 //
@@ -1723,7 +1715,9 @@ impl From<&crate::crypto::Signature> for SimpleSignature {
         let public_key = value.public_key_bytes();
 
         let mut message = Self::default();
-        message.scheme = signature_scheme_to_proto_i32(value.scheme());
+        if let Ok(scheme) = SignatureScheme::try_from(value.scheme()) {
+            message.set_scheme(scheme);
+        }
         message.signature = Some(signature.to_vec().into());
         message.public_key = Some(public_key.to_vec().into());
         message
@@ -1765,7 +1759,9 @@ impl From<&crate::crypto::PublicKey> for MultisigMemberPublicKey {
             }
         }
 
-        message.scheme = signature_scheme_to_proto_i32(value.scheme());
+        if let Ok(scheme) = SignatureScheme::try_from(value.scheme()) {
+            message.set_scheme(scheme);
+        }
         message
     }
 }
@@ -1821,27 +1817,33 @@ impl From<&crate::crypto::CompressedSignature> for MultisigMemberSignature {
         let scheme = match value {
             crate::crypto::CompressedSignature::Ed25519(b) => {
                 message.signature = Some(b.0.to_vec().into());
-                SignatureScheme::Ed25519 as i32
+                Some(SignatureScheme::Ed25519)
             }
             crate::crypto::CompressedSignature::Secp256k1(b) => {
                 message.signature = Some(b.0.to_vec().into());
-                SignatureScheme::Secp256k1 as i32
+                Some(SignatureScheme::Secp256k1)
             }
             crate::crypto::CompressedSignature::Secp256r1(b) => {
                 message.signature = Some(b.0.to_vec().into());
-                SignatureScheme::Secp256r1 as i32
+                Some(SignatureScheme::Secp256r1)
             }
             crate::crypto::CompressedSignature::ZkLogin(_z) => {
                 //TODO
-                SignatureScheme::Zklogin as i32
+                Some(SignatureScheme::Zklogin)
             }
             crate::crypto::CompressedSignature::Passkey(_p) => {
                 //TODO
-                SignatureScheme::Passkey as i32
+                Some(SignatureScheme::Passkey)
+            }
+            crate::crypto::CompressedSignature::MLDSA65(b) => {
+                message.signature = Some(b.0.to_vec().into());
+                None
             }
         };
 
-        message.scheme = Some(scheme);
+        if let Some(scheme) = scheme {
+            message.set_scheme(scheme);
+        }
         message
     }
 }
@@ -1900,16 +1902,16 @@ impl Merge<&crate::signature::GenericSignature> for UserSignature {
                 if mask.contains(Self::MULTISIG_FIELD) {
                     self.signature = Some(Signature::Multisig(multi_sig.into()));
                 }
-                Some(SignatureScheme::Multisig as i32)
+                Some(SignatureScheme::Multisig)
             }
             crate::signature::GenericSignature::MultiSigLegacy(multi_sig_legacy) => {
                 if mask.contains(Self::MULTISIG_FIELD) {
                     self.signature = Some(Signature::Multisig(multi_sig_legacy.into()));
                 }
-                Some(SignatureScheme::Multisig as i32)
+                Some(SignatureScheme::Multisig)
             }
             crate::signature::GenericSignature::Signature(signature) => {
-                let scheme = signature_scheme_to_proto_i32(signature.scheme());
+                let scheme = SignatureScheme::try_from(signature.scheme()).ok();
                 if mask.contains(Self::SIMPLE_FIELD) {
                     self.signature = Some(Signature::Simple(signature.into()));
                 }
@@ -1919,18 +1921,20 @@ impl Merge<&crate::signature::GenericSignature> for UserSignature {
                 if mask.contains(Self::ZKLOGIN_FIELD) {
                     self.signature = Some(Signature::Zklogin(z.into()));
                 }
-                Some(SignatureScheme::Zklogin as i32)
+                Some(SignatureScheme::Zklogin)
             }
             crate::signature::GenericSignature::PasskeyAuthenticator(p) => {
                 if mask.contains(Self::PASSKEY_FIELD) {
                     self.signature = Some(Signature::Passkey(p.into()));
                 }
-                Some(SignatureScheme::Passkey as i32)
+                Some(SignatureScheme::Passkey)
             }
         };
 
-        if mask.contains(Self::SCHEME_FIELD) {
-            self.scheme = scheme;
+        if mask.contains(Self::SCHEME_FIELD)
+            && let Some(scheme) = scheme
+        {
+            self.set_scheme(scheme);
         }
     }
 }

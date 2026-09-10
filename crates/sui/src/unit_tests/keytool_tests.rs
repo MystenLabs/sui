@@ -43,11 +43,11 @@ use sui_types::transaction::TransactionData;
 use tempfile::TempDir;
 use tokio::test;
 
-// A valid ML-DSA-65 keystore blob (flag 0x07 || seed 0x02 * 32) in bech32;
+// A valid ML-DSA-65 keystore blob (flag 0x08 || seed 0x02 * 32) in bech32;
 // crate `sui` has no fastcrypto-pq dependency, so tests decode this instead
 // of generating a keypair.
 const MLDSA65_TEST_SUIPRIVKEY: &str =
-    "suiprivkey1qupqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyghdug7";
+    "suiprivkey1pqpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyrndku7";
 
 const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
 

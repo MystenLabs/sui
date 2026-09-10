@@ -1204,6 +1204,11 @@ impl TryFrom<crate::crypto::CompressedSignature> for MultisigMemberSignature {
                 Self::ZkLogin(Box::new(z.try_into()?))
             }
             crate::crypto::CompressedSignature::Passkey(p) => Self::Passkey(p.try_into()?),
+            crate::crypto::CompressedSignature::MLDSA65(_) => {
+                return Err(SdkTypeConversionError(
+                    "ML-DSA-65 has no sui-sdk-types representation yet".to_string(),
+                ));
+            }
         }
         .pipe(Ok)
     }

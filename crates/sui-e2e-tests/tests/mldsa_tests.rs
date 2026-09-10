@@ -10,10 +10,12 @@ use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{Signature, SuiKeyPair};
+use sui_types::crypto::{Signature, SuiKeyPair, get_key_pair};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
 use sui_types::messages_grpc::SubmitTxRequest;
+use sui_types::multisig::{MultiSig, MultiSigPublicKey};
+use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::{Transaction, TransactionData};
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -73,35 +75,6 @@ fn enable_mldsa_in_multisig() -> sui_protocol_config::OverrideGuard {
         config.set_accept_mldsa65_in_multisig_for_testing(true);
         config
     })
-}
-
-/// A funded 1-of-2 committee with Ed25519 and ML-DSA-65 members, and a
-/// transfer signed by the Ed25519 member alone, in both multisig formats.
-async fn hybrid_committee_txs(test_cluster: &TestCluster) -> [Transaction; 2] {
-    use sui_types::crypto::get_key_pair;
-    use sui_types::multisig::{MultiSig, MultiSigPublicKey};
-    use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
-
-    let ed_kp = SuiKeyPair::Ed25519(get_key_pair().1);
-    let pks = vec![ed_kp.public(), mldsa_keypair().public()];
-    let multisig_pk = MultiSigPublicKey::new(pks.clone(), vec![1, 1], 1).unwrap();
-    let legacy_pk = MultiSigPublicKeyLegacy::new(pks, vec![1, 1], 1).unwrap();
-    let sender = SuiAddress::from(&multisig_pk);
-
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let gas = test_cluster
-        .fund_address_and_return_gas(rgp, Some(20000000000), sender)
-        .await;
-    let tx_data = TestTransactionBuilder::new(sender, gas, rgp)
-        .transfer_sui(None, SuiAddress::ZERO)
-        .build();
-    let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
-    let sig: GenericSignature = Signature::new_secure(&intent_msg, &ed_kp).into();
-    [
-        GenericSignature::MultiSig(MultiSig::combine(vec![sig.clone()], multisig_pk).unwrap()),
-        GenericSignature::MultiSigLegacy(MultiSigLegacy::combine(vec![sig], legacy_pk).unwrap()),
-    ]
-    .map(|generic| Transaction::from_generic_sig_data(intent_msg.value.clone(), vec![generic]))
 }
 
 #[sim_test]
@@ -179,34 +152,86 @@ async fn test_mldsa65_tampered_signature_fails() {
     );
 }
 
+/// A funded committee of one Ed25519 and one ML-DSA-65 member (weight 1 each)
+/// and a transfer from it, ready to be signed by any subset of the members.
+struct HybridCommittee {
+    ed_kp: SuiKeyPair,
+    mldsa_kp: SuiKeyPair,
+    multisig_pk: MultiSigPublicKey,
+    legacy_pk: MultiSigPublicKeyLegacy,
+    intent_msg: IntentMessage<TransactionData>,
+}
+
+impl HybridCommittee {
+    async fn funded(test_cluster: &TestCluster, threshold: u16) -> Self {
+        let ed_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+        let mldsa_kp = mldsa_keypair();
+        let pks = vec![ed_kp.public(), mldsa_kp.public()];
+        let multisig_pk = MultiSigPublicKey::new(pks.clone(), vec![1, 1], threshold).unwrap();
+        let legacy_pk = MultiSigPublicKeyLegacy::new(pks, vec![1, 1], threshold).unwrap();
+        let sender = SuiAddress::from(&multisig_pk);
+
+        let rgp = test_cluster.get_reference_gas_price().await;
+        let gas = test_cluster
+            .fund_address_and_return_gas(rgp, Some(20000000000), sender)
+            .await;
+        let tx_data = TestTransactionBuilder::new(sender, gas, rgp)
+            .transfer_sui(None, SuiAddress::ZERO)
+            .build();
+        Self {
+            ed_kp,
+            mldsa_kp,
+            multisig_pk,
+            legacy_pk,
+            intent_msg: IntentMessage::new(Intent::sui_transaction(), tx_data),
+        }
+    }
+
+    /// The transfer signed by `signers`, in the upgraded and the legacy multisig format.
+    fn signed_by(&self, signers: &[&SuiKeyPair]) -> [Transaction; 2] {
+        let sigs: Vec<GenericSignature> = signers
+            .iter()
+            .map(|kp| Signature::new_secure(&self.intent_msg, *kp).into())
+            .collect();
+        [
+            GenericSignature::MultiSig(
+                MultiSig::combine(sigs.clone(), self.multisig_pk.clone()).unwrap(),
+            ),
+            GenericSignature::MultiSigLegacy(
+                MultiSigLegacy::combine(sigs, self.legacy_pk.clone()).unwrap(),
+            ),
+        ]
+        .map(|generic| {
+            Transaction::from_generic_sig_data(self.intent_msg.value.clone(), vec![generic])
+        })
+    }
+}
+
 #[sim_test]
 async fn test_mldsa65_multisig_member_denied() {
-    // `mldsa65_auth` alone does not admit ML-DSA committee members: that is
-    // `accept_mldsa65_in_multisig`, off here.
+    // `mldsa65_auth` alone does not admit an ML-DSA member's signature inside
+    // a multisig: that is `accept_mldsa65_in_multisig`, off here.
     let _guard = enable_mldsa();
     let test_cluster = TestClusterBuilder::new().build().await;
-    for tx in hybrid_committee_txs(&test_cluster).await {
+    let committee = HybridCommittee::funded(&test_cluster, 1).await;
+    for tx in committee.signed_by(&[&committee.mldsa_kp]) {
         let err = execute_tx(tx, &test_cluster).await.unwrap_err();
         assert!(
-            matches!(
-                err.as_inner(),
-                SuiErrorKind::UserInputError {
-                    error: UserInputError::Unsupported(..)
-                }
-            ),
-            "expected the member gate to refuse the committee: {err:?}"
+            err.to_string()
+                .contains("ML-DSA-65 sig not supported inside multisig"),
+            "{err:?}"
         );
     }
 }
 
 #[sim_test]
-async fn test_mldsa65_multisig_member_accepted_when_enabled() {
-    // With the multisig flag on, hybrid committees can transact on their
-    // classical members' signatures; ML-DSA members are covered by the
-    // compressed-signature support that enables this flag.
+async fn test_mldsa65_multisig_hybrid_executes() {
+    // Threshold 2 of two weight-1 members: both the Ed25519 and the ML-DSA
+    // signatures are required, and with the flag on the transfer executes.
     let _guard = enable_mldsa_in_multisig();
     let test_cluster = TestClusterBuilder::new().build().await;
-    let [upgraded, _legacy] = hybrid_committee_txs(&test_cluster).await;
+    let committee = HybridCommittee::funded(&test_cluster, 2).await;
+    let [upgraded, _legacy] = committee.signed_by(&[&committee.ed_kp, &committee.mldsa_kp]);
     let (effects, _) = test_cluster
         .execute_transaction_return_raw_effects(upgraded)
         .await
