@@ -59,46 +59,45 @@ impl CausalOrder {
     }
 
     /// Experimental: checks, using only object versions recorded in effects (never
-    /// `dependencies()`), that `effects` in the given order is a valid causal order:
+    /// `dependencies()`), that `effects` in the given order is a valid causal order.
     ///
-    /// (a) no transaction reads an object version that is written by a later transaction;
-    /// (b) once a transaction in the batch has written an object, every later input of that
-    ///     object reads the most recently written version.
+    /// The invariant is that each object's versions advance monotonically in batch order:
+    /// the first read of an object seeds its latest version, every later read must see that
+    /// latest version, and every write must produce a strictly newer version. Read-only inputs
+    /// therefore never advance the latest version. This subsumes the RWLock rule (a read-only
+    /// reader of N must precede the writer of N+1) and catches reads of versions produced by a
+    /// later transaction, including newly created objects.
     ///
-    /// (b) subsumes the RWLock rule: a read-only reader of version N must precede the writer
-    /// that produces N+1. Reads of immutable objects and packages are not recorded in effects
-    /// and are therefore not checked. Returns a description of the first violation found.
+    /// Reads of immutable objects and packages are not recorded in effects and are not checked.
+    /// Returns a description of the first violation found.
     pub fn check_already_sorted(effects: &[TransactionEffects]) -> Result<(), String> {
-        let mut written_at: HashMap<ObjectKey, usize> = HashMap::new();
-        for (idx, e) in effects.iter().enumerate() {
-            for key in Self::output_versions(e) {
-                written_at.insert(key, idx);
-            }
-        }
-
-        let mut latest_written: HashMap<ObjectID, (SequenceNumber, usize)> = HashMap::new();
+        let mut latest: HashMap<ObjectID, (SequenceNumber, usize)> = HashMap::new();
         for (idx, e) in effects.iter().enumerate() {
             let digest = e.transaction_digest();
             for key in Self::input_versions(e) {
-                if let Some(&writer) = written_at.get(&key)
-                    && writer > idx
-                {
-                    return Err(format!(
-                        "later writer: tx {digest:?} at index {idx} reads {key:?}, which is \
-                         written by tx at index {writer}"
-                    ));
-                }
-                if let Some(&(latest, writer)) = latest_written.get(&key.0)
-                    && latest != key.1
-                {
-                    return Err(format!(
-                        "stale read: tx {digest:?} at index {idx} reads {key:?}, but tx at \
-                         index {writer} already wrote version {latest:?}"
-                    ));
+                match latest.get(&key.0) {
+                    Some(&(seen, at)) if seen != key.1 => {
+                        return Err(format!(
+                            "stale read: tx {digest:?} at index {idx} reads {key:?}, but the \
+                             latest version observed (at index {at}) is {seen:?}"
+                        ));
+                    }
+                    Some(_) => {}
+                    None => {
+                        latest.insert(key.0, (key.1, idx));
+                    }
                 }
             }
             for key in Self::output_versions(e) {
-                latest_written.insert(key.0, (key.1, idx));
+                if let Some(&(seen, at)) = latest.get(&key.0)
+                    && seen >= key.1
+                {
+                    return Err(format!(
+                        "non-monotonic write: tx {digest:?} at index {idx} writes {key:?}, but \
+                         version {seen:?} was already observed at index {at}"
+                    ));
+                }
+                latest.insert(key.0, (key.1, idx));
             }
         }
         Ok(())
@@ -380,7 +379,7 @@ mod tests {
         let consumer = tx(d(2), 7, &[(o(1), 5)], &[]);
         assert!(CausalOrder::check_already_sorted(&[writer.clone(), consumer.clone()]).is_ok());
         let err = CausalOrder::check_already_sorted(&[consumer, writer.clone()]).unwrap_err();
-        assert!(err.starts_with("later writer"), "{err}");
+        assert!(err.starts_with("stale read"), "{err}");
 
         // read-only reader of (o1, 5) must precede the tx that overwrites it.
         let reader = tx(d(3), 6, &[], &[(o(1), 5)]);
@@ -393,8 +392,8 @@ mod tests {
             ])
             .is_ok()
         );
-        let err =
-            CausalOrder::check_already_sorted(&[writer.clone(), overwriter, reader]).unwrap_err();
+        let err = CausalOrder::check_already_sorted(&[writer.clone(), overwriter, reader.clone()])
+            .unwrap_err();
         assert!(err.starts_with("stale read"), "{err}");
 
         // Readers of a deleted consensus object record the deleting tx's lamport version.
@@ -416,8 +415,21 @@ mod tests {
             ])
             .is_ok()
         );
-        let err = CausalOrder::check_already_sorted(&[writer, ended_reader, deleter]).unwrap_err();
-        assert!(err.starts_with("later writer"), "{err}");
+        let err = CausalOrder::check_already_sorted(&[writer.clone(), ended_reader, deleter])
+            .unwrap_err();
+        assert!(err.starts_with("stale read"), "{err}");
+
+        // A tx that reads an object created by a later tx has no earlier version to compare
+        // against, so the violation is caught on the write side.
+        let mut creator = tx(d(7), 5, &[], &[]);
+        creator.unsafe_add_created_object_for_testing((
+            o(1),
+            SequenceNumber::from_u64(5),
+            ObjectDigest::new(Default::default()),
+        ));
+        assert!(CausalOrder::check_already_sorted(&[creator.clone(), reader.clone()]).is_ok());
+        let err = CausalOrder::check_already_sorted(&[reader, creator]).unwrap_err();
+        assert!(err.starts_with("non-monotonic write"), "{err}");
     }
 
     /// Effects for a tx with the given lamport version that mutates each `(id, input_version)`
