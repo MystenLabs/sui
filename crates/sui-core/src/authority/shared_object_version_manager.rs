@@ -83,6 +83,18 @@ impl AssignedVersions {
         Self::new(vec![], SystemObjectVersions::empty())
     }
 
+    /// Sets the accumulator root as a system object read during execution. For test paths
+    /// that execute directly: the test version-assignment helper assigns no root version,
+    /// but execution reads the root implicitly for any object funds withdraw.
+    pub fn with_accumulator_version(mut self, version: ConsensusObjectVersion) -> Self {
+        self.system_object_versions = SystemObjectVersions::new(
+            Some(version),
+            self.system_object_versions
+                .get(&sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID),
+        );
+        self
+    }
+
     /// Construct with only the accumulator root as the system object read during execution.
     /// Production callers build the full `system_object_versions` map directly.
     #[cfg(test)]
