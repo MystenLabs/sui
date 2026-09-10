@@ -67,7 +67,7 @@ pub fn resolve_impl(
     };
 
     let Some(registry_object) = get_extension_mut!(context, ObjectRuntime)?
-        .load_runtime_system_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+        .load_runtime_system_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)?
     else {
         // Direct protocol-version jumps can enable forwarding one epoch before the registry is
         // created. Reject reserved forwarding addresses during that transition rather than

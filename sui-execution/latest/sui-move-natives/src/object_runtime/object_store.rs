@@ -18,7 +18,7 @@ use sui_types::{
     metrics::ExecutionMetrics,
     move_package::MovePackage,
     object::{Data, MoveObject, Object, Owner},
-    storage::RuntimeObjectResolver,
+    storage::{RuntimeObjectResolver, RuntimeSystemObjectResolver},
 };
 
 pub(super) struct ChildObject {
@@ -69,6 +69,7 @@ pub(crate) type ChildObjectEffects = BTreeMap<ObjectID, ChildObjectEffect>;
 struct Inner<'a> {
     // used for loading child objects
     resolver: &'a dyn RuntimeObjectResolver,
+    system_object_resolver: &'a dyn RuntimeSystemObjectResolver,
     // The version of the root object in ownership at the beginning of the transaction.
     // If it was a child object, it resolves to the root parent's sequence number.
     // Otherwise, it is just the sequence number at the beginning of the transaction.
@@ -412,6 +413,7 @@ fn deserialize_move_object(
 impl<'a> ChildObjectStore<'a> {
     pub(super) fn new(
         resolver: &'a dyn RuntimeObjectResolver,
+        system_object_resolver: &'a dyn RuntimeSystemObjectResolver,
         root_version: BTreeMap<ObjectID, SequenceNumber>,
         wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
         is_metered: bool,
@@ -422,6 +424,7 @@ impl<'a> ChildObjectStore<'a> {
         Self {
             inner: Inner {
                 resolver,
+                system_object_resolver,
                 root_version,
                 wrapped_object_containers,
                 cached_objects: BTreeMap::new(),
@@ -436,16 +439,38 @@ impl<'a> ChildObjectStore<'a> {
         }
     }
 
-    pub(super) fn load_runtime_system_object(&mut self, object_id: &ObjectID) -> Option<Object> {
-        let object = self.inner.resolver.load_runtime_system_object(object_id)?;
+    pub(super) fn load_runtime_system_object(
+        &mut self,
+        object_id: &ObjectID,
+    ) -> PartialVMResult<Option<Object>> {
+        let Some(object) = self
+            .inner
+            .system_object_resolver
+            .load_runtime_system_object(object_id)
+            .map_err(|err| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("Failed to load assigned system object {object_id}: {err}"),
+                )
+            })?
+        else {
+            return Ok(None);
+        };
         match self.inner.root_version.get(object_id) {
-            Some(version) if *version != object.version() => return None,
+            Some(version) if *version != object.version() => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!(
+                            "System object {object_id} version {} differs from input version {version}",
+                            object.version()
+                        )),
+                );
+            }
             Some(_) => {}
             None => {
                 self.inner.root_version.insert(*object_id, object.version());
             }
         }
-        Some(object)
+        Ok(Some(object))
     }
 
     /// When `parent` has a tracked root version, record the same root version for `id`.
@@ -843,5 +868,48 @@ impl<'a> ChildObjectStore<'a> {
                 copied_value: copied_child_value,
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod system_object_tests {
+    use super::*;
+    use crate::test_scenario::InMemoryTestStore;
+    use std::cell::RefCell;
+    use sui_types::{
+        SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, in_memory_storage::InMemoryStorage,
+    };
+
+    #[test]
+    fn conflicting_system_root_versions_are_invariant_errors() {
+        let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+        let input_version = SequenceNumber::from_u64(9);
+        let object = Object::with_id_owner_version_for_testing(
+            id,
+            SequenceNumber::from_u64(10),
+            Owner::Shared {
+                initial_shared_version: SequenceNumber::from_u64(1),
+            },
+        );
+        let resolver = InMemoryTestStore(RefCell::new(InMemoryStorage::new(vec![object])));
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let metrics = Arc::new(ExecutionMetrics::new(&Default::default()));
+        let mut store = ChildObjectStore::new(
+            &resolver,
+            &resolver,
+            BTreeMap::from([(id, input_version)]),
+            BTreeMap::new(),
+            false,
+            &config,
+            metrics,
+            0,
+        );
+        assert_eq!(
+            store
+                .load_runtime_system_object(&id)
+                .unwrap_err()
+                .major_status(),
+            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        );
     }
 }

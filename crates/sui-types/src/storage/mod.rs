@@ -199,13 +199,6 @@ pub enum ObjectFundsSufficiency {
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
 pub trait RuntimeObjectResolver: BackingPackageStore {
-    /// Load a system object for native execution.
-    ///
-    /// Latest execution stores override this method. Historical and tooling resolvers retain the
-    /// default because they cannot execute the forwarding-address native.
-    fn load_runtime_system_object(&self, _object_id: &ObjectID) -> Option<Object> {
-        None
-    }
     /// `child` must have an `ObjectOwner` ownership equal to `owner`.
     fn read_child_object(
         &self,
@@ -261,6 +254,13 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
 /// Resolves the balance available for object-funds withdrawals during execution.
 pub trait ObjectFundsResolver {
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
+}
+
+/// Resolves system-object reads pinned by transaction sequencing.
+pub trait RuntimeSystemObjectResolver {
+    /// Execution stores return `None` only when the transaction has no assigned version.
+    /// An assigned version that cannot be loaded is an execution invariant violation.
+    fn load_runtime_system_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>>;
 }
 
 pub struct DenyListResult {
@@ -568,9 +568,6 @@ impl<S: RuntimeObjectResolver> RuntimeObjectResolver for std::sync::Arc<S> {
             epoch_id,
         )
     }
-    fn load_runtime_system_object(&self, id: &ObjectID) -> Option<Object> {
-        RuntimeObjectResolver::load_runtime_system_object(self.as_ref(), id)
-    }
 }
 
 impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &S {
@@ -597,9 +594,6 @@ impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &S {
             epoch_id,
         )
     }
-    fn load_runtime_system_object(&self, id: &ObjectID) -> Option<Object> {
-        RuntimeObjectResolver::load_runtime_system_object(*self, id)
-    }
 }
 
 impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &mut S {
@@ -625,9 +619,6 @@ impl<S: RuntimeObjectResolver> RuntimeObjectResolver for &mut S {
             receive_object_at_version,
             epoch_id,
         )
-    }
-    fn load_runtime_system_object(&self, id: &ObjectID) -> Option<Object> {
-        RuntimeObjectResolver::load_runtime_system_object(*self, id)
     }
 }
 

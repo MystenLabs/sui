@@ -35,7 +35,8 @@ use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsResolver, Pack
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -43,7 +44,7 @@ use sui_types::{
     gas::GasCostSummary,
     object::Object,
     object::Owner,
-    storage::{BackingPackageStore, RuntimeObjectResolver, Storage},
+    storage::{BackingPackageStore, RuntimeObjectResolver, RuntimeSystemObjectResolver, Storage},
     transaction::InputObjects,
 };
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
@@ -143,7 +144,7 @@ pub struct TemporaryStore<'backing> {
 
     /// System objects implicitly read during execution, keyed by object ID, with the version (and its
     /// digest) at which they were read.
-    /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
+    /// Interior-mutable because system-object reads happen behind `&self`.
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 
     unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
@@ -236,8 +237,8 @@ impl<'backing> TemporaryStore<'backing> {
         let loaded_system_objects = system_object_versions
             .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
             .and_then(|version| {
-                // Dry-run execution cannot wait for a pruned assigned version. Leave the object
-                // unavailable so the simulation reports a Move abort instead of panicking.
+                // Dry-run stores can lack a pruned assigned version. The runtime resolver reports
+                // an invariant error if native execution attempts to use that unavailable root.
                 let object = store.load_implicitly_read_system_object(
                     &SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
                     version,
@@ -1189,10 +1190,6 @@ impl TemporaryStore<'_> {
 }
 
 impl RuntimeObjectResolver for TemporaryStore<'_> {
-    fn load_runtime_system_object(&self, object_id: &ObjectID) -> Option<Object> {
-        self.system_object_versions.get(object_id)?;
-        TemporaryStore::load_implicitly_read_system_object(self, object_id)
-    }
     fn read_child_object(
         &self,
         parent: &ObjectID,
@@ -1236,6 +1233,17 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
             receive_object_at_version,
             epoch_id,
         )
+    }
+}
+
+impl RuntimeSystemObjectResolver for TemporaryStore<'_> {
+    fn load_runtime_system_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
+        if self.system_object_versions.get(object_id).is_none() {
+            return Ok(None);
+        }
+        TemporaryStore::load_implicitly_read_system_object(self, object_id)
+            .map(Some)
+            .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
     }
 }
 
@@ -1521,5 +1529,64 @@ impl BackingPackageStore for TemporaryStore<'_> {
                 }
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod system_object_resolver_tests {
+    use super::*;
+    use sui_types::base_types::ConsensusObjectVersion;
+    use sui_types::in_memory_storage::InMemoryStorage;
+
+    #[test]
+    fn assigned_system_object_cannot_fall_back_to_missing_or_latest() {
+        let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+        let initial_shared_version = SequenceNumber::from_u64(1);
+        let version = SequenceNumber::from_u64(10);
+        let object = Object::with_id_owner_version_for_testing(
+            id,
+            version,
+            Owner::Shared {
+                initial_shared_version,
+            },
+        );
+        let backing_store = InMemoryStorage::new(vec![object.clone()]);
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let load = |assigned_version: Option<SequenceNumber>| {
+            let store = TemporaryStore::new_with_input_objects(
+                &backing_store,
+                InputObjects::new(vec![]),
+                vec![],
+                TransactionDigest::default(),
+                &config,
+                0,
+                SystemObjectVersions::new(
+                    None,
+                    assigned_version.map(|version| ConsensusObjectVersion {
+                        initial_shared_version,
+                        version,
+                    }),
+                ),
+                None,
+                PostExecutionCheckInputs::default(),
+                &EmptyUnsettledObjectFunds,
+            );
+            store.load_runtime_system_object(&id)
+        };
+
+        // A root in storage is not permission to read it without a sequenced version.
+        assert!(load(None).unwrap().is_none());
+        assert_eq!(
+            load(Some(version))
+                .unwrap()
+                .unwrap()
+                .compute_object_reference(),
+            object.compute_object_reference(),
+        );
+        // A pruned pin must not be mistaken for an unregistered master or read a newer root.
+        assert_eq!(
+            load(Some(SequenceNumber::from_u64(9))).unwrap_err(),
+            SuiErrorKind::ExecutionInvariantViolation,
+        );
     }
 }

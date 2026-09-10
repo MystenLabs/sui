@@ -246,6 +246,7 @@ impl VMTestSetup for SuiVMTestSetup {
         ext.add(ObjectRuntime::new(
             &builder.store,
             &builder.object_funds_resolver,
+            &builder.store,
             BTreeMap::new(),
             false,
             protocol_config,

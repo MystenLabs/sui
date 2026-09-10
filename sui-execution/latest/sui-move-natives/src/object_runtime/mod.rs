@@ -47,7 +47,10 @@ use sui_types::{
     metrics::ExecutionMetrics,
     move_package::MovePackage,
     object::{MoveObject, Object, Owner},
-    storage::{ObjectFundsResolver, ObjectFundsSufficiency, RuntimeObjectResolver},
+    storage::{
+        ObjectFundsResolver, ObjectFundsSufficiency, RuntimeObjectResolver,
+        RuntimeSystemObjectResolver,
+    },
 };
 use tracing::error;
 
@@ -188,6 +191,7 @@ impl<'a> ObjectRuntime<'a> {
     pub fn new(
         object_resolver: &'a dyn RuntimeObjectResolver,
         object_funds_resolver: &'a dyn ObjectFundsResolver,
+        system_object_resolver: &'a dyn RuntimeSystemObjectResolver,
         input_objects: BTreeMap<ObjectID, InputObject>,
         is_metered: bool,
         protocol_config: &'a ProtocolConfig,
@@ -216,6 +220,7 @@ impl<'a> ObjectRuntime<'a> {
         Self {
             child_object_store: ChildObjectStore::new(
                 object_resolver,
+                system_object_resolver,
                 root_version,
                 wrapped_object_containers,
                 is_metered,
@@ -496,7 +501,10 @@ impl<'a> ObjectRuntime<'a> {
         std::mem::take(&mut self.state.events)
     }
 
-    pub fn load_runtime_system_object(&mut self, object_id: &ObjectID) -> Option<Object> {
+    pub fn load_runtime_system_object(
+        &mut self,
+        object_id: &ObjectID,
+    ) -> PartialVMResult<Option<Object>> {
         self.child_object_store
             .load_runtime_system_object(object_id)
     }

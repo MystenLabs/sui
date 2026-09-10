@@ -47,7 +47,9 @@ use sui_types::{
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
-    storage::{BackingPackageStore, PackageObject, RuntimeObjectResolver},
+    storage::{
+        BackingPackageStore, PackageObject, RuntimeObjectResolver, RuntimeSystemObjectResolver,
+    },
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -75,11 +77,17 @@ impl BackingPackageStore for InMemoryTestStore {
     }
 }
 
-impl RuntimeObjectResolver for InMemoryTestStore {
-    fn load_runtime_system_object(&self, object_id: &ObjectID) -> Option<Object> {
-        self.0.borrow().get_object(object_id).cloned()
+impl RuntimeSystemObjectResolver for InMemoryTestStore {
+    // Move unit tests have no sequencer; native reads use the scenario's current committed state.
+    fn load_runtime_system_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> sui_types::error::SuiResult<Option<Object>> {
+        Ok(self.0.borrow().get_object(object_id).cloned())
     }
+}
 
+impl RuntimeObjectResolver for InMemoryTestStore {
     fn read_child_object(
         &self,
         parent: &ObjectID,
