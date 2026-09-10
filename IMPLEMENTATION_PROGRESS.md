@@ -29,5 +29,19 @@ Determine whether root effects handed to `CausalOrder::causal_sort_with_ccp` in
   Reports "effects dependency" vs "rwlock edge" in the panic message. Unit test added.
 - Seed search rerun with rebuilt binary, 200/200 passed, 0 violations of either class.
 
-## Not yet covered
-- Other workloads / tests beyond test_composite_workload.
+## Settlement scheduler (commit 2de3fc53d9)
+- `SettlementScheduler::construct_and_execute_settlement` also calls `causal_sort_with_ccp`;
+  the same `check_already_sorted` now runs before it. Both consumers must change together
+  because the checkpoint builder recomputes settlement digests from the sorted order.
+- Seed search on rebuilt binary (both assertions): 200/200 test::test_composite_workload passed, 0 violations.
+
+## Broader coverage
+- All 36 sui-benchmark simtests x 10 seeds (checkpoint-builder assertion only): 282/360 passed,
+  0 failures before the run was cancelled to prioritise the settlement check.
+- sui-e2e-tests sweep: not run.
+
+## Why the property holds (see conversation notes)
+- Shared inputs + RWLock edges: version assignment walks the commit in root order.
+- Owned/received inputs: vote-time exact-version liveness check + votes cast at block
+  acceptance + execution only after commit => producers are in strictly earlier commits.
+  Post-consensus locking already relies on this (authority_per_epoch_store.rs ~1949).
