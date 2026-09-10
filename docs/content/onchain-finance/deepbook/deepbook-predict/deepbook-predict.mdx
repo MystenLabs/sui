@@ -53,11 +53,11 @@ answer: >-
 
 DeepBook Predict is an expiry-based prediction market protocol on Sui. Each market covers one underlying and one expiry timestamp, and every position is a range contract: it pays a fixed amount when the settlement price lands inside a chosen strike range, and nothing otherwise. Liquidity providers supply USDC to a shared pool, receive `PLP` shares, and take the other side of every trade.
 
-Predict is deployed on Sui Mainnet as `deepbook-predict-mainnet` and on Sui Testnet as `deepbook-predict-testnet`, with identical package sources: Testnet was published from the `deepbook-predict-testnet` branch, and Mainnet from the [`deepbook-predict-mainnet` branch](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-mainnet/packages/predict) of the DeepBookV3 repository. Version 2.3.0 or later of the [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) package ships a `/predict` subpath that carries both deployments, builds every transaction, and answers every read, so trading needs no indexer. The examples on these pages select a network with one constant and default to Testnet.
+Predict runs on Sui Mainnet as `deepbook-predict-mainnet` and on Sui Testnet as `deepbook-predict-testnet`, with identical package sources: the Testnet publish comes from the `deepbook-predict-testnet` branch, and the Mainnet publish from the [`deepbook-predict-mainnet` branch](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-mainnet/packages/predict) of the DeepBookV3 repository. Version 2.3.0 or later of the [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) package ships a `/predict` subpath that carries both deployments, builds every transaction, and answers every read, so trading needs no indexer. The examples on these pages select a network with one constant and default to Testnet.
 
 :::caution
 
-These pages describe the two current deployments. As of 2026-09-10 the Mainnet deployment is published and configured, but its pool holds only the bootstrap minimum and no market has been tradable there yet. Testnet creates and settles markets every minute. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state, and treat the package IDs and object IDs on these pages as pinned to those two deployments.
+These pages describe the two current deployments. As of 2026-09-10 the Mainnet deployment is onchain with its configuration in place, but its pool holds only the bootstrap minimum and no market has been tradable there yet. Testnet creates and settles markets every minute. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state, and treat the package IDs and object IDs on these pages as pinned to those two deployments.
 
 :::
 
@@ -149,7 +149,7 @@ Both are optional. The following sample passes both.
 
 :::caution
 
-Omitting `maxCost` and `maxProbability` sends `U64_MAX` for each, which leaves the mint genuinely uncapped against a price move between the quote and execution. `tx.mint` mints an exact payout quantity, so the premium alone cannot exceed `quantity`, but fees are charged on top of it and only `maxCost` bounds the total debit. `tx.mintAmount` is the riskier default: there fees are charged on top of `spend`, and `maxCost` is the only bound on the whole withdrawal. Quote first, then pass both caps.
+Omitting `maxCost` and `maxProbability` sends `U64_MAX` for each, which leaves the mint genuinely uncapped against a price move between the quote and execution. `tx.mint` mints an exact payout quantity, so the premium alone cannot exceed `quantity`, but the protocol charges fees on top of it and only `maxCost` bounds the total debit. `tx.mintAmount` is the riskier default: there the protocol charges fees on top of `spend`, and `maxCost` is the only bound on the whole withdrawal. Quote first, then pass both caps.
 
 :::
 

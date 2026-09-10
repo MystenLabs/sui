@@ -67,7 +67,7 @@ Every transaction and every read on this page goes through the `/predict` subpat
 
 :::caution
 
-As of 2026-09-10 the Mainnet deployment is published and configured, but its pool holds only the bootstrap minimum and no market has been tradable there yet. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state. Package IDs, object IDs, and function signatures on these pages are pinned to the two current deployments.
+As of 2026-09-10 the Mainnet deployment is onchain with its configuration in place, but its pool holds only the bootstrap minimum and no market has been tradable there yet. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state. Package IDs, object IDs, and function signatures on these pages belong to the two current deployments.
 
 :::
 
@@ -138,17 +138,17 @@ Freshness bounds are protocol configuration, and pricing aborts on a stale input
 
 `read.market({ underlying, expiryMs })` returns the same fields plus `nav`, the market's current net asset value, and returns `null` when no market exists at that expiry.
 
-Both networks enable two cadences for BTC, 1m and 5m, with two expiries of each live at once. The 1h, 1d, 1w, and 1mo cadences are configured but disabled. A new 1m market is created every minute on Testnet. `tickSize` is `$0.01` and `admissionTickSize` is `$1` on both enabled cadences, so every finite strike lands on a whole dollar.
+Both networks enable two cadences for BTC, 1m and 5m, with two expiries of each live at once. The configuration also lists the 1h, 1d, 1w, and 1mo cadences, all disabled. Testnet creates a new 1m market every minute. `tickSize` is `$0.01` and `admissionTickSize` is `$1` on both enabled cadences, so every finite strike lands on a whole dollar.
 
 Three things make the soonest expiry a poor default, and the sample's `tradeableMarket(minTtlMs = 30_000)` handles the first two:
 
 - **Trading closes before expiry.** `no_trade_window_ms`, 2 seconds on both deployments, is a hard stop: a quote, mint, or live redeem inside the last 2 seconds before expiry aborts in `protocol_config` with code `7`, `ETradeWindowClosed`. An expired market that nobody has settled is still in the active list, and quoting against it aborts too.
 - **A market can be too close to expiry to trade well before that.** On the 1 minute cadence the entry probability converges hard in the closing seconds, so a quote taken there is stale before the mint lands and the cost cap aborts the trade. Requiring a minimum time to expiry is what makes the quote-then-cap flow hold, and 30 seconds is a floor rather than a recommendation for a flow that waits on a human.
-- **A brand-new market opens with zero working cash.** It cannot be minted against until pool capital funds it, and `plp::rebalance_expiry_cash` is what moves that cash across. Anyone can call it. A mint that aborts on a market that looks otherwise healthy is usually one nobody has funded yet.
+- **A brand-new market opens with zero working cash.** Nobody can mint against it until pool capital funds it, and `plp::rebalance_expiry_cash` is what moves that cash across. Anyone can call it. A mint that aborts on a market that looks otherwise healthy is usually one nobody has funded yet.
 
 ### Ticks, strikes, and position shape
 
-A position is a half-open range on an absolute integer tick grid, `(lower_tick, higher_tick]`. Direction is a special case of that range rather than a separate concept: a down position is `(0, K]` and an up position is `(K, 1073741823]`, where `0` is the negative-infinity sentinel tick and `1073741823` is the positive-infinity sentinel. The fully open range is rejected.
+A position is a half-open range on an absolute integer tick grid, `(lower_tick, higher_tick]`. Direction is a special case of that range rather than a separate concept: a down position is `(0, K]` and an up position is `(K, 1073741823]`, where `0` is the negative-infinity sentinel tick and `1073741823` is the positive-infinity sentinel. The protocol rejects the fully open range.
 
 The SDK hides the tick arithmetic behind a market descriptor with two arms:
 
@@ -215,7 +215,7 @@ For a live tape, stream events from the full node over gRPC and back it with a `
 
 ### Indexed read services for the previous Testnet deployment
 
-As of 2026-09-10 no indexed read service exists for `deepbook-predict-testnet` or for Mainnet. Three public read-only JSON services exist, and they index the previous-generation `predict-8-21` Testnet deployment: their responses carry that deployment's package and object IDs, and they know nothing about accounts, positions, or markets on the current ones. They are indexed views rather than transaction authorities, they are not part of any audited manifest, and they can be retired or repointed independently of the onchain packages. This section stays for readers still working against `predict-8-21` and as the shape a future service is likely to follow.
+As of 2026-09-10 no indexed read service exists for `deepbook-predict-testnet` or for Mainnet. Three public read-only JSON services exist, and they index the previous-generation `predict-8-21` Testnet deployment: their responses carry that deployment's package and object IDs, and they know nothing about accounts, positions, or markets on the current ones. They are indexed views rather than transaction authorities, they are not part of any audited manifest, and their operators can retire or repoint them independently of the onchain packages. This section stays for readers still working against `predict-8-21` and as the shape a future service is likely to follow.
 
 | **Service** | **Base URL** | **Primary data** |
 |---------|----------|--------------|
@@ -267,14 +267,14 @@ Passing a wrapper ID here fails silently. The services answer `200` with an empt
 
 :::
 
-Three more paths round out the indexed views: `GET /apps` on the account service lists the app authorizations recorded on the account registry, `GET /vaults/:pool_vault_id/state` on the Predict service returns the pool's `current` block alongside `latest_flush`, and `GET /config` on the Predict service returns `trading_paused`, `protocol_config_id`, `max_lp_pool_value`, and `max_lp_pool_value_is_unbounded`. Take every path from these tables rather than guessing at one. The plausible variants `/vault`, `/pool`, `/protocol-config`, and `/accounts/:account_id/apps` all return `404`.
+Three more paths round out the indexed views: `GET /apps` on the account service lists the app authorizations that the account registry records, `GET /vaults/:pool_vault_id/state` on the Predict service returns the pool's `current` block alongside `latest_flush`, and `GET /config` on the Predict service returns `trading_paused`, `protocol_config_id`, `max_lp_pool_value`, and `max_lp_pool_value_is_unbounded`. Take every path from these tables rather than guessing at one. The plausible variants `/vault`, `/pool`, `/protocol-config`, and `/accounts/:account_id/apps` all return `404`.
 
 Four conventions apply across all three services:
 
 - **Numbers arrive as strings:** Postgres `NUMERIC` values serialize as JSON strings. Parse monetary, quantity, probability, price, rate, and large identifier fields with decimal or bigint tooling rather than `parseFloat`.
 - **Timestamps are milliseconds:** Onchain and event timestamps use Unix milliseconds unless an endpoint documents seconds. Raw event pages window on `from_ms`, inclusive, and `to_ms`, exclusive, while named history endpoints use `start_time` and `end_time` in Unix seconds.
 - **Order IDs are market-scoped:** Packed order IDs are decimal `u256` strings and are unique only inside one expiry market, so identify a position by `expiry_market_id` and `order_id` together.
-- **Raw events page oldest-first:** `GET /events` lists the allowlisted event resources and their filter profiles. Page one resource with `GET /events/RESOURCE`, then follow the opaque `page.next_cursor` with every filter unchanged until `page.has_next_page` is false. Unknown identifiers return `null` components or empty arrays rather than a 404. The listing also carries a few resources no deployment emits, left over from contract features that were removed: `liquidated-order-redeemed`, `deep-staked`, `deep-unstaked`, and `trading-loss-rebate-claimed`. Requesting one returns `503` rather than an empty page, so treat the four event modules in [Contract information](/onchain-finance/deepbook/deepbook-predict/contract-information#live-onchain-events) as the list of what the contracts actually emit.
+- **Raw events page oldest-first:** `GET /events` lists the allowlisted event resources and their filter profiles. Page one resource with `GET /events/RESOURCE`, then follow the opaque `page.next_cursor` with every filter unchanged until `page.has_next_page` is false. Unknown identifiers return `null` components or empty arrays rather than a 404. The listing also carries a few resources no deployment emits, left over from contract features that no longer exist: `liquidated-order-redeemed`, `deep-staked`, `deep-unstaked`, and `trading-loss-rebate-claimed`. Requesting one returns `503` rather than an empty page, so treat the four event modules in [Contract information](/onchain-finance/deepbook/deepbook-predict/contract-information#live-onchain-events) as the list of what the contracts actually emit.
 
 ## Deposit and mint a directional position
 
@@ -297,15 +297,15 @@ Two of the fee names differ from their onchain names. `penalty` is the congestio
 
 The fee breakdown is not in `raw`, which carries only the four fields above. Read the exact fee amounts from `decode.mint(result).raw` after execution instead.
 
-`fees.referral` is not an extra debit and never changes `cost`. Its basis is the trading fee net of the incentive subsidy, plus the congestion surcharge, and the protocol computes it only after the all-in cost is fixed, then splits it out of the payment you have already made. The Move `MintQuote` has no referral field at all for that reason. Pass `cost`, never `premium`, when you set a cap.
+`fees.referral` is not an extra debit and never changes `cost`. Its basis is the trading fee net of the incentive subsidy, plus the congestion surcharge, and the protocol computes it only after the all-in cost is final, then splits it out of the payment you have already made. The Move `MintQuote` has no referral field at all for that reason. Pass `cost`, never `premium`, when you set a cap.
 
 <ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
 
 :::caution
 
-Mint slippage caps default to uncapped. Omitting `maxCost` and `maxProbability` sends `U64_MAX` for each, which leaves the mint genuinely uncapped against a price move between the quote and execution. The two caps bound different things: `maxCost` bounds the all-in account debit, and `maxProbability` bounds the fill price. Always quote first and pass both. Round `maxCost` to at most 6 decimals, because a value carrying more decimals than the quote coin throws `PredictInputError` before the transaction is built.
+Mint slippage caps default to uncapped. Omitting `maxCost` and `maxProbability` sends `U64_MAX` for each, which leaves the mint genuinely uncapped against a price move between the quote and execution. The two caps bound different things: `maxCost` bounds the all-in account debit, and `maxProbability` bounds the fill price. Always quote first and pass both. Round `maxCost` to at most 6 decimals, because a value carrying more decimals than the quote coin throws `PredictInputError` before the SDK builds the transaction.
 
-`tx.mint` mints an exact payout quantity, so the premium alone cannot exceed `quantity`. Fees are charged on top of it, and `maxCost` is what bounds the total. A mint whose all-in cost would exceed `quantity` aborts with `EMintCostAboveMaxPayout`. `tx.mintAmount` is the genuinely open-ended one: see the warning below it.
+`tx.mint` mints an exact payout quantity, so the premium alone cannot exceed `quantity`. The protocol charges fees on top of it, and `maxCost` is what bounds the total. A mint whose all-in cost would exceed `quantity` aborts with `EMintCostAboveMaxPayout`. `tx.mintAmount` is the genuinely open-ended one: see the warning below it.
 
 :::
 
@@ -315,7 +315,7 @@ To size by budget instead of by payout, `tx.mintAmount` takes `spend` as a premi
 
 :::caution
 
-`maxCost` is optional on `tx.mintAmount`, and that is the more dangerous default of the two builders. Fees are charged on top of `spend`, so `maxCost` is the only bound on the whole withdrawal. Omit it and the call builds fine, sends `U64_MAX`, and leaves the debit unbounded. The onchain guard does not save you: `mint_exact_amount` aborts with `EMintCostCapRequired` only when `max_cost` is exactly 0, which `U64_MAX` is not. The SDK does reject a `maxCost` at or below zero before it builds anything, but nothing rejects an absent one. Always pass a `maxCost` derived from a fresh quote.
+`maxCost` is optional on `tx.mintAmount`, and that is the more dangerous default of the two builders. The protocol charges fees on top of `spend`, so `maxCost` is the only bound on the whole withdrawal. Omit it and the call builds fine, sends `U64_MAX`, and leaves the debit unbounded. The onchain guard does not save you: `mint_exact_amount` aborts with `EMintCostCapRequired` only when `max_cost` is exactly 0, which `U64_MAX` is not. The SDK does reject a `maxCost` at or below zero before it builds anything, but nothing rejects an absent one. Always pass a `maxCost` derived from a fresh quote.
 
 :::
 
@@ -369,12 +369,12 @@ Settlement emits `MarketSettled` carrying the `settlement_price` and a `settleme
 `expiry_market::redeem_settled_permissionless` closes a settled position on the owner's behalf. Three properties define it:
 
 - **Any address can call it:** The function takes no account `Auth`. It mints Predict's app authorization from the shared `AccountRegistry` instead, so the caller needs no capability, no relationship to the owner, and no signature from them. An admin can switch the path off by deauthorizing the Predict app on that registry.
-- **It becomes available at settlement, not at expiry:** The market must be settled. Calling on an unsettled market aborts with `EMarketNotSettled`, and expiry alone does not settle a market. Call `try_settle` first, or wait for `MarketSettled`.
+- **It becomes available at settlement, not at expiry:** The market must have settled. Calling on an unsettled market aborts with `EMarketNotSettled`, and expiry alone does not settle a market. Call `try_settle` first, or wait for `MarketSettled`.
 - **The payout goes to the owner:** The proceeds land in the owner's account, and only the owner can withdraw them. The caller pays gas and receives nothing.
 
 The SDK does not build this call. `tx.claimSettled` builds the owner-authorized `redeem_settled` instead. Build the permissionless variant yourself as a `moveCall` against the Predict package, passing the `ExpiryMarket`, the `AccountRegistry`, the owner's `AccountWrapper`, the `ProtocolConfig`, the order ID, the accumulator root, and the clock. No Predict package declares an `entry fun`, so every integrator call is a `public fun` invoked from a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks), and several of them return values you must consume in the same block.
 
-To find positions worth closing, `read.positions(owner)` walks the account's dynamic fields and returns `marketId` and `orderId` pairs. An indexed service, where one exists for your deployment, returns the same set only when it is keyed on the canonical account ID.
+To find positions worth closing, `read.positions(owner)` walks the account's dynamic fields and returns `marketId` and `orderId` pairs. An indexed service, where one exists for your deployment, returns the same set only when you key it on the canonical account ID.
 
 :::caution
 
@@ -394,7 +394,7 @@ Supply and withdrawal are asynchronous. Neither call mints or burns PLP. Each on
 
 :::info
 
-You cannot start a flush. Only a holder of a pool valuation capability starts one, through `start_pool_valuation`, and that transaction also snapshots every live market's pricer with `snapshot_expiry_pricer` and seals the snapshot. Anyone can then run `value_expiry` per market and `finish_flush`, which drains the queues at the frozen mark, and the whole flush must finish within 5 minutes of its snapshot or be restarted. That single frozen mark is what stops anyone from timing an entry or exit against a self-supplied oracle update. Trading is not blocked while a flush is in flight, and neither is queuing a new request, but a request queued after the snapshot waits for the next flush, and cancelling a queued request is blocked until the flush finishes. Plan on filling at a price you do not control and cannot preview, bounded only by the floor you set.
+You cannot start a flush. Only a holder of a pool valuation capability starts one, through `start_pool_valuation`, and that transaction also snapshots every live market's pricer with `snapshot_expiry_pricer` and seals the snapshot. Anyone can then run `value_expiry` per market and `finish_flush`, which drains the queues at the frozen mark, and the whole flush must finish within 5 minutes of its snapshot, or the cap holder restarts it from scratch. That single frozen mark is what stops anyone from timing an entry or exit against a self-supplied oracle update. A flush in flight blocks neither trading nor queuing a new request, but a request queued after the snapshot waits for the next flush, and the flush blocks cancelling a queued request until it finishes. Plan on filling at a price you do not control and cannot preview, bounded only by the floor you set.
 
 :::
 
@@ -436,10 +436,10 @@ There is no synchronous share price. The pool prices PLP only inside a flush, at
 These points follow from the protocol's documented mechanics. They are not investment advice.
 
 - **You fill at the flush mark, not your own:** Both queues price against one pool-wide net asset value frozen at the flush snapshot. That value moves between the moment you queue and the moment you fill, and no read previews it. A floor turns a bad mark into a refund rather than a fill.
-- **Exits are bounded by idle cash:** The flush fills supplies before withdrawals, so quote coin supplied in a flush can pay that same flush's withdrawals. Cash already funded into an expiry is not directly redeemable until a rebalance or settlement returns it, so a large exit can fill across several flushes.
+- **Idle cash bounds exits:** The flush fills supplies before withdrawals, so quote coin supplied in a flush can pay that same flush's withdrawals. Cash already funded into an expiry is not directly redeemable until a rebalance or settlement returns it, so a large exit can fill across several flushes.
 - **PLP value moves with open positions:** Each active expiry contributes its net asset value to the pool, priced from the oracle observations frozen at the snapshot, so your share value moves with trader positions and oracle prices even when you place no trade.
-- **Backing is enforced per expiry:** Every expiry holds cash at least equal to its payout liability, and a per-expiry allocation cap snapshotted from cadence configuration bounds how much pool capital one expiry can put at risk.
-- **A queued request can come back refunded:** A request the flush cannot execute at the frozen mark, or whose floor that mark misses, is cancelled and refunded rather than held, so handle a refund as a normal outcome rather than an error.
+- **The protocol enforces backing per expiry:** Every expiry holds cash at least equal to its payout liability, and a per-expiry allocation cap snapshotted from cadence configuration bounds how much pool capital one expiry can put at risk.
+- **A queued request can come back refunded:** The flush cancels and refunds, rather than holds, a request it cannot execute at the frozen mark or whose floor that mark misses, so handle a refund as a normal outcome rather than an error.
 
 For the accounting model behind these limits, see [Design](/onchain-finance/deepbook/deepbook-predict/design).
 

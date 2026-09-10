@@ -42,7 +42,7 @@ questions:
 answer: >-
   DeepBook Predict sessions let the owner of a canonical account authorize an
   ephemeral address to trade that account for up to 30 days. A session key can
-  trade the account's entire balance and cannot be scoped to a market, a size, or
+  trade the account's entire balance, and you cannot scope it to a market, a size, or
   a price; its only limits are that it cannot withdraw to an address, cannot
   grant or revoke sessions, and cannot outlive its expiry. Deauthorizing
   SessionsApp on the account registry pauses every grant without clearing any of
@@ -58,7 +58,7 @@ Two modules own the surface:
 - **[`deepbook_sessions::sessions`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/sessions/sources/sessions.move):** grant storage, the lifecycle calls, and every trading wrapper.
 - **[`deepbook_sessions::session_config`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/sessions/sources/session_config.move):** the shared `SessionsConfig` object and the package version floor.
 
-The package is deployed separately on Sui Mainnet and Sui Testnet from identical sources, and the Move snippets on this page are pinned to the Mainnet source commit, which is also the `deepbook-predict-mainnet` branch. In TypeScript, `getSessionsConfig(network)` from `@mysten/deepbook-v3/sessions` resolves `'mainnet'` or `'testnet'` from version 2.3.0 and returns both IDs, plus the account registry the app is authorized against, the Predict protocol config, and the two extra IDs the DeepBook spot wrappers take. The full tables are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#packages):
+Sui Mainnet and Sui Testnet each run a separate deployment of the package from identical sources, and the Move snippets on this page pin the Mainnet source commit, which is also the `deepbook-predict-mainnet` branch. In TypeScript, `getSessionsConfig(network)` from `@mysten/deepbook-v3/sessions` resolves `'mainnet'` or `'testnet'` from version 2.3.0 and returns both IDs, plus the account registry that authorizes the app, the Predict protocol config, and the two extra IDs the DeepBook spot wrappers take. The full tables are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#packages):
 
 | Object | Mainnet | Testnet |
 |---|---|---|
@@ -108,11 +108,11 @@ Each trading wrapper resolves authority through one private helper before it tou
 	fun="generate_auth_as_session"
 />
 
-The `Auth` value it returns is minted and consumed inside the same call, so the session key never holds a value it could reuse in a later command or a later transaction.
+The helper mints the `Auth` value and the wrapper consumes it inside the same call, so the session key never holds a value it could reuse in a later command or a later transaction.
 
 ## Deauthorizing the app is a pause, not a kill switch {#deauthorize-is-a-pause}
 
-`SessionsApp` must be authorized on the account registry before any trading wrapper can generate account authorization. That authorization is package-wide, held by the registry administrator, and it is the emergency stop for the whole lineage: `deauthorize_app` removes the allowlist entry, and from that moment every version of the sessions package fails inside the trading wrappers, aborting `EAppNotAuthorized` once a call clears the version and session checks ahead of it.
+The registry administrator must authorize `SessionsApp` on the account registry before any trading wrapper can generate account authorization. That authorization is package-wide, held by the registry administrator, and it is the emergency stop for the whole lineage: `deauthorize_app` removes the allowlist entry, and from that moment every version of the sessions package fails inside the trading wrappers, aborting `EAppNotAuthorized` once a call clears the version and session checks ahead of it.
 
 :::danger
 
@@ -129,11 +129,11 @@ The `Auth` value it returns is minted and consumed inside the same call, so the 
 	fun="deauthorize_app,generate_auth_as_app"
 />
 
-Until `SessionsApp` is authorized, and again after a deauthorization, the split is clean: the trading wrappers abort, while `authorize_session`, `revoke_session`, and `session_expiration_ms` keep working, because they run on owner authority or no authority at all. An owner can therefore still inspect and clean up grants while the app is paused.
+Until the administrator authorizes `SessionsApp`, and again after a deauthorization, the split is clean: the trading wrappers abort, while `authorize_session`, `revoke_session`, and `session_expiration_ms` keep working, because they run on owner authority or no authority at all. An owner can therefore still inspect and clean up grants while the pause lasts.
 
 ## Session lifecycle {#lifecycle}
 
-Three calls cover the whole lifecycle. Owner authority is derived from the transaction sender, so the account owner signs `authorize_session` and `revoke_session`. That derivation is what makes the flow work for accounts owned by an external address and not for object-owned accounts.
+Three calls cover the whole lifecycle. Owner authority derives from the transaction sender, so the account owner signs `authorize_session` and `revoke_session`. That derivation is what makes the flow work for accounts owned by an external address and not for object-owned accounts.
 
 <ImportContent
 	source="packages/sessions/sources/sessions.move"
@@ -156,20 +156,20 @@ The contract enforces four bounds, and the SDK exports the duration ceiling and 
 | Distinct addresses stored per account | 20 | `ESessionLimitExceeded` |
 | Expiry comparison | Strict, `now < expires_at_ms` | `ESessionNotAuthorized` |
 
-Four properties follow from how those bounds are applied:
+Four properties follow from how the contract applies those bounds:
 
 - **Expiry is absolute and computed onchain.** `authorize_session` reads the `Clock` at execution time and stores `timestamp_ms + duration_ms`, so a queued or retried transaction still gets its full duration rather than a window measured from when you built it.
 - **The grant is dead at its expiration timestamp.** The wrapper asserts `now < expires_at_ms`, not `now <= expires_at_ms`. A grant whose expiry equals the current timestamp is already unusable.
 - **Re-authorizing replaces the expiry in place.** Calling `authorize_session` again for an address that already holds a grant overwrites its expiration and consumes no additional slot, which is the intended way to extend a running session.
 - **The data slot is permanent.** Once the first grant attaches `SessionsData` to an account, the slot stays attached even after the map empties.
 
-### Revocation cannot be confirmed from the transaction result {#revocation-is-silent}
+### The transaction result cannot confirm a revocation {#revocation-is-silent}
 
-`revoke_session` removes a stored grant whether it is active or already expired, frees its slot, and emits `SessionRevoked`. Revoking an address that holds no grant is a silent no-op: the call does not abort and emits no event, so a successful transaction proves nothing about whether a grant was removed or was never there.
+`revoke_session` removes a stored grant whether it is active or already expired, frees its slot, and emits `SessionRevoked`. Revoking an address that holds no grant is a silent no-op: the call does not abort and emits no event, so a successful transaction proves nothing about whether the call removed a grant or none was there.
 
-Read before and after when the difference matters. `session_expiration_ms` returns the stored expiration for a known address and `none` for one that was never authorized or has been revoked. It does not classify the timestamp as active or expired, so compare it with the current time yourself.
+Read before and after when the difference matters. `session_expiration_ms` returns the stored expiration for a known address and `none` for one the owner never authorized or has since revoked. It does not classify the timestamp as active or expired, so compare it with the current time yourself.
 
-Revocation deliberately takes no `SessionsConfig` and is not version gated, so an owner can still remove grants after a package version is retired.
+Revocation deliberately takes no `SessionsConfig` and has no version gate, so an owner can still remove grants after the watermark retires a package version.
 
 <details>
 <summary>Authorize a session with the SDK</summary>
@@ -208,12 +208,12 @@ Four steps get you there, and the SDK exposes each one:
 Three traps sit on that path:
 
 - **The field hangs off the account, not the wrapper.** An owner has two derived objects, the shared `AccountWrapper` that every call takes as an argument, and the canonical `Account` identity that app data attaches to. Grants hang off the second one. Deriving the field under the wrapper address yields an ID that points at nothing.
-- **It is a plain dynamic field.** `account::attach` writes the slot with `dynamic_field::add`, whereas the account and wrapper IDs are claimed through `derived_object::claim`. Derive it with `deriveDynamicFieldID`. Using `deriveObjectID` wraps the type tag in a `DerivedObjectKey`, producing a different, empty address.
+- **It is a plain dynamic field.** `account::attach` writes the slot with `dynamic_field::add`, whereas the registry claims the account and wrapper IDs through `derived_object::claim`. Derive it with `deriveDynamicFieldID`. Using `deriveObjectID` wraps the type tag in a `DerivedObjectKey`, producing a different, empty address.
 - **Decode the whole field, not the inner value.** `decodeSessions` takes the complete `Field<DataKey, SessionsData>` bytes the core API returns. `DataKey` is empty in source, but Move inserts a hidden `dummy_field: bool`, so one zero byte sits between the field ID and the value. Decoding the value alone reads the field ID's first byte as the map length. The decoder also throws on truncated or padded bytes rather than returning an empty list, so an empty result means the account genuinely holds no grants.
 
 Split the result with the two helpers rather than by hand. The chain asserts `now < expires_at_ms`, so `activeSessions` filters on `nowMs < expiresAtMs` and `expiredSessions` on `nowMs >= expiresAtMs`. A filter written the intuitive way, as `nowMs > expiresAtMs`, leaves the grant expiring exactly at `nowMs` classified as neither, and that grant then occupies a slot forever.
 
-Expired grants are never pruned. Time passing executes no Move code, so a dead grant counts toward the 20-address limit until the owner revokes it, and the twenty-first `authorize_session` aborts `ESessionLimitExceeded` even when every stored grant is long dead. List, revoke what has expired, then grant.
+Nothing prunes expired grants. Time passing executes no Move code, so a dead grant counts toward the 20-address limit until the owner revokes it, and the twenty-first `authorize_session` aborts `ESessionLimitExceeded` even when every stored grant is long dead. List, revoke what has expired, then grant.
 
 <details>
 <summary>List grants and reclaim slots with the SDK</summary>
@@ -233,7 +233,7 @@ An active session can call four Predict wrappers:
 | `redeem_live` | `expiry_market::redeem_live` | `Option<u256>`, the replacement order ID when a partial close leaves quantity open. |
 | `redeem_settled` | `expiry_market::redeem_settled` | Nothing. |
 
-Each one validates the package version and the session against the supplied account, generates app authorization internally, and passes it straight into the Predict function of the same name. Every market parameter stays caller-selected, and Predict performs all of the validation it normally would, including the gates a session caller cannot see from this package: `mint_exact_quantity`, `mint_exact_amount`, and `redeem_live` abort with `protocol_config::ETradeWindowClosed` inside the last `no_trade_window_ms` before expiry, deployed at 2,000 ms on both networks, and every wrapper aborts with `ESnapshotInProgress` if it is composed into the transaction that snapshots a pool flush. `redeem_settled` is outside the trade window, so a session can always close a settled position. Compared with the owner-signed Predict call, the wrapper takes no `Auth` argument and adds `account_registry` and `sessions_config`.
+Each one validates the package version and the session against the supplied account, generates app authorization internally, and passes it straight into the Predict function of the same name. Every market parameter stays caller-selected, and Predict performs all of the validation it normally would, including the gates a session caller cannot see from this package: `mint_exact_quantity`, `mint_exact_amount`, and `redeem_live` abort with `protocol_config::ETradeWindowClosed` inside the last `no_trade_window_ms` before expiry, deployed at 2,000 ms on both networks, and every wrapper aborts with `ESnapshotInProgress` if you compose it into the transaction that snapshots a pool flush. `redeem_settled` is outside the trade window, so a session can always close a settled position. Compared with the owner-signed Predict call, the wrapper takes no `Auth` argument and adds `account_registry` and `sessions_config`.
 
 `pricer` is a programmable transaction block result rather than an object ID. Load it with `expiry_market::load_live_pricer` in a preceding command of the same transaction, exactly as the owner-signed flow does. See [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict) for the market parameters, the tick pair, and the fee model behind the caps.
 
@@ -268,13 +268,13 @@ The `@mysten/deepbook-v3/sessions` builders and the `@mysten/deepbook-v3/predict
 
 ## DeepBook spot wrappers {#spot-wrappers}
 
-An active session can also call five DeepBook spot wrappers that route through `deepbook_core_account`: `place_limit_order`, `place_market_order`, `cancel_live_order`, `cancel_live_orders`, and `withdraw_settled_amounts`. Order parameters stay caller-selected and are validated by the account wrapper and DeepBook core. The permissionless settled-amount withdrawal is not duplicated here, because it needs no session authority.
+An active session can also call five DeepBook spot wrappers that route through `deepbook_core_account`: `place_limit_order`, `place_market_order`, `cancel_live_order`, `cancel_live_orders`, and `withdraw_settled_amounts`. Order parameters stay caller-selected, and the account wrapper and DeepBook core validate them. This package does not duplicate the permissionless settled-amount withdrawal, because it needs no session authority.
 
-`DeepbookCoreAccountApp` must be authorized in the supplied DeepBook registry before spot order placement works, separately from the `SessionsApp` authorization these wrappers already require. The two networks differ here, verified 2026-09-10. On Testnet the wrapper's `DeepbookCoreAccountApp` is authorized on the DeepBook registry `0x7c256edbda983a2cd6f946655f4bf3f00a41043993781f8674a7046e8c0e11d1`, so the spot wrappers execute. On Mainnet it is not authorized on the DeepBook registry `0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d`, so the five spot wrappers abort there and the session surface on Mainnet is the four Predict wrappers until that changes.
+The DeepBook admin-cap owner must authorize `DeepbookCoreAccountApp` in the supplied DeepBook registry before spot order placement works, separately from the `SessionsApp` authorization these wrappers already require. The two networks differ here, verified 2026-09-10. On Testnet the DeepBook registry `0x7c256edbda983a2cd6f946655f4bf3f00a41043993781f8674a7046e8c0e11d1` authorizes the wrapper's `DeepbookCoreAccountApp`, so the spot wrappers execute. On Mainnet the DeepBook registry `0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d` does not authorize it, so the five spot wrappers abort there and the session surface on Mainnet is the four Predict wrappers until that changes.
 
-Do not read that state out of the deployment manifest. The manifest is the audited initial-deployment snapshot, and its `externalAuthorizations` entry records whether the authorization was in place when the deployment ran, not whether it is in place now: both manifests record `authorized: false`, and Testnet has since been authorized. The DeepBook admin-cap owner grants it in a separate transaction after deployment, and the DeepBook registry is the live authority from that point on. Check the registry with `deepbook::registry::assert_app_is_authorized<DeepbookCoreAccountApp>` in a simulated transaction, using the `deepbookRegistry` and `deepbookCoreAccountPackageId` that `getSessionsConfig(network)` returns, rather than trusting the recorded flag or this page.
+Do not read that state out of the deployment manifest. The manifest is the audited initial-deployment snapshot, and its `externalAuthorizations` entry records whether the authorization was in place when the deployment ran, not whether it is in place now: both manifests record `authorized: false`, and Testnet has since gained the authorization. The DeepBook admin-cap owner grants it in a separate transaction after deployment, and the DeepBook registry is the live authority from that point on. Check the registry with `deepbook::registry::assert_app_is_authorized<DeepbookCoreAccountApp>` in a simulated transaction, using the `deepbookRegistry` and `deepbookCoreAccountPackageId` that `getSessionsConfig(network)` returns, rather than trusting the recorded flag or this page.
 
-The TypeScript SDK generates these calls but does not wrap them on `SessionsContract`, because the surrounding workflow of discovering the embedded balance manager, reading resting orders, and reading locked balances is not modelled yet. Reach them through the generated `sessionsMoveCalls` namespace meanwhile, and watch the argument positions: `place_limit_order` and `place_market_order` carry `deepbook_registry` between `pool` and `account_registry`, which pushes `account_registry` to index 2 and `sessions_config` to index 4. The other three take no `deepbook_registry`, so they keep those arguments at 1 and 3, matching the Predict wrappers.
+The TypeScript SDK generates these calls but does not wrap them on `SessionsContract`, because the SDK does not yet model the surrounding workflow of discovering the embedded balance manager, reading resting orders, and reading locked balances. Reach them through the generated `sessionsMoveCalls` namespace meanwhile, and watch the argument positions: `place_limit_order` and `place_market_order` carry `deepbook_registry` between `pool` and `account_registry`, which pushes `account_registry` to index 2 and `sessions_config` to index 4. The other three take no `deepbook_registry`, so they keep those arguments at 1 and 3, matching the Predict wrappers.
 
 <details>
 <summary>Spot wrapper signatures</summary>
@@ -331,7 +331,7 @@ Two events cover the lifecycle. Predict and DeepBook core keep emitting their ow
 	struct="SessionAuthorized,SessionRevoked"
 />
 
-`SessionAuthorized` is emitted for a new grant and for a re-authorization alike, carrying the new `expires_at_ms` in both cases. `SessionRevoked` is emitted only when an existing grant is actually removed. Expiration emits nothing, because nothing executes when a deadline passes, and a no-op revocation emits nothing either. An indexer that wants a current view of live grants therefore has to apply expiry itself, using the timestamps the authorization events carry.
+`authorize_session` emits `SessionAuthorized` for a new grant and for a re-authorization alike, carrying the new `expires_at_ms` in both cases. `revoke_session` emits `SessionRevoked` only when it actually removes an existing grant. Expiration emits nothing, because nothing executes when a deadline passes, and a no-op revocation emits nothing either. An indexer that wants a current view of live grants therefore has to apply expiry itself, using the timestamps the authorization events carry.
 
 ## Errors {#errors}
 
@@ -341,9 +341,9 @@ Error numbers repeat across modules, so resolve an abort against the module name
 |---|---|---|---|
 | `EInvalidSessionDuration` | 0 | `sessions` | `duration_ms` is zero or greater than 30 days. |
 | `ESessionNotAuthorized` | 1 | `sessions` | The sender holds no grant on the supplied account, or the current timestamp is at or past the grant's expiration. |
-| `ESessionLimitExceeded` | 2 | `sessions` | The account already stores 20 distinct addresses and the address being authorized is not one of them. |
+| `ESessionLimitExceeded` | 2 | `sessions` | The account already stores 20 distinct addresses and the address in the call is not one of them. |
 | `EPackageVersionDisabled` | 0 | `session_config` | The executing package version is below the shared config's watermark. |
 | `EVersionWatermarkNotAdvanced` | 1 | `session_config` | `bump_version_watermark` runs from a package whose version is not above the stored watermark. |
-| `EAppNotAuthorized` | 1 | `account_registry` | `SessionsApp` is not authorized on the account registry, so no trading wrapper can generate authorization. |
+| `EAppNotAuthorized` | 1 | `account_registry` | The account registry does not authorize `SessionsApp`, so no trading wrapper can generate authorization. |
 
 For the account object these grants attach to, see [Accounts and Custody](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager). For the market parameters the Predict wrappers forward, see [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict).

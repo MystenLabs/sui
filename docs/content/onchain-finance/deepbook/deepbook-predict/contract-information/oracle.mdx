@@ -85,7 +85,7 @@ There is one `OracleRegistry` per deployment, one `PythFeed` per Pyth source, an
 	struct="OracleRegistry,BlockScholesStorePair,OracleMetadata"
 />
 
-A binding is keyed by the underlying ID, the oracle kind, and the value kind. Pyth is oracle kind `0` and spot is value kind `0`. The Block Scholes stores are tracked separately, as a pair per underlying, because a value store and an SVI store are always registered together and share one base asset string.
+Three values key a binding: the underlying ID, the oracle kind, and the value kind. Pyth is oracle kind `0` and spot is value kind `0`. The registry tracks the Block Scholes stores separately, as a pair per underlying, because an admin always registers a value store and an SVI store together and they share one base asset string.
 
 ### Discover the canonical objects
 
@@ -139,10 +139,10 @@ Binding changes emit `OracleSourceRegistered`, `OracleBound`, `BlockScholesStore
 
 | Code | Name | Raised when |
 | --- | --- | --- |
-| `0` | `ESourceAlreadyExists` | A source key is registered twice |
+| `0` | `ESourceAlreadyExists` | A caller registers the same source key twice |
 | `1` | `ESourceNotFound` | The replacement feed is not in the source catalog |
 | `2` | `EInvalidOracleObject` | The supplied object ID does not match the catalogued source object |
-| `3` | `ESourceAlreadyBound` | The source key is already assigned to a different underlying |
+| `3` | `ESourceAlreadyBound` | The source key already belongs to a different underlying |
 | `4` | `EBindingAlreadyExists` | `bind_pyth_to_underlying` on an underlying that already has a binding |
 | `5` | `EBindingNotFound` | `replace_pyth_binding_for_underlying` with no existing binding |
 | `6` | `EBlockScholesStoresAlreadyExist` | A second store pair for one underlying |
@@ -195,7 +195,7 @@ Writes are permissionless because possession of a verified Pyth Lazer update is 
 	noComments
 />
 
-The two write paths are separate and never overlap. `update` replaces the latest observation, and only when the new source timestamp strictly advances: a zero, future, duplicate, or stale generation timestamp is ignored without an abort and without an event, so redelivering a carried-forward price cannot renew a consumer's freshness window. `insert_at` writes the exact-timestamp slot and leaves the latest observation untouched. The first valid observation owns an exact key and cannot be replaced, so a backfill can never overwrite history. `insert_at` also aborts with `EInsertTimestampNotExactMillisecond` when the envelope timestamp is not a whole millisecond, and with `ESettlementCarryExceedsWindow` when Pyth generated the price more than 2,000 ms before that envelope, so a long-carried price cannot claim a settlement key.
+The two write paths are separate and never overlap. `update` replaces the latest observation, and only when the new source timestamp strictly advances: it ignores a zero, future, duplicate, or stale generation timestamp without an abort and without an event, so redelivering a carried-forward price cannot renew a consumer's freshness window. `insert_at` writes the exact-timestamp slot and leaves the latest observation untouched. The first valid observation owns an exact key, and no later write can replace it, so a backfill can never overwrite history. `insert_at` also aborts with `EInsertTimestampNotExactMillisecond` when the envelope timestamp is not a whole millisecond, and with `ESettlementCarryExceedsWindow` when Pyth generated the price more than 2,000 ms before that envelope, so a long-carried price cannot claim a settlement key.
 
 `migrate` moves the object forward to the current package version and never backward.
 
@@ -281,7 +281,7 @@ Unpack a `BsRead` with the read accessors:
 	noComments
 />
 
-The two timestamps answer two different questions. `source_timestamp_ms` is the provider's own time for that observation, the per-update `value_timestamp` of a spot or forward and the `svi_timestamp` of an SVI row, and `onchain_timestamp_ms` is when the write landed on Sui. Latest ordering, exact spot history, the freshness windows, and the SVI roll-down all key on the source timestamp; the batch envelope time is transport metadata only and appears nowhere in a `BsRead`. Judge vendor freshness from the source timestamp and landing order from the onchain timestamp, and never sort by source timestamp alone, because an older source observation can land later. There is no model timestamp: `BsRead` carries exactly the four fields above, so an integrator decoding `BlockScholesObservationRecorded` payloads from the previous-generation `predict-8-21` deployment must drop the leading `model_timestamp_ms` it used to read.
+The two timestamps answer two different questions. `source_timestamp_ms` is the provider's own time for that observation, the per-update `value_timestamp` of a spot or forward and the `svi_timestamp` of an SVI row, and `onchain_timestamp_ms` is the time the write landed on Sui. Latest ordering, exact spot history, the freshness windows, and the SVI roll-down all key on the source timestamp; the batch envelope time is transport metadata only and appears nowhere in a `BsRead`. Judge vendor freshness from the source timestamp and landing order from the onchain timestamp, and never sort by source timestamp alone, because an older source observation can land later. There is no model timestamp: `BsRead` carries exactly the four fields above, so an integrator decoding `BlockScholesObservationRecorded` payloads from the previous-generation `predict-8-21` deployment must drop the leading `model_timestamp_ms` it used to read.
 
 `writer_digest` records the transaction digest that wrote the observation. Predict reads it to enforce the same-transaction guard described later on this page.
 
@@ -349,7 +349,7 @@ The pool flush reads oracles in exactly one place. `plp::snapshot_expiry_pricer`
 
 ### The pricer
 
-Live pricing runs through a `Pricer`, built once per transaction from all four objects:
+Live pricing runs through a `Pricer`, which you build once per transaction from all four objects:
 
 <ImportContent
 	source="packages/predict/sources/expiry_market.move"
@@ -370,11 +370,11 @@ Live pricing runs through a `Pricer`, built once per transaction from all four o
 	struct="Pricer"
 />
 
-`Pricer` has `copy` and `drop` but no `store`. It cannot be put in an object, a dynamic field, or anything that outlives the transaction, so every transaction that quotes, mints, or redeems must call `load_live_pricer` again. Build it once per programmable transaction block and pass the same value into every quote and trade command in that block.
+`Pricer` has `copy` and `drop` but no `store`. You cannot put it in an object, a dynamic field, or anything that outlives the transaction, so every transaction that quotes, mints, or redeems must call `load_live_pricer` again. Build it once per programmable transaction block and pass the same value into every quote and trade command in that block.
 
 The pool flush is the one path that carries a mark across transactions, and it uses a second type for it. `snapshot_expiry_pricer` loads a `Pricer` and converts it into a `FrozenPricer`, which has `store` and lives inside the vault's `PoolValuation` until `value_expiry` prices the market from it. `FrozenPricer` is a deliberately stale mark: its constructor `into_frozen` and its consumer `thaw` are package-internal, and no quote, mint, or redeem accepts one, so a persisted mark can never price a trade. `PricingSVI` gained `store` for the same reason and remains without public constructors or accessors.
 
-A pricer is bound to the market it was loaded for. Passing it to a different market aborts with `expiry_market::EWrongPricer`. Loading one at or after the market's expiry aborts with `pricing::ELivePricingExpired`.
+A pricer binds to the market you loaded it for. Passing it to a different market aborts with `expiry_market::EWrongPricer`. Loading one at or after the market's expiry aborts with `pricing::ELivePricingExpired`.
 
 Two read functions consume a pricer:
 
@@ -392,7 +392,7 @@ Both return a 1e9-scaled probability and take `range_codec::Strike` values, whic
 
 ### Binding validation
 
-Loading a pricer first checks all three feed objects against the registry's current bindings, then checks that the market has not expired. A mismatch aborts before any price is read:
+Loading a pricer first checks all three feed objects against the registry's current bindings, then checks that the market has not expired. A mismatch aborts before Predict reads any price:
 
 | Code | Name | Raised when |
 | --- | --- | --- |
@@ -404,7 +404,7 @@ Loading a pricer first checks all three feed objects against the registry's curr
 
 ### Freshness windows
 
-Freshness is measured against the wall clock, not against how recently a value changed, and the age of an observation is `now - source_timestamp_ms`, the provider's per-update time. The deployed configuration, verified 2026-09-10 on both networks, sets these windows on `ProtocolConfig`:
+Predict measures freshness against the wall clock, not against how recently a value changed, and the age of an observation is `now - source_timestamp_ms`, the provider's per-update time. The deployed configuration, verified 2026-09-10 on both networks, sets these windows on `ProtocolConfig`:
 
 | Setting | Value | Meaning |
 | --- | --- | --- |
@@ -415,7 +415,7 @@ Freshness is measured against the wall clock, not against how recently a value c
 
 The two 2,000 ms windows are the package defaults at this pin; the previous-generation `predict-8-21` deployment ran both at 10,000 ms.
 
-Block Scholes staleness is fatal to live pricing: a spot or forward outside its window aborts with `EBlockScholesPriceStale`, and an SVI observation outside its window aborts with `EBlockScholesSVIStale`. A stale Pyth spot is not fatal while `use_pyth_spot_for_forward` is on. A missing, non-normalizable, or stale Pyth spot is ignored, and pricing uses the Block Scholes forward directly, which is also what happens when the setting is off.
+Block Scholes staleness is fatal to live pricing: a spot or forward outside its window aborts with `EBlockScholesPriceStale`, and an SVI observation outside its window aborts with `EBlockScholesSVIStale`. A stale Pyth spot is not fatal while `use_pyth_spot_for_forward` is on. Pricing ignores a missing, non-normalizable, or stale Pyth spot and uses the Block Scholes forward directly, which is also what happens when the setting is off.
 
 These four values are mutable protocol state with no public getter, so read them rather than assuming the table above still holds. One route works: read the `ProtocolConfig` shared object directly. All four fields sit in its `pricing_config` field and come back in a single object query, over GraphQL or gRPC, against the `protocolConfig` object for the network you are on, which `getConfig(network).objects.protocolConfig` returns:
 
@@ -424,7 +424,7 @@ These four values are mutable protocol state with no public getter, so read them
 | Mainnet | `0x55e8800bcb31b792683ca4385bd533716e2a9721364236a69ee2c3bee61dd8f2` |
 | Testnet | `0xfeda745dfdef2cd9721c2ff1e1de538d103bc6012469d0eec10ea5de67f636d0` |
 
-One route that looks plausible returns nothing. `PricingConfigUpdated` and `EwmaConfigUpdated` are declared in the deployed package but are emitted only when an admin changes a value. As of 2026-09-10 no admin setter has run on either network's `ProtocolConfig`, so an event query for either type returns an empty list, and polling events tells you nothing beyond that the values above are still the deployed ones. The public read services index the previous-generation `predict-8-21` deployment, not these two, so their `GET /config` is not a source for these values either.
+One route that looks plausible returns nothing. The deployed package declares `PricingConfigUpdated` and `EwmaConfigUpdated` but emits them only when an admin changes a value. As of 2026-09-10 no admin setter has run on either network's `ProtocolConfig`, so an event query for either type returns an empty list, and polling events tells you nothing beyond that the values above are still the deployed ones. The public read services index the previous-generation `predict-8-21` deployment, not these two, so their `GET /config` is not a source for these values either.
 
 ### The same-transaction write guard
 
@@ -433,7 +433,7 @@ Predict refuses to price against an observation written by the transaction that 
 - The Block Scholes spot observation.
 - The Block Scholes forward observation for the market's expiry.
 - The SVI observation for the market's expiry.
-- The Pyth spot observation, when `use_pyth_spot_for_forward` is on and it is used.
+- The Pyth spot observation, when `use_pyth_spot_for_forward` is on and pricing uses it.
 
 A match aborts with `pricing::EOracleWrittenInThisTransaction`, error code `15`. The guard means a caller cannot bundle an oracle write and a trade into one transaction and mint against a price it just placed. Split the two into separate transactions.
 
@@ -444,7 +444,7 @@ A match aborts with `pricing::EOracleWrittenInThisTransaction`, error code `15`.
 | Code | Name | Raised when |
 | --- | --- | --- |
 | `0` | `EZeroForward` | The forward normalizes to zero |
-| `1` | `ECannotBeNegative` | A negative value appears where a magnitude is required |
+| `1` | `ECannotBeNegative` | A negative value appears where pricing requires a magnitude |
 | `2` | `ENonPositiveVariance` | Total variance is not positive |
 | `3` | `EInvalidRange` | The strike pair is inverted or otherwise invalid |
 | `4` | `EBlockScholesPriceStale` | Block Scholes spot or forward outside the price freshness window |
@@ -458,8 +458,8 @@ A match aborts with `pricing::EOracleWrittenInThisTransaction`, error code `15`.
 | `12` | `EBlockScholesPriceUnavailable` | No Block Scholes price observation exists |
 | `13` | `EBlockScholesSVIUnavailable` | No Block Scholes SVI observation exists |
 | `14` | `EBlockScholesMinVarianceInvalid` | The smallest total variance the surface admits, `min_variance_increment + a`, is not positive |
-| `15` | `EOracleWrittenInThisTransaction` | A contributing observation was written by this transaction |
-| `16` | `EBlockScholesInputTooWide` | A stored `u128` provider value exceeds `u64::MAX` when it is narrowed to pricing width |
+| `15` | `EOracleWrittenInThisTransaction` | This transaction wrote a contributing observation |
+| `16` | `EBlockScholesInputTooWide` | A stored `u128` provider value exceeds `u64::MAX` when Predict narrows it to pricing width |
 
 Three of those codes are narrower than their names suggest, and confusing them sends you looking at the wrong input.
 
@@ -469,11 +469,11 @@ Three of those codes are narrower than their names suggest, and confusing them s
 - The forward is at most `u64::MAX / 100`, and at most 100 times the spot. That factor of `100` is the basis envelope.
 - The SVI magnitudes `a`, `b`, and `m` are each at most `100e9`.
 - The SVI `rho` magnitude is at most `1e9`.
-- Sigma is between `1e6` and `100e9` inclusive. A sigma below the minimum raises this code, not code `14`.
+- Sigma falls between `1e6` and `100e9` inclusive. A sigma below the minimum raises this code, not code `14`.
 
 `EBlockScholesInputTooWide` is not an economic bound at all. It fires in the narrowing step, when a `u128` value the provider stored does not fit in the `u64` width Predict prices in. `EBlockScholesMinVarianceInvalid` fires only when the sum of the minimum variance increment and `a` is not positive, which is a shape problem in the surface rather than a bound on any one parameter.
 
-`EPythSpotInvalid` is narrower still. It fires only on the forward re-anchor branch, and only when the normalized spot exceeds `u64::MAX / 100`. A missing, non-normalizable, or stale Pyth spot never reaches the assert: it is silently ignored and pricing falls back to the Block Scholes forward. A zero spot passes the assert too.
+`EPythSpotInvalid` is narrower still. It fires only on the forward re-anchor branch, and only when the normalized spot exceeds `u64::MAX / 100`. A missing, non-normalizable, or stale Pyth spot never reaches the assert: pricing silently ignores it and falls back to the Block Scholes forward. A zero spot passes the assert too.
 
 ## Reference ticks and settlement
 
@@ -489,7 +489,7 @@ Two market functions read oracles outside of live pricing, and both are permissi
 	noComments
 />
 
-`set_reference_tick` reads the exact Pyth observation at the market's `reference_tick_source_timestamp_ms`, which market creation set to the expiry minus one cadence period. With no observation at that exact timestamp the call aborts with `expiry_market::EReferenceTickObservationMissing`. The reference tick is the one finite boundary a market admits off its admission grid, and it can be set once: a second, different value aborts with `strike_exposure::EReferenceTickAlreadySet`. A repeat call that resolves to the same tick succeeds and returns that tick, but emits nothing, because `ReferenceTickSet` fires only when the tick is newly recorded. Treat the event as the record of the first successful seeding, not as a receipt for every call.
+`set_reference_tick` reads the exact Pyth observation at the market's `reference_tick_source_timestamp_ms`, which market creation set to the expiry minus one cadence period. With no observation at that exact timestamp the call aborts with `expiry_market::EReferenceTickObservationMissing`. The reference tick is the one finite boundary a market admits off its admission grid, and a caller can set it once: a second, different value aborts with `strike_exposure::EReferenceTickAlreadySet`. A repeat call that resolves to the same tick succeeds and returns that tick, but emits nothing, because `ReferenceTickSet` fires only when the call newly records the tick. Treat the event as the record of the first successful seeding, not as a receipt for every call.
 
 `try_settle` is idempotent and returns a boolean rather than aborting on the common failure. It returns `false` before the expiry, and it returns `true` when the market is now settled or was already settled. A pool flush never blocks it: a market settles the moment it reaches expiry even while the flush that snapshotted it is still valuing other markets, and the only flush-related work it does is to clear a valuation stamp left behind by a superseded flush. Settlement resolves in two stages:
 
