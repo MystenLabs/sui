@@ -6,8 +6,8 @@ use std::{
     sync::Arc,
 };
 
-use mysten_common::assert_reachable;
 use parking_lot::RwLock;
+use sui_protocol_config::assert_reachable_gated;
 use sui_types::{
     accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
     base_types::SequenceNumber,
@@ -146,7 +146,10 @@ impl UnsettledObjectWithdrawals {
             accumulator_running_max_withdraws,
         );
         self.record_unsettled_withdraws(updates, accumulator_version);
-        assert_reachable!("record unsettled object withdraws from in-execution check");
+        assert_reachable_gated!(
+            "record unsettled object withdraws from in-execution check",
+            |pc| pc.check_object_funds_withdraw_in_execution()
+        );
         self.metrics
             .in_execution_check_result
             .with_label_values(&["sufficient"])

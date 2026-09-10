@@ -27,6 +27,15 @@ use sui_protocol_config_macros::{
 };
 use tracing::{info, warn};
 
+pub mod reachability;
+
+// Re-exported so that `assert_reachable_gated!` expands without requiring callers to depend on
+// the antithesis sdk or mysten-common directly.
+#[doc(hidden)]
+pub use antithesis_sdk::linkme;
+#[doc(hidden)]
+pub use mysten_common::assert_reachable_simtest;
+
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
 const MAX_PROTOCOL_VERSION: u64 = 137;

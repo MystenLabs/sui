@@ -16324,6 +16324,7 @@ dependencies = [
 name = "sui-protocol-config"
 version = "0.1.0"
 dependencies = [
+ "antithesis_sdk",
  "clap",
  "fastcrypto",
  "insta",
