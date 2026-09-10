@@ -565,6 +565,7 @@ impl AuthorityStorePruner {
         // embedded rpc-store's `object_version_by_checkpoint` retraction can
         // keep each object's anchor at its true supersession checkpoint.
         let mut effects_to_prune: Vec<(CheckpointSequenceNumber, TransactionEffects)> = vec![];
+        let mut batches_pruned = 0;
         // Absolute tx-seq floor (exclusive) after pruning the current
         // batch — the last-pruned checkpoint's `network_total_transactions`.
         // The embedded rpc-store's history-cohort prune consumes this
@@ -641,6 +642,14 @@ impl AuthorityStorePruner {
                 checkpoints_to_prune = vec![];
                 checkpoint_content_to_prune = vec![];
                 effects_to_prune = vec![];
+                batches_pruned += 1;
+                if batches_pruned >= config.max_pruning_batches_per_run.get() {
+                    debug!(
+                        ?mode,
+                        checkpoint_number, batches_pruned, "pruning run reached its batch budget"
+                    );
+                    return Ok(());
+                }
                 // yield back to the tokio runtime. Prevent potential halt of other tasks
                 tokio::task::yield_now().await;
             }
@@ -959,6 +968,9 @@ impl AuthorityStorePruner {
                 .unwrap_or_default() as i64,
         );
 
+        // Run bounded pruning jobs in dependency order on every tick. Awaiting unbounded jobs in
+        // separate `select!` branches can starve checkpoint pruning while object pruning catches
+        // up; object pruning first advances the safety floor consumed by checkpoint pruning.
         #[cfg(tidehunter)]
         {
             // Index pruning is only implemented for the rocksdb backend.
@@ -967,22 +979,18 @@ impl AuthorityStorePruner {
                 let prune_objects = config.num_epochs_to_retain != u64::MAX;
                 let prune_loop = async move {
                     let mut retraction_cursors = RetractionCursors::default();
-                    let mut objects_prune_interval = tokio::time::interval_at(
-                        Instant::now() + pruning_initial_delay,
-                        tick_duration,
-                    );
-                    let mut checkpoints_prune_interval = tokio::time::interval_at(
+                    let mut prune_interval = tokio::time::interval_at(
                         Instant::now() + pruning_initial_delay,
                         tick_duration,
                     );
                     loop {
                         tokio::select! {
-                            _ = objects_prune_interval.tick(), if prune_objects => {
-                                if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_ref(), &mut retraction_cursors, config.clone(), metrics.clone(), epoch_duration_ms).await {
+                            _ = prune_interval.tick() => {
+                                if prune_objects
+                                    && let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_ref(), &mut retraction_cursors, config.clone(), metrics.clone(), epoch_duration_ms).await
+                                {
                                     error!("Failed to prune objects: {:?}", err);
                                 }
-                            },
-                            _ = checkpoints_prune_interval.tick() => {
                                 if let Err(err) = Self::prune_th(&perpetual_db, &checkpoint_store, num_epochs_to_retain, pruner_watermarks.clone(), !prune_objects) {
                                     error!("Failed to prune checkpoints: {:?}", err);
                                 }
@@ -1037,29 +1045,29 @@ impl AuthorityStorePruner {
 
             let prune_loop = async move {
                 let mut retraction_cursors = RetractionCursors::default();
-                let mut objects_prune_interval =
-                    tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
-                let mut checkpoints_prune_interval =
-                    tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
-                let mut indexes_prune_interval =
+                let mut prune_interval =
                     tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
                 loop {
                     tokio::select! {
-                        _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                            if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_ref(), &mut retraction_cursors, config.clone(), metrics.clone(), epoch_duration_ms).await {
+                        _ = prune_interval.tick() => {
+                            if config.num_epochs_to_retain != u64::MAX
+                                && let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_ref(), &mut retraction_cursors, config.clone(), metrics.clone(), epoch_duration_ms).await
+                            {
                                 error!("Failed to prune objects: {:?}", err);
                             }
-                            if let Err(err) = Self::prune_executed_tx_digests(&perpetual_db, &checkpoint_store).await {
+                            if config.num_epochs_to_retain != u64::MAX
+                                && let Err(err) = Self::prune_executed_tx_digests(&perpetual_db, &checkpoint_store).await
+                            {
                                 error!("Failed to prune executed_tx_digests: {:?}", err);
                             }
-                        },
-                        _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                            if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms, &pruner_watermarks).await {
+                            if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0))
+                                && let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms, &pruner_watermarks).await
+                            {
                                 error!("Failed to prune checkpoints: {:?}", err);
                             }
-                        },
-                        _ = indexes_prune_interval.tick(), if config.num_epochs_to_retain_for_indexes.is_some() => {
-                            if let Err(err) = Self::prune_indexes(jsonrpc_index.as_deref(), &config, epoch_duration_ms, &metrics) {
+                            if config.num_epochs_to_retain_for_indexes.is_some()
+                                && let Err(err) = Self::prune_indexes(jsonrpc_index.as_deref(), &config, epoch_duration_ms, &metrics)
+                            {
                                 error!("Failed to prune indexes: {:?}", err);
                             }
                         }
@@ -1196,10 +1204,22 @@ mod tests {
     use crate::authority::authority_store_types::get_store_object;
     #[cfg(not(tidehunter))]
     use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper};
+    #[cfg(not(tidehunter))]
+    use crate::checkpoints::CheckpointStore;
+    #[cfg(not(tidehunter))]
+    use nonzero_ext::nonzero;
     use prometheus::Registry;
+    #[cfg(not(tidehunter))]
+    use sui_config::node::AuthorityStorePruningConfig;
     use sui_types::base_types::ObjectDigest;
     use sui_types::effects::TransactionEffects;
     use sui_types::effects::TransactionEffectsAPI;
+    #[cfg(not(tidehunter))]
+    use sui_types::message_envelope::Message;
+    #[cfg(not(tidehunter))]
+    use sui_types::messages_checkpoint::VerifiedCheckpoint;
+    #[cfg(not(tidehunter))]
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use sui_types::{
         base_types::{ObjectID, SequenceNumber},
         object::Object,
@@ -1267,6 +1287,83 @@ mod tests {
         assert_eq!(
             AuthorityStorePruner::rpc_store_max_eligible_checkpoint(Some(&store)).unwrap(),
             8,
+        );
+    }
+
+    #[cfg(not(tidehunter))]
+    #[tokio::test]
+    async fn pruning_run_stops_at_batch_budget() {
+        let dir = tempfile::tempdir().unwrap();
+        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+            &dir.path().join("store"),
+            None,
+            None,
+        ));
+        let checkpoint_store = CheckpointStore::new(
+            &dir.path().join("checkpoints"),
+            Arc::new(super::PrunerWatermarks::default()),
+        );
+
+        let mut builder = TestCheckpointBuilder::new(1);
+        let mut content_digests = Vec::new();
+        for sender in 0..5 {
+            builder = builder.start_transaction(sender).finish_transaction();
+            let checkpoint = builder.build_checkpoint();
+            let verified = VerifiedCheckpoint::new_unchecked(checkpoint.summary.clone());
+
+            content_digests.push(*checkpoint.contents.digest());
+            checkpoint_store
+                .insert_checkpoint_contents(checkpoint.contents)
+                .unwrap();
+            checkpoint_store
+                .insert_verified_checkpoint(&verified)
+                .unwrap();
+            for transaction in checkpoint.transactions {
+                perpetual_db
+                    .effects
+                    .insert(&transaction.effects.digest(), &transaction.effects)
+                    .unwrap();
+            }
+        }
+
+        let config = AuthorityStorePruningConfig {
+            max_checkpoints_in_batch: 1,
+            max_transactions_in_batch: usize::MAX,
+            max_pruning_batches_per_run: nonzero!(2usize),
+            ..Default::default()
+        };
+        AuthorityStorePruner::prune_for_eligible_epochs(
+            &perpetual_db,
+            &checkpoint_store,
+            None,
+            &mut RetractionCursors::default(),
+            super::PruningMode::Checkpoints,
+            0,
+            0,
+            6,
+            config,
+            AuthorityStorePruningMetrics::new_for_test(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            checkpoint_store
+                .get_highest_pruned_checkpoint_seq_number()
+                .unwrap(),
+            Some(2)
+        );
+        assert!(
+            checkpoint_store
+                .get_checkpoint_contents(&content_digests[1])
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            checkpoint_store
+                .get_checkpoint_contents(&content_digests[2])
+                .unwrap()
+                .is_some()
         );
     }
 

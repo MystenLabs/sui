@@ -63,6 +63,7 @@ authority-store-pruning-config:
   num-epochs-to-retain: 0
   max-checkpoints-in-batch: 10
   max-transactions-in-batch: 1000
+  max-pruning-batches-per-run: 100
 end-of-epoch-broadcast-channel-capacity: 128
 checkpoint-executor-config:
   checkpoint-execution-max-concurrency: 200
