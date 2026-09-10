@@ -21,6 +21,41 @@
     "path": "composable-move-functions"
   },
   {
+    "slug": "deepbook-margin",
+    "title": "DeepBook Margin",
+    "description": "Build leveraged trading on DeepBook Margin: risk ratios, liquidation mechanics, and the MarginManager lifecycle.",
+    "category": "Onchain finance",
+    "path": "deepbook-margin"
+  },
+  {
+    "slug": "deepbook-move",
+    "title": "DeepBook Move",
+    "description": "Integrate DeepBook pools from Move: place orders onchain, create pools, and use flash loans.",
+    "category": "Onchain finance",
+    "path": "deepbook-move"
+  },
+  {
+    "slug": "deepbook-overview",
+    "title": "DeepBook Overview",
+    "description": "Understand DeepBook V3: architecture, integration models, contract addresses, and supported pools.",
+    "category": "Onchain finance",
+    "path": "deepbook-overview"
+  },
+  {
+    "slug": "deepbook-predict",
+    "title": "DeepBook Predict",
+    "description": "Build on DeepBook Predict, the expiry-based prediction market protocol. Testnet only.",
+    "category": "Onchain finance",
+    "path": "deepbook-predict"
+  },
+  {
+    "slug": "deepbook-sdk",
+    "title": "DeepBook SDK",
+    "description": "Trade on DeepBook from TypeScript with the @mysten/deepbook-v3 SDK: BalanceManager, orders, and swaps.",
+    "category": "Onchain finance",
+    "path": "deepbook-sdk"
+  },
+  {
     "slug": "frontend-apps",
     "title": "Frontend Apps",
     "description": "Build browser dApps with dApp Kit, from wallet connection to onchain queries and transaction execution.",
