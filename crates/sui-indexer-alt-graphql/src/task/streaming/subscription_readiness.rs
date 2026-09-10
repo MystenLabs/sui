@@ -38,8 +38,7 @@ impl SubscriptionReadiness {
     }
 
     /// The first live checkpoint, once recorded. Guaranteed to be `Some` after
-    /// `wait_for_ready()` returns `Ok`. Only the staging-gated subscription setup reads it.
-    #[cfg(feature = "staging")]
+    /// `wait_for_ready()` returns `Ok`. Only the subscription setup reads it.
     pub(crate) fn first_live_checkpoint(&self) -> Option<u64> {
         self.first_live_checkpoint.get().copied()
     }

@@ -1,5 +1,6 @@
 ---
 source: crates/sui-indexer-alt-graphql/src/lib.rs
+assertion_line: 680
 expression: sdl
 ---
 """
@@ -4182,6 +4183,37 @@ type StoreExecutionTimeObservationsTransaction {
 }
 
 
+type Subscription {
+	"""
+	Subscribe to checkpoints as they are finalized.
+	
+	Pass `after` (opaque cursor) or `afterCheckpoint` (sequence number) to resume from a known point. If both are provided, the subscription resumes from whichever is later.
+	
+	This subscription is not yet available for use.
+	"""
+	checkpoints(after: String, afterCheckpoint: UInt53): CheckpointEdge!
+	"""
+	Subscribe to events as they are emitted, with optional filtering.
+	
+	Resume from a known point with `after` (an opaque cursor from a prior delivery) and/or `filter.afterCheckpoint`. The subscription first backfills the matching events after that point via the scanning API, then continues with the live stream.
+	
+	Each matching event is yielded individually as an edge, ordered by checkpoint, then by transaction position within the checkpoint, then by position within the transaction. Each edge carries a cursor for resumption.
+	
+	This subscription is not yet available for use.
+	"""
+	events(filter: EventFilter, after: String): EventEdge!
+	"""
+	Subscribe to transactions as they are finalized, with optional filtering.
+	
+	Resume from a known point with `after` (an opaque cursor from a prior delivery) and/or `filter.afterCheckpoint`. The subscription first backfills the matching transactions after that point via the scanning API, then continues with the live stream.
+	
+	Each matching transaction is yielded individually as an edge, ordered by checkpoint and then by position within the checkpoint. Each edge carries a cursor for resumption.
+	
+	This subscription is not yet available for use.
+	"""
+	transactions(filter: TransactionFilter, after: String): TransactionEdge!
+}
+
 """
 String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
 """
@@ -4842,4 +4874,5 @@ directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: Query
 	mutation: Mutation
+	subscription: Subscription
 }
