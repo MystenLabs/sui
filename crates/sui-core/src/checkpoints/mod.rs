@@ -1641,11 +1641,7 @@ impl CheckpointBuilder {
 
             let _scope = monitored_scope("CheckpointBuilder::causal_sort");
             let ccp_digest = consensus_commit_prologue.map(|(d, _)| d);
-            Self::assert_already_causally_sorted(
-                pending.details.checkpoint_height,
-                &root_digests,
-                &root_effects,
-            );
+            Self::assert_already_causally_sorted(pending.details.checkpoint_height, &root_effects);
             let mut sorted = CausalOrder::causal_sort_with_ccp(root_effects, ccp_digest);
 
             if let Some(settlement_key) = &checkpoint_roots.settlement_root {
@@ -1770,32 +1766,15 @@ impl CheckpointBuilder {
     // Extracts the consensus commit prologue digest and effects from the root transactions.
     // The consensus commit prologue is expected to be the first transaction in the roots.
     /// Experimental check: verifies that the root effects, in the order they were
-    /// written by the consensus handler, already respect the dependency edges recorded
-    /// in each transaction's effects. If this never fires, `CausalOrder::causal_sort`
-    /// is a no-op with respect to correctness and could be removed.
+    /// written by the consensus handler, already satisfy every constraint that
+    /// `CausalOrder::causal_sort` would enforce. If this never fires, the sort
+    /// could be removed.
     fn assert_already_causally_sorted(
         height: CheckpointHeight,
-        root_digests: &[TransactionDigest],
         root_effects: &[TransactionEffects],
     ) {
-        let mut seen: HashSet<TransactionDigest> = HashSet::with_capacity(root_effects.len());
-        let in_batch: HashSet<TransactionDigest> = root_effects
-            .iter()
-            .map(|e| *e.transaction_digest())
-            .collect();
-        for (idx, effects) in root_effects.iter().enumerate() {
-            let digest = *effects.transaction_digest();
-            for dep in effects.dependencies() {
-                if in_batch.contains(dep) && !seen.contains(dep) {
-                    let dep_idx = root_digests.iter().position(|d| d == dep);
-                    panic!(
-                        "CAUSAL_SORT_VIOLATION: checkpoint height {height}: tx {digest:?} at \
-                         index {idx} depends on {dep:?} at index {dep_idx:?}, which appears later \
-                         in the root effects"
-                    );
-                }
-            }
-            seen.insert(digest);
+        if let Err(violation) = CausalOrder::check_already_sorted(root_effects) {
+            panic!("CAUSAL_SORT_VIOLATION: checkpoint height {height}: {violation}");
         }
     }
 

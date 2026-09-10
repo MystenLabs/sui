@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{InputConsensusObject, TransactionEffects};
@@ -56,6 +56,48 @@ impl CausalOrder {
             this.insert(item);
         }
         this.into_list()
+    }
+
+    /// Experimental: checks whether `effects` already satisfies every ordering constraint
+    /// that `causal_sort` would enforce, i.e. explicit effects dependencies plus the
+    /// synthesized RWLock edges (writer of version N+1 after readers of version N).
+    /// Returns a description of the first violation found.
+    pub fn check_already_sorted(effects: &[TransactionEffects]) -> Result<(), String> {
+        let position: HashMap<TransactionDigest, usize> = effects
+            .iter()
+            .enumerate()
+            .map(|(i, e)| (*e.transaction_digest(), i))
+            .collect();
+        let rwlock_builder = RWLockDependencyBuilder::from_effects(effects);
+        let mut seen: HashSet<TransactionDigest> = HashSet::with_capacity(effects.len());
+
+        for (idx, e) in effects.iter().enumerate() {
+            let digest = *e.transaction_digest();
+            let violation = |kind: &str, dep: &TransactionDigest| {
+                format!(
+                    "{kind}: tx {digest:?} at index {idx} depends on {dep:?} at index {:?}, \
+                     which appears later in the batch",
+                    position.get(dep)
+                )
+            };
+
+            for dep in e.dependencies() {
+                if position.contains_key(dep) && !seen.contains(dep) {
+                    return Err(violation("effects dependency", dep));
+                }
+            }
+
+            let mut rw_deps = BTreeSet::new();
+            rwlock_builder.add_dependencies_for(digest, &mut rw_deps);
+            for dep in &rw_deps {
+                if *dep != digest && !seen.contains(dep) {
+                    return Err(violation("rwlock edge", dep));
+                }
+            }
+
+            seen.insert(digest);
+        }
+        Ok(())
     }
 
     fn from_vec(effects: Vec<TransactionEffects>) -> Self {
@@ -294,6 +336,32 @@ mod tests {
         // both [5] and [2] are present (but order is not fixed)
         assert!(r.contains(&5));
         assert!(r.contains(&2));
+    }
+
+    #[test]
+    pub fn test_check_already_sorted() {
+        let e2 = e(d(2), vec![d(3)]);
+        let e3 = e(d(3), vec![]);
+        assert!(CausalOrder::check_already_sorted(&[e3.clone(), e2.clone()]).is_ok());
+        let err = CausalOrder::check_already_sorted(&[e2, e3]).unwrap_err();
+        assert!(err.starts_with("effects dependency"), "{err}");
+
+        let mut reader = e(d(5), vec![]);
+        let mut writer = e(d(3), vec![]);
+        let obj_digest = ObjectDigest::new(Default::default());
+        reader.unsafe_add_input_consensus_object_for_testing(InputConsensusObject::ReadOnly((
+            o(1),
+            SequenceNumber::from_u64(1),
+            obj_digest,
+        )));
+        writer.unsafe_add_input_consensus_object_for_testing(InputConsensusObject::Mutate((
+            o(1),
+            SequenceNumber::from_u64(1),
+            obj_digest,
+        )));
+        assert!(CausalOrder::check_already_sorted(&[reader.clone(), writer.clone()]).is_ok());
+        let err = CausalOrder::check_already_sorted(&[writer, reader]).unwrap_err();
+        assert!(err.starts_with("rwlock edge"), "{err}");
     }
 
     fn extract(e: Vec<TransactionEffects>) -> Vec<u8> {
