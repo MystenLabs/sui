@@ -87,6 +87,11 @@ impl ObjectFundsCheckerDEPRECATED {
         &self.unsettled
     }
 
+    #[cfg(test)]
+    pub(crate) fn metrics(&self) -> &Arc<metrics::ObjectFundsCheckerMetrics> {
+        &self.metrics
+    }
+
     #[instrument(level = "debug", skip_all, fields(tx_digest = ?certificate.digest()))]
     pub fn should_commit_object_funds_withdraws(
         &self,
