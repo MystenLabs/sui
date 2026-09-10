@@ -58,8 +58,8 @@ impl CausalOrder {
         this.into_list()
     }
 
-    /// Experimental: checks, using only object versions recorded in effects (never
-    /// `dependencies()`), that `effects` in the given order is a valid causal order.
+    /// Checks, using only object versions recorded in effects (never `dependencies()`),
+    /// that `effects` in the given order is already a valid causal order.
     ///
     /// The invariant is that each object's versions advance monotonically in batch order:
     /// the first read of an object seeds its latest version, every later read must see that

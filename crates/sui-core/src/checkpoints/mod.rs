@@ -1763,12 +1763,9 @@ impl CheckpointBuilder {
             .collect()
     }
 
-    // Extracts the consensus commit prologue digest and effects from the root transactions.
-    // The consensus commit prologue is expected to be the first transaction in the roots.
-    /// Experimental check: verifies that the root effects, in the order they were
-    /// written by the consensus handler, already satisfy every constraint that
-    /// `CausalOrder::causal_sort` would enforce. If this never fires, the sort
-    /// could be removed.
+    /// Verifies in test configurations that the root effects, in the order the consensus
+    /// handler wrote them, already satisfy every constraint `CausalOrder::causal_sort` enforces.
+    /// If this never fires, the sort can be removed.
     fn assert_already_causally_sorted(
         height: CheckpointHeight,
         root_effects: &[TransactionEffects],
@@ -1781,6 +1778,8 @@ impl CheckpointBuilder {
         }
     }
 
+    // Extracts the consensus commit prologue digest and effects from the root transactions.
+    // The consensus commit prologue is expected to be the first transaction in the roots.
     fn extract_consensus_commit_prologue(
         &self,
         root_digests: &[TransactionDigest],
