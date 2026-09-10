@@ -75,7 +75,7 @@ The package ships 3 subpaths beside its root, each a separate entry in its `expo
 
 ## Create the client {#client}
 
-Register the Predict client as an extension on any Sui client that exposes the core API. The examples select the network in one configuration module that every other file imports:
+Register the Predict client as an extension on any Sui client that exposes the core API. The examples select the network in one configuration module, which the other examples reach directly or through the client module:
 
 <ImportContent source="examples/deepbook-predict/src/config.ts" mode="code" tag="config" />
 
@@ -86,12 +86,12 @@ The client module extends a gRPC client with the Predict client for that network
 Use `predict` to create the registration that `$extend` takes. It returns a `SuiClientRegistration`, and the Predict client lands on `client.predict` unless you pass another `name`. It takes these parameters:
 
 - `network`: The recorded deployment to address, `'testnet'` or `'mainnet'`. The SDK resolves it with `getConfig(network)`.
-- `config`: Optional. A `PredictConfig` for a deployment of your own. When you pass it, the SDK uses it in place of the recorded deployment and does not consult `network`.
-- `name`: Optional. The property name the client registers under. Defaults to `'predict'`.
+- `config`: An optional `PredictConfig` for a deployment of your own. When you pass it, the SDK uses it in place of the recorded deployment and does not consult `network`.
+- `name`: The optional property name the client registers under, which defaults to `'predict'`.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="273-281" />
 
-To construct the client without `$extend`, pass the same options plus your Sui client to `new PredictClient`:
+To construct the client without `$extend`, pass `network`, your Sui client, and an optional `config` to `new PredictClient`:
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="312-316" />
 
@@ -151,7 +151,7 @@ Each value changes per deployment for its own reason:
 | `objects.oracleRegistry`, `objects.accountRegistry` | The Propbook and account packages share their own registries per deployment. |
 | `quoteCoinType` | Mainnet quotes in native USDC. Testnet quotes in a mintable test coin with the same module path and decimals but a different package. |
 | `coinTypes.plp` | Each deployment's Predict package defines its own PLP type. The type keeps the package ID it was first published under, while `packages.predict` moves to the latest package on an upgrade, so read the type rather than building it. |
-| `units` | The SDK records lot size, fixed-point scale, and decimals per deployment rather than assuming them. |
+| `units` | Each deployment records its own lot size, fixed-point scale, and decimals. The 2 current deployments record the same values, and the client reads only `positionLotSize`. |
 | `underlyings` | Each underlying carries its propbook ID and its 3 oracle object IDs, and rebinding can change them. |
 
 Keep live protocol state out of this record. Market IDs, expiries, and reference ticks change as markets expire and new ones open, and cadence terms and oracle observations change independently of any deployment, so read them at runtime.
@@ -160,7 +160,7 @@ For a deployment of your own, pass a `PredictConfig` as `config` to `predict` or
 
 ## Units {#units}
 
-The client takes and returns human-readable values: USD amounts and prices as decimals, probabilities from 0 to 1, and PLP shares as raw integers. It converts each one to the onchain integer the contracts expect:
+The client takes and returns human-readable values: US dollar (USD) amounts and prices as decimals, probabilities from 0 to 1, and PLP shares as raw integers. It converts each one to the onchain integer the contracts expect:
 
 | **Value** | **You pass or receive** | **Onchain form** |
 | --- | --- | --- |
@@ -201,7 +201,7 @@ Resolve `module` before you look up `code`. Error numbers restart at `0` in ever
 
 <ImportContent source="packages/deepbook-v3/src/predict/errors.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="14-43" />
 
-Both SDK quote methods, `read.quoteMint` and `read.quoteRedeem`, dry-run the same transaction their matching builder produces, against the real account and the real fee path, so they raise the same errors the write would, insufficient balance included. Treat a successful quote as a preflight. `read.quoteMint` sends no `maxCost` or `maxProbability`, so a quote never trips a slippage cap. The Move `expiry_market::quote_mint` is a different function with a similar name: it prices only, and it checks no account, no slippage cap, and no exposure capacity.
+Both SDK quote methods, `read.quoteMint` and `read.quoteRedeem`, dry-run the same transaction their matching builder produces, against the real account and the real fee path, so they raise the same errors the write would, insufficient balance included. Treat a successful quote as a preflight. `read.quoteMint` sends only the options you pass. Called with `{ quantity }`, it carries no slippage cap, and an options object that also holds `maxCost` or `maxProbability` passes them through, so the quote aborts on a cap as the mint would. The Move `expiry_market::quote_mint` is a different function with a similar name: it prices only, and it checks no account, no slippage cap, and no exposure capacity.
 
 The SDK never executes a transaction, so a write that fails after your signer submits it arrives as a failed execution result rather than a thrown error. Pass that result's status error to `decodeMoveAbort` to get the same `PredictMoveError`, or `null` when the failure is not a Move abort:
 
@@ -253,7 +253,7 @@ const { orderId } = client.predict.decode.mint(result.Transaction);
 
 The decoders read each event's BCS bytes rather than its JSON rendering, so a result decodes the same from any transport. They match events against the package IDs in the client's configuration, so decode with a client configured for the network that executed the transaction. An event that matches but carries no BCS payload throws `PredictInputError`.
 
-Each singular decoder throws `PredictInputError` unless the result holds exactly one matching event. `mints`, `redeems`, and `claims` are plural forms that return every matching receipt in event order, for a programmable transaction block (PTB) that batches several actions. The other decoders have no plural form.
+Each singular decoder throws `PredictInputError` unless the result holds exactly 1 matching event, so a result executed without events makes it throw. `mints`, `redeems`, and `claims` are plural forms that return every matching receipt in event order, for a programmable transaction block (PTB) that batches several actions, and they return an empty array for a result that carries no events. The other decoders have no plural form.
 
 The following table lists every decoder, the event it reads, and the page that documents its receipt:
 

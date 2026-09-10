@@ -73,7 +73,7 @@ Minting opens a position at the live price. Both mint builders check each numeri
 
 ### `read.quoteMint` {#quote-mint}
 
-Use `read.quoteMint` to price a mint exactly before you send it. It returns a `Promise<MintQuote>`. It simulates the same mint `tx.mint` builds, with the owner as sender, against the owner's real account and the real fee path, so it throws the same typed errors the mint would, insufficient balance included, and serves as a preflight check. The dry run carries no `maxCost` or `maxProbability`, because a cap only gates a mint through an abort and never changes its receipt.
+Use `read.quoteMint` to price a mint exactly before you send it. It returns a `Promise<MintQuote>`. It simulates the same mint `tx.mint` builds, with the owner as sender, against the owner's real account and the real fee path, so it throws the same typed errors the mint would, insufficient balance included, and serves as a preflight check. It sends only the options you pass. Called with `{ quantity }`, the dry run carries no slippage cap, because a cap only gates a mint through an abort and never changes its receipt. An options object that also holds `maxCost` or `maxProbability` passes them through, and the quote then aborts on a cap exactly as the mint would.
 
 The owner needs a funded account for the quote to succeed. The Move `expiry_market::quote_mint` is a different call that prices only and checks no account and no slippage cap; see [Quote a mint](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#quote-a-mint).
 
@@ -123,7 +123,7 @@ It takes these parameters:
 - `opts`: A `MintOptions` object with 3 fields:
   - `quantity`: The payout quantity in USDC, which is the position's maximum payout at 1 USDC per contract. It must be a whole lot of 0.01 USDC.
   - `maxCost`: The optional ceiling on the all-in account debit, in USDC. Derive it from the quote's `cost`, and round it to at most 6 decimals, because a finer value throws `PredictInputError`.
-  - `maxProbability`: The optional ceiling on the quoted per-contract probability before fees, between 0 and 1. Derive it from the quote's `entryProbability`.
+  - `maxProbability`: The optional ceiling on the quoted per-contract probability before fees, between 0 and 1. Derive it from the quote's `entryProbability` and round it to at most 9 decimals, because the SDK throws `PredictInputError` for more.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="625-625" />
 
@@ -161,7 +161,7 @@ Closing takes one of 2 paths, depending on whether the market has settled. Befor
 
 ### `read.quoteRedeem` {#quote-redeem}
 
-Use `read.quoteRedeem` to price a live close exactly before you send it. It returns a `Promise<RedeemQuote>`. It simulates the same transaction `tx.redeem` builds, with the owner as sender, so it throws the same typed errors the close would. `tx.redeem` sends no floors, so the quote is the only price check an SDK close gets: quote immediately before you send, and treat the proceeds as an estimate.
+Use `read.quoteRedeem` to price a live close exactly before you send it. It returns a `Promise<RedeemQuote>`. It simulates the same transaction `tx.redeem` builds, with the owner as sender, so it throws the same typed errors the close would. `tx.redeem` sends no floors, so the quote is the only price check a facade close gets: quote immediately before you send, and treat the proceeds as an estimate.
 
 It takes these parameters:
 
@@ -241,7 +241,7 @@ It takes this parameter:
 
 ### `read.hasPosition` {#has-position}
 
-Use `read.hasPosition` to check whether an owner's account still holds a specific order on a specific market. It returns a `Promise<boolean>`. It is the cheap check for an order ID your app stored, which goes stale after a full close or after a partial close replaces it.
+Use `read.hasPosition` to check whether an owner's account still holds a specific order on a specific market. It returns a `Promise<boolean>`. It is the cheap check for an order ID your app stored, which goes stale after a full close or after a partial close replaces it. The read loads the owner's wrapper, so call it for an account that exists.
 
 It takes these parameters:
 
@@ -253,7 +253,7 @@ It takes these parameters:
 
 ## Receipt decoders {#decode}
 
-The receipt decoders turn an executed transaction's events into typed receipts, with no network call. Execute the transaction with events included and pass the result, because a decoder throws `PredictInputError` when a matching event carries no Binary Canonical Serialization (BCS) payload. Each singular decoder throws `PredictInputError` unless the result holds exactly 1 matching event, and each plural decoder returns every matching receipt in event order, for a transaction that batches several trades. [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#decode) covers how the decoders read events.
+The receipt decoders turn an executed transaction's events into typed receipts, with no network call. Execute the transaction with events included and pass the result. Without events, a singular decoder throws `PredictInputError` because it finds no matching event, and a plural decoder returns an empty array. A decoder also throws `PredictInputError` when a matching event carries no Binary Canonical Serialization (BCS) payload. Each singular decoder throws `PredictInputError` unless the result holds exactly 1 matching event, and each plural decoder returns every matching receipt in event order, for a transaction that batches several trades. [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#decode) covers how the decoders read events.
 
 ### `decode.mint` and `decode.mints` {#decode-mint}
 

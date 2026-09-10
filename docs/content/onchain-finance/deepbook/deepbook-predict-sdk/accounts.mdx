@@ -57,7 +57,7 @@ verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); deepbook-predic
 
 The account functions create a trader's shared `AccountWrapper`, move USDC in and out of it, and attach a builder code, and the `/account` subpath exposes the account primitive underneath for transactions you compose yourself. [Accounts and Custody](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager) explains the custody mechanism: the wrapper, the `Auth` hot potato, settlement, and the account events.
 
-Every `client.predict` call below assumes the client from [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#client).
+The `client.predict` calls assume the client from [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#client).
 
 ## Derive the wrapper ID {#wrapper-id}
 
@@ -115,7 +115,7 @@ Decode the result with [`decode.createManager`](#decode-create-manager) to read 
 
 ### `tx.deposit` {#deposit}
 
-Use `tx.deposit` to move USDC from the signer into the account's stored balance. It returns a `Transaction`. The SDK adds a `coinWithBalance` intent for the deployment's quote coin, which resolves when the transaction is built, drawing on the sender's coin objects and address balance. Without `create`, the transaction then calls `account::deposit_funds` on the wrapper at `wrapperIdFor(owner)`, which settles pending funds before it deposits.
+Use `tx.deposit` to move USDC from the signer into the account's stored balance. It returns a `Transaction`. The SDK adds a `coinWithBalance` intent for the deployment's quote coin, which resolves when you build the transaction, drawing on the sender's coin objects and address balance. Without `create`, the transaction then calls `account::deposit_funds` on the wrapper at `wrapperIdFor(owner)`, which settles pending funds before it deposits.
 
 It takes these parameters:
 

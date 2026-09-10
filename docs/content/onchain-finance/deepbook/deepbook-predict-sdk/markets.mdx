@@ -54,7 +54,7 @@ verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); deepbook-predic
 
 The markets and pricing surface of `@mysten/deepbook-v3/predict` finds live expiry markets, turns a position you describe in US dollars (USD) into the tick pair the contract takes, and prices strikes onchain or locally. [Strikes and Ticks](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys) explains the tick grid and the admission grid, and [Oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle) explains the pricer that every price read loads.
 
-Every method on this page hangs off `client.predict`, the extension that [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#client) registers. Reads run as simulated transactions against the full node for the configured network, so they need no indexer, no account, and no signature.
+The market and pricing methods belong to `client.predict`, the extension that [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#client) registers. Reads run as simulated transactions against the full node for the configured network, so they need no indexer, no account, and no signature.
 
 ## Market reads
 
@@ -83,7 +83,7 @@ Each `ActiveMarket` carries these fields:
 
 Use `read.market` to read a single market's current state, including its net asset value (NAV). It returns a `Promise<MarketSummary | null>`, and it resolves to `null` when the registry holds no market for that underlying and expiry.
 
-It takes these parameters:
+It takes this parameter:
 
 - `m`: The market coordinates, an object with these fields:
   - `underlying`: The underlying symbol, a key of `getConfig(network).underlyings`.
@@ -95,7 +95,7 @@ It takes these parameters:
 
 `MarketSummary` carries every `ActiveMarket` field plus 1 more:
 
-- `nav`: The market's current NAV in USD from `expiry_market::current_nav`, which is free expiry cash minus the marked liability of the exposure book, floored at zero.
+- `nav`: The market's current NAV in USD from `expiry_market::current_nav`, which is free expiry cash minus the marked liability of the exposure book, floored at 0.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="178-192" />
 
@@ -219,7 +219,7 @@ Both pricing reads price against the chain's own live pricer, which `expiry_mark
 
 Use `read.price` to get the chain's probability for both sides of a single strike. It returns a `Promise<{ up: number; down: number }>`, where each value is a probability between 0 and 1: `up` for settlement above the strike and `down` for settlement at or below it.
 
-It takes these parameters:
+It takes this parameter:
 
 - `m`: The market coordinates and strike, an object with these fields:
   - `underlying`: The underlying symbol.
@@ -239,7 +239,7 @@ The SDK loads the pricer and reads `pricing::range_price` for `(strike, positive
 
 Use `read.pricer` to read a market's resolved live pricer once and price every strike locally from it. It returns a `Promise<BoardPricer & { asOf: PricerSnapshot['sources'] }>`: a board pricer bound to that snapshot, plus the source timestamps behind it.
 
-It takes these parameters:
+It takes this parameter:
 
 - `m`: The market coordinates, an object with these fields:
   - `underlying`: The underlying symbol.
@@ -374,7 +374,7 @@ The chain reanchors only while `use_pyth_spot_for_forward` is on and the Pyth sp
 
 Use `boardPricer` to bind a `PricerInputs` snapshot to the board methods. It returns a `BoardPricer`, the shape `read.pricer` returns without `asOf`, and it makes no chain call.
 
-It takes these parameters:
+It takes this parameter:
 
 - `inputs`: The resolved forward and rolled-down SVI surface.
 

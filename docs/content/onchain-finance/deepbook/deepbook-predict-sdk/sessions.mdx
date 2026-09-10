@@ -90,7 +90,7 @@ const protocolConfig = ids.protocolConfig;
 
 Use `getSessionsConfig` to read the deployed sessions IDs for a network, so you never transcribe them. It returns the frozen deployment record for that network, typed `SessionsConfig & SessionsSpotIds & SessionsPredictIds`, and it throws an `Error` for any network other than `'testnet'` or `'mainnet'`. For a deployment of your own, construct a `SessionsConfig` and pass it to the `SessionsContract` constructor directly.
 
-It takes these parameters:
+It takes this parameter:
 
 - `network`: The network to resolve. Its type is `NetworkArg`, the Sui client's network type, so `client.network` passes directly.
 
@@ -100,7 +100,7 @@ It takes these parameters:
 
 Use the `SessionsContract` constructor to bind every builder to one deployment. It reads only the 4 `SessionsConfig` IDs, so the wider `getSessionsConfig` result passes directly, and each Predict builder takes `protocolConfig` as its own parameter.
 
-It takes these parameters:
+It takes this parameter:
 
 - `config`: The deployed sessions and account IDs, usually the `getSessionsConfig` result.
 
@@ -144,7 +144,7 @@ An owner has 2 derived objects in the account registry, and `SessionsContract` c
 
 Use `deriveAccountWrapperId` to compute the owner's `AccountWrapper` ID. It returns a `string`. It delegates to `AccountContract` with the account package and registry that the Predict facade also uses, so it returns the same ID as the wrapper derivation on [Predict Accounts SDK](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#wrapper-id).
 
-It takes these parameters:
+It takes this parameter:
 
 - `owner`: The address that owns the account.
 
@@ -154,7 +154,7 @@ It takes these parameters:
 
 Use `deriveAccountId` to compute the owner's canonical account ID, a different derived object from the wrapper. It returns a `string`. Session grants attach to this object, and `deriveSessionsFieldId` derives from it.
 
-It takes these parameters:
+It takes this parameter:
 
 - `owner`: The address that owns the account.
 
@@ -164,7 +164,7 @@ It takes these parameters:
 
 Use `deriveSessionsFieldId` to compute the object ID of the owner's `DataKey<SessionsApp>` dynamic field, which holds every grant. It returns a `string`. It derives the account ID from `owner` first, so pass the owner address, not an account or wrapper ID.
 
-It takes these parameters:
+It takes this parameter:
 
 - `owner`: The address that owns the account.
 
@@ -236,7 +236,7 @@ It takes these parameters:
 
 Use the static `SessionsContract.decodeSessions` to decode an account's stored grants from the raw BCS content of its `DataKey<SessionsApp>` field object. It returns a `SessionGrant[]`. It re-encodes what it parsed and throws an `Error` when the length differs from the input, so truncated or padded bytes fail instead of decoding to an empty list, and an empty result means the account holds no grants.
 
-It takes these parameters:
+It takes this parameter:
 
 - `contents`: The whole field object's BCS content, as `client.core.getObject` returns it with `include: { content: true }`.
 
@@ -369,7 +369,7 @@ The following example quotes a mint through the owner's facade, then mints, clos
 
 ## Revoke a session {#revoke}
 
-Revocation removes a grant and frees its slot from the next transaction on. It stops future calls only: it does not unwind positions, cancel resting orders, or reverse executed trades.
+Revocation removes a grant and frees its slot immediately, and the revoked address cannot trade from the next transaction on. It stops future calls only: it does not unwind positions, cancel resting orders, or reverse executed trades.
 
 ### `revokeSession` {#revoke-session}
 

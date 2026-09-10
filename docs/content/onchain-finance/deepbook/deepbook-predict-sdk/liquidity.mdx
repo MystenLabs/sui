@@ -61,10 +61,10 @@ Each request takes an optional floor in its options object. The floor bounds the
 
 | **Request** | **Amount you pass** | **Floor** | **Floor units** |
 |---|---|---|---|
-| `tx.supplyPlp` | `amountUsdc`, a USD decimal as a `number` or `string` | `minPlpOut` | Raw 6-decimal PLP shares as a `bigint` |
+| `tx.supplyPlp` | `amountUsdc`, a US dollar (USD) decimal as a `number` or `string` | `minPlpOut` | Raw 6-decimal PLP shares as a `bigint` |
 | `tx.withdrawPlp` | `shares`, raw 6-decimal PLP shares as a `bigint` | `minUsdcOut` | A USD decimal as a `number` or `string` |
 
-A flush that quotes a request below its floor declines it instead of filling it smaller. At the deployed `lp_request_limit_flush_attempts` of `1`, that first miss cancels the request and refunds the escrow to your account, so queue a new request to try again. A flush that has room for only part of a request fills that part at the same mark and leaves the remainder queued with its floor rescaled. A request that you make after a flush has taken its snapshot waits for the flush after it.
+A flush that quotes a request below its floor declines it instead of filling it smaller. At the deployed `lp_request_limit_flush_attempts` of `1`, that first miss cancels the request and refunds the escrow to your account, so queue a new request to try again. The flush also refunds a request whose mark or quote is not executable at all, rather than aborting. A flush that has room for only part of a request fills that part at the same mark and leaves the remainder queued with its floor rescaled. A request that you make after a flush has taken its snapshot waits for the flush after it.
 
 The SDK does not check the per-request minimums. The contract aborts a supply below 10 USDC with `EBelowMinSupplyRequest` and a withdrawal below 1 PLP, which is `1_000_000n` raw, with `EBelowMinWithdrawRequest`. The Vault page lists [every queue rule](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#async-liquidity) and explains [how a flush forms the mark](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#the-flush).
 
@@ -180,13 +180,13 @@ It takes no parameters.
 
 Use `read.plpBalance` to read the PLP shares in an account's custody. It returns a `Promise<bigint>` in raw 6-decimal shares, the unit `tx.withdrawPlp` takes.
 
-It takes these parameters:
+It takes this parameter:
 
 - `owner`: The address that owns the account.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="928-928" />
 
-It reads the account balance accessor for the deployment's PLP coin type, `client.predict.cfg.coinTypes.plp`. That accessor counts stored balance plus funds delivered to the account and not yet settled, so shares from a filled supply appear without a separate settle. For the account's USDC, use [`read.balance`](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#balance).
+It reads the account balance accessor for the deployment's PLP coin type, `client.predict.cfg.coinTypes.plp`. That accessor counts stored balance plus funds delivered to the account and not yet settled, so shares from a filled supply appear without a separate settle. For the account's USDC, use [`read.balance`](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#balance). The read loads the owner's wrapper, so call it for an account that exists.
 
 ## Decoder functions {#decode}
 
@@ -196,7 +196,7 @@ The liquidity decoders parse an executed transaction's events locally and make n
 
 Use `decode.plpRequest` to read the receipt of a `tx.supplyPlp` or `tx.withdrawPlp` transaction, including the queue index a cancel needs. It returns a `PlpRequestReceipt` built from the transaction's `SupplyRequested` or `WithdrawRequested` event.
 
-It takes these parameters:
+It takes this parameter:
 
 - `r`: The executed transaction result, a `DecodableTransactionResult` with its events included.
 
@@ -218,7 +218,7 @@ It takes these parameters:
 
 Use `decode.plpCancel` to read the receipt of a `tx.cancelSupplyPlp` or `tx.cancelWithdrawPlp` transaction. It returns a `PlpCancelReceipt` built from the transaction's `RequestCancelled` event.
 
-It takes these parameters:
+It takes this parameter:
 
 - `r`: The executed transaction result, a `DecodableTransactionResult` with its events included.
 
@@ -233,7 +233,7 @@ It takes these parameters:
 
 <ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="225-234" />
 
-A flush that refunds your request emits the same event inside the flush transaction, with a `reason` that separates your own cancel from a missed floor. `PlpCancelReceipt` does not carry `reason`, and the [pool events](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#events) list its values.
+A flush that refunds your request emits the same event inside the flush transaction, with a `reason` that separates your own cancel (`0`) from a mark or quote the flush found not executable (`1`) and a missed floor (`2`). `PlpCancelReceipt` does not carry `reason`, and the [pool events](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#events) list its values.
 
 ## Example {#example}
 
