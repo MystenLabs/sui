@@ -32,10 +32,13 @@ session-signed trades, and like everything else here they only return the
 transaction.
 
 No package ID, object ID, or coin type is hardcoded here. They all come from
-`@mysten/deepbook-v3/predict`, which carries the record for the deployment its
+`@mysten/deepbook-v3/predict`, which carries a record for each deployment its
 release was cut against. `src/config.ts` asserts that record is
-`predict-testnet-8-21` at startup, so an SDK upgrade that moves Testnet to a new
-deployment fails immediately instead of trading against untested IDs.
+`deepbook-predict-testnet` on Testnet and `deepbook-predict-mainnet` on Mainnet
+at startup, so an SDK upgrade that moves a network to a new deployment fails
+immediately instead of trading against untested IDs.
 
-DeepBook Predict is deployed on Testnet only. There is no Mainnet deployment, and
-`getConfig('mainnet')` throws.
+The examples default to Testnet, where the quote coin is a mintable test coin
+that displays as DUSDC. Set `NETWORK` to `mainnet` in `src/config.ts` to target
+the Mainnet deployment, which settles in native USDC. Read the quote coin from
+`getConfig(network).quoteCoinType` rather than assuming either.

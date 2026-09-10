@@ -63,8 +63,8 @@ export function admissibleStrike(market: ActiveMarket, targetUsd: number): numbe
 	// Trim binary-float residue before returning. Strikes scale by 1e9 and the SDK
 	// throws when a value carries more than nine decimals, which the multiply above
 	// produces for sub-dollar steps: at a 0.1 step it lands on values such as
-	// 96519.90000000001. Today's cadences use 1 and 100, so this is defensive, but
-	// the step is mutable protocol state and is read from the market.
+	// 96519.90000000001. Both enabled cadences use a 1 USD step today, so this is
+	// defensive, but the step is mutable protocol state and is read from the market.
 	return Number(snapped.toFixed(9));
 }
 // docs::/#markets

@@ -43,8 +43,8 @@ answer: >-
   half-open region (lower, higher]. Tick 0 is the negative-infinity sentinel and
   tick 1073741823 is the positive-infinity sentinel. A minted position is a
   packed u256 order ID that is unique only within one expiry market.
-last_verified: 2026-09-03
-verified_against: predict-testnet-8-21
+last_verified: 2026-09-10
+verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
 ---
 
 Every strike in DeepBook Predict is an absolute integer tick counted from zero. One expiry market fixes one `tick_size`, and the raw strike is the product:
@@ -78,7 +78,7 @@ public fun reference_tick_source_timestamp_ms(market: &ExpiryMarket): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="tick_size,admission_tick_size,reference_tick,reference_tick_source_timestamp_ms"
 	noComments
 />
@@ -92,22 +92,19 @@ The only conversion in the other direction is `range_codec::strike_from_tick`, w
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="strike_from_tick"
 	noComments
 />
 
-The Testnet deployment runs one underlying, BTC, with five enabled cadences. Every enabled cadence uses the same fine grid and differs only in how coarse its admission grid is:
+Both the Mainnet and the Testnet deployment run one underlying, BTC, with two enabled cadences, and both cadences use the same grids:
 
 | **Cadence** | **`tick_size` raw** | **Fine grid** | **`admission_tick_size` raw** | **Admission grid** |
 |---|---|---|---|---|
 | 1m | `10_000_000` | 0.01 USD | `1_000_000_000` | 1 USD |
 | 5m | `10_000_000` | 0.01 USD | `1_000_000_000` | 1 USD |
-| 1h | `10_000_000` | 0.01 USD | `1_000_000_000` | 1 USD |
-| 1d | `10_000_000` | 0.01 USD | `100_000_000_000` | 100 USD |
-| 1w | `10_000_000` | 0.01 USD | `100_000_000_000` | 100 USD |
 
-The 1mo cadence is configured and disabled, and a disabled cadence reads back as an all-zero configuration. Read the live values with `registry::cadence_config` or `registry::cadence_configs` rather than hardcoding them, because an admin can change a cadence and each market keeps the terms it was created with.
+The 1h, 1d, 1w, and 1mo cadences are configured and disabled, and a disabled cadence reads back as an all-zero configuration. Those values were verified on both networks on 2026-09-10. Read the live values with `registry::cadence_config` or `registry::cadence_configs`, or as `tickSize` and `admissionTickSize` from `read.markets()`, rather than hardcoding them, because an admin can change a cadence and each market keeps the terms it was created with.
 
 ## A position is a tick pair {#range-key}
 
@@ -130,7 +127,7 @@ Worked against a 0.01 USD grid and a settlement of exactly 105,000 USD, `prefix_
 | 104,000 to 105,000 USD | `(10_400_000, 10_500_000]` | `10_400_000 < 10_500_000` and `10_500_000 <= 10_500_000` | Pays in full |
 | 105,000 to 106,000 USD | `(10_500_000, 10_600_000]` | `10_500_000 < 10_500_000` is false | Pays zero |
 
-A winning position pays its full quantity, and quantity is measured in DUSDC base units where `1_000_000` pays 1 USD at settlement.
+A winning position pays its full quantity, and quantity is measured in base units of the quote coin, USDC, where `1_000_000` pays 1 USD at settlement. On Mainnet that coin is native USDC; on Testnet it is a mintable test coin at the same `usdc::USDC` module path that displays as DUSDC. Take the exact type from `getConfig(network).quoteCoinType`.
 
 ## Sentinel ticks {#sentinels}
 
@@ -167,11 +164,11 @@ Two shapes are rejected outright by the `order` module:
 Confusing the two grids is the most common integration failure on this surface. A new mint's strike must satisfy both conditions:
 
 - **Fine grid:** the raw strike must be an exact multiple of the market's `tick_size`, otherwise it is not a tick at all.
-- **Admission grid:** each finite boundary must additionally land on the coarser `admission_tick_size`, which varies by cadence.
+- **Admission grid:** each finite boundary must additionally land on the coarser `admission_tick_size`, which the cadence configuration sets per cadence.
 
 The chain tests the second condition in tick units. With `admission_multiple = admission_tick_size / tick_size`, a boundary is admitted when it is a sentinel, when `tick % admission_multiple == 0`, or when it equals the market's recorded `reference_tick`. Anything else aborts with `strike_exposure::EInvalidAdmissionTick`.
 
-On the Testnet cadences, `admission_multiple` is `100` for the 1m, 5m, and 1h markets and `10_000` for the 1d and 1w markets.
+On both enabled cadences, `admission_multiple` is `100`: a 0.01 USD fine grid under a 1 USD admission grid.
 
 The `reference_tick` is the one finite strike a market admits off the admission grid. It is the market's window anchor, floored onto the fine grid from an exact Propbook Pyth observation at `reference_tick_source_timestamp_ms`, and a permissionless call records it:
 
@@ -180,7 +177,7 @@ The `reference_tick` is the one finite strike a market admits off the admission 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="set_reference_tick"
 	noComments
 />
@@ -197,7 +194,7 @@ Grid state lives in the market's `StrikeExposure`, which has no public functions
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="StrikeExposure"
 />
 
@@ -214,15 +211,17 @@ Follow these steps before you submit a mint:
 1. Confirm `lower_tick < higher_tick` and that the pair is not `(0, 1073741823]`.
 1. Round the quantity to a whole lot of `10_000` base units, which is 0.01 USD of payout, then check the premium against the minimum below.
 
-The lot is the granularity, not a tradable minimum. Every mint must also produce a premium of at least `1_000_000` base units, which is 1 DUSDC, or it aborts with `strike_exposure_config::EPremiumBelowMinimum`. Premium is `quantity * entry_probability` and entry probability is capped at `0.99`, so the smallest admissible quantity never falls below about `1.02` DUSDC of payout, and it rises steeply as the strike moves away from the money. A far out-of-the-money strike fails earlier still, on the entry-probability band. See [Mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors) for both codes and the measured floors.
+The lot is the granularity, not a tradable minimum. Every mint must also produce a premium of at least `1_000_000` base units, which is 1 USDC, or it aborts with `strike_exposure_config::EPremiumBelowMinimum`. Premium is `quantity * entry_probability` and entry probability is capped at `0.99`, so the smallest admissible quantity never falls below about `1.02` USDC of payout, and it rises steeply as the strike moves away from the money. A far out-of-the-money strike fails earlier still, on the entry-probability band. See [Mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors) for both codes and the measured floors.
 
-Using a 0.01 USD fine grid, the same numeric strike passes or fails depending on the cadence:
+A valid range can still fail on timing. Live mints and live redeems abort with `protocol_config::ETradeWindowClosed` inside the last `no_trade_window_ms` before expiry, deployed at 2,000 ms on both networks, so check the market's remaining time before you submit; see [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict) for the window.
 
-| **Strike** | **Tick** | **1m market** | **1d market** |
-|---|---|---|---|
-| 105,000 USD | `10_500_000` | Admitted | Admitted |
-| 105,050 USD | `10_505_000` | Admitted | Aborts with `EInvalidAdmissionTick` |
-| 105,000.005 USD | Not a tick | Off the fine grid | Off the fine grid |
+Using a 0.01 USD fine grid under a 1 USD admission grid, the same numeric strike passes or fails on where it lands:
+
+| **Strike** | **Tick** | **Result** |
+|---|---|---|
+| 105,000 USD | `10_500_000` | Admitted |
+| 105,000.50 USD | `10_500_050` | Aborts with `EInvalidAdmissionTick`, unless it equals the market's `reference_tick` |
+| 105,000.005 USD | Not a tick | Off the fine grid |
 
 ## The packed order ID {#order-id}
 
@@ -237,7 +236,7 @@ The layout is dense in the low bits:
 | `higher_tick` | bit 40 | 30 bits | Higher boundary tick, where `1073741823` is positive infinity. |
 | `sequence` | bits 0 to 39 | 40 bits | Expiry-local monotonic counter. |
 
-Total width is 132 bits, and any bit set at or above 132 aborts with `order::EInvalidOrderId`. Quantity must be nonzero, a whole multiple of `10_000`, and at most `4_294_967_295` lots. Those are encoding bounds only. Mint admission holds a higher effective floor, because the premium has to clear 1 DUSDC; see [Build a valid range](#build-a-valid-key).
+Total width is 132 bits, and any bit set at or above 132 aborts with `order::EInvalidOrderId`. Quantity must be nonzero, a whole multiple of `10_000`, and at most `4_294_967_295` lots. Those are encoding bounds only. Mint admission holds a higher effective floor, because the premium has to clear 1 USDC; see [Build a valid range](#build-a-valid-key).
 
 Treat the ID as an opaque handle. Pass it back unchanged to redeem, claim, or query a position, and read range facts from the order events rather than by unpacking bits yourself.
 
@@ -253,7 +252,7 @@ The `sequence` counter is expiry-local, so an order ID is unique only within one
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="Order"
 />
 
@@ -291,14 +290,14 @@ public fun expiry_market_id(
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="expiry_market_id"
 	noComments
 />
 
 </details>
 
-The registry stores those IDs in a `Table` keyed by `market_manager::MarketKey`, a `u32` underlying ID paired with a `u64` expiry. That struct is an internal uniqueness key: it has no accessors, no exported constructor, and no role in any integrator call. Use `expiry_market_id` instead, and take `propbook_underlying_id` from the deployment manifest, where the live BTC underlying is `1`.
+The registry stores those IDs in a `Table` keyed by `market_manager::MarketKey`, a `u32` underlying ID paired with a `u64` expiry. That struct is an internal uniqueness key: it has no accessors, no exported constructor, and no role in any integrator call. Use `expiry_market_id` instead, and take `propbook_underlying_id` from `getConfig(network).underlyings` or the deployment manifest, where BTC is `1` on both networks.
 
 <details>
 <summary>Source for the `MarketKey` uniqueness key</summary>
@@ -308,7 +307,7 @@ The registry stores those IDs in a `Table` keyed by `market_manager::MarketKey`,
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="MarketKey"
 />
 
@@ -316,7 +315,7 @@ The registry stores those IDs in a `Table` keyed by `market_manager::MarketKey`,
 
 ## Ticks in the TypeScript SDK {#sdk}
 
-`@mysten/deepbook-v3` version 2.1.3 or later ships a `/predict` subpath that does the tick arithmetic for you. Describe a position with a `MarketDescriptor` in USD, and the SDK resolves the market, converts each strike, and admission-checks each finite boundary before it builds the transaction.
+`@mysten/deepbook-v3` version 2.3.0 or later ships a `/predict` subpath that does the tick arithmetic for you on either network. Describe a position with a `MarketDescriptor` in USD, and the SDK resolves the market, converts each strike, and admission-checks each finite boundary before it builds the transaction.
 
 The descriptor has two arms:
 
@@ -343,7 +342,7 @@ const strike = Math.round(target / m.admissionTickSize) * m.admissionTickSize;
 
 The SDK raises a typed `PredictInputError` before it builds a transaction when a strike is off the fine grid, off the admission grid and not the reference price, outside the finite tick domain, or when `lower` is not below `upper`.
 
-The following Testnet example mints a directional position, quoting first and capping the all-in cost:
+The following example mints a directional position, quoting first and capping the all-in cost; `NETWORK` in the examples package selects Testnet or Mainnet:
 
 <ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
 
@@ -375,8 +374,20 @@ Grid admission and exposure bookkeeping are validated by `strike_exposure`:
 | `5` | `EMintQuantityBelowMin` | The sized or budgeted quantity is below `min_quantity`. |
 | `6` | `EInvalidInventoryImpactScale` | The market's inventory-impact scale is zero at construction. |
 
-A third module gates a mint on strike and size policy rather than on shape. `strike_exposure_config` holds the entry-probability band and the `min_premium` floor, and its two trader-facing codes, `EEntryProbabilityOutOfBounds` and `EPremiumBelowMinimum`, are the ordinary failure modes of a first mint. That table lives with the mint call, in [Mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors).
+The payout index behind `strike_exposure` is `strike_payout_tree`, and one of its codes is a mint abort:
 
-Error numbers repeat across modules, so the number alone identifies nothing: resolve an abort against the module named in the abort location. Code `3` is `EInvalidQuantity` in `order`, `EReferenceTickAlreadySet` in `strike_exposure`, `EPremiumBelowMinimum` in `strike_exposure_config`, and `EMintProbabilityAboveMax` in `expiry_market`. A reader who looks up `3` in the wrong table gets a plausible and wrong answer every time.
+| **Code** | **Constant** | **Cause** |
+|---|---|---|
+| `0` | `EInsufficientPayoutQuantity` | A close removes more payout than the tree holds at that boundary. |
+| `1` | `EMaxPayoutTreeNodes` | The mint would add a new finite boundary tick when the market's index already holds 960 nodes. |
+| `2` | `ENonMonotonePrice` | The pricer returned a probability that does not fall as the strike rises. |
+| `3` | `EStaleValuationSnapshot` | A flush read a payout snapshot from an earlier flush. |
+| `4` | `ESnapshotSeqNotIncreasing` | A flush activated a snapshot whose sequence did not advance. |
+
+Each distinct finite boundary tick in a market costs one node, and a range with two new finite boundaries costs two. The 960 cap is the valuation budget for a single market, so on a busy market a mint at a fresh strike can abort with `EMaxPayoutTreeNodes` while a mint at a strike some other position already uses succeeds. Codes `3` and `4` belong to the pool flush and cannot be reached from a mint or redeem.
+
+A third module gates a mint on strike and size policy rather than on shape. `strike_exposure_config` holds the entry-probability band and the `min_premium` floor, and its two trader-facing codes, `EEntryProbabilityOutOfBounds` and `EPremiumBelowMinimum`, are the ordinary failure modes of a first mint. That table lives with the mint call, in [Mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors). Two `expiry_market` codes complete the list of ways a well-formed mint aborts: `EMintCostAboveMaxPayout`, code `11`, when the all-in cost of the quote exceeds the quantity it would pay, which a deep in-the-money strike plus fees can reach; and `protocol_config::ETradeWindowClosed`, code `7`, inside the no-trade window before expiry.
+
+Error numbers repeat across modules, so the number alone identifies nothing: resolve an abort against the module named in the abort location. Code `3` is `EInvalidQuantity` in `order`, `EReferenceTickAlreadySet` in `strike_exposure`, `EPremiumBelowMinimum` in `strike_exposure_config`, `EStaleValuationSnapshot` in `strike_payout_tree`, and `EMintProbabilityAboveMax` in `expiry_market`. A reader who looks up `3` in the wrong table gets a plausible and wrong answer every time.
 
 For the mint and redeem calls these ticks feed, see [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict). For cadence configuration and market creation, see [Registry](/onchain-finance/deepbook/deepbook-predict/contract-information/registry).

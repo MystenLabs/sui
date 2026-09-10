@@ -30,13 +30,13 @@ export function createAndFund(owner: string, amountUsdc: number): Transaction {
 	return client.predict.tx.deposit(owner, amountUsdc, { create: true });
 }
 
-// Fund an account that already exists. The DUSDC is sourced from the owner's
+// Fund an account that already exists. The USDC is sourced from the owner's
 // coin objects and address balance together.
 export function deposit(owner: string, amountUsdc: number): Transaction {
 	return client.predict.tx.deposit(owner, amountUsdc);
 }
 
-// Take DUSDC back out of the account. It lands in the owner's address balance;
+// Take USDC back out of the account. It lands in the owner's address balance;
 // pass `{ toCoinObject: true }` when you need a discrete coin object instead.
 export function withdrawToWallet(owner: string, amountUsdc: number): Transaction {
 	return client.predict.tx.withdraw(owner, amountUsdc);
@@ -48,7 +48,7 @@ export function decodeCreated(result: DecodableTransactionResult): CreateManager
 	return client.predict.decode.createManager(result);
 }
 
-// The account's internal custody balance in DUSDC, as a decimal number. This is
+// The account's internal custody balance in USDC, as a decimal number. This is
 // the balance a mint is debited from, not the owner's wallet balance.
 export async function accountBalance(owner: string): Promise<number> {
 	return client.predict.read.balance(owner);

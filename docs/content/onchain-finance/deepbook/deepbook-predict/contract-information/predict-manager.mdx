@@ -49,8 +49,8 @@ answer: >-
   same transaction, or with AccountContract from the deepbook-v3 account
   subpath. Access is gated by a single-use Auth hot potato, and Predict keeps
   positions in a PredictData slot attached to the Account.
-last_verified: 2026-09-03
-verified_against: predict-testnet-8-21
+last_verified: 2026-09-10
+verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
 ---
 
 DeepBook Predict has no `PredictManager` and no `predict_manager` module. Custody and identity moved into a standalone `account` package, where each trader owns one shared `AccountWrapper` holding an embedded `Account`. Predict attaches its own per-account data to that `Account` rather than storing positions itself.
@@ -59,16 +59,19 @@ Readers arriving from the old Predict Manager title are in the right place. That
 
 Two modules own this surface, both under `packages/account/sources/` rather than under the Predict package:
 
-- **`account::account`:** the `AccountWrapper` object, the embedded `Account`, the `Auth` type, and the custody functions, at [account.move](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/account/sources/account.move).
-- **`account::account_registry`:** account creation, address derivation, and the app authorization allowlist, at [account_registry.move](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/account/sources/account_registry.move).
+- **`account::account`:** the `AccountWrapper` object, the embedded `Account`, the `Auth` type, and the custody functions, at [account.move](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/account/sources/account.move).
+- **`account::account_registry`:** account creation, address derivation, and the app authorization allowlist, at [account_registry.move](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/account/sources/account_registry.move).
 
-Predict's own per-account slot lives in [`deepbook_predict::predict_account`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/predict/sources/predict_account.move).
+Predict's own per-account slot lives in [`deepbook_predict::predict_account`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/predict/sources/predict_account.move).
 
-:::caution
+The `account` package is deployed separately on Sui Mainnet and Sui Testnet from identical sources, and the Move snippets on this page are pinned to the Mainnet source commit, which is also the `deepbook-predict-mainnet` branch. An account on one network does not exist on the other, and neither deployment shares accounts with the previous-generation `predict-8-21` deployment. Take the IDs from `getAccountConfig(network)` rather than transcribing them:
 
-DeepBook Predict runs on Sui Testnet only. There is no Mainnet deployment. The smart contracts might change, so treat the package IDs, object layouts, and function signatures on this page as Testnet integration targets pinned to the `predict-testnet-8-21` branch.
+| Object | Mainnet | Testnet |
+|---|---|---|
+| `account` package | `0xa6f1b22aaeb429f6fd8f01c13f605256e00876457fd122da8a0e2c1045c75929` | `0x543139156cb90d1a73df33b5dca37d7c8bdce62506c7874ebc854afd319b98f1` |
+| `AccountRegistry` | `0x210ba485d973b5356e9078318837137efabdd5ffb9eeb3705ba7eef3340324fc` | `0xb889caefe327cbdea58e529e3b9e10dc93f1e661ddef32824d28527edf8d6385` |
 
-:::
+The registry authorizes `PredictApp`, `SessionsApp`, and `DeepbookCoreAccountApp` on both networks, verified 2026-09-10.
 
 ## Lifecycle {#lifecycle}
 
@@ -76,11 +79,11 @@ An account moves through five stages. Only creation happens once.
 
 ```mermaid
 flowchart LR
-    A[Create wrapper and share] --> B[Deposit DUSDC]
+    A[Create wrapper and share] --> B[Deposit USDC]
     B --> C[Mint positions]
     C --> D[Redeem into account balance]
     D --> B
-    D --> E[Withdraw DUSDC]
+    D --> E[Withdraw USDC]
     E --> B
 ```
 
@@ -138,7 +141,7 @@ Creating an account twice for the same owner aborts with `EAccountAlreadyExists`
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="new,new_with_referrer"
 	noComments
 />
@@ -168,7 +171,7 @@ That determinism removes the two-transaction dance the old manager required. You
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="derived_address,derived_wrapper_address,derived_exists,derived_wrapper_exists"
 	noComments
 />
@@ -214,7 +217,7 @@ Field order in the table is declaration order. The two referrer fields are writt
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="AccountWrapper,Account"
 />
 
@@ -251,7 +254,7 @@ Two constructors produce owner authority, and one package-issued path produces a
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="Auth"
 />
 
@@ -260,7 +263,7 @@ Two constructors produce owner authority, and one package-issued path produces a
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="generate_auth,generate_auth_as_object,share,load_account_mut"
 	noComments
 />
@@ -300,7 +303,7 @@ public fun withdraw_funds<T>(
 ): Coin<T>
 ```
 
-Predict's own trading functions settle DUSDC through the wrapper before they price anything, so an integrator seldom calls `settle` directly. Because the per-coin latch is timestamp-based, a second settle for the same coin type inside one transaction moves nothing.
+Predict's own trading functions settle USDC through the wrapper before they price anything, so an integrator seldom calls `settle` directly. Because the per-coin latch is timestamp-based, a second settle for the same coin type inside one transaction moves nothing.
 
 <details>
 <summary>Custody source</summary>
@@ -310,7 +313,7 @@ Predict's own trading functions settle DUSDC through the wrapper before they pri
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="deposit_funds,withdraw_funds,settle"
 	noComments
 />
@@ -329,11 +332,11 @@ Two consequences follow. Users can always retrieve funds that are not committed 
 
 Both take an `Auth`, and both abort with `EInvalidOwner` when owner authority does not match the stored owner. `withdraw_funds` aborts with `EBalanceTooLow` when the amount exceeds stored balance or when the account has never held that coin type.
 
-The SDK's `client.predict.tx.deposit(owner, amountUsdc)` sources DUSDC from coin objects or the address balance and can create the account in the same block with `{ create: true }`. Its `client.predict.tx.withdraw(owner, amountUsdc)` sends the result to the owner's address balance by default, or returns a coin object with `{ toCoinObject: true }`.
+The SDK's `client.predict.tx.deposit(owner, amountUsdc)` sources the quote coin from coin objects or the address balance and can create the account in the same block with `{ create: true }`. Its `client.predict.tx.withdraw(owner, amountUsdc)` sends the result to the owner's address balance by default, or returns a coin object with `{ toCoinObject: true }`.
 
 ### Coin types {#supported-coin-types}
 
-`deposit_funds<T>` and `withdraw_funds<T>` are generic over the coin type and place no restriction on `T`. The restriction lives one level up, in Predict: DUSDC is the settlement asset for every trade, and PLP is the pool share coin. Depositing an unrelated coin type succeeds and you can always withdraw it again, but you cannot trade with it.
+`deposit_funds<T>` and `withdraw_funds<T>` are generic over the coin type and place no restriction on `T`. The restriction lives one level up, in Predict: `USDC` is the settlement asset for every trade, and `PLP` is the pool share coin. On Mainnet the quote coin is native USDC, `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC`. On Testnet it is a mintable test coin at the same `usdc::USDC` module path, `0xc028557a1ed49e42ed091e115aedefd70a442b184c18fbec5c48d5b6c0b8c184::usdc::USDC`, which displays as DUSDC. Read the exact type from `getConfig(network).quoteCoinType`. Depositing an unrelated coin type succeeds and you can always withdraw it again, but you cannot trade with it.
 
 Read a balance with the account accessor, which counts stored balance plus funds delivered to the wrapper and not yet settled:
 
@@ -351,7 +354,7 @@ Because it includes unsettled funds, it does not go stale between a payout and t
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="owner,receive_address,account_id,balance,referrer_account_id,referrer_receive_address"
 	noComments
 />
@@ -383,7 +386,7 @@ An order ID alone does not identify a position. It carries the quantity and the 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="PositionKey,Position,PredictData"
 />
 
@@ -400,7 +403,7 @@ public fun builder_code_id(account: &Account): Option<ID>
 
 Both return the empty answer rather than aborting when the account has no Predict slot yet, so `false` and `none` do not distinguish an unused account from a closed position.
 
-`has_position` answers one exact question and needs the market ID and order ID up front, so it cannot enumerate a portfolio. To list what an account holds, read the dynamic fields of the `positions` table, where each field key is a BCS-serialized `PositionKey`. The SDK's `client.predict.read.positions(owner)` does this and returns `{ marketId, orderId }` pairs, and `client.predict.read.hasPosition(owner, marketId, orderId)` wraps the single read. The offchain read services answer the same question over HTTP, but their account and position paths key on the canonical account ID rather than the wrapper ID; see [The account SDK subpath](#account-sdk).
+`has_position` answers one exact question and needs the market ID and order ID up front, so it cannot enumerate a portfolio. To list what an account holds, read the dynamic fields of the `positions` table, where each field key is a BCS-serialized `PositionKey`. The SDK's `client.predict.read.positions(owner)` does this on either network and returns `{ marketId, orderId }` pairs, and `client.predict.read.hasPosition(owner, marketId, orderId)` wraps the single read. The public offchain read services answer the same question over HTTP for the previous-generation `predict-8-21` deployment only, and their account and position paths key on the canonical account ID rather than the wrapper ID; see [The account SDK subpath](#account-sdk).
 
 To value a position, pass its order ID to the market: `expiry_market::live_order_value` with a market-bound pricer while the market is live, or `expiry_market::settled_order_payout` once it has settled. See [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#read-accessors) for both.
 
@@ -429,7 +432,7 @@ Both consume an `Auth` and both emit `BuilderCodeSet` from `deepbook_predict::bu
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="has_position,builder_code_id,set_builder_code,unset_builder_code"
 	noComments
 />
@@ -438,7 +441,7 @@ Both consume an `Auth` and both emit `BuilderCodeSet` from `deepbook_predict::bu
 
 ## Function reference {#function-reference}
 
-Complete public signatures for the account layer. Copy them as written when you generate calls or bindings. None of them is an `entry fun`; every one is a `public fun` you invoke with a `moveCall`.
+Complete public signatures for the account layer. Copy them as written when you generate calls or bindings. Every one is a `public fun` you invoke with a `moveCall`.
 
 ```move title='packages/account/sources/account_registry.move'
 public fun derived_address(registry: &AccountRegistry, owner: address): address
@@ -488,13 +491,14 @@ The account primitive is shared rather than Predict-specific, so `@mysten/deepbo
 
 Two things come out of that subpath before any builder does:
 
-- **`getAccountConfig(network)`:** returns the deployed `accountPackageId` and `accountRegistry` for a network, so you never transcribe them. It throws for a network with no recorded deployment rather than handing back placeholder IDs, and Testnet is the only network it answers for today.
+- **`getAccountConfig(network)`:** returns the deployed `accountPackageId` and `accountRegistry` for `'mainnet'` or `'testnet'`, so you never transcribe them. From `@mysten/deepbook-v3` 2.3.0 both networks resolve; any other value throws a plain `Error` rather than handing back placeholder IDs.
 - **`AccountContract`:** the class every builder hangs off. Construct it with that config, or with your own `{ accountPackageId, accountRegistry }` if you run your own deployment of the account package.
 
 ```ts
 import { AccountContract, getAccountConfig } from '@mysten/deepbook-v3/account';
 
-const account = new AccountContract(getAccountConfig('testnet'));
+const network = 'mainnet'; // or 'testnet'
+const account = new AccountContract(getAccountConfig(network));
 ```
 
 Its methods each return a function you add to a `Transaction`, so they compose into one block:
@@ -514,7 +518,7 @@ Its methods each return a function you add to a `Transaction`, so they compose i
 
 Only the wrapper ID derives from this class. The canonical account identity is a second, different derived object, keyed by `AccountKey(owner)` rather than `AccountWrapperKey(owner)`, and its derivation lives on `SessionsContract.deriveAccountId` in the `/sessions` subpath. Pass the wrapper ID to Predict calls, and expect the account ID in the `account_id` field of events. A live `OrderMinted` carries the account ID, not the wrapper ID.
 
-Which ID an offchain read service wants is the same split, and getting it wrong is quiet. The account and position paths key on the canonical account ID. A wrapper ID passed there returns HTTP `200` with an empty array rather than an error, so a wrong key is indistinguishable from an empty portfolio until you compare the two: verified 2026-09-03 for a real trader, the wrapper ID returned zero balances and zero positions while the account ID returned two balance rows and five open positions. Derive the key with `deriveAccountId`, documented in [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate), where the same wrapper-against-account trap applies to session grants. The wrapper ID stays correct for every onchain call that takes the shared `AccountWrapper` object.
+Which ID an offchain read service wants is the same split, and getting it wrong is quiet. As of 2026-09-10 the only public read services are the Testnet v4 hosts listed on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information), and they index the previous-generation `predict-8-21` deployment, not the two deployments this page describes; no read service exists yet for either, and the SDK reads above need none. On those services the account and position paths key on the canonical account ID. A wrapper ID passed there returns HTTP `200` with an empty array rather than an error, so a wrong key is indistinguishable from an empty portfolio until you compare the two: verified 2026-09-03 for a real trader on that deployment, the wrapper ID returned zero balances and zero positions while the account ID returned two balance rows and five open positions. Derive the key with `deriveAccountId`, documented in [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate), where the same wrapper-against-account trap applies to session grants. The wrapper ID stays correct for every onchain call that takes the shared `AccountWrapper` object.
 
 :::warning
 
@@ -544,7 +548,7 @@ The example below is the second of those. It reads a quote, derives a `maxCost` 
 
 Composing create, fund, and trade into a single block of your own is generated-bindings work rather than facade work. Build it from the `AccountContract` methods above and the `loadLivePricer` escape hatch the `/predict` subpath exports, adding commands to one `Transaction` in this order: `account_registry::new`, `account::generate_auth`, `account::deposit_funds`, `account::share`, `expiry_market::load_live_pricer`, a second `account::generate_auth` because the first is spent, and `expiry_market::mint_exact_quantity`. Share the wrapper after the deposit, not before: an object input can only name an object that already existed when the block started, so a wrapper created inside the block is reachable only through the result handle from `new`.
 
-The [Testnet tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial) walks the whole flow with quotes, ranges, redemption, and settlement.
+The [tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial) walks the whole flow with quotes, ranges, redemption, and settlement.
 
 ## Events {#events}
 
@@ -593,7 +597,7 @@ Two further events, `AppAuthorized` and `AppDeauthorized`, each carry a single `
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="AccountCreated,Deposited,Withdrawn,FundsSettled"
 />
 

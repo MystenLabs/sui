@@ -16,8 +16,8 @@ keywords:
   - sessions app
   - account app
   - deauthorize app
-last_verified: 2026-09-03
-verified_against: predict-testnet-8-21
+last_verified: 2026-09-10
+verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
 goal:
   description: >-
     Reader understands how much authority a DeepBook Predict session key holds,
@@ -55,16 +55,17 @@ Sessions is an account app. It stores grants in the account's app-local data slo
 
 Two modules own the surface:
 
-- **[`deepbook_sessions::sessions`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/sessions/sources/sessions.move):** grant storage, the lifecycle calls, and every trading wrapper.
-- **[`deepbook_sessions::session_config`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/sessions/sources/session_config.move):** the shared `SessionsConfig` object and the package version floor.
+- **[`deepbook_sessions::sessions`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/sessions/sources/sessions.move):** grant storage, the lifecycle calls, and every trading wrapper.
+- **[`deepbook_sessions::session_config`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/sessions/sources/session_config.move):** the shared `SessionsConfig` object and the package version floor.
 
-The package ID and the shared `SessionsConfig` object ID for this deployment are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#packages). In TypeScript, `getSessionsConfig('testnet')` from `@mysten/deepbook-v3/sessions` returns both, plus the account registry the app is authorized against, the Predict protocol config, and the two extra IDs the DeepBook spot wrappers take.
+The package is deployed separately on Sui Mainnet and Sui Testnet from identical sources, and the Move snippets on this page are pinned to the Mainnet source commit, which is also the `deepbook-predict-mainnet` branch. In TypeScript, `getSessionsConfig(network)` from `@mysten/deepbook-v3/sessions` resolves `'mainnet'` or `'testnet'` from version 2.3.0 and returns both IDs, plus the account registry the app is authorized against, the Predict protocol config, and the two extra IDs the DeepBook spot wrappers take. The full tables are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#packages):
 
-:::caution
+| Object | Mainnet | Testnet |
+|---|---|---|
+| `sessions` package | `0xebfa125baee571c1f8c903c1dd54a5bc57949db82469b836c32eca251756c82a` | `0x10c91d168dc4a04357f9d23795a204092ca46e5b97f8b9ef26fea95664d5bb38` |
+| `SessionsConfig` | `0x0c5f64365b3bf1f67827d6975893190079cc048247f9ff0b08390aa9ee697c5c` | `0x63cde7c7d846f15c51802ec3d44ba44918658e3155b0d2e0cb26d6fc1b4dadd8` |
 
-DeepBook Predict runs on Sui Testnet only. There is no Mainnet deployment. The smart contracts might change, so treat the package IDs, object layouts, and function signatures on this page as Testnet integration targets pinned to the `predict-testnet-8-21` branch.
-
-:::
+A grant lives on one network's account. Sessions authorized on the previous-generation `predict-8-21` deployment are not visible on either of these deployments.
 
 ## Authority model {#authority-model}
 
@@ -103,7 +104,7 @@ Each trading wrapper resolves authority through one private helper before it tou
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="generate_auth_as_session"
 />
 
@@ -124,7 +125,7 @@ The `Auth` value it returns is minted and consumed inside the same call, so the 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="deauthorize_app,generate_auth_as_app"
 />
 
@@ -139,7 +140,7 @@ Three calls cover the whole lifecycle. Owner authority is derived from the trans
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="session_expiration_ms,authorize_session,revoke_session"
 	noComments
 />
@@ -193,7 +194,7 @@ There is no bulk onchain read. `session_expiration_ms` answers one address at a 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="SessionsApp,SessionsData"
 />
 
@@ -232,7 +233,7 @@ An active session can call four Predict wrappers:
 | `redeem_live` | `expiry_market::redeem_live` | `Option<u256>`, the replacement order ID when a partial close leaves quantity open. |
 | `redeem_settled` | `expiry_market::redeem_settled` | Nothing. |
 
-Each one validates the package version and the session against the supplied account, generates app authorization internally, and passes it straight into the Predict function of the same name. Every market parameter stays caller-selected, and Predict performs all of the validation it normally would. Compared with the owner-signed Predict call, the wrapper takes no `Auth` argument and adds `account_registry` and `sessions_config`.
+Each one validates the package version and the session against the supplied account, generates app authorization internally, and passes it straight into the Predict function of the same name. Every market parameter stays caller-selected, and Predict performs all of the validation it normally would, including the gates a session caller cannot see from this package: `mint_exact_quantity`, `mint_exact_amount`, and `redeem_live` abort with `protocol_config::ETradeWindowClosed` inside the last `no_trade_window_ms` before expiry, deployed at 2,000 ms on both networks, and every wrapper aborts with `ESnapshotInProgress` if it is composed into the transaction that snapshots a pool flush. `redeem_settled` is outside the trade window, so a session can always close a settled position. Compared with the owner-signed Predict call, the wrapper takes no `Auth` argument and adds `account_registry` and `sessions_config`.
 
 `pricer` is a programmable transaction block result rather than an object ID. Load it with `expiry_market::load_live_pricer` in a preceding command of the same transaction, exactly as the owner-signed flow does. See [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict) for the market parameters, the tick pair, and the fee model behind the caps.
 
@@ -251,7 +252,7 @@ The `@mysten/deepbook-v3/sessions` builders and the `@mysten/deepbook-v3/predict
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="mint_exact_quantity,mint_exact_amount,redeem_live,redeem_settled"
 	noComments
 />
@@ -269,7 +270,9 @@ The `@mysten/deepbook-v3/sessions` builders and the `@mysten/deepbook-v3/predict
 
 An active session can also call five DeepBook spot wrappers that route through `deepbook_core_account`: `place_limit_order`, `place_market_order`, `cancel_live_order`, `cancel_live_orders`, and `withdraw_settled_amounts`. Order parameters stay caller-selected and are validated by the account wrapper and DeepBook core. The permissionless settled-amount withdrawal is not duplicated here, because it needs no session authority.
 
-`DeepbookCoreAccountApp` must be authorized in the supplied DeepBook registry before spot order placement works, separately from the `SessionsApp` authorization these wrappers already require. Do not read that state out of the deployment manifest. The manifest is the audited initial-deployment snapshot, and its `externalAuthorizations` entry records whether the authorization was in place when the deployment ran, not whether it is in place now. The DeepBook admin-cap owner grants it in a separate transaction after deployment, and the DeepBook registry is the live authority from that point on. Check the registry with `registry::assert_app_is_authorized<DeepbookCoreAccountApp>` rather than trusting the recorded flag.
+`DeepbookCoreAccountApp` must be authorized in the supplied DeepBook registry before spot order placement works, separately from the `SessionsApp` authorization these wrappers already require. The two networks differ here, verified 2026-09-10. On Testnet the wrapper's `DeepbookCoreAccountApp` is authorized on the DeepBook registry `0x7c256edbda983a2cd6f946655f4bf3f00a41043993781f8674a7046e8c0e11d1`, so the spot wrappers execute. On Mainnet it is not authorized on the DeepBook registry `0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d`, so the five spot wrappers abort there and the session surface on Mainnet is the four Predict wrappers until that changes.
+
+Do not read that state out of the deployment manifest. The manifest is the audited initial-deployment snapshot, and its `externalAuthorizations` entry records whether the authorization was in place when the deployment ran, not whether it is in place now: both manifests record `authorized: false`, and Testnet has since been authorized. The DeepBook admin-cap owner grants it in a separate transaction after deployment, and the DeepBook registry is the live authority from that point on. Check the registry with `deepbook::registry::assert_app_is_authorized<DeepbookCoreAccountApp>` in a simulated transaction, using the `deepbookRegistry` and `deepbookCoreAccountPackageId` that `getSessionsConfig(network)` returns, rather than trusting the recorded flag or this page.
 
 The TypeScript SDK generates these calls but does not wrap them on `SessionsContract`, because the surrounding workflow of discovering the embedded balance manager, reading resting orders, and reading locked balances is not modelled yet. Reach them through the generated `sessionsMoveCalls` namespace meanwhile, and watch the argument positions: `place_limit_order` and `place_market_order` carry `deepbook_registry` between `pool` and `account_registry`, which pushes `account_registry` to index 2 and `sessions_config` to index 4. The other three take no `deepbook_registry`, so they keep those arguments at 1 and 3, matching the Predict wrappers.
 
@@ -281,7 +284,7 @@ The TypeScript SDK generates these calls but does not wrap them on `SessionsCont
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="place_limit_order,place_market_order,cancel_live_order,cancel_live_orders,withdraw_settled_amounts"
 	signatureOnly
 />
@@ -297,7 +300,7 @@ Publishing the package creates a shared `SessionsConfig` at the package's compil
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="SessionsConfig"
 />
 
@@ -308,7 +311,7 @@ Each package upgrade increments a compiled-in version constant. After clients mo
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="version_watermark,bump_version_watermark"
 	noComments
 />
@@ -324,7 +327,7 @@ Two events cover the lifecycle. Predict and DeepBook core keep emitting their ow
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="SessionAuthorized,SessionRevoked"
 />
 

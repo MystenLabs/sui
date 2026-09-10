@@ -14,8 +14,8 @@ keywords:
   - oracle read
   - pricer
   - oracle freshness
-last_verified: 2026-09-03
-verified_against: predict-testnet-8-21
+last_verified: 2026-09-10
+verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
 goal:
   description: >-
     Reader can resolve the canonical Propbook oracle objects for an underlying,
@@ -34,7 +34,7 @@ goal:
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
-  - Which oracle objects does DeepBook Predict read on Sui Testnet?
+  - Which oracle objects does DeepBook Predict read on Sui Mainnet and Testnet?
   - How do I find the canonical Pyth feed and Block Scholes stores for an underlying?
   - Why does a DeepBook Predict pricing call abort with a wrong feed or stale oracle error?
 answer: >-
@@ -48,7 +48,16 @@ answer: >-
 
 DeepBook Predict declares no oracle object of its own. Oracle data lives in the separate `propbook` package, which publishes an `OracleRegistry` plus one shared object per feed, and Predict reads those objects by reference at call time. Every priced call therefore takes concrete oracle objects as arguments, and Predict checks each one against the registry's current canonical binding before it prices anything.
 
-The object IDs for this deployment are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#underlyings-and-oracle-objects). Resolve them from the registry at runtime rather than caching them, because rebinding an underlying changes which object is canonical.
+The Mainnet and Testnet deployments run the same package sources, so everything on this page holds on both networks; only the object IDs differ. The IDs below come from each network's deployment manifest and match `getConfig(network).underlyings.BTC` in `@mysten/deepbook-v3/predict`. Resolve them from the registry at runtime rather than caching them, because rebinding an underlying changes which object is canonical.
+
+| Object | Mainnet | Testnet |
+| --- | --- | --- |
+| `OracleRegistry` | `0x1ff67a8499b0af7c0fbb26ba82c319be25413af93d9a961ee60f8d1229e7de7c` | `0xda71af88a8b9d01b6913937a84c5a63bb4e1015a7a2142185ec9ef73f675615f` |
+| BTC `PythFeed` | `0x44bd2e00549973bb6a58785836e97ed80b4979e67dc3bf312c997e56053e5376` | `0x7179188b3a27758c53668a4ec09a81be114dea5ffabcf367f4e720a26db8ee59` |
+| BTC `BlockScholesValueStore` | `0xe7c83ee4ac0c300d68d8d4c3d265d78287b4767dcbc5f279cd6f210b6248d493` | `0x77dee47fb870753c740439f436e0c30c00c60f13f171c901125b3d60f89518e5` |
+| BTC `BlockScholesSVIStore` | `0x8e5568aebf490c2adfd4e010a9b4ddcf7c774183f58c98fcd438bae1fc68f561` | `0xe8aa80965d201e2cb18359c3aa315e3abc5bbf807a10a59d6e011ef41be5db7a` |
+
+BTC is `propbook_underlying_id` `1` on both networks. The full package and object tables are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#underlyings-and-oracle-objects).
 
 ## Oracle objects
 
@@ -61,7 +70,7 @@ Four shared objects take part in a Predict pricing call:
 | `BlockScholesValueStore` | `propbook::block_scholes_store` | Block Scholes spot and per-expiry forward observations for one underlying |
 | `BlockScholesSVIStore` | `propbook::block_scholes_store` | Block Scholes SVI surface parameters per expiry for one underlying |
 
-There is one `OracleRegistry` per deployment, one `PythFeed` per Pyth source, and one value store and one SVI store per underlying. No `entry fun` exists in the Propbook package: every function here is a `public fun` invoked as a `moveCall`.
+There is one `OracleRegistry` per deployment, one `PythFeed` per Pyth source, and one value store and one SVI store per underlying. Every function here is a `public fun` invoked as a `moveCall`.
 
 ## The oracle registry
 
@@ -72,7 +81,7 @@ There is one `OracleRegistry` per deployment, one `PythFeed` per Pyth source, an
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="OracleRegistry,BlockScholesStorePair,OracleMetadata"
 />
 
@@ -87,7 +96,7 @@ Resolve an underlying to its three feed objects before building a transaction:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="propbook_pyth_id_for_underlying,propbook_block_scholes_store_pair_for_underlying,block_scholes_value_store_id,block_scholes_svi_store_id"
 	noComments
 />
@@ -101,7 +110,7 @@ Richer metadata is available when you need the source ID behind a binding rather
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="pyth_metadata_for_underlying,propbook_underlying_id,oracle_kind,source_id,propbook_oracle_id,value_kind"
 	noComments
 />
@@ -117,7 +126,7 @@ Creating a Pyth feed object is permissionless, but binding one to an underlying 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="create_and_share_pyth_feed,create_and_share_block_scholes_stores,bind_pyth_to_underlying,replace_pyth_binding_for_underlying"
 	noComments
 />
@@ -148,11 +157,11 @@ Binding changes emit `OracleSourceRegistered`, `OracleBound`, `BlockScholesStore
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="PythFeed,RawSpot"
 />
 
-`RawSpot` keeps Pyth's own representation: a price magnitude and sign, an exponent magnitude and sign, and the feed's update timestamp in microseconds. Sign and magnitude are separate fields because Move has no signed integer type.
+`RawSpot` keeps Pyth's own representation: a price magnitude and sign, an exponent magnitude and sign, and the feed's update timestamp in microseconds. Sign and magnitude are separate fields because Move has no signed integer type. The Testnet sources differ from the Mainnet pin only by a two-line doc comment and attribute at the top of this module, added so one `Update` type links against both deployed Pyth Lazer packages; no signature, struct, event, or error differs.
 
 ### Read spot
 
@@ -163,7 +172,7 @@ Four accessors cover the latest observation and an exact historical one:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="raw_spot,normalized_spot,raw_spot_at,normalized_spot_at"
 	noComments
 />
@@ -181,7 +190,7 @@ Writes are permissionless because possession of a verified Pyth Lazer update is 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="update,insert_at,migrate"
 	noComments
 />
@@ -213,7 +222,7 @@ Two shared objects hold the vendor surface. `BlockScholesValueStore` holds spot 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="BlockScholesValueStore,BlockScholesSVIStore"
 />
 
@@ -228,7 +237,7 @@ Every observation comes back wrapped in a `BsRead`, and SVI values carry an `SVI
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="BsRead,SVIParams"
 />
 
@@ -241,7 +250,7 @@ Read the observations themselves:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="spot,spot_at,forward,svi"
 	noComments
 />
@@ -255,7 +264,7 @@ Compute a series identifier when you need to address a series directly:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="spot_sid,forward_sid,svi_sid"
 	noComments
 />
@@ -267,12 +276,12 @@ Unpack a `BsRead` with the read accessors:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
-	fun="read_model_timestamp_ms,read_source_timestamp_ms,read_onchain_timestamp_ms,read_writer_digest,read_value"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	fun="read_source_timestamp_ms,read_onchain_timestamp_ms,read_writer_digest,read_value"
 	noComments
 />
 
-The three timestamps answer three different questions. `model_timestamp_ms` is when the vendor's model ran, `source_timestamp_ms` is the observation's own time, and `onchain_timestamp_ms` is when the write landed on Sui. Judge vendor freshness from the source timestamp and landing order from the onchain timestamp, and never sort by source timestamp alone, because an older source observation can land later.
+The two timestamps answer two different questions. `source_timestamp_ms` is the provider's own time for that observation, the per-update `value_timestamp` of a spot or forward and the `svi_timestamp` of an SVI row, and `onchain_timestamp_ms` is when the write landed on Sui. Latest ordering, exact spot history, the freshness windows, and the SVI roll-down all key on the source timestamp; the batch envelope time is transport metadata only and appears nowhere in a `BsRead`. Judge vendor freshness from the source timestamp and landing order from the onchain timestamp, and never sort by source timestamp alone, because an older source observation can land later. There is no model timestamp: `BsRead` carries exactly the four fields above, so an integrator decoding `BlockScholesObservationRecorded` payloads from the previous-generation `predict-8-21` deployment must drop the leading `model_timestamp_ms` it used to read.
 
 `writer_digest` records the transaction digest that wrote the observation. Predict reads it to enforce the same-transaction guard described later on this page.
 
@@ -285,12 +294,12 @@ Writes are permissionless because the signed vendor batch is the authority:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="apply_spot_batch,apply_forward_batch,apply_svi_batch"
 	noComments
 />
 
-The forward and SVI batches take a parallel `expiries_ms` vector and abort with `EUnexpectedBatchLength` when its length does not match the batch. A row whose derived series identifier does not match the row's own identifier aborts with `ESeriesIdMismatch`. `insert_at` fills unoccupied exact spot slots only, and `migrate_value_store` and `migrate_svi_store` move a store forward to the current package version. Applying a batch emits `BlockScholesBatchIngested` alongside per-observation events.
+The forward and SVI batches take a parallel `expiries_ms` vector and abort with `EUnexpectedBatchLength` when its length does not match the batch. A row whose derived series identifier does not match the row's own identifier aborts with `ESeriesIdMismatch`. `insert_at` fills unoccupied exact spot slots only, and `migrate_value_store` and `migrate_svi_store` move a store forward to the current package version. Applying a batch emits `BlockScholesBatchIngested` alongside per-observation events. The batch event's `batch_timestamp_ms` is the envelope time and proves only that the feed is running; it is never a freshness or roll-down clock, which is why an ingested batch that advances no series still emits it with `applied` at zero.
 
 Store creation is internal to the package and reachable only through `registry::create_and_share_block_scholes_stores`.
 
@@ -303,18 +312,18 @@ Store creation is internal to the package and reachable only through `registry::
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="OracleRead"
 />
 
-`OracleRead` is the Pyth-side counterpart of `BsRead`, without the model timestamp, and it carries the same four accessors:
+`OracleRead` is the Pyth-side counterpart of `BsRead`, with the same four fields and the same four accessors:
 
 <ImportContent
 	source="packages/propbook/sources/oracle_lane/oracle_lane.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="read_source_timestamp_ms,read_onchain_timestamp_ms,read_writer_digest,read_value"
 	noComments
 />
@@ -328,12 +337,15 @@ Predict validates whatever objects you pass, so a call fails rather than pricing
 | Call | `OracleRegistry` | `PythFeed` | `BlockScholesValueStore` | `BlockScholesSVIStore` |
 | --- | --- | --- | --- | --- |
 | `expiry_market::load_live_pricer` | Yes | Yes | Yes | Yes |
-| `plp::value_expiry` | Yes | Yes | Yes | Yes |
+| `plp::snapshot_expiry_pricer` | Yes | Yes | Yes | Yes |
+| `plp::value_expiry` | No | No | No | No |
 | `expiry_market::try_settle` | Yes | Yes | Yes | No |
 | `expiry_market::set_reference_tick` | Yes | Yes | No | No |
 | `registry::create_and_share_expiry_market` | Yes | No | No | No |
 
 Settlement needs no volatility surface, so `try_settle` takes no SVI store. A reference tick is a single spot reading, so `set_reference_tick` takes only the Pyth feed. Market creation reads no price at all: it takes the registry solely to confirm the underlying has canonical bindings.
+
+The pool flush reads oracles in exactly one place. `plp::snapshot_expiry_pricer` takes all four objects, loads a live pricer for one market, and freezes it into the vault's valuation snapshot; the later `plp::value_expiry` takes only the vault, the market, and the config, and prices the market from that frozen copy, so it can run in a different transaction from the snapshot without touching an oracle. See [PLP vault](/onchain-finance/deepbook/deepbook-predict/contract-information/vault) for the staged flush.
 
 ### The pricer
 
@@ -344,7 +356,7 @@ Live pricing runs through a `Pricer`, built once per transaction from all four o
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="load_live_pricer"
 	noComments
 />
@@ -354,11 +366,13 @@ Live pricing runs through a `Pricer`, built once per transaction from all four o
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="Pricer"
 />
 
-`Pricer` has `copy` and `drop` but no `store`. It cannot be put in an object, a dynamic field, or anything that outlives the transaction, so every transaction that quotes, mints, redeems, or values a market must call `load_live_pricer` again. Build it once per programmable transaction block and pass the same value into every quote and trade command in that block.
+`Pricer` has `copy` and `drop` but no `store`. It cannot be put in an object, a dynamic field, or anything that outlives the transaction, so every transaction that quotes, mints, or redeems must call `load_live_pricer` again. Build it once per programmable transaction block and pass the same value into every quote and trade command in that block.
+
+The pool flush is the one path that carries a mark across transactions, and it uses a second type for it. `snapshot_expiry_pricer` loads a `Pricer` and converts it into a `FrozenPricer`, which has `store` and lives inside the vault's `PoolValuation` until `value_expiry` prices the market from it. `FrozenPricer` is a deliberately stale mark: its constructor `into_frozen` and its consumer `thaw` are package-internal, and no quote, mint, or redeem accepts one, so a persisted mark can never price a trade. `PricingSVI` gained `store` for the same reason and remains without public constructors or accessors.
 
 A pricer is bound to the market it was loaded for. Passing it to a different market aborts with `expiry_market::EWrongPricer`. Loading one at or after the market's expiry aborts with `pricing::ELivePricingExpired`.
 
@@ -369,12 +383,12 @@ Two read functions consume a pricer:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="up_price,range_price"
 	noComments
 />
 
-Both return a 1e9-scaled probability and take `range_codec::Strike` values, which you build from a tick with `range_codec::strike_from_tick`. The SVI shapes behind them, `pricing::RawSVI` and `pricing::PricingSVI`, have no public constructors or accessors: the pricer is the only public view of the surface.
+Both return a 1e9-scaled probability and take `range_codec::Strike` values, which you build from a tick with `range_codec::strike_from_tick`. The SVI shapes behind them, `pricing::RawSVI` and `pricing::PricingSVI`, have no public constructors or accessors: the pricer is the only public view of the surface. The pricer also records the four source timestamps it validated, and the trade events report the same four values, so an event's `block_scholes_*_source_timestamp_ms` fields are the provider per-update times the pricer keyed freshness and roll-down on.
 
 ### Binding validation
 
@@ -390,23 +404,27 @@ Loading a pricer first checks all three feed objects against the registry's curr
 
 ### Freshness windows
 
-Freshness is measured against the wall clock, not against how recently a value changed. The deployed configuration, verified 2026-09-03, sets these windows on `ProtocolConfig`:
+Freshness is measured against the wall clock, not against how recently a value changed, and the age of an observation is `now - source_timestamp_ms`, the provider's per-update time. The deployed configuration, verified 2026-09-10 on both networks, sets these windows on `ProtocolConfig`:
 
 | Setting | Value | Meaning |
 | --- | --- | --- |
 | `use_pyth_spot_for_forward` | `true` | A fresh Pyth spot reanchors the Block Scholes forward basis |
-| `pyth_spot_freshness_ms` | `10000` | Maximum age of a Pyth spot used to reanchor the forward |
-| `block_scholes_price_freshness_ms` | `10000` | Maximum age of a Block Scholes spot or forward observation |
+| `pyth_spot_freshness_ms` | `2000` | Maximum age of a Pyth spot used to reanchor the forward |
+| `block_scholes_price_freshness_ms` | `2000` | Maximum age of a Block Scholes spot or forward observation |
 | `block_scholes_svi_freshness_ms` | `60000` | Maximum age of a Block Scholes SVI observation |
+
+The two 2,000 ms windows are the package defaults at this pin; the previous-generation `predict-8-21` deployment ran both at 10,000 ms.
 
 Block Scholes staleness is fatal to live pricing: a spot or forward outside its window aborts with `EBlockScholesPriceStale`, and an SVI observation outside its window aborts with `EBlockScholesSVIStale`. A stale Pyth spot is not fatal while `use_pyth_spot_for_forward` is on. A missing, non-normalizable, or stale Pyth spot is ignored, and pricing uses the Block Scholes forward directly, which is also what happens when the setting is off.
 
-These four values are mutable protocol state with no public getter, so read them rather than assuming the table above still holds. One route works: read the `ProtocolConfig` shared object directly. All four fields come back in a single GraphQL object query against `0x7ef1ac99c2f0a77e7aa2602b5ea7bff68750cff0d80f09bdf827bfb345128f33`, which is the `protocolConfig` object listed on [Contract information](/onchain-finance/deepbook/deepbook-predict/contract-information).
+These four values are mutable protocol state with no public getter, so read them rather than assuming the table above still holds. One route works: read the `ProtocolConfig` shared object directly. All four fields sit in its `pricing_config` field and come back in a single object query, over GraphQL or gRPC, against the `protocolConfig` object for the network you are on, which `getConfig(network).objects.protocolConfig` returns:
 
-Two routes that look plausible return nothing:
+| Network | `ProtocolConfig` |
+| --- | --- |
+| Mainnet | `0x55e8800bcb31b792683ca4385bd533716e2a9721364236a69ee2c3bee61dd8f2` |
+| Testnet | `0xfeda745dfdef2cd9721c2ff1e1de538d103bc6012469d0eec10ea5de67f636d0` |
 
-- The Predict server's `GET /config` carries `trading_paused`, `protocol_config_id`, `max_lp_pool_value`, and `max_lp_pool_value_is_unbounded`, and none of the pricing values. `GET /events/pricing-config-updated` returns `404`, because the resource is absent from the `GET /events` allowlist even though a `pricing_config_updated` pipeline appears in `/status`.
-- `PricingConfigUpdated` and `EwmaConfigUpdated` are declared in the deployed package but are emitted only when an admin changes a value, and neither has ever been emitted on this deployment. An event query for either type returns an empty list, so polling events tells you nothing and leaves you holding the stale assumption instead. Their absence does mean the values above are unchanged since deployment.
+One route that looks plausible returns nothing. `PricingConfigUpdated` and `EwmaConfigUpdated` are declared in the deployed package but are emitted only when an admin changes a value. As of 2026-09-10 no admin setter has run on either network's `ProtocolConfig`, so an event query for either type returns an empty list, and polling events tells you nothing beyond that the values above are still the deployed ones. The public read services index the previous-generation `predict-8-21` deployment, not these two, so their `GET /config` is not a source for these values either.
 
 ### The same-transaction write guard
 
@@ -466,19 +484,19 @@ Two market functions read oracles outside of live pricing, and both are permissi
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="set_reference_tick,try_settle"
 	noComments
 />
 
 `set_reference_tick` reads the exact Pyth observation at the market's `reference_tick_source_timestamp_ms`, which market creation set to the expiry minus one cadence period. With no observation at that exact timestamp the call aborts with `expiry_market::EReferenceTickObservationMissing`. The reference tick is the one finite boundary a market admits off its admission grid, and it can be set once: a second, different value aborts with `strike_exposure::EReferenceTickAlreadySet`. A repeat call that resolves to the same tick succeeds and returns that tick, but emits nothing, because `ReferenceTickSet` fires only when the tick is newly recorded. Treat the event as the record of the first successful seeding, not as a receipt for every call.
 
-`try_settle` is idempotent and returns a boolean rather than aborting on the common failure. It returns `false` before the expiry, and it returns `true` when the market is now settled or was already settled. Settlement resolves in two stages:
+`try_settle` is idempotent and returns a boolean rather than aborting on the common failure. It returns `false` before the expiry, and it returns `true` when the market is now settled or was already settled. A pool flush never blocks it: a market settles the moment it reaches expiry even while the flush that snapshotted it is still valuing other markets, and the only flush-related work it does is to clear a valuation stamp left behind by a superseded flush. Settlement resolves in two stages:
 
 1. The exact Pyth spot at the market's expiry timestamp. This is the preferred source and records `settlement_source` `0`.
 2. If Pyth has nothing at that exact timestamp, the call waits a 30,000 ms grace period after the expiry, then tries the exact Block Scholes minute-boundary spot. That records `settlement_source` `1`.
 
-Because both stages read an exact timestamp rather than the latest observation, the settlement price does not depend on when anyone calls `try_settle`. Anyone can call it, and calling it again after settlement is harmless.
+Because both stages read an exact timestamp rather than the latest observation, the settlement price does not depend on when anyone calls `try_settle`. Anyone can call it, and calling it again after settlement is harmless. The Block Scholes fallback keys on the provider's own `value_timestamp`: a spot whose source timestamp falls on a minute boundary lands in the exact-history table through `apply_spot_batch` and `insert_at` alike, and `spot_at(expiry)` finds it only if one of those writes carried that exact timestamp.
 
 Settlement emits `MarketSettled`, which carries the settlement price and the source:
 
@@ -487,7 +505,7 @@ Settlement emits `MarketSettled`, which carries the settlement price and the sou
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="ReferenceTickSet,MarketSettled"
 />
 

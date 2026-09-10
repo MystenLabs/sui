@@ -1,27 +1,31 @@
 ---
 title: Contract Information
 description: >-
-  DeepBook Predict Testnet packages, shared objects, coin types, unit constants,
-  cadences, oracle objects, and public read endpoints for the
-  predict-testnet-8-21 deployment.
+  DeepBook Predict packages, shared objects, coin types, unit constants,
+  cadences, and oracle objects for the deepbook-predict-mainnet and
+  deepbook-predict-testnet deployments, plus the read services that index the
+  previous Testnet deployment.
 keywords:
   - deepbook predict contract information
   - predict package id
   - predict shared objects
+  - predict mainnet deployment
   - predict testnet deployment
   - predict server v4
-  - dusdc
+  - usdc
   - plp
   - propbook oracle
   - cadence
+  - Mainnet
   - Testnet
-last_verified: 2026-09-03
-verified_against: predict-testnet-8-21
+last_verified: 2026-09-10
+verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
 goal:
   description: >-
     Reader can identify every package ID, shared object ID, coin type, unit
-    constant, cadence, oracle object, and public read endpoint in the
-    predict-testnet-8-21 Testnet deployment
+    constant, cadence, and oracle object in the deepbook-predict-mainnet and
+    deepbook-predict-testnet deployments, and knows which deployment the public
+    read services index
   requires:
     - has_frontmatter:
         - title
@@ -38,149 +42,234 @@ goal:
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
-  - Which package and object IDs does DeepBook Predict use on Sui Testnet?
+  - Which package and object IDs does DeepBook Predict use on Sui Mainnet and Testnet?
+  - What is the DeepBook Predict quote coin on Mainnet and on Testnet?
+  - What units and market cadences do the DeepBook Predict deployments use?
   - Which servers return DeepBook Predict market, oracle, and account data?
-  - What units and market cadences does the predict-testnet-8-21 deployment use?
 answer: >-
-  The predict-testnet-8-21 deployment publishes six packages on Sui Testnet and
-  shares the Registry, ProtocolConfig, PoolVault, OracleRegistry, and
-  AccountRegistry objects. It quotes in DUSDC, scales probabilities, prices, and
-  rates by 1e9, and serves indexed reads from predict-server-v4,
-  propbook-server-v4, and account-server-v4.
+  DeepBook Predict runs as the deepbook-predict-mainnet deployment on Sui
+  Mainnet and the deepbook-predict-testnet deployment on Sui Testnet. Each
+  publishes seven packages and shares its own Registry, ProtocolConfig,
+  PoolVault, OracleRegistry, and AccountRegistry objects. Mainnet quotes in
+  native USDC and Testnet in a mintable test USDC that displays as DUSDC. Both
+  scale probabilities, prices, and rates by 1e9 and run BTC markets on the 1m
+  and 5m cadences. The @mysten/deepbook-v3 SDK ships both deployments and reads
+  every value without an indexer.
 ---
 
-DeepBook Predict runs on Sui Testnet only. Every identifier on this reference belongs to the `predict-testnet-8-21` deployment, built from source commit `1f79fe87ab2f6b9df40cfdc2e647c93f45e6d737` on the [`predict-testnet-8-21` branch](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-8-21/packages/predict) of the DeepBookV3 repository.
+DeepBook Predict runs on Sui Mainnet and Sui Testnet as two separate deployments, `deepbook-predict-mainnet` and `deepbook-predict-testnet`. Version 2.3.0 or later of [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) carries both, so `getConfig('mainnet')` and `getConfig('testnet')` each return the identifiers on this page. Both deployments are built from the [`deepbook-predict-mainnet` branch](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-mainnet/packages/predict) of the DeepBookV3 repository. The Testnet sources are identical to the Mainnet source commit apart from two lines of doc comment and attribute in `packages/propbook/sources/feeds/pyth_feed.move`, so one source pin serves both networks.
 
 :::caution
 
-The contracts, object layouts, and public interfaces documented here might change before any Mainnet deployment, so treat every value as provisional. There is no Mainnet deployment of DeepBook Predict, so no Mainnet package ID, object ID, quote asset, or server URL exists. Ignore identifiers from earlier Predict deployments, including `predict-testnet-4-16`, in local configs and scripts.
+Every identifier on this page belongs to one of the two current deployments. Earlier Testnet deployments are superseded, and their accounts, positions, and markets are not visible on the current ones, so ignore identifiers from them in local configs and scripts.
+
+As of 2026-09-10 the Mainnet deployment is published and configured, its pool holds only the bootstrap minimum, and no market has been tradable there yet. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object rather than assuming either network's state.
 
 :::
 
-## Current deployment
+## Mainnet deployment {#mainnet}
 
-The deployment manifest is the stable identity record for this branch. It names the chain, the source commit, and the checkpoint from which the public read APIs index:
+The deployment manifest is the stable identity record. It names the chain, the source commit, and the checkpoint from which an indexer would start:
 
 | Parameter | Value |
 | --- | --- |
-| Deployment | `predict-testnet-8-21` |
-| Network | Testnet |
-| Chain ID | `4c78adac` |
-| Source commit | `1f79fe87ab2f6b9df40cfdc2e647c93f45e6d737` |
-| Source branch | [`predict-testnet-8-21`](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-8-21/packages/predict) |
-| Indexing start checkpoint | `374460635` |
+| Deployment | `deepbook-predict-mainnet` |
+| Network | Mainnet |
+| Chain ID | `35834a8a` |
+| Source commit | `14a7e8f822e0397df2d61fbfbce3ef21086891c2` |
+| Source branch | [`deepbook-predict-mainnet`](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-mainnet/packages/predict) |
+| Indexing start checkpoint | `320360057` |
 
-### Packages
+### Mainnet packages {#packages}
 
-Predict is six published packages rather than one. Move call targets, event type prefixes, and the PLP coin type all derive from these IDs:
+Predict is seven packages rather than one. Move call targets, event type prefixes, and the PLP coin type all derive from these IDs. On Mainnet the `usdc` entry is Circle's native USDC package, which Predict links against rather than publishes:
 
 | Package | ID | Contents |
 | --- | --- | --- |
-| `predict` | `0x421041754244cf0e985fb9c9f5e1f49428caf3df4cde3a7b266d8e18ea63597b` | Markets, trading, protocol configuration, registry, and the PLP pool |
-| `propbook` | `0xd8b402609b1728f60cf20bfaaec5255701df54350ec13e93aac39463b00bf97b` | Oracle registry, Pyth feeds, and Block Scholes stores |
-| `account` | `0xa94ec89b6cbb3e2609c7ca65bd77885b7513f852922ebdf8e766851fb6f85259` | Account custody, balances, and the `Auth` authorization type |
-| `fixedMath` | `0xa55ad273d714c0688354cfe057073b64cd7e89ca1807f570a1505b8ee6c1abe3` | Fixed-point arithmetic used by the pricing math |
-| `deepbookCoreAccount` | `0xcc9cf1029127e7bda6da4c2ab90164d7bef751783ff13c21c2bb804cec69ebec` | DeepBook core account app type |
-| `sessions` | `0xb74170443d6d2d37cbe95c7e530dd4a1605ef714ff4f9e88e27a7ac1455451db` | Session support |
+| `predict` | `0x774f9555865a7b96e31ec982f62d5bdf9d74bf57a6468b5ed41340c231afd7df` | Markets, trading, protocol configuration, registry, and the PLP pool |
+| `propbook` | `0x2a63e378ab0138cdcb12651a093f3799f8b8e4f6c927ce6de0e8bc7ded0ec49d` | Oracle registry, Pyth feeds, and Block Scholes stores |
+| `account` | `0xa6f1b22aaeb429f6fd8f01c13f605256e00876457fd122da8a0e2c1045c75929` | Account custody, balances, and the `Auth` authorization type |
+| `fixedMath` | `0xeb8212402af172cac87ef533a61a899334a75a745489432aaa31872fdc5ecb42` | Fixed-point arithmetic used by the pricing math |
+| `deepbookCoreAccount` | `0xebcd5b403ee78021e3f78d1c77e2117a676caa8a9754dedb99e7b102b0d81872` | DeepBook core account app type |
+| `sessions` | `0xebfa125baee571c1f8c903c1dd54a5bc57949db82469b836c32eca251756c82a` | Session support |
+| `usdc` | `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7` | Circle native USDC, linked as an existing dependency |
 
-The `deepbookCoreAccount` app type is `0xcc9cf1029127e7bda6da4c2ab90164d7bef751783ff13c21c2bb804cec69ebec::account_data::DeepbookCoreAccountApp`. App authorization is live registry state, not deployment configuration: the manifest's `externalAuthorizations` entry records whether the authorization was in place when the deployment ran, and an admin grants or revokes it in a separate transaction afterward. In this deployment the app type is authorized on both the DeepBook registry `0x7c256edbda983a2cd6f946655f4bf3f00a41043993781f8674a7046e8c0e11d1` and the account registry `0x5682c73d657de1546374e632369a25c82744c8a20e9b4f47e6558e3d4bde88d3`, alongside `PredictApp` and `SessionsApp`. Read the current state from the registry with `account_registry::is_app_authorized<App>` rather than from the manifest field. [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#spot-wrappers) covers what that authorization gates.
-
-### Shared objects
+### Mainnet shared objects {#shared-objects}
 
 Predict has no single top-level object. State is split across shared objects that you pass by ID into `moveCall` arguments:
 
 | Manifest key | Object ID | What it holds |
 | --- | --- | --- |
-| `registry` | `0x3d486bd50bb5bb5450ddbcb4f74776b6135f416c09024a6674ac266e77e1870a` | `deepbook_predict::registry::Registry`: market lookup, cadence configuration, and capability allowlists |
-| `protocolConfig` | `0x7ef1ac99c2f0a77e7aa2602b5ea7bff68750cff0d80f09bdf827bfb345128f33` | `deepbook_predict::protocol_config::ProtocolConfig`: tunables, fee rates, freshness windows, pause and freeze flags, and the version watermark |
-| `poolVault` | `0x2a31f592d8fd3d0781e2233770d02d67797890ac82c3d18796d7eb0997896602` | `deepbook_predict::plp::PoolVault`: PLP custody, the supply and withdrawal queues, and per-expiry accounting |
-| `oracleRegistry` | `0x715f5ae4aac0078f4d0c6bf9ea2815614e799e909a90b577aeb8de9ad8bab142` | `propbook::registry::OracleRegistry`: the canonical oracle bindings for every underlying |
-| `accountRegistry` | `0x5682c73d657de1546374e632369a25c82744c8a20e9b4f47e6558e3d4bde88d3` | `account::account_registry::AccountRegistry`: account creation and app authorization |
-| `sessionsConfig` | `0xdfb8e23246678649cfdd6f3f6610057d5cadd6a8911a21dbe8e34788abbfab93` | Configuration object of the `sessions` package |
-| `deepbookRegistry` | `0x7c256edbda983a2cd6f946655f4bf3f00a41043993781f8674a7046e8c0e11d1` | DeepBook core registry referenced by the `deepbookCoreAccount` app authorization |
-| `accumulatorRoot` | `0x0000000000000000000000000000000000000000000000000000000000000acc` | Framework funds accumulator that delivers payouts, builder fees, and referral fees |
+| `registry` | `0xc98e430d82bed9f777288061faa1988da705a97db7f0da9f215ab372c53a2362` | `deepbook_predict::registry::Registry`: market lookup, cadence configuration, and capability allowlists |
+| `protocolConfig` | `0x55e8800bcb31b792683ca4385bd533716e2a9721364236a69ee2c3bee61dd8f2` | `deepbook_predict::protocol_config::ProtocolConfig`: tunables, fee rates, freshness windows, the no-trade and valuation windows, pause and freeze flags, and the version watermark |
+| `poolVault` | `0x3f80653bf9324162254d89724276aae7b36ba7c83d4650214afbf266da98f492` | `deepbook_predict::plp::PoolVault`: PLP custody, the supply and withdrawal queues, per-expiry accounting, and the in-flight valuation |
+| `oracleRegistry` | `0x1ff67a8499b0af7c0fbb26ba82c319be25413af93d9a961ee60f8d1229e7de7c` | `propbook::registry::OracleRegistry`: the canonical oracle bindings for every underlying |
+| `accountRegistry` | `0x210ba485d973b5356e9078318837137efabdd5ffb9eeb3705ba7eef3340324fc` | `account::account_registry::AccountRegistry`: account creation and app authorization |
+| `sessionsConfig` | `0x0c5f64365b3bf1f67827d6975893190079cc048247f9ff0b08390aa9ee697c5c` | Configuration object of the `sessions` package |
+| `deepbookRegistry` | `0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d` | DeepBook core registry referenced by the `deepbookCoreAccount` app authorization |
+| `usdcCurrency` | `0x75cfbbf8c962d542e99a1d15731e6069f60a00db895407785b15d14f606f2b4a` | Native USDC's existing shared `coin_registry::Currency` record |
+| `plpCurrency` | `0x1abd3bdc52345ad87467c06fd2d6e49cc1e5d6262bf488a3b814e98f9adfa607` | The PLP `coin_registry::Currency` record |
+| `accumulatorRoot` | `0x0000000000000000000000000000000000000000000000000000000000000acc` | Framework funds accumulator that delivers payouts, builder fees, referral fees, and liquidity fills |
 | `clock` | `0x0000000000000000000000000000000000000000000000000000000000000006` | Framework clock |
 
-Each `ExpiryMarket` is its own shared object, created per underlying and expiry. Market IDs are not deployment configuration: read them from `registry::expiry_market_id` onchain or from the `/markets` endpoint at runtime.
-
-### Coin types
-
-Predict quotes in a Testnet stand-in for USDC and issues one liquidity share type:
+### Mainnet coin types
 
 | Coin | Type | Decimals |
 | --- | --- | --- |
-| DUSDC | `0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC` | 6 |
-| PLP | `0x421041754244cf0e985fb9c9f5e1f49428caf3df4cde3a7b266d8e18ea63597b::plp::PLP` | 6 |
+| USDC | `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC` | 6 |
+| PLP | `0x774f9555865a7b96e31ec982f62d5bdf9d74bf57a6468b5ed41340c231afd7df::plp::PLP` | 6 |
+| DEEP | `0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP` | 6 |
+
+## Testnet deployment {#testnet}
+
+| Parameter | Value |
+| --- | --- |
+| Deployment | `deepbook-predict-testnet` |
+| Network | Testnet |
+| Chain ID | `4c78adac` |
+| Source commit | `a928bd2da4b71abf7c4ea6f66abec2763308331e` |
+| Source branch | [`deepbook-predict-testnet`](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-testnet/packages/predict) |
+| Indexing start checkpoint | `381301489` |
+
+### Testnet packages
+
+On Testnet the `usdc` entry is a test coin that Predict publishes itself. It shares the `usdc::USDC` module path with native USDC, displays with the symbol DUSDC and the name "DeepBook USDC", and is mintable:
+
+| Package | ID | Contents |
+| --- | --- | --- |
+| `predict` | `0x25d075d2de915feda7ab9b8f855afe59cbcd4b2ce96f75324940c810f84da018` | Markets, trading, protocol configuration, registry, and the PLP pool |
+| `propbook` | `0xa04a43dbbfb123feec96691a22809d8a87e9ac37ae9356079c439750145aa92b` | Oracle registry, Pyth feeds, and Block Scholes stores |
+| `account` | `0x543139156cb90d1a73df33b5dca37d7c8bdce62506c7874ebc854afd319b98f1` | Account custody, balances, and the `Auth` authorization type |
+| `fixedMath` | `0x5d3b5af5cb48685e7641d4b0b0293f7af709151ac76367a1e791d545d422134a` | Fixed-point arithmetic used by the pricing math |
+| `deepbookCoreAccount` | `0x2dbb8e6a5b9a8ac6201c7aeff6de0c7e7bca5dcd8d6c16538cb1a7447a298071` | DeepBook core account app type |
+| `sessions` | `0x10c91d168dc4a04357f9d23795a204092ca46e5b97f8b9ef26fea95664d5bb38` | Session support |
+| `usdc` | `0xc028557a1ed49e42ed091e115aedefd70a442b184c18fbec5c48d5b6c0b8c184` | Test USDC, published by the deployment |
+
+### Testnet shared objects
+
+| Manifest key | Object ID | What it holds |
+| --- | --- | --- |
+| `registry` | `0xd21fab5444128eb65c5f6299564f583db72ad84d17581a4febe68878127100d5` | `deepbook_predict::registry::Registry` |
+| `protocolConfig` | `0xfeda745dfdef2cd9721c2ff1e1de538d103bc6012469d0eec10ea5de67f636d0` | `deepbook_predict::protocol_config::ProtocolConfig` |
+| `poolVault` | `0xd6b96a77d5acfd4f4a660cbd1098ed62abf2317e85a01274d1a4eeef19603767` | `deepbook_predict::plp::PoolVault` |
+| `oracleRegistry` | `0xda71af88a8b9d01b6913937a84c5a63bb4e1015a7a2142185ec9ef73f675615f` | `propbook::registry::OracleRegistry` |
+| `accountRegistry` | `0xb889caefe327cbdea58e529e3b9e10dc93f1e661ddef32824d28527edf8d6385` | `account::account_registry::AccountRegistry` |
+| `sessionsConfig` | `0x63cde7c7d846f15c51802ec3d44ba44918658e3155b0d2e0cb26d6fc1b4dadd8` | Configuration object of the `sessions` package |
+| `deepbookRegistry` | `0x7c256edbda983a2cd6f946655f4bf3f00a41043993781f8674a7046e8c0e11d1` | DeepBook core registry referenced by the `deepbookCoreAccount` app authorization |
+| `usdcCurrency` | `0x3122f737aa36d0a3a55a6b15a94578b52829d60d45b8d0f48c37f1739aed3ca2` | The test USDC `coin_registry::Currency` record |
+| `plpCurrency` | `0x45677450205be53f4e8bebf520694e580aced3fb13016f279961f6891fceed13` | The PLP `coin_registry::Currency` record |
+| `accumulatorRoot` | `0x0000000000000000000000000000000000000000000000000000000000000acc` | Framework funds accumulator |
+| `clock` | `0x0000000000000000000000000000000000000000000000000000000000000006` | Framework clock |
+
+### Testnet coin types
+
+| Coin | Type | Decimals |
+| --- | --- | --- |
+| Test USDC, displayed as DUSDC | `0xc028557a1ed49e42ed091e115aedefd70a442b184c18fbec5c48d5b6c0b8c184::usdc::USDC` | 6 |
+| PLP | `0x25d075d2de915feda7ab9b8f855afe59cbcd4b2ce96f75324940c810f84da018::plp::PLP` | 6 |
 | DEEP | `0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8::deep::DEEP` | 6 |
 
-The PLP type is defined by the Predict package, so it changes with every redeployment.
+## Shared facts across both networks
+
+Each `ExpiryMarket` is its own shared object, created per underlying and expiry. Market IDs are not deployment configuration: read them from `registry::expiry_market_id` onchain or from `read.markets()` at runtime. The PLP type is defined by each network's Predict package, so it differs per network and changes with every redeployment. The quote coin type differs per network too, so always take it from `getConfig(network).quoteCoinType` rather than from a symbol.
+
+## Underlyings and oracle objects {#underlyings-and-oracle-objects}
+
+One underlying is live on each network. Oracle data lives in the separate `propbook` package, and every priced call takes concrete oracle objects as arguments:
+
+| Field | Mainnet | Testnet |
+| --- | --- | --- |
+| Symbol | BTC | BTC |
+| Name | `BTC_USD` | `BTC_USD` |
+| Propbook underlying ID | `1` | `1` |
+| Pyth Lazer feed ID | `1` | `1` |
+| Block Scholes source ID | `1` | `1` |
+| `PythFeed` | `0x44bd2e00549973bb6a58785836e97ed80b4979e67dc3bf312c997e56053e5376` | `0x7179188b3a27758c53668a4ec09a81be114dea5ffabcf367f4e720a26db8ee59` |
+| `BlockScholesValueStore` | `0xe7c83ee4ac0c300d68d8d4c3d265d78287b4767dcbc5f279cd6f210b6248d493` | `0x77dee47fb870753c740439f436e0c30c00c60f13f171c901125b3d60f89518e5` |
+| `BlockScholesSVIStore` | `0x8e5568aebf490c2adfd4e010a9b4ddcf7c774183f58c98fcd438bae1fc68f561` | `0xe8aa80965d201e2cb18359c3aa315e3abc5bbf807a10a59d6e011ef41be5db7a` |
+
+Passing an oracle object that is not the current canonical binding aborts rather than pricing against the wrong feed, so resolve the three oracle IDs from `OracleRegistry` at runtime instead of trusting a cached copy. See [Oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle) for the binding accessors, the freshness windows, and which call needs which object.
+
+## App authorization
+
+The `deepbookCoreAccount` package declares the `account_data::DeepbookCoreAccountApp` type under its own package ID on each network. App authorization is live registry state rather than deployment configuration: a manifest's `externalAuthorizations` entry records only whether the authorization was in place when the deployment ran, and an admin grants or revokes it in a separate transaction afterward.
+
+On both networks' `AccountRegistry`, `PredictApp`, `SessionsApp`, and `DeepbookCoreAccountApp` were authorized as of 2026-09-10. That is live registry state, so read it with `account_registry::is_app_authorized<App>` rather than assuming it.
+
+The DeepBook core registry is a separate authorization, and it differs by network as of 2026-09-10. On Testnet, `DeepbookCoreAccountApp` is authorized on the DeepBook registry `0x7c256edbda983a2cd6f946655f4bf3f00a41043993781f8674a7046e8c0e11d1`. On Mainnet it is not authorized on the DeepBook registry `0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d`, so the session spot wrappers cannot work there yet. Neither state is permanent, and the authorization belongs to that registry's administrator rather than to Predict. Check it with `deepbook::registry::assert_app_is_authorized<DeepbookCoreAccountApp>`, which aborts when the app is not authorized. [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#spot-wrappers) covers what that authorization gates.
 
 ## Units and constants
 
-Predict mixes two scales, and confusing them is the fastest way to misprice a trade. Probabilities, prices, and rates are fixed-point integers, while coin amounts use the coin's own decimals:
+Predict mixes two scales, and confusing them is the fastest way to misprice a trade. Probabilities, prices, and rates are fixed-point integers, while coin amounts use the coin's own decimals. The units are identical on both networks:
 
 | Constant | Value | Applies to |
 | --- | --- | --- |
 | Fixed-point scale | `1000000000` (1e9) | Probabilities, prices, tick sizes, and rates |
-| Quote coin decimals | 6 | DUSDC amounts, premiums, fees, and payouts |
+| Quote coin decimals | 6 | USDC amounts, premiums, fees, and payouts |
 | PLP coin decimals | 6 | PLP share amounts |
 | DEEP coin decimals | 6 | DEEP amounts |
 | Position quantity decimals | 6 | Position quantities |
 | Position lot size | `10000` | Position quantities, which must be whole multiples |
-| Minimum premium | `1000000` | The premium of every mint, in DUSDC base units |
+| Minimum premium | `1000000` | The premium of every mint, in USDC base units |
 | Timestamp unit | Unix milliseconds | Onchain timestamps, expiries, and event windows |
 
-A probability of `500000000` is 0.5. A price of `110000000000000` is 110,000.00. An amount of `1000000` is 1 DUSDC. A position quantity of `10000` is one lot, 0.01 contracts.
+A probability of `500000000` is 0.5. A price of `110000000000000` is 110,000.00. An amount of `1000000` is 1 USDC. A position quantity of `10000` is one lot, 0.01 contracts.
 
-The lot size is the granularity of a quantity, not a tradable minimum. `strike_exposure_config::assert_mint_admission` rejects a mint whose premium falls below `1000000` base units, which is 1 DUSDC, with abort code `3`, `EPremiumBelowMinimum`. The premium is the quantity multiplied by the quoted entry probability, and `max_entry_probability` caps that probability at `990000000`, so the smallest quantity any market accepts is about 1.02 contracts, and the floor rises as the strike moves further out of the money. Size a mint by the rule that predicts admission: `quantity` multiplied by the quoted `entryProbability` must reach 1 DUSDC. A quantity of 1 is below the floor on every live market.
+The lot size is the granularity of a quantity, not a tradable minimum. `strike_exposure_config::assert_mint_admission` rejects a mint whose premium falls below `1000000` base units, which is 1 USDC, with abort code `3`, `EPremiumBelowMinimum`. The premium is the quantity multiplied by the quoted entry probability, and `max_entry_probability` caps that probability at `990000000`, so the smallest quantity any market accepts is about 1.02 contracts, and the floor rises as the strike moves further out of the money. Size a mint by the rule that predicts admission: `quantity` multiplied by the quoted `entryProbability` must reach 1 USDC. A quantity of 1 is below the floor on every live market.
 
 Read every quantity that arrives as a JSON string with decimal or bigint tooling. Postgres `NUMERIC` columns serialize as strings, and `parseFloat` silently loses precision on them.
 
-## Underlyings and oracle objects
+## Configuration
 
-One underlying is live. Oracle data lives in the separate `propbook` package, and every priced call takes concrete oracle objects as arguments:
+Both deployments ship the same initial configuration, and both `ProtocolConfig` objects matched it field for field when read on chain on 2026-09-10. Configuration is mutable protocol state, so read the live values from `ProtocolConfig` and `registry::cadence_configs` rather than pinning the ones below.
 
-| Field | Value |
-| --- | --- |
-| Symbol | BTC |
-| Name | `BTC_USD` |
-| Propbook underlying ID | `1` |
-| Pyth Lazer feed ID | `1` |
-| Block Scholes source ID | `1` |
-| `PythFeed` | `0xea8fd4624002516b28b495051c838b2c9a34a4f22ae281d328e1bec47f54cd24` |
-| `BlockScholesValueStore` | `0x9b64cc860ac09e6dcd675fc579c1048792ddce51cc018f2ca16aeb4a1a5684a3` |
-| `BlockScholesSVIStore` | `0xd5bc586e99c8d595e0ba5e0a2ef2295e652db8934ffbeda630d60e207bedab8f` |
+### Cadences
 
-Passing an object that is not the current canonical binding aborts rather than pricing against the wrong feed, so resolve the three IDs from `OracleRegistry` at runtime instead of trusting a cached copy. See [Oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle) for the binding accessors, the freshness windows, and which call needs which object.
-
-## Cadences
-
-Markets are created on fixed cadences. Six cadence slots exist per underlying, addressed by cadence ID, and a cadence is enabled when its window size is greater than zero:
+Six cadence slots exist per underlying, addressed by cadence ID. A cadence is enabled when its window size is greater than zero, and only the 1m and 5m cadences are enabled:
 
 | ID | Name | Period (ms) | Enabled | Tick size | Admission tick size | Max expiry allocation | Initial expiry cash | Window size |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | 1m | `60000` | Yes | `10000000` | `1000000000` | `50000000000` | `10000000000` | `2` |
-| 1 | 5m | `300000` | Yes | `10000000` | `1000000000` | `50000000000` | `10000000000` | `2` |
-| 2 | 1h | `3600000` | Yes | `10000000` | `1000000000` | `250000000000` | `50000000000` | `2` |
-| 3 | 1d | `86400000` | Yes | `10000000` | `100000000000` | `250000000000` | `50000000000` | `2` |
-| 4 | 1w | `604800000` | Yes | `10000000` | `100000000000` | `250000000000` | `50000000000` | `2` |
+| 0 | 1m | `60000` | Yes | `10000000` | `1000000000` | `10000000000` | `2000000000` | `2` |
+| 1 | 5m | `300000` | Yes | `10000000` | `1000000000` | `10000000000` | `2000000000` | `2` |
+| 2 | 1h | `3600000` | No | `0` | `0` | `0` | `0` | `0` |
+| 3 | 1d | `86400000` | No | `0` | `0` | `0` | `0` | `0` |
+| 4 | 1w | `604800000` | No | `0` | `0` | `0` | `0` | `0` |
 | 5 | 1mo | `2592000000` | No | `0` | `0` | `0` | `0` | `0` |
 
 Read each column as follows:
 
-- **Tick size:** the price-axis resolution, in fixed-point price units. Every enabled cadence uses `10000000`, which is 0.01 USD.
-- **Admission tick size:** the coarser grid a finite position boundary must land on, also in fixed-point price units. A boundary tick must be a multiple of `admission_tick_size / tick_size` ticks.
-- **Max expiry allocation:** the cadence cap on cash allocated to one expiry market, in DUSDC base units. The market's inventory-impact curve is scaled by this same value.
-- **Initial expiry cash:** the cash the vault seeds a new market with, in DUSDC base units.
-- **Window size:** how many expiries of this cadence can be live at once. Zero disables the cadence.
+- **Tick size:** the price-axis resolution, in fixed-point price units. Both enabled cadences use `10000000`, which is 0.01 USD.
+- **Admission tick size:** the coarser grid a finite position boundary must land on, also in fixed-point price units. Both enabled cadences use `1000000000`, which is 1 USD, or every 100 ticks. A boundary tick must be a multiple of `admission_tick_size / tick_size` ticks.
+- **Max expiry allocation:** the cadence cap on cash allocated to one expiry market, in USDC base units: 10,000 USDC. The market's inventory-impact curve is scaled by this same value.
+- **Initial expiry cash:** the cash the vault seeds a new market with, in USDC base units: 2,000 USDC.
+- **Window size:** how many expiries of this cadence can be live at once, so four markets are live at any time across the two enabled cadences. Zero disables the cadence.
 
-The admission grids differ by cadence, and a strike on the wrong grid is a common integration failure. The 1m, 5m, and 1h cadences admit boundaries every 1 USD, which is every 100 ticks. The 1d and 1w cadences admit boundaries every 100 USD, which is every 10,000 ticks. The only finite boundary a market admits off its admission grid is its own reference tick. Read `admission_tick_size` from the market rather than assuming one grid for every cadence.
+The only finite boundary a market admits off its admission grid is its own reference tick. Read `admission_tick_size` from the market rather than assuming a grid, because cadence terms are mutable. Market creation on a disabled cadence aborts.
 
-The 1mo cadence is configured but disabled: its terms are all zero, and market creation on it aborts. Cadence terms are mutable protocol state, so read them from `registry::cadence_config` or `registry::cadence_configs` onchain rather than pinning the values above.
+### Protocol values
 
-## Public read APIs
+| Value | Deployed | Notes |
+| --- | --- | --- |
+| Pyth spot freshness | `2000` ms | Live pricing aborts on an older observation |
+| Block Scholes price freshness | `2000` ms | Spot and forward |
+| Block Scholes SVI freshness | `60000` ms | The SVI surface changes more slowly |
+| `no_trade_window_ms` | `2000` | Live mints and live redeems abort with `ETradeWindowClosed` inside the last 2 seconds before expiry |
+| `max_valuation_window_ms` | `300000` | A pool flush must finish within 5 minutes of its snapshot or be restarted |
+| `max_lp_pool_value` | `500000000000` | The pool accepts at most 500,000 USDC of liquidity |
+| `lp_request_limit_flush_attempts` | `1` | A queued request whose floor the flush mark misses is cancelled and refunded at the first miss |
+| PLP supply fee | `0` | |
+| PLP withdraw fee | `2000000` | 0.2 percent |
+| Protocol reserve profit share | `100000000` | 10 percent |
+| Referral fee rate | `100000000` | 10 percent |
+| EWMA congestion penalty | disabled | |
 
-Three services index this deployment. Each exposes read-only JSON `GET` endpoints with permissive browser CORS, and none accepts writes:
+The strike-exposure template is unchanged from earlier deployments: base fee 10 percent, minimum fee 2.2 percent, entry probability band 1 percent to 99 percent, backing buffer lambda 0.31, inventory impact rate 0, and a 1 day expiry fee window with a 1x maximum multiplier. Every package is at version 1 on both networks.
+
+## Public read APIs for the previous Testnet deployment
+
+As of 2026-09-10 no indexed read service exists for `deepbook-predict-testnet` or for `deepbook-predict-mainnet`. The three public read services below still index the previous-generation `predict-8-21` Testnet deployment, so their responses carry that deployment's package and object IDs and none of the identifiers above. Nothing on the SDK path needs them: every `client.predict.read` method runs against a full node, and the event decoders parse a transaction result locally.
+
+The tables stay here for readers who still work against `predict-8-21`, and because the shape of these services is what a future service for the current deployments is likely to follow. Each exposes read-only JSON `GET` endpoints with permissive browser CORS, and none accepts writes:
 
 | Service | Base URL | Primary data |
 | --- | --- | --- |
@@ -188,11 +277,9 @@ Three services index this deployment. Each exposes read-only JSON `GET` endpoint
 | Propbook | `https://propbook-server-v4.testnet.mystenlabs.com` | Oracle bindings, Pyth observations, and Block Scholes spot, forward, and SVI observations |
 | Account | `https://account-server-v4.testnet.mystenlabs.com` | Account custody state, balances, activity, portfolio, and app authorizations |
 
-These hostnames are operational Testnet endpoints. They are not part of the audited manifest, and they might be replaced or retired independently of the onchain packages. Submit transactions through the SDK or a `moveCall`, and treat Sui Testnet as the only execution authority.
+These hostnames are operational Testnet endpoints. They are not part of any audited manifest, and they can be retired or repointed independently of the onchain packages. Confirm which deployment a service indexes before you build on it: its `/markets` response names the Predict package through the market IDs it returns.
 
 ### Market and event data
-
-Discover markets first, then read one market by ID:
 
 | Endpoint | Use |
 | --- | --- |
@@ -208,9 +295,9 @@ Discover markets first, then read one market by ID:
 
 The positions path keys on the canonical account ID rather than the `AccountWrapper` ID, the same as the account service paths. [Account and portfolio data](#account-and-portfolio-data) covers the two ways to get that ID and what a wrapper ID returns instead.
 
-The `GET /events` listing includes `liquidated-order-redeemed`, `deep-staked`, `deep-unstaked`, and `trading-loss-rebate-claimed`, which correspond to contract features that no longer exist. This deployment never emits them and requesting one returns `503`. The event modules below are what the packages actually emit.
+The `GET /events` listing includes `liquidated-order-redeemed`, `deep-staked`, `deep-unstaked`, and `trading-loss-rebate-claimed`, which correspond to contract features that no longer exist. No deployment emits them and requesting one returns `503`. The event modules under [Live onchain events](#live-onchain-events) are what the packages actually emit.
 
-Market discovery returns the creation record for each live market. The following sample is trimmed to the market's identity and cadence terms; the live response also carries the source event's checkpoint and position fields and the market's fee-curve parameters:
+Market discovery returns the creation record for each live market. The following sample is trimmed to the market's identity and cadence terms, and its values are the previous deployment's:
 
 ```bash
 $ curl 'https://predict-server-v4.testnet.mystenlabs.com/markets?active=true&limit=1'
@@ -236,13 +323,9 @@ $ curl 'https://predict-server-v4.testnet.mystenlabs.com/markets?active=true&lim
 ]
 ```
 
-Use `expiry_market_id` for market-scoped reads, `pool_vault_id` for vault reads, and `propbook_underlying_id` to join a market to its oracle objects.
-
-Identifiers in the sample responses on these pages are illustrative. The market above was a 1 minute market that has long since settled, so its ID resolves to nothing useful. Read live IDs from the endpoint or from the chain.
+Use `expiry_market_id` for market-scoped reads, `pool_vault_id` for vault reads, and `propbook_underlying_id` to join a market to its oracle objects. Identifiers in sample responses are illustrative: the market above settled long ago, so its ID resolves to nothing useful.
 
 ### Oracle data
-
-Bindings connect an underlying to the object IDs the observation endpoints accept:
 
 | Endpoint | Use |
 | --- | --- |
@@ -269,7 +352,7 @@ Account and position paths key on the canonical account ID, not on the shared `A
 
 Two routes give you that ID:
 
-- **Derive it from the owner address:** `new SessionsContract(getSessionsConfig('testnet')).deriveAccountId(owner)`, from the `@mysten/deepbook-v3/sessions` subpath, computes it offchain with no chain read. `client.predict` exposes only `wrapperIdFor`, which returns the wrapper, so the Predict client alone cannot produce this ID.
+- **Derive it from the owner address:** `new SessionsContract(getSessionsConfig(network)).deriveAccountId(owner)`, from the `@mysten/deepbook-v3/sessions` subpath, computes it offchain with no chain read. `client.predict` exposes only `wrapperIdFor`, which returns the wrapper, so the Predict client alone cannot produce this ID.
 - **Read it off an event:** every Predict order event carries the account ID in its `account_id` field, and `decode.createManager(result)` returns it as `accountId`.
 
 :::caution
@@ -305,18 +388,29 @@ Raw event pages need care, because they page differently from the named history 
 
 ## Manage configuration across networks
 
-Never inline these values at a call site. Each one is deployment-specific, and all of them change when Predict deploys anywhere else. Keep them in one network-keyed record, resolve it once at startup, and pass the result down:
+Never inline these values at a call site. Each one is deployment-specific, and all of them differ between Mainnet and Testnet. Keep them in one network-keyed record, resolve it once at startup, and pass the result down. The examples do exactly that: a single `NETWORK` constant selects `'testnet'` or `'mainnet'`, and everything else derives from it:
 
 <ImportContent source="examples/deepbook-predict/src/config.ts" mode="code" tag="config" />
 
-Resolving once gives you a single place to switch networks and a single place to fail. Assert the deployment name at startup as well, because a later SDK release can intentionally move Testnet to a newer deployment.
+`getConfig`, `getDeployment`, `getUnits`, `getAccountConfig`, and `getSessionsConfig` all accept `'mainnet'` or `'testnet'` and throw a plain `Error` on any other value, so a misconfigured environment fails at startup instead of sending a transaction to a package that does not exist. Resolving once gives you a single place to switch networks and a single place to fail. Assert the deployment name at startup as well, because a later SDK release can intentionally move a network to a newer deployment. The quote coin is the value most worth reading rather than assuming:
+
+```ts
+import { getConfig, getDeployment } from '@mysten/deepbook-v3/predict';
+
+const network = process.env.PREDICT_NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
+const { deployment, chainId } = getDeployment(network);
+// 'deepbook-predict-mainnet' on chain 35834a8a, or 'deepbook-predict-testnet' on chain 4c78adac.
+
+const { quoteCoinType } = getConfig(network);
+// Mainnet: native USDC. Testnet: the test coin that displays as DUSDC. Same `usdc::USDC` module path.
+```
 
 | Value | Why it changes per deployment |
 | --- | --- |
 | `packages.predict`, `packages.account`, `packages.propbook` | Each deployment publishes its own packages. Move call targets and event type prefixes derive from them. |
 | `objects.registry`, `objects.protocolConfig`, `objects.poolVault` | Each deployment shares its own Predict state objects, which every trading and liquidity call takes as arguments. |
 | `objects.oracleRegistry`, `objects.accountRegistry` | The Propbook and account packages share their own registries per deployment. |
-| `quoteCoinType` | Testnet quotes in the DUSDC test coin. Another deployment would use a different asset with its own type and decimals. |
+| `quoteCoinType` | Mainnet quotes in native USDC. Testnet quotes in a mintable test coin with the same module path and decimals but a different package. |
 | `coinTypes.plp` | Derived from the Predict package ID, so it moves with every republish. |
 | `units` | Lot size, fixed-point scale, and decimals are recorded per deployment rather than assumed. |
 | `underlyings` | Each underlying carries its propbook ID and its three oracle object IDs, and rebinding can change them. |
@@ -325,26 +419,23 @@ Read market IDs, expiries, reference ticks, cadence terms, and oracle observatio
 
 ### Testnet and Mainnet differences
 
-DeepBook Predict currently runs on Testnet only. The SDK records no configuration for any other network, so `getConfig('mainnet')` throws immediately with a message saying Predict is Testnet-only. `getDeployment` and `getUnits` behave the same way. A misconfigured environment therefore fails at startup instead of sending a transaction to a package that does not exist.
+The two deployments run the same contracts and the same initial configuration. What differs is around them:
 
-:::caution
+- **Quote asset and funding.** Testnet quotes in a test coin you can request for free, and Testnet SUI is free. Mainnet quotes in native USDC, there is no faucet, and any top-up path that assumes free replenishment needs replacing.
+- **Activity.** Testnet creates markets every minute and settles them. On Mainnet, as of 2026-09-10, no market has been tradable and the pool holds only the bootstrap minimum. `read.markets()` lists live-and-unsettled markets, which includes an expired market nobody has settled, so check each entry's expiry before you quote against it.
+- **Read services.** None exists for either current deployment as of 2026-09-10.
+- **DeepBook core authorization.** The session spot wrappers work on Testnet and not yet on Mainnet, per [App authorization](#app-authorization).
 
-No Mainnet deployment has published oracle update frequencies, settlement windows, cadence terms, or fee parameters. Do not assume a future Mainnet matches the Testnet configuration. Confirm each value against that deployment when it ships, and treat any Testnet timing you measure as an observation rather than a guarantee.
-
-:::
-
-Structure your code so these unknowns do not become assumptions:
+Structure your code so none of these become assumptions:
 
 - **Read lifecycle state, do not infer it from time.** Check `is_settled` or `try_settlement_price` on the market rather than deriving settlement from an expiry timestamp. A market settles when someone calls `try_settle` successfully, and the gap after expiry has no fixed duration.
-- **Take decimals and scale from the configured deployment.** DUSDC uses 6 decimals and probabilities use a 1e9 scale here. An amount scaled by a hardcoded exponent silently misprices every mint.
-- **Read the admission grid from the market.** Cadences differ, and admission tick size is mutable protocol state.
-- **Do not carry Testnet funding assumptions forward.** Testnet DUSDC and Testnet SUI are free. Any top-up path that assumes free replenishment needs replacing elsewhere.
+- **Take decimals and scale from the configured deployment.** An amount scaled by a hardcoded exponent silently misprices every mint.
+- **Read the admission grid from the market.** Admission tick size is mutable protocol state.
+- **Treat timing you measure on Testnet as an observation rather than a guarantee.** Oracle update frequency and settlement latency are properties of the relayers, not of the contracts.
 
 ## Live onchain events
 
-The read APIs index events after the fact. When a client needs lower latency than that, stream events directly from a full node and keep the read APIs for historical pagination and aggregates.
-
-Predict emits its events from four modules under the Predict package: `config_events` for lifecycle and configuration, `order_events` for trading, `vault_events` for the pool and its queues, and `builder_code_events` for builder attribution. The following table lists the ones an integrator subscribes to most often, not every event each module declares:
+Stream events directly from a full node when a client needs them as they land, and back them with your own store for history. Predict emits its events from four modules under the Predict package: `config_events` for lifecycle and configuration, `order_events` for trading, `vault_events` for the pool and its queues, and `builder_code_events` for builder attribution. The following table lists the ones an integrator subscribes to most often, not every event each module declares:
 
 | Event type | Emitted when |
 | --- | --- |
@@ -352,6 +443,7 @@ Predict emits its events from four modules under the Predict package: `config_ev
 | `config_events::ReferenceTickSet` | A market records its reference tick |
 | `config_events::MarketSettled` | A market settles, with `settlement_source` `0` for Pyth and `1` for Block Scholes |
 | `config_events::ExpiryMarketMintPausedUpdated` | Minting is paused or unpaused on one market |
+| `config_events::NoTradeWindowUpdated` | An admin changes `no_trade_window_ms` |
 | `order_events::OrderMinted` | A position is opened |
 | `order_events::LiveOrderRedeemed` | A live position is closed or reduced before expiry |
 | `order_events::SettledOrderRedeemed` | A settled position is claimed |
@@ -359,19 +451,22 @@ Predict emits its events from four modules under the Predict package: `config_ev
 | `vault_events::SupplyFilled` | A queued supply fills at the flush mark and mints PLP |
 | `vault_events::WithdrawFilled` | A queued withdrawal fills at the flush mark and burns PLP |
 | `vault_events::RequestCancelled` | A queued request is cancelled by its owner or refunded by the flush |
-| `vault_events::FlushExecuted` | The liquidity queue is flushed at one NAV |
+| `vault_events::FlushExecuted` | The liquidity queues are drained at one frozen NAV |
+| `vault_events::FlushRestarted` | A new pool valuation supersedes one that never finished |
 | `builder_code_events::BuilderCodeCreated` | A derived `BuilderCode` is created |
 | `builder_code_events::BuilderCodeSet` | An account changes its sticky builder code attribution |
 | `builder_code_events::BuilderFeesClaimed` | A builder code owner claims accumulated builder fees |
+
+The `SupplyFilled` and `WithdrawFilled` payloads name their quote amounts `usdc_amount`, `fee_usdc`, and `usdc_remaining`, and `WithdrawRequested` carries `min_usdc_out`.
 
 ### Stream events over gRPC
 
 Stream Predict events with `SubscriptionService.SubscribeEvents`, filtering on the Predict package ID, and page the same events historically with `LedgerService.ListEvents` under an identical filter. Sui full nodes no longer serve the older WebSocket subscription API, so do not build on `sui_subscribeEvent`.
 
-Subscribe to market creation and settlement:
+Subscribe to market creation and settlement on Testnet. For Mainnet, swap in the Mainnet Predict package ID and `fullnode.mainnet.sui.io:443`:
 
 ```shell
-$ PACKAGE=0x421041754244cf0e985fb9c9f5e1f49428caf3df4cde3a7b266d8e18ea63597b
+$ PACKAGE=0x25d075d2de915feda7ab9b8f855afe59cbcd4b2ce96f75324940c810f84da018
 $ ENDPOINT=fullnode.testnet.sui.io:443
 $ METHOD=sui.rpc.v2.SubscriptionService/SubscribeEvents
 
@@ -404,7 +499,7 @@ filter {
 " "$ENDPOINT" "$METHOD"
 ```
 
-Swap the method for `sui.rpc.v2.LedgerService/ListEvents` to page the same events historically. The filter is disjunctive normal form, so each `terms` block is ORed: the request above matches either event type and scopes both to this deployment.
+Swap the method for `sui.rpc.v2.LedgerService/ListEvents` to page the same events historically. The filter is disjunctive normal form, so each `terms` block is ORed: the request above matches either event type and scopes both to one deployment.
 
 Subscriptions begin at the current tip and accept no resume point, so recovering events missed during a disconnect always requires a `ListEvents` backfill. Those mechanics are the same for every gRPC event consumer and are documented once, for all of them:
 
@@ -417,17 +512,18 @@ Subscriptions begin at the current tip and accept no resume point, so recovering
 
 ## Source pointers
 
-Every module below lives on the [`predict-testnet-8-21`](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-8-21) branch. There is no `entry fun` in the `predict`, `account`, or `propbook` packages: every integrator call is a `public fun` invoked as a `moveCall`, and several of them return values that a later command in the same transaction must consume.
+Every module below is pinned to the Mainnet source commit `14a7e8f822e0397df2d61fbfbce3ef21086891c2`, which the [`deepbook-predict-mainnet`](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-mainnet) branch carries. The Testnet deployment's sources are identical apart from two lines in `pyth_feed.move`, so the same links serve both networks. There is no `entry fun` in any Predict package: every integrator call is a `public fun` invoked as a `moveCall`, and several of them return values that a later command in the same transaction must consume.
 
 | Area | Source |
 | --- | --- |
-| Markets, quoting, trading, and settlement | [`packages/predict/sources/expiry_market.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/predict/sources/expiry_market.move) |
-| Market catalog, cadences, and capabilities | [`packages/predict/sources/registry/registry.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/predict/sources/registry/registry.move) |
-| Protocol configuration and gating | [`packages/predict/sources/config/protocol_config.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/predict/sources/config/protocol_config.move) |
-| PLP pool, liquidity queues, and valuation | [`packages/predict/sources/plp/plp.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/predict/sources/plp/plp.move) |
-| Account custody and authorization | [`packages/account/sources/account.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/account/sources/account.move) |
-| Oracle registry and bindings | [`packages/propbook/sources/registry.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-8-21/packages/propbook/sources/registry.move) |
-| Pyth and Block Scholes feeds | [`packages/propbook/sources/feeds`](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-8-21/packages/propbook/sources/feeds) |
+| Markets, quoting, trading, and settlement | [`packages/predict/sources/expiry_market.move`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/predict/sources/expiry_market.move) |
+| Market catalog, cadences, and capabilities | [`packages/predict/sources/registry/registry.move`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/predict/sources/registry/registry.move) |
+| Protocol configuration and gating | [`packages/predict/sources/config/protocol_config.move`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/predict/sources/config/protocol_config.move) |
+| PLP pool, liquidity queues, and valuation | [`packages/predict/sources/plp/plp.move`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/predict/sources/plp/plp.move) |
+| Pool valuation capability | [`packages/predict/sources/capabilities/pool_valuation_cap.move`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/predict/sources/capabilities/pool_valuation_cap.move) |
+| Account custody and authorization | [`packages/account/sources/account.move`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/account/sources/account.move) |
+| Oracle registry and bindings | [`packages/propbook/sources/registry.move`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/propbook/sources/registry.move) |
+| Pyth and Block Scholes feeds | [`packages/propbook/sources/feeds`](https://github.com/MystenLabs/deepbookv3/tree/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/propbook/sources/feeds) |
 
 ### Find the page for a Move abort {#abort-module-map}
 
@@ -444,7 +540,18 @@ A Move abort names the module it came from and a number. Error numbers restart a
 | `sessions` | [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions) |
 | `protocol_config`, whose gates run ahead of every call | [Registry](/onchain-finance/deepbook/deepbook-predict/contract-information/registry) |
 
-`PredictMoveError` from the TypeScript SDK carries `module` and `code` for exactly this lookup, plus `abortName` when the client speaks gRPC or GraphQL. A first mint most often aborts in `strike_exposure_config`, whose code `3` is `EPremiumBelowMinimum`.
+Several tables were renumbered or extended on these deployments, so a code memorized from an earlier deployment can point at the wrong constant:
+
+| Module | Codes on these deployments |
+| --- | --- |
+| `plp` | Renumbered: `EMissingExpiryValuation` `0`, `ENotBootstrapped` `1`, `EAlreadyBootstrapped` `2`, `EBelowMinBootstrapLiquidity` `3`, `EBelowMinFeeIncentiveSponsorship` `4`, `EMaxLiveExpiryMarketsExceeded` `5`. New: `EValuationSnapshotNotSealed` `6`, `EExpiryPricerAlreadySnapshotted` `7`, `EIncompleteValuationSnapshot` `8`, `EExpiredMarketNotSettled` `9`, `EValuationWindowExpired` `10`, `ESnapshotStageOpen` `11`. |
+| `protocol_config` | Codes `0` to `5` unchanged. New: `ESnapshotInProgress` `6`, `ETradeWindowClosed` `7`. |
+| `expiry_market` | Codes `0` to `9` unchanged. New: `EMarketNotPendingValuation` `10`, `EMintCostAboveMaxPayout` `11`. |
+| `registry` | New: `EPoolValuationCapNotValid` `3`, `EPoolValuationCapNotFound` `4`. |
+| `config_constants` | New: `EInvalidMaxValuationWindowMs` `23`, `EInvalidNoTradeWindowMs` `24`. |
+| `strike_payout_tree` | New: `EStaleValuationSnapshot` `3`, `ESnapshotSeqNotIncreasing` `4`. |
+
+`PredictMoveError` from the TypeScript SDK carries `module` and `code` for exactly this lookup, plus `abortName` when the client speaks gRPC or GraphQL. A first mint most often aborts in `strike_exposure_config`, whose code `3` is `EPremiumBelowMinimum`, or in `protocol_config` with code `7`, `ETradeWindowClosed`, when the quote was taken inside the last 2 seconds before expiry.
 
 import DocCardList from '@theme/DocCardList';
 

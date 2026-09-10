@@ -7,9 +7,14 @@ import { client } from './client.js';
 
 // Withdrawing from the pool is queued exactly as a supply is, and it takes raw
 // PLP shares rather than a USD amount. `read.plpBalance` returns those shares
-// directly, so exiting the whole position needs no conversion. The builder pins
-// the minimum DUSDC out to zero, so there is no per-request floor to set.
-export async function queueWithdrawAll(owner: string): Promise<Transaction> {
+// directly, so exiting the whole position needs no conversion. `minUsdcOut` is a
+// floor on the USDC the flush pays for the whole request, measured after the
+// withdraw fee: a flush quoting less declines and, at the deployed attempt count
+// of one, cancels and refunds the request. Omit it to accept the next mark.
+export async function queueWithdrawAll(
+	owner: string,
+	minUsdcOut?: number,
+): Promise<Transaction> {
 	const shares = await client.predict.read.plpBalance(owner);
 	// The chain rejects a request below one whole PLP, which is 1_000_000 raw at
 	// six decimals. Check it here rather than letting a dust holder take a Move
@@ -20,7 +25,7 @@ export async function queueWithdrawAll(owner: string): Promise<Transaction> {
 			`${owner} holds ${shares} raw PLP shares; the minimum withdrawal request is ${MIN_WITHDRAW_RAW}.`,
 		);
 	}
-	return client.predict.tx.withdrawPlp(owner, shares);
+	return client.predict.tx.withdrawPlp(owner, shares, { minUsdcOut });
 }
 
 // A queued request can be cancelled up to the flush that would fill it. The

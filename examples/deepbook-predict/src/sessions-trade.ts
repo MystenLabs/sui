@@ -37,7 +37,7 @@ const FEEDS = PREDICT.underlyings[UNDERLYING];
 //    `loadLivePricer` in a preceding command of the same transaction.
 // 3. `maxCost` and `maxProbability` are required. The `/predict` facade defaults
 //    a missing cap to `U64_MAX`, which is no cap at all; the session builder
-//    makes you name both. Quantities and costs are raw six-decimal DUSDC, and
+//    makes you name both. Quantities and costs are raw six-decimal USDC, and
 //    probabilities are raw fixed point at 1e9.
 export async function mintAsSession(params: {
 	owner: string;
@@ -131,7 +131,7 @@ export async function closeAsSession(params: {
 	quantity: number;
 	// Minimum acceptable fill probability, 0 to 1.
 	minProbability: number;
-	// Minimum acceptable DUSDC proceeds for the whole close.
+	// Minimum acceptable USDC proceeds for the whole close.
 	minProceeds: number;
 }): Promise<Transaction> {
 	const { owner, session, expiryMarketId, orderId, quantity } = params;

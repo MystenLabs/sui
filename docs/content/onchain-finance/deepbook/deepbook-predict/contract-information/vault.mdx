@@ -2,7 +2,7 @@
 title: Vault
 description: >-
   Learn how the DeepBook Predict PoolVault holds liquidity, queues asynchronous
-  PLP supply and withdraw requests, and fills them at one flush mark.
+  PLP supply and withdraw requests, and fills them at one frozen flush mark.
 keywords:
   - deepbook predict pool vault
   - poolvault
@@ -12,6 +12,7 @@ keywords:
   - flush
   - request queue
   - expiry cash
+  - pool valuation cap
 goal:
   description: >-
     Reader can learn how the DeepBook Predict PoolVault holds liquidity, queues
@@ -36,36 +37,38 @@ questions:
   - Why is a new DeepBook Predict market not mintable yet?
 answer: >-
   PoolVault is the shared object that holds Predict pool liquidity, the PLP
-  treasury cap, the protocol reserve, per-expiry cash accounting, and the LP
-  request queues. Liquidity is asynchronous: request_supply and request_withdraw
-  queue a request and return a queue index, and a periodic flush of
-  start_pool_valuation, one value_expiry per active market, and finish_flush
-  prices and fills both queues at a single exact pool NAV.
-last_verified: 2026-09-03
-verified_against: predict-testnet-8-21
+  treasury cap, the protocol reserve, per-expiry cash accounting, the LP
+  request queues, and any in-flight pool valuation. Liquidity is asynchronous:
+  request_supply and request_withdraw queue a request with a price floor and
+  return a queue index, and a flush started by a PoolValuationCap holder freezes
+  every market's pricer in one snapshot transaction, values each market in later
+  transactions, and then fills both queues at that single frozen pool NAV.
+last_verified: 2026-09-10
+verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
 ---
 
-The Predict pool is the counterparty to every trade. Liquidity providers deposit DUSDC, receive PLP shares, and collectively back the payout liability of every active expiry. All of that capital sits in one shared object, `deepbook_predict::plp::PoolVault`.
+The Predict pool is the counterparty to every trade. Liquidity providers deposit USDC, receive PLP shares, and collectively back the payout liability of every active expiry. All of that capital sits in one shared object, `deepbook_predict::plp::PoolVault`.
 
-Liquidity is asynchronous. Nothing mints or burns PLP at the moment a provider asks for it. A request joins a queue with a fill limit, and a later privileged flush values the whole pool once and drains both queues at that single frozen mark.
+Liquidity is asynchronous. Nothing mints or burns PLP at the moment a provider asks for it. A request joins a queue with a price floor, and a later flush freezes the whole pool at one instant, values it, and drains both queues at that single frozen mark.
 
-:::caution
+:::info
 
-Predict is available on Sui Testnet only. There is no Mainnet deployment, and DUSDC and PLP are Testnet assets with no market value.
+Collateral is the Move type `usdc::usdc::USDC`. On Mainnet that resolves to native USDC. On Testnet it is a mintable test coin at the same module path that displays as DUSDC and has no market value. Read the exact coin type from `getConfig(network).quoteCoinType` rather than assuming a symbol. The Move snippets on this page are pinned to the Mainnet source commit, which serves both deployments; see [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information) for the package and object IDs of each network.
 
 :::
 
 ## The pool vault {#accounting-model}
 
-`PoolVault` is created and shared at package publish, alongside the PLP currency registration. It holds five things:
+`PoolVault` is created and shared at package publish, alongside the PLP currency registration. It holds six things:
 
 | **Field** | **Type** | **Holds** |
 |---|---|---|
 | `id` | `UID` | The shared object identity. |
-| `protocol_reserve_balance` | `Balance<DUSDC>` | Protocol-owned DUSDC, excluded from PLP redemption. No package call withdraws it. |
-| `fee_incentive_reserve` | `Balance<DUSDC>` | Sponsor-funded DUSDC for taker fee subsidies, excluded from PLP NAV. |
+| `protocol_reserve_balance` | `Balance<USDC>` | Protocol-owned USDC, excluded from PLP redemption. No package call withdraws it. |
+| `fee_incentive_reserve` | `Balance<USDC>` | Sponsor-funded USDC for taker fee subsidies, excluded from PLP NAV. |
 | `lp` | `LpBook<PLP>` | The PLP treasury cap, both request queues with their escrow, and the locked bootstrap balance. |
-| `expiry_accounting` | `Ledger` | Idle DUSDC custody, the active-expiry set, per-expiry cash-flow rows, and the profit basis. |
+| `expiry_accounting` | `Ledger` | Idle USDC custody, the active-expiry set, per-expiry cash-flow rows, and the profit basis. |
+| `valuation` | `Option<PoolValuation>` | The in-flight flush, if one exists. It is `some` exactly while the valuation flag on `ProtocolConfig` is engaged. |
 
 The pool owns no expiry-local state. Each `ExpiryMarket` owns its own trading cash, strike exposure, payout backing, and risk state. The pool coordinates capital across expiries and delegates every expiry-local invariant to the expiry itself.
 
@@ -76,7 +79,7 @@ The pool owns no expiry-local state. Each `ExpiryMarket` owns its own trading ca
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="PoolVault"
 />
 
@@ -94,7 +97,7 @@ A queue is a paged list. Each `RequestPage` holds up to 64 entries, and each `Re
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="LpBook,RequestQueue,RequestEntry"
 />
 
@@ -102,7 +105,7 @@ A queue is a paged list. Each `RequestPage` holds up to 64 entries, and each `Re
 
 ### The accounting ledger {#ledger}
 
-`pool_accounting` holds idle DUSDC and the per-expiry books. It is also entirely `public(package)`. The `Ledger` custodies the idle balance, tracks which expiries are active, and records for each registered expiry its allocation cap, initial cash target, cumulative cash sent and received, and fee-incentive allocation.
+`pool_accounting` holds idle USDC and the per-expiry books. It is also entirely `public(package)`. The `Ledger` custodies the idle balance, tracks which expiries are active, and records for each registered expiry its allocation cap, initial cash target, cumulative cash sent and received, and fee-incentive allocation.
 
 <details>
 <summary>Source for the ledger structs</summary>
@@ -112,7 +115,7 @@ A queue is a paged list. Each `RequestPage` holds up to 64 entries, and each `Re
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="Ledger,ActiveExpiry,RegisteredExpiry"
 />
 
@@ -140,9 +143,11 @@ public fun pending_protocol_profit(vault: &PoolVault): u64
 Behavior worth knowing before you call them:
 
 - `supply_requests_pending` and `withdraw_requests_pending` return queue lengths, not escrowed amounts.
-- `active_expiry_markets` returns every registered active expiry, including settled ones that no sweep has removed yet. Use it to build the `value_expiry` steps of a flush.
+- `active_expiry_markets` returns every registered active expiry, including settled ones that no sweep has removed yet. Use it to build the `snapshot_expiry_pricer` and `value_expiry` steps of a flush.
 - `active_live_expiry_count` counts only expiries still ahead of the clock, which is the count the live-market ceiling applies to.
 - `plp_total_supply` includes the permanently locked bootstrap shares, which are never withdrawable.
+
+Whether a flush is in flight is a `ProtocolConfig` read, `protocol_config::valuation_in_progress(config): bool`, and whether one market is snapshotted into that flush and still awaiting its `value_expiry` is `expiry_market::is_pending_valuation(market, config): bool`. Both are observability reads. Neither gates trading.
 
 <details>
 <summary>Source for the read accessors</summary>
@@ -152,7 +157,7 @@ Behavior worth knowing before you call them:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="idle_balance,protocol_reserve_balance,fee_incentive_reserve,plp_total_supply,supply_requests_pending,withdraw_requests_pending,active_expiry_markets,active_live_expiry_count,profit_basis_debits,profit_basis_credits,pending_protocol_profit"
 	noComments
 />
@@ -165,22 +170,48 @@ Four calls move liquidity in and out, and all four need nothing but account `Aut
 
 | **Call** | **Escrows** | **Limit argument** | **Returns** |
 |---|---|---|---|
-| `request_supply` | `amount` DUSDC pulled from account custody | `min_plp_out` | `u64` queue index |
-| `request_withdraw` | `amount` PLP shares pulled from account custody | `min_dusdc_out` | `u64` queue index |
-| `cancel_supply_request` | Refunds the escrowed DUSDC to the account | Takes the queue `index` | Nothing |
+| `request_supply` | `amount` USDC pulled from account custody | `min_plp_out` | `u64` queue index |
+| `request_withdraw` | `amount` PLP shares pulled from account custody | `min_usdc_out` | `u64` queue index |
+| `cancel_supply_request` | Refunds the escrowed USDC to the account | Takes the queue `index` | Nothing |
 | `cancel_withdraw_request` | Refunds the escrowed PLP to the account | Takes the queue `index` | Nothing |
+
+```move title='packages/predict/sources/plp/plp.move'
+public fun request_supply(
+    vault: &mut PoolVault,
+    wrapper: &mut AccountWrapper,
+    auth: Auth,
+    config: &ProtocolConfig,
+    amount: u64,
+    min_plp_out: u64,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): u64
+
+public fun request_withdraw(
+    vault: &mut PoolVault,
+    wrapper: &mut AccountWrapper,
+    auth: Auth,
+    config: &ProtocolConfig,
+    amount: u64,
+    min_usdc_out: u64,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): u64
+```
 
 Both requests route through the account rather than the transaction signer, so a composing vault's own account receives the fill. The recipient recorded at request time is the account's `receive_address`, and fills and refunds are delivered to it through the balance accumulator.
 
-Both limits are measured after the pool's supply or withdraw fee, so they bound what the account actually receives. Each is a price floor rather than a promise of a quantity: if the flush has room for only part of the request, the fill is proportionally smaller at the same price and the remainder stays queued with its limit rescaled. At the shipped `lp_request_limit_flush_attempts` of `1`, a flush whose mark quotes below the limit cancels and refunds the request on the spot rather than holding the queue head.
+Both limits are measured after the pool's supply or withdraw fee, so they bound what the account actually receives. Each is a price floor rather than a promise of a quantity: if the flush has room for only part of the request, the fill is proportionally smaller at the same price and the remainder stays queued with its limit rescaled. At the deployed `lp_request_limit_flush_attempts` of `1`, the first flush whose mark quotes below the limit cancels and refunds the request on the spot rather than holding the queue head. An admin can raise the attempt count to at most `3`, in which case a request rests through that many misses before it is refunded, and while it rests at the head of its queue that queue stops draining for the flush, so requests behind it wait too.
 
-Both cancels are recipient-checked. The caller's account `receive_address` must equal the recipient recorded on the request, otherwise the call aborts with `lp_book::ENotRequestOwner`. A cancel only works while the request is still pending, and no call can run while a valuation is in progress.
+Requests are not blocked by a flush. A request submitted after a flush has taken its snapshot lands at or above that flush's queue cutoff, so it waits for the next flush and cannot be filled at a mark it already knows. Both cancels are recipient-checked: the caller's account `receive_address` must equal the recipient recorded on the request, otherwise the call aborts with `lp_book::ENotRequestOwner`. A cancel only works while the request is still pending, and neither cancel can run while a flush is in flight, so a request that is inside the current flush's cutoff stays committed to that flush's mark.
 
 Minimum sizes apply per request:
 
 | **Action** | **Minimum** | **Raw** | **Abort** |
 |---|---|---|---|
-| Supply | 10 DUSDC | `10_000_000` | `lp_book::EBelowMinSupplyRequest` |
+| Supply | 10 USDC | `10_000_000` | `lp_book::EBelowMinSupplyRequest` |
 | Withdraw | 1 PLP | `1_000_000` | `lp_book::EBelowMinWithdrawRequest` |
 
 <details>
@@ -191,7 +222,7 @@ Minimum sizes apply per request:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="request_supply,request_withdraw,cancel_supply_request,cancel_withdraw_request"
 	noComments
 />
@@ -200,39 +231,132 @@ Minimum sizes apply per request:
 
 ## The flush {#the-flush}
 
-A flush values the entire pool once and then drains both queues against that one value. It has exactly three stages:
+A flush freezes the entire pool at one instant, values it against that frozen state, and then drains both queues at the resulting mark. It runs in three stages, and only the first stage has to be a single transaction:
 
-1. `start_pool_valuation` consumes a `MarketLifecycleProof` by value, engages the valuation lock on `ProtocolConfig`, snapshots the active expiry set, and returns a `PoolValuation`.
-1. `value_expiry` runs once per snapshotted market. Each call rebalances that market's cash against the pool, then folds the market's value into a running total. A settled market is swept and contributes `0`, and a live market contributes its exact `current_nav`.
-1. `finish_flush` consumes the `PoolValuation` by value, proves every snapshotted market was valued exactly once, computes the LP-attributable pool NAV, drains both queues at that mark, releases the lock, and returns the pool NAV as a `u64`.
+| **Stage** | **Calls** | **Transactions** | **Who can call** |
+|---|---|---|---|
+| Snapshot | `start_pool_valuation`, then `snapshot_expiry_pricer` once per active market, then `seal_valuation_snapshot` | Exactly one | An allowlisted `PoolValuationCap` holder, through a `PoolValuationProof` |
+| Valuation | `value_expiry` once per snapshotted live market | One market per transaction, any number of transactions | Anyone |
+| Finish | `finish_flush` | One | Anyone |
 
-Only the first stage is capability-gated. The proof comes from `registry::generate_lifecycle_proof`, which itself requires an allowlisted `MarketLifecycleCap`. The other two stages carry no capability: holding `&mut PoolValuation` or the potato itself is the authority, backed by an assertion that a valuation is in progress.
+### Snapshot {#snapshot-stage}
 
-`PoolValuation` has no abilities, so it cannot be stored, transferred, or dropped, so the whole flush must be one programmable transaction block. The valuation lock is engaged when the potato is created and released inside `finish_flush`, so there is no way to leave the pool half-valued.
+The snapshot stage is atomic because it is built from two hot potatoes. `registry::generate_pool_valuation_proof` checks that a `PoolValuationCap` is still allowlisted and returns a `PoolValuationProof` that has no abilities. `start_pool_valuation` consumes it and returns a `SnapshotStage`, which also has no abilities. Every `snapshot_expiry_pricer` borrows the stage, and `seal_valuation_snapshot` consumes it. Neither potato can be stored, transferred, or dropped, so the transaction that starts a flush is the transaction that snapshots and seals it, and only the starter's programmable transaction block can add a market to the snapshot:
 
-<ImportContent
-	source="packages/predict/sources/plp/plp.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	branch="predict-testnet-8-21"
-	struct="PoolValuation"
-/>
+```move title='packages/predict/sources/plp/plp.move'
+public fun start_pool_valuation(
+    config: &mut ProtocolConfig,
+    vault: &mut PoolVault,
+    valuation_proof: PoolValuationProof,
+    supply_budget: Option<u64>,
+    withdraw_budget: Option<u64>,
+    clock: &Clock,
+): SnapshotStage
 
-Settlement is a separate step. `value_expiry` loads a live pricer, and a live pricer cannot be built for a market that has crossed its expiry, so compose `expiry_market::try_settle` before the `value_expiry` command for any market whose settlement might be due. An expired unsettled market moves no cash and then aborts the valuation until settlement succeeds.
+public fun snapshot_expiry_pricer(
+    vault: &mut PoolVault,
+    _stage: &SnapshotStage,
+    market: &mut ExpiryMarket,
+    config: &ProtocolConfig,
+    propbook_registry: &OracleRegistry,
+    pyth: &PythFeed,
+    bs_values: &BlockScholesValueStore,
+    bs_svi: &BlockScholesSVIStore,
+    clock: &Clock,
+    ctx: &TxContext,
+)
 
-`finish_flush` also takes `supply_budget` and `withdraw_budget`, each an `Option<u64>` bounding how many requests that queue can process. `none` means unbounded. The budgets are independent, so a supply backlog can never starve withdrawals, and an operator sizes them against the gas left after valuing the snapshotted markets.
+public fun seal_valuation_snapshot(
+    vault: &mut PoolVault,
+    stage: SnapshotStage,
+    config: &mut ProtocolConfig,
+)
+```
+
+`start_pool_valuation` engages the valuation flag on `ProtocolConfig`, increments the flush sequence number, opens the snapshot stage, records the active expiry set as the markets this flush must value, stores the two drain budgets, records each LP queue's next index as that queue's cutoff, and stamps the start time. If a previous flush is still in flight it is discarded first and `FlushRestarted` is emitted. The pool must be bootstrapped, otherwise the call aborts with `ENotBootstrapped`.
+
+`snapshot_expiry_pricer` runs once per market in the active set. For a live market it loads a live pricer, converts it to a storable `FrozenPricer` that only this package can thaw, stores it in the valuation keyed by market ID, and stamps the market with its current cash and inventory-impact reserve. For a market that is already settled it runs the terminal sweep immediately and records no pricer, so that market contributes `0` and its recoverable cash is already in idle when the seal reads it. A market that has expired but not settled aborts with `EExpiredMarketNotSettled`, which reverts the whole snapshot transaction, so compose `expiry_market::try_settle` ahead of the snapshot for any market whose settlement might be due. A market outside the active set is skipped rather than aborting, so a stale off-chain market list cannot fail the flush, and a second snapshot of the same market aborts with `EExpiryPricerAlreadySnapshotted`. The pricer load refuses an oracle observation written earlier in the same transaction, so a keeper cannot refresh the oracles and snapshot in one block.
+
+`seal_valuation_snapshot` proves that every expected market has a frozen entry, aborting with `EIncompleteValuationSnapshot` otherwise, then freezes the vault-side figures the mark needs: idle balance, both profit-basis totals, and the pending protocol profit. It closes the snapshot stage, which is the moment trading reopens for any other transaction.
+
+### Valuation {#valuation-stage}
+
+`value_expiry` folds one market's snapshot-instant NAV into the running total. It takes no oracle objects and no clock, because everything it reads was frozen in the snapshot:
+
+```move title='packages/predict/sources/plp/plp.move'
+public fun value_expiry(
+    vault: &mut PoolVault,
+    market: &mut ExpiryMarket,
+    config: &ProtocolConfig,
+)
+```
+
+It is permissionless and idempotent. A market that is not in the expected set, or that has already been valued, returns without changing anything, so a stranger valuing a market ahead of the keeper can only help. It aborts with `EValuationSnapshotNotSealed` before the seal. For a market frozen with a pricer it thaws the pricer, walks the payout tree's frozen shadow, subtracts that liability from the stamped free cash, adds the result to `total_nav`, and clears the market's stamp. A market frozen as settled contributes `0`. The call moves no cash.
+
+One market per transaction is the intended cadence. Only `value_expiry` walks a payout tree, and a tree holds one dynamic-field child per distinct strike tick, so splitting the walk across transactions is what keeps a large book inside Sui's per-transaction object budget.
+
+### Finish {#finish-stage}
+
+`finish_flush` prices the pool and drains the queues:
+
+```move title='packages/predict/sources/plp/plp.move'
+public fun finish_flush(
+    vault: &mut PoolVault,
+    config: &mut ProtocolConfig,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): u64
+```
+
+It is permissionless, because the drain budgets were committed at start, so a stranger who finishes a flush can only fill requests at the starter's budgets and never starve them. It aborts with `EMissingExpiryValuation` unless every expected market has been valued, computes the LP-attributable pool NAV from the frozen figures, drains both queues at that mark up to the recorded cutoffs and budgets, releases the valuation flag, emits `FlushExecuted`, and returns the pool NAV as a `u64`.
+
+`supply_budget` and `withdraw_budget`, each an `Option<u64>`, bound how many requests that queue can process. `none` means unbounded. The budgets are independent, so a supply backlog can never starve withdrawals.
+
+### The valuation window {#valuation-window}
+
+Finishing is bounded by `max_valuation_window_ms` on `ProtocolConfig`, deployed at `300000`, which is five minutes. Once `now >= started_at_ms + max_valuation_window_ms`, `finish_flush` aborts with `EValuationWindowExpired`, so no request is ever filled at a mark older than the window. Starting carries no deadline. There is no separate abort or discard call: the operator recovers by calling `start_pool_valuation` again, which discards the in-flight valuation, emits `FlushRestarted` with how many markets were expected and how many were valued, and takes a fresh snapshot. Any stamp left on a market by the discarded flush goes stale by sequence number and is cleared lazily by that market's next mint, redeem, or settlement.
+
+### What a flush blocks {#flush-gates}
+
+The valuation flag no longer gates trading. Trades on a stamped market cannot reach the frozen figures, because the stamp captured the cash rows and the payout tree captures each node's shadow before its first post-snapshot mutation. What is and is not blocked:
+
+| **Flow** | **During the snapshot transaction** | **During valuation and finish** |
+|---|---|---|
+| Live quotes, mints, `redeem_live`, `redeem_settled` | Blocked with `ESnapshotInProgress`, which only the starter's own transaction can observe | Open |
+| `try_settle` | Open | Open |
+| `request_supply`, `request_withdraw` | Open | Open, but a request lands beyond this flush's cutoff |
+| `cancel_supply_request`, `cancel_withdraw_request` | Blocked with `EValuationInProgress` | Blocked with `EValuationInProgress` |
+| `sponsor_fee_incentives` | Blocked with `EValuationInProgress` | Blocked with `EValuationInProgress` |
+| `rebalance_expiry_cash` | Blocked with `ESnapshotStageOpen` | Open |
+| `set_reference_tick`, `create_and_share_expiry_market` | Open | Open |
+| Config setters the mark reads, such as fee rates, freshness windows, `max_lp_pool_value`, and `max_valuation_window_ms` | Blocked with `EValuationInProgress` | Blocked with `EValuationInProgress` |
+
+A market created mid-flush is not in the frozen expected set and simply joins the next flush. Settlement is never blocked, because the frozen mark is settlement-invariant: a stamped market that expires mid-window settles the instant it can, and the flush still folds its frozen pre-expiry mark.
 
 <details>
-<summary>Source for the three flush stages</summary>
+<summary>Source for the flush structs</summary>
 
 <ImportContent
 	source="packages/predict/sources/plp/plp.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
-	fun="start_pool_valuation,value_expiry,finish_flush"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	struct="PoolValuationProof,SnapshotStage,PoolValuation"
+/>
+
+</details>
+
+<details>
+<summary>Source for the five flush calls</summary>
+
+<ImportContent
+	source="packages/predict/sources/plp/plp.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	fun="start_pool_valuation,snapshot_expiry_pricer,seal_valuation_snapshot,value_expiry,finish_flush"
 	noComments
 />
 
@@ -240,37 +364,38 @@ Settlement is a separate step. `value_expiry` loads a live pricer, and a live pr
 
 ## One mark for both sides {#share-price}
 
-`finish_flush` computes the LP-attributable pool NAV from the accumulated per-expiry total, then snapshots it once against the PLP supply:
+`finish_flush` computes the LP-attributable pool NAV purely from frozen figures, then snapshots it once against the PLP supply:
 
 ```text
-gross_pool_value = idle_balance + sum of each active expiry's current_nav
+gross_pool_value = frozen_idle_balance + sum of each active expiry's snapshot_nav
 exclusion        = protocol_reserve_profit_share
-                   * max(0, (profit_basis_credits + sum of current_nav) - profit_basis_debits) / 1e9
-pool_nav         = max(0, gross_pool_value - exclusion - pending_protocol_profit)
+                   * max(0, (frozen_profit_basis_credits + sum of snapshot_nav) - frozen_profit_basis_debits) / 1e9
+pool_nav         = max(0, gross_pool_value - exclusion - frozen_pending_protocol_profit)
 ```
 
 Both subtracted terms are protocol profit that is not yet sitting in the reserve. `exclusion` is the protocol's share of profit that NAV has priced in but that has not yet materialized into cash. `pending_protocol_profit` is a cut that has materialized but whose cash could not be moved yet because idle was deployed elsewhere. The two are disjoint, and neither belongs to liquidity providers.
 
-Each expiry's contribution is exact rather than estimated:
+Each expiry's contribution is exact rather than estimated, and it is measured at the snapshot instant:
 
 ```text
-current_nav = max(0, free_cash - live_marked_liability)
-free_cash   = cash_balance - inventory_impact_reserve
+snapshot_nav = max(0, snapshot_free_cash - frozen_marked_liability)
+snapshot_free_cash = snapshot_cash - snapshot_impact_reserve
 ```
 
-`live_marked_liability` is the full payout-tree walk that prices each distinct boundary tick once through the resolved pricer, so every open position is worth exactly its quantity multiplied by its range probability. There is no verified-versus-unscanned bucket split, no uncertainty band, and no separate supply and withdraw pricing.
+`frozen_marked_liability` is the full payout-tree walk over the tree's frozen shadow, pricing each distinct boundary tick once through the thawed pricer, so every position open at the snapshot is worth exactly its quantity multiplied by its range probability. There is no verified-versus-unscanned bucket split, no uncertainty band, and no separate supply and withdraw pricing.
 
 That single exact mark is what makes both directions fair:
 
 - A supplier cannot dilute incumbents, because the mark never undercounts true recoverable value.
 - A withdrawer cannot overdraw, because the mark never overcounts it.
-- The mark cannot be timed against a self-supplied oracle update, because only a lifecycle-cap holder can start a flush and the potato can be created no other way.
+- The mark cannot be timed against a self-supplied oracle update, because only a pool-valuation-cap holder can start a flush, the pricer load refuses an observation written in the same transaction, and every market is frozen in the same transaction.
+- A request cannot be placed against a mark it already knows, because the drain fills only requests indexed below the cutoff recorded at start.
 
-Fees are charged on the DUSDC leg after the mark and never inside it, so they do not move the price either side trades at.
+Fees are charged on the USDC leg after the mark and never inside it, so they do not move the price either side trades at.
 
 ## Filling the queues {#redemption-value}
 
-The drain runs supplies first, then withdrawals, each from the head of its queue in order. Because supplies run first, DUSDC supplied in a flush is available to pay that same flush's withdrawals.
+The drain runs supplies first, then withdrawals, each from the head of its queue in order and only up to that queue's cutoff. Because supplies run first, USDC supplied in a flush is available to pay that same flush's withdrawals.
 
 Supply fills mint PLP against the frozen pair:
 
@@ -279,53 +404,55 @@ fee    = ceil(amount * plp_supply_fee_rate / 1e9)
 shares = floor((amount - fee) * total_supply / pool_nav)
 ```
 
-Withdraw fills burn PLP and pay out of idle DUSDC:
+Withdraw fills burn PLP and pay out of idle USDC:
 
 ```text
 gross  = floor(shares * pool_nav / total_supply)
 payout = gross - ceil(gross * plp_withdraw_fee_rate / 1e9)
 ```
 
-The whole escrow is consumed in both directions. A supply joins its full DUSDC into idle including the fee, and a withdrawal burns its full escrowed PLP while the fee stays in idle.
+The whole escrow is consumed in both directions. A supply joins its full USDC into idle including the fee, and a withdrawal burns its full escrowed PLP while the fee stays in idle.
 
 Three things bound a pass beyond the operator budgets:
 
-- **Pool value cap:** supplies fill only up to `max_lp_pool_value`, measured against the frozen mark plus the supplies already filled in this flush. A head larger than the remaining headroom fills to the headroom and keeps its remainder queued. The deployed value is `18446744073709551615`, the maximum of a `u64`, so the cap is present in the code path but not binding on this deployment. It is mutable protocol state, so read it before you rely on it staying inert.
-- **Idle liquidity:** withdrawals fill only up to idle DUSDC. A head that idle cannot cover in full is paid as far as idle reaches, keeps its position, and stops the pass. Withdrawals are never reordered around a too-large head.
-- **Request limits:** a head whose quote is below its own `min_plp_out` or `min_dusdc_out` is refunded at the shipped attempt count of `1`, and the pass continues. A head whose mark or quote is not executable at all is refunded rather than aborting the flush.
+- **Pool value cap:** supplies fill only up to `max_lp_pool_value`, measured against the frozen mark plus the supplies already filled in this flush. A head larger than the remaining headroom fills to the headroom and keeps its remainder queued. Both deployments set the cap to `500_000_000_000`, which is 500,000 USDC. It is mutable protocol state, so read it before you size a supply.
+- **Idle liquidity:** withdrawals fill only up to live idle USDC at finish time. A head that idle cannot cover in full is paid as far as idle reaches, keeps its position, and stops the pass. Withdrawals are never reordered around a too-large head.
+- **Request limits:** a head whose quote is below its own `min_plp_out` or `min_usdc_out` is refunded at the deployed attempt count of `1`, and the pass continues. A head whose mark or quote is not executable at all is refunded rather than aborting the flush.
 
 Cash already funded into an expiry is not directly redeemable until it returns through a rebalance or settlement, so a large exit can be bounded by idle and deferred. It cannot force-drain a live market.
 
 ## Worked example {#worked-example}
 
-Assume these values at the moment `finish_flush` runs, with `plp_supply_fee_rate` at `0` and `plp_withdraw_fee_rate` at `2_000_000`, which is 0.2 percent:
+Assume these frozen values when `finish_flush` runs, with `plp_supply_fee_rate` at `0` and `plp_withdraw_fee_rate` at `2_000_000`, which is 0.2 percent:
 
 | **Input** | **Raw value** | **Reads as** |
 |---|---|---|
-| `idle_balance` | `500_000_000_000` | 500,000 DUSDC |
-| Sum of `current_nav` | `120_000_000_000` | 120,000 DUSDC |
-| `profit_basis_credits` | `10_000_000_000` | 10,000 DUSDC |
-| `profit_basis_debits` | `40_000_000_000` | 40,000 DUSDC |
-| `pending_protocol_profit` | `0` | 0 DUSDC |
-| `plp_total_supply` | `600_000_000_000` | 600,000 PLP |
+| `frozen_idle_balance` | `300_000_000_000` | 300,000 USDC |
+| Sum of `snapshot_nav` | `120_000_000_000` | 120,000 USDC |
+| `frozen_profit_basis_credits` | `10_000_000_000` | 10,000 USDC |
+| `frozen_profit_basis_debits` | `40_000_000_000` | 40,000 USDC |
+| `frozen_pending_protocol_profit` | `0` | 0 USDC |
+| `plp_total_supply` | `400_000_000_000` | 400,000 PLP |
 
 The mark follows directly:
 
-- **Gross pool value:** `500,000 + 120,000 = 620,000` DUSDC.
-- **Exclusion:** `10% of max(0, 10,000 + 120,000 - 40,000) = 9,000` DUSDC.
-- **Pool NAV:** `620,000 - 9,000 - 0 = 611,000` DUSDC.
-- **Mark:** `611,000 / 600,000 = 1.018333` DUSDC per PLP.
+- **Gross pool value:** `300,000 + 120,000 = 420,000` USDC.
+- **Exclusion:** `10% of max(0, 10,000 + 120,000 - 40,000) = 9,000` USDC.
+- **Pool NAV:** `420,000 - 9,000 - 0 = 411,000` USDC.
+- **Mark:** `411,000 / 400,000 = 1.0275` USDC per PLP.
 
-A queued 1,000 DUSDC supply and a queued 10,000 PLP withdrawal then fill at that one mark:
+A queued 1,000 USDC supply and a queued 10,000 PLP withdrawal then fill at that one mark:
 
-- **Supply 1,000 DUSDC:** `floor(1_000_000_000 * 600_000_000_000 / 611_000_000_000) = 981_996_726`, which is 981.996726 PLP.
-- **Withdraw 10,000 PLP, gross:** `floor(10_000_000_000 * 611_000_000_000 / 600_000_000_000) = 10_183_333_333`, which is 10,183.333333 DUSDC.
-- **Withdrawal fee:** `ceil(10_183_333_333 * 2_000_000 / 1_000_000_000) = 20_366_667`, which is 20.366667 DUSDC.
-- **Withdraw payout:** `10_183_333_333 - 20_366_667 = 10_162_966_666`, which is 10,162.966666 DUSDC.
+- **Supply 1,000 USDC:** `floor(1_000_000_000 * 400_000_000_000 / 411_000_000_000) = 973_236_009`, which is 973.236009 PLP.
+- **Withdraw 10,000 PLP, gross:** `floor(10_000_000_000 * 411_000_000_000 / 400_000_000_000) = 10_275_000_000`, which is 10,275 USDC.
+- **Withdrawal fee:** `ceil(10_275_000_000 * 2_000_000 / 1_000_000_000) = 20_550_000`, which is 20.55 USDC.
+- **Withdraw payout:** `10_275_000_000 - 20_550_000 = 10_254_450_000`, which is 10,254.45 USDC.
+
+The pool NAV sits under the deployed 500,000 USDC `max_lp_pool_value`, so the supply has headroom to fill in full.
 
 ## Funding a market {#rebalance}
 
-A freshly created `ExpiryMarket` holds zero DUSDC and is not mintable. Minting asserts backing but never pulls pool cash, so the call that makes a market tradable is:
+A freshly created `ExpiryMarket` holds zero USDC and is not mintable. Minting asserts backing but never pulls pool cash, so the call that makes a market tradable is:
 
 ```move title='packages/predict/sources/plp/plp.move'
 public fun rebalance_expiry_cash(
@@ -336,7 +463,7 @@ public fun rebalance_expiry_cash(
 )
 ```
 
-`rebalance_expiry_cash` is permissionless and standalone. Anyone can call it at any cadence, and the same inner logic runs inside `value_expiry` during a flush. It handles all three per-market cases: initial funding of an unfunded market, ongoing top-up or surplus sweep of a live market, and the terminal sweep of a settled one.
+`rebalance_expiry_cash` is permissionless and standalone. Anyone can call it at any cadence, including while a flush is in flight, because every figure the mark reads was frozen at the snapshot instant. Its one refusal is the open snapshot stage, where it aborts with `ESnapshotStageOpen`. It handles all three per-market cases: initial funding of an unfunded market, ongoing top-up or surplus sweep of a live market, and the terminal sweep of a settled one. The snapshot stage runs the same terminal sweep for a market that is already settled when the flush starts.
 
 The policy is a band around each expiry's required cash, with hysteresis so that small moves do not thrash cash back and forth:
 
@@ -348,19 +475,18 @@ sweep_threshold  = max(required_cash * (1 + 2 * band), initial_expiry_cash)
 
 `band` is `expiry_rebalance_pct`, which is `100_000_000` at 1e9 scale, or 10 percent. Below `target_cash` the pool tops the market up, and above `sweep_threshold` it pulls the excess back to idle.
 
-Both floors are the market's own `initial_expiry_cash`, snapshotted from its cadence when the market was created, not one protocol-wide constant. The floor therefore differs by cadence:
+Both floors are the market's own `initial_expiry_cash`, snapshotted from its cadence when the market was created, not one protocol-wide constant. Both deployments enable the same two cadences with the same terms:
 
-| **Cadence** | **`initial_expiry_cash` raw** | **Reads as** |
-|---|---|---|
-| 1m | `10_000_000_000` | 10,000 DUSDC |
-| 5m | `10_000_000_000` | 10,000 DUSDC |
-| 1h | `50_000_000_000` | 50,000 DUSDC |
-| 1d | `50_000_000_000` | 50,000 DUSDC |
-| 1w | `50_000_000_000` | 50,000 DUSDC |
+| **Cadence** | **`initial_expiry_cash` raw** | **Reads as** | **`max_expiry_allocation` raw** | **Reads as** |
+|---|---|---|---|---|
+| 1m | `2_000_000_000` | 2,000 USDC | `10_000_000_000` | 10,000 USDC |
+| 5m | `2_000_000_000` | 2,000 USDC | `10_000_000_000` | 10,000 USDC |
 
-`constants::expiry_cash_floor!()`, which is `10_000_000_000`, plays no part in the rebalance. It is the minimum admissible `initial_expiry_cash` that cadence validation enforces, so a cadence configured below 10,000 DUSDC aborts with `EInvalidCadenceConfig`. A market on a cadence configured above that minimum floors its rebalance at the configured figure, not at 10,000 DUSDC. Read the live figures with `registry::cadence_config`, and see the cadence table on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#cadences).
+The 1h, 1d, 1w, and 1mo cadences are configured as disabled, with every term at zero, so no market exists on them.
 
-Two limits bound a top-up: available idle DUSDC, and the expiry's remaining funding room. Funding room is net of returns, and the cap is the `max_expiry_allocation` snapshotted from the cadence configuration when the market was created. On Testnet that is 50,000 DUSDC for the 1m and 5m cadences and 250,000 DUSDC for 1h, 1d, and 1w. Exceeding it aborts with `pool_accounting::EMaxExpiryFundingExceeded`.
+`constants::expiry_cash_floor!()`, which is `1_000_000_000`, plays no part in the rebalance. It is the minimum admissible `initial_expiry_cash` that cadence validation enforces, so a cadence configured below 1,000 USDC aborts with `EInvalidCadenceConfig`, as does one whose `initial_expiry_cash` exceeds its `max_expiry_allocation`. A market on a cadence configured above that minimum floors its rebalance at the configured figure. Read the live figures with `registry::cadence_config`, and see the cadence table on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#cadences).
+
+Two limits bound a top-up: available idle USDC, and the expiry's remaining funding room. Funding room is net of returns, and the cap is the `max_expiry_allocation` snapshotted from the cadence configuration when the market was created, 10,000 USDC on both enabled cadences. Exceeding it aborts with `pool_accounting::EMaxExpiryFundingExceeded`.
 
 Call `expiry_market::try_settle` first in the same transaction when settlement might be due. An expired unsettled market is a no-op for the rebalance.
 
@@ -372,7 +498,7 @@ Call `expiry_market::try_settle` first in the same transaction when settlement m
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="rebalance_expiry_cash"
 	noComments
 />
@@ -394,7 +520,7 @@ payout_liability = max_net_payout
                    + backing_buffer_lambda * (sum of net_payout - max_net_payout) / 1e9
 ```
 
-`max_net_payout` is the largest summed net payout at any single settlement price. Exactly one price settles a market, so that floor alone covers every possible settlement outcome in full. The buffer adds `backing_buffer_lambda`, which the Testnet template sets to `310_000_000` or 31 percent, of the gap between that floor and the sum of every open order's maximum payout. The buffer is what funds early exits of positions that do not overlap the book's worst-case price point. A live redeem that would push cash below the requirement aborts with `expiry_cash::EInsufficientCash`, and the holder can close a smaller quantity, retry after the next rebalance, and is always paid in full at settlement.
+`max_net_payout` is the largest summed net payout at any single settlement price. Exactly one price settles a market, so that floor alone covers every possible settlement outcome in full. The buffer adds `backing_buffer_lambda`, which the deployed template sets to `310_000_000` or 31 percent, of the gap between that floor and the sum of every open order's maximum payout. The buffer is what funds early exits of positions that do not overlap the book's worst-case price point. A live redeem that would push cash below the requirement aborts with `expiry_cash::EInsufficientCash`, and the holder can close a smaller quantity, retry after the next rebalance, and is always paid in full at settlement.
 
 The `inventory_impact_reserve` is an isolated escrow of inventory-impact charges collected at mint, minus rebates paid to voluntary live closes. It is excluded from NAV and from pool sweeps while the market is live, and settlement releases the residual because no live close can earn another rebate.
 
@@ -424,7 +550,7 @@ public fun fee_incentive_balance(market: &ExpiryMarket): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="ExpiryCash"
 />
 
@@ -432,7 +558,7 @@ public fun fee_incentive_balance(market: &ExpiryMarket): u64
 
 ## PLP shares {#plp-shares}
 
-PLP is the Predict pool share token, registered as a 6-decimal currency to match DUSDC. Its type is `plp::PLP` under the Predict package, and its treasury cap lives inside `LpBook`, so PLP is minted only on a supply fill and burned only on a withdraw fill during a flush.
+PLP is the Predict pool share token, registered as a 6-decimal currency to match USDC. Its type is `plp::PLP` under the Predict package, and its treasury cap lives inside `LpBook`, so PLP is minted only on a supply fill and burned only on a withdraw fill during a flush.
 
 <details>
 <summary>Source for the `PLP` witness</summary>
@@ -442,13 +568,13 @@ PLP is the Predict pool share token, registered as a 6-decimal currency to match
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="PLP"
 />
 
 </details>
 
-Fixed-point ratios throughout the pool use 1e9 scaling, while DUSDC and PLP amounts use their coins' 6 decimals. The two scales never mix in one field.
+Fixed-point ratios throughout the pool use 1e9 scaling, while USDC and PLP amounts use their coins' 6 decimals. The two scales never mix in one field.
 
 ## Bootstrap, sponsorship, and capacity {#initialization-and-access-control}
 
@@ -457,14 +583,14 @@ Three operations sit outside the ordinary supply and withdraw path:
 | **Operation** | **Call** | **Authorization** |
 |---|---|---|
 | Bootstrap the pool once | `lock_capital` | `AdminCap`, and only while total supply is zero |
-| Sponsor taker fee incentives | `sponsor_fee_incentives` | Permissionless |
-| Start a flush | `start_pool_valuation` | An allowlisted `MarketLifecycleCap`, through a `MarketLifecycleProof` |
+| Sponsor taker fee incentives | `sponsor_fee_incentives` | Permissionless, and blocked while a flush is in flight |
+| Start a flush | `start_pool_valuation` | An allowlisted `PoolValuationCap`, through a `PoolValuationProof` from `registry::generate_pool_valuation_proof` |
 
-`lock_capital` permanently locks a minimum of 10 DUSDC, mints matching PLP one to one into the book's locked balance, and joins the DUSDC into idle. The caller receives no shares. Locking keeps total supply above zero for the life of the vault and gives rounding dust a holder that can never withdraw. Supply, withdraw, and valuation flows all abort with `ENotBootstrapped` until it has run, and a second call aborts with `EAlreadyBootstrapped`.
+`lock_capital` permanently locks a minimum of 10 USDC, mints matching PLP one to one into the book's locked balance, and joins the USDC into idle. The caller receives no shares. Locking keeps total supply above zero for the life of the vault and gives rounding dust a holder that can never withdraw. Supply, withdraw, and flush flows all abort with `ENotBootstrapped` until it has run, and a second call aborts with `EAlreadyBootstrapped`.
 
-`sponsor_fee_incentives` accepts DUSDC from anyone, with a minimum of 10 DUSDC. The payment joins the pool-level fee incentive reserve, which is excluded from PLP NAV and allocated out to expiry markets by the ordinary rebalance flow. Read the pool-level balance with `fee_incentive_reserve` and the per-market balance with `expiry_market::fee_incentive_balance`.
+`sponsor_fee_incentives` accepts USDC from anyone, with a minimum of 10 USDC. The payment joins the pool-level fee incentive reserve, which is excluded from PLP NAV and allocated out to expiry markets by the ordinary rebalance flow. Read the pool-level balance with `fee_incentive_reserve` and the per-market balance with `expiry_market::fee_incentive_balance`.
 
-Capacity is bounded when a market registers, not when it trades. Registering a market whose expiry is still ahead of the clock aborts with `EMaxLiveExpiryMarketsExceeded` once 24 live pre-expiry markets are already registered to the vault. That ceiling bounds how many `value_expiry` commands one flush can need. Settled or expired markets still sitting in the active set do not count against it, because they contribute `0` rather than a live valuation walk.
+Capacity is bounded when a market registers, not when it trades. Registering a market whose expiry is still ahead of the clock aborts with `EMaxLiveExpiryMarketsExceeded` once 24 live pre-expiry markets are already registered to the vault. That ceiling bounds how many `snapshot_expiry_pricer` commands one snapshot transaction can need. Settled or expired markets still sitting in the active set do not count against it, because the ceiling counts only expiries still ahead of the clock.
 
 <details>
 <summary>Source for `lock_capital` and `sponsor_fee_incentives`</summary>
@@ -474,7 +600,7 @@ Capacity is bounded when a market registers, not when it trades. Registering a m
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="lock_capital,sponsor_fee_incentives"
 	noComments
 />
@@ -483,7 +609,7 @@ Capacity is bounded when a market registers, not when it trades. Registering a m
 
 ## Pool events {#events}
 
-`vault_events` declares fourteen events, all with `copy`, `drop`, and `store`. Fields are listed in declaration order, which is also their BCS order:
+`vault_events` declares fifteen events, all with `copy`, `drop`, and `store`. Fields are listed in declaration order, which is also their BCS order:
 
 | **Event** | **Fields** |
 |---|---|
@@ -491,12 +617,13 @@ Capacity is bounded when a market registers, not when it trades. Registering a m
 | `ExpiryCashRebalanced` | `pool_vault_id`, `expiry_market_id`, `amount`, `to_expiry`, `target_cash`, `protocol_profit_realized` |
 | `ExpiryProfitMaterialized` | `pool_vault_id`, `expiry_market_id`, `lp_profit`, `protocol_profit`, `protocol_reserve_balance_after`, `profit_basis_after`, `pending_protocol_profit_after` |
 | `SupplyRequested` | `pool_vault_id`, `account_id`, `recipient`, `index`, `amount`, `min_plp_out`, `requests_pending_after` |
-| `WithdrawRequested` | `pool_vault_id`, `account_id`, `recipient`, `index`, `amount`, `min_dusdc_out`, `requests_pending_after` |
+| `WithdrawRequested` | `pool_vault_id`, `account_id`, `recipient`, `index`, `amount`, `min_usdc_out`, `requests_pending_after` |
 | `RequestCancelled` | `pool_vault_id`, `account_id`, `recipient`, `index`, `amount`, `is_supply`, `reason`, `requests_pending_after` |
 | `RequestLimitMissed` | `pool_vault_id`, `account_id`, `recipient`, `index`, `amount`, `is_supply`, `quoted_output`, `min_output`, `missed_flushes`, `max_misses` |
-| `SupplyFilled` | `pool_vault_id`, `account_id`, `recipient`, `index`, `dusdc_amount`, `shares_minted`, `fee_dusdc`, `dusdc_remaining`, `requests_pending_after` |
-| `WithdrawFilled` | `pool_vault_id`, `account_id`, `recipient`, `index`, `shares_burned`, `dusdc_amount`, `fee_dusdc`, `shares_remaining`, `requests_pending_after` |
-| `FlushExecuted` | `pool_vault_id`, `epoch`, `pool_value`, `total_supply`, `supply_fee_rate`, `withdraw_fee_rate`, `active_market_nav`, `market_count`, `idle_balance_before`, `supplies_filled`, `withdrawals_filled`, `requests_processed`, `idle_balance_after`, `total_supply_after` |
+| `SupplyFilled` | `pool_vault_id`, `account_id`, `recipient`, `index`, `usdc_amount`, `shares_minted`, `fee_usdc`, `usdc_remaining`, `requests_pending_after` |
+| `WithdrawFilled` | `pool_vault_id`, `account_id`, `recipient`, `index`, `shares_burned`, `usdc_amount`, `fee_usdc`, `shares_remaining`, `requests_pending_after` |
+| `FlushExecuted` | `pool_vault_id`, `epoch`, `pool_value`, `total_supply`, `supply_fee_rate`, `withdraw_fee_rate`, `active_market_nav`, `market_count`, `idle_balance_before`, `frozen_idle_balance`, `supplies_filled`, `withdrawals_filled`, `requests_processed`, `idle_balance_after`, `total_supply_after`, `supply_request_cutoff`, `withdraw_request_cutoff`, `snapshot_timestamp_ms` |
+| `FlushRestarted` | `pool_vault_id`, `expected_market_count`, `valued_market_count` |
 | `CapitalLocked` | `pool_vault_id`, `amount` |
 | `FeeIncentivesSponsored` | `pool_vault_id`, `sponsor`, `amount`, `reserve_after` |
 | `FeeIncentivesAllocated` | `pool_vault_id`, `expiry_market_id`, `amount`, `pool_reserve_after`, `expiry_incentive_balance_after`, `expiry_incentives_allocated_after` |
@@ -510,22 +637,38 @@ Capacity is bounded when a market registers, not when it trades. Registering a m
 | `1` | The flush found the mark or quote not executable. |
 | `2` | The request missed its own output limit. |
 
-One `FlushExecuted` per flush carries the priced mark and its breakdown, so `pool_value` divided by `total_supply` is the exact mark that flush's fills used.
+One `FlushExecuted` per flush carries the priced mark and its breakdown, so `pool_value` divided by `total_supply` is the exact mark that flush's fills used, and `frozen_idle_balance + active_market_nav` reconstructs its gross. `idle_balance_before` is a live read taken immediately before the drain, for telemetry only; it can differ from `frozen_idle_balance` because rebalances, settlement sweeps, and trading run between the snapshot and the finish. `snapshot_timestamp_ms` is the instant the mark prices the pool at, and the two cutoffs are the queue indexes the drain stopped at. `FlushRestarted` is emitted when `start_pool_valuation` discards an in-flight flush, and its counts distinguish an abandoned flush from one that never progressed.
+
+<details>
+<summary>Source for `FlushExecuted` and `FlushRestarted`</summary>
+
+<ImportContent
+	source="packages/predict/sources/events/vault_events.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	struct="FlushExecuted,FlushRestarted"
+/>
+
+</details>
 
 ## Read and write the pool from a client {#read-vault-state-from-a-client}
 
-`@mysten/deepbook-v3` version 2.1.3 or later exposes the LP path on its `/predict` subpath. Every read runs against the Sui client's core API, with no indexer or server in the path.
+`@mysten/deepbook-v3` version 2.3.0 exposes the LP path on its `/predict` subpath for both networks. Every read runs against the Sui client's core API, with no indexer or server in the path.
 
 The four queue builders mirror the Move calls:
 
 | **Call** | **Signature** | **Units** |
 |---|---|---|
-| Queue a supply | `client.predict.tx.supplyPlp(owner, amountUsdc)` | USD decimal, `number` or `string` |
-| Queue a withdrawal | `client.predict.tx.withdrawPlp(owner, shares)` | Raw PLP shares as a `bigint`, not USD |
+| Queue a supply | `client.predict.tx.supplyPlp(owner, amountUsdc, { minPlpOut })` | USD decimal, `number` or `string`; `minPlpOut` is raw PLP shares as a `bigint` |
+| Queue a withdrawal | `client.predict.tx.withdrawPlp(owner, shares, { minUsdcOut })` | Raw PLP shares as a `bigint`, not USD; `minUsdcOut` is a USD decimal |
 | Cancel a supply | `client.predict.tx.cancelSupplyPlp(owner, index)` | `bigint` queue index |
 | Cancel a withdrawal | `client.predict.tx.cancelWithdrawPlp(owner, index)` | `bigint` queue index |
 
-`withdrawPlp` taking raw shares is the sharpest edge on this surface. Read the balance to withdraw with `client.predict.read.plpBalance(owner)`, which also returns a raw `bigint`, and pass it straight through. The facade pins `min_plp_out` and `min_dusdc_out` to `0`, so it surfaces no per-request floor.
+`withdrawPlp` taking raw shares is the sharpest edge on this surface. Read the balance to withdraw with `client.predict.read.plpBalance(owner)`, which also returns a raw `bigint`, and pass it straight through.
+
+The options object carries the request's price floor. `minPlpOut` is the fewest six-decimal PLP shares the whole supply may mint, and `minUsdcOut` is the least USDC, after the withdraw fee, the whole withdrawal may pay. Both are optional and default to no floor. Because both deployments run `lp_request_limit_flush_attempts` at `1`, the first flush whose mark misses a floor cancels and refunds that request, so set a floor you would rather be refunded at than filled through.
 
 Recover the queue index from the request transaction with the decoder, which parses event BCS locally and makes no network call:
 
@@ -540,11 +683,11 @@ req.index;  // bigint - pass to cancelSupplyPlp or cancelWithdrawPlp
 | **Field** | **Type** | **Meaning** |
 |---|---|---|
 | `plpTotalSupply` | `bigint` | Raw PLP supply. |
-| `idleUsdc` | `number` | Idle DUSDC as a USD decimal. |
+| `idleUsdc` | `number` | Idle USDC as a USD decimal. |
 | `supplyRequestsPending` | `number` | Number of queued supply requests, not their total amount. |
 | `withdrawRequestsPending` | `number` | Number of queued withdraw requests, not their total amount. |
 
-The following Testnet example queues a supply request and reads back the receipt index:
+The following example queues a supply request with a floor and reads back the receipt index. It selects its network from the examples' `NETWORK` constant:
 
 <ImportContent source="examples/deepbook-predict/src/supply.ts" mode="code" tag="supply" />
 
@@ -558,22 +701,25 @@ This one queues a withdrawal and then cancels it:
 
 | **Code** | **Constant** | **Cause** |
 |---|---|---|
-| `0` | `EExpiryMarketNotActive` | `value_expiry` was called for a market outside the start snapshot. |
-| `1` | `EExpiryMarketAlreadyValued` | The same market was valued twice in one valuation. |
-| `2` | `EWrongPoolVault` | `finish_flush` was handed a valuation from another vault. |
-| `3` | `EMissingExpiryValuation` | The valued set does not match the snapshot at finish. |
-| `4` | `ENotBootstrapped` | A supply, withdraw, or valuation ran before `lock_capital`. |
-| `5` | `EAlreadyBootstrapped` | `lock_capital` was called a second time. |
-| `6` | `EBelowMinBootstrapLiquidity` | The `lock_capital` payment is below 10 DUSDC. |
-| `7` | `EBelowMinFeeIncentiveSponsorship` | The sponsorship is below 10 DUSDC. |
-| `8` | `EMaxLiveExpiryMarketsExceeded` | Registering the market would exceed 24 live pre-expiry markets. |
+| `0` | `EMissingExpiryValuation` | `finish_flush` ran before every expected market was valued. |
+| `1` | `ENotBootstrapped` | A supply, withdraw, or flush start ran before `lock_capital`. |
+| `2` | `EAlreadyBootstrapped` | `lock_capital` was called a second time. |
+| `3` | `EBelowMinBootstrapLiquidity` | The `lock_capital` payment is below 10 USDC. |
+| `4` | `EBelowMinFeeIncentiveSponsorship` | The sponsorship is below 10 USDC. |
+| `5` | `EMaxLiveExpiryMarketsExceeded` | Registering the market would exceed 24 live pre-expiry markets. |
+| `6` | `EValuationSnapshotNotSealed` | `value_expiry` ran before `seal_valuation_snapshot`. |
+| `7` | `EExpiryPricerAlreadySnapshotted` | `snapshot_expiry_pricer` ran twice for one market in one flush. |
+| `8` | `EIncompleteValuationSnapshot` | `seal_valuation_snapshot` ran before every expected market was snapshotted. |
+| `9` | `EExpiredMarketNotSettled` | `snapshot_expiry_pricer` met a market past its expiry that has not settled. |
+| `10` | `EValuationWindowExpired` | `finish_flush` ran at or after `started_at_ms + max_valuation_window_ms`. |
+| `11` | `ESnapshotStageOpen` | `rebalance_expiry_cash` ran while a started flush was not yet sealed. |
 
 `lp_book` raises these through the queue calls:
 
 | **Code** | **Constant** | **Cause** |
 |---|---|---|
 | `0` | `ERequestNotFound` | The index is absent, the queue is empty, or a partial fill equals the full amount. |
-| `1` | `EBelowMinSupplyRequest` | The supply is below 10 DUSDC. |
+| `1` | `EBelowMinSupplyRequest` | The supply is below 10 USDC. |
 | `2` | `EBelowMinWithdrawRequest` | The withdrawal is below 1 PLP. |
 | `3` | `ENotRequestOwner` | The cancelling account is not the recorded recipient. |
 
@@ -588,6 +734,6 @@ This one queues a withdrawal and then cancels it:
 | `0` | `EInsufficientCash` | `expiry_cash` | The backing check failed, or a release or payment exceeds the balance. |
 | `1` | `EInventoryImpactRebateExceedsReserve` | `expiry_cash` | A rebate exceeds the isolated escrow. |
 
-A flush also runs into `ProtocolConfig` gates: `EValuationNotInProgress` when a stage runs without the lock, `EValuationInProgress` when a NAV-changing flow runs while it is held, and `EPackageVersionDisabled` or `EProtocolFrozen` when the package version or freeze switch blocks the call.
+A flush also runs into `ProtocolConfig` gates: `EValuationNotInProgress` (`2`) when a snapshot, valuation, or finish call runs with no flush in flight, `EValuationInProgress` (`1`) when a cancel, a sponsorship, or a setter the mark reads runs while one is, `ESnapshotInProgress` (`6`) when a trade or a second `start_pool_valuation` is composed into the snapshot transaction, and `EPackageVersionDisabled` (`3`) or `EProtocolFrozen` (`5`) when the package version or freeze switch blocks the call. `registry::generate_pool_valuation_proof` aborts with `registry::EPoolValuationCapNotValid` (`3`) for a capability that is not allowlisted.
 
-Error numbers repeat across modules, so resolve an abort against the module named in the abort location rather than against the number alone. For market creation, cadence configuration, and the lifecycle capability, see [Registry](/onchain-finance/deepbook/deepbook-predict/contract-information/registry). For the accounts these calls route through, see [Accounts and Custody](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager).
+Error numbers repeat across modules, so resolve an abort against the module named in the abort location rather than against the number alone. For market creation, cadence configuration, and the capabilities, see [Registry](/onchain-finance/deepbook/deepbook-predict/contract-information/registry). For the accounts these calls route through, see [Accounts and Custody](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager).

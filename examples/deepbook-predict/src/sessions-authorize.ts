@@ -14,7 +14,7 @@ import { NETWORK } from './config.js';
 // `getSessionsConfig` returns the deployed sessions package, the shared
 // `SessionsConfig` object, the account registry the app is authorized against,
 // the Predict protocol config, and the two extra IDs the DeepBook spot wrappers
-// need. Sessions is Testnet only, so any other network throws.
+// need. It resolves both recorded networks; an unrecorded one throws.
 export const SESSIONS_CONFIG = getSessionsConfig(NETWORK);
 
 export const sessions = new SessionsContract(SESSIONS_CONFIG);

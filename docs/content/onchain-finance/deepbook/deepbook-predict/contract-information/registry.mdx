@@ -2,25 +2,29 @@
 title: Registry
 description: >-
   DeepBook Predict registry reference: market lookup, cadence configuration,
-  capability minting and revocation, one-way pause and freeze paths, underlying
-  registration, market creation, and builder codes.
+  capability minting and revocation, the pool valuation proof, one-way pause and
+  freeze paths, underlying registration, market creation, builder codes, and the
+  protocol configuration setters.
 keywords:
   - deepbook predict registry
   - registry
   - admin cap
   - pause cap
   - market lifecycle cap
+  - pool valuation cap
   - cadence config
   - expiry market id
   - create expiry market
   - builder code
-last_verified: 2026-09-03
-verified_against: predict-testnet-8-21
+  - no_trade_window_ms
+  - max_valuation_window_ms
+last_verified: 2026-09-10
+verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
 goal:
   description: >-
     Reader can look up markets and cadence terms in the Predict Registry, and
-    understands which capability gates each lifecycle, pause, and configuration
-    function
+    understands which capability gates each lifecycle, pause, valuation, and
+    configuration function
   requires:
     - has_frontmatter:
         - title
@@ -36,20 +40,22 @@ goal:
 questions:
   - How do I find the DeepBook Predict market for an underlying and expiry?
   - What are the DeepBook Predict cadence IDs and cadence configuration values?
-  - Which capability gates pausing, freezing, and market creation in Predict?
+  - Which capability gates pausing, freezing, market creation, and the pool flush in Predict?
 answer: >-
-  The shared Registry object holds the market catalog and cadence configuration
-  for DeepBook Predict. Read a market with expiry_market_id and cadence terms
-  with cadence_config or cadence_configs. AdminCap mints and revokes PauseCap
-  and MarketLifecycleCap, PauseCap engages one-way trading, freeze, and
-  per-market mint stops, and MarketLifecycleCap creates markets.
+  The shared Registry object holds the market catalog, the cadence configuration,
+  and the capability allowlists for DeepBook Predict. Read a market with
+  expiry_market_id and cadence terms with cadence_config or cadence_configs.
+  AdminCap mints and revokes PauseCap, MarketLifecycleCap, and PoolValuationCap;
+  PauseCap engages one-way trading, freeze, and per-market mint stops;
+  MarketLifecycleCap creates markets; and PoolValuationCap starts the pool flush
+  through generate_pool_valuation_proof.
 ---
 
-`deepbook_predict::registry::Registry` is the shared object that holds the market catalog and the cadence configuration for every registered underlying. It also holds the allowlists that decide which `PauseCap` and which `MarketLifecycleCap` still carry authority.
+`deepbook_predict::registry::Registry` is the shared object that holds the market catalog and the cadence configuration for every registered underlying. It also holds the allowlists that decide which `PauseCap`, which `MarketLifecycleCap`, and which `PoolValuationCap` still carry authority.
 
-`Registry` and `ProtocolConfig` are created together when the Predict package is published, and the single `AdminCap` is transferred to the publisher at that moment. The object ID for this deployment is on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#shared-objects).
+`Registry` and `ProtocolConfig` are created together when the Predict package is published, and the single `AdminCap` is transferred to the publisher at that moment. The registry object ID for each deployment is on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#shared-objects), and `getConfig(network).objects.registry` in the SDK resolves the same ID. The Move snippets on this page are pinned to the Mainnet source commit, which serves both deployments.
 
-Most application integrations call only the read functions here. The rest are operator and governance surfaces. None of them is an `entry fun`: every function on this page is a `public fun` invoked as a `moveCall`. The capability-minting functions and `generate_lifecycle_proof` return values that a later command in the same transaction must consume, because Sui rejects an unused return value only when its type lacks `drop`. The two creation functions each return an `ID`, which has `drop`, so a transaction can leave it unused.
+Most application integrations call only the read functions here. The rest are operator and governance surfaces. None of them is an `entry fun`: every function on this page is a `public fun` invoked as a `moveCall`. The capability-minting functions and `generate_pool_valuation_proof` return values that a later command in the same transaction must consume, because Sui rejects an unused return value only when its type lacks `drop`. The two creation functions each return an `ID`, which has `drop`, so a transaction can leave it unused.
 
 ## Registry state
 
@@ -60,11 +66,11 @@ The registry holds the market catalog inline rather than in a separate object:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="Registry"
 />
 
-The `market_manager` field is a `deepbook_predict::market_manager::MarketManager`, a `store` value embedded in the registry. It carries two tables: the per-underlying cadence configuration, and the map from an underlying and expiry to a market ID. `MarketManager` is not a separate shared object, so there is no second ID to pass.
+The `market_manager` field is a `deepbook_predict::market_manager::MarketManager`, a `store` value embedded in the registry. It carries two tables: the per-underlying cadence configuration, and the map from an underlying and expiry to a market ID. `MarketManager` is not a separate shared object, so there is no second ID to pass. The three `VecSet<ID>` fields are the capability allowlists.
 
 ## Market lookup
 
@@ -75,14 +81,14 @@ Each market is its own shared `ExpiryMarket` object, addressed by the underlying
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="id,expiry_market_id"
 	noComments
 />
 
-`expiry_market_id` returns `Option<ID>`, which is empty when no market exists for that pair, including when the underlying is not registered at all. The expiry is a Unix millisecond timestamp on the cadence grid, so compute the exact expiry before looking a market up, or list markets from the `/markets` endpoint instead.
+`expiry_market_id` returns `Option<ID>`, which is empty when no market exists for that pair, including when the underlying is not registered at all. The expiry is a Unix millisecond timestamp on the cadence grid, so compute the exact expiry before looking a market up, or list the active markets with `client.predict.read.markets()` in the SDK, which reads them over simulated transactions with no server in the path.
 
-The table key behind that lookup, `market_manager::MarketKey`, has no accessors and no exported constructor. Treat it as internal, and address markets through `expiry_market_id` or through the `/markets` endpoint.
+The table key behind that lookup, `market_manager::MarketKey`, has no accessors and no exported constructor. Treat it as internal, and address markets through `expiry_market_id` or through `read.markets()`.
 
 ## Cadence configuration
 
@@ -104,7 +110,7 @@ A cadence ID above `5` aborts with `EInvalidCadence`. Read one cadence or all si
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="cadence_config,cadence_configs"
 	noComments
 />
@@ -118,7 +124,7 @@ A cadence ID above `5` aborts with `EInvalidCadence`. Read one cadence or all si
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	struct="CadenceConfig"
 />
 
@@ -129,33 +135,51 @@ Read the terms with the accessors rather than by field:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="cadence_tick_size,cadence_admission_tick_size,cadence_max_expiry_allocation,cadence_initial_expiry_cash,cadence_window_size,cadence_enabled"
 	noComments
 />
 
-`cadence_enabled` is derived, not stored: a cadence is enabled exactly when its window size is greater than zero. The live cadence terms for this deployment are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#cadences), but they are mutable protocol state, so read them onchain before sizing a strike.
+`cadence_enabled` is derived, not stored: a cadence is enabled exactly when its window size is greater than zero. Both deployments register one underlying, BTC, and enable the same two cadences with the same terms:
+
+| Cadence | Enabled | `tick_size` | `admission_tick_size` | `max_expiry_allocation` | `initial_expiry_cash` | `window_size` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `0` 1m | Yes | `10000000` (0.01 USD) | `1000000000` (1 USD) | `10000000000` (10,000 USDC) | `2000000000` (2,000 USDC) | `2` |
+| `1` 5m | Yes | `10000000` (0.01 USD) | `1000000000` (1 USD) | `10000000000` (10,000 USDC) | `2000000000` (2,000 USDC) | `2` |
+| `2` 1h, `3` 1d, `4` 1w, `5` 1mo | No | `0` | `0` | `0` | `0` | `0` |
+
+A window size of `2` means two markets per enabled cadence can be open at once, four in total. These are mutable protocol state: `CadenceConfigUpdated` fired once per cadence at deployment on each network, and a later update changes the grid for markets created afterward. Read them onchain before sizing a strike. The same table with the underlying and oracle IDs is on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#cadences).
 
 ## Capabilities
 
-Three capability types gate the privileged surface, and each one is a distinct owned object:
+Four capability types gate the privileged surface, and each one is a distinct owned object:
 
 | Capability | Module | Gates |
 | --- | --- | --- |
-| `AdminCap` | `deepbook_predict::admin` | Protocol configuration, underlying and cadence configuration, per-market mint pause and unpause, and the minting and revocation of the other two capabilities |
+| `AdminCap` | `deepbook_predict::admin` | Protocol configuration, underlying and cadence configuration, per-market mint pause and unpause, and the minting and revocation of the other three capabilities |
 | `PauseCap` | `deepbook_predict::pause_cap` | The three one-way emergency stops |
-| `MarketLifecycleCap` | `deepbook_predict::market_lifecycle_cap` | Market creation, and starting a pool valuation |
+| `MarketLifecycleCap` | `deepbook_predict::market_lifecycle_cap` | Market creation |
+| `PoolValuationCap` | `deepbook_predict::pool_valuation_cap` | Starting a pool flush, through `generate_pool_valuation_proof` |
 
 <ImportContent
 	source="packages/predict/sources/capabilities/market_lifecycle_cap.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
-	struct="MarketLifecycleCap,MarketLifecycleProof"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	struct="MarketLifecycleCap"
 />
 
-`AdminCap` is minted once at publication and has no rotation or revocation path. The other two are minted on demand and revoked by ID, so their authority is a row in the registry rather than possession of the object alone.
+<ImportContent
+	source="packages/predict/sources/capabilities/pool_valuation_cap.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	struct="PoolValuationCap"
+/>
+
+`AdminCap` is minted once at publication and has no rotation or revocation path. The other three are minted on demand and revoked by ID, so their authority is a row in the registry rather than possession of the object alone. Each has an `id` accessor and a `destroy` function the holder can call on a capability it no longer needs. Market creation and flush authority are deliberately separate objects, so an operator can hold one without the other.
 
 ### Mint and revoke a pause capability
 
@@ -166,7 +190,7 @@ Pause capabilities are deliberately not version-gated, so an emergency stop stil
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="mint_pause_cap,revoke_pause_cap"
 	noComments
 />
@@ -182,14 +206,30 @@ Lifecycle capabilities are version-gated, unlike pause capabilities:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
-	fun="mint_lifecycle_cap,revoke_lifecycle_cap,generate_lifecycle_proof"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	fun="mint_lifecycle_cap,revoke_lifecycle_cap"
 	noComments
 />
 
-Revoking an ID that is not in `allowed_lifecycle_caps` aborts with `ELifecycleCapNotFound`, and using a revoked capability aborts with `ELifecycleCapNotValid`.
+Revoking an ID that is not in `allowed_lifecycle_caps` aborts with `ELifecycleCapNotFound`, and using a revoked capability aborts with `ELifecycleCapNotValid`. A lifecycle capability is checked by reference at the moment of market creation and produces no proof object.
 
-`generate_lifecycle_proof` converts an allowlisted capability into a `MarketLifecycleProof`. That proof has no abilities, so it cannot be stored, copied, or dropped: the same transaction must consume it. Its only consumer is `plp::start_pool_valuation`, which is why a liquidity flush and its valuation must run as one programmable transaction block.
+### Mint and revoke a pool valuation capability {#pool-valuation-cap}
+
+Pool valuation capabilities follow the same version-gated mint and ungated revoke pattern. Note that `mint_pool_valuation_cap` takes `_admin_cap` before `config`, the reverse of `mint_lifecycle_cap`:
+
+<ImportContent
+	source="packages/predict/sources/registry/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	fun="mint_pool_valuation_cap,revoke_pool_valuation_cap,generate_pool_valuation_proof"
+	noComments
+/>
+
+Revoking an ID that is not in `allowed_pool_valuation_caps` aborts with `EPoolValuationCapNotFound`, and `generate_pool_valuation_proof` aborts with `EPoolValuationCapNotValid` for a capability that is not allowlisted.
+
+`generate_pool_valuation_proof` converts an allowlisted capability into a `plp::PoolValuationProof`. That proof has no abilities, so it cannot be stored, copied, or dropped: the same transaction must consume it, and its only consumer is `plp::start_pool_valuation`. Checking the allowlist at proof time is what lets a revoked capability fail before a flush starts. The transaction that starts a flush also has to snapshot every active market and seal the snapshot, while the later valuation and finish stages are permissionless and span as many transactions as they need. See [Vault](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#the-flush) for the full sequence.
 
 ## Pause and freeze
 
@@ -200,7 +240,7 @@ Three functions engage an emergency stop, and each validates the capability ID a
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="pause_trading_pause_cap,freeze_protocol_pause_cap,pause_expiry_market_mint_pause_cap"
 	noComments
 />
@@ -222,32 +262,32 @@ An underlying must be registered before any market on it can exist:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="register_underlying,set_template_cadence_config"
 	noComments
 />
 
 Registering the same underlying twice aborts with `EUnderlyingAlreadyRegistered`. Registration creates the row with all six cadences disabled, so a second call to `set_template_cadence_config` per cadence is what actually turns a schedule on.
 
-`set_template_cadence_config` validates the whole cadence as a unit and aborts with `EInvalidCadenceConfig` when the terms mix zero and nonzero values, when the admission tick size is not a whole multiple of the tick size, or when the initial expiry cash falls outside its bounds. A window size above the maximum of `10` is rejected by the configuration constants with `EInvalidCadenceWindowSize`. A successful update emits `CadenceConfigUpdated`.
+`set_template_cadence_config` validates the whole cadence as a unit. Five zeros disable the cadence. Otherwise every term must be nonzero, and the call aborts with `EInvalidCadenceConfig` when the terms mix zero and nonzero values, when the admission tick size is smaller than the tick size or not a whole multiple of it, when `initial_expiry_cash` is below the `expiry_cash_floor` of 1,000 USDC, or when it exceeds `max_expiry_allocation`. Both tick sizes must also pass the market tick bounds in the configuration constants: a tick that is not a positive multiple of `10000` aborts with `EInvalidMarketTickSize`, and one too large to multiply by the top tick aborts with `EMarketTickSizeTooLarge`. A window size above the maximum of `10` aborts with `EInvalidCadenceWindowSize`. A successful update emits `CadenceConfigUpdated`.
 
 Changing a cadence does not touch markets that already exist. Each market snapshots its terms at creation, so the grid an open market admits is the grid it was created with.
 
 ## Market creation
 
-Market creation is the only lifecycle-capability surface in the registry:
+Market creation is the only lifecycle-capability surface in the registry, and its signature is unchanged from the previous deployment:
 
 <ImportContent
 	source="packages/predict/sources/registry/registry.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="create_and_share_expiry_market"
 	noComments
 />
 
-The call passes four gates before it does anything: the package version must be at or above the watermark, the lifecycle capability must be allowlisted, trading must not be paused, and no pool valuation may be in progress. It then picks the next deployable expiry inside the cadence's rolling window and aborts when there is none:
+The call passes three gates before it does anything: the package version must be at or above the watermark, the lifecycle capability must be allowlisted, and trading must not be paused. A pool flush in flight does not block it: creation moves no cash, the new market is not in the flush's frozen expected set, and it simply joins the next flush's snapshot. It then picks the next deployable expiry inside the cadence's rolling window and aborts when there is none:
 
 - **`ECadenceDisabled`:** the cadence window size is zero.
 - **`ECadenceWindowExceeded`:** every slot inside the rolling window is already deployed.
@@ -270,24 +310,49 @@ Builder-code creation is the only permissionless function in the registry that c
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
 	fun="create_and_share_builder_code"
 	noComments
 />
 
 Anyone can call it. The resulting `BuilderCode` is a shared object derived from the registry UID and keyed by the caller address plus the index you pass, so its address is deterministic and one address can hold many codes. The call returns the code ID and emits `BuilderCodeCreated`.
 
-An account attaches a code with `predict_account::set_builder_code` and detaches it with `predict_account::unset_builder_code`. Builder fees accrue to the code address through the funds accumulator, and only the owner can call `builder_code::claim_all_builder_fees`.
+An account attaches a code with `predict_account::set_builder_code` and detaches it with `predict_account::unset_builder_code`. Builder fees accrue to the code address through the funds accumulator, and only the owner can call `builder_code::claim_all_builder_fees`, which returns a `Coin<USDC>`.
+
+## Protocol configuration {#protocol-config}
+
+`ProtocolConfig` is the registry's sibling shared object. Its `AdminCap` setters cover fees, pricing freshness, the strike-exposure template, the EWMA penalty, the LP request policy, and two timing windows that other pages depend on:
+
+<ImportContent
+	source="packages/predict/sources/config/protocol_config.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	fun="set_no_trade_window_ms,set_max_valuation_window_ms"
+	noComments
+/>
+
+| Setter | Field | Bounds | Deployed | Blocked during a flush | Abort |
+| --- | --- | --- | --- | --- | --- |
+| `set_no_trade_window_ms` | `no_trade_window_ms` | `0` to `15000` ms, where `0` disables the window | `2000` | No | `config_constants::EInvalidNoTradeWindowMs` (`24`) |
+| `set_max_valuation_window_ms` | `max_valuation_window_ms` | One minute to four hours | `300000` | Yes, with `EValuationInProgress` | `config_constants::EInvalidMaxValuationWindowMs` (`23`) |
+
+`no_trade_window_ms` is the interval before each expiry in which live quotes, mints, and live redeems abort with `ETradeWindowClosed`; see [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#no-trade-window). It is deliberately not blocked by a flush, matching `set_trading_paused`, so a stalled flush cannot trap a safety control. A change emits `NoTradeWindowUpdated`. `max_valuation_window_ms` is the deadline after which an in-flight flush can no longer finish and must be restarted; see [Vault](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#valuation-window). It is refused while a flush is in flight so a started flush cannot have its deadline moved under it.
+
+Two permissionless reads accompany them: `valuation_in_progress(config): bool` reports whether a flush is in flight, and `no_trade_window_ms(config): u64` returns the live window. Both deployments hold the same values for every `ProtocolConfig` field; the full set is on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).
 
 ## Errors
 
-`deepbook_predict::registry` raises three capability errors:
+`deepbook_predict::registry` raises five capability errors:
 
 | Code | Name | Raised when |
 | --- | --- | --- |
 | `0` | `EPauseCapNotValid` | The pause capability ID is not in `allowed_pause_caps` |
 | `1` | `ELifecycleCapNotValid` | The lifecycle capability ID is not in `allowed_lifecycle_caps` |
 | `2` | `ELifecycleCapNotFound` | Revoking a lifecycle capability ID that was never allowlisted |
+| `3` | `EPoolValuationCapNotValid` | `generate_pool_valuation_proof` with a capability ID that is not in `allowed_pool_valuation_caps` |
+| `4` | `EPoolValuationCapNotFound` | Revoking a pool valuation capability ID that was never allowlisted |
 
 `deepbook_predict::market_manager` raises the catalog and cadence errors:
 
@@ -300,11 +365,24 @@ An account attaches a code with `predict_account::set_builder_code` and detaches
 | `4` | `EInvalidCadence` | Cadence ID above `5` |
 | `5` | `ECadenceWindowExceeded` | No deployable slot inside the rolling window |
 | `6` | `EInvalidDeploymentExpiry` | Expiry not grid-aligned, or not past the watermark |
-| `7` | `EInvalidCadenceConfig` | Mixed zero and nonzero terms, admission tick not a multiple of the tick, or initial expiry cash out of bounds |
+| `7` | `EInvalidCadenceConfig` | Mixed zero and nonzero terms, admission tick smaller than or not a multiple of the tick, or initial expiry cash below 1,000 USDC or above the allocation cap |
 | `8` | `EPythFeedNotBoundToUnderlying` | No canonical Pyth binding for the underlying |
 | `9` | `EBlockScholesStoresNotBoundToUnderlying` | No Block Scholes store pair for the underlying |
 
-Gate failures come from `deepbook_predict::protocol_config` instead: `ETradingPaused` (`0`), `EValuationInProgress` (`1`), `EPackageVersionDisabled` (`3`), and `EProtocolFrozen` (`5`).
+`deepbook_predict::protocol_config` raises eight gate errors. The registry's own functions reach only the first and the two version gates; the rest surface through the trade and flush calls that read the same object:
+
+| Code | Name | Raised when |
+| --- | --- | --- |
+| `0` | `ETradingPaused` | A trading-gated flow ran while `trading_paused` |
+| `1` | `EValuationInProgress` | A flow the flush mark reads, such as an LP cancel, a sponsorship, or a mark-affecting setter, ran while a flush was in flight |
+| `2` | `EValuationNotInProgress` | A flush stage ran with no flush in flight |
+| `3` | `EPackageVersionDisabled` | The running package version is below the watermark |
+| `4` | `EVersionWatermarkNotAdvanced` | `bump_version_watermark` did not strictly increase the watermark |
+| `5` | `EProtocolFrozen` | A version-gated flow ran while frozen |
+| `6` | `ESnapshotInProgress` | A trade, a settled redeem, or a second `start_pool_valuation` was composed into a flush's snapshot transaction |
+| `7` | `ETradeWindowClosed` | A live quote, mint, or live redeem ran inside the no-trade window |
+
+Setter bounds failures come from `deepbook_predict::config_constants`, codes `0` through `24`, including `EMarketTickSizeTooLarge` (`16`), `EInvalidCadenceWindowSize` (`15`), `EInvalidMaxValuationWindowMs` (`23`), and `EInvalidNoTradeWindowMs` (`24`).
 
 ## Events
 
@@ -315,8 +393,8 @@ Registry activity surfaces through `deepbook_predict::config_events`:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="predict-testnet-8-21"
-	struct="MarketCreated,CadenceConfigUpdated"
+	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	struct="MarketCreated,CadenceConfigUpdated,NoTradeWindowUpdated"
 />
 
-`MarketCreated` carries the full snapshot a market was created with, which is what the `/markets` endpoint returns. `CadenceConfigUpdated` carries the registry ID alongside the new terms, so an indexer can replay cadence history without re-reading the object.
+`MarketCreated` carries the full snapshot a market was created with, so an indexer can build the market catalog from events alone. `CadenceConfigUpdated` carries the registry ID alongside the new terms, so an indexer can replay cadence history without re-reading the object; its layout is unchanged from the previous deployment. `NoTradeWindowUpdated` carries the new window and the onchain timestamp of the change.
