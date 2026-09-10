@@ -545,21 +545,18 @@ impl<'backing> TemporaryStore<'backing> {
         let accumulator_running_max_withdraws = self.calculate_accumulator_running_max_withdraws();
         self.merge_accumulator_events();
 
-        // Regardless of execution status (including aborts), we insert the previous transaction
-        // for any successfully received objects during the transaction.
-        for (id, expected_version, expected_digest) in &self.receiving_objects {
-            // If the receiving object is in the loaded runtime objects, then that means that it
-            // was actually successfully loaded (so existed, and there was authenticated mutable
-            // access to it). So we insert the previous transaction as a dependency.
-            if let Some(obj_meta) = self.loaded_runtime_objects.get(id) {
-                // Check that the expected version, digest, and owner match the loaded version,
-                // digest, and owner. If they don't then don't register a dependency.
-                // This is because this could be "spoofed" by loading a dynamic object field.
-                let loaded_via_receive = obj_meta.version == *expected_version
-                    && obj_meta.digest == *expected_digest
-                    && obj_meta.owner.is_address_owned();
-                if loaded_via_receive {
-                    transaction_dependencies.insert(obj_meta.previous_transaction);
+        if !self.protocol_config.disable_effects_tx_dependencies() {
+            // Even on abort, successfully receiving an object creates a dependency.
+            for (id, expected_version, expected_digest) in &self.receiving_objects {
+                if let Some(obj_meta) = self.loaded_runtime_objects.get(id) {
+                    // A dynamic-field load can spoof a receiving input, so authenticate the
+                    // version, digest and owner before registering its dependency.
+                    let loaded_via_receive = obj_meta.version == *expected_version
+                        && obj_meta.digest == *expected_digest
+                        && obj_meta.owner.is_address_owned();
+                    if loaded_via_receive {
+                        transaction_dependencies.insert(obj_meta.previous_transaction);
+                    }
                 }
             }
         }
@@ -718,7 +715,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// Consume this (post-execution) store and return the store used by a `BumpOnly` exit: keep
     /// the input-derived state as well as information about the execution needed for replay,
     /// discard everything related to the execution results, then bump the mutable
-    /// inputs. Its effects record only those version bumps and the input dependencies.
+    /// inputs. Dependencies are retained only when enabled by the protocol.
     pub(crate) fn into_bump_only(self) -> Self {
         let Self {
             // Input-derived - reused verbatim.

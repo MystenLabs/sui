@@ -7,13 +7,14 @@ use rand::distributions::Distribution;
 use std::net::SocketAddr;
 use std::time::{Duration, SystemTime};
 use sui_macros::{register_fail_point_async, sim_test};
+use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::{
     TestTransactionBuilder, publish_basics_package, publish_basics_package_and_make_counter,
 };
-use sui_types::base_types::FullObjectRef;
+use sui_types::base_types::{FullObjectRef, ObjectID};
 use sui_types::crypto::{AccountKeyPair, get_key_pair};
-use sui_types::effects::TransactionEffectsAPI;
+use sui_types::effects::{InputConsensusObject, TransactionEffects, TransactionEffectsAPI};
 use sui_types::event::Event;
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionErrorKind, ExecutionFailure, ExecutionStatus,
@@ -283,11 +284,277 @@ async fn shared_object_deletion_multi_certs() {
         .await;
 }
 
+fn counter_consensus_access(
+    effects: &TransactionEffects,
+    counter_id: ObjectID,
+) -> InputConsensusObject {
+    effects
+        .accessed_consensus_objects()
+        .into_iter()
+        .find(|object| object.id_and_version().0 == counter_id)
+        .unwrap_or_else(|| {
+            panic!(
+                "transaction {:?} did not access shared counter {counter_id}",
+                effects.transaction_digest()
+            )
+        })
+}
+
+async fn assert_checkpoint_order_with_effects_dependencies(
+    protocol_version: ProtocolVersion,
+    expect_effects_dependencies_disabled: bool,
+) {
+    let test_cluster = TestClusterBuilder::new()
+        .with_protocol_version(protocol_version)
+        .with_accounts(vec![AccountConfig {
+            address: None,
+            gas_amounts: vec![DEFAULT_GAS_AMOUNT; 8],
+        }])
+        .build()
+        .await;
+
+    let dependencies_disabled = test_cluster
+        .all_validator_handles()
+        .into_iter()
+        .next()
+        .expect("cluster has a validator")
+        .with(|node| {
+            node.state()
+                .epoch_store_for_testing()
+                .protocol_config()
+                .disable_effects_tx_dependencies()
+        });
+    assert_eq!(
+        dependencies_disabled, expect_effects_dependencies_disabled,
+        "protocol version {protocol_version:?} did not configure disable_effects_tx_dependencies as expected"
+    );
+
+    let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
+    let package_id = package.0;
+    let counter_id = counter.0;
+    let counter_initial_shared_version = counter.1;
+    let counter_read_arg = ObjectArg::SharedObject {
+        id: counter_id,
+        initial_shared_version: counter_initial_shared_version,
+        mutability: SharedObjectMutability::Immutable,
+    };
+
+    let accounts_and_gas = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+    let sender = accounts_and_gas[0].0;
+    let gas = &accounts_and_gas[0].1;
+    let rgp = test_cluster.get_reference_gas_price().await;
+
+    // The soft bundle submits this shared schedule in one consensus request. The failpoint in the
+    // caller delays execution, so the independent transfer can finish in a different order.
+    let read_a = TestTransactionBuilder::new(sender, gas[0], rgp)
+        .move_call(
+            package_id,
+            "counter",
+            "assert_value",
+            vec![
+                CallArg::Object(counter_read_arg),
+                CallArg::Pure(0u64.to_le_bytes().to_vec()),
+            ],
+        )
+        .build();
+    let read_b = TestTransactionBuilder::new(sender, gas[1], rgp)
+        .move_call(
+            package_id,
+            "counter",
+            "assert_value",
+            vec![
+                CallArg::Object(counter_read_arg),
+                CallArg::Pure(0u64.to_le_bytes().to_vec()),
+            ],
+        )
+        .build();
+    let increment = TestTransactionBuilder::new(sender, gas[2], rgp)
+        .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
+        .build();
+    let delete = TestTransactionBuilder::new(sender, gas[3], rgp)
+        .call_counter_delete(package_id, counter_id, counter_initial_shared_version)
+        .build();
+    let independent_transfer = TestTransactionBuilder::new(sender, gas[4], rgp)
+        .transfer_sui(Some(1), sender)
+        .build();
+
+    let signed_txs = vec![
+        test_cluster.sign_transaction(&read_a).await,
+        test_cluster.sign_transaction(&read_b).await,
+        test_cluster.sign_transaction(&increment).await,
+        test_cluster.sign_transaction(&delete).await,
+        test_cluster.sign_transaction(&independent_transfer).await,
+    ];
+    let expected_digests = signed_txs.iter().map(|tx| *tx.digest()).collect::<Vec<_>>();
+    let effects = test_cluster
+        .execute_signed_txns_in_soft_bundle(&signed_txs)
+        .await
+        .expect("soft bundle should execute");
+    let [
+        (read_a_digest, read_a_effects),
+        (read_b_digest, read_b_effects),
+        (increment_digest, increment_effects),
+        (delete_digest, delete_effects),
+        _,
+    ] = effects.as_slice()
+    else {
+        panic!("soft bundle returned an unexpected number of effects");
+    };
+
+    for effects in [
+        read_a_effects,
+        read_b_effects,
+        increment_effects,
+        delete_effects,
+    ] {
+        assert!(
+            effects.status().is_ok(),
+            "scheduled shared transaction failed: {effects:?}"
+        );
+    }
+    assert_eq!(
+        delete_effects
+            .deleted()
+            .iter()
+            .map(|object| object.0)
+            .collect::<Vec<_>>(),
+        vec![counter_id],
+        "the ordered write must delete the shared counter"
+    );
+
+    let read_a_access = counter_consensus_access(read_a_effects, counter_id);
+    let read_b_access = counter_consensus_access(read_b_effects, counter_id);
+    let increment_access = counter_consensus_access(increment_effects, counter_id);
+    let delete_access = counter_consensus_access(delete_effects, counter_id);
+    assert!(matches!(read_a_access, InputConsensusObject::ReadOnly(_)));
+    assert!(matches!(read_b_access, InputConsensusObject::ReadOnly(_)));
+    assert!(matches!(increment_access, InputConsensusObject::Mutate(_)));
+    assert!(matches!(delete_access, InputConsensusObject::Mutate(_)));
+
+    let read_a_version = read_a_access.id_and_version().1;
+    let read_b_version = read_b_access.id_and_version().1;
+    let increment_version = increment_access.id_and_version().1;
+    let delete_version = delete_access.id_and_version().1;
+    assert_eq!(read_a_version, read_b_version);
+    assert_eq!(
+        increment_version, read_a_version,
+        "read-only accesses must not advance the shared object's assigned version"
+    );
+    assert_eq!(
+        delete_version,
+        increment_effects.lamport_version(),
+        "deletion must read the version written by the preceding increment"
+    );
+
+    // This waits for both checkpoint execution and settlement on the RPC fullnode and every
+    // validator; it also makes a checkpoint-digest disagreement observable below.
+    test_cluster
+        .wait_for_tx_settlement_all_nodes(&expected_digests)
+        .await;
+
+    let checkpoint_positions = test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        [
+            *read_a_digest,
+            *read_b_digest,
+            *increment_digest,
+            *delete_digest,
+        ]
+        .map(|digest| {
+            let sequence = state
+                .epoch_store_for_testing()
+                .get_transaction_checkpoint(&digest)
+                .unwrap()
+                .expect("settled transaction missing from checkpoint");
+            let checkpoint = state
+                .checkpoint_store
+                .get_checkpoint_by_sequence_number(sequence)
+                .unwrap()
+                .expect("settled checkpoint missing from fullnode");
+            let contents = state
+                .checkpoint_store
+                .get_checkpoint_contents(&checkpoint.content_digest)
+                .unwrap()
+                .expect("checkpoint contents missing from fullnode");
+            let index = contents
+                .inner()
+                .digests_iter()
+                .position(|entry| entry.transaction == digest)
+                .expect("transaction missing from its checkpoint contents");
+            (sequence, index)
+        })
+    });
+    assert!(
+        checkpoint_positions[0] < checkpoint_positions[2]
+            && checkpoint_positions[1] < checkpoint_positions[2]
+            && checkpoint_positions[2] < checkpoint_positions[3],
+        "checkpoint order must retain both shared reads before their overwrite and deletion: {checkpoint_positions:?}"
+    );
+
+    let checkpoint_sequences = checkpoint_positions
+        .iter()
+        .map(|(sequence, _)| *sequence)
+        .collect::<std::collections::BTreeSet<_>>();
+    let checkpoint_digests = test_cluster
+        .all_node_handles()
+        .into_iter()
+        .map(|handle| {
+            handle.with(|node| {
+                checkpoint_sequences
+                    .iter()
+                    .map(|sequence| {
+                        *node
+                            .state()
+                            .checkpoint_store
+                            .get_checkpoint_by_sequence_number(*sequence)
+                            .unwrap()
+                            .expect("settled checkpoint missing from node")
+                            .digest()
+                    })
+                    .collect::<Vec<_>>()
+            })
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        checkpoint_digests.windows(2).all(|pair| pair[0] == pair[1]),
+        "validators and fullnode disagreed on a settled checkpoint digest: {checkpoint_digests:?}"
+    );
+}
+
+/// Regression coverage for checkpoint ordering when effects dependencies are absent. The
+/// transaction_execution_delay failpoint allows independent execution to finish out of consensus
+/// order; checkpoint construction and settlement must nevertheless retain the shared schedule.
+#[sim_test]
+async fn shared_checkpoint_order_without_effects_dependencies() {
+    register_fail_point_async("transaction_execution_delay", move || async move {
+        let delay = {
+            let dist = rand::distributions::Uniform::new(0, 1000);
+            let mut rng = rand::thread_rng();
+            dist.sample(&mut rng)
+        };
+        sleep(Duration::from_millis(delay)).await;
+    });
+
+    // Mainnet/testnet simulation runs retain the flag-off protocol configuration.
+    let devnet = sui_types::digests::ChainIdentifier::default().chain()
+        == sui_protocol_config::Chain::Unknown;
+    assert_checkpoint_order_with_effects_dependencies(ProtocolVersion::new(137), devnet).await;
+    assert_checkpoint_order_with_effects_dependencies(ProtocolVersion::new(136), false).await;
+}
+
 /// End-to-end shared transaction test for a Sui validator. It does not test the client or wallet,
 /// but tests the end-to-end flow from Sui to consensus.
 #[sim_test]
 async fn call_shared_object_contract() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    // Preserve coverage of the historical transaction-dependency representation.
+    let test_cluster = TestClusterBuilder::new()
+        .with_protocol_version(sui_protocol_config::ProtocolVersion::new(136))
+        .build()
+        .await;
     let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
     let package_id = package.0;
     let counter_id = counter.0;

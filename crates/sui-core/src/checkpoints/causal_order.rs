@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{InputConsensusObject, TransactionEffects};
@@ -14,15 +15,32 @@ pub struct CausalOrder {
 }
 
 impl CausalOrder {
-    /// Causally sort effects, extracting the consensus commit prologue (if present at index 0)
-    /// and placing it first in the result. The CCP is identified by its digest matching
-    /// `ccp_digest`. All other effects are causally sorted after the CCP.
-    pub fn causal_sort_with_ccp(
+    /// Order one consensus schedulable batch for both checkpoints and settlement indices.
+    ///
+    /// Effects must follow the post-reordering consensus input order, not execution completion
+    /// order. Shared versions (including ended streams and implicit system reads) are assigned
+    /// in that order, and owned input producers have already been scheduled before voting.
+    /// Retaining it avoids rebuilding dependencies when effects no longer record them.
+    /// Historical protocols retain their input-order-independent causal sort.
+    pub fn order_for_checkpoint(
         effects: Vec<TransactionEffects>,
         ccp_digest: Option<TransactionDigest>,
+        protocol_config: &ProtocolConfig,
     ) -> Vec<TransactionEffects> {
-        let (ccp_effects, unsorted) = if let Some(digest) = ccp_digest {
+        if let Some(digest) = ccp_digest {
             assert_eq!(effects[0].transaction_digest(), &digest);
+            if cfg!(debug_assertions) {
+                assert!(
+                    effects[1..]
+                        .iter()
+                        .all(|tx| tx.transaction_digest() != &digest)
+                );
+            }
+        }
+        if protocol_config.disable_effects_tx_dependencies() {
+            return effects;
+        }
+        let (ccp_effects, unsorted) = if ccp_digest.is_some() {
             (Some(effects[0].clone()), effects[1..].to_vec())
         } else {
             (None, effects)
@@ -30,27 +48,15 @@ impl CausalOrder {
 
         let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
         if let Some(ccp) = ccp_effects {
-            if cfg!(debug_assertions) {
-                let ccp_digest = ccp_digest.unwrap();
-                for tx in unsorted.iter() {
-                    assert!(tx.transaction_digest() != &ccp_digest);
-                }
-            }
             sorted.push(ccp);
         }
         sorted.extend(Self::causal_sort(unsorted));
         sorted
     }
 
-    /// Causally sort given vector of effects
-    ///
-    /// Returned list has effects that
-    ///
-    /// (a) Causally sorted
-    /// (b) Have deterministic order between transactions that are not causally dependent
-    ///
-    /// The order of result list does not depend on order of effects in the supplied vector
-    pub fn causal_sort(effects: Vec<TransactionEffects>) -> Vec<TransactionEffects> {
+    /// Deterministically topologically sort the dependency graph built by `from_vec`.
+    /// The result does not depend on the input order.
+    fn causal_sort(effects: Vec<TransactionEffects>) -> Vec<TransactionEffects> {
         let mut this = Self::from_vec(effects);
         while let Some(item) = this.pop_first() {
             this.insert(item);

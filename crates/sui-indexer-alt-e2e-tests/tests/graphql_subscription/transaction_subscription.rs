@@ -341,13 +341,25 @@ async fn test_transaction_subscription_field_coverage() {
     let (digest, _) = create_item(&mut cluster.validator, package_id, 42).await;
     let item = wait_for_matching_item(&mut stream, &[digest], transaction_digest).await;
 
+    let dependencies_disabled = cluster.validator.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .load_epoch_store_one_call_per_task()
+            .protocol_config()
+            .disable_effects_tx_dependencies()
+    });
+    let snapshot = if dependencies_disabled {
+        "transaction_subscription_field_coverage_without_dependencies"
+    } else {
+        "transaction_subscription_field_coverage"
+    };
+
     let mut settings = graphql_redactions();
     settings.add_redaction(".**.signatureBytes", "[signature]");
     settings.add_redaction(".**.lamportVersion", "[lamportVersion]");
     settings.add_redaction(".**.gasSummary", "[gasSummary]");
     settings.add_redaction(".**.json", "[json]");
     settings.bind(|| {
-        insta::assert_json_snapshot!("transaction_subscription_field_coverage", item);
+        insta::assert_json_snapshot!(snapshot, item);
     });
 }
 

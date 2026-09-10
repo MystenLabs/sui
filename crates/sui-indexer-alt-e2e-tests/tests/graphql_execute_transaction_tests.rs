@@ -668,8 +668,20 @@ async fn test_execute_transaction_effects_json() {
         .await
         .expect("GraphQL request failed");
 
+    let dependencies_disabled = validator_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .load_epoch_store_one_call_per_task()
+            .protocol_config()
+            .disable_effects_tx_dependencies()
+    });
+    let snapshot = if dependencies_disabled {
+        "execute_transaction_effects_json_without_dependencies"
+    } else {
+        "execute_transaction_effects_json"
+    };
+
     // Use redactions to mask dynamic values that change between runs
-    insta::assert_json_snapshot!("execute_transaction_effects_json", result.pointer("/data/executeTransaction"), {
+    insta::assert_json_snapshot!(snapshot, result.pointer("/data/executeTransaction"), {
         // Object IDs and addresses
         ".**.objectId" => "[object_id]",
         ".**.address" => "[address]",

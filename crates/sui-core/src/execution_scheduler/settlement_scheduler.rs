@@ -194,7 +194,8 @@ impl SettlementScheduler {
 
         let ccp_digest = self.extract_consensus_commit_prologue_digest(&digests, &effects);
 
-        let sorted_effects = CausalOrder::causal_sort_with_ccp(effects, ccp_digest);
+        let sorted_effects =
+            CausalOrder::order_for_checkpoint(effects, ccp_digest, epoch_store.protocol_config());
 
         let epoch = epoch_store.epoch();
         let accumulator_root_obj_initial_shared_version = epoch_store
