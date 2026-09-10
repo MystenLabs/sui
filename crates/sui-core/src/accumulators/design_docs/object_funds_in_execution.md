@@ -102,7 +102,7 @@ executed-but-unsettled withdrawals.
 |------|-----------------------------------------------|
 | Live consensus execution | Assigned versions (`AssignedVersions.system_object_versions`). |
 | Checkpoint execution / crash recovery | Back-filled from the settlement barrier's input version, with recorded `ReadOnlyRoot` versions checked for consistency. See `CheckpointTransactionData::new` in the [checkpoint executor](../../checkpoints/checkpoint_executor/mod.rs). |
-| Dev-inspect / dry-run | Captured from the latest stored root before execution (`SystemObjectVersions::from_latest_in_store`). The old post-execution simulate check is bypassed when the flag is on. Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
+| Dev-inspect / dry-run | Reuses an explicit input root when present, otherwise captures the latest stored root before execution (`SystemObjectVersions::from_input_objects_and_store`). The old post-execution simulate check is bypassed when the flag is on. Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
 | `sui-replay-2` | Reconstructed from expected effects (`SystemObjectVersions::from_effects`). **Caveat:** unsettled in-commit withdrawals are *not* reconstructed in isolated replay (`unsettled = 0`), which can diverge from the original execution — see the TODO in `crates/sui-replay-2/src/execution.rs`. Mainnet enablement is blocked on this. |
 
 ## 5. Failure and error semantics

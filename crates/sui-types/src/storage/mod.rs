@@ -21,7 +21,7 @@ use crate::message_envelope::Message;
 use crate::move_package::MovePackage;
 use crate::storage::error::Error as StorageError;
 use crate::transaction::TransactionData;
-use crate::transaction::{SenderSignedData, TransactionDataAPI};
+use crate::transaction::{InputObjects, SenderSignedData, TransactionDataAPI};
 use crate::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
@@ -897,38 +897,46 @@ impl SystemObjectVersions {
         Self::new(accumulator_version, forwarding_address_registry_version)
     }
 
-    /// Before execution, get the latest versions of the implicitly read system objects from the store,
-    /// and use these versions as the exact version to read during execution.
-    /// This is used only in environments where there is no consensus to assign versions, e.g. simulacrum and dry-run.
-    pub fn from_latest_in_store(
+    /// Pin system-object reads for execution without consensus, e.g. simulacrum and dry-run.
+    /// Reuse explicit input versions so a concurrent write cannot give the same transaction two
+    /// versions of one root. Only exclusively implicit roots are loaded from the latest store state.
+    pub fn from_input_objects_and_store(
+        input_objects: &InputObjects,
         store: &dyn ObjectStore,
         include_forwarding_address_registry: bool,
     ) -> Self {
-        let accumulator_version = store
-            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .map(|object| {
-                let initial_shared_version = object
-                    .owner()
-                    .start_version()
-                    .expect("accumulator root must be a consensus object");
-                ConsensusObjectVersion {
-                    initial_shared_version,
-                    version: object.version(),
+        let version_of = |object: &Object| ConsensusObjectVersion {
+            initial_shared_version: object
+                .owner()
+                .start_version()
+                .expect("implicitly read system objects must be consensus objects"),
+            version: object.version(),
+        };
+        let mut accumulator_version = None;
+        let mut forwarding_address_registry_version = None;
+        for object in input_objects.iter_objects() {
+            match object.id() {
+                SUI_ACCUMULATOR_ROOT_OBJECT_ID => accumulator_version = Some(version_of(object)),
+                SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID
+                    if include_forwarding_address_registry =>
+                {
+                    forwarding_address_registry_version = Some(version_of(object));
                 }
-            });
-        let forwarding_address_registry_version = include_forwarding_address_registry
-            .then(|| store.get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID))
-            .flatten()
-            .map(|object| {
-                let initial_shared_version = object
-                    .owner()
-                    .start_version()
-                    .expect("forwarding address registry must be a consensus object");
-                ConsensusObjectVersion {
-                    initial_shared_version,
-                    version: object.version(),
-                }
-            });
+                _ => {}
+            }
+        }
+        if accumulator_version.is_none() {
+            accumulator_version = store
+                .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                .as_ref()
+                .map(version_of);
+        }
+        if include_forwarding_address_registry && forwarding_address_registry_version.is_none() {
+            forwarding_address_registry_version = store
+                .get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+                .as_ref()
+                .map(version_of);
+        }
         Self::new(accumulator_version, forwarding_address_registry_version)
     }
 }
@@ -1097,5 +1105,69 @@ impl ParentSync for TrackingBackingStore<'_> {
         object_id: ObjectID,
     ) -> Option<crate::base_types::ObjectRef> {
         self.inner.get_latest_parent_entry_ref_deprecated(object_id)
+    }
+}
+
+#[cfg(test)]
+mod system_object_versions_tests {
+    use super::*;
+    use crate::{
+        in_memory_storage::InMemoryStorage,
+        object::Owner,
+        transaction::{
+            InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
+            SharedObjectMutability,
+        },
+    };
+
+    #[test]
+    fn simulation_registry_pin_survives_a_concurrent_registration() {
+        let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+        let initial_shared_version = SequenceNumber::from_u64(1);
+        let registry = |version| {
+            Object::with_id_owner_version_for_testing(
+                id,
+                SequenceNumber::from_u64(version),
+                Owner::Shared {
+                    initial_shared_version,
+                },
+            )
+        };
+        let mut store = InMemoryStorage::new(vec![registry(10)]);
+        let inputs = InputObjects::new(vec![ObjectReadResult::new(
+            InputObjectKind::SharedMoveObject {
+                id,
+                initial_shared_version,
+                mutability: SharedObjectMutability::Mutable,
+            },
+            ObjectReadResultKind::Object(store.get_object(&id).unwrap().clone()),
+        )]);
+
+        // Another registration commits after the explicit input was loaded, but before implicit
+        // system-object versions are chosen for the same simulation.
+        store.insert_object(registry(11));
+        let versions = SystemObjectVersions::from_input_objects_and_store(&inputs, &store, true);
+        assert_eq!(
+            versions.get(&id).unwrap().version,
+            inputs.iter_objects().next().unwrap().version(),
+            "explicit and implicit reads of the registry must use one simulation version",
+        );
+        assert_eq!(
+            SystemObjectVersions::from_input_objects_and_store(
+                &InputObjects::new(vec![]),
+                &store,
+                true,
+            )
+            .get(&id)
+            .unwrap()
+            .version,
+            SequenceNumber::from_u64(11),
+            "an exclusively implicit read should use the latest stored registry",
+        );
+        assert!(
+            SystemObjectVersions::from_input_objects_and_store(&inputs, &store, false)
+                .get(&id)
+                .is_none(),
+        );
     }
 }

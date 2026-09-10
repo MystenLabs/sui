@@ -207,7 +207,8 @@ pub fn simulate_transaction(
     let cloned_gas = gas_data.clone();
     let cloned_kind = kind.clone();
     let tx_digest = transaction_digest;
-    let system_object_versions = SystemObjectVersions::from_latest_in_store(
+    let system_object_versions = SystemObjectVersions::from_input_objects_and_store(
+        checked_input_objects.inner(),
         backing_store,
         protocol_config.enable_forwarding_addresses(),
     );

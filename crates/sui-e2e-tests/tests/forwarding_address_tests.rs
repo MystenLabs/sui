@@ -281,6 +281,9 @@ async fn test_forwarding_address_deposit() {
         10_000_000,
         env.rgp,
     );
+    let simulated_effects =
+        simulate_forwarding_deposit_and_check_registry(&env, &transaction).await;
+    assert!(simulated_effects.status().is_ok());
 
     let (digest, effects) = env.exec_tx_directly(transaction).await.unwrap();
     assert!(effects.status().is_ok());
@@ -513,8 +516,14 @@ async fn simulate_forwarding_deposit_and_check_registry(
         .unwrap()
         .deserialize()
         .unwrap();
-    let registry_version = forwarding_address_registry_read_only_version(&effects)
-        .expect("forwarding deposits must record the registry as a read-only consensus object");
+    let registry_version = effects
+        .accessed_consensus_objects()
+        .into_iter()
+        .find_map(|object| {
+            let (id, version) = object.id_and_version();
+            (id == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID).then_some(version)
+        })
+        .expect("forwarding deposits must record their explicit or implicit registry input");
     let registry_id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID.to_string();
     assert!(
         simulated_transaction
@@ -551,6 +560,7 @@ async fn test_simulate_forwarding_address_deposits_return_read_only_registry() {
     let registered_effects =
         simulate_forwarding_deposit_and_check_registry(&env, &registered_transaction).await;
     assert!(registered_effects.status().is_ok());
+    assert!(forwarding_address_registry_read_only_version(&registered_effects).is_some());
 
     let unregistered_transaction =
         forwarding_address_deposit_transaction(&env, depositor, unregistered_address, amount);
@@ -560,6 +570,7 @@ async fn test_simulate_forwarding_address_deposits_return_read_only_registry() {
         unregistered_effects.status(),
         "simulated unregistered forwarding deposit",
     );
+    assert!(forwarding_address_registry_read_only_version(&unregistered_effects).is_some());
 }
 
 async fn register_master_id(
