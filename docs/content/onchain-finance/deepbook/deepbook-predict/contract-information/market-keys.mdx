@@ -315,40 +315,7 @@ The registry stores those IDs in a `Table` keyed by `market_manager::MarketKey`,
 
 ## Ticks in the TypeScript SDK {#sdk}
 
-`@mysten/deepbook-v3` version 2.3.0 or later ships a `/predict` subpath that does the tick arithmetic for you on either network. Describe a position with a `MarketDescriptor` in USD, and the SDK resolves the market, converts each strike, and admission-checks each finite boundary before it builds the transaction.
-
-The descriptor has 2 arms:
-
-- **Binary arm:** `{ side: 'up' | 'down', strike: number | 'reference' }`, where `'reference'` resolves to the market's `referencePrice`.
-- **Range arm:** `{ side: 'range', lower: number, upper: number }`, where both bounds are finite USD prices and `lower` must be below `upper`.
-
-Each arm maps onto the same tick pair the chain takes:
-
-| **Descriptor** | **`lowerTick`** | **`higherTick`** |
-|---|---|---|
-| `{ side: 'up', strike: K }` | `K / tickSize` | `POS_INF_TICK` |
-| `{ side: 'down', strike: K }` | `0` | `K / tickSize` |
-| `{ side: 'range', lower: L, upper: H }` | `L / tickSize` | `H / tickSize` |
-
-The SDK exports `POS_INF_TICK` as a `bigint` equal to `1073741823n`. `strike: 'reference'` is available on the binary arm only, and it throws while the market has no reference tick recorded. Recording one is permissionless, so a caller blocked this way can unblock themselves by calling `set_reference_tick` rather than waiting for someone else.
-
-`read.markets()` returns `tickSize`, `admissionTickSize`, and `referencePrice` as USD decimals, so snap a target price with plain arithmetic:
-
-```ts
-const markets = await client.predict.read.markets();
-const m = markets[0];
-const strike = Math.round(target / m.admissionTickSize) * m.admissionTickSize;
-```
-
-The SDK raises a typed `PredictInputError` before it builds a transaction when a strike is off the fine grid, off the admission grid and not the reference price, outside the finite tick domain, or when `lower` is not below `upper`.
-
-The following example mints a directional position, quoting first and capping the all-in cost; `NETWORK` in the examples package selects Testnet or Mainnet:
-
-<ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
-
-This one mints a two-sided range through the same builder, with both bounds snapped to the admission grid:
-
-<ImportContent source="examples/deepbook-predict/src/mint-range.ts" mode="code" tag="mint-range" />
+The `@mysten/deepbook-v3/predict` subpath converts USD strikes to these ticks, admission-checks each finite boundary before it builds a transaction, and exports `POS_INF_TICK` and `binaryRangeTicks`, as [Predict Markets and Pricing SDK](/onchain-finance/deepbook/deepbook-predict-sdk/markets#ticks) describes. For directional and range mints built from a market descriptor, see [Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint).
 
 ## Error codes {#error-codes}
 

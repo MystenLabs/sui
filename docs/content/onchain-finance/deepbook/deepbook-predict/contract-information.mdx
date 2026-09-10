@@ -397,34 +397,7 @@ Raw event pages need care, because they page differently from the named history 
 
 ## Manage configuration across networks
 
-Never inline these values at a call site. Each one is deployment-specific, and all of them differ between Mainnet and Testnet. Keep them in one network-keyed record, resolve it once at startup, and pass the result down. The examples do exactly that: a single `NETWORK` constant selects `'testnet'` or `'mainnet'`, and everything else derives from it:
-
-<ImportContent source="examples/deepbook-predict/src/config.ts" mode="code" tag="config" />
-
-`getConfig`, `getDeployment`, `getUnits`, `getAccountConfig`, and `getSessionsConfig` all accept `'mainnet'` or `'testnet'` and throw a plain `Error` on any other value, so a misconfigured environment fails at startup instead of sending a transaction to a package that does not exist. Resolving once gives you a single place to switch networks and a single place to fail. Assert the deployment name at startup as well, because a later SDK release can intentionally move a network to a newer deployment. The quote coin is the value most worth reading rather than assuming:
-
-```ts
-import { getConfig, getDeployment } from '@mysten/deepbook-v3/predict';
-
-const network = process.env.PREDICT_NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
-const { deployment, chainId } = getDeployment(network);
-// 'deepbook-predict-mainnet' on chain 35834a8a, or 'deepbook-predict-testnet' on chain 4c78adac.
-
-const { quoteCoinType } = getConfig(network);
-// Mainnet: native USDC. Testnet: the test coin that displays as DUSDC. Same `usdc::USDC` module path.
-```
-
-| **Value** | **Why it changes per deployment** |
-| --- | --- |
-| `packages.predict`, `packages.account`, `packages.propbook` | Each deployment publishes its own packages. Move call targets and event type prefixes derive from them. |
-| `objects.registry`, `objects.protocolConfig`, `objects.poolVault` | Each deployment shares its own Predict state objects, which every trading and liquidity call takes as arguments. |
-| `objects.oracleRegistry`, `objects.accountRegistry` | The Propbook and account packages share their own registries per deployment. |
-| `quoteCoinType` | Mainnet quotes in native USDC. Testnet quotes in a mintable test coin with the same module path and decimals but a different package. |
-| `coinTypes.plp` | Derived from the Predict package ID, so it moves with every republish. |
-| `units` | The SDK records lot size, fixed-point scale, and decimals per deployment rather than assuming them. |
-| `underlyings` | Each underlying carries its propbook ID and its 3 oracle object IDs, and rebinding can change them. |
-
-Read market IDs, expiries, reference ticks, cadence terms, and oracle observations at runtime rather than adding them to this record. They are live protocol state, not deployment configuration, and they change as markets roll.
+The SDK carries both deployments' identifiers, so keep them in one network-keyed record that you resolve once at startup rather than inlining an ID at a call site. [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#configuration) shows that record, the startup deployment check, and which values change per deployment.
 
 ### Testnet and Mainnet differences
 
@@ -560,7 +533,7 @@ These deployments renumbered or extended several tables, so a code memorized fro
 | `config_constants` | New: `EInvalidMaxValuationWindowMs` `23`, `EInvalidNoTradeWindowMs` `24`. |
 | `strike_payout_tree` | New: `EStaleValuationSnapshot` `3`, `ESnapshotSeqNotIncreasing` `4`. |
 
-`PredictMoveError` from the TypeScript SDK carries `module` and `code` for exactly this lookup, plus `abortName` when the client speaks gRPC or GraphQL. A first mint most often aborts in `strike_exposure_config`, whose code `3` is `EPremiumBelowMinimum`, or in `protocol_config` with code `7`, `ETradeWindowClosed`, when you took the quote inside the last 2 seconds before expiry.
+`PredictMoveError` from the TypeScript SDK carries `module` and `code` for exactly this lookup, and its `abortName` stays `null` for these packages, because they declare their error constants as plain `u64` codes rather than `#[error]` constants. A first mint most often aborts in `strike_exposure_config`, whose code `3` is `EPremiumBelowMinimum`, or in `protocol_config` with code `7`, `ETradeWindowClosed`, when you took the quote inside the last 2 seconds before expiry.
 
 import DocCardList from '@theme/DocCardList';
 

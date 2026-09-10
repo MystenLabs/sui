@@ -403,7 +403,7 @@ public fun builder_code_id(account: &Account): Option<ID>
 
 Both return the empty answer rather than aborting when the account has no Predict slot yet, so `false` and `none` do not distinguish an unused account from a closed position.
 
-`has_position` answers one exact question and needs the market ID and order ID up front, so it cannot enumerate a portfolio. To list what an account holds, read the dynamic fields of the `positions` table, where each field key is a `PositionKey` serialized with Binary Canonical Serialization (BCS). The SDK's `client.predict.read.positions(owner)` does this on either network and returns `{ marketId, orderId }` pairs, and `client.predict.read.hasPosition(owner, marketId, orderId)` wraps the single read. The public offchain read services answer the same question over HTTP for the previous-generation `predict-8-21` deployment only, and their account and position paths key on the canonical account ID rather than the wrapper ID; see [The account SDK subpath](#account-sdk).
+`has_position` answers one exact question and needs the market ID and order ID up front, so it cannot enumerate a portfolio. To list what an account holds, read the dynamic fields of the `positions` table, where each field key is a `PositionKey` serialized with Binary Canonical Serialization (BCS). The SDK's `client.predict.read.positions(owner)` does this on either network and returns `{ marketId, orderId }` pairs, and `client.predict.read.hasPosition(owner, marketId, orderId)` wraps the single read. The public offchain read services answer the same question over HTTP for the previous-generation `predict-8-21` deployment only, and their account and position paths key on the canonical account ID rather than the wrapper ID; see [Wrapper ID and account ID](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#wrapper-and-account-ids).
 
 To value a position, pass its order ID to the market: `expiry_market::live_order_value` with a market-bound pricer while the market is live, or `expiry_market::settled_order_payout` once it has settled. See [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#read-accessors) for both.
 
@@ -487,46 +487,7 @@ public fun unset_builder_code(wrapper: &mut AccountWrapper, auth: Auth, ctx: &mu
 
 ## The account SDK subpath {#account-sdk}
 
-The account primitive serves more than Predict, so `@mysten/deepbook-v3` publishes it on its own subpath, `@mysten/deepbook-v3/account`, separate from `/predict`. Reach for it when you drive custody without the Predict facade, or when you compose account commands into a block of your own.
-
-That subpath exports 2 things before any builder:
-
-- **`getAccountConfig(network)`:** Returns the deployed `accountPackageId` and `accountRegistry` for `'mainnet'` or `'testnet'`, so you never transcribe them. From `@mysten/deepbook-v3` 2.3.0 both networks resolve; any other value throws a plain `Error` rather than handing back placeholder IDs.
-- **`AccountContract`:** The class every builder hangs off. Construct it with that configuration, or with your own `{ accountPackageId, accountRegistry }` if you run your own deployment of the account package.
-
-```ts
-import { AccountContract, getAccountConfig } from '@mysten/deepbook-v3/account';
-
-const network = 'mainnet'; // or 'testnet'
-const account = new AccountContract(getAccountConfig(network));
-```
-
-Its methods each return a function you add to a `Transaction`, so they compose into one block:
-
-| **Method** | **Builds** |
-|---|---|
-| `deriveAccountWrapperId(owner)` | No commands. Computes the wrapper's object ID offchain. |
-| `generateAuth()` | `account::generate_auth` for the transaction sender. |
-| `createAccount()` | `account_registry::new` then `account::share`. |
-| `createAccountAndDeposit({ coin, coinType })` | `new`, `generate_auth`, `deposit_funds`, then `share` last. |
-| `depositFunds({ wrapperId, coin, coinType })` | `generate_auth` then `deposit_funds`. |
-| `withdrawFunds({ wrapperId, amount, coinType })` | `generate_auth` then `withdraw_funds`, returning the `Coin<T>`. |
-| `loadAccount({ wrapperId })` | `account::load_account`, the read-side handle. |
-| `balance({ owner, coinType })` | `load_account` chained into `balance<T>`, for a simulated read. |
-
-`createAccountAndDeposit` is the one that actually implements the create-and-fund workflow in a single block, and you cannot decompose it into `createAccount` plus `depositFunds`. An object input can only name an object that already existed when the block started, so a wrapper created inside the block is reachable only through the result handle `new` returns, and sharing it ends by-value use of that handle. That is why `share` comes last.
-
-Only the wrapper ID derives from this class. The canonical account identity is a second, different derived object, keyed by `AccountKey(owner)` rather than `AccountWrapperKey(owner)`, and its derivation lives on `SessionsContract.deriveAccountId` in the `/sessions` subpath. Pass the wrapper ID to Predict calls, and expect the account ID in the `account_id` field of events. A live `OrderMinted` carries the account ID, not the wrapper ID.
-
-Which ID an offchain read service wants is the same split, and getting it wrong fails quietly. As of 2026-09-10 the only public read services are the Testnet v4 hosts listed on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information), and they index the previous-generation `predict-8-21` deployment, not the 2 deployments this page describes; no read service exists yet for either, and the SDK reads above need none. On those services the account and position paths key on the canonical account ID. A wrapper ID passed there returns HTTP `200` with an empty array rather than an error, so a wrong key is indistinguishable from an empty portfolio until you compare both: verified 2026-09-03 for a real trader on that deployment, the wrapper ID returned zero balances and zero positions while the account ID returned 2 balance rows and 5 open positions. Derive the key with `deriveAccountId`, documented in [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate), where the same wrapper-against-account trap applies to session grants. The wrapper ID stays correct for every onchain call that takes the shared `AccountWrapper` object.
-
-:::caution
-
-The package root exports a different type named `Account`. `import { Account } from '@mysten/deepbook-v3'` gives you `@deepbook/core::account::Account`, the per-pool trading account, whose layout is unrelated to the account primitive's custody account. Parsing an account-primitive object with it yields nonsense rather than an error, because BCS decoding does not check which struct the bytes came from. Import `Account` from `@mysten/deepbook-v3/account` for anything on this page.
-
-:::
-
-The generated bindings sit on the same subpath for callers building their own Move calls: `accountMoveCalls`, `accountRegistryMoveCalls`, `accountEvents`, and the `Account` and `AccountWrapper` BCS structs.
+`@mysten/deepbook-v3` publishes the account primitive on its own subpath, `@mysten/deepbook-v3/account`, with `getAccountConfig(network)` for the deployed IDs and an `AccountContract` class whose builders compose into a programmable transaction block of your own. [Predict Accounts SDK](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#account-subpath) documents every `AccountContract` method, the split between wrapper and account IDs, and the generated bindings.
 
 ## End-to-end workflow {#end-to-end-workflow}
 
@@ -546,7 +507,7 @@ The example below is the second of those. It reads a quote, derives a `maxCost` 
 
 </details>
 
-Composing create, fund, and trade into a single block of your own is generated-bindings work rather than facade work. Build it from the `AccountContract` methods above and the `loadLivePricer` escape hatch the `/predict` subpath exports, adding commands to one `Transaction` in this order: `account_registry::new`, `account::generate_auth`, `account::deposit_funds`, `account::share`, `expiry_market::load_live_pricer`, a second `account::generate_auth` because `deposit_funds` consumed the first, and `expiry_market::mint_exact_quantity`. Share the wrapper after the deposit, not before: an object input can only name an object that already existed when the block started, so a wrapper created inside the block is reachable only through the result handle from `new`.
+Composing create, fund, and trade into a single block of your own is generated-bindings work rather than facade work. Build it from the [`AccountContract` methods](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#account-contract) and the `loadLivePricer` escape hatch the `/predict` subpath exports, adding commands to one `Transaction` in this order: `account_registry::new`, `account::generate_auth`, `account::deposit_funds`, `account::share`, `expiry_market::load_live_pricer`, a second `account::generate_auth` because `deposit_funds` consumed the first, and `expiry_market::mint_exact_quantity`. Share the wrapper after the deposit, not before: an object input can only name an object that already existed when the block started, so a wrapper created inside the block is reachable only through the result handle from `new`.
 
 The [tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial) walks the whole flow with quotes, ranges, redemption, and settlement.
 
