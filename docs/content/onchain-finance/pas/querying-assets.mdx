@@ -98,12 +98,15 @@ const { balance } = await client.getBalance({
 
 ### Check if a wallet has a PAS Account
 
-If `getObject` returns `null` for the derived address, the wallet has no PAS Account yet:
+`getObject` throws an `ObjectError` when the object does not exist, so it never returns a missing Account as a value to test. Use `getObjects`, which returns the error in place of the object instead of throwing:
 
 ```tsx
-const { object } = await client.getObject({ objectId: accountAddress });
-if (!object) {
-    // No PAS account
+const accountAddress = client.pas.deriveAccountAddress(walletAddress);
+const {
+    objects: [account],
+} = await client.getObjects({ objectIds: [accountAddress] });
+if (account instanceof Error) {
+    // No PAS Account for this wallet yet
 }
 ```
 
