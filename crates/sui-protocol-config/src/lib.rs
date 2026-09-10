@@ -396,6 +396,7 @@ const MAINNET_USDB: &str =
 //              serialized byte length.
 //              Enable check_object_funds_withdraw_in_execution on devnet and charge for reads.
 //              Enable allowed_proposers on testnet and mainnet.
+//              Validate PTB indices at signing time.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1014,6 +1015,10 @@ struct FeatureFlags {
     // Check shared object transfer restrictions per command.
     #[serde(skip_serializing_if = "is_false")]
     per_command_shared_object_transfer_rules: bool,
+
+    // Validate PTB input and result indices before signing.
+    #[serde(skip_serializing_if = "is_false")]
+    validate_ptb_argument_indices: bool,
 
     // Enable including checkpoint artifacts digest in the summary.
     #[serde(skip_serializing_if = "is_false")]
@@ -4747,6 +4752,8 @@ impl ProtocolConfig {
                     cfg.reserve_object_funds_for_withdrawal_cold_read_cost = Some(184);
 
                     cfg.feature_flags.allowed_proposers = true;
+
+                    cfg.feature_flags.validate_ptb_argument_indices = true;
                 }
                 // Use this template when making changes:
                 //
