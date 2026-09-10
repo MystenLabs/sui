@@ -194,6 +194,9 @@ impl SettlementScheduler {
 
         let ccp_digest = self.extract_consensus_commit_prologue_digest(&digests, &effects);
 
+        if let Err(violation) = CausalOrder::check_already_sorted(&effects) {
+            panic!("CAUSAL_SORT_VIOLATION: settlement {settlement_key:?}: {violation}");
+        }
         let sorted_effects = CausalOrder::causal_sort_with_ccp(effects, ccp_digest);
 
         let epoch = epoch_store.epoch();
