@@ -835,7 +835,7 @@ impl TakenTransactionsGuard {
                 .collect::<Vec<_>>();
             self.metrics
                 .queue_wait_latency
-                .with_label_values(&[lane.label()])
+                .with_label_values(&[lane.label(), entry.proposers])
                 .observe(entry.ack.created.elapsed().as_secs_f64());
             entry
                 .ack
@@ -844,7 +844,7 @@ impl TakenTransactionsGuard {
         for ping in pings {
             self.metrics
                 .queue_wait_latency
-                .with_label_values(&["ping"])
+                .with_label_values(&["ping", "na"])
                 .observe(ping.created.elapsed().as_secs_f64());
             ping.resolve_included(
                 self.epoch,
