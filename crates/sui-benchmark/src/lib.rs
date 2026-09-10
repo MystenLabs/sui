@@ -510,21 +510,21 @@ impl LocalValidatorAggregatorProxy {
         const EXTRA_SUBMIT_TIMEOUT: Duration = Duration::from_secs(2);
         const PREFERRED_VALIDATOR_LATENCY_DELTA: f64 = 0.02;
 
-        let sample = {
-            let mut rng = rand::thread_rng();
-            submission_amplification.sample(&mut rng)
-        };
-        if sample.total_submissions() == 1 {
-            return self.submit_transaction_block(tx).await;
-        }
-
-        let tx_digest = *tx.digest();
         let current_epoch = self.td.authority_aggregator().load().committee.epoch;
         let allowed_proposers = tx
             .data()
             .transaction_data()
             .expiration()
             .allowed_proposers(current_epoch);
+        let sample = {
+            let mut rng = rand::thread_rng();
+            submission_amplification.sample(&mut rng, allowed_proposers.is_some())
+        };
+        if sample.total_submissions() == 1 {
+            return self.submit_transaction_block(tx).await;
+        }
+
+        let tx_digest = *tx.digest();
         let validators = self.select_validators_for_submission_amplification(
             sample,
             PREFERRED_VALIDATOR_LATENCY_DELTA,

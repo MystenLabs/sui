@@ -266,6 +266,9 @@ pub enum RunSpec {
         // Number of validators to submit to when amplification_probability triggers.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [SubmissionAmplification::DEFAULT_AMPLIFICATION_VALIDATORS_PER_TX])]
         amplification_validators_per_tx: Vec<usize>,
+        // Apply amplification only to transactions without allowed proposers.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [false])]
+        amplification_unrestricted_only: Vec<bool>,
         // Probability that each selected validator receives multiple copies.
         // Defaults to zero, so duplicate traffic must be explicitly enabled.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]

@@ -86,6 +86,7 @@ impl std::fmt::Display for ValidatorSelection {
 pub struct SubmissionAmplification {
     pub amplification_probability: f64,
     pub amplification_validators_per_tx: usize,
+    pub amplification_unrestricted_only: bool,
     pub duplicate_probability: f64,
     pub duplicate_copies_per_validator: usize,
     pub validator_selection: ValidatorSelection,
@@ -96,6 +97,7 @@ impl Default for SubmissionAmplification {
         Self {
             amplification_probability: 0.0,
             amplification_validators_per_tx: 1,
+            amplification_unrestricted_only: false,
             duplicate_probability: 0.0,
             duplicate_copies_per_validator: 1,
             validator_selection: ValidatorSelection::Random,
@@ -117,6 +119,7 @@ impl SubmissionAmplification {
         Self {
             amplification_probability: Self::DEFAULT_AMPLIFICATION_PROBABILITY,
             amplification_validators_per_tx: Self::DEFAULT_AMPLIFICATION_VALIDATORS_PER_TX,
+            amplification_unrestricted_only: false,
             duplicate_probability: Self::DEFAULT_DUPLICATE_PROBABILITY,
             duplicate_copies_per_validator: Self::DEFAULT_DUPLICATE_COPIES_PER_VALIDATOR,
             validator_selection: Self::DEFAULT_VALIDATOR_SELECTION,
@@ -126,6 +129,7 @@ impl SubmissionAmplification {
     pub fn new(
         amplification_probability: f64,
         amplification_validators_per_tx: usize,
+        amplification_unrestricted_only: bool,
         duplicate_probability: f64,
         duplicate_copies_per_validator: usize,
         validator_selection: ValidatorSelection,
@@ -158,6 +162,7 @@ impl SubmissionAmplification {
         Ok(Self {
             amplification_probability,
             amplification_validators_per_tx,
+            amplification_unrestricted_only,
             duplicate_probability,
             duplicate_copies_per_validator,
             validator_selection,
@@ -169,12 +174,19 @@ impl SubmissionAmplification {
             || (self.duplicate_probability > 0.0 && self.duplicate_copies_per_validator > 1)
     }
 
-    pub fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SubmissionAmplificationSample {
-        let validators_per_tx = if rng.gen_bool(self.amplification_probability) {
-            self.amplification_validators_per_tx
-        } else {
-            1
-        };
+    pub fn sample<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        has_allowed_proposers: bool,
+    ) -> SubmissionAmplificationSample {
+        let amplification_eligible =
+            !self.amplification_unrestricted_only || !has_allowed_proposers;
+        let validators_per_tx =
+            if amplification_eligible && rng.gen_bool(self.amplification_probability) {
+                self.amplification_validators_per_tx
+            } else {
+                1
+            };
         let copies_per_validator = if rng.gen_bool(self.duplicate_probability) {
             self.duplicate_copies_per_validator
         } else {
@@ -209,6 +221,34 @@ pub struct SubmissionAmplificationSample {
 impl SubmissionAmplificationSample {
     pub fn total_submissions(&self) -> usize {
         self.validators_per_tx * self.copies_per_validator
+    }
+}
+
+#[cfg(test)]
+mod submission_amplification_tests {
+    use rand::{SeedableRng, rngs::StdRng};
+
+    use super::{SubmissionAmplification, ValidatorSelection};
+
+    #[test]
+    fn unrestricted_only_amplification_skips_restricted_transactions() {
+        let config =
+            SubmissionAmplification::new(1.0, 20, true, 0.0, 1, ValidatorSelection::Random)
+                .unwrap();
+        let mut rng = StdRng::seed_from_u64(0);
+
+        assert_eq!(config.sample(&mut rng, true).total_submissions(), 1);
+        assert_eq!(config.sample(&mut rng, false).total_submissions(), 20);
+    }
+
+    #[test]
+    fn default_amplification_still_applies_to_restricted_transactions() {
+        let config =
+            SubmissionAmplification::new(1.0, 20, false, 0.0, 1, ValidatorSelection::Random)
+                .unwrap();
+        let mut rng = StdRng::seed_from_u64(0);
+
+        assert_eq!(config.sample(&mut rng, true).total_submissions(), 20);
     }
 }
 

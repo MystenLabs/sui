@@ -107,6 +107,7 @@ impl WorkloadConfiguration {
                 in_flight_ratio,
                 amplification_probability,
                 amplification_validators_per_tx,
+                amplification_unrestricted_only,
                 duplicate_probability,
                 duplicate_copies_per_validator,
                 validator_selection,
@@ -129,6 +130,7 @@ impl WorkloadConfiguration {
                     let submission_amplification = SubmissionAmplification::new(
                         amplification_probability[i],
                         amplification_validators_per_tx[i],
+                        amplification_unrestricted_only[i],
                         duplicate_probability[i],
                         duplicate_copies_per_validator[i],
                         validator_selection[i],
