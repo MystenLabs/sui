@@ -3943,6 +3943,24 @@ impl AuthorityState {
     /// Executes accumulator settlement for testing purposes.
     /// Returns a list of (transaction, execution_env) pairs that can be replayed on another
     /// AuthorityState (e.g., a fullnode) using `replay_settlement_for_testing`.
+    /// The accumulator root version a transaction executed right now would read, or
+    /// None when accumulators are not enabled. Test paths that execute directly attach
+    /// this to their assigned versions: the test version-assignment helper assigns no
+    /// root version, but execution reads the root implicitly for object funds withdraws.
+    pub fn accumulator_version_for_testing(
+        &self,
+    ) -> Option<sui_types::base_types::ConsensusObjectVersion> {
+        let initial_shared_version = self
+            .epoch_store_for_testing()
+            .epoch_start_config()
+            .accumulator_root_obj_initial_shared_version()?;
+        let version = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)?.version();
+        Some(sui_types::base_types::ConsensusObjectVersion {
+            initial_shared_version,
+            version,
+        })
+    }
+
     pub async fn settle_accumulator_for_testing(
         &self,
         effects: &[TransactionEffects],
@@ -3985,19 +4003,14 @@ impl AuthorityState {
             })
             .collect();
 
-        // The test version-assignment helper assigns no accumulator root version;
-        // settlements are the one test-driven version group that needs it (the
-        // barrier settles object funds at the version it writes).
+        // The test version-assignment helper assigns no accumulator root version, and
+        // the barrier settles object funds at the version it writes.
+        let root_version = sui_types::base_types::ConsensusObjectVersion {
+            initial_shared_version: accumulator_root_obj_initial_shared_version,
+            version: accumulator_version,
+        };
         let with_root_version = |assigned: shared_object_version_manager::AssignedVersions| {
-            shared_object_version_manager::AssignedVersions::new(
-                assigned.shared_object_versions,
-                sui_types::base_types::SystemObjectVersions::new(Some(
-                    sui_types::base_types::ConsensusObjectVersion {
-                        initial_shared_version: accumulator_root_obj_initial_shared_version,
-                        version: accumulator_version,
-                    },
-                )),
-            )
+            assigned.with_accumulator_version(root_version)
         };
 
         let assigned_versions = epoch_store
