@@ -3,6 +3,7 @@
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::ConsensusAdapter;
+use crate::staggered_submission::proposers_metric_label;
 use arc_swap::ArcSwap;
 use mysten_common::debug_fatal;
 use mysten_metrics::{COUNT_BUCKETS, spawn_monitored_task};
@@ -204,7 +205,7 @@ impl AdmissionQueueMetrics {
             queue_wait_latency: register_histogram_vec_with_registry!(
                 "admission_queue_wait_latency",
                 "Time a submission spends waiting in the admission queue or transaction pool before being drained or proposed",
-                &["lane"],
+                &["lane", "proposers"],
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -788,10 +789,11 @@ impl AdmissionQueueEventLoop {
             return;
         }
         for entry in entries {
+            let proposers = proposers_metric_label(&entry.transactions, &self.epoch_store);
             self.queue
                 .metrics
                 .queue_wait_latency
-                .with_label_values(&["user"])
+                .with_label_values(&["user", proposers])
                 .observe(entry.enqueue_time.elapsed().as_secs_f64());
             let adapter = self.consensus_adapter.clone();
             let es = self.epoch_store.clone();
