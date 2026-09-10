@@ -54,19 +54,20 @@ pub struct TestRunner {
 
 impl TestRunner {
     pub async fn new(base_package_name: &str) -> Self {
-        Self::new_with_disable_effects_dependencies(base_package_name, false).await
+        Self::new_with_disable_effects_tx_dependencies(base_package_name, false).await
     }
 
-    pub async fn new_with_disable_effects_dependencies(
+    pub async fn new_with_disable_effects_tx_dependencies(
         base_package_name: &str,
-        disable_effects_dependencies: bool,
+        disable_effects_tx_dependencies: bool,
     ) -> Self {
         telemetry_subscribers::init_for_testing();
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_disable_effects_dependencies_for_testing(disable_effects_dependencies);
+        protocol_config
+            .set_disable_effects_tx_dependencies_for_testing(disable_effects_tx_dependencies);
         let authority_state = TestAuthorityBuilder::new()
             .with_protocol_config(protocol_config)
             .build()
@@ -833,10 +834,10 @@ async fn test_delete_shared_object_immut_mut_immut_interleave() {
     assert!(effects.status().is_err());
 }
 
-async fn assert_mutate_after_delete_effects_dependencies(disable_effects_dependencies: bool) {
-    let mut user_1 = TestRunner::new_with_disable_effects_dependencies(
+async fn assert_mutate_after_delete_effects_dependencies(disable_effects_tx_dependencies: bool) {
+    let mut user_1 = TestRunner::new_with_disable_effects_tx_dependencies(
         "shared_object_deletion",
-        disable_effects_dependencies,
+        disable_effects_tx_dependencies,
     )
     .await;
     let effects = user_1.create_shared_object().await;
@@ -890,7 +891,7 @@ async fn assert_mutate_after_delete_effects_dependencies(disable_effects_depende
     assert_eq!(gas.version(), gas_ref.1);
     assert_eq!(gas.previous_transaction, *effects.transaction_digest());
 
-    if disable_effects_dependencies {
+    if disable_effects_tx_dependencies {
         assert!(effects.dependencies().is_empty());
     } else {
         let package_digest = user_1

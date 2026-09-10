@@ -9,6 +9,10 @@
 use async_graphql::connection::CursorType;
 use serde_json::json;
 use sui_indexer_alt_graphql::CheckpointToken;
+use sui_rpc::field::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2::ListCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use tokio_stream::StreamExt;
 
 use crate::testing::SubscriptionTestCluster;
@@ -477,9 +481,43 @@ async fn test_subscription_recovers_from_upstream_disconnect() {
 
 #[tokio::test]
 async fn test_subscription_resume_with_after_cursor() {
-    let cluster = SubscriptionTestCluster::new().await;
+    let (cluster, proxy) = SubscriptionTestCluster::new_with_disruption_proxy().await;
+    let mut healthy = cluster
+        .subscribe("subscription { checkpoints { node { sequenceNumber } } }")
+        .await;
+    checkpoint_seq(&healthy.next().await.unwrap());
+    drop(healthy);
 
-    let resume_seq = cluster.validator_checkpoint_tip();
+    proxy.block_connections();
+    proxy.disconnect_all();
+
+    // Execution can lead the RPC index. Require the backfill API to serve the next
+    // checkpoint before subscribing, rather than handing an empty scan back to blocked live.
+    let resume_seq = cluster.validator_checkpoint_tip() + 1;
+    let mut client = LedgerServiceClient::connect(cluster.validator.rpc_url().to_string())
+        .await
+        .unwrap();
+    let mut request = ListCheckpointsRequest::default();
+    request.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    request.start_checkpoint = Some(resume_seq + 1);
+    request.end_checkpoint = Some(resume_seq + 2);
+    tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        loop {
+            let mut checkpoints = client
+                .list_checkpoints(request.clone())
+                .await
+                .unwrap()
+                .into_inner();
+            while let Some(response) = checkpoints.message().await.unwrap() {
+                if response.checkpoint.is_some() {
+                    return;
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .expect("RPC index did not advance beyond the resume point");
     let cursor = CheckpointToken::cursor(resume_seq).encode_cursor();
     let query = format!(
         r#"subscription {{ checkpoints(after: "{cursor}") {{ node {{ sequenceNumber }} }} }}"#,
@@ -487,6 +525,7 @@ async fn test_subscription_resume_with_after_cursor() {
     let mut stream = cluster.subscribe(&query).await;
 
     let first = checkpoint_seq(&stream.next().await.unwrap());
+    proxy.allow_connections();
     let second = checkpoint_seq(&stream.next().await.unwrap());
     assert_eq!(first, resume_seq + 1);
     assert_eq!(second, first + 1);

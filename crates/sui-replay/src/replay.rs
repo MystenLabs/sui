@@ -1748,13 +1748,12 @@ impl LocalExec {
         // correct transaction dependency for a deleted shared object.
         if !deleted_shared_objects.is_empty() {
             if ProtocolConfig::get_for_version(tx_info.protocol_version, tx_info.chain)
-                .disable_effects_dependencies()
+                .disable_effects_tx_dependencies()
             {
                 return Err(ReplayEngineError::GeneralError {
                     err:
                         "Legacy JSON-RPC replay cannot resolve deleted shared-object predecessors \
-                          when effects dependencies are disabled; use sui-replay-2 with object \
-                          metadata instead."
+                          when effects dependencies are disabled."
                             .to_string(),
                 });
             }

@@ -1275,7 +1275,7 @@ struct FeatureFlags {
 
     // Keep the effects wire representation, but stop collecting transaction dependencies.
     #[serde(skip_serializing_if = "is_false")]
-    disable_effects_dependencies: bool,
+    disable_effects_tx_dependencies: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4744,7 +4744,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.charge_ld_const_abstract_size = true;
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
-                        cfg.feature_flags.disable_effects_dependencies = true;
+                        cfg.feature_flags.disable_effects_tx_dependencies = true;
                     }
                     cfg.reserve_object_funds_for_withdrawal_cost_base = Some(52);
                     // Equivalent to the fixed portion of a dynamic-field lookup (52 + 52) plus

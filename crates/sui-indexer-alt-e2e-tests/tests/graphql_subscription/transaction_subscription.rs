@@ -345,7 +345,7 @@ async fn test_transaction_subscription_field_coverage() {
         node.state()
             .load_epoch_store_one_call_per_task()
             .protocol_config()
-            .disable_effects_dependencies()
+            .disable_effects_tx_dependencies()
     });
     let snapshot = if dependencies_disabled {
         "transaction_subscription_field_coverage_without_dependencies"

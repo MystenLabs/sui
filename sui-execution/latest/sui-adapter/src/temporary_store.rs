@@ -545,7 +545,7 @@ impl<'backing> TemporaryStore<'backing> {
         let accumulator_running_max_withdraws = self.calculate_accumulator_running_max_withdraws();
         self.merge_accumulator_events();
 
-        if !self.protocol_config.disable_effects_dependencies() {
+        if !self.protocol_config.disable_effects_tx_dependencies() {
             // Even on abort, successfully receiving an object creates a dependency.
             for (id, expected_version, expected_digest) in &self.receiving_objects {
                 if let Some(obj_meta) = self.loaded_runtime_objects.get(id) {

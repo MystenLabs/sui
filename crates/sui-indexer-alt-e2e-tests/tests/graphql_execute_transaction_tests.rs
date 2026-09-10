@@ -672,7 +672,7 @@ async fn test_execute_transaction_effects_json() {
         node.state()
             .load_epoch_store_one_call_per_task()
             .protocol_config()
-            .disable_effects_dependencies()
+            .disable_effects_tx_dependencies()
     });
     let snapshot = if dependencies_disabled {
         "execute_transaction_effects_json_without_dependencies"

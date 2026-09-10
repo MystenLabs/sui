@@ -124,21 +124,16 @@ async fn richer_payload_paces_slower() {
     let mut lean = cluster
         .subscribe_with_variables(LEAN_QUERY, Some(json!({ "after": 0 })))
         .await;
-    let lean_total = collect_next_n_arrivals(&mut lean, 4)
-        .await
-        .last()
-        .unwrap()
-        .0;
+    // Compare arrival gaps, excluding startup/backfill latency before the first payload.
+    let lean_arrivals = collect_next_n_arrivals(&mut lean, 4).await;
+    let lean_total = lean_arrivals.last().unwrap().0 - lean_arrivals.first().unwrap().0;
     drop(lean);
 
     let mut rich = cluster
         .subscribe_with_variables(RICH_QUERY, Some(json!({ "after": 0 })))
         .await;
-    let rich_total = collect_next_n_arrivals(&mut rich, 4)
-        .await
-        .last()
-        .unwrap()
-        .0;
+    let rich_arrivals = collect_next_n_arrivals(&mut rich, 4).await;
+    let rich_total = rich_arrivals.last().unwrap().0 - rich_arrivals.first().unwrap().0;
 
     assert!(
         rich_total > lean_total + Duration::from_secs(1),

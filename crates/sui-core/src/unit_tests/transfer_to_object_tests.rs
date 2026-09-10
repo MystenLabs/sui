@@ -79,19 +79,20 @@ macro_rules! transfer_test_runner {
     };
 }
 
-fn effects_dependencies_protocol_config(disable_effects_dependencies: bool) -> ProtocolConfig {
+fn effects_dependencies_protocol_config(disable_effects_tx_dependencies: bool) -> ProtocolConfig {
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config.set_disable_effects_dependencies_for_testing(disable_effects_dependencies);
+    protocol_config
+        .set_disable_effects_tx_dependencies_for_testing(disable_effects_tx_dependencies);
     protocol_config
 }
 
 fn assert_effects_dependencies(
-    disable_effects_dependencies: bool,
+    disable_effects_tx_dependencies: bool,
     effects: &TransactionEffects,
     expected: impl IntoIterator<Item = TransactionDigest>,
 ) {
-    if disable_effects_dependencies {
+    if disable_effects_tx_dependencies {
         assert!(effects.dependencies().is_empty());
     } else {
         let expected = expected
@@ -1089,9 +1090,9 @@ async fn test_tto_not_locked() {
 
 #[tokio::test]
 async fn test_tto_valid_dependencies() {
-    for disable_effects_dependencies in [false, true] {
+    for disable_effects_tx_dependencies in [false, true] {
         transfer_test_runner! {
-            protocol_config: effects_dependencies_protocol_config(disable_effects_dependencies),
+            protocol_config: effects_dependencies_protocol_config(disable_effects_tx_dependencies),
             gas_objects: 3,
             |mut runner: TestRunner| async move {
             let effects = runner
@@ -1169,7 +1170,7 @@ async fn test_tto_valid_dependencies() {
             assert!(effects.unwrapped_then_deleted().is_empty());
             assert!(effects.wrapped().is_empty());
             assert_effects_dependencies(
-                disable_effects_dependencies,
+                disable_effects_tx_dependencies,
                 &effects,
                 [
                     parent_digest,
@@ -1493,9 +1494,9 @@ async fn test_tto_dependencies_dont_receive_but_abort() {
 
 #[tokio::test]
 async fn test_tto_dependencies_receive_and_abort() {
-    for disable_effects_dependencies in [false, true] {
+    for disable_effects_tx_dependencies in [false, true] {
         transfer_test_runner! {
-            protocol_config: effects_dependencies_protocol_config(disable_effects_dependencies),
+            protocol_config: effects_dependencies_protocol_config(disable_effects_tx_dependencies),
             gas_objects: 3,
             |mut runner: TestRunner| async move {
             let effects = runner
@@ -1574,7 +1575,7 @@ async fn test_tto_dependencies_receive_and_abort() {
             assert!(effects.unwrapped_then_deleted().is_empty());
             assert!(effects.wrapped().is_empty());
             assert_effects_dependencies(
-                disable_effects_dependencies,
+                disable_effects_tx_dependencies,
                 &effects,
                 [
                     parent_digest,
@@ -1601,9 +1602,9 @@ async fn test_tto_dependencies_receive_and_abort() {
 
 #[tokio::test]
 async fn test_tto_dependencies_receive_and_type_mismatch() {
-    for disable_effects_dependencies in [false, true] {
+    for disable_effects_tx_dependencies in [false, true] {
         transfer_test_runner! {
-            protocol_config: effects_dependencies_protocol_config(disable_effects_dependencies),
+            protocol_config: effects_dependencies_protocol_config(disable_effects_tx_dependencies),
             gas_objects: 3,
             |mut runner: TestRunner| async move {
             let effects = runner
@@ -1689,7 +1690,7 @@ async fn test_tto_dependencies_receive_and_type_mismatch() {
             assert!(effects.unwrapped_then_deleted().is_empty());
             assert!(effects.wrapped().is_empty());
             assert_effects_dependencies(
-                disable_effects_dependencies,
+                disable_effects_tx_dependencies,
                 &effects,
                 [
                     parent_digest,
@@ -1716,9 +1717,9 @@ async fn test_tto_dependencies_receive_and_type_mismatch() {
 
 #[tokio::test]
 async fn receive_and_dof_interleave() {
-    for disable_effects_dependencies in [false, true] {
+    for disable_effects_tx_dependencies in [false, true] {
         transfer_test_runner! {
-            protocol_config: effects_dependencies_protocol_config(disable_effects_dependencies),
+            protocol_config: effects_dependencies_protocol_config(disable_effects_tx_dependencies),
             gas_objects: 3,
             |mut runner: TestRunner| async move {
             // step 1 & 2
@@ -1802,7 +1803,7 @@ async fn receive_and_dof_interleave() {
             assert!(recv_effects.status().is_ok());
             // The object was loaded through the dynamic field rather than received.
             assert!(!recv_effects.dependencies().contains(init_digest));
-            if disable_effects_dependencies {
+            if disable_effects_tx_dependencies {
                 assert!(recv_effects.dependencies().is_empty());
             }
             }
