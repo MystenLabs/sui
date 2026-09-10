@@ -143,13 +143,17 @@ impl TransactionVoteTracker {
     }
 
     /// Retrieves own votes on peer block transactions.
+    /// Every input block must be above the vote tracker GC round.
     pub(crate) fn get_own_votes(&self, block_refs: Vec<BlockRef>) -> Vec<BlockTransactionVotes> {
         let mut votes = vec![];
         let vote_tracker_state = self.vote_tracker_state.read();
         for block_ref in block_refs {
-            if block_ref.round <= vote_tracker_state.gc_round {
-                continue;
-            }
+            assert!(
+                block_ref.round > vote_tracker_state.gc_round,
+                "Transaction vote target {} is at or below vote tracker GC round {}",
+                block_ref,
+                vote_tracker_state.gc_round,
+            );
             let vote_info = vote_tracker_state.votes.get(&block_ref).unwrap_or_else(|| {
                 panic!(
                     "Ancestor block {} not found in vote tracker state",
