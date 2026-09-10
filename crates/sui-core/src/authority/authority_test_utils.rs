@@ -167,9 +167,6 @@ pub async fn submit_and_execute_with_error(
     let executable =
         VerifiedExecutableTransaction::new_from_consensus(verified_tx, epoch_store.epoch());
 
-    // This also assigns the accumulator root's version when accumulators are enabled, even if
-    // the transaction has no shared inputs. So we should always call this, whether or not there
-    // are shared objects present in the transaction.
     let versions = authority
         .epoch_store_for_testing()
         .assign_shared_object_versions_for_tests(
@@ -181,6 +178,13 @@ pub async fn submit_and_execute_with_error(
         .get(&executable.key())
         .cloned()
         .unwrap_or_else(AssignedVersions::empty);
+    // This executes directly, so it attaches the accumulator root version itself: the
+    // helper assigns none, and execution reads the root implicitly for object funds
+    // withdraws, even when the transaction has no shared inputs.
+    let assigned_versions = match authority.accumulator_version_for_testing() {
+        Some(version) => assigned_versions.with_accumulator_version(version),
+        None => assigned_versions,
+    };
 
     // State accumulator for validation
     let state_acc =
