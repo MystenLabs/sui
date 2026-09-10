@@ -21,6 +21,7 @@ use fastcrypto::{
     error::FastCryptoError,
     traits::{EncodeDecodeBase64, ToFromBytes},
 };
+use fastcrypto_pq::mldsa65::{MLDSA65PublicKey, MLDSA65Signature};
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId, OIDCProvider};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use imbl::hashmap::HashMap as ImHashMap;
@@ -41,6 +42,7 @@ pub struct VerifyParams {
     pub verify_legacy_zklogin_address: bool,
     pub accept_zklogin_in_multisig: bool,
     pub accept_passkey_in_multisig: bool,
+    pub accept_mldsa65_in_multisig: bool,
     pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
     pub additional_multisig_checks: bool,
     pub validate_zklogin_public_identifier: bool,
@@ -55,6 +57,7 @@ impl VerifyParams {
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
         accept_passkey_in_multisig: bool,
+        accept_mldsa65_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
         additional_multisig_checks: bool,
         validate_zklogin_public_identifier: bool,
@@ -67,6 +70,7 @@ impl VerifyParams {
             verify_legacy_zklogin_address,
             accept_zklogin_in_multisig,
             accept_passkey_in_multisig,
+            accept_mldsa65_in_multisig,
             zklogin_max_epoch_upper_bound_delta,
             additional_multisig_checks,
             validate_zklogin_public_identifier,
@@ -165,6 +169,14 @@ impl GenericSignature {
                         })?)
                             .into(),
                     )),
+                    SignatureScheme::MLDSA65 => Ok(CompressedSignature::MLDSA65(Box::new(
+                        (&MLDSA65Signature::from_bytes(bytes).map_err(|_| {
+                            SuiErrorKind::InvalidSignature {
+                                error: "Cannot parse mldsa65 sig".to_string(),
+                            }
+                        })?)
+                            .into(),
+                    ))),
                     SignatureScheme::Secp256r1 | SignatureScheme::PasskeyAuthenticator => {
                         Ok(CompressedSignature::Secp256r1(
                             (&Secp256r1Signature::from_bytes(bytes).map_err(|_| {
@@ -216,6 +228,12 @@ impl GenericSignature {
                         })?)
                             .into(),
                     )),
+                    SignatureScheme::MLDSA65 => Ok(PublicKey::MLDSA65(Box::new(
+                        (&MLDSA65PublicKey::from_bytes(bytes).map_err(|_| {
+                            SuiErrorKind::KeyConversionError("Cannot parse mldsa65 pk".to_string())
+                        })?)
+                            .into(),
+                    ))),
                     SignatureScheme::Secp256r1 => Ok(PublicKey::Secp256r1(
                         (&Secp256r1PublicKey::from_bytes(bytes).map_err(|_| {
                             SuiErrorKind::KeyConversionError(

@@ -132,6 +132,7 @@ fn compressed_signature_to_scheme(sig: &CompressedSignature) -> Option<Signature
                 .ok()
                 .map(|native| SignatureScheme::Passkey(PasskeySignature { native }))
         }
+        CompressedSignature::MLDSA65(_) => None,
     }
 }
 
@@ -142,10 +143,7 @@ impl From<&sui_types::multisig::MultiSigPublicKey> for MultisigCommittee {
                 pk.pubkeys()
                     .iter()
                     .map(|(public_key, weight)| MultisigMember {
-                        // ML-DSA-65 members have no GraphQL type yet; render
-                        // them as null rather than reaching the `From` arm.
-                        public_key: (!matches!(public_key, PublicKey::MLDSA65(_)))
-                            .then(|| MultisigMemberPublicKey::from(public_key)),
+                        public_key: MultisigMemberPublicKey::try_from(public_key).ok(),
                         weight: Some(*weight),
                     })
                     .collect(),
@@ -155,9 +153,12 @@ impl From<&sui_types::multisig::MultiSigPublicKey> for MultisigCommittee {
     }
 }
 
-impl From<&PublicKey> for MultisigMemberPublicKey {
-    fn from(pk: &PublicKey) -> Self {
-        match pk {
+impl TryFrom<&PublicKey> for MultisigMemberPublicKey {
+    type Error = anyhow::Error;
+
+    /// Fails for member schemes with no GraphQL representation yet.
+    fn try_from(pk: &PublicKey) -> Result<Self, Self::Error> {
+        Ok(match pk {
             PublicKey::Ed25519(_) => MultisigMemberPublicKey::Ed25519(Ed25519PublicKey {
                 bytes: Some(Base64(pk.as_ref().to_vec())),
             }),
@@ -182,10 +183,8 @@ impl From<&PublicKey> for MultisigMemberPublicKey {
                 )
             }
             PublicKey::MLDSA65(_) => {
-                // Filtered out at the only call site (`MultisigCommittee::from`)
-                // until GraphQL supports the member type.
-                unreachable!("ML-DSA-65 multisig members are filtered before conversion")
+                anyhow::bail!("ML-DSA-65 multisig members have no GraphQL type yet")
             }
-        }
+        })
     }
 }

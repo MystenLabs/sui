@@ -148,13 +148,16 @@ fn get_registry() -> Result<Registry> {
         .trace_value(&mut samples, &generic_sig_multi)
         .unwrap();
 
-    // Traces PublicKey::MLDSA65 so the snapshot pins its BCS variant index.
+    // A hybrid ML-DSA + Ed25519 committee pins the BCS variant index of the
+    // MLDSA65 arms of both PublicKey and CompressedSignature.
     let kp_mldsa = SuiKeyPair::MLDSA65(
         fastcrypto_pq::mldsa65::MLDSA65KeyPair::from_bytes(&[2u8; 32]).unwrap(),
     );
-    let mldsa_committee =
+    let hybrid_pk =
         MultiSigPublicKey::new(vec![kp_mldsa.public(), kp1.public()], vec![1, 1], 2).unwrap();
-    tracer.trace_value(&mut samples, &mldsa_committee).unwrap();
+    let sig_mldsa: GenericSignature = Signature::new_secure(&msg, &kp_mldsa).into();
+    let hybrid_multisig = MultiSig::combine(vec![sig_mldsa, sig1.clone()], hybrid_pk).unwrap();
+    tracer.trace_value(&mut samples, &hybrid_multisig).unwrap();
 
     tracer.trace_value(&mut samples, &sig1).unwrap();
     tracer.trace_value(&mut samples, &sig2).unwrap();

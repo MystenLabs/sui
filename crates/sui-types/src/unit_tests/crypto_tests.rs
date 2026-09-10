@@ -144,7 +144,7 @@ proptest! {
 // test needs it, everything else uses a fresh random keypair.
 const MLDSA65_TEST_SEED: [u8; 32] = [2; 32];
 const MLDSA65_TEST_ADDRESS: &str =
-    "0xa44576e02f83a9e1bddac6fd742a77931d1689d9a61122eb3125dee425f6dd36";
+    "0x687afa13b5510548e8ab9c57b34544c8ade5507559cfb944db0453fae2a68d4c";
 
 fn mldsa65_random_keypair() -> SuiKeyPair {
     SuiKeyPair::MLDSA65(MLDSA65KeyPair::generate(&mut rand::thread_rng()))

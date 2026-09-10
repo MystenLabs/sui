@@ -20,6 +20,7 @@ use fastcrypto::{
     secp256r1::Secp256r1PublicKey,
     traits::{EncodeDecodeBase64, ToFromBytes, VerifyingKey},
 };
+use fastcrypto_pq::mldsa65::{MLDSA65PublicKey, MLDSA65Signature};
 use mysten_common::ZipDebugEqIteratorExt;
 use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
@@ -144,6 +145,16 @@ impl AuthenticatorTrait for MultiSig {
             .into());
         }
 
+        // Same shape as the passkey/zkLogin checks: gates the member *signing*,
+        // not membership, so hybrid committees keep working on their classical
+        // members until the flag turns on.
+        if self.has_mldsa65_sigs() && !verify_params.accept_mldsa65_in_multisig {
+            return Err(SuiErrorKind::InvalidSignature {
+                error: "ML-DSA-65 sig not supported inside multisig".to_string(),
+            }
+            .into());
+        }
+
         let mut weight_sum: u16 = 0;
         let mut hasher = DefaultHash::default();
         bcs::serialize_into(&mut hasher, &value).expect("Message serialization should not fail");
@@ -231,6 +242,33 @@ impl AuthenticatorTrait for MultiSig {
                         &digest,
                         &s.try_into().map_err(|_| SuiErrorKind::InvalidSignature {
                             error: "Invalid r1 signature bytes".to_string(),
+                        })?,
+                    )
+                }
+                CompressedSignature::MLDSA65(s) => {
+                    if verify_params.additional_multisig_checks
+                        && !matches!(subsig_pubkey.scheme(), SignatureScheme::MLDSA65)
+                    {
+                        return Err(SuiErrorKind::InvalidSignature {
+                            error: format!(
+                                "Invalid sig for pk={} address={:?} error=signature/pubkey type mismatch",
+                                subsig_pubkey.encode_base64(),
+                                SuiAddress::from(subsig_pubkey)
+                            ),
+                        }.into());
+                    }
+                    let pk =
+                        MLDSA65PublicKey::from_bytes(subsig_pubkey.as_ref()).map_err(|_| {
+                            SuiErrorKind::InvalidSignature {
+                                error: "Invalid mldsa65 pk bytes".to_string(),
+                            }
+                        })?;
+                    pk.verify(
+                        &digest,
+                        &MLDSA65Signature::from_bytes(&s.0).map_err(|_| {
+                            SuiErrorKind::InvalidSignature {
+                                error: "Invalid mldsa65 signature bytes".to_string(),
+                            }
                         })?,
                     )
                 }
@@ -448,6 +486,12 @@ impl MultiSig {
         self.sigs
             .iter()
             .any(|s| matches!(s, CompressedSignature::ZkLogin(_)))
+    }
+
+    pub fn has_mldsa65_sigs(&self) -> bool {
+        self.sigs
+            .iter()
+            .any(|s| matches!(s, CompressedSignature::MLDSA65(_)))
     }
 }
 

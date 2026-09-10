@@ -37,6 +37,7 @@ pub use fastcrypto::traits::{
 };
 use fastcrypto_pq::mldsa65::{
     MLDSA65KeyPair, MLDSA65PublicKey, MLDSA65PublicKeyAsBytes, MLDSA65Signature,
+    MLDSA65SignatureAsBytes,
 };
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
@@ -1848,7 +1849,7 @@ impl SignatureScheme {
             SignatureScheme::BLS12381 => 0x04, // This is currently not supported for user Sui Address.
             SignatureScheme::ZkLoginAuthenticator => 0x05,
             SignatureScheme::PasskeyAuthenticator => 0x06,
-            SignatureScheme::MLDSA65 => 0x07,
+            SignatureScheme::MLDSA65 => 0x08,
         }
     }
 
@@ -1868,7 +1869,7 @@ impl SignatureScheme {
             0x04 => Ok(SignatureScheme::BLS12381),
             0x05 => Ok(SignatureScheme::ZkLoginAuthenticator),
             0x06 => Ok(SignatureScheme::PasskeyAuthenticator),
-            0x07 => Ok(SignatureScheme::MLDSA65),
+            0x08 => Ok(SignatureScheme::MLDSA65),
             _ => Err(SuiErrorKind::KeyConversionError("Invalid key scheme".to_string()).into()),
         }
     }
@@ -1881,6 +1882,9 @@ pub enum CompressedSignature {
     Secp256r1(Secp256r1SignatureAsBytes),
     ZkLogin(ZkLoginAuthenticatorAsBytes),
     Passkey(PasskeyAuthenticatorAsBytes),
+    // Boxed and schema-skipped for the same reasons as `PublicKey::MLDSA65`.
+    #[schemars(skip)]
+    MLDSA65(Box<MLDSA65SignatureAsBytes>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -1897,6 +1901,7 @@ impl AsRef<[u8]> for CompressedSignature {
             CompressedSignature::Secp256r1(sig) => &sig.0,
             CompressedSignature::ZkLogin(sig) => &sig.0,
             CompressedSignature::Passkey(sig) => &sig.0,
+            CompressedSignature::MLDSA65(sig) => &sig.0,
         }
     }
 }

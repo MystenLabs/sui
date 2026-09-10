@@ -72,6 +72,8 @@ struct ZkLoginParams {
     pub accept_zklogin_in_multisig: bool,
     // Flag to determine whether passkey inside multisig is accepted.
     pub accept_passkey_in_multisig: bool,
+    /// Flag to determine whether ML-DSA-65 inside multisig is accepted.
+    pub accept_mldsa65_in_multisig: bool,
     /// Value that sets the upper bound for max_epoch in zkLogin signature.
     pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
     /// Flag to determine whether additional multisig checks are performed.
@@ -91,6 +93,7 @@ impl SignatureVerifier {
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
         accept_passkey_in_multisig: bool,
+        accept_mldsa65_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
         additional_multisig_checks: bool,
         validate_zklogin_public_identifier: bool,
@@ -119,6 +122,7 @@ impl SignatureVerifier {
                 verify_legacy_zklogin_address,
                 accept_zklogin_in_multisig,
                 accept_passkey_in_multisig,
+                accept_mldsa65_in_multisig,
                 zklogin_max_epoch_upper_bound_delta,
                 additional_multisig_checks,
                 validate_zklogin_public_identifier,
@@ -233,6 +237,7 @@ impl SignatureVerifier {
             self.zk_login_params.verify_legacy_zklogin_address,
             self.zk_login_params.accept_zklogin_in_multisig,
             self.zk_login_params.accept_passkey_in_multisig,
+            self.zk_login_params.accept_mldsa65_in_multisig,
             self.zk_login_params.zklogin_max_epoch_upper_bound_delta,
             self.zk_login_params.additional_multisig_checks,
             self.zk_login_params.validate_zklogin_public_identifier,
