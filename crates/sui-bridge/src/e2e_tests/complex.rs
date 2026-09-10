@@ -59,22 +59,30 @@ async fn test_sui_bridge_paused() {
     initiate_bridge_eth_to_sui(&bridge_test_cluster, 10, 0)
         .await
         .unwrap();
-    // verify Eth was transferred to Sui address
     let eth_coin_type = sui_token_type_tags.get(&TOKEN_ID_ETH).unwrap();
-    let eth_coin = bridge_test_cluster
-        .test_cluster
-        .inner
-        .grpc_client()
-        .get_owned_objects(
-            sui_address,
-            Some(Coin::type_(eth_coin_type.clone())),
-            None,
-            None,
-        )
-        .await
-        .unwrap()
-        .items;
-    assert_eq!(1, eth_coin.len());
+    // Claim status is live state; the typed owned-object query waits for checkpoint indexing.
+    let eth_coin = tokio::time::timeout(std::time::Duration::from_secs(60), async {
+        loop {
+            let eth_coins = bridge_test_cluster
+                .grpc_client()
+                .get_owned_objects(
+                    sui_address,
+                    Some(Coin::type_(eth_coin_type.clone())),
+                    None,
+                    None,
+                )
+                .await
+                .unwrap()
+                .items;
+            if !eth_coins.is_empty() {
+                assert_eq!(1, eth_coins.len());
+                break eth_coins.into_iter().next().unwrap();
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+    })
+    .await
+    .expect("ETH coin was claimed but not indexed");
 
     // get pause bridge signatures from committee
     let bridge_committee = Arc::new(bridge_client.get_bridge_committee().await.unwrap());
@@ -127,7 +135,7 @@ async fn test_sui_bridge_paused() {
     let sui_to_eth_bridge_action = initiate_bridge_sui_to_eth(
         &bridge_test_cluster,
         EthAddress::random(),
-        eth_coin.first().unwrap().compute_object_reference(),
+        eth_coin.compute_object_reference(),
         0,
         10,
     )
