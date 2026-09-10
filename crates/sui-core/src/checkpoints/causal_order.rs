@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use sui_types::base_types::TransactionDigest;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{InputConsensusObject, TransactionEffects};
 use sui_types::storage::ObjectKey;
@@ -58,46 +58,81 @@ impl CausalOrder {
         this.into_list()
     }
 
-    /// Experimental: checks whether `effects` already satisfies every ordering constraint
-    /// that `causal_sort` would enforce, i.e. explicit effects dependencies plus the
-    /// synthesized RWLock edges (writer of version N+1 after readers of version N).
-    /// Returns a description of the first violation found.
+    /// Experimental: checks, using only object versions recorded in effects (never
+    /// `dependencies()`), that `effects` in the given order is a valid causal order:
+    ///
+    /// (a) no transaction reads an object version that is written by a later transaction;
+    /// (b) once a transaction in the batch has written an object, every later input of that
+    ///     object reads the most recently written version.
+    ///
+    /// (b) subsumes the RWLock rule: a read-only reader of version N must precede the writer
+    /// that produces N+1. Reads of immutable objects and packages are not recorded in effects
+    /// and are therefore not checked. Returns a description of the first violation found.
     pub fn check_already_sorted(effects: &[TransactionEffects]) -> Result<(), String> {
-        let position: HashMap<TransactionDigest, usize> = effects
-            .iter()
-            .enumerate()
-            .map(|(i, e)| (*e.transaction_digest(), i))
-            .collect();
-        let rwlock_builder = RWLockDependencyBuilder::from_effects(effects);
-        let mut seen: HashSet<TransactionDigest> = HashSet::with_capacity(effects.len());
-
+        let mut written_at: HashMap<ObjectKey, usize> = HashMap::new();
         for (idx, e) in effects.iter().enumerate() {
-            let digest = *e.transaction_digest();
-            let violation = |kind: &str, dep: &TransactionDigest| {
-                format!(
-                    "{kind}: tx {digest:?} at index {idx} depends on {dep:?} at index {:?}, \
-                     which appears later in the batch",
-                    position.get(dep)
-                )
-            };
+            for key in Self::output_versions(e) {
+                written_at.insert(key, idx);
+            }
+        }
 
-            for dep in e.dependencies() {
-                if position.contains_key(dep) && !seen.contains(dep) {
-                    return Err(violation("effects dependency", dep));
+        let mut latest_written: HashMap<ObjectID, (SequenceNumber, usize)> = HashMap::new();
+        for (idx, e) in effects.iter().enumerate() {
+            let digest = e.transaction_digest();
+            for key in Self::input_versions(e) {
+                if let Some(&writer) = written_at.get(&key)
+                    && writer > idx
+                {
+                    return Err(format!(
+                        "later writer: tx {digest:?} at index {idx} reads {key:?}, which is \
+                         written by tx at index {writer}"
+                    ));
+                }
+                if let Some(&(latest, writer)) = latest_written.get(&key.0)
+                    && latest != key.1
+                {
+                    return Err(format!(
+                        "stale read: tx {digest:?} at index {idx} reads {key:?}, but tx at \
+                         index {writer} already wrote version {latest:?}"
+                    ));
                 }
             }
-
-            let mut rw_deps = BTreeSet::new();
-            rwlock_builder.add_dependencies_for(digest, &mut rw_deps);
-            for dep in &rw_deps {
-                if *dep != digest && !seen.contains(dep) {
-                    return Err(violation("rwlock edge", dep));
-                }
+            for key in Self::output_versions(e) {
+                latest_written.insert(key.0, (key.1, idx));
             }
-
-            seen.insert(digest);
         }
         Ok(())
+    }
+
+    fn input_versions(e: &TransactionEffects) -> impl Iterator<Item = ObjectKey> + '_ {
+        e.modified_at_versions()
+            .into_iter()
+            .map(|(id, v)| ObjectKey(id, v))
+            .chain(
+                e.accessed_consensus_objects()
+                    .into_iter()
+                    .filter_map(|kind| match kind {
+                        InputConsensusObject::Mutate(r) | InputConsensusObject::ReadOnly(r) => {
+                            Some(ObjectKey(r.0, r.1))
+                        }
+                        InputConsensusObject::ReadConsensusStreamEnded(id, v)
+                        | InputConsensusObject::MutateConsensusStreamEnded(id, v) => {
+                            Some(ObjectKey(id, v))
+                        }
+                        InputConsensusObject::Cancelled(..) => None,
+                    }),
+            )
+    }
+
+    fn output_versions(e: &TransactionEffects) -> impl Iterator<Item = ObjectKey> + '_ {
+        e.all_changed_objects()
+            .into_iter()
+            .map(|(r, _, _)| ObjectKey(r.0, r.1))
+            .chain(
+                e.all_removed_objects()
+                    .into_iter()
+                    .map(|(r, _)| ObjectKey(r.0, r.1)),
+            )
     }
 
     fn from_vec(effects: Vec<TransactionEffects>) -> Self {
@@ -340,28 +375,88 @@ mod tests {
 
     #[test]
     pub fn test_check_already_sorted() {
-        let e2 = e(d(2), vec![d(3)]);
-        let e3 = e(d(3), vec![]);
-        assert!(CausalOrder::check_already_sorted(&[e3.clone(), e2.clone()]).is_ok());
-        let err = CausalOrder::check_already_sorted(&[e2, e3]).unwrap_err();
-        assert!(err.starts_with("effects dependency"), "{err}");
+        // writer produces (o1, 5); consumer mutates (o1, 5) -> (o1, 7).
+        let writer = tx(d(1), 5, &[(o(1), 3)], &[]);
+        let consumer = tx(d(2), 7, &[(o(1), 5)], &[]);
+        assert!(CausalOrder::check_already_sorted(&[writer.clone(), consumer.clone()]).is_ok());
+        let err = CausalOrder::check_already_sorted(&[consumer, writer.clone()]).unwrap_err();
+        assert!(err.starts_with("later writer"), "{err}");
 
-        let mut reader = e(d(5), vec![]);
-        let mut writer = e(d(3), vec![]);
+        // read-only reader of (o1, 5) must precede the tx that overwrites it.
+        let reader = tx(d(3), 6, &[], &[(o(1), 5)]);
+        let overwriter = tx(d(4), 8, &[(o(1), 5)], &[]);
+        assert!(
+            CausalOrder::check_already_sorted(&[
+                writer.clone(),
+                reader.clone(),
+                overwriter.clone()
+            ])
+            .is_ok()
+        );
+        let err =
+            CausalOrder::check_already_sorted(&[writer.clone(), overwriter, reader]).unwrap_err();
+        assert!(err.starts_with("stale read"), "{err}");
+
+        // Readers of a deleted consensus object record the deleting tx's lamport version.
+        let mut deleter = tx(d(5), 9, &[], &[]);
+        deleter.unsafe_add_object_tombstone_for_testing((
+            o(1),
+            SequenceNumber::from_u64(5),
+            ObjectDigest::new(Default::default()),
+        ));
+        let mut ended_reader = tx(d(6), 10, &[], &[]);
+        ended_reader.unsafe_add_input_consensus_object_for_testing(
+            InputConsensusObject::ReadConsensusStreamEnded(o(1), SequenceNumber::from_u64(9)),
+        );
+        assert!(
+            CausalOrder::check_already_sorted(&[
+                writer.clone(),
+                deleter.clone(),
+                ended_reader.clone()
+            ])
+            .is_ok()
+        );
+        let err = CausalOrder::check_already_sorted(&[writer, ended_reader, deleter]).unwrap_err();
+        assert!(err.starts_with("later writer"), "{err}");
+    }
+
+    /// Effects for a tx with the given lamport version that mutates each `(id, input_version)`
+    /// in `mutated` and reads each `(id, version)` in `read_only` as a consensus object.
+    fn tx(
+        digest: TransactionDigest,
+        lamport: u64,
+        mutated: &[(ObjectID, u64)],
+        read_only: &[(ObjectID, u64)],
+    ) -> TransactionEffects {
+        use sui_types::execution_status::ExecutionStatus;
+        use sui_types::gas::GasCostSummary;
+
         let obj_digest = ObjectDigest::new(Default::default());
-        reader.unsafe_add_input_consensus_object_for_testing(InputConsensusObject::ReadOnly((
-            o(1),
-            SequenceNumber::from_u64(1),
-            obj_digest,
-        )));
-        writer.unsafe_add_input_consensus_object_for_testing(InputConsensusObject::Mutate((
-            o(1),
-            SequenceNumber::from_u64(1),
-            obj_digest,
-        )));
-        assert!(CausalOrder::check_already_sorted(&[reader.clone(), writer.clone()]).is_ok());
-        let err = CausalOrder::check_already_sorted(&[writer, reader]).unwrap_err();
-        assert!(err.starts_with("rwlock edge"), "{err}");
+        let mut effects = TransactionEffects::new_from_execution_v2(
+            ExecutionStatus::Success,
+            0,
+            GasCostSummary::default(),
+            vec![],
+            digest,
+            SequenceNumber::from_u64(lamport),
+            Default::default(),
+            None,
+            None,
+            vec![],
+        );
+        for (id, v) in mutated {
+            effects.unsafe_add_deleted_live_object_for_testing((
+                *id,
+                SequenceNumber::from_u64(*v),
+                obj_digest,
+            ));
+        }
+        for (id, v) in read_only {
+            effects.unsafe_add_input_consensus_object_for_testing(InputConsensusObject::ReadOnly(
+                (*id, SequenceNumber::from_u64(*v), obj_digest),
+            ));
+        }
+        effects
     }
 
     fn extract(e: Vec<TransactionEffects>) -> Vec<u8> {
