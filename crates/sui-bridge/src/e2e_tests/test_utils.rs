@@ -34,15 +34,11 @@ use move_core_types::ident_str;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_common::ZipDebugEqIteratorExt;
 use prometheus::Registry;
-use rand::Rng;
-use rand::SeedableRng;
-use rand::rngs::SmallRng;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fs;
-use std::fs::{DirBuilder, File};
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 use std::process::{Child, Command};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -70,10 +66,9 @@ use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
 use tap::TapFallible;
 use tempfile::tempdir;
 use test_cluster::{TestCluster, TestClusterBuilder};
-use tokio::join;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
-use tracing::{error, info};
+use tracing::info;
 
 const BRIDGE_COMMITTEE_NAME: &str = "BridgeCommittee";
 const SUI_BRIDGE_NAME: &str = "SuiBridge";
@@ -94,7 +89,7 @@ pub struct BridgeTestCluster {
     pub num_validators: usize,
     pub test_cluster: TestClusterWrapper,
     bridge_client: SuiBridgeClient,
-    eth_environment: EthBridgeEnvironment,
+    eth_environment: Option<EthBridgeEnvironment>,
     bridge_node_handles: Option<Vec<JoinHandle<()>>>,
     approved_governance_actions_for_next_start: Option<Vec<Vec<BridgeAction>>>,
     events_cursor: Option<u64>,
@@ -177,10 +172,14 @@ impl BridgeTestClusterBuilder {
             bridge_keys_copy.push(kp);
         }
         let start_cluster_task = tokio::task::spawn(Self::start_test_cluster(bridge_keys));
-        let start_eth_env_task = tokio::task::spawn(Self::start_eth_env(bridge_keys_copy));
-        let (start_cluster_res, start_eth_env_res) = join!(start_cluster_task, start_eth_env_task);
-        let test_cluster = start_cluster_res.unwrap();
-        let eth_environment = start_eth_env_res.unwrap();
+        let start_eth_env_task = self
+            .with_eth_env
+            .then(|| tokio::task::spawn(Self::start_eth_env(bridge_keys_copy)));
+        let test_cluster = start_cluster_task.await.unwrap();
+        let eth_environment = match start_eth_env_task {
+            Some(task) => Some(task.await.unwrap()),
+            None => None,
+        };
 
         let mut bridge_node_handles = None;
         if self.with_bridge_cluster {
@@ -189,8 +188,14 @@ impl BridgeTestClusterBuilder {
                 .clone()
                 .unwrap_or(vec![vec![]; self.num_validators]);
             bridge_node_handles = Some(
-                start_bridge_cluster(&test_cluster, &eth_environment, approved_governance_actions)
-                    .await,
+                start_bridge_cluster(
+                    &test_cluster,
+                    eth_environment
+                        .as_ref()
+                        .expect("bridge cluster requires an Ethereum environment"),
+                    approved_governance_actions,
+                )
+                .await,
             );
         }
         let bridge_client =
@@ -253,7 +258,7 @@ impl BridgeTestClusterBuilder {
 
 impl BridgeTestCluster {
     pub fn get_eth_signer_and_private_key(&self) -> anyhow::Result<(EthSignerProvider, String)> {
-        self.eth_environment.get_signer_provider(TEST_PK)
+        self.eth_env().get_signer_provider(TEST_PK)
     }
 
     pub fn get_eth_signer_and_address(&self) -> anyhow::Result<(EthSignerProvider, EthAddress)> {
@@ -289,15 +294,17 @@ impl BridgeTestCluster {
     }
 
     pub fn eth_env(&self) -> &EthBridgeEnvironment {
-        &self.eth_environment
+        self.eth_environment
+            .as_ref()
+            .expect("Ethereum environment was not enabled")
     }
 
     pub fn contracts(&self) -> &DeployedSolContracts {
-        self.eth_environment.contracts()
+        self.eth_env().contracts()
     }
 
     pub fn sui_bridge_address(&self) -> String {
-        self.eth_environment.contracts().sui_bridge_addrress_hex()
+        self.eth_env().contracts().sui_bridge_address_hex()
     }
 
     pub fn wallet_mut(&mut self) -> &mut WalletContext {
@@ -317,7 +324,7 @@ impl BridgeTestCluster {
     }
 
     pub fn eth_rpc_url(&self) -> String {
-        self.eth_environment.rpc_url.clone()
+        self.eth_env().rpc_url.clone()
     }
 
     pub async fn get_mut_bridge_arg(&self) -> Option<ObjectArg> {
@@ -367,7 +374,7 @@ impl BridgeTestCluster {
         self.bridge_node_handles = Some(
             start_bridge_cluster(
                 &self.test_cluster,
-                &self.eth_environment,
+                self.eth_env(),
                 approved_governance_actions,
             )
             .await,
@@ -440,10 +447,14 @@ impl BridgeTestCluster {
         info!("Upgrading SuiBridge to V2...");
         info!("  Proxy address: {:?}", sui_bridge_proxy);
 
-        // Step 1: Deploy SuiBridgeV2 implementation using forge create
+        // Concurrent bridge tests share sources, but must not share Foundry artifacts or caches.
+        let forge_dir = tempdir()?;
         let (_, eth_pk_hex) = self.get_eth_signer_and_private_key()?;
         let output = std::process::Command::new("forge")
             .current_dir(&sol_path)
+            .env("FOUNDRY_OUT", forge_dir.path().join("out"))
+            .env("FOUNDRY_CACHE_PATH", forge_dir.path().join("cache"))
+            .env("FOUNDRY_BROADCAST", forge_dir.path().join("broadcast"))
             .args([
                 "create",
                 "contracts/SuiBridgeV2.sol:SuiBridgeV2",
@@ -553,12 +564,12 @@ pub struct DeployedSolContracts {
 }
 
 impl DeployedSolContracts {
-    pub fn eth_adress_to_hex(addr: EthAddress) -> String {
+    pub fn eth_address_to_hex(addr: EthAddress) -> String {
         format!("{:x}", addr)
     }
 
-    pub fn sui_bridge_addrress_hex(&self) -> String {
-        Self::eth_adress_to_hex(self.sui_bridge)
+    pub fn sui_bridge_address_hex(&self) -> String {
+        Self::eth_address_to_hex(self.sui_bridge)
     }
 }
 
@@ -586,11 +597,8 @@ pub(crate) async fn deploy_sol_contract(
 ) -> DeployedSolContracts {
     let sol_path = format!("{}/../../bridge/evm", env!("CARGO_MANIFEST_DIR"));
 
-    // Write the deploy config to a temp file then provide it to the forge late
-    let deploy_config_path = tempfile::tempdir()
-        .unwrap()
-        .keep()
-        .join("sol_deploy_config.json");
+    let forge_dir = tempdir().unwrap();
+    let deploy_config_path = forge_dir.path().join("sol_deploy_config.json");
     let node_len = bridge_authority_keys.len();
     let stake = TOTAL_VOTING_POWER / (node_len as u64);
     let committee_members = bridge_authority_keys
@@ -632,36 +640,16 @@ pub(crate) async fn deploy_sol_contract(
     let mut file = File::create(deploy_config_path.clone()).unwrap();
     file.write_all(serialized_config.as_bytes()).unwrap();
 
-    // override for the deploy script
-    unsafe {
-        std::env::set_var("OVERRIDE_CONFIG_PATH", deploy_config_path.to_str().unwrap());
-        std::env::set_var("PRIVATE_KEY", eth_private_key_hex);
-        std::env::set_var("ETHERSCAN_API_KEY", "n/a");
-    };
-
-    // We provide a unique out path for each run to avoid conflicts
-    let mut rng = SmallRng::from_entropy();
-    let random_number = rng.r#gen::<u32>();
-    let forge_out_path = PathBuf::from(format!("out-{random_number}"));
-    let _dir = TempDir::new(
-        PathBuf::from(sol_path.clone())
-            .join(forge_out_path.clone())
-            .as_path(),
-    )
-    .unwrap();
-    unsafe {
-        std::env::set_var("FOUNDRY_OUT", forge_out_path.to_str().unwrap());
-    };
-
     info!("Deploying solidity contracts");
-    Command::new("forge")
-        .current_dir(sol_path.clone())
-        .arg("clean")
-        .status()
-        .expect("Failed to execute `forge clean`");
 
-    let mut child = Command::new("forge")
+    let output = Command::new("forge")
         .current_dir(sol_path)
+        .env("OVERRIDE_CONFIG_PATH", deploy_config_path)
+        .env("PRIVATE_KEY", eth_private_key_hex)
+        .env("ETHERSCAN_API_KEY", "n/a")
+        .env("FOUNDRY_OUT", forge_dir.path().join("out"))
+        .env("FOUNDRY_CACHE_PATH", forge_dir.path().join("cache"))
+        .env("FOUNDRY_BROADCAST", forge_dir.path().join("broadcast"))
         .arg("script")
         .arg("script/deploy_bridge.s.sol")
         .arg("--fork-url")
@@ -670,32 +658,16 @@ pub(crate) async fn deploy_sol_contract(
         .arg("--ffi")
         .arg("--chain")
         .arg("31337")
-        .stdout(std::process::Stdio::piped()) // Capture stdout
-        .stderr(std::process::Stdio::piped()) // Capture stderr
-        .spawn()
-        .unwrap();
-
-    let mut stdout = child.stdout.take().expect("Failed to open stdout");
-    let mut stderr = child.stderr.take().expect("Failed to open stderr");
-
-    // Read stdout/stderr to String
-    let mut s = String::new();
-    stdout.read_to_string(&mut s).unwrap();
-    let mut e = String::new();
-    stderr.read_to_string(&mut e).unwrap();
-
-    // Wait for the child process to finish and collect its status
-    let status = child.wait().unwrap();
-    if status.success() {
-        info!("Solidity contract deployment finished successfully");
-    } else {
-        error!(
-            "Solidity contract deployment exited with code: {:?}",
-            status.code()
-        );
-    }
-    println!("Stdout: {}", s);
-    println!("Stdout: {}", e);
+        .output()
+        .expect("Failed to execute Forge deployment");
+    let s = String::from_utf8_lossy(&output.stdout);
+    let e = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "Forge deployment failed ({}):\nstdout:\n{s}\nstderr:\n{e}",
+        output.status
+    );
+    info!("Solidity contract deployment finished successfully");
 
     let mut deployed_contracts = BTreeMap::new();
     // Process the stdout to parse contract addresses
@@ -811,6 +783,7 @@ impl EthBridgeEnvironment {
 impl Drop for EthBridgeEnvironment {
     fn drop(&mut self) {
         self.process.kill().unwrap();
+        self.process.wait().unwrap();
     }
 }
 
@@ -835,7 +808,7 @@ pub(crate) async fn start_bridge_cluster(
         .contracts
         .as_ref()
         .unwrap()
-        .sui_bridge_addrress_hex();
+        .sui_bridge_address_hex();
 
     let mut handles = vec![];
     for (i, ((kp, server_listen_port), approved_governance_actions)) in bridge_authority_keys
@@ -921,30 +894,6 @@ where
 {
     let pending_tx = provider.send_transaction(tx).await.unwrap();
     pending_tx.get_receipt().await.unwrap()
-}
-
-/// A simple struct to create a temporary directory that
-/// will be removed when it goes out of scope.
-struct TempDir {
-    path: PathBuf,
-}
-
-impl TempDir {
-    fn new(dir_path: &Path) -> std::io::Result<TempDir> {
-        DirBuilder::new().recursive(true).create(dir_path)?;
-        Ok(TempDir {
-            path: dir_path.to_path_buf(),
-        })
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        // Use eprintln! here in case logging is not initialized
-        if let Err(e) = fs::remove_dir_all(&self.path) {
-            eprintln!("Failed to remove temp dir: {:?}", e);
-        }
-    }
 }
 
 pub struct TestClusterWrapperBuilder {

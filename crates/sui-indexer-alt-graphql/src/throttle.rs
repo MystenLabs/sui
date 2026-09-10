@@ -198,19 +198,26 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn wrap_includes_depth_surcharge() {
-        // 4-node payloads at query depth 3 each cost 4 + 3 * 2 = 10, so at 20 nodes/sec the gap
-        // between deliveries is 10 / 20 = 0.5s.
+    async fn wrap_paces_payloads_by_size_and_depth() {
         let query_depth = QueryDepth::new_for_test(3);
-        let payload = value!({ "a": 1, "b": 2, "c": 3 }); // 4 output nodes
-        let responses = vec![Response::new(payload.clone()), Response::new(payload)];
+        let lean = value!({ "a": 1, "b": 2, "c": 3 });
+        let rich = value!({ "a": 1, "b": { "c": 2, "d": 3, "e": 4 } });
+        let responses = vec![
+            Response::new(lean.clone()),
+            Response::new(rich.clone()),
+            Response::new(lean.clone()),
+        ];
         let mut paced = Box::pin(throttle(20).wrap(futures::stream::iter(responses), query_depth));
 
         let start = tokio::time::Instant::now();
-        paced.next().await.unwrap();
+        assert_eq!(paced.next().await.unwrap().data, lean);
         assert_eq!(start.elapsed(), Duration::ZERO);
-        paced.next().await.unwrap();
+        // Four output nodes plus depth three cost ten at twenty nodes per second.
+        assert_eq!(paced.next().await.unwrap().data, rich);
         assert_eq!(start.elapsed(), Duration::from_millis(500));
+        // The richer payload has six output nodes and therefore costs twelve.
+        assert_eq!(paced.next().await.unwrap().data, lean);
+        assert_eq!(start.elapsed(), Duration::from_millis(1100));
     }
 
     #[tokio::test(start_paused = true)]

@@ -19,6 +19,7 @@ use serde_json::json;
 use sui_config::RpcConfig;
 use sui_config::rpc_config::LedgerHistoryConfig;
 use sui_futures::service::Service;
+use sui_indexer_alt_e2e_tests::wait_for_kv_packages;
 use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
 use sui_indexer_alt_graphql::args::SubscriptionArgs;
 pub use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
@@ -581,43 +582,4 @@ pub fn transaction_digest(item: &Value) -> Vec<&str> {
         .as_str()
         .into_iter()
         .collect()
-}
-
-/// Poll the kv_packages watermark until it reaches `target_checkpoint`.
-pub async fn wait_for_kv_packages(db: &sui_pg_db::temp::TempDb, target_checkpoint: u64) {
-    use diesel::ExpressionMethods;
-    use diesel::QueryDsl;
-    use sui_indexer_alt_schema::schema::watermarks::dsl as w;
-
-    let reader = sui_indexer_alt_reader::pg_reader::PgReader::new(
-        Some("wait_for_kv_packages"),
-        Some(db.database().url().clone()),
-        DbArgs::default(),
-        &Registry::new(),
-    )
-    .await
-    .expect("Failed to create PgReader");
-
-    tokio::time::timeout(Duration::from_secs(30), async {
-        loop {
-            if let Ok(mut conn) = reader.connect().await
-                && let Ok(hi) = conn
-                    .results(
-                        w::watermarks
-                            .select(w::checkpoint_hi_inclusive)
-                            .filter(w::pipeline.eq("kv_packages")),
-                    )
-                    .await
-                && hi
-                    .first()
-                    .is_some_and(|&cp: &i64| cp as u64 >= target_checkpoint)
-            {
-                return;
-            }
-
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-    })
-    .await
-    .expect("Timed out waiting for kv_packages indexer");
 }
