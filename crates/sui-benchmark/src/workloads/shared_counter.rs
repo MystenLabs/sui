@@ -28,6 +28,10 @@ use tracing::{debug, error, info};
 /// The max amount of gas units needed for a payload.
 pub const MAX_GAS_IN_UNIT: u64 = 1_000_000_000;
 
+fn base_gas_price(rgp: u64, multiplier: f64) -> u64 {
+    (rgp as f64 * multiplier).round() as u64
+}
+
 #[derive(Debug)]
 pub struct SharedCounterTestPayload {
     package_id: ObjectID,
@@ -35,6 +39,7 @@ pub struct SharedCounterTestPayload {
     counter_initial_shared_version: SequenceNumber,
     gas: Gas,
     max_tip_amount: u64,
+    gas_price_multiplier: f64,
     system_state_observer: Arc<SystemStateObserver>,
 }
 
@@ -63,7 +68,7 @@ impl Payload for SharedCounterTestPayload {
         } else {
             rand::thread_rng().gen_range(0..self.max_tip_amount)
         };
-        let gas_price = rgp + gas_price_increment;
+        let gas_price = base_gas_price(rgp, self.gas_price_multiplier) + gas_price_increment;
         TestTransactionBuilder::new(self.gas.1, self.gas.0, gas_price)
             .call_counter_increment(
                 self.package_id,
@@ -83,6 +88,7 @@ pub struct SharedCounterWorkloadBuilder {
     num_counters: u64,
     num_payloads: u64,
     max_tip_amount: u64,
+    gas_price_multiplier: f64,
     rgp: u64,
 }
 
@@ -95,6 +101,7 @@ impl SharedCounterWorkloadBuilder {
         shared_counter_hotness_factor: u32,
         num_shared_counters: Option<u64>,
         shared_counter_max_tip_amount: u64,
+        shared_counter_gas_price_multiplier: f64,
         reference_gas_price: u64,
         duration: Interval,
         group: u32,
@@ -123,6 +130,7 @@ impl SharedCounterWorkloadBuilder {
                     num_counters: num_shared_counters,
                     num_payloads: max_ops,
                     max_tip_amount: shared_counter_max_tip_amount,
+                    gas_price_multiplier: shared_counter_gas_price_multiplier,
                     rgp: reference_gas_price,
                 },
             ));
@@ -161,7 +169,8 @@ impl WorkloadBuilder<dyn Payload> for SharedCounterWorkloadBuilder {
     }
     async fn generate_coin_config_for_payloads(&self) -> Vec<GasCoinConfig> {
         let mut configs = vec![];
-        let amount = MAX_GAS_IN_UNIT * (self.rgp + self.max_tip_amount)
+        let amount = MAX_GAS_IN_UNIT
+            * (base_gas_price(self.rgp, self.gas_price_multiplier) + self.max_tip_amount)
             + ESTIMATED_COMPUTATION_COST
             + STORAGE_COST_PER_COUNTER * self.num_counters;
         // Gas coins for running workload
@@ -186,6 +195,7 @@ impl WorkloadBuilder<dyn Payload> for SharedCounterWorkloadBuilder {
             init_gas,
             payload_gas,
             max_tip_amount: self.max_tip_amount,
+            gas_price_multiplier: self.gas_price_multiplier,
         }))
     }
 }
@@ -197,6 +207,7 @@ pub struct SharedCounterWorkload {
     pub init_gas: Vec<Gas>,
     pub payload_gas: Vec<Gas>,
     pub max_tip_amount: u64,
+    pub gas_price_multiplier: f64,
 }
 
 #[async_trait]
@@ -269,6 +280,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 gas: g.clone(),
                 system_state_observer: system_state_observer.clone(),
                 max_tip_amount: self.max_tip_amount,
+                gas_price_multiplier: self.gas_price_multiplier,
             }));
         }
         let payloads: Vec<Box<dyn Payload>> = shared_payloads

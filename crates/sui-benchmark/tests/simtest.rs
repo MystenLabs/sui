@@ -641,6 +641,7 @@ mod test {
             // Use shared_counter_max_tip to make transactions to have different gas prices.
             simulated_load_config.use_shared_counter_max_tip = rng.gen_bool(0.25);
             simulated_load_config.shared_counter_max_tip = rng.gen_range(1..=1000);
+            simulated_load_config.shared_counter_gas_price_multiplier = rng.gen_range(1.0..=10.0);
 
             // Always enable the randomized tx workload in this test.
             simulated_load_config.randomized_transaction_weight = 1;
@@ -1189,6 +1190,7 @@ mod test {
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
+        shared_counter_gas_price_multiplier: f64,
         expected_failure_weight: u32,
         expected_failure_config: ExpectedFailurePayloadCfg,
         party_weight: u32,
@@ -1218,6 +1220,7 @@ mod test {
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
+                shared_counter_gas_price_multiplier: 1.0,
                 expected_failure_weight: 0,
                 expected_failure_config: ExpectedFailurePayloadCfg {
                     failure_type: ExpectedFailureType::try_from(0).unwrap(),
@@ -1455,6 +1458,7 @@ mod test {
             shared_counter_hotness_factor: config.shared_counter_hotness_factor,
             num_shared_counters: config.num_shared_counters,
             shared_counter_max_tip,
+            shared_counter_gas_price_multiplier: config.shared_counter_gas_price_multiplier,
             num_contested_objects: config.num_contested_objects,
             randomized_transaction_concurrency: config.randomized_transaction_concurrency,
             target_qps,
