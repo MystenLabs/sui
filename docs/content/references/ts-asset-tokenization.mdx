@@ -50,8 +50,8 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   Generates an `AssetCap` for each new asset represented as a fractional NFT. In most scenarios, create it as an owned object, which you can then transfer to the platform administrator for access-restricted method invocation.
 
-  ```rust
-  struct AssetCap<phantom T> {
+  ```move
+  public struct AssetCap<phantom T> {
       id: UID,
       // the current supply in circulation
       supply: Supply<T>,
@@ -210,7 +210,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   An internal helper function that populates a `VecMap<String, String>`. It assists in the process of filling key-value pairs within the `VecMap` data structure.
 
-  ```rust
+  ```move
   fun create_vec_map_from_arrays(
           keys: vector<String>,
           values: vector<String>
@@ -229,8 +229,8 @@ The `proxy` module contains methods that the type owner uses to execute publishe
 
   The `PROXY` struct represents the One-Time Witness to claim the publisher.
 
-  ```rust
-  struct PROXY has drop {}
+  ```move
+  public struct PROXY has drop {}
   ```
 
 - `Registry`
@@ -328,8 +328,8 @@ It allows tokenized asset type creators to enable these operations for kiosk ass
 
   A promise object established to prevent attempts of permanently unlocking an object beyond the intended scope of joining.
 
-  ```rust
-  struct JoinPromise {
+  ```move
+  public struct JoinPromise {
       /// the item where the balance of the burnt tokenized asset will be added.
       item: ID,
       /// burned is the id of the tokenized asset that will be burned
@@ -343,8 +343,8 @@ It allows tokenized asset type creators to enable these operations for kiosk ass
 
   A promise object created to ensure the permanent burning of a specified object.
 
-  ```rust
-  struct BurnPromise {
+  ```move
+  public struct BurnPromise {
     expected_supply: u64
   }
   ```
