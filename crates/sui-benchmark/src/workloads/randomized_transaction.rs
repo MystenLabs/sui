@@ -4,7 +4,10 @@
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
-use crate::workloads::payload::{BatchExecutionResults, BatchedTransactionStatus, Payload};
+use crate::workloads::payload::{
+    BatchExecutionResults, BatchedTransactionStatus, Payload, TransactionValidity,
+    TransactionValidityGenerator,
+};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder,
 };
@@ -265,7 +268,7 @@ impl Payload for RandomizedTransactionPayload {
         );
     }
 
-    fn make_transaction(&mut self) -> Transaction {
+    fn make_transaction(&mut self, _validity: TransactionValidity) -> Transaction {
         unimplemented!("Randomized transaction should not be executed as a single transaction");
     }
 
@@ -278,7 +281,10 @@ impl Payload for RandomizedTransactionPayload {
         true
     }
 
-    async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
+    async fn make_transaction_batch(
+        &mut self,
+        validity_generator: &mut (dyn TransactionValidityGenerator + Send),
+    ) -> Vec<Transaction> {
         let rgp = self
             .system_state_observer
             .state
@@ -336,6 +342,9 @@ impl Payload for RandomizedTransactionPayload {
             let signed_tx = tx_builder
                 .ensure_unique()
                 .build_and_sign(self.gas_objects[i].2.as_ref());
+            let signed_tx = validity_generator
+                .next_validity()
+                .apply(signed_tx, self.gas_objects[i].2.as_ref());
             transactions.push(signed_tx);
         }
 

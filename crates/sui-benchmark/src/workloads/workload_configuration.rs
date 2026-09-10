@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::bank::BenchmarkBank;
-use crate::drivers::{Interval, SubmissionAmplification};
+use crate::drivers::{AllowedProposersConfig, Interval, SubmissionAmplification};
 use crate::options::{Opts, RunSpec};
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::addr_bal_deposit::{AddrBalDepositConfig, AddrBalDepositWorkloadBuilder};
@@ -76,6 +76,7 @@ impl WorkloadConfiguration {
     ) -> Result<BTreeMap<GroupID, Vec<WorkloadInfo>>> {
         let mut workload_builders = vec![];
         let mut submission_amplification_by_group = BTreeMap::new();
+        let mut allowed_proposers_by_group = BTreeMap::new();
 
         // Create the workload builders for each Run spec
         match opts.run_spec.clone() {
@@ -109,6 +110,9 @@ impl WorkloadConfiguration {
                 duplicate_probability,
                 duplicate_copies_per_validator,
                 validator_selection,
+                allowed_proposers_probability,
+                allowed_proposers_count,
+                allowed_proposers_selection,
                 duration,
                 deposit_target_address,
                 deposit_seed_sui,
@@ -144,6 +148,18 @@ impl WorkloadConfiguration {
                     }
                     submission_amplification_by_group
                         .insert(workload_group, submission_amplification);
+                    let allowed_proposers = AllowedProposersConfig::new(
+                        allowed_proposers_probability[i],
+                        allowed_proposers_count[i],
+                        allowed_proposers_selection[i],
+                    )?;
+                    if allowed_proposers.is_enabled() {
+                        info!(
+                            "Benchmark group {} allowed proposers: {:?}",
+                            workload_group, allowed_proposers
+                        );
+                    }
+                    allowed_proposers_by_group.insert(workload_group, allowed_proposers);
 
                     let config = WorkloadConfig {
                         group: workload_group,
@@ -209,6 +225,7 @@ impl WorkloadConfiguration {
                     system_state_observer,
                     opts.gas_request_chunk_size,
                     submission_amplification_by_group,
+                    allowed_proposers_by_group,
                 )
                 .await
             }
@@ -221,6 +238,7 @@ impl WorkloadConfiguration {
         system_state_observer: Arc<SystemStateObserver>,
         gas_request_chunk_size: u64,
         submission_amplification_by_group: BTreeMap<GroupID, SubmissionAmplification>,
+        allowed_proposers_by_group: BTreeMap<GroupID, AllowedProposersConfig>,
     ) -> Result<BTreeMap<GroupID, Vec<WorkloadInfo>>> {
         // Generate the workloads and init them
         let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
@@ -253,6 +271,10 @@ impl WorkloadConfiguration {
             |mut acc, (workload, workload_params)| {
                 let w = WorkloadInfo {
                     submission_amplification: submission_amplification_by_group
+                        .get(&workload_params.group)
+                        .copied()
+                        .unwrap_or_default(),
+                    allowed_proposers: allowed_proposers_by_group
                         .get(&workload_params.group)
                         .copied()
                         .unwrap_or_default(),

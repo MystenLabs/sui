@@ -5,7 +5,9 @@ use clap::*;
 
 use strum_macros::EnumString;
 
-use crate::drivers::{Interval, SubmissionAmplification, ValidatorSelection};
+use crate::drivers::{
+    AllowedProposersConfig, Interval, SubmissionAmplification, ValidatorSelection,
+};
 use std::str::FromStr;
 
 #[derive(Parser)]
@@ -274,6 +276,15 @@ pub enum RunSpec {
         // Validator selection strategy for duplicate/amplified submissions.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [SubmissionAmplification::DEFAULT_VALIDATOR_SELECTION])]
         validator_selection: Vec<ValidatorSelection>,
+        // Probability that a logical transaction restricts consensus proposal to an allowed set.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
+        allowed_proposers_probability: Vec<f64>,
+        // Number of validators named by each restricted transaction.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [AllowedProposersConfig::DEFAULT_COUNT])]
+        allowed_proposers_count: Vec<usize>,
+        // Validator selection strategy for the allowed proposer set.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [AllowedProposersConfig::DEFAULT_SELECTION])]
+        allowed_proposers_selection: Vec<ValidatorSelection>,
 
         // Setting the duration of each benchmark. Benchmarks will run in sequence.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [Interval::from_str("unbounded").unwrap()])]

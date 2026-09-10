@@ -9,7 +9,7 @@ use crate::drivers::Interval;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
 use crate::workloads::benchmark_move_base_dir;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{Payload, TransactionValidity};
 use crate::workloads::{Gas, GasCoinConfig, workload::ExpectedFailureType};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
@@ -78,8 +78,11 @@ impl Payload for PartyTestPayload {
         self.state.lock().unwrap().update(effects);
     }
 
-    fn make_transaction(&mut self) -> Transaction {
-        self.create_transaction()
+    fn make_transaction(&mut self, validity: TransactionValidity) -> Transaction {
+        let transaction = self.create_transaction();
+        let state = self.state.lock().unwrap();
+        let account = state.account(&self.sender).unwrap();
+        validity.apply(transaction, account.key())
     }
 
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {

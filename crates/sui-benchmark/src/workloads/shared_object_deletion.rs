@@ -5,7 +5,7 @@ use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
 use crate::workloads::GasCoinConfig;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{Payload, TransactionValidity};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COUNTER,
     Workload, WorkloadBuilder,
@@ -71,7 +71,7 @@ impl Payload for SharedCounterDeletionTestPayload {
         }
     }
 
-    fn make_transaction(&mut self) -> Transaction {
+    fn make_transaction(&mut self, validity: TransactionValidity) -> Transaction {
         let rgp = self
             .system_state_observer
             .state
@@ -94,7 +94,7 @@ impl Payload for SharedCounterDeletionTestPayload {
         };
 
         let transaction_selector = rand::thread_rng().gen_range(0..num_transactions_to_select);
-        match transaction_selector {
+        let transaction = match transaction_selector {
             0 => transaction_builder.call_counter_increment(
                 self.package_id,
                 self.counter_id,
@@ -117,7 +117,8 @@ impl Payload for SharedCounterDeletionTestPayload {
             _ => panic!("Invalid transaction selector"),
         }
         .ensure_unique()
-        .build_and_sign(self.gas.2.as_ref())
+        .build_and_sign(self.gas.2.as_ref());
+        validity.apply(transaction, self.gas.2.as_ref())
     }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
         None

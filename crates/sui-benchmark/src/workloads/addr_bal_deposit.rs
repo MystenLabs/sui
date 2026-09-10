@@ -3,7 +3,10 @@
 
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::{BatchExecutionResults, BatchedTransactionStatus, Payload};
+use crate::workloads::payload::{
+    BatchExecutionResults, BatchedTransactionStatus, Payload, TransactionValidity,
+    TransactionValidityGenerator,
+};
 use crate::workloads::workload::{ESTIMATED_COMPUTATION_COST, Workload, WorkloadBuilder};
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -296,7 +299,7 @@ impl Payload for AddrBalDepositPayload {
         unreachable!();
     }
 
-    fn make_transaction(&mut self) -> Transaction {
+    fn make_transaction(&mut self, _validity: TransactionValidity) -> Transaction {
         unreachable!()
     }
 
@@ -304,7 +307,10 @@ impl Payload for AddrBalDepositPayload {
         true
     }
 
-    async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
+    async fn make_transaction_batch(
+        &mut self,
+        validity_generator: &mut (dyn TransactionValidityGenerator + Send),
+    ) -> Vec<Transaction> {
         let system_state = self.system_state_observer.state.borrow().clone();
         let rgp = system_state.reference_gas_price;
         let current_epoch = system_state.epoch;
@@ -349,6 +355,9 @@ impl Payload for AddrBalDepositPayload {
         let tx = tx_builder
             .ensure_unique()
             .build_and_sign(self.keypair.as_ref());
+        let tx = validity_generator
+            .next_validity()
+            .apply(tx, self.keypair.as_ref());
         self.metrics.lock().unwrap().sent += 1;
         vec![tx]
     }

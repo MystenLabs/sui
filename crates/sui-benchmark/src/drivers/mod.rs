@@ -8,6 +8,7 @@ use std::{str::FromStr, time::Duration};
 use anyhow::ensure;
 use clap::ValueEnum;
 use rand::Rng;
+use sui_types::transaction::MAX_UNPAID_ALLOWED_PROPOSERS;
 
 pub mod bench_driver;
 pub mod driver;
@@ -19,6 +20,57 @@ use hdrhistogram::{Histogram, serialization::Serializer};
 pub enum ValidatorSelection {
     Random,
     HighestPerformance,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct AllowedProposersConfig {
+    pub probability: f64,
+    pub count: usize,
+    pub selection: ValidatorSelection,
+}
+
+impl Default for AllowedProposersConfig {
+    fn default() -> Self {
+        Self {
+            probability: 0.0,
+            count: MAX_UNPAID_ALLOWED_PROPOSERS as usize,
+            selection: ValidatorSelection::HighestPerformance,
+        }
+    }
+}
+
+impl AllowedProposersConfig {
+    pub const DEFAULT_COUNT: usize = MAX_UNPAID_ALLOWED_PROPOSERS as usize;
+    pub const DEFAULT_SELECTION: ValidatorSelection = ValidatorSelection::HighestPerformance;
+
+    pub fn new(
+        probability: f64,
+        count: usize,
+        selection: ValidatorSelection,
+    ) -> anyhow::Result<Self> {
+        ensure!(
+            (0.0..=1.0).contains(&probability),
+            "allowed proposers probability must be between 0.0 and 1.0"
+        );
+        ensure!(
+            count > 0,
+            "allowed proposers count must be greater than zero"
+        );
+        ensure!(
+            count <= MAX_UNPAID_ALLOWED_PROPOSERS as usize,
+            "allowed proposers count must not exceed {MAX_UNPAID_ALLOWED_PROPOSERS} at the reference gas price"
+        );
+
+        Ok(Self {
+            probability,
+            count,
+            selection,
+        })
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.probability > 0.0
+    }
 }
 
 impl std::fmt::Display for ValidatorSelection {
@@ -204,7 +256,6 @@ impl std::fmt::Display for Interval {
 }
 
 // wrapper which implements serde
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct HistogramWrapper {
     histogram: Histogram<u64>,

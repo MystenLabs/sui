@@ -11,7 +11,7 @@ use crate::in_memory_wallet::InMemoryWallet;
 use crate::in_memory_wallet::move_call_pt_impl;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
 use crate::workloads::benchmark_move_base_dir;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{Payload, TransactionValidity};
 use crate::workloads::{Gas, GasCoinConfig, workload::ExpectedFailureType};
 use crate::{BenchMoveCallArg, ExecutionEffects, ValidatorProxy, convert_move_call_args};
 use anyhow::anyhow;
@@ -179,10 +179,10 @@ impl Payload for AdversarialTestPayload {
         self.state.update(effects);
     }
 
-    fn make_transaction(&mut self) -> Transaction {
+    fn make_transaction(&mut self, validity: TransactionValidity) -> Transaction {
         let payload_type = self.adversarial_payload_cfg.payload_type;
 
-        self.create_transaction(
+        let transaction = self.create_transaction(
             &payload_type,
             self.system_state_observer
                 .state
@@ -190,7 +190,9 @@ impl Payload for AdversarialTestPayload {
                 .protocol_config
                 .as_ref()
                 .expect("Protocol config not in system state"),
-        )
+        );
+        let account = self.state.account(&self.sender).unwrap();
+        validity.apply(transaction, account.key())
     }
 
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {

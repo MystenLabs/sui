@@ -4,7 +4,7 @@
 use crate::drivers::Interval;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{Payload, TransactionValidity};
 use crate::workloads::workload::{ESTIMATED_COMPUTATION_COST, WorkloadBuilder};
 use crate::workloads::workload::{ExpectedFailureType, STORAGE_COST_PER_COIN, Workload};
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
@@ -71,7 +71,7 @@ impl Payload for BatchPaymentTestPayload {
         self.num_payments += self.state.num_addresses();
     }
 
-    fn make_transaction(&mut self) -> Transaction {
+    fn make_transaction(&mut self, validity: TransactionValidity) -> Transaction {
         let addrs = self.state.addresses().cloned().collect::<Vec<SuiAddress>>();
         let num_recipients = addrs.len();
         let sender = if self.num_payments == 0 {
@@ -102,19 +102,21 @@ impl Payload for BatchPaymentTestPayload {
         let coins = Vec::new();
         // create a sender -> all transfer, using all of the sender's coins
         // TODO: use a larger amount, fewer input coins?
-        make_pay_sui_transaction(
+        let keypair = self.state.keypair(&sender).unwrap();
+        let transaction = make_pay_sui_transaction(
             *gas_obj,
             coins,
             addrs,
             vec![amount; num_recipients],
             sender,
-            &self.state.keypair(&sender).unwrap(),
+            &keypair,
             self.system_state_observer
                 .state
                 .borrow()
                 .reference_gas_price,
             gas_budget,
-        )
+        );
+        validity.apply(transaction, &keypair)
     }
 
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {

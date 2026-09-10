@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{Payload, TransactionValidity};
 use crate::workloads::workload::WorkloadBuilder;
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN,
@@ -68,9 +68,9 @@ impl Payload for TransferObjectTestPayload {
         self.transfer_to = recipient;
         self.gas = updated_gas;
     }
-    fn make_transaction(&mut self) -> Transaction {
+    fn make_transaction(&mut self, validity: TransactionValidity) -> Transaction {
         let (gas_obj, _, keypair) = self.gas.iter().find(|x| x.1 == self.transfer_from).unwrap();
-        make_transfer_object_transaction(
+        let transaction = make_transfer_object_transaction(
             self.transfer_object,
             *gas_obj,
             self.transfer_from,
@@ -80,7 +80,8 @@ impl Payload for TransferObjectTestPayload {
                 .state
                 .borrow()
                 .reference_gas_price,
-        )
+        );
+        validity.apply(transaction, keypair)
     }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
         None

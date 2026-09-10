@@ -3,7 +3,7 @@
 
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{Payload, TransactionValidity};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN,
 };
@@ -56,8 +56,8 @@ impl Payload for DelegationTestPayload {
     /// delegation flow is split into two phases
     /// first `make_transaction` call creates separate coin object for future delegation
     /// followup call creates delegation transaction itself
-    fn make_transaction(&mut self) -> Transaction {
-        match self.coin {
+    fn make_transaction(&mut self, validity: TransactionValidity) -> Transaction {
+        let transaction = match self.coin {
             Some(coin) => TestTransactionBuilder::new(
                 self.sender,
                 self.gas,
@@ -80,7 +80,8 @@ impl Payload for DelegationTestPayload {
                     .borrow()
                     .reference_gas_price,
             ),
-        }
+        };
+        validity.apply(transaction, self.keypair.as_ref())
     }
 
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {

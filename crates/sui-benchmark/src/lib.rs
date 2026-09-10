@@ -26,11 +26,12 @@ use sui_core::{
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc_api::{Client, client::ExecutedTransaction};
-use sui_types::transaction::Argument;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::ObjectArg;
+use sui_types::transaction::{Argument, TransactionDataAPI};
 use sui_types::transaction_driver_types::EffectsFinalityInfo;
 use sui_types::transaction_driver_types::FinalizedEffects;
+use sui_types::transaction_executor::ProposerSelector;
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId},
@@ -376,6 +377,8 @@ pub trait ValidatorProxy {
 
     fn get_current_epoch(&self) -> EpochId;
 
+    fn preferred_proposers(&self, max: usize) -> Option<sui_types::transaction::AllowedProposers>;
+
     fn clone_new(&self) -> Box<dyn ValidatorProxy + Send + Sync>;
 
     async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error>;
@@ -516,9 +519,16 @@ impl LocalValidatorAggregatorProxy {
         }
 
         let tx_digest = *tx.digest();
+        let current_epoch = self.td.authority_aggregator().load().committee.epoch;
+        let allowed_proposers = tx
+            .data()
+            .transaction_data()
+            .expiration()
+            .allowed_proposers(current_epoch);
         let validators = self.select_validators_for_submission_amplification(
             sample,
             PREFERRED_VALIDATOR_LATENCY_DELTA,
+            allowed_proposers,
         )?;
         let request = SubmitTxRequest::new_transaction(tx.clone());
         let mut additional_requests = JoinSet::new();
@@ -555,17 +565,27 @@ impl LocalValidatorAggregatorProxy {
         &self,
         sample: SubmissionAmplificationSample,
         preferred_validator_latency_delta: f64,
+        allowed_proposers: Option<&sui_types::transaction::AllowedProposers>,
     ) -> anyhow::Result<Vec<(AuthorityName, NetworkAuthorityClient)>> {
+        let committee = self.td.authority_aggregator().load().committee.clone();
         let num_validators = sample
             .validators_per_tx
-            .min(self.committee.num_members())
+            .min(committee.num_members())
             .min(self.clients.len());
 
+        let is_allowed = |name: &AuthorityName| {
+            allowed_proposers.is_none_or(|allowed| {
+                committee
+                    .authority_index(name)
+                    .is_some_and(|index| allowed.proposers.iter().any(|allowed| *allowed == index))
+            })
+        };
         let validator_names = match sample.validator_selection {
             ValidatorSelection::Random => {
                 let mut rng = rand::thread_rng();
                 self.clients
                     .keys()
+                    .filter(|name| is_allowed(name))
                     .copied()
                     .choose_multiple(&mut rng, num_validators)
             }
@@ -573,7 +593,7 @@ impl LocalValidatorAggregatorProxy {
                 .td
                 .select_preferred_validators(preferred_validator_latency_delta)
                 .into_iter()
-                .filter(|name| self.clients.contains_key(name))
+                .filter(|name| self.clients.contains_key(name) && is_allowed(name))
                 .take(num_validators)
                 .collect(),
         };
@@ -643,6 +663,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
     fn get_current_epoch(&self) -> EpochId {
         self.td.authority_aggregator().load().committee.epoch
+    }
+
+    fn preferred_proposers(&self, max: usize) -> Option<sui_types::transaction::AllowedProposers> {
+        self.td.preferred_proposers(max)
     }
 
     fn clone_new(&self) -> Box<dyn ValidatorProxy + Send + Sync> {
@@ -923,8 +947,7 @@ async fn execute_soft_bundle_with_retries(
 pub struct FullNodeProxy {
     sui_client: Client,
 
-    // Committee and protocol config are initialized on startup and not updated on epoch changes.
-    committee: Arc<Committee>,
+    // Protocol config is initialized on startup and not updated on epoch changes.
     protocol_config: Arc<ProtocolConfig>,
     chain_identifier: ChainIdentifier,
 
@@ -946,8 +969,6 @@ impl FullNodeProxy {
 
         // Each request times out after 60s (default value)
         let sui_client = Client::new(&http_url)?;
-
-        let committee = sui_client.get_committee(None).await?;
 
         let chain_identifier = sui_client.get_chain_identifier().await?;
 
@@ -992,7 +1013,6 @@ impl FullNodeProxy {
 
         Ok(Self {
             sui_client,
-            committee: Arc::new(committee),
             protocol_config: Arc::new(protocol_config),
             chain_identifier,
             td,
@@ -1184,17 +1204,20 @@ impl ValidatorProxy for FullNodeProxy {
     }
 
     fn clone_committee(&self) -> Arc<Committee> {
-        self.committee.clone()
+        self.td.authority_aggregator().load().committee.clone()
     }
 
     fn get_current_epoch(&self) -> EpochId {
-        self.committee.epoch
+        self.td.authority_aggregator().load().committee.epoch
+    }
+
+    fn preferred_proposers(&self, max: usize) -> Option<sui_types::transaction::AllowedProposers> {
+        self.td.preferred_proposers(max)
     }
 
     fn clone_new(&self) -> Box<dyn ValidatorProxy + Send + Sync> {
         Box::new(Self {
             sui_client: self.sui_client.clone(),
-            committee: self.clone_committee(),
             protocol_config: self.protocol_config.clone(),
             chain_identifier: self.chain_identifier,
             td: self.td.clone(),

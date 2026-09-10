@@ -49,6 +49,7 @@ mysten-metrics.workspace = true
 test-cluster.workspace = true
 sysinfo.workspace = true
 mysten-common.workspace = true
+nonempty.workspace = true
 
 sui-move-build.workspace = true
 

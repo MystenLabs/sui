@@ -18,7 +18,10 @@ use rand::seq::SliceRandom;
 
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::{BatchExecutionResults, BatchedTransactionStatus, Payload};
+use crate::workloads::payload::{
+    BatchExecutionResults, BatchedTransactionStatus, Payload, TransactionValidity,
+    TransactionValidityGenerator,
+};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COUNTER, Workload,
     WorkloadBuilder,
@@ -908,7 +911,7 @@ impl Payload for CompositePayload {
         unimplemented!();
     }
 
-    fn make_transaction(&mut self) -> Transaction {
+    fn make_transaction(&mut self, _validity: TransactionValidity) -> Transaction {
         unimplemented!()
     }
 
@@ -916,7 +919,10 @@ impl Payload for CompositePayload {
         true
     }
 
-    async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
+    async fn make_transaction_batch(
+        &mut self,
+        validity_generator: &mut (dyn TransactionValidityGenerator + Send),
+    ) -> Vec<Transaction> {
         let alias_tx_needed = self.advance_alias_state().await;
         let batch_size = {
             let mut rng = get_rng();
@@ -1077,6 +1083,13 @@ impl Payload for CompositePayload {
                 .collect::<Vec<_>>(),
         );
         transactions
+            .into_iter()
+            .map(|transaction| {
+                validity_generator
+                    .next_validity()
+                    .apply(transaction, keypair.as_ref())
+            })
+            .collect()
     }
 
     fn handle_batch_results(&mut self, results: &BatchExecutionResults) {

@@ -20,7 +20,7 @@ use prometheus::{
 use prometheus::{HistogramVec, IntGauge, IntGaugeVec};
 use prometheus::{register_counter_vec_with_registry, register_gauge_vec_with_registry};
 use rand::Rng;
-use rand::seq::SliceRandom;
+use rand::seq::{IteratorRandom, SliceRandom};
 use sui_types::digests::TransactionDigest;
 use tokio::sync::OnceCell;
 use tokio::sync::mpsc::{Sender, channel};
@@ -31,6 +31,7 @@ use crate::drivers::driver::Driver;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::{
     BatchExecutionResults, BatchedTransactionResult, BatchedTransactionStatus, Payload,
+    TransactionValidity, TransactionValidityGenerator,
 };
 use crate::workloads::workload::ExpectedFailureType;
 use crate::workloads::{GroupID, WorkloadInfo};
@@ -55,7 +56,12 @@ use tokio::{time, time::Instant};
 use tracing::{debug, error, info, warn};
 
 use super::Interval;
-use super::{BenchmarkStats, StressStats, SubmissionAmplification};
+use super::{
+    AllowedProposersConfig, BenchmarkStats, StressStats, SubmissionAmplification,
+    ValidatorSelection,
+};
+use nonempty::NonEmpty;
+use sui_types::transaction::AllowedProposers;
 
 /// Randomly partitions a list of transactions into groups for soft bundle submission.
 /// Each group will be submitted as a separate soft bundle.
@@ -118,6 +124,7 @@ pub struct BenchMetrics {
     pub validators_in_effects_cert: IntCounterVec,
     pub cpu_usage: GaugeVec,
     pub num_success_cmds: IntCounterVec,
+    pub transactions_by_allowed_proposers: IntCounterVec,
 }
 
 impl BenchMetrics {
@@ -207,6 +214,67 @@ impl BenchMetrics {
                 registry,
             )
             .unwrap(),
+            transactions_by_allowed_proposers: register_int_counter_vec_with_registry!(
+                "benchmark_transactions_by_allowed_proposers",
+                "Logical benchmark transactions generated with or without allowed proposers",
+                &["restriction"],
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
+struct AllowedProposersSampler {
+    config: AllowedProposersConfig,
+    execution_proxy: Arc<dyn ValidatorProxy + Send + Sync>,
+    metrics: Arc<BenchMetrics>,
+}
+
+impl TransactionValidityGenerator for AllowedProposersSampler {
+    fn next_validity(&mut self) -> TransactionValidity {
+        let mut rng = rand::thread_rng();
+        if !rng.gen_bool(self.config.probability) {
+            self.metrics
+                .transactions_by_allowed_proposers
+                .with_label_values(&["unrestricted"])
+                .inc();
+            return TransactionValidity::Unrestricted;
+        }
+
+        let committee = self.execution_proxy.clone_committee();
+        let count = self.config.count.min(committee.num_members());
+        let allowed_proposers = match self.config.selection {
+            ValidatorSelection::Random => {
+                let mut proposers =
+                    (0..committee.num_members() as u32).choose_multiple(&mut rng, count);
+                proposers.sort_unstable();
+                AllowedProposers {
+                    epoch: committee.epoch,
+                    proposers: NonEmpty::from_vec(proposers)
+                        .expect("a committee has at least one validator"),
+                }
+            }
+            ValidatorSelection::HighestPerformance => {
+                let Some(allowed_proposers) = self.execution_proxy.preferred_proposers(count)
+                else {
+                    self.metrics
+                        .transactions_by_allowed_proposers
+                        .with_label_values(&["unrestricted"])
+                        .inc();
+                    return TransactionValidity::Unrestricted;
+                };
+                allowed_proposers
+            }
+        };
+
+        self.metrics
+            .transactions_by_allowed_proposers
+            .with_label_values(&["restricted"])
+            .inc();
+        TransactionValidity::Restricted {
+            chain: self.execution_proxy.get_chain_identifier(),
+            allowed_proposers,
         }
     }
 }
@@ -258,6 +326,7 @@ pub struct BenchWorker {
     pub group: u32,
     pub duration: Interval,
     pub submission_amplification: SubmissionAmplification,
+    pub allowed_proposers: AllowedProposersConfig,
 }
 
 impl Debug for BenchWorker {
@@ -351,6 +420,7 @@ impl BenchDriver {
                     group: workload_info.workload_params.group,
                     duration: workload_info.workload_params.duration,
                     submission_amplification: workload_info.submission_amplification,
+                    allowed_proposers: workload_info.allowed_proposers,
                 });
                 payloads = remaining;
                 qps -= target_qps;
@@ -790,6 +860,11 @@ async fn run_bench_worker(
     let mut stat_interval = time::interval(Duration::from_micros(stat_delay_micros));
 
     let mut retry_queue: VecDeque<RetryType> = VecDeque::new();
+    let mut validity_generator = AllowedProposersSampler {
+        config: worker.allowed_proposers,
+        execution_proxy: worker.execution_proxy.clone(),
+        metrics: metrics.clone(),
+    };
 
     let group_benchmark_run_interval = worker.duration;
     let mut free_pool: VecDeque<_> = worker.payload.into_iter().collect();
@@ -1043,7 +1118,9 @@ async fn run_bench_worker(
 
                     // Check if this is a batched payload
                     if payload.is_batched() {
-                        let txs = payload.make_transaction_batch().await;
+                        let txs = payload
+                            .make_transaction_batch(&mut validity_generator)
+                            .await;
                         let max_bundles = payload.max_soft_bundles();
 
                         let num_txs = txs.len();
@@ -1112,7 +1189,7 @@ async fn run_bench_worker(
                         };
                         futures.push(Box::pin(res));
                     } else {
-                        let tx = payload.make_transaction();
+                        let tx = payload.make_transaction(validity_generator.next_validity());
                         let start = Arc::new(Instant::now());
                         let metrics = Arc::clone(&metrics);
                         let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
@@ -1492,7 +1569,7 @@ mod tests {
     #[async_trait::async_trait]
     impl Payload for MockPayload {
         fn make_new_payload(&mut self, _effects: &crate::ExecutionEffects) {}
-        fn make_transaction(&mut self) -> Transaction {
+        fn make_transaction(&mut self, _validity: TransactionValidity) -> Transaction {
             unimplemented!("not needed for recycling tests")
         }
     }

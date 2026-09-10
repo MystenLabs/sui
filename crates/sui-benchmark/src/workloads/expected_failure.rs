@@ -5,7 +5,7 @@ use crate::ExecutionEffects;
 use crate::ValidatorProxy;
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{Payload, TransactionValidity};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN,
     WorkloadBuilder,
@@ -70,7 +70,7 @@ impl Payload for ExpectedFailurePayload {
         unreachable!()
     }
 
-    fn make_transaction(&mut self) -> Transaction {
+    fn make_transaction(&mut self, validity: TransactionValidity) -> Transaction {
         let (gas_obj, _, keypair) = self.gas.iter().find(|x| x.1 == self.transfer_from).unwrap();
         let tx = make_transfer_object_transaction(
             self.transfer_object,
@@ -83,6 +83,7 @@ impl Payload for ExpectedFailurePayload {
                 .borrow()
                 .reference_gas_price,
         );
+        let tx = validity.apply(tx, keypair);
         self.create_failing_transaction(tx)
     }
 
