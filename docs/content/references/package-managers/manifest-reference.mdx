@@ -81,8 +81,8 @@ Maps custom environment names to chain identifiers. The `mainnet` and `testnet` 
 
 Chain IDs accept either format interchangeably:
 
-- **Hex** (short form) — the first 4 bytes of the genesis checkpoint digest, hex-encoded (for example, `"aba3e445"`).
-- **Base58** (full form) — the complete genesis checkpoint digest, Base58-encoded (for example, `"69WiPg3DAQhKenaFN9I6pYc7MYk..."`).
+- **Hex** (short form): the first 4 bytes of the genesis checkpoint digest, hex-encoded (for example, `"aba3e445"`).
+- **Base58** (full form): the complete genesis checkpoint digest, Base58-encoded (for example, `"69WiPg3DAQhKenaFN9I6pYc7MYk..."`).
 
 The package system compares chain IDs by their underlying bytes, so a Hex value in the manifest matches a Base58 value from the CLI and vice versa.
 
