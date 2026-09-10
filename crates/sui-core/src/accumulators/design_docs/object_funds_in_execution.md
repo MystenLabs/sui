@@ -119,6 +119,10 @@ For an exclusively implicit registry read, simulation materializes the chosen ve
 returns `ObjectNotFound`; otherwise the retained exact-version object survives subsequent pruning.
 These retained reads are not added to declared inputs, so their storage-read gas treatment is unchanged.
 
+Shared-input metrics classify the transaction's declared inputs, not its effects. Mandatory implicit
+registry reads therefore do not turn an owned-only transaction into a shared-input transaction;
+explicit registry inputs still count.
+
 ## 5. Failure and error semantics
 
 - Insufficiency aborts the transaction: a real, committed failed execution with normal gas
