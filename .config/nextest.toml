@@ -11,6 +11,10 @@ experimental = ["setup-scripts"]
 [scripts.setup.big-worker-stack]
 command = 'scripts/nextest/big-worker-stack.sh'
 
+# Reserve worker capacity for whole-network load tests, with at most four running together.
+[test-groups.simulated-load]
+max-threads = 32
+
 # Apply the 8 MiB worker stack to the whole package: multiple binaries overflow
 # (transactional_tests, jsonrpc_address_balance_coin_tests, ...). Listed under
 # both `default` (local runs) and `ci` (CI uses `--profile ci`); a named setup
@@ -32,8 +36,13 @@ status-level = "fail"
 fail-fast = false
 # Retry failing tests in order to not block builds on flaky tests
 retries = 3
-# Timeout tests after 4 minutes
+# Timeout tests after 5 minutes.
 slow-timeout = { period = "60s", terminate-after = 5 }
+
+[[profile.ci.overrides]]
+filter = 'package(sui-benchmark) and binary(simtest)'
+test-group = 'simulated-load'
+threads-required = 8
 
 [profile.simtestnightly]
 # Print out output for failing tests as soon as they fail, and also at the end
