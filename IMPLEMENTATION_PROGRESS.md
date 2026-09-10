@@ -24,9 +24,10 @@ Determine whether root effects handed to `CausalOrder::causal_sort_with_ccp` in
 - Explicit effects dependencies are already respected by consensus handler output order
   in every batch handed to the checkpoint builder in this workload.
 
+## RWLock edges (commit 2651b21836)
+- Check moved into `CausalOrder::check_already_sorted` so it reuses `RWLockDependencyBuilder`.
+  Reports "effects dependency" vs "rwlock edge" in the panic message. Unit test added.
+- Seed search rerun with rebuilt binary, 200/200 passed, 0 violations of either class.
+
 ## Not yet covered
-- The RWLock synthesized edges (`RWLockDependencyBuilder`): a consensus-object writer of
-  version N+1 is sorted after readers of version N. This is *not* an effects dependency,
-  so the assertion does not check it. Needs a second assertion before causal_sort can
-  actually be removed.
 - Other workloads / tests beyond test_composite_workload.
