@@ -2,71 +2,67 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // docs::#mint-binary
-import { Transaction } from '@mysten/sui/transactions';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import type { MarketDescriptor, MintQuote } from '@mysten/deepbook-v3/predict';
+import type { Transaction } from '@mysten/sui/transactions';
 import { client } from './client.js';
-import { PREDICT, type ActiveOracle } from './config.js';
+import { UNDERLYING } from './config.js';
+import { admissibleStrike, tradeableMarket } from './markets.js';
 
-// Deposits DUSDC into the manager and mints one binary "up" position, in a
-// single PTB. The deposit is sourced from the signer's DUSDC wherever it sits,
-// whether that is an address balance or several separate coin objects.
-export async function mintBinaryUp(params: {
-	signer: Ed25519Keypair;
-	managerId: string;
-	oracle: ActiveOracle;
-	depositAmount: bigint; // DUSDC base units (6 decimals)
-	quantity: bigint; // position quantity
-}) {
-	const { signer, managerId, oracle, depositAmount, quantity } = params;
-	const tx = new Transaction();
+// Quote, then mint with a cap derived from the quote.
+//
+// Both caps are optional, and omitting them is not a safe default: the SDK sends
+// U64_MAX for a missing `maxCost` or `maxProbability`, which leaves the mint
+// genuinely uncapped against any price move between the quote and execution.
+// This builder mints an exact payout quantity, so the premium alone cannot exceed
+// `quantity`; fees are charged on top, and `maxCost` is what bounds the total
+// debit. `tx.mintAmount` is the one that can reach the whole balance, because
+// there fees are charged on top of `spend` and `maxCost` is the only bound on the
+// full withdrawal. Always pass at least `maxCost`.
+export async function mintDirectional(params: {
+	owner: string;
+	side: 'up' | 'down';
+	// Maximum payout in USD, at $1 per contract. Must be a whole $0.01 lot.
+	quantity: number;
+	// Omit to trade at the market's on-chain reference price, the window anchor.
+	targetStrikeUsd?: number;
+}): Promise<{ tx: Transaction; quote: MintQuote; descriptor: MarketDescriptor }> {
+	const { owner, side, quantity, targetStrikeUsd } = params;
+	const market = await tradeableMarket();
 
-	// 1. Source the deposit amount in DUSDC and deposit it into the manager.
-	const deposit = tx.coin({ balance: depositAmount, type: PREDICT.quoteType });
-	tx.moveCall({
-		target: `${PREDICT.packageId}::predict_manager::deposit`,
-		typeArguments: [PREDICT.quoteType],
-		arguments: [tx.object(managerId), deposit],
+	const descriptor: MarketDescriptor = {
+		underlying: UNDERLYING,
+		expiryMs: market.expiryMs,
+		// Pin the exact market object that was read, rather than whatever the
+		// registry resolves to at submit time.
+		marketId: market.id,
+		side,
+		strike:
+			targetStrikeUsd === undefined
+				? 'reference'
+				: admissibleStrike(market, targetStrikeUsd),
+	};
+
+	// The quote dry-runs the identical transaction the mint builds, against the
+	// real account and the real fee path, so it doubles as preflight: it throws
+	// the same typed errors the mint would.
+	const quote = await client.predict.read.quoteMint(owner, descriptor, { quantity });
+
+	// `quote.cost` is the all-in account debit, not the premium. Raw amounts are
+	// integers at six decimals, so round the cap to six decimals: a finer value
+	// throws `PredictInputError`.
+	const maxCost = Math.ceil(quote.cost * 1.01 * 1e6) / 1e6;
+
+	// A second, independent ceiling on the fill price, 0..1 per $1 of payout.
+	const maxProbability = Math.min(1, Number((quote.entryProbability * 1.02).toFixed(6)));
+
+	const tx = await client.predict.tx.mint(owner, descriptor, {
+		quantity,
+		maxCost,
+		maxProbability,
 	});
 
-	// 2. Build the MarketKey for an "up" binary position.
-	const key = tx.moveCall({
-		target: `${PREDICT.packageId}::market_key::up`,
-		arguments: [
-			tx.pure.id(oracle.oracleId),
-			tx.pure.u64(oracle.expiry),
-			tx.pure.u64(oracle.strike),
-		],
-	});
-
-	// 3. Mint the position, paying from the manager's deposited balance.
-	tx.moveCall({
-		target: `${PREDICT.packageId}::predict::mint`,
-		typeArguments: [PREDICT.quoteType],
-		arguments: [
-			tx.object(PREDICT.predictObjectId),
-			tx.object(managerId),
-			tx.object(oracle.oracleId),
-			key,
-			tx.pure.u64(quantity),
-			tx.object.clock(),
-		],
-	});
-
-	const result = await client.signAndExecuteTransaction({
-		transaction: tx,
-		signer,
-		include: { effects: true },
-	});
-	// Wait for finality before acting on the result, so later reads reflect it.
-	await client.waitForTransaction({ result });
-
-	if (result.$kind === 'FailedTransaction') {
-		// The transaction is onchain and the sender paid gas. Do not retry it.
-		const { status } = result.FailedTransaction;
-		throw new Error(
-			`mint aborted: ${status.success ? 'unknown' : JSON.stringify(status.error)}`,
-		);
-	}
-	return result.Transaction;
+	// The transaction is ready to sign. Nothing here signs it, and the SDK never
+	// holds keys.
+	return { tx, quote, descriptor };
 }
 // docs::/#mint-binary

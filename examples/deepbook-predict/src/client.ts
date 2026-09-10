@@ -3,17 +3,22 @@
 
 // docs::#client
 import { SuiGrpcClient } from '@mysten/sui/grpc';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
-import { PREDICT } from './config.js';
+import { predict } from '@mysten/deepbook-v3/predict';
+import { FULLNODE_URL, NETWORK } from './config.js';
 
-export function getKeypair(privateKey: string): Ed25519Keypair {
-	const { secretKey } = decodeSuiPrivateKey(privateKey);
-	return Ed25519Keypair.fromSecretKey(secretKey);
-}
-
+// `$extend` registers the Predict facade on the Sui client, so everything below
+// reaches it at `client.predict`. Any client exposing the core API works,
+// whether gRPC or JSON-RPC.
 export const client = new SuiGrpcClient({
-	network: PREDICT.network,
-	baseUrl: PREDICT.fullnodeUrl,
-});
+	network: NETWORK,
+	baseUrl: FULLNODE_URL,
+}).$extend(predict({ network: NETWORK }));
+
+// Reads run through the client's own transaction simulation and object reads, so
+// `client.predict.read.*` needs neither an indexer nor a Predict server.
+//
+// The SDK never signs and never holds keys. Every `client.predict.tx.*` builder
+// returns a `Transaction` for a wallet, dapp-kit, or your own signer to execute.
+// Execute with events included whenever you intend to decode a receipt, because
+// the decoders read the events' canonical BCS bytes.
 // docs::/#client
