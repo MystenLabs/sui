@@ -60,9 +60,7 @@ use task::streaming::StreamedCaches;
 use task::streaming::StreamedObjectStore;
 use task::streaming::StreamedTransactionStore;
 use task::streaming::StreamingPackageStore;
-#[cfg(feature = "staging")]
 use task::streaming::SubscriberLimit;
-#[cfg(feature = "staging")]
 use task::streaming::SubscriptionBroadcast;
 use task::streaming::SubscriptionReadiness;
 use task::watermark::WatermarkTask;
@@ -77,7 +75,6 @@ use url::Url;
 
 use crate::api::mutation::Mutation;
 use crate::api::query::Query;
-#[cfg(feature = "staging")]
 use crate::api::subscription::Subscription;
 use crate::error::PanicHandler;
 use crate::extensions::logging::ClientInfo;
@@ -86,8 +83,6 @@ use crate::extensions::logging::Session;
 use crate::metrics::RpcMetrics;
 use crate::metrics::SubscriptionMetrics;
 use crate::middleware::version::Version;
-#[cfg(not(feature = "staging"))]
-use async_graphql::EmptySubscription as Subscription;
 
 const GRAPHQL_PATH: &str = "/graphql";
 const GRAPHQL_SUBSCRIPTIONS_PATH: &str = "/graphql/subscriptions";
@@ -491,7 +486,6 @@ pub async fn start_rpc(
 
     // The transaction subscription backfill waits on pipeline watermarks to gate delivery, so it
     // needs a live view of them. Captured before the watermark task is consumed by `run()`.
-    #[cfg(feature = "staging")]
     let subscription_watermarks_rx = watermark_task.watermarks_rx();
 
     let s_system_package_task = system_package_task.run();
@@ -508,14 +502,12 @@ pub async fn start_rpc(
         readiness,
     )) = streaming_setup
     {
-        #[cfg(feature = "staging")]
         let max_subscribers = config.subscription.max_subscribers;
         rpc = rpc.data(caches).data(config.subscription);
         let s_stream = stream_task.run();
         let s_eviction = eviction_task.run();
         readiness.wait_for_ready().await?;
-        // The broadcast handle is only consumed by the (staging-gated) subscription resolvers.
-        #[cfg(feature = "staging")]
+        // The broadcast handle is only consumed by the subscription resolvers.
         {
             // `first_live_checkpoint` is the first checkpoint the live upstream stream
             // broadcast, recorded as readiness fires.

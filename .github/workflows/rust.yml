@@ -135,7 +135,10 @@ jobs:
           swap-size-gb: 256
       - name: cargo test
         run: |
-          cargo nextest run --profile ci --cargo-quiet -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
+          # graphql_subscription is a set of timing-sensitive SSE e2e tests; they run isolated in
+          # the "cargo test (sui-graphql staging)" step below, not amid the full parallel suite
+          # where their fixed stream timeouts flake under contention.
+          cargo nextest run --profile ci --cargo-quiet -E '!package(sui-bridge) and !package(sui-bridge-indexer) and !(package(sui-indexer-alt-e2e-tests) and binary(graphql_subscription))'
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
