@@ -70,7 +70,11 @@ fn used_inside_nested_loop(exp: &Exp, target: Label) -> bool {
                 go(cond, target, in_nested) || arms.iter().any(|(_, a)| go(a, target, in_nested))
             }
             Exp::Match(cond, _, arms) => {
-                go(cond, target, in_nested) || arms.iter().any(|(_, _, a)| go(a, target, in_nested))
+                go(cond, target, in_nested)
+                    || arms.iter().any(|arm| {
+                        arm.guard.as_ref().is_some_and(|g| go(g, target, in_nested))
+                            || go(&arm.rhs, target, in_nested)
+                    })
             }
             Exp::MatchLit(cond, arms) => {
                 go(cond, target, in_nested) || arms.iter().any(|(_, a)| go(a, target, in_nested))

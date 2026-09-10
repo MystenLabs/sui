@@ -1320,7 +1320,9 @@
                 "better_loader_errors": false,
                 "bridge": false,
                 "cancel_for_failed_dkg_early": false,
+                "charge_ld_const_abstract_size": false,
                 "check_for_init_during_upgrade": false,
+                "check_object_funds_withdraw_in_execution": false,
                 "commit_root_state_digest": false,
                 "consensus_always_accept_system_transactions": false,
                 "consensus_batched_block_sync": false,
@@ -1359,6 +1361,7 @@
                 "early_return_receive_object_mismatched_type": false,
                 "enable_accumulators": false,
                 "enable_address_balance_gas_payments": false,
+                "enable_allowances": false,
                 "enable_authenticated_event_streams": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
@@ -1390,6 +1393,7 @@
                 "enforce_address_balance_change_invariant": false,
                 "enforce_checkpoint_timestamp_monotonicity": false,
                 "fix_checkpoint_signature_mapping": false,
+                "fix_ptb_generated_reads": false,
                 "flexible_tx_context_positions": false,
                 "framework_tx_context_mut_restrictions": false,
                 "fresh_vm_on_framework_upgrade": false,
@@ -2046,6 +2050,8 @@
                 "random_beacon_min_round_interval_ms": null,
                 "random_beacon_reduction_allowed_delta": null,
                 "random_beacon_reduction_lower_bound": null,
+                "reserve_object_funds_for_withdrawal_cold_read_cost": null,
+                "reserve_object_funds_for_withdrawal_cost_base": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },
@@ -2175,7 +2181,9 @@
                 "bridge": false,
                 "buffer_stake_for_protocol_upgrade_bps": "5000",
                 "cancel_for_failed_dkg_early": false,
+                "charge_ld_const_abstract_size": false,
                 "check_for_init_during_upgrade": false,
+                "check_object_funds_withdraw_in_execution": false,
                 "commit_root_state_digest": false,
                 "consensus_always_accept_system_transactions": false,
                 "consensus_batched_block_sync": false,
@@ -2264,6 +2272,7 @@
                 "ed25519_ed25519_verify_msg_cost_per_byte": "2",
                 "enable_accumulators": false,
                 "enable_address_balance_gas_payments": false,
+                "enable_allowances": false,
                 "enable_authenticated_event_streams": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
@@ -2299,6 +2308,7 @@
                 "event_emit_tag_size_derivation_cost_per_byte": "5",
                 "event_emit_value_size_derivation_cost_per_byte": "2",
                 "fix_checkpoint_signature_mapping": false,
+                "fix_ptb_generated_reads": false,
                 "flexible_tx_context_positions": false,
                 "framework_tx_context_mut_restrictions": false,
                 "fresh_vm_on_framework_upgrade": false,
@@ -11087,10 +11097,38 @@
         }
       },
       "SuiWithdrawFrom": {
-        "type": "string",
-        "enum": [
-          "sender",
-          "sponsor"
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "sender",
+              "sponsor"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "senderAllowance"
+            ],
+            "properties": {
+              "senderAllowance": {
+                "type": "object",
+                "required": [
+                  "allowance",
+                  "funder"
+                ],
+                "properties": {
+                  "allowance": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "funder": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
         ]
       },
       "SuiWithdrawalTypeArg": {

@@ -12,7 +12,10 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::accumulator_root::AccumulatorObjId;
+use sui_types::accumulator_root::{
+    AccumulatorObjId, AccumulatorValue as AccumulatorRootValue, EmptyUnsettledObjectFunds,
+    UnsettledObjectFundsRead,
+};
 use sui_types::base_types::{SystemObjectVersions, VersionDigest};
 use sui_types::coin_reservation::ParsedDigest;
 use sui_types::committee::EpochId;
@@ -21,17 +24,18 @@ use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, TransactionEffects,
     TransactionEffectsV2, TransactionEvents,
 };
+use sui_types::error::SuiErrorKind;
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
-use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
+use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsResolver, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
-    SUI_DENY_LIST_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -47,11 +51,17 @@ use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
 pub(crate) mod invariants;
 use invariants::InvariantChecker;
 
+/// Declared allowance ids per `(funder, funds type)` key.
+type AllowanceIds = BTreeMap<(SuiAddress, TypeTag), Vec<ObjectID>>;
+
 #[derive(Default)]
 struct PostExecutionCheckInputs {
     /// Per-`(address, type)` funds-accumulator reservation budget authorized by this transaction.
     /// Shared by gasless execution validation and the post-execution invariant checks.
     input_reservations: BTreeMap<(SuiAddress, TypeTag), u64>,
+    /// The allowance ids declared per `WithdrawFrom::SenderAllowance` reservation key. Consumed by
+    /// `check_ownership_invariants` to authorize Splits at non-signer keys.
+    allowance_ids: AllowanceIds,
     /// For the advance-epoch transaction, `(epoch_fees minted, epoch_rebates burned)`; `None`
     /// for every other transaction. Needed by the expensive SUI conservation check.
     advance_epoch_gas_summary: Option<(u64, u64)>,
@@ -65,13 +75,15 @@ struct PostExecutionCheckInputs {
 impl PostExecutionCheckInputs {
     fn new(transaction: (&TransactionKind, &GasData, SuiAddress), enable_gasless: bool) -> Self {
         let (transaction_kind, gas_data, transaction_signer) = transaction;
+        let (input_reservations, allowance_ids) = compute_input_reservations(
+            transaction_kind,
+            gas_data,
+            transaction_signer,
+            enable_gasless,
+        );
         Self {
-            input_reservations: compute_input_reservations(
-                transaction_kind,
-                gas_data,
-                transaction_signer,
-                enable_gasless,
-            ),
+            input_reservations,
+            allowance_ids,
             advance_epoch_gas_summary: transaction_kind.get_advance_epoch_tx_gas_summary(),
             is_genesis: matches!(transaction_kind, TransactionKind::Genesis(_)),
             declared_packages: declared_packages(transaction_kind),
@@ -133,6 +145,8 @@ pub struct TemporaryStore<'backing> {
     /// digest) at which they were read.
     /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
+
+    unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -148,6 +162,7 @@ impl<'backing> TemporaryStore<'backing> {
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
         transaction: (&TransactionKind, &GasData, SuiAddress),
+        unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
         let post_execution_check_inputs =
             PostExecutionCheckInputs::new(transaction, protocol_config.enable_gasless());
@@ -160,6 +175,7 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             system_object_versions,
             post_execution_check_inputs,
+            unsettled_object_funds,
         )
     }
 
@@ -180,6 +196,9 @@ impl<'backing> TemporaryStore<'backing> {
                 is_genesis: true,
                 ..Default::default()
             },
+            // The genesis transaction cannot withdraw object funds, so there are never
+            // unsettled withdrawals for it to account for.
+            &EmptyUnsettledObjectFunds,
         )
     }
 
@@ -192,6 +211,7 @@ impl<'backing> TemporaryStore<'backing> {
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
         post_execution_check_inputs: PostExecutionCheckInputs,
+        unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -235,6 +255,7 @@ impl<'backing> TemporaryStore<'backing> {
             invariants: InvariantChecker::default(),
             system_object_versions,
             loaded_system_objects: RefCell::new(BTreeMap::new()),
+            unsettled_object_funds,
         }
     }
 
@@ -265,6 +286,10 @@ impl<'backing> TemporaryStore<'backing> {
             .borrow_mut()
             .insert(*object_id, (object.version(), object.digest()));
         Some(object)
+    }
+
+    pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {
+        self.unsettled_object_funds
     }
 
     // Helpers to access private fields
@@ -714,6 +739,7 @@ impl<'backing> TemporaryStore<'backing> {
             runtime_packages_loaded_from_db,
             loaded_per_epoch_config_objects,
             loaded_system_objects,
+            unsettled_object_funds,
             // Execution outcomes can be discarded.
             execution_results: _,
             invariants: _,
@@ -735,6 +761,7 @@ impl<'backing> TemporaryStore<'backing> {
             post_execution_check_inputs,
             system_object_versions,
             loaded_system_objects,
+            unsettled_object_funds,
             execution_results: ExecutionResultsV2::default(),
             invariants: InvariantChecker::default(),
         };
@@ -1176,10 +1203,36 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
     }
 }
 
+impl ObjectFundsResolver for TemporaryStore<'_> {
+    /// Loads the object balance at the required version and subtracts withdrawals from the same
+    /// checkpoint that have not settled yet.
+    /// This function is expected never to fail; an error indicates an invariant violation.
+    fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128> {
+        let required_version = self
+            .load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?
+            .version();
+
+        let settled = AccumulatorRootValue::load(self, Some(required_version), owner, type_)?
+            .and_then(|value| value.as_u128())
+            .unwrap_or(0);
+
+        let unsettled = self.unsettled_object_funds.get_unsettled_object_withdraw(
+            &AccumulatorRootValue::get_field_id(owner, type_)?,
+            required_version,
+        );
+        settled
+            .checked_sub(unsettled)
+            .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
+    }
+}
+
 /// Compute the per-`(address, type)` funds-accumulator reservation budget authorized by the
-/// transaction. Today every funds accumulator is a `Balance<T>`, but the `(address, TypeTag)`
-/// keying lets this generalize as more accumulator types are added. Sources:
-/// - PTB `FundsWithdrawalArg`s for any supported accumulator type (sender or sponsor as owner).
+/// transaction, and the allowance ids declared per key. Today every funds accumulator is a
+/// `Balance<T>`, but the `(address, TypeTag)` keying lets this generalize as more accumulator
+/// types are added. Budget sources:
+/// - PTB `FundsWithdrawalArg`s for any supported accumulator type (sender, sponsor, or
+///   allowance funder as owner).
 /// - Gas paid entirely from address balance (credits `(gas_owner, Balance<SUI>)`).
 /// - Gas-data entries with coin-reservation digests (also credit `(gas_owner, Balance<SUI>)`).
 fn compute_input_reservations(
@@ -1187,24 +1240,33 @@ fn compute_input_reservations(
     gas_data: &GasData,
     transaction_signer: SuiAddress,
     enable_gasless: bool,
-) -> BTreeMap<(SuiAddress, TypeTag), u64> {
+) -> (BTreeMap<(SuiAddress, TypeTag), u64>, AllowanceIds) {
     use sui_types::balance::Balance;
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
 
     let is_gasless = enable_gasless && is_gasless_transaction(gas_data, transaction_kind);
     let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
+    let mut allowance_ids = AllowanceIds::new();
     let sui_balance_type = Balance::type_tag(GAS::type_tag());
 
     for arg in transaction_kind.get_funds_withdrawals() {
+        let ty = arg.type_arg.to_type_tag();
         let owner = match arg.withdraw_from {
             WithdrawFrom::Sender => transaction_signer,
             WithdrawFrom::Sponsor => gas_data.owner,
+            // The funder will differ from the signer/sponsor, but permission
+            // is verified at signing
+            WithdrawFrom::SenderAllowance { funder, allowance } => {
+                allowance_ids
+                    .entry((funder, ty.clone()))
+                    .or_default()
+                    .push(allowance);
+                funder
+            }
         };
         let Reservation::MaxAmountU64(reservation) = arg.reservation;
-        let entry = reservations
-            .entry((owner, arg.type_arg.to_type_tag()))
-            .or_insert(0);
+        let entry = reservations.entry((owner, ty)).or_insert(0);
         *entry = entry.saturating_add(reservation);
     }
 
@@ -1226,7 +1288,7 @@ fn compute_input_reservations(
         }
     }
 
-    reservations
+    (reservations, allowance_ids)
 }
 
 /// What each `Publish`/`Upgrade` command declares about the package it writes, in command order.

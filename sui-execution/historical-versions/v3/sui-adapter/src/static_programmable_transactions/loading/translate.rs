@@ -178,6 +178,12 @@ fn input<Mode: ExecutionMode>(
                         )
                     })?
                     .into(),
+                P::WithdrawFrom::SenderAllowance { .. } => {
+                    unimplemented!(
+                        "WithdrawFrom::SenderAllowance is not supported by this execution version, \
+                        should have been checked at signing"
+                    );
+                }
             };
             (
                 L::InputArg::FundsWithdrawal(L::FundsWithdrawalArg {

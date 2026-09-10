@@ -8,11 +8,13 @@ processed 10 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 8-25:
+task 1, lines 8-23:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5920400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// Mint S to A. Transfer S from A to B
 
 task 2, line 27:
 //# run test::m::mint_s --sender A

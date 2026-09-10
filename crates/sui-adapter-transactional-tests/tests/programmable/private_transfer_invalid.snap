@@ -8,11 +8,13 @@ processed 11 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-17:
+task 1, lines 8-15:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5244000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// Has store, but cannot be used with internal variants
 
 task 2, lines 19-21:
 //# programmable --sender A --inputs @A

@@ -9,11 +9,15 @@ processed 4 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 9-36:
+task 1, lines 9-32:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 6087600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+//
+// Test sharing
+//
 
 task 2, line 38:
 //# run test::m::create --sender A

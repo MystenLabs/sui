@@ -1,5 +1,6 @@
 ---
 source: crates/sui-indexer-alt-graphql/src/api/types/available_range.rs
+assertion_line: 632
 expression: output
 ---
 AccumulatorRootCreateTransaction._
@@ -135,6 +136,12 @@ BalanceWithdraw.type
   => {}
 
 BalanceWithdraw.withdrawFrom
+  => {}
+
+BalanceWithdraw.funder
+  => {}
+
+BalanceWithdraw.allowance
   => {}
 
 BridgeCommitteeInitTransaction.bridgeObjectVersion
@@ -1665,6 +1672,15 @@ SplitCoinsCommand.amounts
   => {}
 
 StoreExecutionTimeObservationsTransaction._
+  => {}
+
+Subscription.checkpoints
+  => {}
+
+Subscription.transactions
+  => {}
+
+Subscription.events
   => {}
 
 Transaction.id

@@ -3314,6 +3314,146 @@
       "source": "/sui-jsonrpc",
       "destination": "/references/sui-api",
       "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/capability-pattern",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/capability-pattern/",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/derived-objects",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/derived-objects/",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/scenario-testing",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/scenario-testing/",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/dapp-kit-frontend",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/dapp-kit-frontend/",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/nft-app",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/nft-app/",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/lootbox-ctf",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/lootbox-ctf/",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/merchant-ctf",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/merchant-ctf/",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/staking-ctf",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/staking-ctf/",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/event-indexer",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/event-indexer/",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/plinko",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/plinko/",
+      "destination": "/getting-started/examples",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/consumer-app-zklogin",
+      "destination": "/sui-stack/zklogin-integration/consumer-app-zklogin",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/consumer-app-zklogin/",
+      "destination": "/sui-stack/zklogin-integration/consumer-app-zklogin",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/defi-trading-zklogin",
+      "destination": "/sui-stack/zklogin-integration/defi-trading-zklogin",
+      "permanent": true
+    },
+    {
+      "source": "/getting-started/examples/defi-trading-zklogin/",
+      "destination": "/sui-stack/zklogin-integration/defi-trading-zklogin",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/first-app/first-move-package",
+      "destination": "/getting-started/onboarding/hello-world",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/first-app",
+      "destination": "/getting-started/onboarding/hello-world",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/first-app/:path*",
+      "destination": "/getting-started/onboarding/hello-world",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/sui-move-concepts/testing",
+      "destination": "/develop/testing-debugging/testing",
+      "permanent": true
     }
   ],
   "rewrites": [

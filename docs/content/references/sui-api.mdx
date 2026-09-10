@@ -57,7 +57,7 @@ This table shows the restrictions placed on JSON types to make them SuiJSON comp
 
 | JSON    | SuiJSON restrictions                         | Move type mapping                                                                        |
 | ------- | -------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Number  | Must be unsigned integer                     | u8, u6, u32, u64 (encoded as String), u128 (encoded as String), u256 (encoded as String) |
+| Number  | Must be unsigned integer                     | u8, u16, u32, u64 (encoded as String), u128 (encoded as String), u256 (encoded as String) |
 | String  | No restrictions                              | Vector`<u8>`, Address, ObjectID, TypeTag, Identifier, Unsigned integer (256 bit max)     |
 | Boolean | No restrictions                              | Bool                                                                                     |
 | Array   | Must be homogeneous JSON and of SuiJSON type | Vector                                                                                   |

@@ -62,7 +62,7 @@ Anyone operating a wallet (custodial, non-custodial, or exchange wallets) might 
 
 Initially, this should not happen often because most of the ecosystem continues to transfer coin objects. However, because there is no way to prevent funds from arriving at any given wallet through an address balance transfer, wallet implementors should be prepared.
 
-User funds can also become split across both coins and address balances. Balance queries (through JSON-RPC, gRPC, or GraphQL) show the combined total. To send funds that include the address balance portion, you must either:
+User funds can also become split across both coins and address balances. Balance queries through gRPC or GraphQL show the combined total. To send funds that include the address balance portion, you must either:
 
 - Use `coinWithBalance` from the TypeScript SDK (v2+), which automatically draws from both sources.
 - Implement manual withdrawal logic as described in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances).
@@ -71,9 +71,11 @@ User funds can also become split across both coins and address balances. Balance
 
 Balance query responses now include address balance information alongside coin object totals.
 
-### JSON-RPC
+### JSON-RPC (legacy)
 
-The `suix_getBalance` and `suix_getAllBalances` methods now return a `fundsInAddressBalance` field. The `totalBalance` field includes both coin objects and address balance funds:
+Sui Foundation disabled JSON-RPC on Mainnet full nodes. This section describes the legacy response shape so you can recognize it in code you are migrating. For new code, use the gRPC or GraphQL fields that follow.
+
+The legacy `suix_getBalance` and `suix_getAllBalances` response carries a `fundsInAddressBalance` field, and its `totalBalance` field combines coin objects and address balance funds:
 
 ```json
 {
@@ -85,7 +87,7 @@ The `suix_getBalance` and `suix_getAllBalances` methods now return a `fundsInAdd
 }
 ```
 
-To get only the coin-based balance, subtract `fundsInAddressBalance` from `totalBalance`.
+Getting only the coin-based balance means subtracting `fundsInAddressBalance` from `totalBalance`. The gRPC and GraphQL responses return the two amounts as separate fields, so you do not need that arithmetic.
 
 ### gRPC
 
@@ -112,7 +114,7 @@ The `balance` and `balances` fields on address types now include `addressBalance
 
 ## Changes to balance computation from checkpoint data
 
-It is recommended that you use the balance changes provided by JSON RPC or gRPC.
+Use the balance changes that gRPC or GraphQL provide rather than computing them yourself.
 
 If you compute balance changes from checkpoint data, you must now process accumulator events from `TransactionEffects` in addition to coin object diffs.
 
