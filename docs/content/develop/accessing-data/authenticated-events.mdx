@@ -271,7 +271,6 @@ Used to verify that the `EventStreamHead` object was written at a specific check
   - `inclusion` (`OcsInclusionProof`): the object changed in this checkpoint. Contains `object_ref`, `merkle_proof`, `leaf_index`, `tree_root`, and `object_data`, the BCS-encoded object at the committed version. `object_data` is absent when the change was a deletion or a wrap.
   - `non_inclusion` (`OcsNonInclusionProof`): the object did not change in this checkpoint
 
-
 The inclusion proof verifies that the `EventStreamHead` was written at the specified checkpoint. This is essential for resuming streams: the checkpoint must be one where events were actually emitted.
 
 ### Client configuration
