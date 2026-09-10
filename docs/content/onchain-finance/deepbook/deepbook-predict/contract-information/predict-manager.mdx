@@ -57,16 +57,16 @@ DeepBook Predict has no `PredictManager` and no `predict_manager` module. Custod
 
 If you arrived from the old Predict Manager title, you are in the right place. That title and the SDK's `createManager()` method both survive from older DeepBook balance-manager vocabulary, and both name the account wrapper described here. The SDK's own name for the object is account wrapper.
 
-Two modules own this surface, both under `packages/account/sources/` rather than under the Predict package:
+This surface belongs to 2 modules, both under `packages/account/sources/` rather than under the Predict package:
 
-- **`account::account`:** the `AccountWrapper` object, the embedded `Account`, the `Auth` type, and the custody functions, at [account.move](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/account/sources/account.move).
-- **`account::account_registry`:** account creation, address derivation, and the app authorization allowlist, at [account_registry.move](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/account/sources/account_registry.move).
+- **`account::account`:** The `AccountWrapper` object, the embedded `Account`, the `Auth` type, and the custody functions, at [`account.move`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/account/sources/account.move).
+- **`account::account_registry`:** Account creation, address derivation, and the app authorization allowlist, at [`account_registry.move`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/account/sources/account_registry.move).
 
 Predict's own per-account slot lives in [`deepbook_predict::predict_account`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/predict/sources/predict_account.move).
 
 Sui Mainnet and Sui Testnet each run a separate deployment of the `account` package from identical sources, and the Move snippets on this page pin the Mainnet source commit, which is also the `deepbook-predict-mainnet` branch. An account on one network does not exist on the other, and neither deployment shares accounts with the previous-generation `predict-8-21` deployment. Take the IDs from `getAccountConfig(network)` rather than transcribing them:
 
-| Object | Mainnet | Testnet |
+| **Object** | **Mainnet** | **Testnet** |
 |---|---|---|
 | `account` package | `0xa6f1b22aaeb429f6fd8f01c13f605256e00876457fd122da8a0e2c1045c75929` | `0x543139156cb90d1a73df33b5dca37d7c8bdce62506c7874ebc854afd319b98f1` |
 | `AccountRegistry` | `0x210ba485d973b5356e9078318837137efabdd5ffb9eeb3705ba7eef3340324fc` | `0xb889caefe327cbdea58e529e3b9e10dc93f1e661ddef32824d28527edf8d6385` |
@@ -75,7 +75,7 @@ The registry authorizes `PredictApp`, `SessionsApp`, and `DeepbookCoreAccountApp
 
 ## Lifecycle {#lifecycle}
 
-An account moves through five stages. Only creation happens once.
+An account moves through 5 stages. Only creation happens once.
 
 ```mermaid
 flowchart LR
@@ -95,17 +95,17 @@ flowchart LR
 | Redeem | `expiry_market::redeem_live`, `expiry_market::redeem_settled`, `expiry_market::redeem_settled_permissionless` | Removes or replaces the position and credits the payout. |
 | Withdraw | `account::withdraw_funds<T>` | Settles pending funds, debits stored balance, and returns a `Coin<T>`. |
 
-Three properties shape every stage:
+Every stage shares 3 properties:
 
-- **Creation fixes the owner.** `new` records `ctx.sender()` as `owner`, and no function changes it. To move an account to a different address, create a new one under that address.
-- **The wrapper is shared, not owned.** `AccountWrapper` has the `key` ability only, and creation hands it back for `account::share`. Any transaction can name it as an input, so authorization comes from the `Auth` value a function demands.
-- **Both IDs derive from the registry.** The wrapper address and the account identity are derived objects claimed from it, so they are deterministic and computable before the account exists.
+- **Owner:** Creation fixes the owner. `new` records `ctx.sender()` as `owner`, and no function changes it. To move an account to a different address, create a new one under that address.
+- **Ownership:** The wrapper is shared, not owned. `AccountWrapper` has the `key` ability only, and creation hands it back for `account::share`. Any transaction can name it as an input, so authorization comes from the `Auth` value a function demands.
+- **Derived IDs:** Both IDs derive from the registry. The wrapper address and the account identity are derived objects claimed from it, so they are deterministic and computable before the account exists.
 
 ## Create an account {#create-a-manager}
 
-Three constructors exist, and all three are permissionless:
+The registry has 3 constructors, and all 3 are permissionless:
 
-```move
+```move title='packages/account/sources/account_registry.move'
 public fun new(registry: &mut AccountRegistry, ctx: &mut TxContext): AccountWrapper
 
 public fun new_with_referrer(
@@ -125,7 +125,7 @@ public fun new_self_owned(
 
 Each constructor returns the `AccountWrapper` by value. You cannot drop a `key`-only value, so the same transaction must consume it, and the only sensible consumer is:
 
-```move
+```move title='packages/account/sources/account.move'
 public fun share(self: AccountWrapper)
 ```
 
@@ -152,7 +152,7 @@ Creating an account twice for the same owner aborts with `EAccountAlreadyExists`
 
 Both object IDs derive from the shared `AccountRegistry` and the owner address, so you can compute them offchain and hardcode them into the transaction that creates the account:
 
-```move
+```move title='packages/account/sources/account_registry.move'
 public fun derived_address(registry: &AccountRegistry, owner: address): address
 public fun derived_wrapper_address(registry: &AccountRegistry, owner: address): address
 public fun derived_exists(registry: &AccountRegistry, owner: address): bool
@@ -161,7 +161,7 @@ public fun derived_wrapper_exists(registry: &AccountRegistry, owner: address): b
 
 `derived_wrapper_address` returns the shared object's address, which is what every Predict call takes as the `wrapper` argument and what the accumulator delivers funds to. `derived_address` returns the canonical account identity, which is the parent of every app-data slot and the value that appears as `account_id` in events.
 
-That determinism removes the two-transaction dance the old manager required. You no longer need to execute a creation transaction, read the new object ID out of effects, and wait for finality before depositing. Compose creation, sharing, and the first deposit in one block. The TypeScript SDK does exactly this with `client.predict.tx.deposit(owner, amount, { create: true })`, and it exposes the derivation directly as `client.predict.wrapperIdFor(owner)` and the free function `deriveAccountWrapperId(config, owner)`.
+That determinism removes the 2-transaction sequence the old manager required. You no longer need to execute a creation transaction, read the new object ID out of effects, and wait for finality before depositing. Compose creation, sharing, and the first deposit in one block. The TypeScript SDK does exactly this with `client.predict.tx.deposit(owner, amount, { create: true })`, and it exposes the derivation directly as `client.predict.wrapperIdFor(owner)` and the free function `deriveAccountWrapperId(config, owner)`.
 
 <details>
 <summary>Derivation source</summary>
@@ -189,9 +189,9 @@ The SDK's `client.predict.tx.createManager()` builds `account_registry::new` plu
 
 ## Structs {#structs}
 
-Two structs describe the object, and one describes the authority that opens it.
+The layer has 2 structs that describe the object and 1 that describes the authority that opens it.
 
-### AccountWrapper and Account {#account-wrapper-struct}
+### `AccountWrapper` and `Account` {#account-wrapper-struct}
 
 `AccountWrapper` is the shared object. `Account` is a `store` field inside it, not a separate object, so it has no independent object ID that a transaction can name:
 
@@ -207,7 +207,7 @@ Two structs describe the object, and one describes the authority that opens it.
 | `Account` | `referrer_account_id` | `Option<ID>` | Referring account's canonical ID, set only at referral creation. |
 | `Account` | `referrer_receive_address` | `Option<address>` | Referring account's wrapper address, the destination for referral payments. |
 
-Field order in the table is declaration order. Creation writes the two referrer fields once, and they never change, which is why you cannot add or move a referral relationship afterward.
+Field order in the table is declaration order. Creation writes the 2 referrer fields once, and they never change, which is why you cannot add or move a referral relationship afterward.
 
 <details>
 <summary>`AccountWrapper` and `Account` source</summary>
@@ -223,11 +223,11 @@ Field order in the table is declaration order. Creation writes the two referrer 
 
 </details>
 
-### The Auth hot potato {#auth}
+### The `Auth` hot potato {#auth}
 
 `Auth` carries the authority to open an account mutably:
 
-```move
+```move title='packages/account/sources/account.move'
 public struct Auth {
     kind: u8,
     owner: address,
@@ -236,7 +236,7 @@ public struct Auth {
 
 `Auth` declares no abilities at all. You cannot copy, drop, or store it, so the transaction that creates one must consume it, and one `Auth` authorizes exactly one call. Build one per gated call in the block.
 
-Two constructors produce owner authority, and one package-issued path produces app authority:
+Owner authority comes from 2 constructors, and app authority from 1 package-issued path:
 
 | **Constructor** | **Binds to** | **Use** |
 |---|---|---|
@@ -272,19 +272,19 @@ Two constructors produce owner authority, and one package-issued path produces a
 
 ## Balances and custody {#quote-balances}
 
-Funds reach an account two ways. Some arrive as stored balance directly: a deposit, and a redemption payout, which Predict credits to the account inside the redeeming transaction. The rest arrive at the wrapper address through Sui's fund accumulator, which is how builder fees, referral shares, and filled liquidity requests arrive, and a settling call has to fold them into stored balance before the account can spend them.
+Funds reach an account in 2 ways. Some arrive as stored balance directly: a deposit, and a redemption payout, which Predict credits to the account inside the redeeming transaction. The rest arrive at the wrapper address through Sui's fund accumulator, which is how builder fees, referral shares, and filled liquidity requests arrive, and a settling call has to fold them into stored balance before the account can spend them.
 
 `settle` does that folding and is permissionless:
 
-```move
+```move title='packages/account/sources/account.move'
 public fun settle<T>(wrapper: &mut AccountWrapper, root: &AccumulatorRoot, clock: &Clock)
 ```
 
-Anyone can call it for any account and coin type, because only the wrapper's own UID can authenticate the address-balance withdrawal and no value leaves the account. It latches a per-coin timestamp before reading the accumulator, so it is safe to call repeatedly and is a no-op once it has run for that coin type in the same millisecond. It emits `FundsSettled` when it moves a non-zero amount.
+Anyone can call it for any account and coin type, because only the wrapper's own UID can authenticate the address-balance withdrawal and no value leaves the account. It latches a per-coin timestamp before reading the accumulator, so it is safe to call repeatedly and is a no-op once it has run for that coin type in the same millisecond. It emits `FundsSettled` when it moves a nonzero amount.
 
-In practice you rarely call it alone. The two custody functions settle first, then act:
+In practice you rarely call it alone. The 2 custody functions settle first, then act:
 
-```move
+```move title='packages/account/sources/account.move'
 public fun deposit_funds<T>(
     wrapper: &mut AccountWrapper,
     auth: Auth,
@@ -324,7 +324,7 @@ Predict's own trading functions settle USDC through the wrapper before they pric
 
 `withdraw_funds` lives in the `account` package, which knows nothing about Predict's `ProtocolConfig`. It therefore runs regardless of Predict's package version watermark, its `trading_paused` flag, and its emergency freeze. Pausing or freezing Predict stops trading, not the exit of idle balance.
 
-Two consequences follow. You can always retrieve funds that are not committed to a live position. Risk tooling must not treat a Predict pause as a custody halt.
+This has 2 consequences. You can always retrieve funds that are not committed to a live position. Risk tooling must not treat a Predict pause as a custody halt.
 
 ### Deposit and withdraw {#deposit-and-withdraw}
 
@@ -340,7 +340,7 @@ The SDK's `client.predict.tx.deposit(owner, amountUsdc)` sources the quote coin 
 
 Read a balance with the account accessor, which counts stored balance plus funds delivered to the wrapper and not yet settled:
 
-```move
+```move title='packages/account/sources/account.move'
 public fun balance<T>(self: &Account, root: &AccumulatorRoot, clock: &Clock): u64
 ```
 
@@ -394,16 +394,16 @@ An order ID alone does not identify a position. It carries the quantity and the 
 
 ### Read a position {#read-a-position-quantity}
 
-Two reads work against a borrowed `&Account`, so a simulated transaction resolves them without gas:
+The `predict_account` module has 2 reads that work against a borrowed `&Account`, so a simulated transaction resolves them without gas:
 
-```move
+```move title='packages/predict/sources/predict_account.move'
 public fun has_position(account: &Account, expiry_market_id: ID, order_id: u256): bool
 public fun builder_code_id(account: &Account): Option<ID>
 ```
 
 Both return the empty answer rather than aborting when the account has no Predict slot yet, so `false` and `none` do not distinguish an unused account from a closed position.
 
-`has_position` answers one exact question and needs the market ID and order ID up front, so it cannot enumerate a portfolio. To list what an account holds, read the dynamic fields of the `positions` table, where each field key is a BCS-serialized `PositionKey`. The SDK's `client.predict.read.positions(owner)` does this on either network and returns `{ marketId, orderId }` pairs, and `client.predict.read.hasPosition(owner, marketId, orderId)` wraps the single read. The public offchain read services answer the same question over HTTP for the previous-generation `predict-8-21` deployment only, and their account and position paths key on the canonical account ID rather than the wrapper ID; see [The account SDK subpath](#account-sdk).
+`has_position` answers one exact question and needs the market ID and order ID up front, so it cannot enumerate a portfolio. To list what an account holds, read the dynamic fields of the `positions` table, where each field key is a `PositionKey` serialized with Binary Canonical Serialization (BCS). The SDK's `client.predict.read.positions(owner)` does this on either network and returns `{ marketId, orderId }` pairs, and `client.predict.read.hasPosition(owner, marketId, orderId)` wraps the single read. The public offchain read services answer the same question over HTTP for the previous-generation `predict-8-21` deployment only, and their account and position paths key on the canonical account ID rather than the wrapper ID; see [The account SDK subpath](#account-sdk).
 
 To value a position, pass its order ID to the market: `expiry_market::live_order_value` with a market-bound pricer while the market is live, or `expiry_market::settled_order_payout` once it has settled. See [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#read-accessors) for both.
 
@@ -411,7 +411,7 @@ To value a position, pass its order ID to the market: `expiry_market::live_order
 
 An account can carry one builder code, which routes an add-on fee to the code's owner on every trade the account makes:
 
-```move
+```move title='packages/predict/sources/predict_account.move'
 public fun set_builder_code(
     wrapper: &mut AccountWrapper,
     auth: Auth,
@@ -483,16 +483,16 @@ public fun set_builder_code(wrapper: &mut AccountWrapper, auth: Auth, code: &Bui
 public fun unset_builder_code(wrapper: &mut AccountWrapper, auth: Auth, ctx: &mut TxContext)
 ```
 
-`deposit` and `withdraw` take a `&mut Account`, which only `load_account_mut` produces, so reaching them still costs an `Auth`. `authorize_app` and `deauthorize_app` need the `AccountAdminCap`, and `generate_auth_as_app` needs a `Permit<App>`, so none of the three is an integrator call.
+`deposit` and `withdraw` take a `&mut Account`, which only `load_account_mut` produces, so reaching them still costs an `Auth`. `authorize_app` and `deauthorize_app` need the `AccountAdminCap`, and `generate_auth_as_app` needs a `Permit<App>`, so none of the 3 is an integrator call.
 
 ## The account SDK subpath {#account-sdk}
 
 The account primitive serves more than Predict, so `@mysten/deepbook-v3` publishes it on its own subpath, `@mysten/deepbook-v3/account`, separate from `/predict`. Reach for it when you drive custody without the Predict facade, or when you compose account commands into a block of your own.
 
-Two things come out of that subpath before any builder does:
+That subpath exports 2 things before any builder:
 
-- **`getAccountConfig(network)`:** returns the deployed `accountPackageId` and `accountRegistry` for `'mainnet'` or `'testnet'`, so you never transcribe them. From `@mysten/deepbook-v3` 2.3.0 both networks resolve; any other value throws a plain `Error` rather than handing back placeholder IDs.
-- **`AccountContract`:** the class every builder hangs off. Construct it with that config, or with your own `{ accountPackageId, accountRegistry }` if you run your own deployment of the account package.
+- **`getAccountConfig(network)`:** Returns the deployed `accountPackageId` and `accountRegistry` for `'mainnet'` or `'testnet'`, so you never transcribe them. From `@mysten/deepbook-v3` 2.3.0 both networks resolve; any other value throws a plain `Error` rather than handing back placeholder IDs.
+- **`AccountContract`:** The class every builder hangs off. Construct it with that configuration, or with your own `{ accountPackageId, accountRegistry }` if you run your own deployment of the account package.
 
 ```ts
 import { AccountContract, getAccountConfig } from '@mysten/deepbook-v3/account';
@@ -518,24 +518,24 @@ Its methods each return a function you add to a `Transaction`, so they compose i
 
 Only the wrapper ID derives from this class. The canonical account identity is a second, different derived object, keyed by `AccountKey(owner)` rather than `AccountWrapperKey(owner)`, and its derivation lives on `SessionsContract.deriveAccountId` in the `/sessions` subpath. Pass the wrapper ID to Predict calls, and expect the account ID in the `account_id` field of events. A live `OrderMinted` carries the account ID, not the wrapper ID.
 
-Which ID an offchain read service wants is the same split, and getting it wrong fails quietly. As of 2026-09-10 the only public read services are the Testnet v4 hosts listed on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information), and they index the previous-generation `predict-8-21` deployment, not the two deployments this page describes; no read service exists yet for either, and the SDK reads above need none. On those services the account and position paths key on the canonical account ID. A wrapper ID passed there returns HTTP `200` with an empty array rather than an error, so a wrong key is indistinguishable from an empty portfolio until you compare the two: verified 2026-09-03 for a real trader on that deployment, the wrapper ID returned zero balances and zero positions while the account ID returned two balance rows and five open positions. Derive the key with `deriveAccountId`, documented in [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate), where the same wrapper-against-account trap applies to session grants. The wrapper ID stays correct for every onchain call that takes the shared `AccountWrapper` object.
+Which ID an offchain read service wants is the same split, and getting it wrong fails quietly. As of 2026-09-10 the only public read services are the Testnet v4 hosts listed on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information), and they index the previous-generation `predict-8-21` deployment, not the 2 deployments this page describes; no read service exists yet for either, and the SDK reads above need none. On those services the account and position paths key on the canonical account ID. A wrapper ID passed there returns HTTP `200` with an empty array rather than an error, so a wrong key is indistinguishable from an empty portfolio until you compare both: verified 2026-09-03 for a real trader on that deployment, the wrapper ID returned zero balances and zero positions while the account ID returned 2 balance rows and 5 open positions. Derive the key with `deriveAccountId`, documented in [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate), where the same wrapper-against-account trap applies to session grants. The wrapper ID stays correct for every onchain call that takes the shared `AccountWrapper` object.
 
-:::warning
+:::caution
 
 The package root exports a different type named `Account`. `import { Account } from '@mysten/deepbook-v3'` gives you `@deepbook/core::account::Account`, the per-pool trading account, whose layout is unrelated to the account primitive's custody account. Parsing an account-primitive object with it yields nonsense rather than an error, because BCS decoding does not check which struct the bytes came from. Import `Account` from `@mysten/deepbook-v3/account` for anything on this page.
 
 :::
 
-The generated bindings sit on the same subpath for callers building their own move calls: `accountMoveCalls`, `accountRegistryMoveCalls`, `accountEvents`, and the `Account` and `AccountWrapper` BCS structs.
+The generated bindings sit on the same subpath for callers building their own Move calls: `accountMoveCalls`, `accountRegistryMoveCalls`, `accountEvents`, and the `Account` and `AccountWrapper` BCS structs.
 
 ## End-to-end workflow {#end-to-end-workflow}
 
-You can compose creating an account, funding it, and trading into one programmable transaction block, because the wrapper's object ID is derivable before the account exists. Two layers reach that, and they are not interchangeable.
+You can compose creating an account, funding it, and trading into one programmable transaction block, because the wrapper's object ID is derivable before the account exists. You have 2 layers that reach that, and they are not interchangeable.
 
-The facade builders under `client.predict.tx.*` do not compose. Each one returns its own fresh `Transaction` carrying just that builder's commands, so you cannot chain two of them into one block. What the facade does offer is two prebuilt compositions:
+The facade builders under `client.predict.tx.*` do not compose. Each one returns its own fresh `Transaction` carrying just that builder's commands, so you cannot chain 2 of them into one block. What the facade does offer is 2 prebuilt compositions:
 
-- **`client.predict.tx.deposit(owner, amount, { create: true })`:** creates the wrapper, deposits through the fresh handle, and shares last, in one block. The `owner` must be the signer, because `account_registry::new` derives from the transaction sender, and the call aborts if the account already exists.
-- **`client.predict.tx.mint(owner, descriptor, opts)`:** a standalone transaction containing `load_live_pricer`, `generate_auth`, and `mint_exact_quantity`, and nothing else. There is no create, share, split, or deposit in it.
+- **`client.predict.tx.deposit(owner, amount, { create: true })`:** Creates the wrapper, deposits through the fresh handle, and shares last, in one block. The `owner` must be the signer, because `account_registry::new` derives from the transaction sender, and the call aborts if the account already exists.
+- **`client.predict.tx.mint(owner, descriptor, opts)`:** A standalone transaction containing `load_live_pricer`, `generate_auth`, and `mint_exact_quantity`, and nothing else. There is no create, share, split, or deposit in it.
 
 The example below is the second of those. It reads a quote, derives a `maxCost` cap from it, and returns an unsigned mint transaction:
 
@@ -554,9 +554,9 @@ The [tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial) walks the wh
 
 Account events live in `account::account_events`. All of them carry `copy` and `drop` but not `store`, so they are readable from transaction results and no object can hold them. Field order below is declaration order, which is the order BCS decoding depends on.
 
-### AccountCreated {#account-created}
+### `AccountCreated` {#account-created}
 
-All three constructors emit it, once per account:
+All 3 constructors emit it, once per account:
 
 | **#** | **Field** | **Type** | **Description** |
 |---|---|---|---|
@@ -570,7 +570,7 @@ To recover a lost wrapper ID, prefer `derived_wrapper_address` over an event que
 
 ### Balance events {#balance-events}
 
-Three events cover value moving in and out. Each carries the same four fields:
+Value moves in and out under 3 events, and each carries the same 4 fields:
 
 | **#** | **Field** | **Type** | **Description** |
 |---|---|---|---|
@@ -579,15 +579,15 @@ Three events cover value moving in and out. Each carries the same four fields:
 | 3 | `amount` | `u64` | Amount moved, in the coin's base units. |
 | 4 | `new_balance` | `u64` | Stored balance after the move, excluding unsettled funds. |
 
-The three differ only in what caused the move:
+The 3 differ only in what caused the move:
 
-- **`Deposited`:** a coin entered stored balance through `deposit`, reached from `deposit_funds`.
-- **`Withdrawn`:** stored balance left as a coin through `withdraw`, reached from `withdraw_funds`.
-- **`FundsSettled`:** accumulator funds at the wrapper address folded into stored balance. `settle` emits it only when the settled amount is greater than zero, so a no-op `settle` is silent.
+- **`Deposited`:** A coin entered stored balance through `deposit`, reached from `deposit_funds`.
+- **`Withdrawn`:** Stored balance left as a coin through `withdraw`, reached from `withdraw_funds`.
+- **`FundsSettled`:** Accumulator funds at the wrapper address folded into stored balance. `settle` emits it only when the settled amount is greater than zero, so a no-op `settle` is silent.
 
-A redemption payout credits stored balance inside the redeeming transaction, so it surfaces as `Deposited`. Builder fees, referral shares, and filled liquidity requests travel through the accumulator instead and surface as `FundsSettled` on the next settling call. Index all three events to reconstruct a full account ledger, and read the order events described in [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#events) for the trades themselves.
+A redemption payout credits stored balance inside the redeeming transaction, so it surfaces as `Deposited`. Builder fees, referral shares, and filled liquidity requests travel through the accumulator instead and surface as `FundsSettled` on the next settling call. Index all 3 events to reconstruct a full account ledger, and read the order events described in [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#events) for the trades themselves.
 
-Two further events, `AppAuthorized` and `AppDeauthorized`, each carry a single `app` string and record changes to the registry allowlist that governs app authority.
+The module declares 2 further events, `AppAuthorized` and `AppDeauthorized`, which each carry a single `app` string and record changes to the registry allowlist that governs app authority.
 
 <details>
 <summary>Account event source</summary>

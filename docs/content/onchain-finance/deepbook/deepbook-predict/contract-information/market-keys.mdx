@@ -97,7 +97,7 @@ The only conversion in the other direction is `range_codec::strike_from_tick`, w
 	noComments
 />
 
-Both the Mainnet and the Testnet deployment run one underlying, BTC, with two enabled cadences, and both cadences use the same grids:
+Both the Mainnet and the Testnet deployment run one underlying, BTC, with 2 enabled cadences, and both cadences use the same grids:
 
 | **Cadence** | **`tick_size` raw** | **Fine grid** | **`admission_tick_size` raw** | **Admission grid** |
 |---|---|---|---|---|
@@ -131,7 +131,7 @@ A winning position pays its full quantity, and the contract measures quantity in
 
 ## Sentinel ticks {#sentinels}
 
-The protocol reserves two ticks so that an open-ended range needs no artificial outer strike:
+The protocol reserves 2 ticks so that an open-ended range needs no artificial outer strike:
 
 | **End** | **Tick** | **Raw strike** | **Constant** | **Visibility** |
 |---|---|---|---|---|
@@ -150,21 +150,21 @@ A directional view is a one-sided range, and the protocol prices it through exac
 |---|---|---|---|
 | Ends above one level | Directional up | `(K, 1073741823]` | `settlement > K` |
 | Ends at or below one level | Directional down | `(0, K]` | `settlement <= K` |
-| Lands between two levels | Two-sided range | `(L, H]` | `L < settlement <= H` |
+| Lands between 2 levels | Two-sided range | `(L, H]` | `L < settlement <= H` |
 
 A one-sided range wins on an unbounded outcome, so it costs more per contract and wins more often. A two-sided range wins on a bounded outcome, so it costs less per contract and wins less often. Ranges suit a view on where a price settles rather than on which direction it moves.
 
-The `order` module rejects two shapes outright:
+The `order` module rejects 2 shapes outright:
 
 - `lower_tick >= higher_tick` aborts with `EInvalidRange`, so a zero-width or inverted band cannot exist.
 - The fully open range `(0, 1073741823]` aborts with `EInvalidRange`, because it always pays and is not a tradable contract.
 
-## Two grids: tick size and admission tick size {#validation-rules}
+## The tick grid and the admission grid {#validation-rules}
 
-Confusing the two grids is the most common integration failure on this surface. A new mint's strike must satisfy both conditions:
+Confusing the 2 grids is the most common integration failure on this surface. A new mint's strike must satisfy both conditions:
 
-- **Fine grid:** the raw strike must be an exact multiple of the market's `tick_size`, otherwise it is not a tick at all.
-- **Admission grid:** each finite boundary must additionally land on the coarser `admission_tick_size`, which the cadence configuration sets per cadence.
+- **Fine grid:** The raw strike must be an exact multiple of the market's `tick_size`, otherwise it is not a tick at all.
+- **Admission grid:** Each finite boundary must additionally land on the coarser `admission_tick_size`, which the cadence configuration sets per cadence.
 
 The chain tests the second condition in tick units. With `admission_multiple = admission_tick_size / tick_size`, the chain admits a boundary when it is a sentinel, when `tick % admission_multiple == 0`, or when it equals the market's recorded `reference_tick`. Anything else aborts with `strike_exposure::EInvalidAdmissionTick`.
 
@@ -231,10 +231,10 @@ The layout is dense in the low bits:
 
 | **Field** | **Offset** | **Width** | **Meaning** |
 |---|---|---|---|
-| `quantity_lots` | bit 100 | 32 bits | Quantity in lots. Payout quantity is `quantity_lots * 10_000` base units. |
-| `lower_tick` | bit 70 | 30 bits | Lower boundary tick, where `0` is negative infinity. |
-| `higher_tick` | bit 40 | 30 bits | Higher boundary tick, where `1073741823` is positive infinity. |
-| `sequence` | bits 0 to 39 | 40 bits | Expiry-local monotonic counter. |
+| `quantity_lots` | Bit 100 | 32 bits | Quantity in lots. Payout quantity is `quantity_lots * 10_000` base units. |
+| `lower_tick` | Bit 70 | 30 bits | Lower boundary tick, where `0` is negative infinity. |
+| `higher_tick` | Bit 40 | 30 bits | Higher boundary tick, where `1073741823` is positive infinity. |
+| `sequence` | Bits 0 to 39 | 40 bits | Expiry-local monotonic counter. |
 
 Total width is 132 bits, and any bit set at or above 132 aborts with `order::EInvalidOrderId`. Quantity must be nonzero, a whole multiple of `10_000`, and at most `4_294_967_295` lots. Those are encoding bounds only. Mint admission holds a higher effective floor, because the premium has to clear 1 USDC; see [Build a valid range](#build-a-valid-key).
 
@@ -317,7 +317,7 @@ The registry stores those IDs in a `Table` keyed by `market_manager::MarketKey`,
 
 `@mysten/deepbook-v3` version 2.3.0 or later ships a `/predict` subpath that does the tick arithmetic for you on either network. Describe a position with a `MarketDescriptor` in USD, and the SDK resolves the market, converts each strike, and admission-checks each finite boundary before it builds the transaction.
 
-The descriptor has two arms:
+The descriptor has 2 arms:
 
 - **Binary arm:** `{ side: 'up' | 'down', strike: number | 'reference' }`, where `'reference'` resolves to the market's `referencePrice`.
 - **Range arm:** `{ side: 'range', lower: number, upper: number }`, where both bounds are finite USD prices and `lower` must be below `upper`.
@@ -384,9 +384,9 @@ The payout index behind `strike_exposure` is `strike_payout_tree`, and one of it
 | `3` | `EStaleValuationSnapshot` | A flush read a payout snapshot from an earlier flush. |
 | `4` | `ESnapshotSeqNotIncreasing` | A flush activated a snapshot whose sequence did not advance. |
 
-Each distinct finite boundary tick in a market costs one node, and a range with two new finite boundaries costs two. The 960 cap is the valuation budget for a single market, so on a busy market a mint at a fresh strike can abort with `EMaxPayoutTreeNodes` while a mint at a strike some other position already uses succeeds. Codes `3` and `4` belong to the pool flush, and a mint or redeem cannot reach them.
+Each distinct finite boundary tick in a market costs one node, and a range with 2 new finite boundaries costs 2. The 960 cap is the valuation budget for a single market, so on a busy market a mint at a fresh strike can abort with `EMaxPayoutTreeNodes` while a mint at a strike some other position already uses succeeds. Codes `3` and `4` belong to the pool flush, and a mint or redeem cannot reach them.
 
-A third module gates a mint on strike and size policy rather than on shape. `strike_exposure_config` holds the entry-probability band and the `min_premium` floor, and its two trader-facing codes, `EEntryProbabilityOutOfBounds` and `EPremiumBelowMinimum`, are the ordinary failure modes of a first mint. That table lives with the mint call, in [Mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors). Two `expiry_market` codes complete the list of ways a well-formed mint aborts: `EMintCostAboveMaxPayout`, code `11`, when the all-in cost of the quote exceeds the quantity it would pay, which a deep in-the-money strike plus fees can reach; and `protocol_config::ETradeWindowClosed`, code `7`, inside the no-trade window before expiry.
+A third module gates a mint on strike and size policy rather than on shape. `strike_exposure_config` holds the entry-probability band and the `min_premium` floor, and its 2 trader-facing codes, `EEntryProbabilityOutOfBounds` and `EPremiumBelowMinimum`, are the ordinary failure modes of a first mint. That table lives with the mint call, in [Mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors). The list of ways a well-formed mint aborts ends with 2 `expiry_market` codes: `EMintCostAboveMaxPayout`, code `11`, when the all-in cost of the quote exceeds the quantity it would pay, which a deep in-the-money strike plus fees can reach; and `protocol_config::ETradeWindowClosed`, code `7`, inside the no-trade window before expiry.
 
 Error numbers repeat across modules, so the number alone identifies nothing: resolve an abort against the module named in the abort location. Code `3` is `EInvalidQuantity` in `order`, `EReferenceTickAlreadySet` in `strike_exposure`, `EPremiumBelowMinimum` in `strike_exposure_config`, `EStaleValuationSnapshot` in `strike_payout_tree`, and `EMintProbabilityAboveMax` in `expiry_market`. A reader who looks up `3` in the wrong table gets a plausible and wrong answer every time.
 

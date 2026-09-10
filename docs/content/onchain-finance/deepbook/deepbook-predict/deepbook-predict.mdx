@@ -57,13 +57,13 @@ Predict runs on Sui Mainnet as `deepbook-predict-mainnet` and on Sui Testnet as 
 
 :::caution
 
-These pages describe the two current deployments. As of 2026-09-10 the Mainnet deployment is onchain with its configuration in place, but its pool holds only the bootstrap minimum and no market has been tradable there yet. Testnet creates and settles markets every minute. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state, and treat the package IDs and object IDs on these pages as pinned to those two deployments.
+These pages describe the 2 current deployments. As of 2026-09-10 the Mainnet deployment is onchain with its configuration in place, but its pool holds only the bootstrap minimum and no market has been tradable there yet. Testnet creates and settles markets every minute. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state, and treat the package IDs and object IDs on these pages as pinned to those 2 deployments.
 
 :::
 
 ## Quickstart: mint a position
 
-The following steps install the DeepBook TypeScript SDK, create and fund a Predict account, discover a live market, quote a position, and mint it under a cost cap and a fill price cap. They run on Testnet, where the quote coin is a mintable test coin. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`) against `@mysten/deepbook-v3` version 2.3.0 or later and `@mysten/sui` version 2.30.0 or later. They pass compile checks but do not run against Testnet during the docs build, so work through [Verify on Testnet](#verify-on-testnet) before you rely on them.
+The following 7 steps install the DeepBook TypeScript SDK, prepare a funded Predict account, and quote and mint a position on a live market under a cost cap and a fill price cap. They run on Testnet, where the quote coin is a mintable test coin. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`) against `@mysten/deepbook-v3` version 2.3.0 or later and `@mysten/sui` version 2.30.0 or later. They pass compile checks but do not run against Testnet during the documentation build, so work through [Verify on Testnet](#verify-on-testnet) before you rely on them.
 
 ### 1. Install the SDK
 
@@ -77,12 +77,12 @@ The Predict client lives on the `@mysten/deepbook-v3/predict` subpath. You do no
 
 ### 2. Request Testnet tokens
 
-You need two assets on Testnet, from two separate sources. Neither one substitutes for the other:
+You need 2 assets on Testnet, from 2 separate sources. Neither one substitutes for the other:
 
 - **SUI for gas:** Every transaction on this page pays gas in SUI, including the ones that only move the quote coin. Request SUI from a [Sui Testnet faucet](/getting-started/onboarding/get-coins), which lists the browser, Discord, and cURL routes.
 - **Test USDC as the quote asset:** Predict denominates deposits, premiums, payouts, and pool supplies in its quote coin. On Testnet that is a test coin with the type `0xc028557a1ed49e42ed091e115aedefd70a442b184c18fbec5c48d5b6c0b8c184::usdc::USDC`, which wallets display as DUSDC. Request it through the [DeepBook Predict Testnet token request form](https://tally.so/r/Xx102L). The quote coin never pays gas, so an address that holds it but no SUI cannot submit a Predict transaction.
 
-On Mainnet the quote asset is Circle's native USDC, and there is no faucet. Read the exact type for either network from `getConfig(network).quoteCoinType` rather than from a symbol: the two coins share the `usdc::USDC` module path but live in different packages.
+On Mainnet the quote asset is Circle's native USDC, and there is no faucet. Read the exact type for either network from `getConfig(network).quoteCoinType` rather than from a symbol: the 2 coins share the `usdc::USDC` module path but live in different packages.
 
 #### How much SUI to hold
 
@@ -100,7 +100,7 @@ The SDK ships each deployment's package IDs, object IDs, coin types, and units, 
 
 <ImportContent source="examples/deepbook-predict/src/config.ts" mode="code" tag="config" />
 
-Set up a client next. The following example uses the [gRPC](/develop/accessing-data/grpc) client, which matches the rest of the DeepBook SDK docs, and extends it with the Predict client for the selected network.
+Set up a client next. The following example uses the [gRPC](/develop/accessing-data/grpc) client, which matches the rest of the DeepBook SDK documentation, and extends it with the Predict client for the selected network.
 
 <ImportContent source="examples/deepbook-predict/src/client.ts" mode="code" tag="client" />
 
@@ -124,11 +124,11 @@ Every transaction on this page asks the owner to sign. An application that would
 
 ### 5. Discover a live market
 
-Predict creates markets on a fixed cadence, one object per underlying and expiry. Both networks configure BTC markets on the 1 minute and 5 minute cadences, with two expiries of each live at once. `client.predict.read.markets()` returns the active ones with their expiry, tick size, admission tick size, mint pause flag, and reference price. Active means live and not yet settled, so an expired market nobody has settled is still in the list, and quoting against it aborts.
+Predict creates markets on a fixed cadence, one object per underlying and expiry. Both networks configure BTC markets on the 1-minute and 5-minute cadences, with 2 expiries of each live at once. `client.predict.read.markets()` returns the active ones with their expiry, both tick sizes, mint pause flag, and reference price. Active means live and not yet settled, so an expired market nobody has settled is still in the list, and quoting against it aborts.
 
 <ImportContent source="examples/deepbook-predict/src/markets.ts" mode="code" tag="markets" />
 
-Pick a market that is not mint paused and whose expiry leaves you time to trade. The sample's `tradeableMarket` helper filters on both, and its `minTtlMs` default of 30 seconds is the reason it exists: on the 1 minute cadence a quote taken in the closing seconds is stale before the mint lands, and the cost cap then aborts the trade. The protocol also closes trading outright inside a no-trade window before expiry, 2 seconds on both deployments, where a mint or live redeem aborts with `ETradeWindowClosed`. The 30 second floor clears that window with room to spare. Raise it for a flow that waits on a human.
+Pick a market that is not mint paused and whose expiry leaves you time to trade. The sample's `tradeableMarket` helper filters on both, and its `minTtlMs` default of 30 seconds is the reason it exists: on the 1-minute cadence a quote taken in the closing seconds is stale before the mint lands, and the cost cap then aborts the trade. The protocol also closes trading outright inside a no-trade window before expiry, 2 seconds on both deployments, where a mint or live redeem aborts with `ETradeWindowClosed`. The 30-second floor clears that window with room to spare. Raise it for a flow that waits on a human.
 
 A numeric strike must land on that market's `admissionTickSize` grid, which the sample's `admissibleStrike` helper rounds onto. The market's own reference price is the one finite strike the protocol admits off that grid, and the descriptor spells it `strike: 'reference'`. A market reports a `null` reference price until it records its reference tick. The sample skips those markets, but you do not have to wait for a keeper: `expiry_market::set_reference_tick` is permissionless, so you can seed the tick yourself.
 
@@ -138,7 +138,7 @@ A brand-new market also opens with zero working cash and rejects a mint until po
 
 Quote first. `client.predict.read.quoteMint` dry-runs the identical transaction the mint builder produces, against the real account and the real fee path, so it doubles as a preflight check and raises the same typed errors the mint would, insufficient balance included. It returns the all-in account debit as `cost` and the fill price as `entryProbability`.
 
-The mint takes two independent caps, and they bound different things:
+The mint takes 2 independent caps, and they bound different things:
 
 - `maxCost` bounds the all-in account debit, in USDC. Derive it from the quote's `cost` with a small buffer, rounded to at most 6 decimals.
 - `maxProbability` bounds the fill price, between 0 and 1 per 1 USDC of payout. Derive it from the quote's `entryProbability` with a small buffer.
@@ -155,11 +155,11 @@ Omitting `maxCost` and `maxProbability` sends `U64_MAX` for each, which leaves t
 
 A directional position is a one-sided range: `side: 'up'` pays when settlement lands above the strike, and `side: 'down'` pays when settlement lands at or below it. `quantity` is the maximum payout in USDC, and it must be a whole lot of 0.01 USDC.
 
-The lot size is the granularity of a quantity, not a size you can trade. Every mint has to pay a premium of at least 1 USDC, and the premium is `quantity` multiplied by the quoted `entryProbability`. Size a mint by that product rather than by the lot grid: a quantity of 1 is below the floor on every live market and aborts in `strike_exposure_config` with code `3`, `EPremiumBelowMinimum`. A strike quoting near a coin flip needs roughly 2 contracts, a far strike quoting at a low probability needs proportionally more, and no strike ever clears the floor below about 1.02 contracts, so quote first and pick a quantity whose premium reaches 1 USDC.
+The lot size is the granularity of a quantity, not a size you can trade. Every mint has to pay a premium of at least 1 USDC, and the premium is `quantity` multiplied by the quoted `entryProbability`. Size a mint by that product rather than by the lot grid: a quantity of 1 is below the floor on every live market and aborts in `strike_exposure_config` with code `3`, `EPremiumBelowMinimum`. A strike quoting near a 50 percent chance needs roughly 2 contracts, a far strike quoting at a low probability needs proportionally more, and no strike ever clears the floor below about 1.02 contracts, so quote first and pick a quantity whose premium reaches 1 USDC.
 
 The mint returns an order ID. Read it from the transaction result with `client.predict.decode.mint(result).orderId` and persist it, because redeeming or claiming a position needs the market and order ID together, and closing part of a position replaces the ID with a new one. For range positions, live redemption, settled claims, and the liquidity provider flow, see the [end-to-end tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial).
 
-### Verify on Testnet {#verify-on-testnet}
+### 7. Verify on Testnet {#verify-on-testnet}
 
 The samples above pass compile checks, but nothing runs them against Testnet. Confirm them end to end yourself, with `NETWORK` set to `'testnet'`:
 
@@ -175,9 +175,9 @@ The samples above pass compile checks, but nothing runs them against Testnet. Co
 
 DeepBook Predict provides the following capabilities:
 
-- **Per-expiry markets:** Each market settles once, at one timestamp, from one of two sources: the exact Pyth price at the expiry timestamp, or, when that is unavailable 30 seconds after expiry, the exact Block Scholes minute-boundary spot. Six cadence slots exist from 1 minute to 1 month, and both deployments enable the 1 minute and 5 minute cadences. Trading closes 2 seconds before expiry, so a mint or live redeem inside that no-trade window aborts rather than filling at a converged price.
+- **Per-expiry markets:** Each market settles once, at one timestamp, from one of 2 sources: the exact Pyth price at the expiry timestamp, or, when that is unavailable 30 seconds after expiry, the exact Block Scholes minute-boundary spot. Cadence slots run from 1 minute to 1 month in 6 sizes, and both deployments enable the 1-minute and 5-minute cadences. Trading closes 2 seconds before expiry, so a mint or live redeem inside that no-trade window aborts rather than filling at a converged price.
 - **Range positions:** Every position pays its full quantity when settlement lands inside its strike range and nothing otherwise. Directional positions are ranges with one open end.
-- **Oracle pricing from external feeds:** Pyth Lazer spot, plus Block Scholes forward and SVI data, drive every quote from shared objects in a separate `propbook` package.
+- **Oracle pricing from external feeds:** Pyth Lazer spot, plus Block Scholes forward and stochastic volatility inspired (SVI) data, drive every quote from shared objects in a separate `propbook` package.
 - **Shared account custody:** One shared account per owner holds USDC balances, open positions, and builder code attribution, at an address derived from the owner address.
 - **Pooled liquidity:** Liquidity providers queue USDC supply and `PLP` withdrawal requests, each with an optional floor, and a periodic flush fills them at one frozen pool value.
 - **TypeScript SDK on both networks:** The SDK carries the Mainnet and Testnet deployments and covers quotes, transactions, and reads without an indexer. Events stream from any full node over gRPC.

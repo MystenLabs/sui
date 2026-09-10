@@ -67,7 +67,7 @@ Every transaction and every read on this page goes through the `/predict` subpat
 
 :::caution
 
-As of 2026-09-10 the Mainnet deployment is onchain with its configuration in place, but its pool holds only the bootstrap minimum and no market has been tradable there yet. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state. Package IDs, object IDs, and function signatures on these pages belong to the two current deployments.
+As of 2026-09-10 the Mainnet deployment is onchain with its configuration in place, but its pool holds only the bootstrap minimum and no market has been tradable there yet. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state. Package IDs, object IDs, and function signatures on these pages belong to the 2 current deployments.
 
 :::
 
@@ -94,7 +94,7 @@ Register the Predict extension on any client that exposes the core API. The foll
 
 <ImportContent source="examples/deepbook-predict/src/client.ts" mode="code" tag="client" />
 
-`predict({ network })` lands the extension on `client.predict`, which exposes three groups. `tx` builds ready-to-sign transactions, `read` runs simulations and object reads, and `decode` parses receipts out of an executed transaction's events with no network call at all.
+`predict({ network })` lands the extension on `client.predict`, which exposes 3 groups. `tx` builds ready-to-sign transactions, `read` runs simulations and object reads, and `decode` parses receipts out of an executed transaction's events with no network call at all.
 
 :::info
 
@@ -104,7 +104,7 @@ Every write below asks the account owner to sign. An application that would rath
 
 ### Errors the SDK raises
 
-Two typed errors cover almost every failure you handle in application code:
+Almost every failure you handle in application code falls under 2 typed errors:
 
 - `PredictInputError`: Client-side validation rejected the call before it built anything. Common causes are an unknown underlying, a strike off the tick or admission grid, a quantity that is not a whole lot, an amount carrying more decimals than the coin allows, and a range whose `lower` is not below `upper`.
 - `PredictMoveError`: A simulation hit a Move abort. It carries `module`, the exact `code`, and `abortName`, the `E`-prefixed constant name. `abortName` is `null` over JSON-RPC, because only gRPC and GraphQL surface the clever-error constant name.
@@ -115,7 +115,7 @@ Both SDK quote methods dry-run the identical transaction their matching builder 
 
 ## Understand the oracle
 
-Predict owns no oracle. Pricing inputs live in the separate `propbook` package as three shared objects per underlying: a `PythFeed` holding exact-timestamp spot observations, a `BlockScholesValueStore` holding spot and forward observations, and a `BlockScholesSVIStore` holding the SVI volatility surface. One underlying is live on both networks, BTC, with propbook underlying ID `1`.
+Predict owns no oracle. Pricing inputs live in the separate `propbook` package as 3 shared objects per underlying: a `PythFeed` holding exact-timestamp spot observations, a `BlockScholesValueStore` holding spot and forward observations, and a `BlockScholesSVIStore` holding the stochastic volatility inspired (SVI) volatility surface. One underlying is live on both networks, BTC, with propbook underlying ID `1`.
 
 Every priced call rebuilds a transaction-local `Pricer` from those objects through `expiry_market::load_live_pricer`. `Pricer` has `copy` and `drop` but not `store`, so it never persists between transactions, and it binds to exactly one `ExpiryMarket`. The SDK resolves the oracle objects from the deployment configuration for every call it builds, so on those paths you pass no oracle object ID yourself. A call the SDK does not build takes them explicitly: `expiry_market::try_settle` is the one this page asks you to make, and it takes the `OracleRegistry`, the `PythFeed`, and the `BlockScholesValueStore`.
 
@@ -138,26 +138,26 @@ Freshness bounds are protocol configuration, and pricing aborts on a stale input
 
 `read.market({ underlying, expiryMs })` returns the same fields plus `nav`, the market's current net asset value, and returns `null` when no market exists at that expiry.
 
-Both networks enable two cadences for BTC, 1m and 5m, with two expiries of each live at once. The configuration also lists the 1h, 1d, 1w, and 1mo cadences, all disabled. Testnet creates a new 1m market every minute. `tickSize` is `$0.01` and `admissionTickSize` is `$1` on both enabled cadences, so every finite strike lands on a whole dollar.
+Both networks enable 2 cadences for BTC, 1m and 5m, with 2 expiries of each live at once. The configuration also lists the 1h, 1d, 1w, and 1mo cadences, all disabled. Testnet creates a new 1m market every minute. `tickSize` is `$0.01` and `admissionTickSize` is `$1` on both enabled cadences, so every finite strike lands on a whole dollar.
 
-Three things make the soonest expiry a poor default, and the sample's `tradeableMarket(minTtlMs = 30_000)` handles the first two:
+The soonest expiry is a poor default for 3 reasons, and the sample's `tradeableMarket(minTtlMs = 30_000)` handles the first 2:
 
-- **Trading closes before expiry.** `no_trade_window_ms`, 2 seconds on both deployments, is a hard stop: a quote, mint, or live redeem inside the last 2 seconds before expiry aborts in `protocol_config` with code `7`, `ETradeWindowClosed`. An expired market that nobody has settled is still in the active list, and quoting against it aborts too.
-- **A market can be too close to expiry to trade well before that.** On the 1 minute cadence the entry probability converges hard in the closing seconds, so a quote taken there is stale before the mint lands and the cost cap aborts the trade. Requiring a minimum time to expiry is what makes the quote-then-cap flow hold, and 30 seconds is a floor rather than a recommendation for a flow that waits on a human.
-- **A brand-new market opens with zero working cash.** Nobody can mint against it until pool capital funds it, and `plp::rebalance_expiry_cash` is what moves that cash across. Anyone can call it. A mint that aborts on a market that looks otherwise healthy is usually one nobody has funded yet.
+- **Trading window:** Trading closes before expiry. `no_trade_window_ms`, 2 seconds on both deployments, is a hard stop: a quote, mint, or live redeem inside the last 2 seconds before expiry aborts in `protocol_config` with code `7`, `ETradeWindowClosed`. An expired market that nobody has settled is still in the active list, and quoting against it aborts too.
+- **Closing seconds:** A market can be too close to expiry to trade well before that. On the 1-minute cadence the entry probability converges hard in the closing seconds, so a quote taken there is stale before the mint lands and the cost cap aborts the trade. Requiring a minimum time to expiry is what makes the quote-then-cap flow hold, and 30 seconds is a floor rather than a recommendation for a flow that waits on a human.
+- **Unfunded markets:** A brand-new market opens with zero working cash. Nobody can mint against it until pool capital funds it, and `plp::rebalance_expiry_cash` is what moves that cash across. Anyone can call it. A mint that aborts on a market that looks otherwise healthy is usually one nobody has funded yet.
 
 ### Ticks, strikes, and position shape
 
 A position is a half-open range on an absolute integer tick grid, `(lower_tick, higher_tick]`. Direction is a special case of that range rather than a separate concept: a down position is `(0, K]` and an up position is `(K, 1073741823]`, where `0` is the negative-infinity sentinel tick and `1073741823` is the positive-infinity sentinel. The protocol rejects the fully open range.
 
-The SDK hides the tick arithmetic behind a market descriptor with two arms:
+The SDK hides the tick arithmetic behind a market descriptor with 2 arms:
 
 - **Directional:** `{ underlying, expiryMs, side: 'up' | 'down', strike }`, where `strike` is a USD number or the literal `'reference'`.
 - **Two-sided range:** `{ underlying, expiryMs, side: 'range', lower, upper }`, where both bounds are finite USD numbers and `lower` sits below `upper`.
 
 An optional `marketId` on either arm pins the exact `ExpiryMarket` and skips the registry lookup. The SDK validates the ID and rejects a pin whose expiry disagrees with the descriptor.
 
-A numeric strike must land on the market's `admissionTickSize` grid, not just the finer `tickSize` grid. The sample's `admissibleStrike` helper rounds a target onto that grid and trims the binary-float residue the multiply leaves behind, which matters because the SDK throws on a value carrying more than nine decimals.
+A numeric strike must land on the market's `admissionTickSize` grid, not just the finer `tickSize` grid. The sample's `admissibleStrike` helper rounds a target onto that grid and trims the binary-float residue the multiply leaves behind, which matters because the SDK throws on a value carrying more than 9 decimals.
 
 The market's `referencePrice` is the one finite off-grid boundary the chain admits, and `strike: 'reference'` selects it. That literal works on the directional arm only, and it throws while the market's reference price is still `null`. A keeper normally seeds each window, but `expiry_market::set_reference_tick` is permissionless, so you can seed it yourself instead of waiting. It reads the exact Pyth spot at the market's reference timestamp and derives the tick from it, and a repeat call with the same tick succeeds and emits nothing.
 
@@ -188,11 +188,11 @@ Each owner has exactly one Predict account: a shared `AccountWrapper` object hol
 
 The wrapper address derives from the account registry root, so you do not need a transaction result to know it. `client.predict.wrapperIdFor(owner)` computes it offchain with no chain read, and that ID is the argument every Move call takes. After execution, `decode.createManager(result)` reads the same `wrapperId` out of the events alongside `accountId`, `owner`, and `selfOwned`.
 
-One owner derives two addresses from that registry, and they are not interchangeable. The wrapper is the shared object every Move call takes. The canonical account is the identity that app data hangs off, that events report as `account_id`, and that indexed read services key on. `client.predict` derives only the wrapper, through `wrapperIdFor`. Three routes give you the account ID: `new SessionsContract(getSessionsConfig(network)).deriveAccountId(owner)` on the `@mysten/deepbook-v3/sessions` subpath, the `accountId` field on `decode.createManager(result)`, or the `account_id` field on any order event. [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate) covers both derivations and the dynamic field that hangs off the account.
+One owner derives 2 addresses from that registry, and they are not interchangeable. The wrapper is the shared object every Move call takes. The canonical account is the identity that app data hangs off, that events report as `account_id`, and that indexed read services key on. `client.predict` derives only the wrapper, through `wrapperIdFor`. You have 3 routes to the account ID: `new SessionsContract(getSessionsConfig(network)).deriveAccountId(owner)` on the `@mysten/deepbook-v3/sessions` subpath, the `accountId` field on `decode.createManager(result)`, or the `account_id` field on any order event. [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate) covers both derivations and the dynamic field that hangs off the account.
 
 Creating a second account for the same owner aborts. To create and fund in a single transaction, `tx.deposit(owner, amountUsdc, { create: true })` composes the creation, the deposit, and the share. That form runs no pre-check, so it aborts when the account already exists, and `owner` must be the signing address because the registry derives the wrapper from the transaction sender.
 
-Three calls cover funding and reading the account:
+Funding and reading the account takes 3 calls:
 
 - **Deposit:** `tx.deposit(owner, amountUsdc)` sources the quote coin from your coin objects and your address balance.
 - **Withdraw:** `tx.withdraw(owner, amountUsdc)` sends the quote coin to the owner's address balance. Pass `{ toCoinObject: true }` to receive a coin object instead.
@@ -208,14 +208,14 @@ Read live state through the SDK first. Every `read` method runs against the full
 | `read.market({ underlying, expiryMs })` | One market with its `nav`, or `null` |
 | `read.balance(owner)`, `read.plpBalance(owner)` | The account's quote balance as a decimal and its PLP shares as a raw `bigint` |
 | `read.positions(owner)` | Every open position as `marketId` and `orderId` pairs, walked from the account's dynamic fields |
-| `read.pool()` | Pool aggregates: `plpTotalSupply`, `idleUsdc`, and the two queue depths |
+| `read.pool()` | Pool aggregates: `plpTotalSupply`, `idleUsdc`, and the 2 queue depths |
 | `read.quoteMint`, `read.quoteRedeem` | Exact dry runs of the matching builders |
 
 For a live tape, stream events from the full node over gRPC and back it with a `ListEvents` backfill, as [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#stream-events-over-grpc) shows.
 
 ### Indexed read services for the previous Testnet deployment
 
-As of 2026-09-10 no indexed read service exists for `deepbook-predict-testnet` or for Mainnet. Three public read-only JSON services exist, and they index the previous-generation `predict-8-21` Testnet deployment: their responses carry that deployment's package and object IDs, and they know nothing about accounts, positions, or markets on the current ones. They are indexed views rather than transaction authorities, they are not part of any audited manifest, and their operators can retire or repoint them independently of the onchain packages. This section stays for readers still working against `predict-8-21` and as the shape a future service is likely to follow.
+As of 2026-09-10 no indexed read service exists for `deepbook-predict-testnet` or for Mainnet. The 3 public read-only JSON services that do exist index the previous-generation `predict-8-21` Testnet deployment: their responses carry that deployment's package and object IDs, and they know nothing about accounts, positions, or markets on the current ones. They are indexed views rather than transaction authorities, they are not part of any audited manifest, and their operators can retire or repoint them independently of the onchain packages. This section stays for readers still working against `predict-8-21` and as the shape a future service is likely to follow.
 
 | **Service** | **Base URL** | **Primary data** |
 |---------|----------|--------------|
@@ -267,20 +267,20 @@ Passing a wrapper ID here fails silently. The services answer `200` with an empt
 
 :::
 
-Three more paths round out the indexed views: `GET /apps` on the account service lists the app authorizations that the account registry records, `GET /vaults/:pool_vault_id/state` on the Predict service returns the pool's `current` block alongside `latest_flush`, and `GET /config` on the Predict service returns `trading_paused`, `protocol_config_id`, `max_lp_pool_value`, and `max_lp_pool_value_is_unbounded`. Take every path from these tables rather than guessing at one. The plausible variants `/vault`, `/pool`, `/protocol-config`, and `/accounts/:account_id/apps` all return `404`.
+The indexed views have 3 more paths: `GET /apps` on the account service lists the app authorizations that the account registry records, `GET /vaults/:pool_vault_id/state` on the Predict service returns the pool's `current` block alongside `latest_flush`, and `GET /config` on the Predict service returns `trading_paused`, `protocol_config_id`, `max_lp_pool_value`, and `max_lp_pool_value_is_unbounded`. Take every path from these tables rather than guessing at one. The plausible variants `/vault`, `/pool`, `/protocol-config`, and `/accounts/:account_id/apps` all return `404`.
 
-Four conventions apply across all three services:
+All 3 services share 4 conventions:
 
 - **Numbers arrive as strings:** Postgres `NUMERIC` values serialize as JSON strings. Parse monetary, quantity, probability, price, rate, and large identifier fields with decimal or bigint tooling rather than `parseFloat`.
 - **Timestamps are milliseconds:** Onchain and event timestamps use Unix milliseconds unless an endpoint documents seconds. Raw event pages window on `from_ms`, inclusive, and `to_ms`, exclusive, while named history endpoints use `start_time` and `end_time` in Unix seconds.
 - **Order IDs are market-scoped:** Packed order IDs are decimal `u256` strings and are unique only inside one expiry market, so identify a position by `expiry_market_id` and `order_id` together.
-- **Raw events page oldest-first:** `GET /events` lists the allowlisted event resources and their filter profiles. Page one resource with `GET /events/RESOURCE`, then follow the opaque `page.next_cursor` with every filter unchanged until `page.has_next_page` is false. Unknown identifiers return `null` components or empty arrays rather than a 404. The listing also carries a few resources no deployment emits, left over from contract features that no longer exist: `liquidated-order-redeemed`, `deep-staked`, `deep-unstaked`, and `trading-loss-rebate-claimed`. Requesting one returns `503` rather than an empty page, so treat the four event modules in [Contract information](/onchain-finance/deepbook/deepbook-predict/contract-information#live-onchain-events) as the list of what the contracts actually emit.
+- **Raw events page oldest-first:** `GET /events` lists the allowlisted event resources and their filter profiles. Page one resource with `GET /events/RESOURCE`, then follow the opaque `page.next_cursor` with every filter unchanged until `page.has_next_page` is false. Unknown identifiers return `null` components or empty arrays rather than a `404`. The listing also carries a few resources no deployment emits, left over from contract features that no longer exist: `liquidated-order-redeemed`, `deep-staked`, `deep-unstaked`, and `trading-loss-rebate-claimed`. Requesting one returns `503` rather than an empty page, so treat the 4 event modules in [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#live-onchain-events) as the list of what the contracts actually emit.
 
 ## Deposit and mint a directional position
 
 A directional position pays `$1` per contract when settlement lands inside its range, and nothing otherwise. `quantity` is therefore the maximum payout in USD, and it must be a whole `$0.01` lot.
 
-The lot size is the granularity of a quantity, not a size you can trade. `strike_exposure_config::assert_mint_admission` rejects any mint whose premium falls below 1 USDC with code `3`, `EPremiumBelowMinimum`, and the premium is `quantity` multiplied by the quoted `entryProbability`. Because `max_entry_probability` caps that probability at 0.99, no market accepts a quantity below about 1.02, and the floor climbs as the strike moves out of the money: a strike quoting near a coin flip needs roughly 2 contracts, and a strike quoting at 0.08 needs 12.5. Size by the product, not by the grid, and quote before you pick a quantity.
+The lot size is the granularity of a quantity, not a size you can trade. `strike_exposure_config::assert_mint_admission` rejects any mint whose premium falls below 1 USDC with code `3`, `EPremiumBelowMinimum`, and the premium is `quantity` multiplied by the quoted `entryProbability`. Because `max_entry_probability` caps that probability at 0.99, no market accepts a quantity below about 1.02, and the floor climbs as the strike moves out of the money: a strike quoting near 50 percent needs roughly 2 contracts, and a strike quoting at 0.08 needs 12.5. Size by the product, not by the grid, and quote before you pick a quantity.
 
 Quote before you mint. `read.quoteMint(owner, descriptor, { quantity })` dry-runs the identical transaction `tx.mint` builds, against the real account and the real fee path, so it doubles as a price preview and a preflight, and its fee numbers are exact rather than estimated:
 
@@ -293,9 +293,9 @@ Quote before you mint. `read.quoteMint(owner, descriptor, { quantity })` dry-run
 | `quantity` | The payout the quote priced |
 | `raw` | Exact `bigint` chain amounts for `premium`, `cost`, `quantity`, and `entryProbability` only |
 
-Two of the fee names differ from their onchain names. `penalty` is the congestion surcharge, `penalty_fee` onchain, and it ships disabled on both deployments. `subsidy` is the fee incentive subsidy, `fee_incentive_subsidy` onchain. [Design](/onchain-finance/deepbook/deepbook-predict/design#fee-components) explains what each component charges for.
+The fee names differ from their onchain names in 2 cases. `penalty` is the congestion surcharge, `penalty_fee` onchain, and it ships disabled on both deployments. `subsidy` is the fee incentive subsidy, `fee_incentive_subsidy` onchain. [Design](/onchain-finance/deepbook/deepbook-predict/design#fee-components) explains what each component charges for.
 
-The fee breakdown is not in `raw`, which carries only the four fields above. Read the exact fee amounts from `decode.mint(result).raw` after execution instead.
+The fee breakdown is not in `raw`, which carries only the 4 fields above. Read the exact fee amounts from `decode.mint(result).raw` after execution instead.
 
 `fees.referral` is not an extra debit and never changes `cost`. Its basis is the trading fee net of the incentive subsidy, plus the congestion surcharge, and the protocol computes it only after the all-in cost is final, then splits it out of the payment you have already made. The Move `MintQuote` has no referral field at all for that reason. Pass `cost`, never `premium`, when you set a cap.
 
@@ -303,7 +303,7 @@ The fee breakdown is not in `raw`, which carries only the four fields above. Rea
 
 :::caution
 
-Mint slippage caps default to uncapped. Omitting `maxCost` and `maxProbability` sends `U64_MAX` for each, which leaves the mint genuinely uncapped against a price move between the quote and execution. The two caps bound different things: `maxCost` bounds the all-in account debit, and `maxProbability` bounds the fill price. Always quote first and pass both. Round `maxCost` to at most 6 decimals, because a value carrying more decimals than the quote coin throws `PredictInputError` before the SDK builds the transaction.
+Mint slippage caps default to uncapped. Omitting `maxCost` and `maxProbability` sends `U64_MAX` for each, which leaves the mint genuinely uncapped against a price move between the quote and execution. The 2 caps bound different things: `maxCost` bounds the all-in account debit, and `maxProbability` bounds the fill price. Always quote first and pass both. Round `maxCost` to at most 6 decimals, because a value carrying more decimals than the quote coin throws `PredictInputError` before the SDK builds the transaction.
 
 `tx.mint` mints an exact payout quantity, so the premium alone cannot exceed `quantity`. The protocol charges fees on top of it, and `maxCost` is what bounds the total. A mint whose all-in cost would exceed `quantity` aborts with `EMintCostAboveMaxPayout`. `tx.mintAmount` is the genuinely open-ended one: see the warning below it.
 
@@ -315,7 +315,7 @@ To size by budget instead of by payout, `tx.mintAmount` takes `spend` as a premi
 
 :::caution
 
-`maxCost` is optional on `tx.mintAmount`, and that is the more dangerous default of the two builders. The protocol charges fees on top of `spend`, so `maxCost` is the only bound on the whole withdrawal. Omit it and the call builds fine, sends `U64_MAX`, and leaves the debit unbounded. The onchain guard does not save you: `mint_exact_amount` aborts with `EMintCostCapRequired` only when `max_cost` is exactly 0, which `U64_MAX` is not. The SDK does reject a `maxCost` at or below zero before it builds anything, but nothing rejects an absent one. Always pass a `maxCost` derived from a fresh quote.
+`maxCost` is optional on `tx.mintAmount`, and that is the more dangerous default of the 2 builders. The protocol charges fees on top of `spend`, so `maxCost` is the only bound on the whole withdrawal. Omit it and the call builds fine, sends `U64_MAX`, and leaves the debit unbounded. The onchain guard does not save you: `mint_exact_amount` aborts with `EMintCostCapRequired` only when `max_cost` is exactly 0, which `U64_MAX` is not. The SDK does reject a `maxCost` at or below zero before it builds anything, but nothing rejects an absent one. Always pass a `maxCost` derived from a fresh quote.
 
 :::
 
@@ -329,7 +329,7 @@ Both bounds are finite USD numbers that must land on the market's admission grid
 
 ## Redeem and settlement
 
-Closing a position takes one of two paths, and which one applies depends on whether the market has settled. The following sample quotes and closes a live position, then claims a settled one.
+Closing a position takes one of 2 paths, and which one applies depends on whether the market has settled. The following sample quotes and closes a live position, then claims a settled one.
 
 <ImportContent source="examples/deepbook-predict/src/redeem.ts" mode="code" tag="redeem" />
 
@@ -351,8 +351,8 @@ Settlement is permissionless. Any address can call `expiry_market::try_settle`, 
 
 Settlement needs an exact price at the market's expiry timestamp, and it looks for one in a fixed order:
 
-1. **Exact Pyth spot first.** `try_settle` looks for a Pyth observation at exactly the expiry timestamp.
-1. **Exact Block Scholes spot after a grace period.** When Pyth has nothing at that timestamp, the call waits 30 seconds past expiry, then tries the exact Block Scholes minute-boundary spot.
+1. **Exact Pyth spot:** `try_settle` first looks for a Pyth observation at exactly the expiry timestamp.
+1. **Exact Block Scholes spot after a grace period:** When Pyth has nothing at that timestamp, the call waits 30 seconds past expiry, then tries the exact Block Scholes minute-boundary spot.
 
 A market with neither exact observation stays unsettled, and later calls keep retrying. No approximation substitutes for the exact price, because an expired unsettled market has no solvency-safe mark.
 
@@ -366,7 +366,7 @@ Settlement emits `MarketSettled` carrying the `settlement_price` and a `settleme
 
 ### Permissionless redemption
 
-`expiry_market::redeem_settled_permissionless` closes a settled position on the owner's behalf. Three properties define it:
+`expiry_market::redeem_settled_permissionless` closes a settled position on the owner's behalf. It has 3 defining properties:
 
 - **Any address can call it:** The function takes no account `Auth`. It mints Predict's app authorization from the shared `AccountRegistry` instead, so the caller needs no capability, no relationship to the owner, and no signature from them. An admin can switch the path off by deauthorizing the Predict app on that registry.
 - **It becomes available at settlement, not at expiry:** The market must have settled. Calling on an unsettled market aborts with `EMarketNotSettled`, and expiry alone does not settle a market. Call `try_settle` first, or wait for `MarketSettled`.
@@ -394,13 +394,13 @@ Supply and withdrawal are asynchronous. Neither call mints or burns PLP. Each on
 
 :::info
 
-You cannot start a flush. Only a holder of a pool valuation capability starts one, through `start_pool_valuation`, and that transaction also snapshots every live market's pricer with `snapshot_expiry_pricer` and seals the snapshot. Anyone can then run `value_expiry` per market and `finish_flush`, which drains the queues at the frozen mark, and the whole flush must finish within 5 minutes of its snapshot, or the cap holder restarts it from scratch. That single frozen mark is what stops anyone from timing an entry or exit against a self-supplied oracle update. A flush in flight blocks neither trading nor queuing a new request, but a request queued after the snapshot waits for the next flush, and the flush blocks cancelling a queued request until it finishes. Plan on filling at a price you do not control and cannot preview, bounded only by the floor you set.
+You cannot start a flush. Only a holder of a pool valuation capability starts one, through `start_pool_valuation`, and that transaction also snapshots every live market's pricer with `snapshot_expiry_pricer` and seals the snapshot. Anyone can then run `value_expiry` per market and `finish_flush`, which drains the queues at the frozen mark, and the whole flush must finish within 5 minutes of its snapshot, or the cap holder restarts it from scratch. That single frozen mark is what stops anyone from timing an entry or exit against a self-supplied oracle update. A flush in flight blocks neither trading nor queuing a new request, but a request queued after the snapshot waits for the next flush, and the flush blocks canceling a queued request until it finishes. Plan on filling at a price you do not control and cannot preview, bounded only by the floor you set.
 
 :::
 
 ### Supply liquidity
 
-`tx.supplyPlp(owner, amountUsdc, { minPlpOut })` queues a supply request and escrows the quote coin. The minimum request is 10 USDC. `minPlpOut` is a floor on the shares the flush must mint for the request, in raw six-decimal shares, and it is optional: omitted, the request accepts whatever the next flush quotes.
+`tx.supplyPlp(owner, amountUsdc, { minPlpOut })` queues a supply request and escrows the quote coin. The minimum request is 10 USDC. `minPlpOut` is a floor on the shares the flush must mint for the request, in raw 6-decimal shares, and it is optional: omitted, the request accepts whatever the next flush quotes.
 
 <ImportContent source="examples/deepbook-predict/src/supply.ts" mode="code" tag="supply" />
 
@@ -433,7 +433,7 @@ There is no synchronous share price. The pool prices PLP only inside a flush, at
 
 ## Vault strategy considerations
 
-These points follow from the protocol's documented mechanics. They are not investment advice.
+These points follow from the protocol's documented mechanics, and they are not investment advice:
 
 - **You fill at the flush mark, not your own:** Both queues price against one pool-wide net asset value frozen at the flush snapshot. That value moves between the moment you queue and the moment you fill, and no read previews it. A floor turns a bad mark into a refund rather than a fill.
 - **Idle cash bounds exits:** The flush fills supplies before withdrawals, so quote coin supplied in a flush can pay that same flush's withdrawals. Cash already funded into an expiry is not directly redeemable until a rebalance or settlement returns it, so a large exit can fill across several flushes.
@@ -455,7 +455,7 @@ The write paths above type-check but this document does not execute them. To con
 1. Deposit test USDC, then confirm `read.balance(owner)` reports the deposit.
 1. Call `read.quoteMint` with a quantity whose premium clears 1 USDC, which means `quantity` multiplied by `entryProbability` above 1. Mint with `maxCost` derived from the quote's `cost`. Confirm an `OrderMinted` event, and record both the `orderId` and the event's `account_id`.
 1. Confirm `read.positions(owner)` lists that `orderId`, and that `deriveAccountId(owner)` equals the event's `account_id`, which proves you can key an indexed service on the right ID when one exists.
-1. Mint a range position on two admission-grid bounds. Confirm a second `OrderMinted` event whose `lowerTick` and `higherTick` are both finite.
+1. Mint a range position on 2 admission-grid bounds. Confirm a second `OrderMinted` event whose `lowerTick` and `higherTick` are both finite.
 1. Quote and close part of the directional position with more than 2 seconds left before expiry. Confirm a `LiveOrderRedeemed` event and record `replacementOrderId`.
 1. After an expiry passes, build the `expiry_market::try_settle` `moveCall` described in [Settlement](#settlement), send it, and confirm a `MarketSettled` event. Claim with `tx.claimSettled` and confirm a `SettledOrderRedeemed` event.
 1. Queue a supply of at least 10 USDC. Confirm a `SupplyRequested` event, then cancel it with the returned index and confirm a `RequestCancelled` event.
