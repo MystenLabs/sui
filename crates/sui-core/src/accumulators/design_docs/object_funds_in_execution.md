@@ -105,6 +105,11 @@ executed-but-unsettled withdrawals.
 | Dev-inspect / dry-run | Reuses an explicit input root when present, otherwise captures the latest stored root before execution (`SystemObjectVersions::from_input_objects_and_store`). The old post-execution simulate check is bypassed when the flag is on. Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
 | `sui-replay-2` | Reconstructed from expected effects (`SystemObjectVersions::from_effects`). **Caveat:** unsettled in-commit withdrawals are *not* reconstructed in isolated replay (`unsettled = 0`), which can diverge from the original execution — see the TODO in `crates/sui-replay-2/src/execution.rs`. Mainnet enablement is blocked on this. |
 
+Accumulator settlement batches and barriers exclude the forwarding registry from their implicit inputs.
+Their outputs use the accumulator's independent clock; a registry Lamport input could make the barrier
+skip versions and violate the address-funds schedulers' consecutive-version contract. Consensus
+assignment, simulation, and Simulacrum preserve this exclusion.
+
 ## 5. Failure and error semantics
 
 - Insufficiency aborts the transaction: a real, committed failed execution with normal gas

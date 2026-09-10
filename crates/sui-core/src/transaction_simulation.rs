@@ -210,7 +210,7 @@ pub fn simulate_transaction(
     let system_object_versions = SystemObjectVersions::from_input_objects_and_store(
         checked_input_objects.inner(),
         backing_store,
-        protocol_config.enable_forwarding_addresses(),
+        protocol_config.enable_forwarding_addresses() && !kind.is_accumulator_settle_tx(),
     );
     let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
         &tracking_store,

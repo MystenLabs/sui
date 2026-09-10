@@ -48,8 +48,8 @@ pub struct AssignedVersions {
     /// version of the object.
     ///
     /// The accumulator root is always present while accumulator settlement is enabled. The
-    /// forwarding-address registry is also present while forwarding is enabled, because execution
-    /// can discover a forwarding address without declaring the registry as an input.
+    /// forwarding-address registry is present for enabled transactions that can discover a
+    /// forwarding address without declaring the registry. Settlements and cancellations do not read it.
     pub system_object_versions: SystemObjectVersions,
 }
 
@@ -505,6 +505,18 @@ impl SharedObjVerManager {
                     .forwarding_address_registry_obj_initial_shared_version()
             })
             .flatten()
+            // Settlement batches and barriers advance only the accumulator's clock. Inheriting
+            // a higher registry version would violate their consecutive-version contract.
+            .filter(|_| match assignable {
+                Schedulable::AccumulatorSettlement(..) => false,
+                Schedulable::Transaction(tx) => !tx
+                    .as_tx()
+                    .transaction_data()
+                    .kind()
+                    .is_accumulator_settle_tx(),
+                Schedulable::RandomnessStateUpdate(..)
+                | Schedulable::ConsensusCommitPrologue(..) => true,
+            })
             .map(|initial_shared_version| {
                 let version = *shared_input_next_versions
                     .get(&(
@@ -703,11 +715,15 @@ fn get_or_init_versions<'a>(
 mod tests {
     use super::*;
 
+    use crate::accumulators::build_accumulator_barrier_tx;
     use crate::authority::AuthorityState;
+    use crate::authority::authority_test_utils::execute_from_consensus;
     use crate::authority::shared_object_version_manager::{
         ConsensusSharedObjVerAssignment, SharedObjVerManager,
     };
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
+    use move_core_types::ident_str;
     use std::collections::{BTreeMap, HashMap};
     use std::sync::Arc;
     use sui_protocol_config::ProtocolConfig;
@@ -720,12 +736,14 @@ mod tests {
         CertificateProof, ExecutableTransaction, VerifiedExecutableTransaction,
     };
 
-    use sui_types::object::Object;
+    use sui_types::object::{Object, Owner};
     use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
 
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::FundsWithdrawalArg;
-    use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+    use sui_types::{
+        SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    };
 
     #[tokio::test]
     async fn test_assign_versions_from_consensus_basic() {
@@ -880,6 +898,125 @@ mod tests {
                 .shared_input_next_versions
                 .get(&(other_shared_object, initial_shared_version)),
             Some(&SequenceNumber::from_u64(7))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_forwarding_registry_does_not_advance_settlement_clock() {
+        let (sender, keypair) = get_account_key_pair();
+        let gas = Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            SequenceNumber::from_u64(10_000),
+            Owner::AddressOwner(sender),
+        );
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_create_forwarding_address_registry_for_testing(true);
+        config.set_enable_forwarding_addresses_for_testing(true);
+        config.set_forwarding_address_resolve_cost_base_for_testing(52);
+        config.set_forwarding_address_resolve_cost_per_byte_for_testing(
+            config.obj_access_cost_read_per_byte(),
+        );
+        let authority = TestAuthorityBuilder::new()
+            .with_starting_objects(std::slice::from_ref(&gas))
+            .with_protocol_config(config)
+            .build()
+            .await;
+        let epoch_store = authority.epoch_store_for_testing();
+        let epoch = epoch_store.epoch();
+        let registry_initial_version = epoch_store
+            .epoch_start_config()
+            .forwarding_address_registry_obj_initial_shared_version()
+            .unwrap();
+        let accumulator = authority
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .unwrap();
+        let accumulator_initial_version = accumulator.owner.start_version().unwrap();
+        let mut expected_accumulator_version = accumulator.version();
+        let mut builder = TestTransactionBuilder::new(
+            sender,
+            gas.compute_object_reference(),
+            epoch_store.reference_gas_price(),
+        );
+        let ptb = builder.ptb_builder_mut();
+        let registry = ptb
+            .obj(ObjectArg::SharedObject {
+                id: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                initial_shared_version: registry_initial_version,
+                mutability: SharedObjectMutability::Mutable,
+            })
+            .unwrap();
+        let master_id = ptb.pure(7u64).unwrap();
+        ptb.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            ident_str!("forwarding_address").into(),
+            ident_str!("register").into(),
+            vec![],
+            vec![registry, master_id],
+        );
+        let registration =
+            VerifiedExecutableTransaction::new_for_testing(builder.build(), &keypair);
+        let barriers = [1, 2].map(|height| {
+            VerifiedExecutableTransaction::new_system(
+                VerifiedTransaction::new_system_transaction(build_accumulator_barrier_tx(
+                    epoch,
+                    accumulator_initial_version,
+                    height,
+                    &[],
+                )),
+                epoch,
+            )
+        });
+        let assignables = [
+            Schedulable::Transaction(registration.clone()),
+            Schedulable::AccumulatorSettlement(epoch, 1),
+            Schedulable::Transaction(barriers[1].clone()),
+        ];
+        let assignment = SharedObjVerManager::assign_versions_from_consensus(
+            &epoch_store,
+            authority.get_object_cache_reader().as_ref(),
+            assignables.iter(),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+        let mut versions = assignment.assigned_versions.into_map();
+        let registration_versions = versions.remove(&registration.key()).unwrap();
+        let (effects, _) =
+            execute_from_consensus(&authority, registration, registration_versions).await;
+        assert!(effects.status().is_ok(), "{effects:?}");
+        let registry_version = authority
+            .get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+            .unwrap()
+            .version();
+        assert!(registry_version > expected_accumulator_version);
+
+        for (barrier, assignable) in barriers.into_iter().zip_debug_eq(&assignables[1..]) {
+            let assigned = versions.remove(&assignable.key()).unwrap();
+            let (effects, _) = execute_from_consensus(&authority, barrier, assigned).await;
+            assert!(effects.status().is_ok(), "{effects:?}");
+            let next_accumulator_version = effects
+                .mutated()
+                .into_iter()
+                .find_map(|(object_ref, _)| {
+                    (object_ref.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID).then_some(object_ref.1)
+                })
+                .unwrap();
+            expected_accumulator_version = expected_accumulator_version.next();
+            assert_eq!(next_accumulator_version, expected_accumulator_version);
+            assert!(effects.accessed_consensus_objects().iter().all(|object| {
+                object.id_and_version().0 != SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID
+            }));
+            authority
+                .execution_scheduler
+                .settle_address_funds(FundsSettlement {
+                    next_accumulator_version,
+                    funds_changes: BTreeMap::new(),
+                });
+        }
+        assert_eq!(
+            assignment
+                .shared_input_next_versions
+                .get(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_initial_version)),
+            Some(&expected_accumulator_version)
         );
     }
 

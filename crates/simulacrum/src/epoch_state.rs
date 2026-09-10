@@ -184,7 +184,8 @@ impl EpochState {
             sui_types::base_types::SystemObjectVersions::from_input_objects_and_store(
                 checked_input_objects.inner(),
                 store.backing_store(),
-                self.protocol_config.enable_forwarding_addresses(),
+                self.protocol_config.enable_forwarding_addresses()
+                    && !kind.is_accumulator_settle_tx(),
             );
         let (inner_temp_store, gas_status, effects, _timings, result) = self
             .executor
