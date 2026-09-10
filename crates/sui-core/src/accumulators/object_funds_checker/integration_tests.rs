@@ -230,12 +230,18 @@ impl TestEnv {
         VerifiedExecutableTransaction::new_for_testing(builder.build(), &self.keypair)
     }
 
-    /// Enqueues `certs` as one version group at the current accumulator root version and
-    /// returns their effects in order.
+    /// Enqueues `certs` as one version group at the current accumulator root version,
+    /// waits for their effects, and asserts each outcome. Also asserts that exactly the
+    /// insufficient transactions went through the checker's pending path: a sufficient
+    /// transaction executes on its first attempt, an insufficient one is retried once.
     pub async fn execute_batch(
         &self,
         certs: &[VerifiedExecutableTransaction],
+        expected: &[Expect],
     ) -> Vec<TransactionEffects> {
+        assert_eq!(certs.len(), expected.len());
+        let pending_before = self.pending_check_count();
+
         let assigned = self
             .epoch_store
             .assign_shared_object_versions_for_tests(
@@ -263,15 +269,56 @@ impl TestEnv {
             .enqueue(batch, &self.epoch_store);
 
         let mut all_effects = Vec::with_capacity(certs.len());
-        for cert in certs {
-            all_effects.push(
-                self.authority
-                    .notify_read_effects_for_testing("test", *cert.digest())
-                    .await,
-            );
+        for (cert, expect) in certs.iter().zip(expected) {
+            let effects = self
+                .authority
+                .notify_read_effects_for_testing("test", *cert.digest())
+                .await;
+            match expect {
+                Expect::Ok => assert_ok(&effects),
+                Expect::Insufficient => assert_insufficient(&effects),
+            }
+            all_effects.push(effects);
         }
+
+        // The pending check is recorded after the retry is re-sent, so it can trail the
+        // retried transaction's effects briefly.
+        let expected_pending = expected
+            .iter()
+            .filter(|e| matches!(e, Expect::Insufficient))
+            .count() as u64;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while self.pending_check_count() < pending_before + expected_pending
+            && std::time::Instant::now() < deadline
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert_eq!(
+            self.pending_check_count() - pending_before,
+            expected_pending,
+            "pending object funds checks"
+        );
         all_effects
     }
+
+    /// Number of object funds checks that have gone through the pending path so far.
+    fn pending_check_count(&self) -> u64 {
+        self.authority
+            .object_funds_checker
+            .load()
+            .as_ref()
+            .expect("object funds checker must be initialized")
+            .metrics()
+            .pending_check_latency
+            .get_sample_count()
+    }
+}
+
+/// Expected outcome of a transaction in an `execute_batch` call.
+#[derive(Clone, Copy)]
+pub enum Expect {
+    Ok,
+    Insufficient,
 }
 
 fn assert_ok(effects: &TransactionEffects) {
@@ -307,8 +354,7 @@ async fn test_object_withdraw_basic_flow() {
         .build();
     let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
 
-    let effects = env.execute_batch(&[cert]).await;
-    assert_ok(&effects[0]);
+    env.execute_batch(&[cert], &[Expect::Ok]).await;
 }
 
 #[tokio::test]
@@ -323,10 +369,7 @@ async fn test_object_withdraw_multiple_withdraws() {
     let certs: Vec<_> = (0..3)
         .map(|_| env.shared_vault_withdraw_tx(&[(300, env.sender)]))
         .collect();
-    let all_effects = env.execute_batch(&certs).await;
-    for effects in &all_effects {
-        assert_ok(effects);
-    }
+    let all_effects = env.execute_batch(&certs, &[Expect::Ok; 3]).await;
     env.authority
         .settle_accumulator_for_testing(&all_effects, None)
         .await;
@@ -339,10 +382,9 @@ async fn test_object_withdraw_multiple_withdraws() {
     let certs: Vec<_> = (0..3)
         .map(|_| env.shared_vault_withdraw_tx(&[(40, env.sender)]))
         .collect();
-    let all_effects = env.execute_batch(&certs).await;
-    assert_ok(&all_effects[0]);
-    assert_ok(&all_effects[1]);
-    assert_insufficient(&all_effects[2]);
+    let all_effects = env
+        .execute_batch(&certs, &[Expect::Ok, Expect::Ok, Expect::Insufficient])
+        .await;
     env.authority
         .settle_accumulator_for_testing(&all_effects, None)
         .await;
@@ -376,12 +418,18 @@ async fn test_object_withdraw_and_deposit_same_transaction() {
         // must fail.
         env.shared_vault_withdraw_tx(&[(1, vault)]),
     ];
-    let all_effects = env.execute_batch(&certs).await;
-    assert_insufficient(&all_effects[0]);
-    assert_ok(&all_effects[1]);
-    assert_ok(&all_effects[2]);
-    assert_ok(&all_effects[3]);
-    assert_insufficient(&all_effects[4]);
+    let all_effects = env
+        .execute_batch(
+            &certs,
+            &[
+                Expect::Insufficient,
+                Expect::Ok,
+                Expect::Ok,
+                Expect::Ok,
+                Expect::Insufficient,
+            ],
+        )
+        .await;
 
     // Settlement applies the net amounts: only the full-balance withdraw of 2
     // actually deducted funds.
@@ -422,10 +470,9 @@ async fn test_object_net_deposit_same_transaction() {
         // But the unsettled deposit of 3 is not credited before settlement.
         env.shared_vault_withdraw_tx(&[(1, env.sender)]),
     ];
-    let all_effects = env.execute_batch(&certs).await;
-    assert_ok(&all_effects[0]);
-    assert_ok(&all_effects[1]);
-    assert_insufficient(&all_effects[2]);
+    let all_effects = env
+        .execute_batch(&certs, &[Expect::Ok, Expect::Ok, Expect::Insufficient])
+        .await;
 
     // After settlement the net deposit materializes: 2 + 3 - 2 = 3.
     env.authority
@@ -461,8 +508,7 @@ async fn test_object_zero_amount_withdraw() {
         )
         .build();
     let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
-    let effects = env.execute_batch(&[cert]).await;
-    assert_ok(&effects[0]);
+    let effects = env.execute_batch(&[cert], &[Expect::Ok]).await;
 
     env.authority
         .settle_accumulator_for_testing(&effects, None)
@@ -488,7 +534,6 @@ async fn test_object_withdraw_and_deposit_same_transaction_legacy() {
         // of 2 is recorded as unsettled, so no balance remains available.
         env.shared_vault_withdraw_tx(&[(1, vault)]),
     ];
-    let all_effects = env.execute_batch(&certs).await;
-    assert_ok(&all_effects[0]);
-    assert_insufficient(&all_effects[1]);
+    env.execute_batch(&certs, &[Expect::Ok, Expect::Insufficient])
+        .await;
 }
