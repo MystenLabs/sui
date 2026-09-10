@@ -26,7 +26,7 @@ use itertools::Itertools;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::{CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME, NotifyRead};
-use mysten_common::{assert_reachable, debug_fatal, fatal, in_antithesis};
+use mysten_common::{assert_reachable, debug_fatal, fatal, in_antithesis, in_test_configuration};
 use mysten_metrics::{MonitoredFutureExt, monitored_scope, spawn_monitored_task};
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
@@ -1773,6 +1773,9 @@ impl CheckpointBuilder {
         height: CheckpointHeight,
         root_effects: &[TransactionEffects],
     ) {
+        if !in_test_configuration() {
+            return;
+        }
         if let Err(violation) = CausalOrder::check_already_sorted(root_effects) {
             panic!("CAUSAL_SORT_VIOLATION: checkpoint height {height}: {violation}");
         }
