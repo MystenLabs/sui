@@ -214,7 +214,9 @@ where
                     && broadcast.network_tip().saturating_sub(scanned.checkpoint()) <= handoff_threshold
                 {
                     pending_receiver = Some(broadcast.broadcaster().resubscribe());
-                    handoff = Some(broadcast.network_tip());
+                    // The ledger scan can be ahead of the broadcaster. Handing off below the
+                    // scan frontier could replay live checkpoints from before the resume point.
+                    handoff = Some(broadcast.network_tip().max(scanned.checkpoint()));
                 }
 
                 match scanned {
