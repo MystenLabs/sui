@@ -3,7 +3,7 @@ source: crates/move-decompiler/tests/tests.rs
 ---
 module inline_immutable_alias {
     public fun add_one () {
-        *l0 =         *l0 + 1u64
+        *l0 = *l0 + 1u64
     }
 
     public fun mut_borrow_blocks_inline () {

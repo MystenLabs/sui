@@ -30,6 +30,13 @@ pub fn transaction<Mode: ExecutionMode>(
     gas_payment: Option<GasPayment>,
     pt: P::ProgrammableTransaction,
 ) -> Result<L::Transaction, Mode::Error> {
+    if env.protocol_config.validate_ptb_argument_indices()
+        && let Err(err) = pt.validate_argument_indices()
+    {
+        invariant_violation!(
+            "PTB argument indices are checked at signing -- this should be impossible: {err}"
+        );
+    }
     metering::pre_translation::meter::<Mode::Error>(meter, &pt)?;
     let P::ProgrammableTransaction { inputs, commands } = pt;
     // withdrawal_compatibility_inputs specified ==> the protocol config flag is set

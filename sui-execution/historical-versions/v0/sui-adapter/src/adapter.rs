@@ -66,6 +66,7 @@ mod checked {
                 deprecate_global_storage_ops_during_deserialization: protocol_config
                     .deprecate_global_storage_ops_during_deserialization(),
                 normalize_depth_formula: protocol_config.normalize_depth_formula(),
+                charge_ld_const_abstract_size: protocol_config.charge_ld_const_abstract_size(),
             },
         )
         .map_err(|_| SuiErrorKind::ExecutionInvariantViolation.into())

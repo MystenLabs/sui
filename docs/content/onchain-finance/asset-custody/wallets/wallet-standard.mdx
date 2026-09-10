@@ -316,7 +316,7 @@ const client = new SuiGrpcClient({
   network: 'mainnet',
   baseUrl: 'https://fullnode.mainnet.sui.io:443',
 });
-client.core.executeTransaction({
+await client.executeTransaction({
   transaction: fromBase64(bytes),
   signatures: [signature],
 });

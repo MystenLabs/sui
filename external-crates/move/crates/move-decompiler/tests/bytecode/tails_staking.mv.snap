@@ -164,11 +164,11 @@ public fun claim_profit_sharing<T0>(l0: &mut Version, l1: &mut TailsStakingRegis
     let l15 = tx_context::sender(freeze(l2));
     let l6 = big_vector::length(&l1.staking_infos);
     let l13 = big_vector::slice_size(&l1.staking_infos)as u64;
-    let l11 = 0u64;
-    let l10 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l11);
-    let l12 = big_vector::get_slice_length(freeze(l10));
-    let l5 = 0u64;
-    let l14;
+    let mut l11 = 0u64;
+    let mut l10 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l11);
+    let mut l12 = big_vector::get_slice_length(freeze(l10));
+    let mut l5 = 0u64;
+    let mut l14;
     loop {
         assert!(l5 < l6, C12);
         l14 = big_vector::borrow_from_slice_mut(l10, l5 % l13);
@@ -197,11 +197,11 @@ entry fun daily_sign_up(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: Coi
     let l17 = bag::borrow(&l1.tails_metadata, C7);
     let l9 = big_vector::length(&l1.staking_infos);
     let l14 = big_vector::slice_size(&l1.staking_infos)as u64;
-    let l12 = 0u64;
-    let l11 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l12);
-    let l13 = big_vector::get_slice_length(freeze(l11));
-    let l7 = 0u64;
-    let l15;
+    let mut l12 = 0u64;
+    let mut l11 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l12);
+    let mut l13 = big_vector::get_slice_length(freeze(l11));
+    let mut l7 = 0u64;
+    let mut l15;
     loop {
         assert!(l7 < l9, C12);
         l15 = big_vector::borrow_from_slice_mut(l11, l7 % l14);
@@ -218,7 +218,7 @@ entry fun daily_sign_up(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: Coi
     let l19 = clock::timestamp_ms(l3);
     assert!(l19 / C0 - (&l15.u64_padding)[C1] / C0 != 0u64, C1);
     *(&mut (&mut l15.u64_padding)[C1]) = l19;
-    let l8 = 0u64;
+    let mut l8 = 0u64;
     let l10 = (&l15.tails).length();
     let l6 = (&l1.config)[C4];
     while (l8 < l10) {
@@ -295,17 +295,17 @@ public fun exp_up_without_staking(l0: &Version, l1: &TailsStakingRegistry, l2: &
 
 public(friend) fun get_level_counts(l0: &Version, l1: &TailsStakingRegistry): vector<u64> {
     ecosystem::version_check(l0);
-    let l7 = C18;
+    let mut l7 = C18;
     let l14 = bag::borrow(&l1.tails_metadata, C8);
     let l5 = big_vector::length(&l1.staking_infos);
     let l11 = big_vector::slice_size(&l1.staking_infos)as u64;
-    let l9 = 0u64;
-    let l8 = big_vector::borrow_slice(&l1.staking_infos, l9);
-    let l10 = big_vector::get_slice_length(l8);
-    let l3 = 0u64;
+    let mut l9 = 0u64;
+    let mut l8 = big_vector::borrow_slice(&l1.staking_infos, l9);
+    let mut l10 = big_vector::get_slice_length(l8);
+    let mut l3 = 0u64;
     while (l3 < l5) {
         let l12 = big_vector::borrow_from_slice(l8, l3 % l11);
-        let l4 = 0u64;
+        let mut l4 = 0u64;
         let l6 = (&l12.tails).length();
         while (l4 < l6) {
             let l15 = (&l12.tails)[l4];
@@ -325,18 +325,18 @@ public(friend) fun get_level_counts(l0: &Version, l1: &TailsStakingRegistry): ve
 
 public fun get_max_staking_level(l0: &Version, l1: &TailsStakingRegistry, l2: address): u64 {
     ecosystem::version_check(l0);
-    let l8 = 0u64;
+    let mut l8 = 0u64;
     let l14 = bag::borrow(&l1.tails_metadata, C8);
     let l6 = big_vector::length(&l1.staking_infos);
     if (l6 > 0u64) {
-        let __c39;
-        let __c34;
+        let mut __c39;
+        let mut __c34;
         let l12 = big_vector::slice_size(&l1.staking_infos)as u64;
-        let l10 = 0u64;
-        let l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
-        let l11 = big_vector::get_slice_length(l9);
-        let l4 = 0u64;
-        let (l13, l5, l7);
+        let mut l10 = 0u64;
+        let mut l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
+        let mut l11 = big_vector::get_slice_length(l9);
+        let mut l4 = 0u64;
+        let (mut l13, mut l5, l7);
         loop {
             __c34 = l4 < l6;
             if (!(__c34)) {
@@ -373,10 +373,10 @@ public(friend) fun get_staking_info(l0: &Version, l1: &TailsStakingRegistry, l2:
     ecosystem::version_check(l0);
     let l5 = big_vector::length(&l1.staking_infos);
     let l9 = big_vector::slice_size(&l1.staking_infos)as u64;
-    let l7 = 0u64;
-    let l6 = big_vector::borrow_slice(&l1.staking_infos, l7);
-    let l8 = big_vector::get_slice_length(l6);
-    let l4 = 0u64;
+    let mut l7 = 0u64;
+    let mut l6 = big_vector::borrow_slice(&l1.staking_infos, l7);
+    let mut l8 = big_vector::get_slice_length(l6);
+    let mut l4 = 0u64;
     loop {
         if (l4 >= l5) {
             return C26
@@ -395,13 +395,13 @@ public(friend) fun get_staking_info(l0: &Version, l1: &TailsStakingRegistry, l2:
 
 public(friend) fun get_staking_infos(l0: &Version, l1: &TailsStakingRegistry, l2: address): vector<vector<u8>> {
     ecosystem::version_check(l0);
-    let l6 = C17;
+    let mut l6 = C17;
     let l5 = big_vector::length(&l1.staking_infos);
     let l10 = big_vector::slice_size(&l1.staking_infos)as u64;
-    let l8 = 0u64;
-    let l7 = big_vector::borrow_slice(&l1.staking_infos, l8);
-    let l9 = big_vector::get_slice_length(l7);
-    let l4 = 0u64;
+    let mut l8 = 0u64;
+    let mut l7 = big_vector::borrow_slice(&l1.staking_infos, l8);
+    let mut l9 = big_vector::get_slice_length(l7);
+    let mut l4 = 0u64;
     while (l4 < l5) {
         if ((big_vector::borrow_from_slice(l7, l4 % l10)).user == l2) {
             l6.push_back(bcs::to_bytes(big_vector::borrow_from_slice(l7, l4 % l10)))
@@ -416,11 +416,11 @@ public(friend) fun get_staking_infos(l0: &Version, l1: &TailsStakingRegistry, l2
     return l6
 }
 
-public fun import_tails(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: vector<Tails>, l3: vector<address>, l4: &TxContext) {
+public fun import_tails(l0: &mut Version, l1: &mut TailsStakingRegistry, mut l2: vector<Tails>, mut l3: vector<address>, l4: &TxContext) {
     ecosystem::verify(freeze(l0), l4);
     assert!(l2.length() == l3.length(), C5);
     while (!(vector::is_empty(&l2))) {
-        let l5 = l2.pop_back();
+        let mut l5 = l2.pop_back();
         let l8 = l3.pop_back();
         if (typus_nft::contains_u64_padding(&l1.tails_manager_cap, &l5, string::utf8(C19))) {
             typus_nft::remove_u64_padding(&l1.tails_manager_cap, &mut l5, string::utf8(C19))
@@ -450,9 +450,9 @@ public fun import_tails(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: vec
 
 entry fun init_tails_staking_registry(l0: &Version, l1: xb_ManagerCap, l2: TransferPolicy<Tails>, l3: &mut TxContext) {
     ecosystem::verify(l0, freeze(l3));
-    let l6 = bag::new(l3);
-    let l5 = table::new(l3);
-    let l4 = 1u64;
+    let mut l6 = bag::new(l3);
+    let mut l5 = table::new(l3);
+    let mut l4 = 1u64;
     while (l4 <= 7u64) {
         table::add(&mut l5, l4, big_vector::new(1111u32, l3));
         l4 = l4 + 1u64;
@@ -547,10 +547,10 @@ entry fun remove_profit_sharing<T0>(l0: &Version, l1: &mut TailsStakingRegistry,
     assert!(!(!(reg_7)), C6);
     let l7 = big_vector::length(&l1.staking_infos);
     let l14 = big_vector::slice_size(&l1.staking_infos)as u64;
-    let l12 = 0u64;
-    let l11 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l12);
-    let l13 = big_vector::get_slice_length(freeze(l11));
-    let l6 = 0u64;
+    let mut l12 = 0u64;
+    let mut l11 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l12);
+    let mut l13 = big_vector::get_slice_length(freeze(l11));
+    let mut l6 = 0u64;
     while (l6 < l7) {
         if (l6 + 1u64 < l7 && l6 + 1u64 == l12 * l14 + l13) {
             l12 = big_vector::get_slice_idx(freeze(l11)) + 1u64;
@@ -571,8 +571,8 @@ entry fun remove_webp_bytes(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64
 
 entry fun set_profit_sharing<T0, T1>(l0: &Version, l1: &mut TailsStakingRegistry, l2: vector<u64>, l3: Coin<T0>, l4: u64, l5: u64, l6: &TxContext) {
     ecosystem::verify(l0, l6);
-    let l17 = C18;
-    let l32 = 0u64;
+    let mut l17 = C18;
+    let mut l32 = 0u64;
     let l19 = type_name::with_defining_ids();
     let (reg_8, reg_9) = vector::index_of(&l1.profit_assets, &l19);
     let l21 = reg_9;
@@ -580,14 +580,14 @@ entry fun set_profit_sharing<T0, T1>(l0: &Version, l1: &mut TailsStakingRegistry
     let l30 = bag::borrow(&l1.tails_metadata, C8);
     let l15 = big_vector::length(&l1.staking_infos);
     let l26 = big_vector::slice_size(&l1.staking_infos)as u64;
-    let l24 = 0u64;
-    let l23 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l24);
-    let l25 = big_vector::get_slice_length(freeze(l23));
-    let l13 = 0u64;
+    let mut l24 = 0u64;
+    let mut l23 = big_vector::borrow_slice_mut(&mut l1.staking_infos, l24);
+    let mut l25 = big_vector::get_slice_length(freeze(l23));
+    let mut l13 = 0u64;
     while (l13 < l15) {
         let l28 = big_vector::borrow_from_slice_mut(l23, l13 % l26);
-        let l18 = 0u64;
-        let l14 = 0u64;
+        let mut l18 = 0u64;
+        let mut l14 = 0u64;
         let l16 = (&l28.tails).length();
         while (l14 < l16) {
             let l31 = (&l28.tails)[l14];
@@ -637,15 +637,15 @@ public fun stake_tails(l0: &mut Version, l1: &mut TailsStakingRegistry, l2: &mut
     event::emit(StakeTailsEvent { tails: l9, log: vector[l11, l10], bcs_padding: C17 })
 }
 
-fun stake_tails_(l0: &mut TailsStakingRegistry, l1: Tails, l2: address) {
+fun stake_tails_(l0: &mut TailsStakingRegistry, mut l1: Tails, l2: address) {
     *(&mut (bag::borrow_mut(&mut l0.tails_metadata, C7))[typus_nft::tails_number(&l1) - 1u64]) = object::id_address(&l1);
     *(&mut (bag::borrow_mut(&mut l0.tails_metadata, C8))[typus_nft::tails_number(&l1) - 1u64]) = typus_nft::tails_level(&l1);
     let l5 = big_vector::length(&l0.staking_infos);
     let l10 = big_vector::slice_size(&l0.staking_infos)as u64;
-    let l8 = 0u64;
-    let l7 = big_vector::borrow_slice(&l0.staking_infos, l8);
-    let l9 = big_vector::get_slice_length(l7);
-    let l4 = 0u64;
+    let mut l8 = 0u64;
+    let mut l7 = big_vector::borrow_slice(&l0.staking_infos, l8);
+    let mut l9 = big_vector::get_slice_length(l7);
+    let mut l4 = 0u64;
     let l11;
     loop {
         if (l4 < l5) {
@@ -660,7 +660,7 @@ fun stake_tails_(l0: &mut TailsStakingRegistry, l1: Tails, l2: address) {
             }
         };
         if (l4 == l5) {
-            let l6 = C14;
+            let mut l6 = C14;
             utility::pad_u64_vector(&mut l6, (&l0.profit_assets).length() - 1u64);
             big_vector::push_back(&mut l0.staking_infos, StakingInfo { user: l2, tails: C14, profits: l6, u64_padding: C25 })
         };
@@ -703,7 +703,7 @@ public fun transfer_tails(l0: &mut Version, l1: &TailsStakingRegistry, l2: &mut 
     let l13 = typus_nft::tails_level(&l11);
     let (reg_44, reg_45) = kiosk::new(l7);
     let l9 = reg_45;
-    let l8 = reg_44;
+    let mut l8 = reg_44;
     kiosk::lock(&mut l8, &l9, &l1.transfer_policy, l11);
     transfer::public_share_object(l8);
     transfer::public_transfer(l9, l6);
@@ -724,11 +724,11 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
     let l14 = bag::borrow(&l0.tails_metadata, C7);
     let l6 = big_vector::length(&l0.staking_infos);
     let l11 = big_vector::slice_size(&l0.staking_infos)as u64;
-    let l9 = 0u64;
-    let l8 = big_vector::borrow_slice_mut(&mut l0.staking_infos, l9);
-    let l10 = big_vector::get_slice_length(freeze(l8));
-    let l4 = 0u64;
-    let (__c27, __c32, l12, l5, l7);
+    let mut l9 = 0u64;
+    let mut l8 = big_vector::borrow_slice_mut(&mut l0.staking_infos, l9);
+    let mut l10 = big_vector::get_slice_length(freeze(l8));
+    let mut l4 = 0u64;
+    let (mut __c27, mut __c32, mut l12, mut l5, l7);
     loop {
         __c27 = l4 < l6;
         if (!(__c27)) {
@@ -772,7 +772,7 @@ entry fun update_tails_staking_registry_config(l0: &Version, l1: &mut TailsStaki
 
 entry fun upload_ids(l0: &Version, l1: &mut TailsStakingRegistry, l2: &TxContext) {
     ecosystem::verify(l0, l2);
-    let l3 = 6666u64;
+    let mut l3 = 6666u64;
     let l4 = bag::borrow_mut(&mut l1.tails_metadata, C7);
     while (l3 > 0u64) {
         l4.push_back(C16);
@@ -780,7 +780,7 @@ entry fun upload_ids(l0: &Version, l1: &mut TailsStakingRegistry, l2: &TxContext
     }
 }
 
-entry fun upload_ipfs_urls(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64, l3: vector<vector<u8>>, l4: &TxContext) {
+entry fun upload_ipfs_urls(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64, mut l3: vector<vector<u8>>, l4: &TxContext) {
     ecosystem::verify(l0, l4);
     let l5 = table::borrow_mut(bag::borrow_mut(&mut l1.tails_metadata, C9), l2);
     while (!(vector::is_empty(&l3))) {
@@ -790,7 +790,7 @@ entry fun upload_ipfs_urls(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64,
 
 entry fun upload_levels(l0: &Version, l1: &mut TailsStakingRegistry, l2: &TxContext) {
     ecosystem::verify(l0, l2);
-    let l3 = 6666u64;
+    let mut l3 = 6666u64;
     let l4 = bag::borrow_mut(&mut l1.tails_metadata, C8);
     while (l3 > 0u64) {
         l4.push_back(0u64);
@@ -798,7 +798,7 @@ entry fun upload_levels(l0: &Version, l1: &mut TailsStakingRegistry, l2: &TxCont
     }
 }
 
-entry fun upload_webp_bytes(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64, l3: u64, l4: vector<u8>, l5: &TxContext) {
+entry fun upload_webp_bytes(l0: &Version, l1: &mut TailsStakingRegistry, l2: u64, l3: u64, mut l4: vector<u8>, l5: &TxContext) {
     ecosystem::verify(l0, l5);
     let l6 = bag::borrow_mut(&mut l1.tails_metadata, C10);
     if (!(table::contains(freeze(l6), l3 * 10000u64 + l2))) {
@@ -816,11 +816,11 @@ public fun verify_staking(l0: &Version, l1: &TailsStakingRegistry, l2: address, 
     let l14 = bag::borrow(&l1.tails_metadata, C7);
     let l7 = big_vector::length(&l1.staking_infos);
     let l12 = big_vector::slice_size(&l1.staking_infos)as u64;
-    let l10 = 0u64;
-    let l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
-    let l11 = big_vector::get_slice_length(l9);
-    let l5 = 0u64;
-    let (l13, l6, l8);
+    let mut l10 = 0u64;
+    let mut l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
+    let mut l11 = big_vector::get_slice_length(l9);
+    let mut l5 = 0u64;
+    let (mut l13, mut l6, l8);
     loop {
         if (l5 >= l7) {
             return false
@@ -858,11 +858,11 @@ public fun verify_staking_identity(l0: &Version, l1: &TailsStakingRegistry, l2: 
     let l14 = bag::borrow(&l1.tails_metadata, C8);
     let l7 = big_vector::length(&l1.staking_infos);
     let l12 = big_vector::slice_size(&l1.staking_infos)as u64;
-    let l10 = 0u64;
-    let l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
-    let l11 = big_vector::get_slice_length(l9);
-    let l5 = 0u64;
-    let l13;
+    let mut l10 = 0u64;
+    let mut l9 = big_vector::borrow_slice(&l1.staking_infos, l10);
+    let mut l11 = big_vector::get_slice_length(l9);
+    let mut l5 = 0u64;
+    let mut l13;
     loop {
         if (l5 >= l7) {
             return false
@@ -878,7 +878,7 @@ public fun verify_staking_identity(l0: &Version, l1: &TailsStakingRegistry, l2: 
         };
         l5 = l5 + 1u64;
     };
-    let l6 = 0u64;
+    let mut l6 = 0u64;
     let l8 = (&l13.tails).length();
     loop {
         if (l6 >= l8) {

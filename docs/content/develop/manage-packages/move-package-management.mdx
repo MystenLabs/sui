@@ -58,7 +58,7 @@ If you do need to add a persistent environment (for example, a custom Devnet dep
 devnet = "aba3e445"
 ```
 
-Use `sui client chain-identifier` to find the chain ID for your network. The command displays both Base58 and Hex formats — you can use either one in the `[environments]` section. Note that `mainnet` and `testnet` are implicitly available and do not need to be listed.
+Use `sui client chain-identifier` to find the chain ID for your network. The command displays both Base58 and Hex formats. You can use either one in the `[environments]` section. Note that `mainnet` and `testnet` are implicitly available and do not need to be listed.
 
 :::
 
@@ -460,7 +460,7 @@ If `--build-env <env>` is omitted, it defaults to the `build-env` name of the fi
 For example, if you want to build and publish the Testnet version of your package on Localnet, you would switch your CLI's active environment to Localnet, and run with `--build-env testnet`:
 
 ```sh
-sui client env switch localnet
+sui client switch --env localnet
 sui client test-publish --build-env testnet
 ```
 

@@ -2,54 +2,50 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // docs::#config
-export type PredictNetwork = 'testnet' | 'mainnet';
+import { getConfig, getDeployment, getUnits } from '@mysten/deepbook-v3/predict';
 
-export type PredictConfig = {
-	network: PredictNetwork;
-	fullnodeUrl: string;
-	packageId: string;
-	predictObjectId: string;
-	quoteType: string;
-	serverUrl: string;
-};
+// The SDK carries a deployment record for Testnet and for Mainnet, so `getConfig`
+// resolves either. This constant is the single place these examples select a
+// network. Change it here and every other file follows. They default to Testnet,
+// where the quote coin is a mintable test coin; on Mainnet it is native USDC.
+export const NETWORK = 'testnet' as 'testnet' | 'mainnet';
 
-// Testnet IDs pinned to the `predict-testnet-4-16` branch. These change at
-// Mainnet launch. Source: Contract Information page.
-const TESTNET: PredictConfig = {
-	network: 'testnet',
-	fullnodeUrl: 'https://fullnode.testnet.sui.io:443',
-	packageId: '0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138',
-	predictObjectId: '0xc8736204d12f0a7277c86388a68bf8a194b0a14c5538ad13f22cbd8e2a38028a',
-	// DeepBook Test USDC (DUSDC), 6 decimals.
-	quoteType:
-		'0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC',
-	serverUrl: 'https://predict-server.testnet.mystenlabs.com',
-};
+export const FULLNODE_URL =
+	NETWORK === 'mainnet'
+		? 'https://fullnode.mainnet.sui.io:443'
+		: 'https://fullnode.testnet.sui.io:443';
 
-// DeepBook Predict has no Mainnet deployment yet, so there is no Mainnet entry
-// to select. Add one at launch: every value differs from Testnet, including the
-// quote asset, which is a test coin on Testnet and a real asset on Mainnet.
-const CONFIGS: Partial<Record<PredictNetwork, PredictConfig>> = {
-	testnet: TESTNET,
-};
+// One underlying is live on this deployment.
+export const UNDERLYING = 'BTC';
 
-export function predictConfigFor(network: PredictNetwork): PredictConfig {
-	const config = CONFIGS[network];
-	if (!config) {
-		throw new Error(`DeepBook Predict has no ${network} deployment.`);
-	}
-	return config;
+// The SDK carries the IDs of whichever deployments its release was cut against.
+// Assert the name at startup, so a later SDK release that moves a network to a
+// new deployment fails loudly here rather than quietly trading against a
+// deployment these examples were never checked against.
+export const EXPECTED_DEPLOYMENT = {
+	testnet: 'deepbook-predict-testnet',
+	mainnet: 'deepbook-predict-mainnet',
+}[NETWORK];
+
+export const DEPLOYMENT = getDeployment(NETWORK);
+
+if (DEPLOYMENT.deployment !== EXPECTED_DEPLOYMENT) {
+	throw new Error(
+		`Expected DeepBook Predict deployment ${EXPECTED_DEPLOYMENT}, got ` +
+			`${DEPLOYMENT.deployment} (chain ${DEPLOYMENT.chainId}, ` +
+			`deepbookv3 commit ${DEPLOYMENT.sourceCommit}).`,
+	);
 }
 
-// Resolve once at startup and pass the result down, rather than reading the
-// network in each module. The examples target Testnet.
-export const PREDICT = predictConfigFor('testnet');
+// Package IDs, the shared registry, protocol config, and pool vault objects, the
+// quote coin type, and the per-underlying oracle IDs all come from the SDK, so
+// no deployment identifier is hardcoded in these examples. Always read the quote
+// coin from `CONFIG.quoteCoinType`: on Mainnet it is native USDC, and on Testnet
+// it is a test coin with the same `usdc::USDC` module path that displays as DUSDC.
+export const CONFIG = getConfig(NETWORK);
 
-// Oracle ID, expiry, and strike are NOT hardcoded. Read a live oracle from the
-// Predict server before minting: GET /predicts/:predict_id/oracles.
-export type ActiveOracle = {
-	oracleId: string; // object ID of the OracleSVI
-	expiry: number; // ms timestamp
-	strike: number; // fixed-point strike, per oracle scale
-};
+// Scale constants the deployment owns: position quantities are whole
+// `positionLotSize` lots, amounts are `quoteCoinDecimals`-decimal USDC, and
+// probabilities, prices, and rates are fixed point at `fixedPointScale`.
+export const UNITS = getUnits(NETWORK);
 // docs::/#config

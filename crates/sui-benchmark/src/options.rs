@@ -236,6 +236,10 @@ pub enum RunSpec {
         // The actual increment for each transaction is chosen at random a value between 0 and this value.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         shared_counter_max_tip: Vec<u64>,
+        // Gas price for shared counter transactions as a multiple of the RGP, applied before
+        // `shared_counter_max_tip`. Must be at least 1.0.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [1.0], value_parser = parse_gas_price_multiplier)]
+        shared_counter_gas_price_multiplier: Vec<f64>,
         // batch size use for batch payment workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [15])]
         batch_payment_size: Vec<u32>,
@@ -286,4 +290,43 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [Interval::from_str("unbounded").unwrap()])]
         duration: Vec<Interval>,
     },
+}
+
+fn parse_gas_price_multiplier(s: &str) -> Result<f64, String> {
+    let multiplier: f64 = s.parse().map_err(|e| format!("{e}"))?;
+    if multiplier.is_finite() && multiplier >= 1.0 {
+        Ok(multiplier)
+    } else {
+        Err(format!(
+            "gas price multiplier must be at least 1.0, got {s}"
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_multiplier(value: &str) -> Result<Vec<f64>, clap::Error> {
+        let opts = Opts::try_parse_from([
+            "stress",
+            "bench",
+            "--shared-counter-gas-price-multiplier",
+            value,
+        ])?;
+        let RunSpec::Bench {
+            shared_counter_gas_price_multiplier,
+            ..
+        } = opts.run_spec;
+        Ok(shared_counter_gas_price_multiplier)
+    }
+
+    #[test]
+    fn shared_counter_gas_price_multiplier_requires_at_least_one() {
+        assert_eq!(parse_multiplier("1.0").unwrap(), vec![1.0]);
+        assert_eq!(parse_multiplier("2.5,10").unwrap(), vec![2.5, 10.0]);
+        assert!(parse_multiplier("0.99").is_err());
+        assert!(parse_multiplier("0").is_err());
+        assert!(parse_multiplier("nan").is_err());
+    }
 }
