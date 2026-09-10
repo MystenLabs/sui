@@ -569,13 +569,12 @@ async fn test_delete_shared_object() {
 
     // assert the shared object was deleted
     let deleted_obj_id = effects.deleted()[0].0;
-    let shared_obj_id = effects
-        .accessed_consensus_objects()
-        .into_iter()
-        .find(|object| object.id_and_version().0 == deleted_obj_id)
-        .expect("deleted shared object must be recorded in effects")
-        .id_and_version()
-        .0;
+    assert!(
+        effects
+            .accessed_consensus_objects()
+            .iter()
+            .any(|object| object.id_and_version().0 == shared_obj_id)
+    );
     assert_eq!(deleted_obj_id, shared_obj_id);
 
     // assert the version of the deleted shared object was incremented
@@ -694,13 +693,12 @@ async fn test_delete_shared_object_immut_mut_mut_interleave() {
 
     // assert the shared object was deleted
     let deleted_obj_id = effects.deleted()[0].0;
-    let shared_obj_id = effects
-        .accessed_consensus_objects()
-        .into_iter()
-        .find(|object| object.id_and_version().0 == deleted_obj_id)
-        .expect("deleted shared object must be recorded in effects")
-        .id_and_version()
-        .0;
+    assert!(
+        effects
+            .accessed_consensus_objects()
+            .iter()
+            .any(|object| object.id_and_version().0 == shared_obj_id)
+    );
     assert_eq!(deleted_obj_id, shared_obj_id);
 
     // assert the version of the deleted shared object was incremented
@@ -798,13 +796,12 @@ async fn test_delete_shared_object_immut_mut_immut_interleave() {
 
     // assert the shared object was deleted
     let deleted_obj_id = effects.deleted()[0].0;
-    let shared_obj_id = effects
-        .accessed_consensus_objects()
-        .into_iter()
-        .find(|object| object.id_and_version().0 == deleted_obj_id)
-        .expect("deleted shared object must be recorded in effects")
-        .id_and_version()
-        .0;
+    assert!(
+        effects
+            .accessed_consensus_objects()
+            .iter()
+            .any(|object| object.id_and_version().0 == shared_obj_id)
+    );
     assert_eq!(deleted_obj_id, shared_obj_id);
 
     // assert the version of the deleted shared object was incremented
