@@ -102,7 +102,7 @@ executed-but-unsettled withdrawals.
 |------|-----------------------------------------------|
 | Live consensus execution | Assigned versions (`AssignedVersions.system_object_versions`). |
 | Checkpoint execution / crash recovery | Back-filled from the settlement barrier's input version, with recorded `ReadOnlyRoot` versions checked for consistency. See `CheckpointTransactionData::new` in the [checkpoint executor](../../checkpoints/checkpoint_executor/mod.rs). |
-| Dev-inspect / dry-run | Reuses an explicit input root when present, otherwise captures the latest stored root before execution (`SystemObjectVersions::from_input_objects_and_store`). The old post-execution simulate check is bypassed when the flag is on. Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
+| Dev-inspect / dry-run | Reuses explicit input versions and selects other roots from the latest store state (`TrackingBackingStore::pin_system_objects`). The implicit registry is retained before execution; missing pinned data is an error. The old post-execution simulate check is bypassed when the flag is on. Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
 | `sui-replay-2` | Reconstructed from expected effects (`SystemObjectVersions::from_effects`). **Caveat:** unsettled in-commit withdrawals are *not* reconstructed in isolated replay (`unsettled = 0`), which can diverge from the original execution — see the TODO in `crates/sui-replay-2/src/execution.rs`. Mainnet enablement is blocked on this. |
 
 Accumulator settlement batches and barriers exclude the forwarding registry from their implicit inputs.
@@ -113,6 +113,11 @@ assignment, simulation, and Simulacrum preserve this exclusion.
 Runtime loading first reuses a retained explicit input at the assigned version. Simulation and replay
 can therefore keep using that root after its stored version is pruned. A retained input at a different
 version is not a fallback for the assigned root.
+
+For an exclusively implicit registry read, simulation materializes the chosen version in
+`TrackingBackingStore` before entering execution. If that version has already been pruned, simulation
+returns `ObjectNotFound`; otherwise the retained exact-version object survives subsequent pruning.
+These retained reads are not added to declared inputs, so their storage-read gas treatment is unchanged.
 
 ## 5. Failure and error semantics
 

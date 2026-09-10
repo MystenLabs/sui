@@ -13,7 +13,7 @@ use sui_config::{
 use sui_execution::Executor;
 use sui_transaction_checks::{check_dev_inspect_input, check_transaction_input};
 use sui_types::{
-    base_types::{EpochId, ObjectID, ObjectRef, SystemObjectVersions},
+    base_types::{EpochId, ObjectID, ObjectRef},
     coin_reservation::{CoinReservationResolverTrait, ParsedDigest},
     digests::{ChainIdentifier, TransactionDigest},
     effects::TransactionEffectsAPI,
@@ -207,11 +207,10 @@ pub fn simulate_transaction(
     let cloned_gas = gas_data.clone();
     let cloned_kind = kind.clone();
     let tx_digest = transaction_digest;
-    let system_object_versions = SystemObjectVersions::from_input_objects_and_store(
+    let system_object_versions = tracking_store.pin_system_objects(
         checked_input_objects.inner(),
-        backing_store,
         protocol_config.enable_forwarding_addresses() && !kind.is_accumulator_settle_tx(),
-    );
+    )?;
     let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
         &tracking_store,
         protocol_config,

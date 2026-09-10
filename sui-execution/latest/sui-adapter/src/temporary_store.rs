@@ -1533,8 +1533,12 @@ impl BackingPackageStore for TemporaryStore<'_> {
 #[cfg(test)]
 mod system_object_resolver_tests {
     use super::*;
+    use std::cell::Cell;
     use sui_types::base_types::ConsensusObjectVersion;
+    use sui_types::effects::{TransactionEffectsAPI, UnchangedConsensusKind};
+    use sui_types::error::UserInputError;
     use sui_types::in_memory_storage::InMemoryStorage;
+    use sui_types::storage::{ObjectStore, ParentSync, TrackingBackingStore};
     use sui_types::transaction::{
         InputObjectKind, ObjectReadResult, ObjectReadResultKind, SharedObjectMutability,
     };
@@ -1648,6 +1652,159 @@ mod system_object_resolver_tests {
             ))
             .unwrap_err(),
             SuiErrorKind::ExecutionInvariantViolation,
+        );
+    }
+
+    struct PruningStore {
+        root: Object,
+        latest: InMemoryStorage,
+        pruned: Cell<bool>,
+        prune_before_load: bool,
+    }
+
+    impl ObjectStore for PruningStore {
+        fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+            if *object_id == self.root.id() && !self.pruned.get() {
+                if self.prune_before_load {
+                    self.pruned.set(true);
+                }
+                Some(self.root.clone())
+            } else {
+                self.latest.get_object(object_id).cloned()
+            }
+        }
+
+        fn get_object_by_key(
+            &self,
+            object_id: &ObjectID,
+            version: SequenceNumber,
+        ) -> Option<Object> {
+            if *object_id == self.root.id()
+                && version == self.root.version()
+                && !self.pruned.replace(true)
+            {
+                Some(self.root.clone())
+            } else {
+                self.latest.get_object_by_key(object_id, version)
+            }
+        }
+    }
+
+    impl BackingPackageStore for PruningStore {
+        fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+            self.latest.get_package_object(package_id)
+        }
+    }
+
+    impl ParentSync for PruningStore {
+        fn get_latest_parent_entry_ref_deprecated(&self, object_id: ObjectID) -> Option<ObjectRef> {
+            self.latest
+                .get_latest_parent_entry_ref_deprecated(object_id)
+        }
+    }
+
+    impl RuntimeObjectResolver for PruningStore {
+        fn read_child_object(
+            &self,
+            parent: &ObjectID,
+            child: &ObjectID,
+            child_version_upper_bound: SequenceNumber,
+        ) -> SuiResult<Option<Object>> {
+            self.latest
+                .read_child_object(parent, child, child_version_upper_bound)
+        }
+
+        fn get_object_received_at_version(
+            &self,
+            owner: &ObjectID,
+            object_id: &ObjectID,
+            version: SequenceNumber,
+            epoch: EpochId,
+        ) -> SuiResult<Option<Object>> {
+            self.latest
+                .get_object_received_at_version(owner, object_id, version, epoch)
+        }
+    }
+
+    #[test]
+    fn implicit_system_object_pinning_is_lossless_or_fails() {
+        let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+        let owner = Owner::Shared {
+            initial_shared_version: SequenceNumber::from_u64(1),
+        };
+        let mut root = Object::with_id_owner_version_for_testing(
+            id,
+            SequenceNumber::from_u64(10),
+            owner.clone(),
+        );
+        root.previous_transaction = TransactionDigest::new([7; 32]);
+        let make_store = |prune_before_load| PruningStore {
+            root: root.clone(),
+            latest: InMemoryStorage::new(vec![Object::with_id_owner_version_for_testing(
+                id,
+                SequenceNumber::from_u64(11),
+                owner.clone(),
+            )]),
+            pruned: Cell::new(false),
+            prune_before_load,
+        };
+        let inputs = InputObjects::new(vec![]);
+
+        // Pruning between version selection and materialization must stop simulation.
+        let backing_store = make_store(true);
+        let tracking_store = TrackingBackingStore::new(&backing_store);
+        assert_eq!(
+            tracking_store
+                .pin_system_objects(&inputs, true)
+                .unwrap_err(),
+            SuiErrorKind::UserInputError {
+                error: UserInputError::ObjectNotFound {
+                    object_id: id,
+                    version: Some(root.version()),
+                },
+            },
+        );
+
+        // Pruning after materialization must not erase an implicit Lamport input, even when no
+        // forwarding native runs. The effects must preserve both its reference and dependency.
+        let backing_store = make_store(false);
+        let tracking_store = TrackingBackingStore::new(&backing_store);
+        let versions = tracking_store.pin_system_objects(&inputs, true).unwrap();
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let digest = TransactionDigest::new([8; 32]);
+        let mut dependencies = BTreeSet::new();
+        let store = TemporaryStore::new_with_input_objects(
+            &tracking_store,
+            inputs,
+            vec![],
+            digest,
+            &config,
+            0,
+            versions,
+            Some(&mut dependencies),
+            PostExecutionCheckInputs::default(),
+            &EmptyUnsettledObjectFunds,
+        );
+        let (_, effects) = store.into_effects(
+            vec![],
+            &digest,
+            dependencies,
+            GasCostSummary::default(),
+            ExecutionStatus::Success,
+            None,
+            0,
+        );
+        assert_eq!(
+            effects.unchanged_consensus_objects(),
+            vec![(
+                id,
+                UnchangedConsensusKind::ReadOnlyRoot((root.version(), root.digest())),
+            )],
+        );
+        assert_eq!(effects.dependencies(), &[root.previous_transaction]);
+        assert_eq!(
+            effects.lamport_version(),
+            SequenceNumber::lamport_increment([root.version()]),
         );
     }
 }

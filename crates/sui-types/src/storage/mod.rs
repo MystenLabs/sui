@@ -14,7 +14,7 @@ use crate::base_types::{
 use crate::committee::EpochId;
 use crate::effects::InputConsensusObject;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
-use crate::error::{ExecutionError, SuiError, SuiErrorKind};
+use crate::error::{ExecutionError, SuiError, SuiErrorKind, UserInputError};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
 use crate::full_checkpoint_content::ObjectSet;
 use crate::message_envelope::Message;
@@ -900,6 +900,7 @@ impl SystemObjectVersions {
     /// Pin system-object reads for execution without consensus, e.g. simulacrum and dry-run.
     /// Reuse explicit input versions so a concurrent write cannot give the same transaction two
     /// versions of one root. Only exclusively implicit roots are loaded from the latest store state.
+    /// Concurrent stores require `TrackingBackingStore::pin_system_objects` to retain mandatory roots.
     pub fn from_input_objects_and_store(
         input_objects: &InputObjects,
         store: &dyn ObjectStore,
@@ -1016,6 +1017,31 @@ impl<'a> TrackingBackingStore<'a> {
         }
     }
 
+    /// Retain implicit Lamport inputs before simulation starts. Declared inputs already retain their
+    /// objects; adding implicit roots to them would change storage-read gas charges.
+    pub fn pin_system_objects(
+        &self,
+        input_objects: &InputObjects,
+        include_forwarding_address_registry: bool,
+    ) -> SuiResult<SystemObjectVersions> {
+        let versions = SystemObjectVersions::from_input_objects_and_store(
+            input_objects,
+            self.inner,
+            include_forwarding_address_registry,
+        );
+        let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+        if let Some(version) = versions.get(&id)
+            && !input_objects.iter_objects().any(|object| object.id() == id)
+        {
+            self.load_implicitly_read_system_object(&id, version)
+                .ok_or(UserInputError::ObjectNotFound {
+                    object_id: id,
+                    version: Some(version.version),
+                })?;
+        }
+        Ok(versions)
+    }
+
     pub fn into_read_objects(self) -> ObjectSet {
         self.read_objects.into_inner()
     }
@@ -1083,6 +1109,14 @@ impl crate::storage::ObjectStore for TrackingBackingStore<'_> {
         object_id: &ObjectID,
         version: crate::base_types::ConsensusObjectVersion,
     ) -> Option<Object> {
+        // A simulation pin must survive pruning between materialization and execution.
+        if let Some(object) = self
+            .read_objects
+            .borrow()
+            .get(&ObjectKey(*object_id, version.version))
+        {
+            return Some(object.clone());
+        }
         self.inner
             .load_implicitly_read_system_object(object_id, version)
             .inspect(|o| self.track_object(o))
