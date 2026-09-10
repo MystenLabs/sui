@@ -49,7 +49,7 @@ answer: >-
   down probabilities for a single strike, and `read.pricer` reads the resolved
   pricer once and prices every strike locally.
 last_verified: 2026-09-10
-verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d'
+verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); Mainnet deployment 14a7e8f8; Testnet deployment a928bd2d'
 ---
 
 The markets and pricing surface of `@mysten/deepbook-v3/predict` finds live expiry markets, turns a position you describe in US dollars (USD) into the tick pair the contract takes, and prices strikes onchain or locally. [Strikes and Ticks](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys) explains the tick grid and the admission grid, and [Oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle) explains the pricer that every price read loads.
@@ -72,9 +72,9 @@ Each `ActiveMarket` carries these fields:
 
 - `id`: The `ExpiryMarket` shared object ID.
 - `expiryMs`: The expiry as a Unix millisecond timestamp, typed `bigint`.
-- `tickSize`: The fine strike grid in USD, converted from the market's raw `tick_size` at the 1e9 price scale.
+- `tickSize`: The fine strike grid in USD, which the SDK converts from the market's raw `tick_size` at the 1e9 price scale.
 - `admissionTickSize`: The coarser grid in USD that every new finite mint strike must land on, unless the strike equals `referencePrice`.
-- `mintPaused`: Whether the market rejects new mints. The builders do not check it, and the contract aborts a mint while it is set.
+- `mintPaused`: Whether the market rejects new mints. The builders do not check it, and the contract aborts a mint while the flag is `true`.
 - `referencePrice`: The market's reference strike in USD, which is its recorded `reference_tick` multiplied by `tickSize`, or `null` until someone records that tick.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="161-175" />
@@ -95,7 +95,7 @@ It takes this parameter:
 
 `MarketSummary` carries every `ActiveMarket` field plus 1 more:
 
-- `nav`: The market's current NAV in USD from `expiry_market::current_nav`, which is free expiry cash minus the marked liability of the exposure book, floored at 0.
+- `nav`: The market's current NAV in USD from `expiry_market::current_nav`, which is free expiry cash minus the marked liability of the exposure book, with a floor of 0.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="178-192" />
 
@@ -120,10 +120,10 @@ Each call reads a different part of the descriptor:
 
 | **Call** | **What it takes** | **What it reads** |
 |---|---|---|
-| `tx.mint`, `tx.mintAmount`, `read.quoteMint` | A full `MarketDescriptor` | Every field, with each strike resolved to a tick and admission-checked |
+| `tx.mint`, `tx.mintAmount`, `read.quoteMint` | A full `MarketDescriptor` | Every field. The SDK resolves each strike to a tick and admission-checks it. |
 | `tx.redeem`, `read.quoteRedeem` | A full `MarketDescriptor` | Only `underlying`, `expiryMs`, and `marketId`, because the order ID identifies the position |
 | `tx.claimSettled` | `underlying`, `expiryMs`, and an optional `marketId` | All of them |
-| `read.price` | `underlying`, `expiryMs`, an optional `marketId`, and `strike` | All of them, with the strike checked against the fine grid only |
+| `read.price` | `underlying`, `expiryMs`, an optional `marketId`, and `strike` | All of them. The SDK checks the strike against the fine grid only. |
 | `read.market`, `read.pricer` | `underlying` and `expiryMs` | Both of them |
 
 [Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint) documents the mint, redeem, and claim builders.
@@ -224,7 +224,7 @@ It takes this parameter:
 - `m`: The market coordinates and strike, an object with these fields:
   - `underlying`: The underlying symbol.
   - `expiryMs`: The expiry as a Unix millisecond timestamp.
-  - `marketId`: An optional `ExpiryMarket` object ID that pins the market, validated as in [The `MarketDescriptor` type](#market-descriptor).
+  - `marketId`: An optional `ExpiryMarket` object ID that pins the market, which the SDK validates as [The `MarketDescriptor` type](#market-descriptor) describes.
   - `strike`: A USD strike on the market's fine tick grid, or `'reference'` for the market's reference price.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="807-807" />
@@ -250,12 +250,12 @@ It takes this parameter:
 The SDK simulates `expiry_market::load_live_pricer` and decodes the returned `Pricer`, so the chain has already chosen the forward and rolled the stochastic volatility inspired (SVI) surface down to the current time. Every later call on the returned object runs locally with no chain read. The returned object has these members:
 
 - `up(strike)`: The probability that settlement lands above `strike`.
-- `down(strike)`: The probability that settlement lands at or below `strike`, computed as `1 - up(strike)`.
+- `down(strike)`: The probability that settlement lands at or below `strike`, which the board computes as `1 - up(strike)`.
 - `probability(strike, side)`: The probability for `side`, either `'up'` or `'down'`, at `strike`.
-- `range(lower, higher)`: The probability mass in `(lower, higher]`, floored at 0. Pass a `lower` of 0 or below for negative infinity and `Infinity` for an open upper end.
+- `range(lower, higher)`: The probability mass in `(lower, higher]`, with a floor of 0. Pass a `lower` of 0 or below for negative infinity and `Infinity` for an open upper end.
 - `strikeAtProbability(p)`: The strike whose up probability is `p`, or `null` when `p` is not strictly between 0 and 1 or no crossing exists within 64 percent of the forward.
 - `forward`: The forward price the surface prices against, in USD.
-- `svi`: The rolled-down SVI parameters `a`, `b`, `rho`, `m`, and `sigma`, as decimals.
+- `svi`: The rolled-down SVI parameters as decimals, in the `Svi` shape that the [`pricing` namespace](#pricing) uses.
 - `asOf`: The source timestamps, in milliseconds, of the Pyth spot and the Block Scholes spot, forward, and SVI observations behind the snapshot. Its `pythSpotMs` is 0 when no usable Pyth spot existed.
 
 <ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="176-187" />
@@ -309,7 +309,7 @@ It takes these parameters:
 
 ### `rangeProbability` {#range-probability}
 
-Use `rangeProbability` to compute the probability mass in `(lower, higher]`. It returns a `number` floored at 0, which matches the chain's saturating subtraction.
+Use `rangeProbability` to compute the probability mass in `(lower, higher]`. It returns a `number` with a floor of 0, which matches the chain's saturating subtraction.
 
 It takes these parameters:
 
@@ -344,7 +344,7 @@ It takes these parameters:
 
 ### `rollDown` {#roll-down}
 
-Use `rollDown` to decay a provider SVI surface toward expiry the way the chain does before it prices. It returns a new `Svi` with `a` and `b` scaled by `remainingMs / anchorTteMs` and with `rho`, `m`, and `sigma` unchanged. When `anchorTteMs` is 0 or below, it returns `a` and `b` as 0.
+Use `rollDown` to decay a provider SVI surface toward expiry the way the chain does before it prices. It returns a new `Svi` that scales `a` and `b` by `remainingMs / anchorTteMs` and keeps `rho`, `m`, and `sigma`. When `anchorTteMs` is 0 or below, it returns `a` and `b` as 0.
 
 It takes these parameters:
 
@@ -358,7 +358,7 @@ It takes these parameters:
 
 ### `forward` {#forward}
 
-Use `forward` to compute the forward the contract prices against from raw feed values. It returns `pythSpot * (bsForward / bsSpot)`, the Pyth spot reanchored by the Block Scholes basis, when both spots are positive, and `bsForward` otherwise.
+Use `forward` to compute the forward the contract prices against from raw feed values. It returns `pythSpot * (bsForward / bsSpot)`, the Pyth spot after the Block Scholes basis reanchors it, when both spots are positive, and `bsForward` otherwise.
 
 It takes these parameters:
 

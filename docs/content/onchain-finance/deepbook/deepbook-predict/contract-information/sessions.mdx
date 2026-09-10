@@ -207,7 +207,7 @@ Each one validates the package version and the session against the supplied acco
 
 ### Slippage bounds differ from the facade {#slippage-bounds}
 
-The `@mysten/deepbook-v3/sessions` mint builders require the slippage caps that the `@mysten/deepbook-v3/predict` facade leaves uncapped when you omit them, and the session `redeemLive` accepts the close-side floors that the facade always sends as zero. [Predict Sessions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/sessions#slippage-bounds) describes both differences.
+The `@mysten/deepbook-v3/sessions` mint builders require the slippage caps that the `@mysten/deepbook-v3/predict` facade leaves uncapped when you omit them, and the session `redeemLive` accepts the close-side floors that the facade always sends as 0. [Predict Sessions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/sessions#slippage-bounds) describes both differences.
 
 <details>
 <summary>Predict wrapper source</summary>

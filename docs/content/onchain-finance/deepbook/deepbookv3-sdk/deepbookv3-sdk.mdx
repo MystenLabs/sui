@@ -64,9 +64,9 @@ npm install @mysten/deepbook-v3
 
 The package root covers DeepBook spot and margin, and it imports none of the 3 subpaths the same package ships:
 
-- **`@mysten/deepbook-v3/predict`:** DeepBook Predict, covering market discovery, quotes, minting and redeeming positions, PLP liquidity, typed receipts, and a client-side board pricer. See [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk).
-- **`@mysten/deepbook-v3/account`:** The shared onchain account primitive that Predict and the DeepBook core account wrapper build on. See [Predict Accounts SDK](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#account-subpath).
-- **`@mysten/deepbook-v3/sessions`:** Time-limited trading sessions that let an ephemeral key trade for an account until a fixed expiry. See [Predict Sessions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/sessions).
+- `@mysten/deepbook-v3/predict`: DeepBook Predict, covering markets and quotes, positions, PLP liquidity, and client-side pricing. See [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk).
+- `@mysten/deepbook-v3/account`: The shared onchain account primitive that Predict and the DeepBook core account wrapper build on. See [Predict Accounts SDK](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#account-subpath).
+- `@mysten/deepbook-v3/sessions`: Time-limited trading sessions that let an ephemeral key trade for an account until a fixed expiry. See [Predict Sessions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/sessions).
 
 Each subpath exports the deployed IDs for its own surface through `getConfig`, `getAccountConfig`, and `getSessionsConfig`, for both Testnet and Mainnet, so you never transcribe an ID by hand.
 

@@ -48,7 +48,7 @@ answer: >-
   with `client.predict.decode.plpRequest(result).index` and pass it to
   `tx.cancelSupplyPlp` or `tx.cancelWithdrawPlp`.
 last_verified: 2026-09-10
-verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d'
+verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); Mainnet deployment 14a7e8f8; Testnet deployment a928bd2d'
 ---
 
 The liquidity functions move USDC into the Predict pool for PLP shares and move PLP shares back out for USDC, through requests that wait for the next pool flush. [Vault](/onchain-finance/deepbook/deepbook-predict/contract-information/vault) explains the pool, its request queues, and the flush that fills them.
@@ -64,7 +64,7 @@ Each request takes an optional floor in its options object. The floor bounds the
 | `tx.supplyPlp` | `amountUsdc`, a US dollar (USD) decimal as a `number` or `string` | `minPlpOut` | Raw 6-decimal PLP shares as a `bigint` |
 | `tx.withdrawPlp` | `shares`, raw 6-decimal PLP shares as a `bigint` | `minUsdcOut` | A USD decimal as a `number` or `string` |
 
-A flush that quotes a request below its floor declines it instead of filling it smaller. At the deployed `lp_request_limit_flush_attempts` of `1`, that first miss cancels the request and refunds the escrow to your account, so queue a new request to try again. The flush also refunds a request whose mark or quote is not executable at all, rather than aborting. A flush that has room for only part of a request fills that part at the same mark and leaves the remainder queued with its floor rescaled. A request that you make after a flush has taken its snapshot waits for the flush after it.
+A flush that quotes a request below its floor declines it instead of filling it smaller. At the deployed `lp_request_limit_flush_attempts` of `1`, that first miss cancels the request and refunds the escrow to your account, so queue a new request to try again. The flush also refunds a request whose mark or quote is not executable at all, rather than aborting. A flush that has room for only part of a request fills that part at the same mark and keeps the remainder in the queue and rescales its floor. A request that you make after a flush has taken its snapshot waits for the flush after it.
 
 The SDK does not check the per-request minimums. The contract aborts a supply below 10 USDC with `EBelowMinSupplyRequest` and a withdrawal below 1 PLP, which is `1_000_000n` raw, with `EBelowMinWithdrawRequest`. The Vault page lists [every queue rule](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#async-liquidity) and explains [how a flush forms the mark](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#the-flush).
 
@@ -131,7 +131,7 @@ It takes these parameters:
 - `owner`: The address that owns the account that made the request.
 - `index`: The request's queue index, as a `bigint`.
 
-A cancel works only while its request is still pending. The contract aborts with `ERequestNotFound` when no pending entry carries the index, with `ENotRequestOwner` when your account is not the request's recorded recipient, and with `EValuationInProgress` while a flush is in flight, so a request inside the current flush's cutoff stays committed to that flush's mark.
+A cancel works only while its request is still pending. The contract aborts with `ERequestNotFound` when no pending entry carries the index, with `ENotRequestOwner` when your account is not the request's recorded recipient, and with `EValuationInProgress` while a flush is in flight, so the current flush still fills a request inside its cutoff at that flush's mark.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="723-723" />
 
@@ -155,7 +155,7 @@ function cancelRequest(owner: string, result: DecodableTransactionResult): Trans
 
 ## Pool reads {#pool-reads}
 
-Both pool reads run a simulated transaction through your Sui client's core API, with no indexer in the path. A failed simulation throws `PredictMoveError` when the chain returns a Move abort and a plain `Error` otherwise. See [errors](/onchain-finance/deepbook/deepbook-predict-sdk#errors) for both types.
+Both pool reads run a simulated transaction through your Sui client's core API, with no indexer in the path. A failed simulation throws `PredictMoveError` when the chain returns a Move abort and a plain `Error` otherwise. See [Errors](/onchain-finance/deepbook/deepbook-predict-sdk#errors) for both types.
 
 ### `read.pool` {#pool}
 
@@ -174,7 +174,7 @@ It takes no parameters.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="197-204" />
 
-`idleUsdc` is a display value that passes through a JavaScript `number`, while `plpTotalSupply` stays exact. See [units](/onchain-finance/deepbook/deepbook-predict-sdk#units) for how the SDK converts amounts. `PoolSummary` carries no pool net asset value (NAV) or share price, because only a flush computes the mark. Each flush's `FlushExecuted` event records that mark as `pool_value` divided by `total_supply`, and the SDK does not decode it. See the [pool events](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#events) for its fields.
+`idleUsdc` is a display value that passes through a JavaScript `number`, while `plpTotalSupply` stays exact. See [Units](/onchain-finance/deepbook/deepbook-predict-sdk#units) for how the SDK converts amounts. `PoolSummary` carries no pool net asset value (NAV) or share price, because only a flush computes the mark. Each flush's `FlushExecuted` event records that mark as `pool_value` divided by `total_supply`, and the SDK does not decode it. See the [pool events](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#events) for its fields.
 
 ### `read.plpBalance` {#plp-balance}
 
@@ -186,19 +186,19 @@ It takes this parameter:
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="928-928" />
 
-It reads the account balance accessor for the deployment's PLP coin type, `client.predict.cfg.coinTypes.plp`. That accessor counts stored balance plus funds delivered to the account and not yet settled, so shares from a filled supply appear without a separate settle. For the account's USDC, use [`read.balance`](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#balance). The read loads the owner's wrapper, so call it for an account that exists.
+It reads the account balance accessor for the deployment's PLP coin type, `client.predict.cfg.coinTypes.plp`. That accessor counts stored balance plus funds that reach the account before it settles them, so shares from a filled supply appear without a separate settle. For the account's USDC, use [`read.balance`](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#balance). The read loads the owner's wrapper, so call it for an account that exists.
 
 ## Decoder functions {#decode}
 
-The liquidity decoders parse an executed transaction's events locally and make no network call. Each expects exactly 1 matching event and throws `PredictInputError` otherwise, and neither has a plural form, so keep 1 request or 1 cancel per transaction when you intend to decode it. Execute with events included, because an event with no Binary Canonical Serialization (BCS) payload also throws `PredictInputError`. See [decoding](/onchain-finance/deepbook/deepbook-predict-sdk#decode) for the result shape the decoders accept.
+The liquidity decoders parse an executed transaction's events locally and make no network call. Each expects exactly 1 matching event and throws `PredictInputError` otherwise, and neither has a plural form, so keep 1 request or 1 cancel per transaction when you intend to decode it. Include events when you execute the transaction, because an event with no Binary Canonical Serialization (BCS) payload also throws `PredictInputError`. See [Decode transaction results](/onchain-finance/deepbook/deepbook-predict-sdk#decode) for the result shape the decoders accept.
 
 ### `decode.plpRequest` {#plp-request}
 
-Use `decode.plpRequest` to read the receipt of a `tx.supplyPlp` or `tx.withdrawPlp` transaction, including the queue index a cancel needs. It returns a `PlpRequestReceipt` built from the transaction's `SupplyRequested` or `WithdrawRequested` event.
+Use `decode.plpRequest` to read the receipt of a `tx.supplyPlp` or `tx.withdrawPlp` transaction, including the queue index a cancel needs. It builds a `PlpRequestReceipt` from the transaction's `SupplyRequested` or `WithdrawRequested` event and returns it.
 
 It takes this parameter:
 
-- `r`: The executed transaction result, a `DecodableTransactionResult` with its events included.
+- `r`: The executed transaction result, a `DecodableTransactionResult` that includes its events.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="963-963" />
 
@@ -216,11 +216,11 @@ It takes this parameter:
 
 ### `decode.plpCancel` {#plp-cancel}
 
-Use `decode.plpCancel` to read the receipt of a `tx.cancelSupplyPlp` or `tx.cancelWithdrawPlp` transaction. It returns a `PlpCancelReceipt` built from the transaction's `RequestCancelled` event.
+Use `decode.plpCancel` to read the receipt of a `tx.cancelSupplyPlp` or `tx.cancelWithdrawPlp` transaction. It builds a `PlpCancelReceipt` from the transaction's `RequestCancelled` event and returns it.
 
 It takes this parameter:
 
-- `r`: The executed transaction result, a `DecodableTransactionResult` with its events included.
+- `r`: The executed transaction result, a `DecodableTransactionResult` that includes its events.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="965-965" />
 

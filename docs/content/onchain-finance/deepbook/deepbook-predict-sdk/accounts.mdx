@@ -52,7 +52,7 @@ answer: >-
   client.predict.tx.withdraw sends USDC to the owner's address balance by
   default, and { toCoinObject: true } transfers a coin object instead.
 last_verified: 2026-09-10
-verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d'
+verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); Mainnet deployment 14a7e8f8; Testnet deployment a928bd2d'
 ---
 
 The account functions create a trader's shared `AccountWrapper`, move USDC in and out of it, and attach a builder code, and the `/account` subpath exposes the account primitive underneath for transactions you compose yourself. [Accounts and Custody](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager) explains the custody mechanism: the wrapper, the `Auth` hot potato, settlement, and the account events.
@@ -61,7 +61,7 @@ The `client.predict` calls assume the client from [DeepBook Predict SDK](/onchai
 
 ## Derive the wrapper ID {#wrapper-id}
 
-Every Predict call that acts on an account takes the owner's `AccountWrapper` object ID as its `wrapper` argument. The wrapper is a derived object of the account registry, keyed by the owner address, so the SDK computes its ID offchain with no chain read, and the ID is valid before the account exists. The facade derives it from the `owner` you pass, so you need the ID yourself only to compose transactions or to look up the object. [Derive the IDs before you create](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#derive-the-ids) covers the Move side, and [Wrapper ID and account ID](#wrapper-and-account-ids) explains why the wrapper ID is not the account ID that events carry.
+Every Predict call that acts on an account takes the owner's `AccountWrapper` object ID as its `wrapper` argument. The account registry derives the wrapper from the owner address, so the SDK computes its ID offchain with no chain read, and the ID is valid before the account exists. The facade derives it from the `owner` you pass, so you need the ID yourself only to compose transactions or to look up the object. [Derive the IDs before you create](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#derive-the-ids) covers the Move side, and [Wrapper ID and account ID](#wrapper-and-account-ids) explains why the wrapper ID is not the account ID that events carry.
 
 ### `wrapperIdFor` {#wrapper-id-for}
 
@@ -79,7 +79,7 @@ Use `deriveAccountWrapperId` from `@mysten/deepbook-v3/predict` when you hold a 
 
 It takes these parameters:
 
-- `cfg`: The `PredictConfig` for the deployment, such as the result of `getConfig('mainnet')`.
+- `cfg`: The `PredictConfig` for the deployment, such as the `getConfig` result for Mainnet.
 - `owner`: The address that owns the account.
 
 <ImportContent source="packages/deepbook-v3/src/predict/tx/common.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="89-89" />
@@ -131,7 +131,7 @@ With `{ create: true }`, the contract derives the new wrapper from the transacti
 
 :::
 
-Sharing comes last because a wrapper created inside a PTB is reachable only through the handle `account_registry::new` returns, as [`AccountContract.createAccountAndDeposit`](#account-contract-create-account-and-deposit) explains. Decode the result with [`decode.deposit`](#decode-deposit), and also with [`decode.createManager`](#decode-create-manager) when you pass `create`.
+Sharing comes last because a wrapper that the PTB creates is reachable only through the handle `account_registry::new` returns, as [`AccountContract.createAccountAndDeposit`](#account-contract-create-account-and-deposit) explains. Decode the result with [`decode.deposit`](#decode-deposit), and also with [`decode.createManager`](#decode-create-manager) when you pass `create`.
 
 ### `tx.withdraw` {#withdraw}
 
@@ -147,7 +147,7 @@ It takes these parameters:
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="601-605" />
 
-The contract aborts with `EBalanceTooLow` when the amount exceeds the account's stored balance after that settlement. Withdrawal lives in the account package, so it keeps working while Predict trading is paused or frozen, as [Predict does not gate withdrawal](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#withdrawal-is-ungated) describes. To use the withdrawn coin in further commands of your own, build the withdrawal with [`AccountContract.withdrawFunds`](#account-contract-withdraw-funds), which returns the coin as a transaction result.
+The contract aborts with `EBalanceTooLow` when the amount exceeds the account's stored balance after that settlement. Withdrawal lives in the account package, so it keeps working while an admin has paused or frozen Predict trading, as [Predict does not gate withdrawal](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#withdrawal-is-ungated) describes. To use the withdrawn coin in further commands of your own, build the withdrawal with [`AccountContract.withdrawFunds`](#account-contract-withdraw-funds), which returns the coin as a transaction result.
 
 ## Account reads {#account-reads}
 
@@ -157,7 +157,7 @@ The account read runs through the Sui client's transaction simulation, so it nee
 
 Use `read.balance` to read the account's USDC custody balance. It returns a `Promise<number>` that holds the balance as a decimal USDC value.
 
-The figure counts the account's stored balance plus funds delivered to the wrapper and not yet settled, which is the balance a mint debits. It is not the owner's wallet balance, which sits outside the account in coin objects and the address balance. The read loads the owner's wrapper, so call it for an account that exists.
+The figure counts the account's stored balance plus funds that reach the wrapper before the account settles them, which is the balance a mint debits. It is not the owner's wallet balance, which sits outside the account in coin objects and the address balance. The read loads the owner's wrapper, so call it for an account that exists.
 
 It takes this parameter:
 
@@ -187,7 +187,7 @@ A builder code routes an add-on fee to the code's owner on every trade the accou
 
 ### `tx.setBuilderCode` {#set-builder-code}
 
-Use `tx.setBuilderCode` to attach a builder code to the account. It returns a `Transaction` that calls `predict_account::set_builder_code`, which lives in the Predict package rather than in the account package. Attribution is sticky and applies only to trades made after the call.
+Use `tx.setBuilderCode` to attach a builder code to the account. It returns a `Transaction` that calls `predict_account::set_builder_code`, which lives in the Predict package rather than in the account package. Attribution is sticky and applies only to trades the account makes after the call.
 
 It takes these parameters:
 
@@ -210,7 +210,7 @@ Decode either result with [`decode.builderCode`](#decode-builder-code).
 
 ## Account decoders {#decode}
 
-The account decoders turn an executed transaction result into a typed receipt. They make no network call and read each event's canonical Binary Canonical Serialization (BCS) bytes, so execute the transaction with events included. [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#decode) describes the `DecodableTransactionResult` input they share.
+The account decoders turn an executed transaction result into a typed receipt. They make no network call and read each event's canonical Binary Canonical Serialization (BCS) bytes, so include events when you execute the transaction. [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#decode) describes the `DecodableTransactionResult` input they share.
 
 Each decoder throws `PredictInputError` unless the result holds exactly 1 matching event, and also when a matching event carries no BCS payload. None of the 4 has a plural form.
 
@@ -220,7 +220,7 @@ Use `decode.createManager` to read a new account's IDs from a transaction that r
 
 It takes this parameter:
 
-- `r`: The executed transaction result, with events included.
+- `r`: The executed transaction result, including its events.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="957-957" />
 
@@ -233,7 +233,7 @@ The receipt carries 4 fields:
 - `accountId`: The canonical account ID, which events carry in their `account_id` field.
 - `wrapperId`: The shared wrapper's object ID, the same value `wrapperIdFor(owner)` returns.
 - `owner`: The address that owns the account.
-- `selfOwned`: Whether an object owns the account. It is `true` only for an account created with `account_registry::new_self_owned`, which the facade never calls.
+- `selfOwned`: Whether an object owns the account. It is `true` only for an account that `account_registry::new_self_owned` creates, which the facade never calls.
 
 ### `decode.deposit` {#decode-deposit}
 
@@ -241,7 +241,7 @@ Use `decode.deposit` to read a deposit from the `Deposited` event. It returns a 
 
 It takes this parameter:
 
-- `r`: The executed transaction result, with events included.
+- `r`: The executed transaction result, including its events.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="959-959" />
 
@@ -251,7 +251,7 @@ Use `decode.withdraw` to read a withdrawal from the `Withdrawn` event. It return
 
 It takes this parameter:
 
-- `r`: The executed transaction result, with events included.
+- `r`: The executed transaction result, including its events.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="961-961" />
 
@@ -273,7 +273,7 @@ Use `decode.builderCode` to read the `BuilderCodeSet` event that `tx.setBuilderC
 
 It takes this parameter:
 
-- `r`: The executed transaction result, with events included.
+- `r`: The executed transaction result, including its events.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="967-967" />
 
@@ -302,11 +302,11 @@ const account = new AccountContract(getAccountConfig(network));
 
 ### `getAccountConfig` {#get-account-config}
 
-Use `getAccountConfig` to get the deployed `account` package ID and `AccountRegistry` object ID for a network, so you never transcribe them. It returns an `AccountConfig`. It resolves `'mainnet'` and `'testnet'`, and throws a plain `Error` for any other network rather than returning placeholder IDs.
+Use `getAccountConfig` to get the deployed `account` package ID and `AccountRegistry` object ID for a network, so you never transcribe them. It returns an `AccountConfig`. It resolves Mainnet and Testnet, and throws a plain `Error` for any other network rather than returning placeholder IDs.
 
 It takes this parameter:
 
-- `network`: The network to resolve, `'mainnet'` or `'testnet'`.
+- `network`: The network to resolve, Mainnet or Testnet.
 
 <ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="54-54" />
 
@@ -366,7 +366,7 @@ It takes these parameters:
 
 <ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="138-138" />
 
-You cannot decompose it into `createAccount` plus `depositFunds`. An object input can only name an object that existed when the PTB started, so a wrapper created inside the PTB is reachable only through the result handle `new` returns, and sharing that handle ends its by-value use. That is why `share` comes last.
+You cannot decompose it into `createAccount` plus `depositFunds`. An object input can only name an object that existed when the PTB started, so a wrapper that the PTB creates is reachable only through the result handle `new` returns, and sharing that handle ends its by-value use. That is why `share` comes last.
 
 ### `AccountContract.depositFunds` {#account-contract-deposit-funds}
 
@@ -439,9 +439,9 @@ It takes these parameters:
 
 ### Wrapper ID and account ID {#wrapper-and-account-ids}
 
-Only the wrapper ID derives from `AccountContract`. The canonical account identity is a second, different derived object, keyed by `AccountKey(owner)` rather than `AccountWrapperKey(owner)`, and the SDK derives it with [`SessionsContract.deriveAccountId`](/onchain-finance/deepbook/deepbook-predict-sdk/sessions#derive-ids) in the `/sessions` subpath. Pass the wrapper ID to Predict calls, and expect the account ID in the `account_id` field of events. A live `OrderMinted` carries the account ID, not the wrapper ID.
+Only the wrapper ID derives from `AccountContract`. The canonical account identity is a second, different derived object whose key is `AccountKey(owner)` rather than `AccountWrapperKey(owner)`, and the SDK derives it with [`SessionsContract.deriveAccountId`](/onchain-finance/deepbook/deepbook-predict-sdk/sessions#derive-ids) in the `/sessions` subpath. Pass the wrapper ID to Predict calls, and expect the account ID in the `account_id` field of events. A live `OrderMinted` carries the account ID, not the wrapper ID.
 
-Offchain read services make the same split, and getting it wrong fails quietly. As of 2026-09-10 the only public read services are the Testnet v4 hosts listed on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#account-and-portfolio-data), and they index the previous-generation `predict-8-21` deployment, not the 2 current deployments. No read service exists yet for either current deployment, and no SDK read needs one. On those hosts the account and position paths key on the canonical account ID. A wrapper ID passed there returns status `200` with an empty array rather than an error, so a wrong key looks like an empty portfolio until you compare both: verified 2026-09-03 for a real trader on that deployment, the wrapper ID returned 0 balances and 0 positions while the account ID returned 2 balance rows and 5 open positions. The same wrapper-against-account trap applies to session grants, as [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate) describes. The wrapper ID stays correct for every onchain call that takes the shared `AccountWrapper` object.
+Offchain read services make the same split, and getting it wrong fails quietly. As of 2026-09-10 the only public read services are the Testnet v4 hosts that [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#account-and-portfolio-data) lists, and they index the previous-generation `predict-8-21` deployment, not the 2 current deployments. No read service exists yet for either current deployment, and no SDK read needs one. On those hosts the account and position paths key on the canonical account ID. A request with a wrapper ID returns status `200` with an empty array rather than an error, so a wrong key looks like an empty portfolio until you compare both: in a 2026-09-03 check for a real trader on that deployment, the wrapper ID returned 0 balances and 0 positions while the account ID returned 2 balance rows and 5 open positions. The same wrapper-against-account trap applies to session grants, as [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate) describes. The wrapper ID stays correct for every onchain call that takes the shared `AccountWrapper` object.
 
 ### Generated bindings {#generated-bindings}
 
@@ -449,7 +449,13 @@ The subpath also exports the generated bindings, for callers who build their own
 
 - `accountMoveCalls`: Move-call builders for the `account::account` functions, such as `settle`, `depositFunds`, `withdrawFunds`, and `loadAccount`, plus the module's BCS structs.
 - `accountRegistryMoveCalls`: Move-call builders for the `account::account_registry` functions, including `_new`, `newWithReferrer`, `newSelfOwned`, and the 4 derivation reads.
-- `accountEvents`: The BCS structs for the account events: `AccountCreated`, `Deposited`, `Withdrawn`, `FundsSettled`, `AppAuthorized`, and `AppDeauthorized`.
+- `accountEvents`: The BCS structs for the 6 account events:
+  - `AccountCreated`
+  - `Deposited`
+  - `Withdrawn`
+  - `FundsSettled`
+  - `AppAuthorized`
+  - `AppDeauthorized`
 - `Account` and `AccountWrapper`: The BCS structs for the embedded account and the shared wrapper, for parsing a wrapper object's contents.
 
 <ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="237-240" />
@@ -464,14 +470,14 @@ The package root exports a different type named `Account`. `import { Account } f
 
 The subpath re-exports the deployment provenance helpers, so you can tell which onchain deployment an SDK build targets without importing another subpath:
 
-- `getDeployment(network)`: Returns a `DeploymentInfo` with the deployment name, the network, the chain ID, and the `deepbookv3` commit the deployed Move sources were built from.
+- `getDeployment(network)`: Returns a `DeploymentInfo` with the deployment name, the network, the chain ID, and the `deepbookv3` source commit of the deployed packages.
 - `getUnits(network)`: Returns a `DeploymentUnits` with the deployment's scale constants: the position lot size, the fixed-point scale, the quote coin decimals, and the position quantity decimals.
 - `TESTNET_DEPLOYMENT` and `TESTNET_UNITS`: The Testnet records as constants.
 - `NetworkArg` and `DeployedNetwork`: The types for a network argument and for the networks with a recorded deployment.
 
 <ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="19-21" />
 
-Both functions throw a plain `Error` for a network with no recorded deployment. The subpath does not re-export the Mainnet constants: call `getDeployment('mainnet')` and `getUnits('mainnet')`, or import `MAINNET_DEPLOYMENT` and `MAINNET_UNITS` from `@mysten/deepbook-v3/predict`.
+Both functions throw a plain `Error` for a network with no recorded deployment. The subpath does not re-export the Mainnet constants: call `getDeployment` and `getUnits` with the Mainnet network name, or import `MAINNET_DEPLOYMENT` and `MAINNET_UNITS` from `@mysten/deepbook-v3/predict`.
 
 ## Example {#example}
 

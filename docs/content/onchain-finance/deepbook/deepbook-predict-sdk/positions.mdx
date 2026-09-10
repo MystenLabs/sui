@@ -50,12 +50,12 @@ answer: >-
   the decoded receipts carry the order ID you persist to close a position
   later.
 last_verified: 2026-09-10
-verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d'
+verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); Mainnet deployment 14a7e8f8; Testnet deployment a928bd2d'
 ---
 
 The position functions in the DeepBook Predict SDK quote, open, close, and claim range positions, list the positions an account holds, and decode the receipt of each trade. [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict) explains the mint and redeem mechanics that these builders wrap.
 
-Every function is a member of `client.predict`, which [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#client) shows how to register. Each builder and quote that targets a market takes the market as a [market descriptor](/onchain-finance/deepbook/deepbook-predict-sdk/markets#market-descriptor), then reads the chain to resolve the market object and caches it per client, so those functions are async. The SDK takes and returns amounts as decimal USDC values and converts them to 6-decimal base units; see [units](/onchain-finance/deepbook/deepbook-predict-sdk#units).
+Every function is a member of `client.predict`, which [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#client) shows how to register. Each builder and quote that targets a market takes the market as a [market descriptor](/onchain-finance/deepbook/deepbook-predict-sdk/markets#market-descriptor), then reads the chain to resolve the market object and caches it per client, so those functions are asynchronous. The SDK takes and returns amounts as decimal USDC values and converts them to 6-decimal base units; see [Units](/onchain-finance/deepbook/deepbook-predict-sdk#units).
 
 :::caution
 
@@ -73,7 +73,7 @@ Minting opens a position at the live price. Both mint builders check each numeri
 
 ### `read.quoteMint` {#quote-mint}
 
-Use `read.quoteMint` to price a mint exactly before you send it. It returns a `Promise<MintQuote>`. It simulates the same mint `tx.mint` builds, with the owner as sender, against the owner's real account and the real fee path, so it throws the same typed errors the mint would, insufficient balance included, and serves as a preflight check. It sends only the options you pass. Called with `{ quantity }`, the dry run carries no slippage cap, because a cap only gates a mint through an abort and never changes its receipt. An options object that also holds `maxCost` or `maxProbability` passes them through, and the quote then aborts on a cap exactly as the mint would.
+Use `read.quoteMint` to price a mint exactly before you send it. It returns a `Promise<MintQuote>`. It simulates the same mint `tx.mint` builds, with the owner as sender, against the owner's real account and the real fee path, so it throws the same typed errors the mint would, including insufficient balance, and serves as a preflight check. It sends only the options you pass. Called with `{ quantity }`, the dry run carries no slippage cap, because a cap only gates a mint through an abort and never changes its receipt. An options object that also holds `maxCost` or `maxProbability` passes them through, and the quote then aborts on a cap exactly as the mint would.
 
 The owner needs a funded account for the quote to succeed. The Move `expiry_market::quote_mint` is a different call that prices only and checks no account and no slippage cap; see [Quote a mint](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#quote-a-mint).
 
@@ -91,7 +91,7 @@ It takes these parameters:
 | --- | --- |
 | `entryProbability` | Fill price between 0 and 1 per 1 USDC of payout, which `maxProbability` caps |
 | `premium` | Premium alone, before fees |
-| `fees` | Exact fee breakdown, described below |
+| `fees` | Exact fee breakdown by component |
 | `cost` | All-in account debit, which `maxCost` caps |
 | `quantity` | Payout quantity the quote priced |
 | `raw` | Exact `bigint` amounts for `premium`, `cost`, `quantity`, and `entryProbability` |
@@ -101,7 +101,7 @@ It takes these parameters:
 
 - `trading`: The trading fee before the sponsor subsidy.
 - `subsidy`: The sponsor-funded part of the trading fee, which you do not pay.
-- `builder`: The builder add-on, zero when the account carries no builder code.
+- `builder`: The builder add-on, 0 when the account carries no builder code.
 - `penalty`: The congestion surcharge.
 - `referral`: The portion of the trading fee and congestion surcharge that the protocol routes to a referrer. It is already inside those amounts, not an extra debit.
 - `inventoryImpact`: The inventory-impact charge, a separate charge that `cost` includes.
@@ -157,7 +157,7 @@ const tx = await client.predict.tx.mintAmount(owner, descriptor, opts);
 
 ## Close functions {#close-functions}
 
-Closing takes one of 2 paths, depending on whether the market has settled. Before settlement, `tx.redeem` closes all or part of a position at the live price. After settlement, `tx.claimSettled` claims the fixed payout. An order ID is unique only inside one market, so both builders take the market along with the order ID.
+Closing follows either of 2 paths, depending on whether the market has settled. Before settlement, `tx.redeem` closes all or part of a position at the live price. After settlement, `tx.claimSettled` claims the fixed payout. An order ID is unique only inside a single market, so both builders take the market along with the order ID.
 
 ### `read.quoteRedeem` {#quote-redeem}
 
@@ -175,11 +175,11 @@ It takes these parameters:
 
 | **Field** | **Meaning** |
 | --- | --- |
-| `proceeds` | Net USDC credited to the account |
+| `proceeds` | Net USDC that the close credits to the account |
 | `gross` | Close value before fees |
 | `fees` | Exact `trading`, `builder`, `penalty`, and `inventoryImpactRebate` amounts |
 | `quantityClosed` | Payout quantity the close removes |
-| `remaining` | Payout quantity left open after the close |
+| `remaining` | Payout quantity that stays open after the close |
 | `raw` | Exact `bigint` amounts for `proceeds`, `gross`, and `quantityClosed` |
 | `feesExact` | Always `true`, because the fees come from the real redeem code path |
 
@@ -209,7 +209,7 @@ It takes these parameters:
 
 ### `tx.claimSettled` {#claim-settled}
 
-Use `tx.claimSettled` to claim a position whose market has settled, the SDK form of the owner-authorized `redeem_settled`. It returns a `Promise<Transaction>`. A settled claim always closes the order in full, so the builder takes no quantity, and the order ID identifies the position, so it takes no side or strike. It loads no pricer, because the settlement price is fixed. The payout is the full quantity when the settlement price lands inside the position's range and zero otherwise.
+Use `tx.claimSettled` to claim a position whose market has settled, the SDK form of the owner-authorized `redeem_settled`. It returns a `Promise<Transaction>`. A settled claim always closes the order in full, so the builder takes no quantity, and the order ID identifies the position, so it takes no side or strike. It loads no pricer, because settlement has already fixed the price. The payout is the full quantity when the settlement price lands inside the position's range and 0 otherwise.
 
 Before settlement the claim aborts with `EMarketNotSettled`, and expiry alone does not settle a market. Settlement runs through the permissionless `expiry_market::try_settle`, which the SDK does not build; see [Settle a market](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#settle-a-market). The no-trade window does not apply to a claim. The SDK also builds no `redeem_settled_permissionless`, the path that lets any address claim on a holder's behalf.
 
@@ -227,7 +227,7 @@ The SDK reads positions straight from the account's onchain position table, so n
 
 ### `read.positions` {#positions}
 
-Use `read.positions` to list every open position an owner's account holds. It returns a `Promise<OpenPosition[]>`, one entry per position, each carrying the `marketId` and `orderId` that `tx.redeem`, `tx.claimSettled`, and `read.hasPosition` take. It returns an empty array for an owner with no Predict account or no Predict positions.
+Use `read.positions` to list every open position an owner's account holds. It returns a `Promise<OpenPosition[]>`, an entry for each position, each carrying the `marketId` and `orderId` that `tx.redeem`, `tx.claimSettled`, and `read.hasPosition` take. It returns an empty array for an owner with no Predict account or no Predict positions.
 
 The SDK caches the account and table IDs per owner once the table exists, so later reads cost 1 request per page of positions. A transport failure throws rather than reading as an empty list, and a table that still has entries after 10 pages throws a plain `Error`. `OpenPosition` carries no underlying or expiry, so supply those yourself when you build the descriptor for a close.
 
@@ -253,15 +253,15 @@ It takes these parameters:
 
 ## Receipt decoders {#decode}
 
-The receipt decoders turn an executed transaction's events into typed receipts, with no network call. Execute the transaction with events included and pass the result. Without events, a singular decoder throws `PredictInputError` because it finds no matching event, and a plural decoder returns an empty array. A decoder also throws `PredictInputError` when a matching event carries no Binary Canonical Serialization (BCS) payload. Each singular decoder throws `PredictInputError` unless the result holds exactly 1 matching event, and each plural decoder returns every matching receipt in event order, for a transaction that batches several trades. [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#decode) covers how the decoders read events.
+The receipt decoders turn an executed transaction's events into typed receipts, with no network call. Include events when you execute the transaction, and pass the result. Without events, a singular decoder throws `PredictInputError` because it finds no matching event, and a plural decoder returns an empty array. A decoder also throws `PredictInputError` when a matching event carries no Binary Canonical Serialization (BCS) payload. Each singular decoder throws `PredictInputError` unless the result holds exactly 1 matching event, and each plural decoder returns every matching receipt in event order, for a transaction that batches several trades. [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#decode) covers how the decoders read events.
 
 ### `decode.mint` and `decode.mints` {#decode-mint}
 
-Use `decode.mint` to read the receipt of a mint, and `decode.mints` to read every mint in one transaction. Each decodes the [`OrderMinted`](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#order-minted) event and returns a `MintReceipt`, or an array of them. Persist `orderId`, because closing or claiming the position needs it with the market ID. `positionRootId` stays stable across partial-close replacements, `quantity` is the quantity the contract actually minted, which it rounds down to a lot for `tx.mintAmount`, and `raw` carries every fee component as an exact `bigint`.
+Use `decode.mint` to read the receipt of a mint, and `decode.mints` to read every mint in a single transaction. Each decodes the [`OrderMinted`](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#order-minted) event and returns a `MintReceipt`, or an array of them. Persist `orderId`, because closing or claiming the position needs it with the market ID. `positionRootId` stays stable across partial-close replacements, `quantity` is the quantity the contract actually minted, which it rounds down to a lot for `tx.mintAmount`, and `raw` carries every fee component as an exact `bigint`.
 
 It takes this parameter:
 
-- `r`: The executed transaction result, with events included.
+- `r`: The executed transaction result, including its events.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="949-950" />
 
@@ -269,11 +269,11 @@ It takes this parameter:
 
 ### `decode.redeem` and `decode.redeems` {#decode-redeem}
 
-Use `decode.redeem` to read the receipt of a live close, and `decode.redeems` to read every live close in one transaction. Each decodes the [`LiveOrderRedeemed`](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#live-order-redeemed) event and returns a `RedeemReceipt`, or an array of them. After a partial close, `replacementOrderId` carries the order ID of the remaining quantity: store it in place of the old one, or the next close targets an order that no longer exists. It is `null` after a full close, and `proceeds` is the net amount credited, computed the same way as in `RedeemQuote`.
+Use `decode.redeem` to read the receipt of a live close, and `decode.redeems` to read every live close in a single transaction. Each decodes the [`LiveOrderRedeemed`](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#live-order-redeemed) event and returns a `RedeemReceipt`, or an array of them. After a partial close, `replacementOrderId` carries the order ID of the remaining quantity: store it in place of the old one, or the next close targets an order that no longer exists. It is `null` after a full close, and `proceeds` is the net amount the close credits, which the SDK computes the same way as in `RedeemQuote`.
 
 It takes this parameter:
 
-- `r`: The executed transaction result, with events included.
+- `r`: The executed transaction result, including its events.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="951-953" />
 
@@ -281,11 +281,11 @@ It takes this parameter:
 
 ### `decode.claim` and `decode.claims` {#decode-claim}
 
-Use `decode.claim` to read the receipt of a settled claim, and `decode.claims` to read every claim in one transaction. Each decodes the [`SettledOrderRedeemed`](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#settled-order-redeemed) event and returns a `ClaimReceipt`, or an array of them, with the `payout` alongside the market, account, and order identifiers.
+Use `decode.claim` to read the receipt of a settled claim, and `decode.claims` to read every claim in a single transaction. Each decodes the [`SettledOrderRedeemed`](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#settled-order-redeemed) event and returns a `ClaimReceipt`, or an array of them, with the `payout` alongside the market, account, and order identifiers.
 
 It takes this parameter:
 
-- `r`: The executed transaction result, with events included.
+- `r`: The executed transaction result, including its events.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="954-956" />
 

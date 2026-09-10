@@ -50,7 +50,7 @@ answer: >-
   `redeemLive`, and `redeemSettled`, which require explicit mint caps and accept
   close-side floors.
 last_verified: 2026-09-10
-verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d'
+verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); Mainnet deployment 14a7e8f8; Testnet deployment a928bd2d'
 ---
 
 The `@mysten/deepbook-v3/sessions` subpath exports `SessionsContract`, which builds the owner-signed calls that grant and revoke a time-limited session key and the session-signed calls that trade DeepBook Predict positions for the account. [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions) explains the contract mechanism behind each call.
@@ -88,7 +88,7 @@ const protocolConfig = ids.protocolConfig;
 
 ### `getSessionsConfig` {#get-sessions-config}
 
-Use `getSessionsConfig` to read the deployed sessions IDs for a network, so you never transcribe them. It returns the frozen deployment record for that network, typed `SessionsConfig & SessionsSpotIds & SessionsPredictIds`, and it throws an `Error` for any network other than `'testnet'` or `'mainnet'`. For a deployment of your own, construct a `SessionsConfig` and pass it to the `SessionsContract` constructor directly.
+Use `getSessionsConfig` to read the deployed sessions IDs for a network, so you never transcribe them. It returns the frozen deployment record for that network, typed `SessionsConfig & SessionsSpotIds & SessionsPredictIds`, and it throws an `Error` for any network other than Testnet or Mainnet. For a deployment of your own, construct a `SessionsConfig` and pass it to the `SessionsContract` constructor directly.
 
 It takes this parameter:
 
@@ -98,7 +98,7 @@ It takes this parameter:
 
 ### `SessionsContract` {#sessions-contract}
 
-Use the `SessionsContract` constructor to bind every builder to one deployment. It reads only the 4 `SessionsConfig` IDs, so the wider `getSessionsConfig` result passes directly, and each Predict builder takes `protocolConfig` as its own parameter.
+Use the `SessionsContract` constructor to bind every builder to a single deployment. It reads only the 4 `SessionsConfig` IDs, so the wider `getSessionsConfig` result passes directly, and each Predict builder takes `protocolConfig` as its own parameter.
 
 It takes this parameter:
 
@@ -126,13 +126,13 @@ It takes this parameter:
 
 ### `MAX_SESSION_DURATION_MS` {#max-session-duration-ms}
 
-`MAX_SESSION_DURATION_MS` is the longest grant the contract accepts, 30 days in milliseconds. `authorizeSession` does not check `durationMs` against it, so a zero or longer duration reaches the chain and aborts `EInvalidSessionDuration`. Check the duration locally, as the [authorize example](#authorize-example) does, to get the error before you sign.
+`MAX_SESSION_DURATION_MS` is the longest grant the contract accepts, 30 days in milliseconds. `authorizeSession` does not check `durationMs` against it, so a duration of 0, or one longer than the maximum, reaches the chain and aborts with `EInvalidSessionDuration`. Check the duration locally, as the [authorize example](#authorize-example) does, to get the error before you sign.
 
 <ImportContent source="packages/deepbook-v3/src/sessions.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="82-82" />
 
 ### `MAX_SESSIONS_PER_ACCOUNT` {#max-sessions-per-account}
 
-`MAX_SESSIONS_PER_ACCOUNT` is the number of distinct session addresses an account can store, 20. Expired grants keep counting toward it until the owner revokes them, and the SDK does not check it, so authorizing a new address on a full account aborts `ESessionLimitExceeded`. The [list example](#list-example) reclaims the slots that expired grants hold.
+`MAX_SESSIONS_PER_ACCOUNT` is the number of distinct session addresses an account can store, 20. Expired grants keep counting toward it until the owner revokes them, and the SDK does not check it, so authorizing a new address on a full account aborts with `ESessionLimitExceeded`. The [list example](#list-example) reclaims the slots that expired grants hold.
 
 <ImportContent source="packages/deepbook-v3/src/sessions.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="85-85" />
 
@@ -217,7 +217,7 @@ Expired grants keep their slots until the owner revokes them, so on a busy accou
 
 ### `sessionExpirationMs` {#session-expiration-ms}
 
-Use `sessionExpirationMs` to read the absolute expiry of a single session address. It returns a `(tx: Transaction) => TransactionResult` function that adds the `session_expiration_ms` call. Simulate the transaction and decode the returned BCS as `Option<u64>`: the stored expiry in milliseconds, or `none` for an address the owner never authorized or has revoked. The call is not version gated, and it does not classify the timestamp, so compare it with the current time yourself.
+Use `sessionExpirationMs` to read the absolute expiry of a single session address. It returns a `(tx: Transaction) => TransactionResult` function that adds the `session_expiration_ms` call. Simulate the transaction and decode the returned BCS as `Option<u64>`: the stored expiry in milliseconds, or `none` for an address the owner never authorized or has revoked. The call has no version gate, and it does not classify the timestamp, so compare it with the current time yourself.
 
 It takes these parameters:
 
@@ -272,7 +272,7 @@ The following example lists an account's grants, splits them at the current time
 
 ## Trade as a session key {#trade}
 
-The 4 Predict builders mirror the `expiry_market` entrypoints of the same name, signed by the session key instead of the owner. Compared with the owner-signed call, you pass no `Auth`, because the wrapper generates app authorization internally, and each builder adds the `accountRegistry` and `sessionsConfig` arguments from its `SessionsConfig`. Predict still runs its own validation, and the Sessions page lists [the aborts a session caller still meets](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#predict-wrappers). If the account registry does not authorize `SessionsApp`, every trading call aborts `EAppNotAuthorized`, as the Sessions page explains under [deauthorizing the app](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#deauthorize-is-a-pause).
+The 4 Predict builders mirror the `expiry_market` entrypoints of the same name, but the session key signs them instead of the owner. Compared with the owner-signed call, you pass no `Auth`, because the wrapper generates app authorization internally, and each builder adds the `accountRegistry` and `sessionsConfig` arguments from its `SessionsConfig`. Predict still runs its own validation, and the Sessions page lists [the aborts a session caller still meets](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#predict-wrappers). If the account registry does not authorize `SessionsApp`, every trading call aborts with `EAppNotAuthorized`, as the Sessions page explains under [deauthorizing the app](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#deauthorize-is-a-pause).
 
 Every Predict builder follows these conventions:
 
@@ -284,7 +284,7 @@ Every Predict builder follows these conventions:
 
 ### `mintExactQuantity` {#mint-exact-quantity}
 
-Use `mintExactQuantity` to mint a position of an exact payout quantity as the session key. It returns a `(tx: Transaction) => TransactionResult` function whose result is the new order ID, a `u256`. Both caps are required and have no default. The contract asserts that each value is at most its cap, so a cap of `u64::MAX` never trips.
+Use `mintExactQuantity` to mint a position of an exact payout quantity as the session key. It returns a `(tx: Transaction) => TransactionResult` function whose result is the new order ID, a `u256`. The builder requires both caps and gives them no default. The contract asserts that each value is at most its cap, so a cap of `u64::MAX` never trips.
 
 It takes these parameters:
 
@@ -302,7 +302,7 @@ It takes these parameters:
 
 ### `mintExactAmount` {#mint-exact-amount}
 
-Use `mintExactAmount` to mint by spending up to a premium budget and flooring the quantity received, as the session key. It returns a `(tx: Transaction) => TransactionResult` function whose result is the new order ID, a `u256`. `maxCost` is required, and the contract requires it to be greater than 0.
+Use `mintExactAmount` to mint by spending up to a premium budget and flooring the quantity received, as the session key. It returns a `(tx: Transaction) => TransactionResult` function whose result is the new order ID, a `u256`. The builder requires `maxCost`, and the contract requires it to be greater than 0.
 
 It takes these parameters:
 
@@ -324,7 +324,7 @@ Use `redeemLive` to close part or all of a live position at the pricer's mark as
 
 :::caution
 
-`redeemLive` sends `0` for an omitted `minProbability` or `minProceeds`, and a zero floor lets the session key close the position at whatever price the mark gives. Pass real floors on every close a session key signs.
+`redeemLive` sends `0` for an omitted `minProbability` or `minProceeds`, and a floor of 0 lets the session key close the position at whatever price the mark gives. Pass real floors on every close a session key signs.
 
 :::
 
@@ -343,7 +343,7 @@ It takes these parameters:
 
 ### `redeemSettled` {#redeem-settled}
 
-Use `redeemSettled` to claim a settled position in full as the session key. It returns a `(tx: Transaction) => void` function. It takes no pricer, because the settlement price is fixed, and no quantity, because a settled claim closes the order in full.
+Use `redeemSettled` to claim a settled position in full as the session key. It returns a `(tx: Transaction) => void` function. It takes no pricer, because settlement has already fixed the price, and no quantity, because a settled claim closes the order in full.
 
 It takes these parameters:
 
@@ -404,7 +404,7 @@ Whether these calls succeed depends on a DeepBook registry authorization that di
 
 Each generated function takes an options object with these fields:
 
-- `arguments`: The Move arguments, keyed by parameter name.
+- `arguments`: The Move arguments, in an object whose keys are the parameter names.
 - `typeArguments`: The pool's base and quote coin types.
 - `config`: The `sessionsPackageId` and `sessionsConfig` IDs. The function resolves the package address from it and fills in the `sessionsConfig` argument, so you can omit that argument.
 - `package`: An explicit package ID, which overrides `config.sessionsPackageId`.
@@ -447,15 +447,21 @@ The generated `sessionConfigMoveCalls` namespace covers the `session_config` mod
 
 The subpath re-exports 4 generated BCS structs from the `sessions` module. Each one is a `MoveStruct`, so its `parse` method decodes the matching bytes:
 
-- **`SessionsApp`:** The app type the account registry must authorize before any trading call works.
-- **`SessionsData`:** The grant map stored under the account, a `VecMap` from session address to expiry. `decodeSessions` decodes the dynamic field that wraps it.
-- **`SessionAuthorized`:** The event `authorize_session` emits for a new grant or a re-authorization, with `account_id`, `session`, and `expires_at_ms`.
-- **`SessionRevoked`:** The event `revoke_session` emits when it removes a grant, with the same 3 fields.
+- `SessionsApp`: The app type the account registry must authorize before any trading call works.
+- `SessionsData`: The grant map stored under the account, a `VecMap` from session address to expiry. `decodeSessions` decodes the dynamic field that wraps it.
+- `SessionAuthorized`: The event `authorize_session` emits for a new grant or a re-authorization, with `account_id`, `session`, and `expires_at_ms`.
+- `SessionRevoked`: The event `revoke_session` emits when it removes a grant, with the same 3 fields.
 
 <ImportContent source="packages/deepbook-v3/src/sessions.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="466-473" />
 
 ### Deployment helpers {#deployment-helpers}
 
-The subpath re-exports `getDeployment`, `getUnits`, `TESTNET_DEPLOYMENT`, and `TESTNET_UNITS`, plus the `DeployedNetwork` and `NetworkArg` types, so code that imports only `@mysten/deepbook-v3/sessions` can name the deployment its IDs came from and format a custody balance. [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#configuration) describes the deployment record they read.
+The subpath re-exports these deployment helpers, so code that imports only `@mysten/deepbook-v3/sessions` can name the deployment its IDs came from and format a custody balance:
+
+- `getDeployment` and `getUnits`
+- `TESTNET_DEPLOYMENT` and `TESTNET_UNITS`
+- The `DeployedNetwork` and `NetworkArg` types
+
+[DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#configuration) describes the deployment record they read.
 
 <ImportContent source="packages/deepbook-v3/src/sessions.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="12-13" />

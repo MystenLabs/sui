@@ -403,7 +403,7 @@ public fun builder_code_id(account: &Account): Option<ID>
 
 Both return the empty answer rather than aborting when the account has no Predict slot yet, so `false` and `none` do not distinguish an unused account from a closed position.
 
-`has_position` answers one exact question and needs the market ID and order ID up front, so it cannot enumerate a portfolio. To list what an account holds, read the dynamic fields of the `positions` table, where each field key is a `PositionKey` serialized with Binary Canonical Serialization (BCS). The SDK's `client.predict.read.positions(owner)` does this on either network and returns `{ marketId, orderId }` pairs, and `client.predict.read.hasPosition(owner, marketId, orderId)` wraps the single read. The public offchain read services answer the same question over HTTP for the previous-generation `predict-8-21` deployment only, and their account and position paths key on the canonical account ID rather than the wrapper ID; see [Wrapper ID and account ID](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#wrapper-and-account-ids).
+`has_position` answers one exact question and needs the market ID and order ID up front, so it cannot enumerate a portfolio. To list what an account holds, read the dynamic fields of the `positions` table, where each field key is a `PositionKey` in Binary Canonical Serialization (BCS). The SDK's `client.predict.read.positions(owner)` does this on either network and returns `{ marketId, orderId }` pairs, and `client.predict.read.hasPosition(owner, marketId, orderId)` wraps the single read. The public offchain read services answer the same question over HTTP for the previous-generation `predict-8-21` deployment only, and their account and position paths key on the canonical account ID rather than the wrapper ID; see [Wrapper ID and account ID](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#wrapper-and-account-ids).
 
 To value a position, pass its order ID to the market: `expiry_market::live_order_value` with a market-bound pricer while the market is live, or `expiry_market::settled_order_payout` once it has settled. See [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#read-accessors) for both.
 
@@ -507,7 +507,17 @@ The example below is the second of those. It reads a quote, derives a `maxCost` 
 
 </details>
 
-Composing create, fund, and trade into a single block of your own is generated-bindings work rather than facade work. Build it from the [`AccountContract` methods](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#account-contract) and the `loadLivePricer` escape hatch the `/predict` subpath exports, adding commands to one `Transaction` in this order: `account_registry::new`, `account::generate_auth`, `account::deposit_funds`, `account::share`, `expiry_market::load_live_pricer`, a second `account::generate_auth` because `deposit_funds` consumed the first, and `expiry_market::mint_exact_quantity`. Share the wrapper after the deposit, not before: an object input can only name an object that already existed when the block started, so a wrapper created inside the block is reachable only through the result handle from `new`.
+Composing create, fund, and trade into a single block of your own is generated-bindings work rather than facade work. Build it from the [`AccountContract` methods](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#account-contract) and the `loadLivePricer` function that the `/predict` subpath exports, adding commands to a single `Transaction` in this order:
+
+1. `account_registry::new`
+1. `account::generate_auth`
+1. `account::deposit_funds`
+1. `account::share`
+1. `expiry_market::load_live_pricer`
+1. A second `account::generate_auth`, because `deposit_funds` consumed the first
+1. `expiry_market::mint_exact_quantity`
+
+Share the wrapper after the deposit, not before: an object input can only name an object that already existed when the block started, so a wrapper that the block creates is reachable only through the result handle from `new`.
 
 The [tutorial](/onchain-finance/deepbook/deepbook-predict/tutorial) walks the whole flow with quotes, ranges, redemption, and settlement.
 
