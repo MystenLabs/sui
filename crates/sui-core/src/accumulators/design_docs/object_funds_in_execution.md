@@ -110,6 +110,10 @@ Their outputs use the accumulator's independent clock; a registry Lamport input 
 skip versions and violate the address-funds schedulers' consecutive-version contract. Consensus
 assignment, simulation, and Simulacrum preserve this exclusion.
 
+Runtime loading first reuses a retained explicit input at the assigned version. Simulation and replay
+can therefore keep using that root after its stored version is pruned. A retained input at a different
+version is not a fallback for the assigned root.
+
 ## 5. Failure and error semantics
 
 - Insufficiency aborts the transaction: a real, committed failed execution with normal gas

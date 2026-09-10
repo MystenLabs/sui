@@ -214,7 +214,7 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
-        mut transaction_dependencies: Option<&mut BTreeSet<TransactionDigest>>,
+        transaction_dependencies: Option<&mut BTreeSet<TransactionDigest>>,
         post_execution_check_inputs: PostExecutionCheckInputs,
         unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
@@ -231,27 +231,6 @@ impl<'backing> TemporaryStore<'backing> {
         }
         let stream_ended_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
-        // Consensus assigns the registry to every transaction while forwarding is enabled, so it
-        // participates in Lamport ordering and effects even when execution does not invoke the
-        // resolver. This lets effects-based re-execution recover the same assigned version.
-        let loaded_system_objects = system_object_versions
-            .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-            .and_then(|version| {
-                // Dry-run stores can lack a pruned assigned version. The runtime resolver reports
-                // an invariant error if native execution attempts to use that unavailable root.
-                let object = store.load_implicitly_read_system_object(
-                    &SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                    version,
-                )?;
-                if let Some(dependencies) = transaction_dependencies.as_mut() {
-                    dependencies.insert(object.previous_transaction);
-                }
-                Some(BTreeMap::from([(
-                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                    (object.version(), object.digest()),
-                )]))
-            })
-            .unwrap_or_default();
         #[cfg(debug_assertions)]
         {
             // Ensure that input objects and receiving objects must not overlap.
@@ -269,7 +248,7 @@ impl<'backing> TemporaryStore<'backing> {
                     .is_none()
             );
         }
-        Self {
+        let temporary_store = Self {
             store,
             tx_digest,
             input_objects: objects,
@@ -287,9 +266,23 @@ impl<'backing> TemporaryStore<'backing> {
             post_execution_check_inputs,
             invariants: InvariantChecker::default(),
             system_object_versions,
-            loaded_system_objects: RefCell::new(loaded_system_objects),
+            loaded_system_objects: RefCell::new(BTreeMap::new()),
             unsettled_object_funds,
+        };
+        // An assigned registry participates in Lamport ordering even if resolution is not invoked.
+        // Materialize it through the same loader used at runtime so effects-based replay retains it.
+        if temporary_store
+            .system_object_versions
+            .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+            .is_some()
+        {
+            let registry = temporary_store
+                .load_implicitly_read_system_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID);
+            if let (Some(registry), Some(dependencies)) = (registry, transaction_dependencies) {
+                dependencies.insert(registry.previous_transaction);
+            }
         }
+        temporary_store
     }
 
     /// Checks that the system object `object_id` is available at the version this transaction
@@ -308,11 +301,16 @@ impl<'backing> TemporaryStore<'backing> {
                 return None;
             }
         };
+        // Simulation and replay can retain an exact input after storage has pruned that version.
         let object = self
-            .store
-            // If this transaction needs to read an implicit system object,
-            // the version must be assigned before execution.
-            .load_implicitly_read_system_object(object_id, version)?;
+            .input_objects
+            .get(object_id)
+            .filter(|object| object.version() == version.version)
+            .cloned()
+            .or_else(|| {
+                self.store
+                    .load_implicitly_read_system_object(object_id, version)
+            })?;
         // Record the read version so it can be emitted into effects as a read-only consensus object and
         // reproduced on replay.
         self.loaded_system_objects
@@ -1537,6 +1535,9 @@ mod system_object_resolver_tests {
     use super::*;
     use sui_types::base_types::ConsensusObjectVersion;
     use sui_types::in_memory_storage::InMemoryStorage;
+    use sui_types::transaction::{
+        InputObjectKind, ObjectReadResult, ObjectReadResultKind, SharedObjectMutability,
+    };
 
     #[test]
     fn assigned_system_object_cannot_fall_back_to_missing_or_latest() {
@@ -1586,6 +1587,66 @@ mod system_object_resolver_tests {
         // A pruned pin must not be mistaken for an unregistered master or read a newer root.
         assert_eq!(
             load(Some(SequenceNumber::from_u64(9))).unwrap_err(),
+            SuiErrorKind::ExecutionInvariantViolation,
+        );
+    }
+
+    #[test]
+    fn retained_system_object_survives_backing_store_pruning() {
+        let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+        let initial_shared_version = SequenceNumber::from_u64(1);
+        let registry = |version| {
+            Object::with_id_owner_version_for_testing(
+                id,
+                SequenceNumber::from_u64(version),
+                Owner::Shared {
+                    initial_shared_version,
+                },
+            )
+        };
+        let retained_root = registry(10);
+        let inputs = InputObjects::new(vec![ObjectReadResult::new(
+            InputObjectKind::SharedMoveObject {
+                id,
+                initial_shared_version,
+                mutability: SharedObjectMutability::Mutable,
+            },
+            ObjectReadResultKind::Object(retained_root.clone()),
+        )]);
+        // Only the new version remains in storage after the explicit input was loaded.
+        let backing_store = InMemoryStorage::new(vec![registry(11)]);
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let load = |versions| {
+            TemporaryStore::new_with_input_objects(
+                &backing_store,
+                inputs.clone(),
+                vec![],
+                TransactionDigest::default(),
+                &config,
+                0,
+                versions,
+                None,
+                PostExecutionCheckInputs::default(),
+                &EmptyUnsettledObjectFunds,
+            )
+            .load_runtime_system_object(&id)
+        };
+        let versions =
+            SystemObjectVersions::from_input_objects_and_store(&inputs, &backing_store, true);
+        assert_eq!(
+            load(versions).unwrap().unwrap().compute_object_reference(),
+            retained_root.compute_object_reference(),
+        );
+        // A retained object is not a substitute for a different assigned version.
+        assert_eq!(
+            load(SystemObjectVersions::new(
+                None,
+                Some(ConsensusObjectVersion {
+                    initial_shared_version,
+                    version: SequenceNumber::from_u64(9),
+                }),
+            ))
+            .unwrap_err(),
             SuiErrorKind::ExecutionInvariantViolation,
         );
     }
