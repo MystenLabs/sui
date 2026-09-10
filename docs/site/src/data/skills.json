@@ -77,6 +77,13 @@
     "path": "sui-install"
   },
   {
+    "slug": "kiosk",
+    "title": "Kiosk",
+    "description": "Trade NFTs and enforce transfer policies with Kiosk, including asset states, purchase flows, and Kiosk Apps.",
+    "category": "Onchain finance",
+    "path": "kiosk"
+  },
+  {
     "slug": "modern-move-syntax",
     "title": "Modern Move Syntax",
     "description": "Write idiomatic Move with 2024 edition syntax: method calls, string literals, vectors, options, and more.",
@@ -89,6 +96,13 @@
     "description": "Set up Move projects, configure Move.toml and MVR dependencies, and troubleshoot build errors.",
     "category": "Move",
     "path": "sui-move-project"
+  },
+  {
+    "slug": "move-security",
+    "title": "Move Security",
+    "description": "Review Move code for vulnerabilities: access control, capability handling, invariants, and upgrade governance.",
+    "category": "Move",
+    "path": "move-security"
   },
   {
     "slug": "move-unit-testing",
@@ -112,6 +126,13 @@
     "path": "object-model"
   },
   {
+    "slug": "onchain-randomness",
+    "title": "Onchain Randomness",
+    "description": "Generate random values in Move with the Random object, and secure them against composition and PTB attacks.",
+    "category": "Move",
+    "path": "onchain-randomness"
+  },
+  {
     "slug": "ptbs",
     "title": "Programmable Transaction Blocks",
     "description": "Compose multiple Move calls into a single atomic transaction with gas handling and sponsorship support.",
@@ -126,11 +147,11 @@
     "path": "sui-publish"
   },
   {
-    "slug": "sui-cli",
-    "title": "Sui CLI",
-    "description": "Understand Sui networks, gas costs, epochs, and how the network operates at a high level.",
-    "category": "CLI",
-    "path": "sui-cli"
+    "slug": "sui-bridge",
+    "title": "Sui Bridge",
+    "description": "Move assets between Sui and Ethereum over the native bridge: supported assets, the global limiter, and governance.",
+    "category": "Onchain finance",
+    "path": "sui-bridge"
   },
   {
     "slug": "sui-client",
@@ -140,11 +161,25 @@
     "path": "sui-client"
   },
   {
+    "slug": "sui-for-ethereum",
+    "title": "Sui for Ethereum Developers",
+    "description": "Map Solidity and EVM patterns onto Move and the Sui object model when migrating from Ethereum.",
+    "category": "Get started",
+    "path": "sui-for-ethereum"
+  },
+  {
     "slug": "sui-move",
     "title": "Sui Move",
     "description": "Write and debug Move smart contracts covering abilities, init functions, one-time witnesses, upgrades, and custom coins.",
     "category": "Move",
     "path": "sui-move"
+  },
+  {
+    "slug": "sui-networks-gas",
+    "title": "Sui Networks and Gas",
+    "description": "Understand Sui network environments, gas costs, epochs, and how the network operates at a high level.",
+    "category": "Get started",
+    "path": "sui-networks-gas"
   },
   {
     "slug": "sui-overview",
@@ -159,6 +194,13 @@
     "description": "Pick the right Sui SDK for your language and wire it up: TypeScript, Rust, Python, Go, Dart, Kotlin, or Swift.",
     "category": "Frontend and SDKs",
     "path": "sui-sdks"
+  },
+  {
+    "slug": "sui-ts-sdk-backend",
+    "title": "TypeScript SDK for Backends",
+    "description": "Build backend services and agents on Sui: keypairs, signing, sponsored transactions, executors, and cloud KMS.",
+    "category": "Frontend and SDKs",
+    "path": "sui-ts-sdk-backend"
   },
   {
     "slug": "walrus-sites",
@@ -180,5 +222,12 @@
     "description": "Publish and update Walrus Sites using the site-builder CLI.",
     "category": "Frontend and SDKs",
     "path": "walrus-sites/publishing"
+  },
+  {
+    "slug": "zklogin",
+    "title": "zkLogin",
+    "description": "Integrate OAuth-based, wallet-less login: address derivation, session lifetime, proofs, and security properties.",
+    "category": "Frontend and SDKs",
+    "path": "zklogin"
   }
 ]
