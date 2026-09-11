@@ -475,6 +475,25 @@ jobs:
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
           swap-size-gb: 256
+      - name: Control package directory enumeration order
+        run: |
+          python3 - <<'PY'
+          import os
+          import tempfile
+          from pathlib import Path
+
+          root = Path("crates/sui-surfer/tests")
+          order = ["random", "move_building_blocks"]
+          with tempfile.TemporaryDirectory(dir=root.parent) as staging:
+              for name in order:
+                  os.rename(root / name, Path(staging) / name)
+              for name in order:
+                  os.rename(Path(staging) / name, root / name)
+          actual = [entry.name for entry in os.scandir(root) if entry.is_dir()]
+          print("CLAUDE: controlled package directory order:", actual)
+          assert actual == order, actual
+          PY
+          git diff --exit-code -- crates/sui-surfer/tests
       - name: cargo simtest
         run: |
           MSIM_TEST_SEED=1187333251852574750 scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-capture --retries 0 -E 'test(=test::test_simulated_load_shared_object_congestion_control)'
