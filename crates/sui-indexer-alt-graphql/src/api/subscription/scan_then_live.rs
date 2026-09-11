@@ -27,7 +27,6 @@ use backoff::ExponentialBackoff;
 use futures::Stream;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
-use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use tokio::sync::broadcast;
 use tokio::sync::watch;
@@ -315,14 +314,11 @@ fn backfill<S: Subscribable>(
     }
 }
 
-/// The highest checkpoint fully scanned as of `token`: its own checkpoint for a `Boundary`, one less
-/// for an `Item` (whose checkpoint may still hold later matches).
+/// The highest checkpoint fully scanned as of `token`. An item can leave later matches in its
+/// checkpoint, while an ascending boundary resumes inclusively at its coordinate. Neither proves
+/// that the checkpoint is fully covered.
 fn covered_checkpoint(token: &CursorToken) -> u64 {
-    let checkpoint = token.position.checkpoint();
-    match token.kind {
-        CursorKind::Boundary => checkpoint,
-        CursorKind::Item => checkpoint.saturating_sub(1),
-    }
+    token.position.checkpoint().saturating_sub(1)
 }
 
 /// Follow the live broadcast from `last_checkpoint + 1`, delivering matching items. Drops the
@@ -483,4 +479,19 @@ async fn scan_with_retry<S: Subscribable>(
             })
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_rpc_cursor::Position;
+
+    use super::CursorToken;
+    use super::covered_checkpoint;
+
+    #[test]
+    fn boundary_cursor_does_not_claim_its_resume_checkpoint_covered() {
+        let boundary = CursorToken::boundary(Position::Checkpoints { checkpoint: 42 });
+
+        assert_eq!(covered_checkpoint(&boundary), 41);
+    }
 }

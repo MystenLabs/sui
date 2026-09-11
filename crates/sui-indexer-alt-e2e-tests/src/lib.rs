@@ -981,3 +981,83 @@ async fn start_archival(
     let service = bt_indexer_service.merge(kv_rpc_service);
     Ok((bigtable_client, emulator, service))
 }
+
+/// Poll the kv_packages watermark until it reaches `target_checkpoint`.
+pub async fn wait_for_kv_packages(db: &TempDb, target_checkpoint: u64) {
+    use sui_indexer_alt_schema::schema::watermarks::dsl as w;
+
+    let reader = sui_indexer_alt_reader::pg_reader::PgReader::new(
+        Some("wait_for_kv_packages"),
+        Some(db.database().url().clone()),
+        DbArgs::default(),
+        &prometheus::Registry::new(),
+    )
+    .await
+    .expect("Failed to create PgReader");
+
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            if let Ok(mut conn) = reader.connect().await
+                && let Ok(hi) = conn
+                    .results(
+                        w::watermarks
+                            .select(w::checkpoint_hi_inclusive)
+                            .filter(w::pipeline.eq("kv_packages")),
+                    )
+                    .await
+                && hi.as_slice().first().is_some_and(|&cp: &i64| {
+                    u64::try_from(cp).is_ok_and(|cp| cp >= target_checkpoint)
+                })
+            {
+                return;
+            }
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .expect("Timed out waiting for kv_packages indexer");
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use diesel::ExpressionMethods;
+    use diesel::QueryDsl;
+    use diesel_async::RunQueryDsl;
+    use sui_indexer_alt_framework::store::Connection as _;
+    use sui_pg_db::Db;
+    use sui_pg_db::DbArgs;
+    use sui_pg_db::schema::watermarks;
+    use sui_pg_db::temp::TempDb;
+
+    use super::wait_for_kv_packages;
+
+    #[tokio::test]
+    async fn package_readiness_waits_for_genesis() {
+        let db = TempDb::new().unwrap();
+        let writer = Db::for_write(db.database().url().clone(), DbArgs::default())
+            .await
+            .unwrap();
+        writer.run_migrations(None).await.unwrap();
+        let mut conn = writer.connect().await.unwrap();
+        conn.init_watermark("kv_packages", None).await.unwrap();
+
+        let ready = wait_for_kv_packages(&db, 0);
+        tokio::pin!(ready);
+        assert!(
+            tokio::time::timeout(Duration::from_secs(1), &mut ready)
+                .await
+                .is_err(),
+            "an uninitialized watermark must not satisfy package readiness"
+        );
+
+        diesel::update(watermarks::table.filter(watermarks::pipeline.eq("kv_packages")))
+            .set(watermarks::checkpoint_hi_inclusive.eq(0))
+            .execute(&mut conn)
+            .await
+            .unwrap();
+        ready.await;
+    }
+}

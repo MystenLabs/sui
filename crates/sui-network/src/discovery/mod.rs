@@ -400,7 +400,11 @@ impl DiscoveryEventLoop {
 
         let mut interval = tokio::time::interval(self.discovery_config.interval_period());
         let mut peer_events = {
-            let (subscriber, _peers) = self.network.subscribe().unwrap();
+            let (subscriber, peers) = self.network.subscribe().unwrap();
+            // Connections can be established before discovery subscribes to future peer events.
+            for peer_id in peers {
+                self.handle_peer_event(Ok(PeerEvent::NewPeer(peer_id)));
+            }
             subscriber
         };
 

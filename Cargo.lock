@@ -15244,7 +15244,6 @@ dependencies = [
  "pin-project",
  "prometheus",
  "prost-types 0.14.1",
- "regex",
  "reqwest",
  "rustls",
  "serde",
