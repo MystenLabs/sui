@@ -117,4 +117,17 @@
   - Retain iteration 8's configuration-thread logging, exact cohort, seed, chain, output policy, retries, and deadlines.
   - Add only RPC-stage logging in the existing Sui server handlers. Do not modify SDK behavior, dependency revisions, or cursor code.
 - RESULTS
+  - Linux run 34556590637 reproduced the target failure on all four attempts: 3140 passed and one failed; two other tests passed after retry.
+  - All four initial surfer transactions reached the fullnode executor at simulated 04:01:14.074712. No successful executor completion was logged for any of their digests across the complete 6.1 MB log.
+  - All four initial ledger lookups returned NotFound. Checkpoint subscriptions registered and kept emitting, reaching cursor 414 near the stop signal.
+  - The pending calls are not merely waiting to register a checkpoint subscription. No SDK or cursor change is justified by these observations.
+
+# Iteration 10
+
+- HYPOTHESIS
+  - The orchestrator's submission count and validator submission/certification boundaries will locate the pending execution stage. Existing driver trace messages can identify validator rejections or effects-wait errors.
+- EXPERIMENT
+  - Retain iteration 9's full cohort, seed, chain, configuration-thread initialization, capture policy, retries, and deadlines.
+  - Add only three driver stage logs and one orchestrator execution-plan log. Enable existing orchestrator debug and transaction-driver trace messages. Do not change execution, retry, timeout, or dependency behavior.
+- RESULTS
   - Pending.

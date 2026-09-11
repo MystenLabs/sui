@@ -366,6 +366,13 @@ where
         let tx_digest = request.tx_digest();
         let ping_type = request.ping_type;
 
+        tracing::info!(
+            target: "simtest::driver",
+            ?tx_digest,
+            epoch = auth_agg.committee.epoch,
+            ?tx_type,
+            "CLAUDE: validator submission started"
+        );
         let (name, submit_txn_result) = self
             .submitter
             .submit_transaction(
@@ -377,6 +384,13 @@ where
                 options,
             )
             .await?;
+        tracing::info!(
+            target: "simtest::driver",
+            ?tx_digest,
+            ?name,
+            outcome = ?std::mem::discriminant(&submit_txn_result),
+            "CLAUDE: validator submission completed; waiting for certification"
+        );
         if let SubmitTxResult::Rejected { error } = &submit_txn_result {
             return Err(TransactionDriverError::ClientInternal {
                 error: format!(
@@ -399,6 +413,12 @@ where
                 options,
             )
             .await;
+        tracing::info!(
+            target: "simtest::driver",
+            ?tx_digest,
+            result = ?result.as_ref().map(|_| ()),
+            "CLAUDE: effects certification completed"
+        );
 
         if result.is_ok() {
             self.client_monitor

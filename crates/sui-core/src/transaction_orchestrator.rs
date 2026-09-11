@@ -577,6 +577,14 @@ where
         } else {
             1
         };
+        info!(
+            target: "simtest::driver",
+            ?tx_digest,
+            is_new_transaction,
+            num_submissions,
+            ?finality_timeout,
+            "CLAUDE: orchestrator execution plan"
+        );
 
         // Wait for one of the execution futures to succeed, or all of them to fail.
         let mut execution_futures = FuturesUnordered::new();

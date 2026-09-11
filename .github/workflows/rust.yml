@@ -454,7 +454,7 @@ jobs:
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 300000
       SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: mainnet
-      RUST_LOG: error,sui_types::digests=info,sui_surfer=info,simtest=info
+      RUST_LOG: error,sui_types::digests=info,sui_surfer=info,simtest=info,sui_core::transaction_orchestrator=debug,sui_core::transaction_driver=trace
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
