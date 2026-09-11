@@ -1,0 +1,63 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-21:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 7425200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 23-24:
+//# programmable --sender A
+//> 0: test::m::new_party();
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 26-29:
+//# programmable --sender A --inputs object(2,0) 7
+// VALID: a write through a reference into a party object persists
+//> 0: test::m::f_mut(Input(0));
+//> 1: test::m::write(Result(0), Input(1));
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+
+task 4, line 31:
+//# view-object 2,0
+Owner: ConsensusAddressOwner( 2, A )
+Version: 3
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    f: 7u64,
+}
+
+task 5, lines 33-37:
+//# programmable --sender A --inputs object(2,0) 8 @B
+// VALID: transferred to an address once the reference is dead, carrying the write
+//> 0: test::m::f_mut(Input(0));
+//> 1: test::m::write(Result(0), Input(1));
+//> 2: TransferObjects([Input(0)], Input(2));
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+
+task 6, line 39:
+//# view-object 2,0
+Owner: Account Address ( B )
+Version: 4
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    f: 8u64,
+}

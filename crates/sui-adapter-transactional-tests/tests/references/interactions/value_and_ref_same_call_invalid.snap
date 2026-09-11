@@ -1,0 +1,63 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-18:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6118000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 20-23:
+//# programmable
+// INVALID: ArgumentWithoutValue at arg 1 of command 1
+//> 0: test::m::nc();
+//> 1: test::m::take_and_imm(Result(0), Result(0));
+Error: Transaction Effects Status: Invalid command argument at 1. Specified argument location does not have a value and cannot be used
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: ArgumentWithoutValue }, source: None, command: Some(1) } }
+
+task 3, lines 25-28:
+//# programmable
+// INVALID: CannotMoveBorrowedValue at arg 1 of command 1
+//> 0: test::m::nc();
+//> 1: test::m::imm_and_take(Result(0), Result(0));
+Error: Transaction Effects Status: Invalid command argument at 1. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: CannotMoveBorrowedValue }, source: None, command: Some(1) } }
+
+task 4, lines 30-33:
+//# programmable
+// INVALID: ArgumentWithoutValue at arg 1 of command 1
+//> 0: test::m::nc();
+//> 1: test::m::take_and_mut(Result(0), Result(0));
+Error: Transaction Effects Status: Invalid command argument at 1. Specified argument location does not have a value and cannot be used
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: ArgumentWithoutValue }, source: None, command: Some(1) } }
+
+task 5, lines 35-38:
+//# programmable
+// INVALID: CannotMoveBorrowedValue at arg 1 of command 1
+//> 0: test::m::nc();
+//> 1: test::m::mut_and_take(Result(0), Result(0));
+Error: Transaction Effects Status: Invalid command argument at 1. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: CannotMoveBorrowedValue }, source: None, command: Some(1) } }
+
+task 6, lines 40-44:
+//# programmable
+// INVALID: CannotMoveBorrowedValue at arg 0 of command 2, the value moved with its own field reference
+//> 0: test::m::nc();
+//> 1: test::m::f_mut(Result(0));
+//> 2: test::m::take_and_u64(Result(0), Result(1));
+Error: Transaction Effects Status: Invalid command argument at 0. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotMoveBorrowedValue }, source: None, command: Some(2) } }
+
+task 7, lines 46-50:
+//# programmable
+// INVALID: CannotMoveBorrowedValue at arg 1 of command 2, the field reference first
+//> 0: test::m::nc();
+//> 1: test::m::f_mut(Result(0));
+//> 2: test::m::u64_and_take(Result(1), Result(0));
+Error: Transaction Effects Status: Invalid command argument at 1. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: CannotMoveBorrowedValue }, source: None, command: Some(2) } }

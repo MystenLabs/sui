@@ -1,0 +1,49 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-13:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4347200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-19:
+//# programmable
+// VALID: two free-floating references passed together, aborts at runtime with code 7
+//> 0: test::m::boom();
+//> 1: test::m::boom();
+//> 2: test::m::two_mut(Result(0), Result(1));
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m::boom (function index 0) at offset 1, Abort Code: 7
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("boom") }, 7), source: Some(VMError { major_status: ABORTED, sub_status: Some(7), message: Some("test::m::boom at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
+
+task 3, lines 21-24:
+//# programmable
+// INVALID: InvalidReferenceArgument at arg 1 of command 1, the same free-floating reference twice
+//> 0: test::m::boom();
+//> 1: test::m::two_mut(Result(0), Result(0));
+Error: Transaction Effects Status: Invalid command argument at 1. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidReferenceArgument }, source: None, command: Some(1) } }
+
+task 4, lines 26-30:
+//# programmable --inputs 0 1
+// VALID: a laundered reference does not borrow its immutable source, aborts at runtime with code 8
+//> 0: test::m::launder(Input(0));
+//> 1: test::m::id_mut<u64>(Input(0));
+//> 2: test::m::two_mut(Result(0), Result(1));
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m::launder (function index 1) at offset 1, Abort Code: 8
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("launder") }, 8), source: Some(VMError { major_status: ABORTED, sub_status: Some(8), message: Some("test::m::launder at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
+
+task 5, lines 32-37:
+//# programmable --inputs 0 1
+// VALID: writing the source while the laundered reference is live, aborts at runtime with code 8
+//> 0: test::m::launder(Input(0));
+//> 1: test::m::id_mut<u64>(Input(0));
+//> 2: test::m::write(Result(1), Input(1));
+//> 3: test::m::write(Result(0), Input(1));
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m::launder (function index 1) at offset 1, Abort Code: 8
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("launder") }, 8), source: Some(VMError { major_status: ABORTED, sub_status: Some(8), message: Some("test::m::launder at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }

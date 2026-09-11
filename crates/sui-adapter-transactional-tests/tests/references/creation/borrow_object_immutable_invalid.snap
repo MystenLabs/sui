@@ -1,0 +1,51 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-20:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7151600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 22-23:
+//# programmable --sender A
+//> 0: test::m::freeze_new();
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 25-29:
+//# programmable --sender A --inputs object(2,0) 3
+// VALID: `&Obj` then `&Inner` then `&u64`
+//> 0: test::m::inner(Input(0));
+//> 1: test::m::f(Result(0));
+//> 2: test::m::check(Result(1), Input(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 31-33:
+//# programmable --sender A --inputs object(2,0)
+// INVALID: InvalidObjectByMutRef at arg 0 of command 0
+//> 0: test::m::inner_mut(Input(0));
+Error: Transaction Effects Status: Invalid command argument at 0. Immutable objects cannot be passed by mutable reference, &mut.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByMutRef }, source: None, command: Some(0) } }
+
+task 5, lines 35-38:
+//# programmable --sender A --inputs object(2,0)
+// INVALID: TypeMismatch at arg 0 of command 1, `&Inner` used as `&mut Inner`
+//> 0: test::m::inner(Input(0));
+//> 1: test::m::use_mut<test::m::Inner>(Result(0));
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
+
+task 6, lines 40-42:
+//# programmable --sender A --inputs object(2,0)
+// INVALID: InvalidObjectByValue at arg 0 of command 0
+//> 0: test::m::delete(Input(0));
+Error: Transaction Effects Status: Invalid command argument at 0. Immutable objects cannot be passed by-value.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue }, source: None, command: Some(0) } }

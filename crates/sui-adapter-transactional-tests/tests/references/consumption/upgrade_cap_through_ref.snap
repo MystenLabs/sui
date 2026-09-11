@@ -1,0 +1,51 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-15:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5707600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-20:
+//# publish --upgradeable --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 5, lines 35-45:
+//# programmable --sender A --inputs 7 8 @A
+// VALID: references into an object result and a pure input live across a Publish whose init creates an object
+//> 0: test::m::new();
+//> 1: test::m::f_mut(Result(0));
+//> 2: test::m::id_mut<u64>(Input(0));
+//> 3: Publish(p, [sui, std]);
+//> 4: test::m::write(Result(1), Input(1));
+//> 5: test::m::write(Result(2), Input(1));
+//> 6: test::m::check(Result(1), Input(1));
+//> 7: test::m::check(Input(0), Input(1));
+//> 8: TransferObjects([Result(0), Result(3)], Input(2));
+created: object(5,0), object(5,1), object(5,2), object(5,3)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 9226400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 47-57:
+//# programmable --sender A --inputs object(2,1) 0u8 digest(q_2) 7 @A
+// VALID: a reference into the UpgradeCap authorizes and commits; an object reference lives across the Upgrade
+//> 0: test::m::new();
+//> 1: test::m::f_mut(Result(0));
+//> 2: test::m::id_mut<sui::package::UpgradeCap>(Input(0));
+//> 3: sui::package::authorize_upgrade(Result(2), Input(1), Input(2));
+//> 4: Upgrade(q_2, [sui, std], q, Result(3));
+//> 5: test::m::write(Result(1), Input(3));
+//> 6: sui::package::commit_upgrade(Result(2), Result(4));
+//> 7: test::m::check(Result(1), Input(3));
+//> 8: TransferObjects([Result(0)], Input(4));
+created: object(6,0), object(6,1)
+mutated: object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 6368800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220

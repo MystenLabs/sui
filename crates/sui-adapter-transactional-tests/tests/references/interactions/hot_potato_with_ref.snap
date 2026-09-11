@@ -1,0 +1,77 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-24:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8139600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 26-34:
+//# programmable --sender A --inputs 1
+// VALID: the potato and the reference consumed by one call, the write observed after
+//> 0: test::m::new();
+//> 1: test::m::open(Result(0));
+//> 2: test::m::close(NestedResult(1,0), NestedResult(1,1));
+//> 3: test::m::inner(Result(0));
+//> 4: test::m::f(Result(3));
+//> 5: test::m::check(Result(4), Input(0));
+//> 6: test::m::delete(Result(0));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 36-42:
+//# programmable --sender A
+// INVALID: InvalidReferenceArgument at arg 1 of command 2, the parent `&mut` while the sibling reference is live
+//> 0: test::m::new();
+//> 1: test::m::open(Result(0));
+//> 2: test::m::close_with_parent(NestedResult(1,0), Result(0));
+//> 3: test::m::use_mut<test::m::Inner>(NestedResult(1,1));
+//> 4: test::m::delete(Result(0));
+Error: Transaction Effects Status: Invalid command argument at 1. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidReferenceArgument }, source: None, command: Some(2) } }
+
+task 4, lines 44-49:
+//# programmable --sender A
+// INVALID: CannotMoveBorrowedValue at arg 1 of command 2, the parent by value while the sibling reference is live
+//> 0: test::m::new();
+//> 1: test::m::open(Result(0));
+//> 2: test::m::close_and_delete(NestedResult(1,0), Result(0));
+//> 3: test::m::use_mut<test::m::Inner>(NestedResult(1,1));
+Error: Transaction Effects Status: Invalid command argument at 1. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: CannotMoveBorrowedValue }, source: None, command: Some(2) } }
+
+task 5, lines 51-56:
+//# programmable --sender A
+// VALID: the parent consumed with the potato once the reference is dead
+//> 0: test::m::new();
+//> 1: test::m::open(Result(0));
+//> 2: test::m::use_mut<test::m::Inner>(NestedResult(1,1));
+//> 3: test::m::close_and_delete(NestedResult(1,0), Result(0));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 58-63:
+//# programmable --sender A
+// INVALID: UnusedValueWithoutDrop { result_idx: 1, secondary_idx: 0 }, the potato never consumed
+//> 0: test::m::new();
+//> 1: test::m::open(Result(0));
+//> 2: test::m::use_mut<test::m::Inner>(NestedResult(1,1));
+//> 3: test::m::delete(Result(0));
+Error: Transaction Effects Status: Unused result without the drop ability. Command result 1, return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 1, secondary_idx: 0 }, source: Some("Unused value without drop"), command: None } }
+
+task 7, lines 65-70:
+//# programmable --sender A
+// VALID: the reference unused and released, the potato closed against the parent
+//> 0: test::m::new();
+//> 1: test::m::open(Result(0));
+//> 2: test::m::close_with_parent(NestedResult(1,0), Result(0));
+//> 3: test::m::delete(Result(0));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
