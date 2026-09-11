@@ -124,6 +124,10 @@ Shared-input metrics classify the transaction's declared inputs, not its effects
 registry reads therefore do not turn an owned-only transaction into a shared-input transaction;
 explicit registry inputs still count.
 
+Forwarding resolution activates at protocol 138 on devnet/Unknown only. Protocol 137's frozen
+framework contains registry creation but not registration or resolution, so its configuration and
+bytecode snapshots must remain unchanged.
+
 ## 5. Failure and error semantics
 
 - Insufficiency aborts the transaction: a real, committed failed execution with normal gas

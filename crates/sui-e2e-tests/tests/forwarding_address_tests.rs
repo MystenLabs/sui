@@ -36,7 +36,7 @@ async fn test_create_forwarding_address_registry_object_at_upgrade() {
             if version.as_u64() >= 132 {
                 config.set_create_forwarding_address_registry_for_testing(true);
             }
-            if version.as_u64() >= 137 {
+            if version.as_u64() >= 138 {
                 config.set_enable_forwarding_addresses_for_testing(true);
                 config.set_forwarding_address_resolve_cost_base_for_testing(52);
                 config.set_forwarding_address_resolve_cost_per_byte_for_testing(
@@ -49,7 +49,7 @@ async fn test_create_forwarding_address_registry_object_at_upgrade() {
     let test_cluster = TestClusterBuilder::new()
         .with_protocol_version(130.into())
         .with_epoch_duration_ms(10000)
-        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(130, 137))
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(130, 138))
         .build()
         .await;
 
@@ -67,7 +67,7 @@ async fn test_create_forwarding_address_registry_object_at_upgrade() {
         });
     }
 
-    test_cluster.wait_for_protocol_version(137.into()).await;
+    test_cluster.wait_for_protocol_version(138.into()).await;
     // A direct jump activates the native before the registry can be created. Forwarding-shaped
     // recipients must fail closed during this epoch instead of receiving funds as ordinary
     // addresses.
