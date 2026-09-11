@@ -17,12 +17,20 @@ on:
         type: string
         required: false
         default: ''
+      validation:
+        description: "Remote epoch-readiness experiment"
+        type: choice
+        required: true
+        default: cohort
+        options:
+          - cohort
+          - seed-sweep
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.inputs.validation || 'default' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
@@ -454,7 +462,7 @@ jobs:
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 300000
       SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: mainnet
-      RUST_LOG: error,sui_types::digests=info,sui_surfer=info,simtest=info,sui_core::transaction_orchestrator=debug,sui_core::transaction_driver=trace
+      RUST_LOG: error
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -475,9 +483,41 @@ jobs:
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
           swap-size-gb: 256
-      - name: cargo simtest
+      - name: Run identical-seed full cohort
+        if: github.event.inputs.validation != 'seed-sweep'
+        env:
+          RUST_LOG: error,sui_types::digests=info,sui_surfer=info,simtest=info,sui_core::transaction_orchestrator=debug,sui_core::transaction_driver=trace
         run: |
           MSIM_TEST_SEED=1187333251852574750 scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
+      - name: Run congestion readiness seed sweep
+        if: github.event.inputs.validation == 'seed-sweep'
+        run: |
+          git rev-parse HEAD
+          python3 scripts/simtest/seed-search.py \
+            --package sui-benchmark --test simtest \
+            --exact test::test_simulated_load_shared_object_congestion_control \
+            --seed-start 1187333251852574749 --num-seeds 200 --concurrency 4 \
+            --watchdog-timeout-ms 300000 \
+            --log-dir "$RUNNER_TEMP/epoch-readiness-seeds"
+      - name: Check a five-minute epoch override
+        if: github.event.inputs.validation == 'seed-sweep'
+        env:
+          EPOCH_DURATION_MS: 300000
+        run: |
+          python3 scripts/simtest/seed-search.py \
+            --package sui-benchmark --test simtest \
+            --exact test::test_simulated_load_shared_object_congestion_control \
+            --seed-start 1187333251852574749 --num-seeds 1 --concurrency 1 \
+            --watchdog-timeout-ms 300000 \
+            --log-dir "$RUNNER_TEMP/epoch-readiness-long-epoch"
+      - name: Upload seed logs
+        if: always() && github.event.inputs.validation == 'seed-sweep'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
+        with:
+          name: epoch-readiness-seeds
+          path: |
+            ${{ runner.temp }}/epoch-readiness-seeds
+            ${{ runner.temp }}/epoch-readiness-long-epoch
 
   # This job ensures that Move unit tests are run if there are changes
   # to Move code but not Rust code (If there are Rust changes, they
