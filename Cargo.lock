@@ -16400,50 +16400,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-replay"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-recursion",
- "async-trait",
- "bcs",
- "clap",
- "futures",
- "http 1.3.1",
- "jsonrpsee",
- "lru 0.18.2",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
- "parking_lot 0.12.3",
- "prometheus",
- "rand 0.8.5",
- "regex",
- "serde",
- "serde_json",
- "serde_with",
- "serde_yaml 0.8.26",
- "shellexpand",
- "similar",
- "sui-config",
- "sui-core",
- "sui-execution",
- "sui-framework",
- "sui-json-rpc-api",
- "sui-json-rpc-types",
- "sui-protocol-config",
- "sui-sdk",
- "sui-transaction-checks",
- "sui-types",
- "tabled",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tokio-util 0.7.18 (registry+https://github.com/rust-lang/crates.io-index)",
- "tracing",
-]
-
-[[package]]
 name = "sui-replay-2"
 version = "0.1.0"
 dependencies = [
@@ -17170,7 +17126,6 @@ dependencies = [
  "sui-network",
  "sui-package-dump",
  "sui-protocol-config",
- "sui-replay",
  "sui-rpc-api",
  "sui-snapshot",
  "sui-storage",
