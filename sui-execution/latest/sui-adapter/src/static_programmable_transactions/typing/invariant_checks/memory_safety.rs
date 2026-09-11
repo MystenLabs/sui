@@ -33,6 +33,7 @@ enum NodeKind {
 #[derive(Debug)]
 struct Node {
     kind: NodeKind,
+    /// Contains the node itself and all of its transitive ancestors
     ancestors: BitSet,
     children: Vec<NodeID>,
 }
