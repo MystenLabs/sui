@@ -1046,10 +1046,11 @@ fn max_rpc_retries() -> usize {
 }
 
 /// Antithesis stops and partitions nodes for stretches that routinely outlast the default
-/// budget, so the client gives up while the fault is still in effect.
+/// budget, so the client gives up while the fault is still in effect. Continuous fault chains
+/// can keep the fullnode unavailable for more than five minutes during workload initialization.
 fn rpc_retry_budget() -> Duration {
     if in_antithesis() {
-        Duration::from_secs(300)
+        Duration::from_secs(600)
     } else {
         Duration::from_secs(60)
     }
