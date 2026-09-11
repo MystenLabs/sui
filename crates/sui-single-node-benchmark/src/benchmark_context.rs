@@ -598,6 +598,7 @@ mod tests {
     use super::*;
     use crate::command::WorkloadKind;
     use sui_macros::sim_test;
+    use sui_protocol_config::ProtocolConfig;
     use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
     use sui_types::effects::UnchangedConsensusKind;
 
@@ -612,6 +613,18 @@ mod tests {
     }
 
     async fn assert_owned_benchmark_preserves_registry(component: Component) {
+        // Protocol overrides are process-global when native tests share a test binary.
+        static PROTOCOL_CONFIG_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+        let _lock = PROTOCOL_CONFIG_LOCK.lock().await;
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_create_forwarding_address_registry_for_testing(true);
+            config.set_enable_forwarding_addresses_for_testing(true);
+            config.set_forwarding_address_resolve_cost_base_for_testing(52);
+            config.set_forwarding_address_resolve_cost_per_byte_for_testing(
+                config.obj_access_cost_read_per_byte(),
+            );
+            config
+        });
         let workload = Workload::new(
             2,
             WorkloadKind::PTB {
