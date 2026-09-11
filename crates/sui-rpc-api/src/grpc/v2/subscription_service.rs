@@ -68,6 +68,7 @@ impl SubscriptionService for RpcService {
         &self,
         request: tonic::Request<SubscribeCheckpointsRequest>,
     ) -> Result<tonic::Response<BoxStream<SubscribeCheckpointsResponse>>, tonic::Status> {
+        tracing::info!(target: "simtest::rpc", "CLAUDE: checkpoint subscription started");
         let request = request.into_inner();
         let read_mask = read_mask_defaults::validate_read_mask::<Checkpoint>(
             request.read_mask,
@@ -82,6 +83,7 @@ impl SubscriptionService for RpcService {
             },
         )
         .await?;
+        tracing::info!(target: "simtest::rpc", "CLAUDE: checkpoint subscription registered");
 
         let response = Box::pin(async_stream::stream! {
             while let Some(update) = receiver.recv().await {
@@ -99,6 +101,12 @@ impl SubscriptionService for RpcService {
                         SubscriptionFrameKind::Watermark
                     }
                 };
+                tracing::info!(
+                    target: "simtest::rpc",
+                    cursor = ?response.cursor,
+                    transactions = response.checkpoint().transactions().len(),
+                    "CLAUDE: checkpoint subscription emits frame"
+                );
                 stream_metrics.observe_frame(&response, frame_kind);
                 let yielded_at = Instant::now();
                 yield Ok(response);

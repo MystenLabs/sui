@@ -83,9 +83,21 @@ impl LedgerService for RpcService {
         &self,
         request: tonic::Request<GetTransactionRequest>,
     ) -> Result<tonic::Response<GetTransactionResponse>, tonic::Status> {
-        get_transaction::get_transaction(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        tracing::info!(
+            target: "simtest::rpc",
+            digest = request.get_ref().digest(),
+            "CLAUDE: ledger lookup started"
+        );
+        let response = get_transaction::get_transaction(self, request.into_inner());
+        tracing::info!(
+            target: "simtest::rpc",
+            result = ?response.as_ref().map(|response| (
+                response.transaction().digest(),
+                response.transaction().checkpoint_opt()
+            )),
+            "CLAUDE: ledger lookup completed"
+        );
+        response.map(tonic::Response::new).map_err(Into::into)
     }
 
     async fn batch_get_transactions(

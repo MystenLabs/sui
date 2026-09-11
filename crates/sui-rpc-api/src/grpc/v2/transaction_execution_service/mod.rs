@@ -132,6 +132,11 @@ pub async fn execute_transaction(
             || read_mask.contains(ExecutedTransaction::EFFECTS_FIELD.name),
         include_auxiliary_data: false,
     };
+    tracing::info!(
+        target: "simtest::rpc",
+        digest = %transaction.digest(),
+        "CLAUDE: RPC execution started"
+    );
 
     let sui_types::transaction_driver_types::ExecuteTransactionResponseV3 {
         effects:
@@ -144,6 +149,11 @@ pub async fn execute_transaction(
         output_objects,
         auxiliary_data: _,
     } = executor.execute_transaction(request, None).await?;
+    tracing::info!(
+        target: "simtest::rpc",
+        digest = %transaction.digest(),
+        "CLAUDE: RPC execution completed"
+    );
 
     let executed_transaction = {
         // Build the objects set first so we can use it for event JSON rendering.
