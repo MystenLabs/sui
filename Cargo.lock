@@ -17185,6 +17185,7 @@ dependencies = [
  "http 1.3.1",
  "iso8601",
  "move-binary-format",
+ "move-bytecode-source-map",
  "move-bytecode-utils",
  "move-command-line-common",
  "move-compiler",

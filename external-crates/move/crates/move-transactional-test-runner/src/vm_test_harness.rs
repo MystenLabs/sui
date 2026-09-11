@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    framework::{CompiledState, MaybeNamedCompiledModule, MoveTestAdapter, run_test_impl},
+    framework::{
+        CompiledState, MaybeNamedCompiledModule, MoveTestAdapter, PreCompiledProgramInfoFuture,
+        run_test_impl,
+    },
     tasks::{InitCommand, SyntaxChoice, TaskInput, parse_qualified_module_access},
 };
 
@@ -189,11 +192,15 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
+        pre_compiled_deps: Option<PreCompiledProgramInfoFuture>,
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
         println!("---- INITIALIZING -------------------------------------------------------------");
+        let pre_compiled_deps = match pre_compiled_deps {
+            Some(deps) => Some(deps.await),
+            None => None,
+        };
         println!("grabbing init arguments");
         let (additional_mapping, compiler_edition) = match task_opt.map(|t| t.command) {
             Some((InitCommand { named_addresses }, AdapterInitArgs { edition })) => {
@@ -743,12 +750,7 @@ static MOVE_STDLIB_COMPILED: LazyLock<Vec<(CompiledModule, SourceMap)>> = LazyLo
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     SWITCH_TO_REGEX_REFERENCE_SAFETY.set(false).unwrap();
-    run_test_impl::<SimpleRuntimeTestAdapter>(
-        path,
-        Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
-        None,
-    )
-    .await
+    run_test_impl::<SimpleRuntimeTestAdapter>(path, Some(precompiled_move_stdlib()), None).await
 }
 
 #[tokio::main]
@@ -763,12 +765,14 @@ pub async fn run_test_with_regex_reference_safety(
     {
         options.suffix("regex");
     }
-    run_test_impl::<SimpleRuntimeTestAdapter>(
-        path,
-        Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
-        Some(options),
-    )
-    .await
+    run_test_impl::<SimpleRuntimeTestAdapter>(path, Some(precompiled_move_stdlib()), Some(options))
+        .await
+}
+
+fn precompiled_move_stdlib() -> PreCompiledProgramInfoFuture {
+    Box::pin(std::future::ready(Arc::new(
+        PRECOMPILED_MOVE_STDLIB.clone(),
+    )))
 }
 
 //**************************************************************************************************
