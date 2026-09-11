@@ -50,7 +50,6 @@ sui-core.workspace = true
 sui-network.workspace = true
 sui-snapshot.workspace = true
 sui-protocol-config.workspace = true
-sui-replay.workspace = true
 sui-rpc-api.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
