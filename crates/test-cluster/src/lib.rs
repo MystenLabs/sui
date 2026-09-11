@@ -428,7 +428,7 @@ impl TestCluster {
         let mut state = None;
         timeout(timeout_dur, async {
             let epoch = handle.with(|node| node.state().epoch_store_for_testing().epoch());
-            if Some(epoch) == target_epoch {
+            if target_epoch.is_some_and(|target_epoch| epoch >= target_epoch) {
                 return handle.with(|node| node.state().get_sui_system_state_object_for_testing().unwrap());
             }
             while let Ok(system_state) = epoch_rx.recv().await {
