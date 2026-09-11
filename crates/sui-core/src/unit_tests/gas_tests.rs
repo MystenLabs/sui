@@ -1055,7 +1055,7 @@ async fn execute_transfer_with_price(
             .into_tx();
         authority_state
             .handle_vote_transaction(&epoch_store, tx)
-            .map(|()| None)
+            .map(|_| None)
     };
     TransferResult {
         authority_state,
