@@ -75,6 +75,16 @@ pub fn bench<M: Measurement + 'static>(c: &mut Criterion<M>, filename: &str) {
     execute(c, &mut adapter, BENCH_ADDR, modules, filename);
 }
 
+/// Like `bench`, but creates the VM once per bench function instead of once per iteration, so
+/// the measurement excludes VM construction. Use for benches whose per-iteration work would
+/// otherwise be drowned by setup (e.g. single bulk vector ops).
+pub fn bench_hoisted<M: Measurement + 'static>(c: &mut Criterion<M>, filename: &str) {
+    let modules = compile_modules(filename);
+    let mut adapter = create_vm();
+    publish_stdlib(&mut adapter);
+    execute_hoisted(c, &mut adapter, BENCH_ADDR, modules, filename);
+}
+
 /// Bench entry point for the pinned/system-package optimization (MystenLabs/sui#26508). The
 /// source file is expected to contain a callee package at `LIB_ADDR` (0x42) and a user package
 /// at `BENCH_ADDR` (0x2) with `bench_*` functions that hammer cross-package calls.
@@ -254,6 +264,48 @@ fn execute_labeled<M: Measurement + 'static>(
     label: &str,
 ) {
     execute_inner(c, adapter, sender, modules, file, Some(label));
+}
+
+// VM created once and reused so criterion measures only the function execution.
+fn execute_hoisted<M: Measurement + 'static>(
+    c: &mut Criterion<M>,
+    adapter: &mut InMemoryTestAdapter,
+    sender: AccountAddress,
+    modules: Vec<CompiledModule>,
+    file: &str,
+) {
+    let fun_names_with_moduleid = find_bench_functions(&modules);
+
+    let linkage = adapter
+        .generate_linkage_context(sender, sender, &modules)
+        .unwrap();
+    let pkg = StoredPackage::from_module_for_testing_with_linkage(sender, linkage.clone(), modules)
+        .unwrap();
+    adapter
+        .publish_package(sender, pkg.into_serialized_package())
+        .unwrap();
+
+    fun_names_with_moduleid
+        .iter()
+        .for_each(|(fun_name, module_id)| {
+            let bench_name = format!("{}::{}::{}", file, module_id.name().as_str(), fun_name);
+            let mut vm = adapter.make_vm(linkage.clone()).unwrap();
+            c.bench_function(&bench_name, |b| {
+                b.iter_with_large_drop(|| {
+                    vm.execute_function_bypass_visibility(
+                        module_id,
+                        fun_name,
+                        vec![],
+                        vec![],
+                        &mut UnmeteredGasMeter,
+                        None,
+                    )
+                    .unwrap_or_else(|err| {
+                        panic!("{:?}::bench in {file} failed with {:?}", &module_id, err)
+                    })
+                })
+            });
+        });
 }
 
 fn execute_inner<M: Measurement + 'static>(
