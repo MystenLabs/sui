@@ -101,4 +101,20 @@
   - Move only telemetry initialization from the target test body into its existing simulator configuration expression. Retain all logging statements, full-cohort selection, seed, chain, retries, and deadlines.
   - Retain successful output for this exact target through a nextest output-only override so a pass also yields usable observations.
 - RESULTS
+  - Linux run 34554557293 reproduced the target failure on all four attempts: 3140 tests passed and one failed; two other tests passed after retry.
+  - Both package publications succeeded and registered 20 callable functions. Four surfer tasks submitted their first Move call at simulated 04:01:13.588325–04:01:13.588326. No call returned before all tasks received the stop signal at 04:02:13.552226–04:02:13.552227.
+  - The benchmark completed 66 transactions. The surfer seed was 3499224019834037213, distinct from the earlier passing selected-test run; congestion parameters remained target utilization 5 and maximum deferrals 694.
+  - Moving initialization out of the actual test thread restored the original failure timestamp while retaining logs. This supports preserving that setup for diagnosis; it does not by itself prove the precise hash-state mechanism.
+
+# Iteration 9
+
+- OBSERVATIONS
+  - The wallet delegates each call to the RPC SDK's execute-and-wait-for-checkpoint helper. Its 30-second timeout covers checkpoint confirmation only, after execution and the post-execution lookup return.
+  - All four calls remained pending without RPC retry errors, so their waiting stage is still unknown.
+- HYPOTHESIS
+  - Server-side subscription, execution, and ledger-lookup boundaries will distinguish subscription startup, transaction execution, and client-side response/confirmation waiting.
+- EXPERIMENT
+  - Retain iteration 8's configuration-thread logging, exact cohort, seed, chain, output policy, retries, and deadlines.
+  - Add only RPC-stage logging in the existing Sui server handlers. Do not modify SDK behavior, dependency revisions, or cursor code.
+- RESULTS
   - Pending.
