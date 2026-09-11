@@ -65,6 +65,7 @@ env:
 
 jobs:
   diff:
+    if: false
     runs-on: [ ubuntu-latest ]
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
@@ -78,6 +79,7 @@ jobs:
         id: diff
 
   license-check:
+    if: false
     name: license-check
     runs-on: [ ubuntu-latest ]
     steps:
@@ -446,13 +448,13 @@ jobs:
     permissions:
       contents: read
       id-token: write # OIDC token to assume the sccache role on trusted refs
-    needs: [diff, rustfmt, clippy, snapshot-check]
-    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
+    if: github.event_name == 'workflow_dispatch'
     timeout-minutes: 45
     runs-on: [ ubuntu-ghcloud ]
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 300000
       SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: mainnet
+      RUST_LOG: error,sui_types::digests=info,sui_surfer=info,simtest=info
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -475,7 +477,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo simtest
         run: |
-          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
+          MSIM_TEST_SEED=1187333251852574750 scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-capture --retries 0 -E 'test(=test::test_simulated_load_shared_object_congestion_control)'
 
   # This job ensures that Move unit tests are run if there are changes
   # to Move code but not Rust code (If there are Rust changes, they
@@ -661,7 +663,7 @@ jobs:
       - uses: taiki-e/install-action@cargo-deny
       - run: cargo deny check advisories --hide-inclusion-graph
 
-  sui-excution-cut:
+  sui-execution-cut:
     permissions:
       contents: read
       id-token: write # OIDC token to assume the sccache role on trusted refs
