@@ -41,6 +41,7 @@ Sui provides multiple primitives for building payment flows, from reading balanc
 - **Constructing payments:** Use [payment intents](/onchain-finance/payment-intents) to compose multi-step payment workflows (split coins, transfer, merge) into a single atomic [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks).
 - **Sponsoring gas:** Use [sponsored transactions](/develop/transaction-payment/sponsor-txn) so your users pay no gas fees. This is common for onboarding flows and stablecoin transfers where you want a Web2-like experience.
 - **Gasless stablecoin transfers:** Sui supports [zero-fee stablecoin transfers](/develop/transaction-payment/gasless-stablecoin-transfers) for eligible transactions, removing gas costs entirely for supported assets.
+- **Recurring and delegated spending:** Use [allowances](/onchain-finance/allowances) to let a service, agent, or team member pull from a user's address balance within limits the user sets and can revoke.
 - **Payment verification:** The [Payment Kit](/onchain-finance/payment-kit) provides secure payment verification, receipt management, and duplicate prevention for production payment systems.
 
 ### Choosing a payment approach
@@ -52,6 +53,7 @@ Sui provides multiple primitives for building payment flows, from reading balanc
 | Subsidize user gas costs | [Sponsored Transactions](/develop/transaction-payment/sponsor-txn) | Zero gas for the end user |
 | Stablecoin payments | [Gasless Stablecoin Transfers](/develop/transaction-payment/gasless-stablecoin-transfers) | No gas fees for eligible stablecoin transfers |
 | Production payment processing | [Payment Kit](/onchain-finance/payment-kit) | Receipts, verification, duplicate prevention |
+| Subscriptions and agent budgets | [Allowances](/onchain-finance/allowances) | Bounded, revocable pulls from a funder's balance without per-payment signatures |
 
 :::info Regulatory considerations
 
