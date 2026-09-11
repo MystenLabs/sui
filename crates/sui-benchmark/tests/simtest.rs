@@ -61,7 +61,6 @@ mod test {
     use sui_types::digests::TransactionDigest;
     use sui_types::effects::TransactionEffectsAPI;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
-    use sui_types::sui_system_state::SuiSystemStateTrait;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
     use sui_types::transaction::{TransactionDataAPI, TransactionKind};
@@ -660,8 +659,8 @@ mod test {
             Some(|cluster: Arc<TestCluster>| async move {
                 // Gas preparation can consume most of an epoch. Start both workloads in
                 // a fresh epoch so the surfer can submit before prolonged epoch closing.
-                let epoch = cluster.wait_for_epoch(None).await.epoch();
-                cluster.wait_for_epoch_all_nodes(epoch).await;
+                // Trigger it explicitly so long epoch-duration overrides do not stall setup.
+                cluster.trigger_reconfiguration().await;
             }),
             true, // enable_surfer
         )
