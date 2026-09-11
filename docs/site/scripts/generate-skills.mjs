@@ -10,7 +10,8 @@
 //
 // The script reads every `SKILL.md` in the repository. Each skill is the
 // directory that contains a `SKILL.md`. It parses the YAML frontmatter for
-// `name` and `title`, and derives a category tag from the top-level folder.
+// `name`, `title`, and `description`, and derives a category tag from the
+// top-level folder.
 //
 // On any failure (network error, API rate limit, or a private repo with no
 // token) the script logs a warning and exits 0 without touching the committed
@@ -35,6 +36,32 @@ const headers = {
   "User-Agent": "sui-docs-skills-generator",
   ...(token ? { Authorization: `Bearer ${token}` } : {}),
 };
+
+const MAX_CARD_CHARS = 200;
+
+// SKILL.md descriptions are written to route an agent, not to fill a card: a
+// summary sentence, then "Use when ..." trigger guidance, then cross-references
+// to sibling skills. The card wants the summary, so keep the opening paragraph
+// up to the point the trigger guidance starts.
+function cardDescription(raw) {
+  if (!raw) return "";
+  const firstParagraph = String(raw).trim().split(/\n\s*\n/)[0];
+  const text = firstParagraph.replace(/\s+/g, " ").trim();
+  const trigger = text.search(/\b(?:Use|Also use)\b[^.]*?\bwhen\b/i);
+  let summary = (trigger > 0 ? text.slice(0, trigger) : text)
+    .trim()
+    .replace(/[\s\u2014-]+$/, "");
+  // Every card in the grid is the same width, so a description that runs on
+  // would stretch its whole row. Keep whole sentences where one fits.
+  if (summary.length > MAX_CARD_CHARS) {
+    const lastStop = summary.lastIndexOf(". ", MAX_CARD_CHARS);
+    summary =
+      lastStop > 0
+        ? summary.slice(0, lastStop + 1)
+        : summary.slice(0, MAX_CARD_CHARS).trimEnd() + "\u2026";
+  }
+  return summary;
+}
 
 // Turn a kebab-case or snake_case slug into a display title.
 function titleCase(slug) {
@@ -100,7 +127,7 @@ async function main() {
     existing.push({
       slug,
       title: data.title || titleCase(slug),
-      description: "",
+      description: cardDescription(data.description),
       category: "General",
       path: dir,
     });
