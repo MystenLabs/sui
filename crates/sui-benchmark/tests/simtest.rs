@@ -585,8 +585,6 @@ mod test {
     // Tests cluster liveness when shared object congestion control is on.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_shared_object_congestion_control() {
-        telemetry_subscribers::init_for_testing();
-        info!("CLAUDE: starting shared-object congestion progress diagnostic");
         let mode;
         let max_deferral_rounds;
         {
@@ -1552,6 +1550,10 @@ mod test {
                     1, // skip first account for use by bench_task
                 )
                 .await;
+                if results.num_successful_transactions == 0 {
+                    telemetry_subscribers::init_for_testing();
+                    info!("CLAUDE: zero-progress surfer results: {results:?}");
+                }
                 info!("sui_surfer test complete with results: {results:?}");
                 assert!(results.num_successful_transactions > 0);
                 assert!(!results.unique_move_functions_called.is_empty());
