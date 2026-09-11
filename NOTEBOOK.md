@@ -130,4 +130,9 @@
   - Retain iteration 9's full cohort, seed, chain, configuration-thread initialization, capture policy, retries, and deadlines.
   - Add only three driver stage logs and one orchestrator execution-plan log. Enable existing orchestrator debug and transaction-driver trace messages. Do not change execution, retry, timeout, or dependency behavior.
 - RESULTS
-  - Pending.
+  - Linux run 34558644409 reproduced the target failure: 3140 passed, one failed, and three other tests passed after retry.
+  - The same four surfer transactions were new to the orchestrator, each with one submission future and a 90-second finality timeout. They made 19, 20, 19, and 20 submission attempts, all in epoch 0; none reached successful submission or effects certification.
+  - The log contains 248 individual epoch-change rejections and 64 recent-submission deduplication rejections. The first submission cycle and late retries were rejected by all four validators because they had stopped accepting transactions for epoch change.
+  - The last observed rejection was at simulated 04:02:13.115345, immediately before the surfer stop at 04:02:13.552226. Checkpoint streaming continued, but that does not imply admission of new transactions during epoch closing.
+  - The scenario uses 30-second epochs, permits 500–999 congestion deferral rounds, explicitly disables the epoch-close deadline, and requires surfer progress within a 60-second window. The failure is in epoch-close admission, not cursor extraction or subscription registration.
+  - This localizes the blocker but does not establish whether the separate repair belongs in epoch-close draining or the benchmark liveness measurement contract. No timeout increase, assertion removal, SDK change, or cursor change was applied. The diagnostic branch remains isolated from all replacement PRs.
