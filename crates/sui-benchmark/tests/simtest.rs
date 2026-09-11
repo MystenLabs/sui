@@ -631,11 +631,10 @@ mod test {
                 // The horizon has to fit inside the run rather than being a fixed range. A
                 // transaction deferred for N rounds occupies about N * ASSUMED_COMMIT_PERIOD_MS
                 // before it resolves. The cluster's epoch is 30s (see build_test_cluster below) and
-                // this test disables the epoch close deadline, so epoch close waits for the entire
-                // deferred backlog to drain. If the horizon outlives the run, the first epoch
-                // boundary never completes: every validator moves to RejectAllCerts and rejects all
-                // user transactions for the remainder of the test, so nothing past the 30s mark is
-                // exercised at all.
+                // epoch close waits for the entire deferred backlog to drain. If the horizon
+                // outlives the run, the first epoch boundary never completes: every validator moves
+                // to RejectAllCerts and rejects all user transactions for the remainder of the
+                // test, so nothing past the 30s mark is exercised at all.
                 //
                 // A fixed 500..1000 (100-200s of deferral) did exactly that under the default 60s
                 // duration - it was sized for the 300s nightly profile. Cap the horizon at a
@@ -660,19 +659,10 @@ mod test {
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
             config.set_per_object_congestion_control_mode_for_testing(mode);
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
-            // Production runs max_deferral_rounds = 10 and epoch_close_deadline_ms = Some(120_000):
-            // deferrals resolve in seconds, so reaching the deadline means something is genuinely
-            // stuck, and the failsafe abandons the deferred transactions and fires debug_fatal.
-            // This test's long-horizon branch defers transactions for far longer than production
-            // ever would, and those deferrals are still making progress - each round moves the
-            // transaction closer to its round limit. The failsafe cannot tell the two apart, so it
-            // would abandon them and panic the simtest (#27315). Disable it here so epoch close
-            // instead waits for the deferrals to resolve, which is the liveness property this test
-            // is about. The failsafe keeps its own unit tests and e2e simtest.
-            //
-            // Disabling it means epoch close has no upper bound in this test, which is why the
-            // deferral horizon above is capped against the run length.
-            config.disable_epoch_close_deadline_ms_for_testing();
+            // The epoch close deadline stays armed here on purpose. It is floored at the
+            // deferred transaction drain bound (ConsensusHandler::deferred_transaction_drain_bound_ms),
+            // so the long deferral horizons this test uses no longer trip it the way they did in
+            // #27315, and a deadline firing here now means something is genuinely stuck.
             config
         });
 
