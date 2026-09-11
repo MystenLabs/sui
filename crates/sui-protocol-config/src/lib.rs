@@ -391,6 +391,7 @@ const MAINNET_USDB: &str =
 // Version 137: Lower the per-bit cost of bulletproofs range proof verification, and raise the
 //              bound on batch size * range bits from 512 to 1024.
 //              Enable allowances.
+//              Floor the epoch close deadline at the deferred transaction drain bound.
 //              Enable fix_ptb_generated_reads.
 //              Charge `LdConst` for the abstract value size of the constant instead of its
 //              serialized byte length.
@@ -1019,6 +1020,12 @@ struct FeatureFlags {
     // Validate PTB input and result indices before signing.
     #[serde(skip_serializing_if = "is_false")]
     validate_ptb_argument_indices: bool,
+
+    // If true, the epoch close deadline is floored at the time the deferred transaction backlog
+    // is guaranteed to need, derived from max_deferral_rounds_for_congestion_control, instead of
+    // being a flat epoch_close_deadline_ms.
+    #[serde(skip_serializing_if = "is_false")]
+    epoch_close_deadline_respects_deferral_bound: bool,
 
     // Enable including checkpoint artifacts digest in the summary.
     #[serde(skip_serializing_if = "is_false")]
@@ -4754,6 +4761,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.allowed_proposers = true;
 
                     cfg.feature_flags.validate_ptb_argument_indices = true;
+
+                    cfg.feature_flags
+                        .epoch_close_deadline_respects_deferral_bound = true;
                 }
                 // Use this template when making changes:
                 //

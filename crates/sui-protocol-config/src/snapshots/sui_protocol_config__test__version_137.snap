@@ -136,6 +136,7 @@ feature_flags:
   enable_order_independent_upgrade_init_linkage: true
   harden_linkage_consistency: true
   validate_ptb_argument_indices: true
+  epoch_close_deadline_respects_deferral_bound: true
   include_checkpoint_artifacts_digest_in_summary: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true

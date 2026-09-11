@@ -1304,6 +1304,28 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         fail_point!("crash");
     }
 
+    /// How long the deferred transaction backlog can still legitimately take to drain.
+    ///
+    /// A congestion-deferred transaction carries the round it was first deferred from, and
+    /// `transaction_deferral_within_limit` cancels it once it has been deferred for more than
+    /// `max_deferral_rounds_for_congestion_control` rounds. Epoch close stops admitting new user
+    /// transactions, so no new deferrals enter the backlog once it starts, and every transaction
+    /// already in it resolves - executes or is cancelled - within that many commits. Abandoning
+    /// the backlog any earlier drops transactions that are still making progress.
+    ///
+    /// The safety factor absorbs the commit period drifting upward after the estimate is taken.
+    fn deferred_transaction_drain_bound_ms(
+        protocol_config: &ProtocolConfig,
+        commit_info: &ConsensusCommitInfo,
+    ) -> u64 {
+        const SAFETY_FACTOR: u64 = 2;
+
+        protocol_config
+            .max_deferral_rounds_for_congestion_control()
+            .saturating_mul(commit_info.estimated_commit_period().as_millis() as u64)
+            .saturating_mul(SAFETY_FACTOR)
+    }
+
     fn handle_close_epoch(
         &self,
         state: &mut CommitHandlerState,
@@ -1317,11 +1339,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     ) {
         let timestamp_triggered =
             commit_info.timestamp >= self.epoch_store.next_reconfiguration_timestamp_ms();
-        let deadline_reached = self
-            .epoch_store
-            .protocol_config()
+        let protocol_config = self.epoch_store.protocol_config();
+        let deadline_reached = protocol_config
             .epoch_close_deadline_ms_as_option()
             .is_some_and(|deadline_ms| {
+                let deadline_ms = if protocol_config.epoch_close_deadline_respects_deferral_bound()
+                {
+                    deadline_ms.max(Self::deferred_transaction_drain_bound_ms(
+                        protocol_config,
+                        commit_info,
+                    ))
+                } else {
+                    deadline_ms
+                };
                 commit_info.timestamp
                     >= self
                         .epoch_store
@@ -3922,15 +3952,63 @@ mod tests {
         let scheduled_end = epoch_store.next_reconfiguration_timestamp_ms();
         let mut setup = setup_consensus_handler_for_testing(&state).await;
 
+        // The deadline is floored at the drain bound, which for 1_000 deferral rounds at the
+        // fallback 200ms commit period estimate is 1_000 * 200 * 2 = 400_000ms. Jump past that,
+        // not just past the 100ms epoch_close_deadline_ms: inside the bound the deferral is still
+        // making progress and must not be abandoned.
         setup
             .consensus_handler
             .handle_consensus_commit_for_test(TestConsensusCommit::new(
                 consensus_transactions,
                 1,
-                scheduled_end + 100,
+                scheduled_end + 400_001,
                 1,
             ))
             .await;
+    }
+
+    // Companion to the test above: past epoch_close_deadline_ms but inside the drain bound, a
+    // deferred transaction that is still making progress must be left alone. Before the deadline
+    // was floored at the drain bound this abandoned the transaction and fired debug_fatal.
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_epoch_close_deadline_waits_for_deferral_drain_bound() {
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(epoch_close_deadline_config(Some(100)))
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+        epoch_store.insert_deferred_transactions_for_test(
+            DeferralKey::new_for_consensus_round(u64::MAX, 1),
+            vec![user_txn(1)],
+        );
+        let scheduled_end = epoch_store.next_reconfiguration_timestamp_ms();
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+
+        // max_deferral_rounds_for_congestion_control is 10 and the commit period estimate falls
+        // back to min_checkpoint_interval_ms (200ms) on the first commit, so the drain bound is
+        // 10 * 200 * 2 = 4_000ms - far past the configured 100ms deadline.
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::empty(
+                1,
+                scheduled_end + 3_999,
+                1,
+            ))
+            .await;
+
+        assert_eq!(
+            epoch_store.get_all_deferred_transactions_for_test().len(),
+            1
+        );
+        assert_eq!(
+            setup
+                .consensus_handler
+                .metrics
+                .consensus_handler_dropped_transactions
+                .with_label_values(&["epoch_close_deadline"])
+                .get(),
+            0
+        );
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
