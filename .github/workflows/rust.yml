@@ -459,6 +459,10 @@ jobs:
       contents: read
       id-token: write # OIDC token to assume the sccache role on trusted refs
     if: github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        seed_shard: ${{ fromJSON(github.event.inputs.validation == 'seed-sweep' && '[0,1,2,3]' || '[0]') }}
     timeout-minutes: 45
     runs-on: [ ubuntu-ghcloud ]
     env:
@@ -505,11 +509,12 @@ jobs:
           python3 scripts/simtest/seed-search.py \
             --package sui-benchmark --test simtest \
             --exact test::test_simulated_load_shared_object_congestion_control \
-            --seed-start 1187333251852574749 --num-seeds 200 --concurrency 4 \
+            --seed-start "$((1187333251852574749 + 50 * ${{ matrix.seed_shard }}))" \
+            --num-seeds 50 --concurrency 4 \
             --watchdog-timeout-ms 300000 \
             --log-dir "$RUNNER_TEMP/epoch-readiness-seeds"
       - name: Check a five-minute epoch override
-        if: github.event.inputs.validation == 'seed-sweep'
+        if: github.event.inputs.validation == 'seed-sweep' && matrix.seed_shard == 0
         env:
           EPOCH_DURATION_MS: 300000
         run: |
@@ -523,7 +528,7 @@ jobs:
         if: always() && github.event.inputs.validation == 'seed-sweep'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # pin@v6.0.0
         with:
-          name: epoch-readiness-seeds
+          name: epoch-readiness-seeds-${{ matrix.seed_shard }}
           path: |
             ${{ runner.temp }}/epoch-readiness-seeds
             ${{ runner.temp }}/epoch-readiness-long-epoch
