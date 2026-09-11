@@ -397,6 +397,7 @@ const MAINNET_USDB: &str =
 //              Enable check_object_funds_withdraw_in_execution on devnet and charge for reads.
 //              Enable allowed_proposers on testnet and mainnet.
 //              Validate PTB indices at signing time.
+//              Enable memory_safety_invariant_check_v2.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1277,6 +1278,9 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     check_object_funds_withdraw_in_execution: bool,
+    // If true, use the bitset implementation for PTB memory safety invariant check.
+    #[serde(skip_serializing_if = "is_false")]
+    memory_safety_invariant_check_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4754,6 +4758,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.allowed_proposers = true;
 
                     cfg.feature_flags.validate_ptb_argument_indices = true;
+                    cfg.feature_flags.memory_safety_invariant_check_v2 = true;
                 }
                 // Use this template when making changes:
                 //
