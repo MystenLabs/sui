@@ -524,10 +524,10 @@ pub struct ExecutionTimeObserverConfig {
     /// If unspecified, this will default to `false`.
     pub report_object_utilization_metric_with_full_id: Option<bool>,
 
-    /// Object IDs whose utilization is always reported precisely, under their full object ID,
-    /// in the per-object utilization metric. Tracked objects are excluded from the hashed
-    /// buckets so that the metric remains a partition of total utilization. Unlike bucketed
-    /// objects, tracked objects are reported even if they have never been overutilized.
+    /// Object IDs whose utilization is reported under their full object ID in the
+    /// `epoch_execution_time_observer_tracked_object_utilization` metric, regardless of
+    /// whether they have ever been overutilized. This does not affect the bucketed
+    /// per-object utilization metric.
     ///
     /// Use this to precisely monitor a small number of known hot objects without enabling
     /// `report_object_utilization_metric_with_full_id`.

@@ -391,26 +391,26 @@ impl ExecutionTimeObserver {
                         .epoch_execution_time_observer_overutilized_objects
                         .dec();
                 }
-                // Explicitly tracked objects are always reported under their full ID and
-                // never contribute to a hash bucket. Other objects are only reported once
-                // they have been overutilized, to bound metric cardinality.
-                let metric_key = if self.config.is_object_utilization_tracked(&id)
-                    || (utilization.was_overutilized
-                        && self.config.report_object_utilization_metric_with_full_id())
-                {
-                    Some(id.to_string())
-                } else if utilization.was_overutilized {
-                    let key_lsb = id.into_bytes()[ObjectID::LENGTH - 1];
-                    let hash = key_lsb % OBJECT_UTILIZATION_METRIC_HASH_MODULUS;
-                    Some(format!("{:x}", hash))
-                } else {
-                    None
-                };
-                if let Some(key) = metric_key {
+                if utilization.was_overutilized {
+                    let key = if self.config.report_object_utilization_metric_with_full_id() {
+                        id.to_string()
+                    } else {
+                        let key_lsb = id.into_bytes()[ObjectID::LENGTH - 1];
+                        let hash = key_lsb % OBJECT_UTILIZATION_METRIC_HASH_MODULUS;
+                        format!("{:x}", hash)
+                    };
+
                     epoch_store
                         .metrics
                         .epoch_execution_time_observer_object_utilization
                         .with_label_values(&[key.as_str()])
+                        .inc_by(total_duration.as_secs_f64());
+                }
+                if self.config.is_object_utilization_tracked(&id) {
+                    epoch_store
+                        .metrics
+                        .epoch_execution_time_observer_tracked_object_utilization
+                        .with_label_values(&[id.to_string().as_str()])
                         .inc_by(total_duration.as_secs_f64());
                 }
 
@@ -1427,8 +1427,7 @@ mod tests {
             false,
         );
 
-        // Both objects hash to the same metric bucket so that we can verify the tracked
-        // object is excluded from it.
+        // Both objects hash to the same bucket of the aggregate metric.
         let mut bytes = [0u8; ObjectID::LENGTH];
         bytes[ObjectID::LENGTH - 1] = 0x05;
         bytes[0] = 1;
@@ -1455,42 +1454,45 @@ mod tests {
         };
         let tracked_ptb = make_ptb(tracked_id);
         let untracked_ptb = make_ptb(untracked_id);
-        let metric = &epoch_store
+        let aggregate_metric = &epoch_store
             .metrics
             .epoch_execution_time_observer_object_utilization;
+        let tracked_metric = &epoch_store
+            .metrics
+            .epoch_execution_time_observer_tracked_object_utilization;
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
 
         tokio::time::pause();
 
-        // First observation: neither object is overutilized yet. Only the tracked object
-        // is reported, and nothing lands in the shared bucket.
+        // First observation: neither object is overutilized yet, so the aggregate metric is
+        // untouched, but the tracked object is already reported in the tracked metric.
         observer.record_local_observations(&tracked_ptb, &timings, Duration::from_secs(2), 1);
         observer.record_local_observations(&untracked_ptb, &timings, Duration::from_secs(2), 1);
         assert_eq!(
-            metric
+            tracked_metric
                 .with_label_values(&[tracked_id.to_string().as_str()])
                 .get(),
             2.0
         );
-        assert_eq!(metric.with_label_values(&[bucket_key]).get(), 0.0);
+        assert_eq!(aggregate_metric.with_label_values(&[bucket_key]).get(), 0.0);
 
-        // Second observation with no time elapsed: both objects are now overutilized. The
-        // untracked object is reported in its bucket; the tracked object stays out of it.
+        // Second observation with no time elapsed: both objects are now overutilized and
+        // both land in the aggregate bucket. Only the tracked object is in the tracked metric.
         observer.record_local_observations(&tracked_ptb, &timings, Duration::from_secs(2), 1);
         observer.record_local_observations(&untracked_ptb, &timings, Duration::from_secs(2), 1);
         assert_eq!(
-            metric
+            tracked_metric
                 .with_label_values(&[tracked_id.to_string().as_str()])
                 .get(),
             4.0
         );
-        assert_eq!(metric.with_label_values(&[bucket_key]).get(), 2.0);
         assert_eq!(
-            metric
+            tracked_metric
                 .with_label_values(&[untracked_id.to_string().as_str()])
                 .get(),
             0.0
         );
+        assert_eq!(aggregate_metric.with_label_values(&[bucket_key]).get(), 4.0);
     }
 
     #[tokio::test]
