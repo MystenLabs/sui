@@ -73,4 +73,16 @@
   - Restore the original benchmark and surfer code. Initialize logging only after `num_successful_transactions` is already zero and emit the completed statistics immediately before the unchanged assertions.
   - Run the original full-cohort CI command at the original seed, with the original capture, retry policy, profile, and watchdog deadline. Remove the failed directory-order control.
 - RESULTS
+  - Linux run 34550475555 reproduced the same assertion in the full cohort: 3140 tests passed and one failed after all four attempts; two other tests passed after retry.
+  - The final attempt recorded zero successful transactions, zero failed transactions, zero owned/shared transactions, and no called Move functions. This observes no completed calls, not necessarily no attempted calls.
+  - The selected-test pass does not resolve the original failure. Keep the full cohort for the next experiment.
+
+# Iteration 7
+
+- HYPOTHESIS
+  - The surfer either has no callable functions after publication, or its first selected calls remain unfinished until shutdown. The zero completed-call counters alone do not distinguish these paths.
+- EXPERIMENT
+  - Retain iteration 6's full-cohort command, seed, chain, capture, retries, and deadlines.
+  - Initialize scoped telemetry at the start of the failing test. Log package execution status and resulting function count, Move-call submission and RPC retry errors, and final per-task statistics. Make no functional changes.
+- RESULTS
   - Pending.
