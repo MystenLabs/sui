@@ -145,6 +145,7 @@ impl SurferTask {
                 }
 
                 _ = self.exit_rcv.changed() => {
+                    tracing::info!("CLAUDE: surfer task exits with {:?}", self.state.stats);
                     return self.state.stats;
                 }
             }

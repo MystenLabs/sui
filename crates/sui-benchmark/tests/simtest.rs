@@ -585,6 +585,7 @@ mod test {
     // Tests cluster liveness when shared object congestion control is on.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_shared_object_congestion_control() {
+        telemetry_subscribers::init_for_testing();
         let mode;
         let max_deferral_rounds;
         {

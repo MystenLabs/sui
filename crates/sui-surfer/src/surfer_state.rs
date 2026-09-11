@@ -174,6 +174,12 @@ impl SurferState {
         )
         .unwrap();
         let tx = self.cluster.wallet.sign_transaction(&tx_data).await;
+        info!(
+            "CLAUDE: submitting surfer Move call {:?}::{:?}, transaction {:?}",
+            module,
+            function,
+            tx.digest()
+        );
         let response = loop {
             debug!("Executing transaction {:?}", tx.digest());
             match self
@@ -184,6 +190,7 @@ impl SurferState {
             {
                 Ok(effects) => break effects,
                 Err(e) => {
+                    info!("CLAUDE: surfer Move RPC retry {:?}: {e:?}", tx.digest());
                     error!("Error executing transaction {:?}: {e:?}", tx.digest());
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
@@ -382,8 +389,20 @@ impl SurferState {
                 }
             }
         };
+        info!(
+            "CLAUDE: package execution status for {:?}: {:?}",
+            path,
+            response.effects.status()
+        );
         info!("Successfully published package in {:?}", path);
         self.process_tx_effects(&response.effects).await;
+        info!(
+            "CLAUDE: callable function count after {:?}: {:?}",
+            path,
+            self.entry_functions
+                .try_read()
+                .map(|functions| functions.len())
+        );
     }
 
     pub fn matching_owned_objects_count(&self, type_tag: &StructTag) -> usize {
