@@ -132,8 +132,9 @@ pub struct EpochMetrics {
     pub epoch_execution_time_observer_object_utilization: CounterVec,
 
     /// Utilization of the objects listed in
-    /// `ExecutionTimeObserverConfig::object_utilization_metric_tracked_ids`, keyed by full
-    /// object ID and reported regardless of whether the object is overutilized.
+    /// `ExecutionTimeObserverConfig::object_utilization_metric_tracked_ids`, labeled by full
+    /// object ID and configured name, reported regardless of whether the object is
+    /// overutilized.
     pub epoch_execution_time_observer_tracked_object_utilization: CounterVec,
 
     /// The number of execution time observations loaded at start of epoch.
@@ -315,8 +316,8 @@ impl EpochMetrics {
             .unwrap(),
             epoch_execution_time_observer_tracked_object_utilization: register_counter_vec_with_registry!(
                 "epoch_execution_time_observer_tracked_object_utilization",
-                "Utilization of objects explicitly listed in the execution time observer config, keyed by full object ID",
-                &["object_id"],
+                "Utilization of objects explicitly listed in the execution time observer config, labeled by full object ID and configured name",
+                &["object_id", "name"],
                 registry
             )
             .unwrap(),

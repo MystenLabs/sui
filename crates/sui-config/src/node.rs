@@ -524,16 +524,17 @@ pub struct ExecutionTimeObserverConfig {
     /// If unspecified, this will default to `false`.
     pub report_object_utilization_metric_with_full_id: Option<bool>,
 
-    /// Object IDs whose utilization is reported under their full object ID in the
-    /// `epoch_execution_time_observer_tracked_object_utilization` metric, regardless of
-    /// whether they have ever been overutilized. This does not affect the bucketed
-    /// per-object utilization metric.
+    /// Map from object ID to a human-readable name. Utilization of each listed object is
+    /// reported in the `epoch_execution_time_observer_tracked_object_utilization` metric,
+    /// labeled with both the full object ID and the name, regardless of whether the object
+    /// has ever been overutilized. This does not affect the bucketed per-object
+    /// utilization metric.
     ///
     /// Use this to precisely monitor a small number of known hot objects without enabling
     /// `report_object_utilization_metric_with_full_id`.
     ///
-    /// If unspecified, this will default to an empty set.
-    pub object_utilization_metric_tracked_ids: Option<BTreeSet<ObjectID>>,
+    /// If unspecified, this will default to an empty map.
+    pub object_utilization_metric_tracked_ids: Option<BTreeMap<ObjectID, String>>,
 
     /// Unless target object utilization is exceeded by at least this amount, no observation
     /// will be shared with consensus.
@@ -613,10 +614,11 @@ impl ExecutionTimeObserverConfig {
             .unwrap_or(false)
     }
 
-    pub fn is_object_utilization_tracked(&self, id: &ObjectID) -> bool {
+    pub fn object_utilization_metric_tracked_ids(&self) -> impl Iterator<Item = (&ObjectID, &str)> {
         self.object_utilization_metric_tracked_ids
-            .as_ref()
-            .is_some_and(|ids| ids.contains(id))
+            .iter()
+            .flatten()
+            .map(|(id, name)| (id, name.as_str()))
     }
 
     pub fn observation_sharing_object_utilization_threshold(&self) -> Duration {
@@ -2014,16 +2016,20 @@ mod tests {
     #[test]
     fn execution_time_observer_config_tracked_ids() {
         let omitted: ExecutionTimeObserverConfig = serde_yaml::from_str("{}").unwrap();
-        assert!(!omitted.is_object_utilization_tracked(&ObjectID::from_single_byte(5)));
+        assert_eq!(omitted.object_utilization_metric_tracked_ids().count(), 0);
 
         let yaml = r#"
             object-utilization-metric-tracked-ids:
-              - "0x0000000000000000000000000000000000000000000000000000000000000005"
-              - "0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407"
+              "0x0000000000000000000000000000000000000000000000000000000000000005": sui-system-state
+              "0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407": deepbook-sui-usdc
         "#;
         let configured: ExecutionTimeObserverConfig = serde_yaml::from_str(yaml).unwrap();
-        assert!(configured.is_object_utilization_tracked(&ObjectID::from_single_byte(5)));
-        assert!(!configured.is_object_utilization_tracked(&ObjectID::from_single_byte(6)));
+        let tracked: Vec<_> = configured.object_utilization_metric_tracked_ids().collect();
+        assert_eq!(tracked.len(), 2);
+        assert_eq!(
+            tracked[0],
+            (&ObjectID::from_single_byte(5), "sui-system-state")
+        );
 
         let serialized = serde_yaml::to_string(&configured).unwrap();
         let round_tripped: ExecutionTimeObserverConfig = serde_yaml::from_str(&serialized).unwrap();

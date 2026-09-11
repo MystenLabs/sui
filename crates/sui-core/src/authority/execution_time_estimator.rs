@@ -80,6 +80,10 @@ pub struct ExecutionTimeObserver {
     // via consensus.
     object_utilization_tracker: LruCache<ObjectID, ObjectUtilization>,
 
+    // Pre-resolved metric children for objects listed in the config, so that recording
+    // utilization for a tracked object does not allocate.
+    tracked_object_counters: HashMap<ObjectID, prometheus::Counter>,
+
     // Sorted list of recently indebted objects, updated by consensus handler.
     indebted_objects: Vec<ObjectID>,
 
@@ -173,6 +177,21 @@ impl ObjectUtilization {
     }
 }
 
+fn tracked_object_counters(
+    config: &ExecutionTimeObserverConfig,
+    metrics: &crate::epoch::epoch_metrics::EpochMetrics,
+) -> HashMap<ObjectID, prometheus::Counter> {
+    config
+        .object_utilization_metric_tracked_ids()
+        .map(|(id, name)| {
+            let counter = metrics
+                .epoch_execution_time_observer_tracked_object_utilization
+                .with_label_values(&[id.to_string().as_str(), name]);
+            (*id, counter)
+        })
+        .collect()
+}
+
 // Tracks local execution time observations and shares them via consensus.
 impl ExecutionTimeObserver {
     pub fn spawn(
@@ -202,6 +221,7 @@ impl ExecutionTimeObserver {
             consensus_adapter,
             local_observations: LruCache::new(config.observation_cache_size()),
             object_utilization_tracker: LruCache::new(config.object_utilization_cache_size()),
+            tracked_object_counters: tracked_object_counters(&config, &epoch_store.metrics),
             indebted_objects: Vec::new(),
             sharing_rate_limiter: RateLimiter::direct_with_clock(
                 Quota::per_second(config.observation_sharing_rate_limit())
@@ -263,6 +283,7 @@ impl ExecutionTimeObserver {
             },
             local_observations: LruCache::new(NonZeroUsize::new(10000).unwrap()),
             object_utilization_tracker: LruCache::new(NonZeroUsize::new(50000).unwrap()),
+            tracked_object_counters: HashMap::new(),
             indebted_objects: Vec::new(),
             sharing_rate_limiter: RateLimiter::direct_with_clock(
                 Quota::per_hour(std::num::NonZeroU32::MAX),
@@ -406,12 +427,8 @@ impl ExecutionTimeObserver {
                         .with_label_values(&[key.as_str()])
                         .inc_by(total_duration.as_secs_f64());
                 }
-                if self.config.is_object_utilization_tracked(&id) {
-                    epoch_store
-                        .metrics
-                        .epoch_execution_time_observer_tracked_object_utilization
-                        .with_label_values(&[id.to_string().as_str()])
-                        .inc_by(total_duration.as_secs_f64());
+                if let Some(counter) = self.tracked_object_counters.get(&id) {
+                    counter.inc_by(total_duration.as_secs_f64());
                 }
 
                 utilization.excess_execution_time
@@ -905,7 +922,7 @@ mod tests {
     use crate::consensus_adapter::{
         ConsensusAdapter, ConsensusAdapterMetrics, MockConsensusClient,
     };
-    use std::collections::BTreeSet;
+    use std::collections::BTreeMap;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::transaction::{
@@ -1435,7 +1452,11 @@ mod tests {
         bytes[0] = 2;
         let untracked_id = ObjectID::new(bytes);
         let bucket_key = "5";
-        observer.config.object_utilization_metric_tracked_ids = Some(BTreeSet::from([tracked_id]));
+        let tracked_name = "tracked-object";
+        observer.config.object_utilization_metric_tracked_ids =
+            Some(BTreeMap::from([(tracked_id, tracked_name.to_string())]));
+        observer.tracked_object_counters =
+            tracked_object_counters(&observer.config, &epoch_store.metrics);
 
         let package = ObjectID::random();
         let make_ptb = |id: ObjectID| ProgrammableTransaction {
@@ -1470,7 +1491,7 @@ mod tests {
         observer.record_local_observations(&untracked_ptb, &timings, Duration::from_secs(2), 1);
         assert_eq!(
             tracked_metric
-                .with_label_values(&[tracked_id.to_string().as_str()])
+                .with_label_values(&[tracked_id.to_string().as_str(), tracked_name])
                 .get(),
             2.0
         );
@@ -1482,13 +1503,13 @@ mod tests {
         observer.record_local_observations(&untracked_ptb, &timings, Duration::from_secs(2), 1);
         assert_eq!(
             tracked_metric
-                .with_label_values(&[tracked_id.to_string().as_str()])
+                .with_label_values(&[tracked_id.to_string().as_str(), tracked_name])
                 .get(),
             4.0
         );
         assert_eq!(
             tracked_metric
-                .with_label_values(&[untracked_id.to_string().as_str()])
+                .with_label_values(&[untracked_id.to_string().as_str(), tracked_name])
                 .get(),
             0.0
         );
