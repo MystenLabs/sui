@@ -85,4 +85,6 @@
   - Retain iteration 6's full-cohort command, seed, chain, capture, retries, and deadlines.
   - Initialize scoped telemetry at the start of the failing test. Log package execution status and resulting function count, Move-call submission and RPC retry errors, and final per-task statistics. Make no functional changes.
 - RESULTS
-  - Pending.
+  - Linux run 34552302631 passed all 3141 tests; two other tests passed after retry. The target test did not fail.
+  - Successful-test output was suppressed by the unchanged CI capture policy, so the new per-call observations are unavailable.
+  - Early telemetry initialization and additional enabled log expressions differ from iteration 6. This is not a repair or a resolved causal explanation. Investigate those side effects before choosing another probe.
