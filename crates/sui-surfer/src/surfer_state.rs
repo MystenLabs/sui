@@ -383,6 +383,10 @@ impl SurferState {
             }
         };
         info!("Successfully published package in {:?}", path);
+        info!(
+            "CLAUDE: package {path:?} execution status: {:?}",
+            response.effects.status()
+        );
         self.process_tx_effects(&response.effects).await;
     }
 
