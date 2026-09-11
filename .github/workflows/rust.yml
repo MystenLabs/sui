@@ -489,6 +489,9 @@ jobs:
           RUST_LOG: error,sui_types::digests=info,sui_surfer=info,simtest=info,sui_core::transaction_orchestrator=debug,sui_core::transaction_driver=trace
         run: |
           MSIM_TEST_SEED=1187333251852574750 scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
+      - name: Expose the simulator cargo command
+        if: github.event.inputs.validation == 'seed-sweep'
+        run: echo "$GITHUB_WORKSPACE/scripts/simtest" >> "$GITHUB_PATH"
       - name: Run congestion readiness seed sweep
         if: github.event.inputs.validation == 'seed-sweep'
         run: |
