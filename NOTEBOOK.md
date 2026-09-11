@@ -61,4 +61,16 @@
   - Keep iteration 4's source, seed, filtering, logging, and deadlines unchanged. On Linux, reinsert the two existing package directories in reverse order without changing their contents.
   - Assert the actual `os.scandir` order and verify that git reports no package-content difference before running the same simulator command.
 - RESULTS
+  - Setup failed before the simulator ran. Reinserting the directories did not change Linux enumeration order; it remained `move_building_blocks`, then `random`. The hypothesis was neither confirmed nor refuted.
+
+# Iteration 6
+
+- OBSERVATIONS
+  - The instrumented selected test passed, but the original full-cohort CI failed repeatedly. Pre-test logging initialization and cohort selection were both changed in the isolated run.
+- HYPOTHESIS
+  - Observing the already-computed zero-progress statistics in the original full cohort can distinguish no attempted calls from failed calls without perturbing execution before the failed condition.
+- EXPERIMENT
+  - Restore the original benchmark and surfer code. Initialize logging only after `num_successful_transactions` is already zero and emit the completed statistics immediately before the unchanged assertions.
+  - Run the original full-cohort CI command at the original seed, with the original capture, retry policy, profile, and watchdog deadline. Remove the failed directory-order control.
+- RESULTS
   - Pending.
