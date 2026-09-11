@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{BlockAPI, Slot, VerifiedBlock},
+    context::Context,
     leader_scoring::ReputationScores,
     storage::Store,
 };
@@ -398,10 +399,27 @@ impl CommittedSubDag {
     }
 }
 
-// Sort the sub-dag blocks by `BlockRef` (round, author, digest). The digest tiebreaker
-// keeps the order total even when an authority equivocates within a round.
-pub(crate) fn sort_sub_dag_blocks(blocks: &mut [VerifiedBlock]) {
-    blocks.sort_by_key(|block| block.reference())
+// Sort the blocks of a committed sub-dag.
+//
+// With `sort_sub_dag_by_block_ref` enabled, blocks are ordered by full `BlockRef`
+// (round, author, digest), which is a total order even when an authority equivocates
+// within a round. Otherwise the legacy (round, author) order is used, where equivocating
+// blocks tie and the stable sort keeps them in linearizer traversal order.
+//
+// The two orders only differ for equivocating blocks. Without equivocation every block has
+// a distinct (round, author), so both comparators produce the same sequence and the same
+// commit bytes. The switch is gated by protocol version because the sorted block list is
+// serialized into the `Commit` and hashed into its digest.
+pub(crate) fn sort_sub_dag_blocks(context: &Context, blocks: &mut [VerifiedBlock]) {
+    if context.protocol_config.sort_sub_dag_by_block_ref() {
+        blocks.sort_by_key(|block| block.reference())
+    } else {
+        blocks.sort_by(|a, b| {
+            a.round()
+                .cmp(&b.round())
+                .then_with(|| a.author().cmp(&b.author()))
+        })
+    }
 }
 
 impl Display for CommittedSubDag {
@@ -770,10 +788,9 @@ mod tests {
         assert_eq!(subdag.commit_ref, commit.reference());
     }
 
-    #[tokio::test]
-    async fn test_sort_sub_dag_blocks_total_order_under_equivocation() {
-        // Two blocks with the same (round, author) but different content, i.e. an
-        // equivocating authority. They tie on (round, author) and differ only by digest.
+    // Two blocks with the same (round, author) but different content, i.e. an
+    // equivocating authority. They tie on (round, author) and differ only by digest.
+    fn equivocating_pair() -> (VerifiedBlock, VerifiedBlock) {
         let block_a =
             VerifiedBlock::new_for_test(TestBlock::new(2, 1).set_timestamp_ms(10).build());
         let block_b =
@@ -781,22 +798,99 @@ mod tests {
         assert_eq!(block_a.round(), block_b.round());
         assert_eq!(block_a.author(), block_b.author());
         assert_ne!(block_a.digest(), block_b.digest());
+        (block_a, block_b)
+    }
 
-        // The sorted order must not depend on the order blocks were collected in, so that
-        // every validator linearizes the sub-dag identically.
+    fn refs(blocks: &[VerifiedBlock]) -> Vec<BlockRef> {
+        blocks.iter().map(|block| block.reference()).collect()
+    }
+
+    #[tokio::test]
+    async fn test_sort_sub_dag_blocks_total_order_under_equivocation() {
+        let mut context = Context::new_for_test(4).0;
+        context
+            .protocol_config
+            .set_sort_sub_dag_by_block_ref_for_testing(true);
+
+        let (block_a, block_b) = equivocating_pair();
+
+        // The sorted order must not depend on the order blocks were collected in.
         let mut forward = vec![block_a.clone(), block_b.clone()];
         let mut reverse = vec![block_b.clone(), block_a.clone()];
-        sort_sub_dag_blocks(&mut forward);
-        sort_sub_dag_blocks(&mut reverse);
-
-        let forward_order: Vec<_> = forward.iter().map(|block| block.reference()).collect();
-        let reverse_order: Vec<_> = reverse.iter().map(|block| block.reference()).collect();
-        assert_eq!(forward_order, reverse_order);
+        sort_sub_dag_blocks(&context, &mut forward);
+        sort_sub_dag_blocks(&context, &mut reverse);
+        assert_eq!(refs(&forward), refs(&reverse));
 
         // The order is exactly `BlockRef` (round, author, digest) order.
         let mut expected = vec![block_a.reference(), block_b.reference()];
         expected.sort();
-        assert_eq!(forward_order, expected);
+        assert_eq!(refs(&forward), expected);
+    }
+
+    #[tokio::test]
+    async fn test_sort_sub_dag_blocks_legacy_order_under_equivocation() {
+        let mut context = Context::new_for_test(4).0;
+        context
+            .protocol_config
+            .set_sort_sub_dag_by_block_ref_for_testing(false);
+
+        let (block_a, block_b) = equivocating_pair();
+
+        // Legacy (round, author) order: the equivocating pair ties, and the stable sort
+        // keeps the input (traversal) order. This is the pre-flag behavior that commit
+        // digests on the legacy path depend on.
+        let mut forward = vec![block_a.clone(), block_b.clone()];
+        let mut reverse = vec![block_b.clone(), block_a.clone()];
+        sort_sub_dag_blocks(&context, &mut forward);
+        sort_sub_dag_blocks(&context, &mut reverse);
+        assert_eq!(
+            refs(&forward),
+            vec![block_a.reference(), block_b.reference()]
+        );
+        assert_eq!(
+            refs(&reverse),
+            vec![block_b.reference(), block_a.reference()]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sort_sub_dag_blocks_orders_agree_without_equivocation() {
+        // Without equivocation every block has a distinct (round, author), so the legacy
+        // and `BlockRef` orders must agree and produce identical commit bytes.
+        let mut legacy_context = Context::new_for_test(4).0;
+        legacy_context
+            .protocol_config
+            .set_sort_sub_dag_by_block_ref_for_testing(false);
+        let mut total_order_context = Context::new_for_test(4).0;
+        total_order_context
+            .protocol_config
+            .set_sort_sub_dag_by_block_ref_for_testing(true);
+
+        // Rounds 1..=3, authorities 0..=3, collected out of order.
+        let mut blocks: Vec<VerifiedBlock> = (1..=3u32)
+            .flat_map(|round| {
+                (0..4u32).map(move |author| {
+                    VerifiedBlock::new_for_test(TestBlock::new(round, author).build())
+                })
+            })
+            .collect();
+        blocks.reverse();
+        blocks.swap(1, 7);
+        blocks.swap(3, 10);
+
+        let mut legacy = blocks.clone();
+        let mut total_order = blocks.clone();
+        sort_sub_dag_blocks(&legacy_context, &mut legacy);
+        sort_sub_dag_blocks(&total_order_context, &mut total_order);
+        assert_eq!(refs(&legacy), refs(&total_order));
+
+        let leader = legacy.last().unwrap().reference();
+        let legacy_commit = Commit::new(1, CommitDigest::MIN, 0, leader, refs(&legacy));
+        let total_order_commit = Commit::new(1, CommitDigest::MIN, 0, leader, refs(&total_order));
+        assert_eq!(
+            legacy_commit.serialize().unwrap(),
+            total_order_commit.serialize().unwrap()
+        );
     }
 
     #[tokio::test]

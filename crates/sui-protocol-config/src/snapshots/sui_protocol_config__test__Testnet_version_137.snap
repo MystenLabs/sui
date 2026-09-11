@@ -184,6 +184,7 @@ feature_flags:
   enable_unified_linkage: true
   enable_allowances: true
   fix_ptb_generated_reads: true
+  consensus_sort_sub_dag_by_block_ref: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

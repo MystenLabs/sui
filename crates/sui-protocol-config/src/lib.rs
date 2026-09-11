@@ -397,6 +397,7 @@ const MAINNET_USDB: &str =
 //              Enable check_object_funds_withdraw_in_execution on devnet and charge for reads.
 //              Enable allowed_proposers on testnet and mainnet.
 //              Validate PTB indices at signing time.
+//              Sort committed sub-dag blocks by full `BlockRef` (total order under equivocation).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1277,6 +1278,11 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     check_object_funds_withdraw_in_execution: bool,
+
+    // If true, sort the blocks of each committed sub-dag by full `BlockRef` (round, author,
+    // digest) instead of (round, author), so the order is total under equivocation.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_sort_sub_dag_by_block_ref: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4754,6 +4760,8 @@ impl ProtocolConfig {
                     cfg.feature_flags.allowed_proposers = true;
 
                     cfg.feature_flags.validate_ptb_argument_indices = true;
+
+                    cfg.feature_flags.consensus_sort_sub_dag_by_block_ref = true;
                 }
                 // Use this template when making changes:
                 //

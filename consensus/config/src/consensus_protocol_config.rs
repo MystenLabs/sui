@@ -34,6 +34,10 @@ pub struct ConsensusProtocolConfig {
     leader_schedule_window_size: u32,
     /// Number of commit indices that use the same Mysticeti v3 leader schedule.
     leader_schedule_update_interval: u32,
+    /// Whether committed sub-dag blocks are sorted by full `BlockRef` (round, author, digest)
+    /// instead of (round, author). Changes commit contents under equivocation, so it must
+    /// switch for all validators at once.
+    sort_sub_dag_by_block_ref: bool,
 }
 
 impl Default for ConsensusProtocolConfig {
@@ -52,6 +56,7 @@ impl Default for ConsensusProtocolConfig {
             enable_v3: false,
             leader_schedule_window_size: 600,
             leader_schedule_update_interval: 60,
+            sort_sub_dag_by_block_ref: false,
         }
     }
 }
@@ -71,6 +76,7 @@ impl ConsensusProtocolConfig {
         enable_v3: bool,
         leader_schedule_window_size: u32,
         leader_schedule_update_interval: u32,
+        sort_sub_dag_by_block_ref: bool,
     ) -> Self {
         Self {
             protocol_version,
@@ -86,6 +92,7 @@ impl ConsensusProtocolConfig {
             enable_v3,
             leader_schedule_window_size,
             leader_schedule_update_interval,
+            sort_sub_dag_by_block_ref,
         }
     }
 
@@ -106,6 +113,7 @@ impl ConsensusProtocolConfig {
             enable_v3: false,
             leader_schedule_window_size: 600,
             leader_schedule_update_interval: 60,
+            sort_sub_dag_by_block_ref: true,
         }
     }
 
@@ -166,6 +174,10 @@ impl ConsensusProtocolConfig {
         self.leader_schedule_update_interval.max(1)
     }
 
+    pub fn sort_sub_dag_by_block_ref(&self) -> bool {
+        self.sort_sub_dag_by_block_ref
+    }
+
     // Test setter methods
 
     pub fn set_gc_depth_for_testing(&mut self, val: u32) {
@@ -210,5 +222,9 @@ impl ConsensusProtocolConfig {
 
     pub fn set_leader_schedule_update_interval_for_testing(&mut self, val: u32) {
         self.leader_schedule_update_interval = val;
+    }
+
+    pub fn set_sort_sub_dag_by_block_ref_for_testing(&mut self, val: bool) {
+        self.sort_sub_dag_by_block_ref = val;
     }
 }
