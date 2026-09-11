@@ -1,4 +1,5 @@
 name: Rust
+run-name: "Epoch readiness ${{ github.event.inputs.validation || github.event_name }} (${{ github.event.inputs.sui_repo_ref || github.sha }})"
 
 on:
   push:
@@ -25,12 +26,13 @@ on:
         options:
           - cohort
           - seed-sweep
+          - epoch-wait-regression
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.inputs.validation || 'default' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.inputs.validation || 'default' }}-${{ github.event.inputs.sui_repo_ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
@@ -484,11 +486,15 @@ jobs:
         with:
           swap-size-gb: 256
       - name: Run identical-seed full cohort
-        if: github.event.inputs.validation != 'seed-sweep'
+        if: github.event.inputs.validation == 'cohort'
         env:
           RUST_LOG: error,sui_types::digests=info,sui_surfer=info,simtest=info,sui_core::transaction_orchestrator=debug,sui_core::transaction_driver=trace
         run: |
           MSIM_TEST_SEED=1187333251852574750 scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet --no-fail-fast
+      - name: Run the stale-epoch regression
+        if: github.event.inputs.validation == 'epoch-wait-regression'
+        run: |
+          MSIM_TEST_SEED=1187333251852574750 scripts/simtest/cargo-simtest simtest --profile ci --cargo-quiet -p sui-e2e-tests --test reconfiguration_tests -E 'test(=basic_reconfig_end_to_end_test)'
       - name: Expose the simulator cargo command
         if: github.event.inputs.validation == 'seed-sweep'
         run: echo "$GITHUB_WORKSPACE/scripts/simtest" >> "$GITHUB_PATH"
