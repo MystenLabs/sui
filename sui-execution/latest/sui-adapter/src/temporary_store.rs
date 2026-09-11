@@ -277,8 +277,9 @@ impl<'backing> TemporaryStore<'backing> {
             .is_some()
         {
             let registry = temporary_store
-                .load_implicitly_read_system_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID);
-            if let (Some(registry), Some(dependencies)) = (registry, transaction_dependencies) {
+                .load_implicitly_read_system_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+                .expect("assigned forwarding registry must be available before execution");
+            if let Some(dependencies) = transaction_dependencies {
                 dependencies.insert(registry.previous_transaction);
             }
         }
@@ -1534,6 +1535,7 @@ impl BackingPackageStore for TemporaryStore<'_> {
 mod system_object_resolver_tests {
     use super::*;
     use std::cell::Cell;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
     use sui_types::base_types::ConsensusObjectVersion;
     use sui_types::effects::{TransactionEffectsAPI, UnchangedConsensusKind};
     use sui_types::error::UserInputError;
@@ -1542,6 +1544,49 @@ mod system_object_resolver_tests {
     use sui_types::transaction::{
         InputObjectKind, ObjectReadResult, ObjectReadResultKind, SharedObjectMutability,
     };
+
+    #[test]
+    #[should_panic]
+    fn missing_mandatory_system_object_cannot_produce_effects() {
+        let initial_shared_version = SequenceNumber::from_u64(1);
+        let backing_store = InMemoryStorage::new(vec![Object::with_id_owner_version_for_testing(
+            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+            SequenceNumber::from_u64(11),
+            Owner::Shared {
+                initial_shared_version,
+            },
+        )]);
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let digest = TransactionDigest::new([8; 32]);
+        let mut dependencies = BTreeSet::new();
+        let store = TemporaryStore::new_with_input_objects(
+            &backing_store,
+            InputObjects::new(vec![]),
+            vec![],
+            digest,
+            &config,
+            0,
+            SystemObjectVersions::new(
+                None,
+                Some(ConsensusObjectVersion {
+                    initial_shared_version,
+                    version: SequenceNumber::from_u64(10),
+                }),
+            ),
+            Some(&mut dependencies),
+            PostExecutionCheckInputs::default(),
+            &EmptyUnsettledObjectFunds,
+        );
+        let _ = store.into_effects(
+            vec![],
+            &digest,
+            dependencies,
+            GasCostSummary::default(),
+            ExecutionStatus::Success,
+            None,
+            0,
+        );
+    }
 
     #[test]
     fn assigned_system_object_cannot_fall_back_to_missing_or_latest() {
@@ -1589,9 +1634,11 @@ mod system_object_resolver_tests {
             object.compute_object_reference(),
         );
         // A pruned pin must not be mistaken for an unregistered master or read a newer root.
-        assert_eq!(
-            load(Some(SequenceNumber::from_u64(9))).unwrap_err(),
-            SuiErrorKind::ExecutionInvariantViolation,
+        assert!(
+            catch_unwind(AssertUnwindSafe(|| {
+                load(Some(SequenceNumber::from_u64(9)))
+            }))
+            .is_err()
         );
     }
 
@@ -1642,16 +1689,17 @@ mod system_object_resolver_tests {
             retained_root.compute_object_reference(),
         );
         // A retained object is not a substitute for a different assigned version.
-        assert_eq!(
-            load(SystemObjectVersions::new(
-                None,
-                Some(ConsensusObjectVersion {
-                    initial_shared_version,
-                    version: SequenceNumber::from_u64(9),
-                }),
-            ))
-            .unwrap_err(),
-            SuiErrorKind::ExecutionInvariantViolation,
+        assert!(
+            catch_unwind(AssertUnwindSafe(|| {
+                load(SystemObjectVersions::new(
+                    None,
+                    Some(ConsensusObjectVersion {
+                        initial_shared_version,
+                        version: SequenceNumber::from_u64(9),
+                    }),
+                ))
+            }))
+            .is_err()
         );
     }
 

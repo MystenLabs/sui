@@ -137,3 +137,8 @@ explicit registry inputs still count.
 - During committed validator/fullnode execution, a root that has not caught up locally is awaited,
   so temporary unavailability is invisible in effects. Dry-run reads do not wait and can instead
   produce a load error if the captured root version is unavailable.
+- An assigned forwarding registry must materialize before execution can produce effects, even when
+  the native is not invoked. A missing required version is an invariant failure: omitting its
+  read-only effect while retaining its Lamport contribution would make effects-based replay compute
+  a different timestamp. Simulation checks availability before this boundary and returns
+  `ObjectNotFound` when materialization is impossible.
