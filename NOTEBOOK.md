@@ -88,3 +88,17 @@
   - Linux run 34552302631 passed all 3141 tests; two other tests passed after retry. The target test did not fail.
   - Successful-test output was suppressed by the unchanged CI capture policy, so the new per-call observations are unavailable.
   - Early telemetry initialization and additional enabled log expressions differ from iteration 6. This is not a repair or a resolved causal explanation. Investigate those side effects before choosing another probe.
+
+# Iteration 8
+
+- OBSERVATIONS
+  - The pinned Linux simulator compiles a C interceptor for `libc::syscall(SYS_getrandom)`. The older warning in its random-number source does not establish that this test bypasses the simulator RNG.
+  - Subscriber construction creates two standard-library hash maps in `EnvFilter`. `RandomState::new` advances a thread-local hash seed; the simulator initializes that seed when constructing a fresh runtime thread. This is an observable setup side effect, but its connection to the surfer failure is not yet demonstrated.
+  - The simulator macro evaluates its configuration expression on a separate thread before constructing the actual test runtime on another fresh thread.
+- HYPOTHESIS
+  - Constructing the subscriber on the configuration thread avoids perturbing the actual test thread's hash-state sequence while still capturing the failing path.
+- EXPERIMENT
+  - Move only telemetry initialization from the target test body into its existing simulator configuration expression. Retain all logging statements, full-cohort selection, seed, chain, retries, and deadlines.
+  - Retain successful output for this exact target through a nextest output-only override so a pass also yields usable observations.
+- RESULTS
+  - Pending.
