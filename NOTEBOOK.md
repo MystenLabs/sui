@@ -130,4 +130,27 @@
   - Retain iteration 9's full cohort, seed, chain, configuration-thread initialization, capture policy, retries, and deadlines.
   - Add only three driver stage logs and one orchestrator execution-plan log. Enable existing orchestrator debug and transaction-driver trace messages. Do not change execution, retry, timeout, or dependency behavior.
 - RESULTS
-  - Pending.
+  - Linux run 34558644409 reproduced the target failure: 3140 passed, one failed, and three other tests passed after retry.
+  - The same four surfer transactions were new to the orchestrator, each with one submission future and a 90-second finality timeout. They made 19, 20, 19, and 20 submission attempts, all in epoch 0; none reached successful submission or effects certification.
+  - The log contains 248 individual epoch-change rejections and 64 recent-submission deduplication rejections. The first submission cycle and late retries were rejected by all four validators because they had stopped accepting transactions for epoch change.
+  - The last observed rejection was at simulated 04:02:13.115345, immediately before the surfer stop at 04:02:13.552226. Checkpoint streaming continued, but that does not imply admission of new transactions during epoch closing.
+  - The scenario uses 30-second epochs, permits 500–999 congestion deferral rounds, explicitly disables the epoch-close deadline, and requires surfer progress within a 60-second window. The failure is in epoch-close admission, not cursor extraction or subscription registration.
+  - This localizes the blocker but does not establish whether the separate repair belongs in epoch-close draining or the benchmark liveness measurement contract. No timeout increase, assertion removal, SDK change, or cursor change was applied. The diagnostic branch remains isolated from all replacement PRs.
+
+# Iteration 11: Remote-only benchmark repair
+
+- HYPOTHESIS
+  - Gas preparation can consume the initial admission window. Starting the measured workloads after explicit epoch readiness should preserve the progress assertion without counting an already-closing setup epoch.
+- EXPERIMENT
+  - Keep workload durations, congestion settings, assertions and existing deadlines. Request quorum reconfiguration after preparation and wait for monotonic RPC-fullnode progress. Return immediately for already-reached epoch targets; avoid all-node exact-target waits for stopped RunWithRange nodes.
+  - Run all compilation and tests remotely. Compare baseline `817f669a836726ec50b344590f3ee0c7f3e57205` with diagnostic source `55e0b820cb5c8a9b70244f1a5c894542b9559c84` at seed `1187333251852574750`. Validate clean reviewed head `bf3f1a4508a3c757f6c808430f24fd4035dbbac0` separately.
+- RESULTS
+  - Diagnostic comparison run 34570399189 passed all 3141 tests. Rolling-restart and upgrade-compatibility benchmark cases required a retry. This instrumented comparison is not the clean PR head.
+  - Clean-head run 34572463912 passed all 200 distinct seeds from `1187333251852574750` through `1187333251852574949`, in four 50-seed shards, plus one run with `EPOCH_DURATION_MS=300000`. All checkout receipts match the reviewed head. Per-seed archives were retained with verified CI SHA-256 digests.
+  - The stale-target regression passed in run 34570469722. Restoring only the old initial predicate failed in run 34570597537 while waiting for already-passed epoch 0.
+  - Astra and official Opus passed the final head after repairs for the long-epoch natural-wait limitation and exact-target readiness race. PR checks show 50 passes and 11 conditional skips; required checks show 17 passes and two conditional skips.
+  - An unsharded attempt hit the existing 45-minute cap after 94 seeds. Sharding retained all 200 seeds and existing deadlines. Linux lacked `/usr/bin/lipo`, so no reachability-assertion coverage claim is made.
+- DISPOSITION
+  - The clean repair is independent main-based draft https://github.com/MystenLabs/sui/pull/27976. Diagnostic instrumentation and workflow controls are not part of that PR.
+  - #27959 remains unchanged and retains its failing simulator check until the repair reaches its test baseline. No cursor change, approval, merge or review publication was performed.
+  - Final evidence: `congestion-epoch-validation-current.json`, `congestion-epoch-seed-sweep-final.json`, and `congestion-epoch-comparison-attribution.json` in the retained research directory.
