@@ -24,7 +24,7 @@ pub use move_transactional_test_runner::framework::{
 #[cfg(feature = "testing")]
 mod testing_imports {
     pub use super::simulator_persisted_store::PersistedStore;
-    pub use super::test_adapter::{PRE_COMPILED, SuiTestAdapter};
+    pub use super::test_adapter::{SuiTestAdapter, compile_framework_in_background};
     pub use rand::rngs::StdRng;
     pub use simulacrum::AdvanceEpochConfig;
     pub use simulacrum::Simulacrum;
@@ -74,8 +74,7 @@ pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
-    run_test_impl::<SuiTestAdapter>(path, Some(std::sync::Arc::new(PRE_COMPILED.clone())), None)
-        .await?;
+    run_test_impl::<SuiTestAdapter>(path, Some(compile_framework_in_background()), None).await?;
     Ok(())
 }
 

@@ -22,8 +22,8 @@ use sui_transactional_test_runner::offchain_state::OffchainStateReader;
 use sui_transactional_test_runner::offchain_state::TestResponse;
 use sui_transactional_test_runner::run_tasks_with_adapter;
 use sui_transactional_test_runner::test_adapter::OffChainConfig;
-use sui_transactional_test_runner::test_adapter::PRE_COMPILED;
 use sui_transactional_test_runner::test_adapter::SuiTestAdapter;
+use sui_transactional_test_runner::test_adapter::compile_framework_in_background;
 use tokio::join;
 
 use sui_indexer_alt_e2e_tests::OffchainCluster;
@@ -168,7 +168,7 @@ async fn run_test(path: &Path) -> Result<(), Box<dyn Error>> {
 
     // start the adapter first to start the executor (simulacrum)
     let (output, mut adapter, tasks) =
-        create_adapter_and_taskify::<SuiTestAdapter>(path, Some(Arc::new(PRE_COMPILED.clone())))
+        create_adapter_and_taskify::<SuiTestAdapter>(path, Some(compile_framework_in_background()))
             .await?;
 
     // configure access to the off-chain reader
