@@ -2841,6 +2841,66 @@ async fn test_idempotent_reversed_confirmation() {
 }
 
 #[tokio::test]
+async fn test_forwarding_registry_input_requires_feature() {
+    for (version, enabled) in [(137, false), (138, false), (138, true)] {
+        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+        let gas = Object::with_owner_for_testing(sender);
+        let mut config = ProtocolConfig::get_for_version(version.into(), Chain::Unknown);
+        config.set_create_forwarding_address_registry_for_testing(true);
+        config.set_enable_forwarding_addresses_for_testing(enabled);
+        config.set_forwarding_address_resolve_cost_base_for_testing(52);
+        config.set_forwarding_address_resolve_cost_per_byte_for_testing(
+            config.obj_access_cost_read_per_byte(),
+        );
+        let authority = TestAuthorityBuilder::new()
+            .with_starting_objects(std::slice::from_ref(&gas))
+            .with_protocol_config(config)
+            .build()
+            .await;
+        let registry = authority
+            .get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+            .unwrap();
+        let Owner::Shared {
+            initial_shared_version,
+        } = registry.owner
+        else {
+            panic!("the forwarding registry must be shared");
+        };
+        for mutability in [
+            SharedObjectMutability::Mutable,
+            SharedObjectMutability::Immutable,
+        ] {
+            let mut builder = TestTransactionBuilder::new(
+                sender,
+                gas.compute_object_reference(),
+                authority.reference_gas_price_for_testing().unwrap(),
+            )
+            .transfer_sui(Some(1), dbg_addr(2));
+            builder
+                .ptb_builder_mut()
+                .obj(ObjectArg::SharedObject {
+                    id: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                    initial_shared_version,
+                    mutability,
+                })
+                .unwrap();
+            let transaction = to_sender_signed_transaction(builder.build(), &sender_key);
+            let result = handle_transaction_for_test(&authority, transaction);
+            if enabled {
+                result.unwrap();
+            } else {
+                assert_eq!(
+                    UserInputError::try_from(result.unwrap_err()).unwrap(),
+                    UserInputError::ImmutableParameterExpectedError {
+                        object_id: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                    },
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn test_invalid_mutable_clock_parameter() {
     // User transactions that take the singleton Clock object at `0x6` by mutable reference will
     // fail to sign, to prevent transactions bottlenecking on it.

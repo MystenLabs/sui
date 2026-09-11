@@ -124,7 +124,9 @@ Shared-input metrics classify the transaction's declared inputs, not its effects
 registry reads therefore do not turn an owned-only transaction into a shared-input transaction;
 explicit registry inputs still count.
 
-Forwarding resolution activates at protocol 138 on devnet/Unknown only. Protocol 137's frozen
+Forwarding resolution and user registry inputs activate at protocol 138 on devnet/Unknown only.
+Both mutable and immutable registry arguments require the feature flag, preserving pre-activation
+rejection even when the registry already exists. Protocol 137's frozen
 framework contains registry creation but not registration or resolution, so its configuration and
 bytecode snapshots must remain unchanged.
 

@@ -490,6 +490,7 @@ mod checked {
                         input_object_kind,
                         object,
                         system_transaction,
+                        protocol_config,
                     )?;
                 }
                 // We skip checking a removed consensus object because it no longer exists.
@@ -508,6 +509,7 @@ mod checked {
         object_kind: InputObjectKind,
         object: &Object,
         system_transaction: bool,
+        protocol_config: &ProtocolConfig,
     ) -> UserInputResult {
         // Defense-in-depth: Owner::Party is not yet supported.
         if matches!(object.owner, Owner::Party { .. }) {
@@ -609,13 +611,15 @@ mod checked {
                         | (SUI_COIN_REGISTRY_OBJECT_ID, _)
                         | (SUI_DISPLAY_REGISTRY_OBJECT_ID, _)
                         | (SUI_DENY_LIST_OBJECT_ID, _)
-                        | (SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, _)
                         | (SUI_BRIDGE_OBJECT_ID, _)
 
                         // System objects that can only be taken immutably
                         | (SUI_CLOCK_OBJECT_ID, SharedObjectMutability::Immutable)
                         | (SUI_RANDOMNESS_STATE_OBJECT_ID, SharedObjectMutability::Immutable)
                         | (SUI_ACCUMULATOR_ROOT_OBJECT_ID, SharedObjectMutability::Immutable) => (),
+
+                        (SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, _)
+                            if protocol_config.enable_forwarding_addresses() => (),
 
                         // All other system objects: cannot be used as input at all
                         _ => {
