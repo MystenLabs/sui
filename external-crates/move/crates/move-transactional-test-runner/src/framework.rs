@@ -45,9 +45,15 @@ use std::{
     future::Future,
     io::Write,
     path::Path,
+    pin::Pin,
     sync::Arc,
 };
 use tempfile::NamedTempFile;
+
+/// Dependencies compiled ahead of the test. An adapter awaits it where it first needs the
+/// modules, so the caller can overlap the compile with the adapter's other setup.
+pub type PreCompiledProgramInfoFuture =
+    Pin<Box<dyn Future<Output = Arc<PreCompiledProgramInfo>> + Send>>;
 
 pub struct CompiledState {
     pre_compiled_program_info_opt: Option<Arc<PreCompiledProgramInfo>>,
@@ -122,7 +128,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
     fn default_syntax(&self) -> SyntaxChoice;
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_module_info_opt: Option<Arc<PreCompiledProgramInfo>>,
+        pre_compiled_module_info_opt: Option<PreCompiledProgramInfoFuture>,
         init_data: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         path: &Path,
     ) -> (Self, Option<String>);
@@ -815,7 +821,7 @@ pub fn compile_ir_module(
 /// adapter if it is a `TaskCommand::Init`. Returns the adapter, output string, and remaining tasks.
 pub async fn create_adapter_and_taskify<'a, Adapter>(
     path: &Path,
-    pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+    pre_compiled_program: Option<PreCompiledProgramInfoFuture>,
 ) -> Result<
     (
         String,
@@ -954,7 +960,7 @@ where
 /// not need to extend the adapter.
 pub async fn run_test_impl<'a, Adapter>(
     path: &Path,
-    pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+    pre_compiled_program: Option<PreCompiledProgramInfoFuture>,
     insta_options: Option<InstaOptions>,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
