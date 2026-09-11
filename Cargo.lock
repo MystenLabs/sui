@@ -16340,6 +16340,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sui-protocol-config-macros",
+ "tempfile",
  "tracing",
 ]
 

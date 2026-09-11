@@ -13,8 +13,8 @@
 //! "never reached". The same thing happens in reverse while a flag is rolling out: a path
 //! guarded by `!flag` is dark on whichever chains already have the flag on.
 //!
-//! `assert_reachable_gated!` takes a predicate over `ProtocolConfig` and is catalogued only
-//! once the node actually adopts a config that satisfies it:
+//! `assert_reachable_gated!` takes a predicate over `ProtocolConfig` and registers a reachability
+//! expectation when the node adopts a config that satisfies it:
 //!
 //! ```ignore
 //! assert_reachable_gated!(
@@ -25,25 +25,22 @@
 //!
 //! `register_reachability_for_config` performs that registration and is called at every epoch
 //! start. Registration is cumulative across epochs, so an upgrade test that starts below a
-//! flag's enabling version and upgrades through it requires both the old and the new path -
-//! which is correct, since both really do execute during the run.
+//! flag's enabling version and upgrades through it requires both the old and the new path,
+//! since both configurations were adopted. A point reached before registration is also
+//! catalogued as required: the observed hit already satisfies that expectation.
 
 use crate::ProtocolConfig;
 use antithesis_sdk::assert::{AssertType, assert_raw};
 use antithesis_sdk::linkme::distributed_slice;
 use serde_json::json;
-use std::sync::atomic::{AtomicU8, Ordering};
-
-/// A catalog entry has been emitted for this point.
-const CATALOGUED: u8 = 1 << 0;
-/// The emitted catalog entry has `must_hit: true`.
-const REQUIRED: u8 = 1 << 1;
-/// A `hit` has been emitted for this point.
-const HIT: u8 = 1 << 2;
+use std::sync::{
+    Once,
+    atomic::{AtomicBool, Ordering},
+};
 
 /// A reachability assertion that is registered with Antithesis at runtime.
 ///
-/// Constructed by [`assert_reachable_gated!`]; there is no reason to name this type directly.
+/// Constructed by [`crate::assert_reachable_gated!`]; there is no reason to name this type directly.
 pub struct GatedReachabilityPoint {
     pub message: &'static str,
     pub class: &'static str,
@@ -55,10 +52,11 @@ pub struct GatedReachabilityPoint {
     pub column: u32,
     /// Whether the point is expected to be reachable under a given protocol config.
     pub expected_reachable: fn(&ProtocolConfig) -> bool,
-    pub state: AtomicU8,
+    pub catalogued: Once,
+    pub hit: AtomicBool,
 }
 
-/// Every [`assert_reachable_gated!`] site linked into the binary.
+/// Every [`crate::assert_reachable_gated!`] site linked into the binary.
 #[distributed_slice]
 #[linkme(crate = antithesis_sdk::linkme)]
 pub static GATED_REACHABILITY_CATALOG: [GatedReachabilityPoint];
@@ -70,44 +68,27 @@ pub const fn as_predicate(f: fn(&ProtocolConfig) -> bool) -> fn(&ProtocolConfig)
 }
 
 impl GatedReachabilityPoint {
-    /// Whether Antithesis has been told this point must be hit.
-    pub fn is_required(&self) -> bool {
-        self.state.load(Ordering::Relaxed) & REQUIRED != 0
+    fn ensure_catalogued(&self) {
+        // A concurrent first hit must wait until the declaration has been emitted.
+        self.catalogued.call_once(|| self.emit(false));
     }
 
-    /// Emits a catalog entry if one is still owed, and reports whether the point is required.
-    ///
-    /// `required` only ever upgrades: once a config has made the point live, a later config
-    /// that does not is not a reason to stop expecting the hit, because the earlier config
-    /// really did run.
-    fn ensure_catalogued(&self, required: bool) -> bool {
-        let wanted = CATALOGUED | if required { REQUIRED } else { 0 };
-        let previous = self.state.fetch_or(wanted, Ordering::Relaxed);
-        let required = required || previous & REQUIRED != 0;
-        if !previous & wanted != 0 {
-            self.emit(false, required);
-        }
-        required
-    }
-
-    /// Records that control flow reached this point. Called by [`assert_reachable_gated!`].
+    /// Records that control flow reached this point. Called by [`crate::assert_reachable_gated!`].
     pub fn reached(&self) {
         // Only the first hit is reported, so keep the steady state to a single relaxed load:
         // some of these sit on per-transaction paths.
-        if self.state.load(Ordering::Relaxed) & HIT != 0 {
+        if self.hit.load(Ordering::Relaxed) {
             return;
         }
-        // A point can be reached without having been catalogued: either the predicate is
-        // wrong, or this is a binary that never adopts a protocol config (the stress client,
-        // for instance). Catalog it as optional so that the hit is still well formed - the
-        // SDK requires a catalog entry for every assertion issued through `assert_raw`.
-        let required = self.ensure_catalogued(false);
-        if self.state.fetch_or(HIT, Ordering::Relaxed) & HIT == 0 {
-            self.emit(true, required);
+        // A binary without an epoch store can reach a point before registration. Requiring
+        // an already-observed point is safe and keeps its SDK declaration stable.
+        self.ensure_catalogued();
+        if !self.hit.swap(true, Ordering::Relaxed) {
+            self.emit(true);
         }
     }
 
-    fn emit(&self, hit: bool, must_hit: bool) {
+    fn emit(&self, hit: bool) {
         // Mirror what the sdk's own macros put on the wire: catalog entries carry
         // `condition: false` and an empty payload, hits carry `condition: true`.
         let details = if hit { json!({}) } else { json!(null) };
@@ -121,7 +102,7 @@ impl GatedReachabilityPoint {
             self.line,                    // begin_line
             self.column,                  // begin_column
             hit,                          // hit
-            must_hit,                     // must_hit
+            true,                         // must_hit
             AssertType::Reachability,     // assert_type
             "Reachable".to_owned(),       // display_type
             self.message.to_owned(),      // id
@@ -140,7 +121,7 @@ pub fn register_reachability_for_config(config: &ProtocolConfig) {
     }
     for point in GATED_REACHABILITY_CATALOG.iter() {
         if (point.expected_reachable)(config) {
-            point.ensure_catalogued(true);
+            point.ensure_catalogued();
         }
     }
 }
@@ -148,7 +129,8 @@ pub fn register_reachability_for_config(config: &ProtocolConfig) {
 /// Like `mysten_common::assert_reachable!`, but only expected to be reached under protocol
 /// configs satisfying `$expected_reachable`. See the module docs.
 ///
-/// The predicate must be a non-capturing closure over `&ProtocolConfig`.
+/// The predicate must be a non-capturing closure over `&ProtocolConfig` that does not panic
+/// for any supported configuration; it runs during epoch-store construction.
 #[macro_export]
 macro_rules! assert_reachable_gated {
     ($message:literal, $expected_reachable:expr) => {{
@@ -175,10 +157,11 @@ macro_rules! assert_reachable_gated {
                 line: ::std::line!(),
                 column: ::std::column!(),
                 expected_reachable: $crate::reachability::as_predicate($expected_reachable),
-                state: ::std::sync::atomic::AtomicU8::new(0),
+                catalogued: ::std::sync::Once::new(),
+                hit: ::std::sync::atomic::AtomicBool::new(false),
             };
 
-        // calling in to antithesis sdk breaks determinisim in simtests (on linux only)
+        // calling in to antithesis sdk breaks determinism in simtests (on linux only)
         if !cfg!(msim) {
             POINT.reached();
         } else {
@@ -192,31 +175,114 @@ macro_rules! assert_reachable_gated {
 mod tests {
     use super::*;
     use crate::{Chain, ProtocolVersion};
+    use std::{path::Path, process::Command};
 
-    fn find(message: &str) -> &'static GatedReachabilityPoint {
-        GATED_REACHABILITY_CATALOG
-            .iter()
-            .find(|point| point.message == message)
-            .expect("point should be linked into the catalog")
+    fn early_hit() {
+        assert_reachable_gated!("gated reachability test: early", |pc| pc
+            .check_object_funds_withdraw_in_execution());
     }
 
-    fn always_live() {
-        assert_reachable_gated!("test point: always live", |_| true);
+    fn legacy() {
+        assert_reachable_gated!("gated reachability test: legacy", |pc| !pc
+            .check_object_funds_withdraw_in_execution());
     }
 
-    fn never_live() {
-        assert_reachable_gated!("test point: never live", |_| false);
+    fn upgraded() {
+        assert_reachable_gated!("gated reachability test: upgraded", |pc| pc
+            .check_object_funds_withdraw_in_execution());
+    }
+
+    fn disabled() {
+        assert_reachable_gated!("gated reachability test: disabled", |_| false);
+    }
+
+    fn assert_output(path: &Path, expected: &[(&str, bool)]) {
+        use mysten_common::ZipDebugEqIteratorExt as _;
+
+        let output = std::fs::read_to_string(path).unwrap();
+        let assertions: Vec<_> = output
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .filter_map(|mut event| {
+                let assertion = event.get_mut("antithesis_assert")?;
+                assertion["id"]
+                    .as_str()?
+                    .starts_with("gated reachability test:")
+                    .then(|| assertion.take())
+            })
+            .collect();
+        assert_eq!(assertions.len(), expected.len(), "{assertions:#?}");
+        for (assertion, (id, hit)) in assertions.iter().zip_debug_eq(expected) {
+            assert_eq!(assertion["id"], *id);
+            assert_eq!(assertion["hit"], *hit);
+            assert_eq!(assertion["condition"], *hit);
+            assert_eq!(assertion["must_hit"], true);
+            assert_eq!(assertion["assert_type"], "reachability");
+            assert_eq!(assertion["display_type"], "Reachable");
+        }
     }
 
     #[test]
-    fn registers_only_points_the_config_makes_live() {
-        // Force codegen of the enclosing functions so their catalog entries are linked in.
-        let _ = (always_live as fn(), never_live as fn());
+    fn emits_stable_reachability_across_registration_and_hits() {
+        let expected = [
+            ("gated reachability test: early", false),
+            ("gated reachability test: early", true),
+            ("gated reachability test: legacy", false),
+            ("gated reachability test: legacy", true),
+            ("gated reachability test: upgraded", false),
+            ("gated reachability test: upgraded", true),
+        ];
+        const CHILD: &str = "SUI_REACHABILITY_TEST_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            // The SDK caches both its output destination and its assertion tracker globally.
+            // A subprocess isolates them without changing the test runner's environment.
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("sdk.jsonl");
+            let output = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "reachability::tests::emits_stable_reachability_across_registration_and_hits",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .env("ANTITHESIS_SDK_LOCAL_OUTPUT", &path)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "child failed:\nstdout: {}\nstderr: {}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+            assert_output(&path, &expected);
+            return;
+        }
 
-        let config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown);
-        register_reachability_for_config(&config);
+        std::hint::black_box(disabled as fn());
+        let path = std::env::var_os("ANTITHESIS_SDK_LOCAL_OUTPUT").unwrap();
+        let path = Path::new(&path);
 
-        assert!(find("test point: always live").is_required());
-        assert!(!find("test point: never live").is_required());
+        early_hit();
+        assert_output(path, &expected[..2]);
+
+        let old = ProtocolConfig::get_for_version(ProtocolVersion::new(136), Chain::Unknown);
+        register_reachability_for_config(&old);
+        register_reachability_for_config(&old);
+        assert_output(path, &expected[..3]);
+
+        legacy();
+        legacy();
+        assert_output(path, &expected[..4]);
+
+        let new = ProtocolConfig::get_for_version(ProtocolVersion::new(137), Chain::Unknown);
+        register_reachability_for_config(&new);
+        register_reachability_for_config(&new);
+        assert_output(path, &expected[..5]);
+
+        upgraded();
+        upgraded();
+        early_hit();
+        register_reachability_for_config(&old);
+        assert_output(path, &expected);
     }
 }
