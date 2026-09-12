@@ -2563,6 +2563,18 @@ emit_authenticated_impl
 ForwardingAddressRegistry
 	public struct
 	0x2::forwarding_address
+ForwardingDeposit
+	public struct
+	0x2::forwarding_address
+register
+	public fun
+	0x2::forwarding_address
+resolve
+	public(package) fun
+	0x2::forwarding_address
+resolve_impl
+	fun
+	0x2::forwarding_address
 create
 	fun
 	0x2::forwarding_address

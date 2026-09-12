@@ -47,7 +47,7 @@ use sui_types::{
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
-    storage::{BackingPackageStore, PackageObject, RuntimeObjectResolver},
+    storage::{BackingPackageStore, ExecutionObjectResolver, PackageObject, RuntimeObjectResolver},
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -72,6 +72,25 @@ impl BackingPackageStore for InMemoryTestStore {
         package_id: &ObjectID,
     ) -> sui_types::error::SuiResult<Option<PackageObject>> {
         self.0.borrow().get_package_object(package_id)
+    }
+}
+
+impl ExecutionObjectResolver for InMemoryTestStore {
+    fn object_available_balance(
+        &self,
+        _owner: SuiAddress,
+        _type_: &TypeTag,
+    ) -> sui_types::error::SuiResult<u128> {
+        // Move unit tests do not model checkpoint reservations.
+        Ok(u128::MAX)
+    }
+
+    // Move unit tests have no sequencer; native reads use the scenario's current committed state.
+    fn load_runtime_system_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> sui_types::error::SuiResult<Option<Object>> {
+        Ok(self.0.borrow().get_object(object_id).cloned())
     }
 }
 
