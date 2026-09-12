@@ -27,7 +27,9 @@ use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
 use sui_config::node::CongestionLogConfig;
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
-use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig};
+use sui_protocol_config::{
+    Chain, PerObjectCongestionControlMode, ProtocolConfig, assert_reachable_gated,
+};
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::{
@@ -1871,8 +1873,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         conflict_info.gas_object_conflicts,
                         conflict_info.non_gas_object_conflicts,
                     );
-                    assert_reachable!(
-                        "Successfully deferred transaction attempting to double spend owned object."
+                    assert_reachable_gated!(
+                        "Successfully deferred transaction attempting to double spend owned object.",
+                        |pc| pc.defer_owned_object_double_spend()
                     );
                     deferred_txns
                         .entry(deferral_key)
