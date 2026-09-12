@@ -74,6 +74,8 @@ use sui_types::{
 /// Controls which special end-of-epoch transactions are created during epoch transitions.
 #[derive(Debug, Clone, Default)]
 pub struct AdvanceEpochConfig {
+    /// Test-only protocol version to activate in the next epoch.
+    pub protocol_version: Option<ProtocolVersion>,
     /// Controls whether a `RandomStateCreate` end-of-epoch transaction is included
     /// (to initialise on-chain randomness for the first time).
     pub create_random_state: bool,
@@ -428,10 +430,11 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     /// The `config` parameter controls which special end-of-epoch transactions are created
     /// as part of this epoch change.
     ///
-    /// NOTE: This function does not currently support updating the protocol version
     pub fn advance_epoch(&mut self, config: AdvanceEpochConfig) {
         let next_epoch = self.epoch_state.epoch() + 1;
-        let next_epoch_protocol_version = self.epoch_state.protocol_version();
+        let next_epoch_protocol_version = config
+            .protocol_version
+            .unwrap_or_else(|| self.epoch_state.protocol_version());
         let gas_cost_summary = self.checkpoint_builder.epoch_rolling_gas_cost_summary();
         let epoch_start_timestamp_ms = self.store.get_clock().timestamp_ms();
 
@@ -489,24 +492,53 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             ));
         }
 
-        kinds.push(EndOfEpochTransactionKind::new_change_epoch(
-            next_epoch,
-            next_epoch_protocol_version,
-            gas_cost_summary.storage_cost,
-            gas_cost_summary.computation_cost,
-            gas_cost_summary.storage_rebate,
-            gas_cost_summary.non_refundable_storage_fee,
-            epoch_start_timestamp_ms,
-            next_epoch_system_package_bytes,
-        ));
-
-        let tx = VerifiedTransaction::new_end_of_epoch_transaction(kinds);
+        let tx = if self
+            .epoch_state
+            .protocol_config()
+            .end_of_epoch_transaction_supported()
+        {
+            kinds.push(EndOfEpochTransactionKind::new_change_epoch(
+                next_epoch,
+                next_epoch_protocol_version,
+                gas_cost_summary.storage_cost,
+                gas_cost_summary.computation_cost,
+                gas_cost_summary.storage_rebate,
+                gas_cost_summary.non_refundable_storage_fee,
+                epoch_start_timestamp_ms,
+                next_epoch_system_package_bytes,
+            ));
+            VerifiedTransaction::new_end_of_epoch_transaction(kinds)
+        } else {
+            assert!(
+                kinds.is_empty(),
+                "special end-of-epoch transactions are not supported at protocol version {}",
+                self.epoch_state.protocol_version().as_u64()
+            );
+            VerifiedTransaction::new_change_epoch(
+                next_epoch,
+                next_epoch_protocol_version,
+                gas_cost_summary.storage_cost,
+                gas_cost_summary.computation_cost,
+                gas_cost_summary.storage_rebate,
+                gas_cost_summary.non_refundable_storage_fee,
+                epoch_start_timestamp_ms,
+                next_epoch_system_package_bytes,
+            )
+        };
         self.execute_transaction(tx.into())
             .expect("advancing the epoch cannot fail");
 
+        let next_protocol_config = if config.protocol_version.is_some() {
+            ProtocolConfig::get_for_version(
+                next_epoch_protocol_version,
+                self.epoch_state.chain_identifier().chain(),
+            )
+        } else {
+            self.epoch_state.protocol_config().clone()
+        };
         let new_epoch_state = EpochState::new_with_protocol_config(
             self.store.get_system_state(),
-            self.epoch_state.protocol_config().clone(),
+            next_protocol_config,
             self.epoch_state.chain_identifier(),
         );
         let end_of_epoch_data = EndOfEpochData {
