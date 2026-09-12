@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 137;
+const MAX_PROTOCOL_VERSION: u64 = 138;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -76,7 +76,7 @@ const MAINNET_USDB: &str =
 //            hash module bytes individually before computing package digest.
 // Version 8: Disallow changing abilities and type constraints for type parameters in structs
 //            during upgrades.
-// Version 9: Limit the length of Move idenfitiers to 128.
+// Version 9: Limit the length of Move identifiers to 128.
 //            Disallow extraneous module bytes,
 //            advance_to_highest_supported_protocol_version,
 // Version 10:increase bytecode verifier `max_verifier_meter_ticks_per_function` and
@@ -407,6 +407,7 @@ const MAINNET_USDB: &str =
 //              Enable allowed_proposers on testnet and mainnet.
 //              Validate PTB indices at signing time.
 //              Enable memory_safety_invariant_check_v2.
+// Version 138: Enable forwarding addresses on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1145,6 +1146,10 @@ struct FeatureFlags {
     // If true, create the forwarding address registry object in the change epoch transaction.
     #[serde(skip_serializing_if = "is_false")]
     create_forwarding_address_registry: bool,
+
+    // If true, resolve forwarding addresses through the forwarding address registry.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_forwarding_addresses: bool,
 
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // Deprecated: must always be set to `true`.
@@ -4768,6 +4773,11 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.validate_ptb_argument_indices = true;
                     cfg.feature_flags.memory_safety_invariant_check_v2 = true;
+                }
+                138 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_forwarding_addresses = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

@@ -236,24 +236,45 @@ pub struct ConsensusObjectVersion {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SystemObjectVersions {
     accumulator_version: Option<ConsensusObjectVersion>,
+    forwarding_address_registry_version: Option<ConsensusObjectVersion>,
 }
 
 impl SystemObjectVersions {
-    pub fn new(accumulator_version: Option<ConsensusObjectVersion>) -> Self {
+    pub fn new(
+        accumulator_version: Option<ConsensusObjectVersion>,
+        forwarding_address_registry_version: Option<ConsensusObjectVersion>,
+    ) -> Self {
         Self {
             accumulator_version,
+            forwarding_address_registry_version,
         }
     }
 
     pub fn empty() -> Self {
-        Self::new(None)
+        Self::new(None, None)
+    }
+
+    pub fn from_map(
+        mut versions: std::collections::BTreeMap<ObjectID, ConsensusObjectVersion>,
+    ) -> Self {
+        let accumulator_version = versions.remove(&crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID);
+        let forwarding_address_registry_version =
+            versions.remove(&crate::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID);
+        assert!(
+            versions.is_empty(),
+            "{:?} are not implicitly read system objects",
+            versions.keys().collect::<Vec<_>>()
+        );
+        Self::new(accumulator_version, forwarding_address_registry_version)
     }
 
     pub fn get(&self, object_id: &ObjectID) -> Option<ConsensusObjectVersion> {
-        if *object_id == crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID {
-            self.accumulator_version
-        } else {
-            panic!("{object_id} is not an implicitly read system object")
+        match *object_id {
+            crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID => self.accumulator_version,
+            crate::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID => {
+                self.forwarding_address_registry_version
+            }
+            _ => panic!("{object_id} is not an implicitly read system object"),
         }
     }
 }

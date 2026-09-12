@@ -163,7 +163,10 @@ pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION
 /// a settlement transaction mutating the accumulator root, or a user transaction that passes it
 /// in); declared inputs are version-assigned through the normal shared-input path, independent of
 /// this set. Extend this as more implicitly-read system objects arise.
-pub const IMPLICITLY_READ_SYSTEM_OBJECTS: &[ObjectID] = &[SUI_ACCUMULATOR_ROOT_OBJECT_ID];
+pub const IMPLICITLY_READ_SYSTEM_OBJECTS: &[ObjectID] = &[
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+];
 
 pub fn sui_framework_address_concat_string(suffix: &str) -> String {
     format!("{}{suffix}", SUI_FRAMEWORK_ADDRESS.to_hex_literal())
