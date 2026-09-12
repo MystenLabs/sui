@@ -524,6 +524,18 @@ pub struct ExecutionTimeObserverConfig {
     /// If unspecified, this will default to `false`.
     pub report_object_utilization_metric_with_full_id: Option<bool>,
 
+    /// Map from object ID to a human-readable name. Utilization of each listed object is
+    /// reported in the `epoch_execution_time_observer_tracked_object_utilization` metric,
+    /// labeled with both the full object ID and the name, regardless of whether the object
+    /// has ever been overutilized. This does not affect the bucketed per-object
+    /// utilization metric.
+    ///
+    /// Use this to precisely monitor a small number of known hot objects without enabling
+    /// `report_object_utilization_metric_with_full_id`.
+    ///
+    /// If unspecified, this will default to an empty map.
+    pub object_utilization_metric_tracked_ids: Option<BTreeMap<ObjectID, String>>,
+
     /// Unless target object utilization is exceeded by at least this amount, no observation
     /// will be shared with consensus.
     ///
@@ -600,6 +612,13 @@ impl ExecutionTimeObserverConfig {
     pub fn report_object_utilization_metric_with_full_id(&self) -> bool {
         self.report_object_utilization_metric_with_full_id
             .unwrap_or(false)
+    }
+
+    pub fn object_utilization_metric_tracked_ids(&self) -> impl Iterator<Item = (&ObjectID, &str)> {
+        self.object_utilization_metric_tracked_ids
+            .iter()
+            .flatten()
+            .map(|(id, name)| (id, name.as_str()))
     }
 
     pub fn observation_sharing_object_utilization_threshold(&self) -> Duration {
@@ -1931,9 +1950,12 @@ mod tests {
     use fastcrypto::traits::KeyPair;
     use rand::{SeedableRng, rngs::StdRng};
     use sui_keys::keypair_file::{write_authority_keypair_to_file, write_keypair_to_file};
+    use sui_types::base_types::ObjectID;
     use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SuiKeyPair, get_key_pair_from_rng};
 
-    use super::{AuthorityStorePruningConfig, Genesis, StateArchiveConfig};
+    use super::{
+        AuthorityStorePruningConfig, ExecutionTimeObserverConfig, Genesis, StateArchiveConfig,
+    };
     use crate::NodeConfig;
 
     #[test]
@@ -1988,6 +2010,32 @@ mod tests {
         assert_eq!(
             round_tripped.rpc_store_bitmap_periodic_compaction_days,
             Some(17)
+        );
+    }
+
+    #[test]
+    fn execution_time_observer_config_tracked_ids() {
+        let omitted: ExecutionTimeObserverConfig = serde_yaml::from_str("{}").unwrap();
+        assert_eq!(omitted.object_utilization_metric_tracked_ids().count(), 0);
+
+        let yaml = r#"
+            object-utilization-metric-tracked-ids:
+              "0x0000000000000000000000000000000000000000000000000000000000000005": sui-system-state
+              "0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407": deepbook-sui-usdc
+        "#;
+        let configured: ExecutionTimeObserverConfig = serde_yaml::from_str(yaml).unwrap();
+        let tracked: Vec<_> = configured.object_utilization_metric_tracked_ids().collect();
+        assert_eq!(tracked.len(), 2);
+        assert_eq!(
+            tracked[0],
+            (&ObjectID::from_single_byte(5), "sui-system-state")
+        );
+
+        let serialized = serde_yaml::to_string(&configured).unwrap();
+        let round_tripped: ExecutionTimeObserverConfig = serde_yaml::from_str(&serialized).unwrap();
+        assert_eq!(
+            round_tripped.object_utilization_metric_tracked_ids,
+            configured.object_utilization_metric_tracked_ids
         );
     }
 
