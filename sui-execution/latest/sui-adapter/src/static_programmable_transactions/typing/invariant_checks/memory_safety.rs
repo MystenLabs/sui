@@ -38,7 +38,7 @@ struct Node {
     children: Vec<NodeID>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Memory {
     nodes: Vec<Node>,
     roots: BTreeMap<RootLocation, NodeID>,
@@ -52,7 +52,10 @@ enum Value {
 
 #[derive(Debug)]
 struct Location {
-    root: NodeID,
+    /// Logical identity of this location's graph root.
+    /// The node is created lazily on first borrow, so non-reference locations that are never
+    /// borrowed do not create a node.
+    root: RootLocation,
     value: Option<Value>,
 }
 
@@ -173,6 +176,13 @@ impl BitSet {
 }
 
 impl Memory {
+    fn new() -> Self {
+        Self {
+            nodes: vec![],
+            roots: BTreeMap::new(),
+        }
+    }
+
     fn node(&self, id: NodeID) -> anyhow::Result<&Node> {
         self.nodes
             .get(id)
@@ -219,6 +229,11 @@ impl Memory {
         let id = self.new_node(NodeKind::Root(root), &[])?;
         self.roots.insert(root, id);
         Ok(id)
+    }
+
+    /// Returns the node for a PTB location if one has been created
+    fn get_root(&self, root: RootLocation) -> Option<NodeID> {
+        self.roots.get(&root).copied()
     }
 
     /// Creates a call-return delta reference, whose ancestors are derived from parent reference
@@ -318,7 +333,7 @@ impl Value {
 }
 
 impl Location {
-    fn non_ref(root: NodeID) -> Self {
+    fn non_ref(root: RootLocation) -> Self {
         Self {
             root,
             value: Some(Value::NonRef),
@@ -345,14 +360,11 @@ impl Location {
         }
     }
 
-    fn borrow(&self, is_mut: bool) -> anyhow::Result<Value> {
+    fn assert_borrowable(&self) -> anyhow::Result<()> {
         match self.value.as_ref() {
             None => anyhow::bail!("Borrow of invalid memory location"),
             Some(Value::Ref { .. }) => anyhow::bail!("Cannot borrow a reference"),
-            Some(Value::NonRef) => Ok(Value::Ref {
-                is_mut,
-                node: self.root,
-            }),
+            Some(Value::NonRef) => Ok(()),
         }
     }
 }
@@ -371,40 +383,39 @@ impl Context {
             commands: _,
             unified_linkage: _,
         } = txn;
-        let mut memory = Memory::default();
-        let tx_context =
-            Location::non_ref(memory.root(RootLocation::Known(T::Location::TxContext))?);
-        let mut gas = Location::non_ref(memory.root(RootLocation::Known(T::Location::GasCoin))?);
+        let memory = Memory::new();
+        let tx_context = Location::non_ref(RootLocation::Known(T::Location::TxContext));
+        let mut gas = Location::non_ref(RootLocation::Known(T::Location::GasCoin));
         if gas_payment.is_none() {
             gas.move_value()
                 .map_err(|_| anyhow::anyhow!("gas coin should be initialized"))?;
         }
         let object_inputs = (0..objects.len())
             .map(|i| {
-                Ok(Location::non_ref(memory.root(RootLocation::Known(
+                Ok(Location::non_ref(RootLocation::Known(
                     T::Location::ObjectInput(checked_as!(i, u16)?),
-                ))?))
+                )))
             })
             .collect::<anyhow::Result<_>>()?;
         let withdrawal_inputs = (0..withdrawals.len())
             .map(|i| {
-                Ok(Location::non_ref(memory.root(RootLocation::Known(
+                Ok(Location::non_ref(RootLocation::Known(
                     T::Location::WithdrawalInput(checked_as!(i, u16)?),
-                ))?))
+                )))
             })
             .collect::<anyhow::Result<_>>()?;
         let pure_inputs = (0..pure.len())
             .map(|i| {
-                Ok(Location::non_ref(memory.root(RootLocation::Known(
+                Ok(Location::non_ref(RootLocation::Known(
                     T::Location::PureInput(checked_as!(i, u16)?),
-                ))?))
+                )))
             })
             .collect::<anyhow::Result<_>>()?;
         let receiving_inputs = (0..receiving.len())
             .map(|i| {
-                Ok(Location::non_ref(memory.root(RootLocation::Known(
+                Ok(Location::non_ref(RootLocation::Known(
                     T::Location::ReceivingInput(checked_as!(i, u16)?),
-                ))?))
+                )))
             })
             .collect::<anyhow::Result<_>>()?;
         Ok(Self {
@@ -436,10 +447,10 @@ impl Context {
                 .enumerate()
                 .map(|(i, v)| {
                     Ok(Location {
-                        root: self.memory.root(RootLocation::Known(T::Location::Result(
+                        root: RootLocation::Known(T::Location::Result(
                             command,
                             checked_as!(i, u16)?,
-                        )))?,
+                        )),
                         value: v,
                     })
                 })
@@ -504,11 +515,17 @@ impl Context {
         })
     }
 
+    /// Returns true iff any live reference borrows `location`.
+    fn location_is_borrowed(&self, location: &Location) -> anyhow::Result<bool> {
+        match self.memory.get_root(location.root) {
+            Some(node) => self.any_extends(node, /* ignore alias */ false),
+            None => Ok(false),
+        }
+    }
+
     fn check_usage(&self, usage: &T::Usage, location: &Location) -> anyhow::Result<()> {
-        // by marking "ignore alias" as `false`, we will also check for `Alias` paths, i.e. paths
-        // that point to the location itself without any extensions.
-        let is_borrowed = self.any_extends(location.root, /* ignore alias */ false)?
-            || self.arg_roots.contains(&usage.location());
+        let is_borrowed =
+            self.location_is_borrowed(location)? || self.arg_roots.contains(&usage.location());
         match usage {
             T::Usage::Move(_) => {
                 anyhow::ensure!(!is_borrowed, "Cannot move a value that is borrowed");
@@ -549,13 +566,14 @@ impl Context {
             | T::Argument__::Read(usage) => self.check_usage(usage, location)?,
             T::Argument__::Borrow(_, _) => (),
         };
-        let location = self.location_mut(arg.location())?;
         let value = match arg {
-            T::Argument__::Use(usage) => location.use_(usage)?,
-            T::Argument__::Freeze(usage) => location.use_(usage)?.freeze()?,
-            T::Argument__::Borrow(is_mut, _) => location.borrow(*is_mut)?,
+            T::Argument__::Use(usage) => self.location_mut(arg.location())?.use_(usage)?,
+            T::Argument__::Freeze(usage) => {
+                self.location_mut(arg.location())?.use_(usage)?.freeze()?
+            }
+            T::Argument__::Borrow(is_mut, _) => self.borrow_location(arg.location(), *is_mut)?,
             T::Argument__::Read(usage) => {
-                location.use_(usage)?;
+                self.location_mut(arg.location())?.use_(usage)?;
                 Value::NonRef
             }
         };
@@ -563,6 +581,17 @@ impl Context {
             self.arg_roots.extend(self.memory.known_roots(*node)?);
         }
         Ok(value)
+    }
+
+    /// Borrows a location, creating its graph node on first use.
+    fn borrow_location(&mut self, loc: T::Location, is_mut: bool) -> anyhow::Result<Value> {
+        let root = {
+            let location = self.location(loc)?;
+            location.assert_borrowable()?;
+            location.root
+        };
+        let node = self.memory.root(root)?;
+        Ok(Value::Ref { is_mut, node })
     }
 
     fn arguments(&mut self, args: &[T::Argument]) -> anyhow::Result<Vec<Value>> {
@@ -800,12 +829,17 @@ fn call(
         all_nodes.retain(|node| !tx_context_nodes.contains(node));
     }
     let command = context.current_command()?;
-    let mut_nodes = if mut_nodes.is_empty() {
+    // Reference returns derive from an unknown root when no reference arguments feed them. Calls
+    // that return no references need no such node, so avoid creating one.
+    let has_reference_return = return_
+        .iter()
+        .any(|ty| matches!(ty, T::Type::Reference(_, _)));
+    let mut_nodes = if mut_nodes.is_empty() && has_reference_return {
         vec![context.memory.root(RootLocation::Unknown { command })?]
     } else {
         mut_nodes
     };
-    let all_nodes = if all_nodes.is_empty() {
+    let all_nodes = if all_nodes.is_empty() && has_reference_return {
         vec![context.memory.root(RootLocation::Unknown { command })?]
     } else {
         all_nodes
