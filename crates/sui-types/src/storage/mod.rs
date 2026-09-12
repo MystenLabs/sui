@@ -14,14 +14,14 @@ use crate::base_types::{
 use crate::committee::EpochId;
 use crate::effects::InputConsensusObject;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
-use crate::error::{ExecutionError, SuiError, SuiErrorKind, UserInputError};
+use crate::error::{ExecutionError, SuiError, SuiErrorKind};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
 use crate::full_checkpoint_content::ObjectSet;
 use crate::message_envelope::Message;
 use crate::move_package::MovePackage;
 use crate::storage::error::Error as StorageError;
 use crate::transaction::TransactionData;
-use crate::transaction::{InputObjects, SenderSignedData, TransactionDataAPI};
+use crate::transaction::{SenderSignedData, TransactionDataAPI};
 use crate::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
@@ -251,13 +251,9 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
     }
 }
 
-/// Resolves the balance available for object-funds withdrawals during execution.
-pub trait ObjectFundsResolver {
+/// Resolves object reads against the transaction's sequenced state and pending withdrawals.
+pub trait ExecutionObjectResolver: RuntimeObjectResolver {
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
-}
-
-/// Resolves system-object reads pinned by transaction sequencing.
-pub trait RuntimeSystemObjectResolver {
     /// Execution stores return `None` only when the transaction has no assigned version.
     /// An assigned version that cannot be loaded is an execution invariant violation.
     fn load_runtime_system_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>>;
@@ -896,50 +892,6 @@ impl SystemObjectVersions {
             });
         Self::new(accumulator_version, forwarding_address_registry_version)
     }
-
-    /// Pin system-object reads for execution without consensus, e.g. simulacrum and dry-run.
-    /// Reuse explicit input versions so a concurrent write cannot give the same transaction two
-    /// versions of one root. Only exclusively implicit roots are loaded from the latest store state.
-    /// Concurrent stores require `TrackingBackingStore::pin_system_objects` to retain mandatory roots.
-    pub fn from_input_objects_and_store(
-        input_objects: &InputObjects,
-        store: &dyn ObjectStore,
-        include_forwarding_address_registry: bool,
-    ) -> Self {
-        let version_of = |object: &Object| ConsensusObjectVersion {
-            initial_shared_version: object
-                .owner()
-                .start_version()
-                .expect("implicitly read system objects must be consensus objects"),
-            version: object.version(),
-        };
-        let mut accumulator_version = None;
-        let mut forwarding_address_registry_version = None;
-        for object in input_objects.iter_objects() {
-            match object.id() {
-                SUI_ACCUMULATOR_ROOT_OBJECT_ID => accumulator_version = Some(version_of(object)),
-                SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID
-                    if include_forwarding_address_registry =>
-                {
-                    forwarding_address_registry_version = Some(version_of(object));
-                }
-                _ => {}
-            }
-        }
-        if accumulator_version.is_none() {
-            accumulator_version = store
-                .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-                .as_ref()
-                .map(version_of);
-        }
-        if include_forwarding_address_registry && forwarding_address_registry_version.is_none() {
-            forwarding_address_registry_version = store
-                .get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-                .as_ref()
-                .map(version_of);
-        }
-        Self::new(accumulator_version, forwarding_address_registry_version)
-    }
 }
 
 // Returns a set of the ObjectKey's of objects read or written by this transaction
@@ -1017,29 +969,10 @@ impl<'a> TrackingBackingStore<'a> {
         }
     }
 
-    /// Retain implicit Lamport inputs before simulation starts. Declared inputs already retain their
-    /// objects; adding implicit roots to them would change storage-read gas charges.
-    pub fn pin_system_objects(
-        &self,
-        input_objects: &InputObjects,
-        include_forwarding_address_registry: bool,
-    ) -> SuiResult<SystemObjectVersions> {
-        let versions = SystemObjectVersions::from_input_objects_and_store(
-            input_objects,
-            self.inner,
-            include_forwarding_address_registry,
-        );
-        let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
-        if let Some(version) = versions.get(&id)
-            && !input_objects.iter_objects().any(|object| object.id() == id)
-        {
-            self.load_implicitly_read_system_object(&id, version)
-                .ok_or(UserInputError::ObjectNotFound {
-                    object_id: id,
-                    version: Some(version.version),
-                })?;
-        }
-        Ok(versions)
+    /// Retain an object selected during input loading so simulation can resolve its exact version
+    /// after the backing store prunes it.
+    pub fn retain_object(&self, object: Object) {
+        self.read_objects.borrow_mut().insert(object);
     }
 
     pub fn into_read_objects(self) -> ObjectSet {
@@ -1139,69 +1072,5 @@ impl ParentSync for TrackingBackingStore<'_> {
         object_id: ObjectID,
     ) -> Option<crate::base_types::ObjectRef> {
         self.inner.get_latest_parent_entry_ref_deprecated(object_id)
-    }
-}
-
-#[cfg(test)]
-mod system_object_versions_tests {
-    use super::*;
-    use crate::{
-        in_memory_storage::InMemoryStorage,
-        object::Owner,
-        transaction::{
-            InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
-            SharedObjectMutability,
-        },
-    };
-
-    #[test]
-    fn simulation_registry_pin_survives_a_concurrent_registration() {
-        let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
-        let initial_shared_version = SequenceNumber::from_u64(1);
-        let registry = |version| {
-            Object::with_id_owner_version_for_testing(
-                id,
-                SequenceNumber::from_u64(version),
-                Owner::Shared {
-                    initial_shared_version,
-                },
-            )
-        };
-        let mut store = InMemoryStorage::new(vec![registry(10)]);
-        let inputs = InputObjects::new(vec![ObjectReadResult::new(
-            InputObjectKind::SharedMoveObject {
-                id,
-                initial_shared_version,
-                mutability: SharedObjectMutability::Mutable,
-            },
-            ObjectReadResultKind::Object(store.get_object(&id).unwrap().clone()),
-        )]);
-
-        // Another registration commits after the explicit input was loaded, but before implicit
-        // system-object versions are chosen for the same simulation.
-        store.insert_object(registry(11));
-        let versions = SystemObjectVersions::from_input_objects_and_store(&inputs, &store, true);
-        assert_eq!(
-            versions.get(&id).unwrap().version,
-            inputs.iter_objects().next().unwrap().version(),
-            "explicit and implicit reads of the registry must use one simulation version",
-        );
-        assert_eq!(
-            SystemObjectVersions::from_input_objects_and_store(
-                &InputObjects::new(vec![]),
-                &store,
-                true,
-            )
-            .get(&id)
-            .unwrap()
-            .version,
-            SequenceNumber::from_u64(11),
-            "an exclusively implicit read should use the latest stored registry",
-        );
-        assert!(
-            SystemObjectVersions::from_input_objects_and_store(&inputs, &store, false)
-                .get(&id)
-                .is_none(),
-        );
     }
 }

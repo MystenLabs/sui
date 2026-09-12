@@ -47,10 +47,7 @@ use sui_types::{
     metrics::ExecutionMetrics,
     move_package::MovePackage,
     object::{MoveObject, Object, Owner},
-    storage::{
-        ObjectFundsResolver, ObjectFundsSufficiency, RuntimeObjectResolver,
-        RuntimeSystemObjectResolver,
-    },
+    storage::{ExecutionObjectResolver, ObjectFundsSufficiency},
 };
 use tracing::error;
 
@@ -141,7 +138,7 @@ pub(crate) struct ObjectRuntimeState {
 #[derive(Tid)]
 pub struct ObjectRuntime<'a> {
     child_object_store: ChildObjectStore<'a>,
-    object_funds_resolver: &'a dyn ObjectFundsResolver,
+    object_resolver: &'a dyn ExecutionObjectResolver,
     // inventories for test scenario
     pub(crate) test_inventories: TestInventories,
     // the internal state
@@ -189,9 +186,7 @@ impl ObjectFundsAvailable {
 
 impl<'a> ObjectRuntime<'a> {
     pub fn new(
-        object_resolver: &'a dyn RuntimeObjectResolver,
-        object_funds_resolver: &'a dyn ObjectFundsResolver,
-        system_object_resolver: &'a dyn RuntimeSystemObjectResolver,
+        object_resolver: &'a dyn ExecutionObjectResolver,
         input_objects: BTreeMap<ObjectID, InputObject>,
         is_metered: bool,
         protocol_config: &'a ProtocolConfig,
@@ -220,7 +215,6 @@ impl<'a> ObjectRuntime<'a> {
         Self {
             child_object_store: ChildObjectStore::new(
                 object_resolver,
-                system_object_resolver,
                 root_version,
                 wrapped_object_containers,
                 is_metered,
@@ -228,7 +222,7 @@ impl<'a> ObjectRuntime<'a> {
                 metrics.clone(),
                 epoch_id,
             ),
-            object_funds_resolver,
+            object_resolver,
             test_inventories: TestInventories::new(),
             state: ObjectRuntimeState {
                 input_objects: input_object_owners,
@@ -266,15 +260,13 @@ impl<'a> ObjectRuntime<'a> {
             .entry(key)
             .or_insert_with(ObjectFundsAvailable::init);
         if entry.needs_store_read(amount) {
-            let settled_available = match self
-                .object_funds_resolver
-                .object_available_balance(owner, type_)
-            {
-                Ok(balance) => balance,
-                Err(e) => {
-                    return ObjectFundsSufficiency::LoadError(e.to_string());
-                }
-            };
+            let settled_available =
+                match self.object_resolver.object_available_balance(owner, type_) {
+                    Ok(balance) => balance,
+                    Err(e) => {
+                        return ObjectFundsSufficiency::LoadError(e.to_string());
+                    }
+                };
             let Some(available) = entry.available.checked_add(U256::from(settled_available)) else {
                 return ObjectFundsSufficiency::Overflow;
             };

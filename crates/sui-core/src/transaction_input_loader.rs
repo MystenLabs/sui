@@ -6,11 +6,12 @@ use crate::{
         authority_per_epoch_store::CertLockGuard, shared_object_version_manager::AssignedVersions,
     },
     execution_cache::ObjectCacheRead,
-    transaction_simulation::SimulationInputLoader,
+    transaction_simulation::{SimulationInputLoader, SimulationInputObjects},
 };
 use mysten_common::{ZipDebugEqIteratorExt, izip_debug_eq};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID};
 use sui_types::{
     base_types::{EpochId, FullObjectID, ObjectRef, TransactionDigest},
     error::{SuiError, SuiResult, UserInputError},
@@ -267,8 +268,61 @@ impl SimulationInputLoader for TransactionInputLoader {
         input_object_kinds: &[InputObjectKind],
         receiving_object_refs: &[ObjectRef],
         epoch_id: EpochId,
-    ) -> SuiResult<(InputObjects, ReceivingObjects)> {
-        self.read_objects_for_signing(None, input_object_kinds, receiving_object_refs, epoch_id)
+        include_forwarding_address_registry: bool,
+    ) -> SuiResult<SimulationInputObjects> {
+        let registry_is_explicit = include_forwarding_address_registry
+            && input_object_kinds.iter().any(|input| {
+                matches!(
+                    input,
+                    InputObjectKind::SharedMoveObject { id, .. }
+                        if *id == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID
+                )
+            });
+        let (input_objects, receiving_objects) = self.read_objects_for_signing(
+            None,
+            input_object_kinds,
+            receiving_object_refs,
+            epoch_id,
+        )?;
+        let accumulator_version = input_objects
+            .iter_objects()
+            .find(|object| object.id() == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .map(SimulationInputObjects::consensus_object_version)
+            .or_else(|| {
+                self.cache
+                    .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                    .as_ref()
+                    .map(SimulationInputObjects::consensus_object_version)
+            });
+        let (forwarding_address_registry_version, retained_forwarding_address_registry) =
+            if !include_forwarding_address_registry {
+                (None, None)
+            } else if registry_is_explicit {
+                let registry = input_objects
+                    .iter_objects()
+                    .find(|object| object.id() == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+                    .expect("declared forwarding registry must have been loaded");
+                (
+                    Some(SimulationInputObjects::consensus_object_version(registry)),
+                    None,
+                )
+            } else {
+                let registry = self
+                    .cache
+                    .get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID);
+                let version = registry
+                    .as_ref()
+                    .map(SimulationInputObjects::consensus_object_version);
+                (version, registry)
+            };
+
+        Ok(SimulationInputObjects::new(
+            input_objects,
+            receiving_objects,
+            accumulator_version,
+            forwarding_address_registry_version,
+            retained_forwarding_address_registry,
+        ))
     }
 }
 

@@ -3,13 +3,14 @@
 
 use std::collections::BTreeMap;
 use sui_config::genesis;
+use sui_core::transaction_simulation::SimulationInputObjects;
 use sui_types::base_types::ObjectRef;
 use sui_types::error::UserInputError;
 use sui_types::transaction::InputObjects;
 use sui_types::transaction::ObjectReadResult;
 use sui_types::transaction::ReceivingObjectReadResult;
-use sui_types::transaction::ReceivingObjects;
 use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
     digests::{ObjectDigest, TransactionDigest},
@@ -118,7 +119,16 @@ pub trait SimulatorStore: BackingStore {
         _tx_digest: &TransactionDigest,
         input_object_kinds: &[InputObjectKind],
         receiving_object_refs: &[ObjectRef],
-    ) -> SuiResult<(InputObjects, ReceivingObjects)> {
+        include_forwarding_address_registry: bool,
+    ) -> SuiResult<SimulationInputObjects> {
+        let registry_is_explicit = include_forwarding_address_registry
+            && input_object_kinds.iter().any(|input| {
+                matches!(
+                    input,
+                    InputObjectKind::SharedMoveObject { id, .. }
+                        if *id == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID
+                )
+            });
         let mut input_objects = Vec::new();
         for kind in input_object_kinds {
             let obj = match kind {
@@ -153,6 +163,43 @@ pub trait SimulatorStore: BackingStore {
             receiving_objects.push(ReceivingObjectReadResult::new(*objref, obj.into()));
         }
 
-        Ok((input_objects.into(), receiving_objects.into()))
+        let input_objects = InputObjects::new(input_objects);
+        let accumulator_version = input_objects
+            .iter_objects()
+            .find(|object| object.id() == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .map(SimulationInputObjects::consensus_object_version)
+            .or_else(|| {
+                SimulatorStore::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                    .as_ref()
+                    .map(SimulationInputObjects::consensus_object_version)
+            });
+        let (forwarding_address_registry_version, retained_forwarding_address_registry) =
+            if !include_forwarding_address_registry {
+                (None, None)
+            } else if registry_is_explicit {
+                let registry = input_objects
+                    .iter_objects()
+                    .find(|object| object.id() == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+                    .expect("declared forwarding registry must have been loaded");
+                (
+                    Some(SimulationInputObjects::consensus_object_version(registry)),
+                    None,
+                )
+            } else {
+                let registry =
+                    SimulatorStore::get_object(self, &SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID);
+                let version = registry
+                    .as_ref()
+                    .map(SimulationInputObjects::consensus_object_version);
+                (version, registry)
+            };
+
+        Ok(SimulationInputObjects::new(
+            input_objects,
+            receiving_objects.into(),
+            accumulator_version,
+            forwarding_address_registry_version,
+            retained_forwarding_address_registry,
+        ))
     }
 }

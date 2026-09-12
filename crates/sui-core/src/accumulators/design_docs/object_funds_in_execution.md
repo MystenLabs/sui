@@ -71,6 +71,11 @@ Key properties:
   transactions in the same consensus commit are invisible in the settled read. They are
   subtracted via `UnsettledObjectWithdrawals` (see §3).
 
+Latest execution exposes funds resolution and pinned system-root reads through one
+`ExecutionObjectResolver: RuntimeObjectResolver`. `TemporaryStore` owns both capabilities: funds
+resolution subtracts unsettled withdrawals, while system-root resolution delegates to its existing
+implicit-object loader. Historical object resolvers need no new methods or permissive defaults.
+
 ## 3. Unsettled-withdrawal tracking
 
 `UnsettledObjectWithdrawals` (in `accumulators/unsettled_object_withdrawals.rs`) is the
@@ -102,7 +107,7 @@ executed-but-unsettled withdrawals.
 |------|-----------------------------------------------|
 | Live consensus execution | Assigned versions (`AssignedVersions.system_object_versions`). |
 | Checkpoint execution / crash recovery | Back-filled from the settlement barrier's input version, with recorded `ReadOnlyRoot` versions checked for consistency. See `CheckpointTransactionData::new` in the [checkpoint executor](../../checkpoints/checkpoint_executor/mod.rs). |
-| Dev-inspect / dry-run | Reuses explicit input versions and selects other roots from the latest store state (`TrackingBackingStore::pin_system_objects`). The implicit registry is retained before execution; missing pinned data is an error. The old post-execution simulate check is bypassed when the flag is on. Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
+| Dev-inspect / dry-run | Input loading selects each registry root once: an explicit access uses its declared object; an exclusively implicit access captures the latest object and derives its version from that object. `TrackingBackingStore` retains the selection before execution without adding a declared input. The old post-execution simulate check is bypassed when the flag is on. Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
 | `sui-replay-2` | Reconstructed from expected effects (`SystemObjectVersions::from_effects`). **Caveat:** unsettled in-commit withdrawals are *not* reconstructed in isolated replay (`unsettled = 0`), which can diverge from the original execution — see the TODO in `crates/sui-replay-2/src/execution.rs`. Mainnet enablement is blocked on this. |
 | Single-node benchmarks | Every transaction retains its entry from the consensus assignment map, including owned-only transactions executed in parallel. The in-memory path also uses these assignments when generating checkpoint effects; raw setup execution obtains assignments through the same version manager. |
 
@@ -111,13 +116,18 @@ Their outputs use the accumulator's independent clock; a registry Lamport input 
 skip versions and violate the address-funds schedulers' consecutive-version contract. Consensus
 assignment, simulation, and Simulacrum preserve this exclusion.
 
+Sequencing merges the implicit read-only registry input with any explicit registry access before
+assigning versions. Explicit mutability wins; each eligible transaction has one registry assignment.
+`SystemObjectVersions` projects that same assignment, and a debug-fatal invariant rejects conflicting
+assigned and system versions. Effects-based reconstruction follows the same representation.
+
 Runtime loading first reuses a retained explicit input at the assigned version. Simulation and replay
 can therefore keep using that root after its stored version is pruned. A retained input at a different
 version is not a fallback for the assigned root.
 
-For an exclusively implicit registry read, simulation materializes the chosen version in
-`TrackingBackingStore` before entering execution. If that version has already been pruned, simulation
-returns `ObjectNotFound`; otherwise the retained exact-version object survives subsequent pruning.
+For an exclusively implicit registry read, input loading retains the selected object itself in
+`TrackingBackingStore`. There is no separate version-selection/materialization gap; the retained
+exact-version object survives subsequent pruning.
 These retained reads are not added to declared inputs, so their storage-read gas treatment is unchanged.
 
 Shared-input metrics classify the transaction's declared inputs, not its effects. Mandatory implicit
@@ -147,5 +157,5 @@ bytecode snapshots must remain unchanged.
 - An assigned forwarding registry must materialize before execution can produce effects, even when
   the native is not invoked. A missing required version is an invariant failure: omitting its
   read-only effect while retaining its Lamport contribution would make effects-based replay compute
-  a different timestamp. Simulation checks availability before this boundary and returns
-  `ObjectNotFound` when materialization is impossible.
+  a different timestamp. Simulation retains the selected implicit object during input loading, so
+  later pruning cannot make that root unavailable at execution.

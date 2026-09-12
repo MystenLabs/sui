@@ -31,7 +31,7 @@ use sui_types::execution::{
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
-use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsResolver, PackageObject};
+use sui_types::storage::{BackingStore, DenyListResult, ExecutionObjectResolver, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
@@ -44,7 +44,7 @@ use sui_types::{
     gas::GasCostSummary,
     object::Object,
     object::Owner,
-    storage::{BackingPackageStore, RuntimeObjectResolver, RuntimeSystemObjectResolver, Storage},
+    storage::{BackingPackageStore, RuntimeObjectResolver, Storage},
     transaction::InputObjects,
 };
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
@@ -1235,7 +1235,7 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
     }
 }
 
-impl RuntimeSystemObjectResolver for TemporaryStore<'_> {
+impl ExecutionObjectResolver for TemporaryStore<'_> {
     fn load_runtime_system_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
         if self.system_object_versions.get(object_id).is_none() {
             return Ok(None);
@@ -1244,9 +1244,7 @@ impl RuntimeSystemObjectResolver for TemporaryStore<'_> {
             .map(Some)
             .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
     }
-}
 
-impl ObjectFundsResolver for TemporaryStore<'_> {
     /// Loads the object balance at the required version and subtracts withdrawals from the same
     /// checkpoint that have not settled yet.
     /// This function is expected never to fail; an error indicates an invariant violation.
@@ -1534,13 +1532,11 @@ impl BackingPackageStore for TemporaryStore<'_> {
 #[cfg(test)]
 mod system_object_resolver_tests {
     use super::*;
-    use std::cell::Cell;
     use std::panic::{AssertUnwindSafe, catch_unwind};
     use sui_types::base_types::ConsensusObjectVersion;
     use sui_types::effects::{TransactionEffectsAPI, UnchangedConsensusKind};
-    use sui_types::error::UserInputError;
     use sui_types::in_memory_storage::InMemoryStorage;
-    use sui_types::storage::{ObjectStore, ParentSync, TrackingBackingStore};
+    use sui_types::storage::TrackingBackingStore;
     use sui_types::transaction::{
         InputObjectKind, ObjectReadResult, ObjectReadResultKind, SharedObjectMutability,
     };
@@ -1682,8 +1678,13 @@ mod system_object_resolver_tests {
             )
             .load_runtime_system_object(&id)
         };
-        let versions =
-            SystemObjectVersions::from_input_objects_and_store(&inputs, &backing_store, true);
+        let versions = SystemObjectVersions::new(
+            None,
+            Some(ConsensusObjectVersion {
+                initial_shared_version,
+                version: retained_root.version(),
+            }),
+        );
         assert_eq!(
             load(versions).unwrap().unwrap().compute_object_reference(),
             retained_root.compute_object_reference(),
@@ -1703,127 +1704,42 @@ mod system_object_resolver_tests {
         );
     }
 
-    struct PruningStore {
-        root: Object,
-        latest: InMemoryStorage,
-        pruned: Cell<bool>,
-        prune_before_load: bool,
-    }
-
-    impl ObjectStore for PruningStore {
-        fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
-            if *object_id == self.root.id() && !self.pruned.get() {
-                if self.prune_before_load {
-                    self.pruned.set(true);
-                }
-                Some(self.root.clone())
-            } else {
-                self.latest.get_object(object_id).cloned()
-            }
-        }
-
-        fn get_object_by_key(
-            &self,
-            object_id: &ObjectID,
-            version: SequenceNumber,
-        ) -> Option<Object> {
-            if *object_id == self.root.id()
-                && version == self.root.version()
-                && !self.pruned.replace(true)
-            {
-                Some(self.root.clone())
-            } else {
-                self.latest.get_object_by_key(object_id, version)
-            }
-        }
-    }
-
-    impl BackingPackageStore for PruningStore {
-        fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
-            self.latest.get_package_object(package_id)
-        }
-    }
-
-    impl ParentSync for PruningStore {
-        fn get_latest_parent_entry_ref_deprecated(&self, object_id: ObjectID) -> Option<ObjectRef> {
-            self.latest
-                .get_latest_parent_entry_ref_deprecated(object_id)
-        }
-    }
-
-    impl RuntimeObjectResolver for PruningStore {
-        fn read_child_object(
-            &self,
-            parent: &ObjectID,
-            child: &ObjectID,
-            child_version_upper_bound: SequenceNumber,
-        ) -> SuiResult<Option<Object>> {
-            self.latest
-                .read_child_object(parent, child, child_version_upper_bound)
-        }
-
-        fn get_object_received_at_version(
-            &self,
-            owner: &ObjectID,
-            object_id: &ObjectID,
-            version: SequenceNumber,
-            epoch: EpochId,
-        ) -> SuiResult<Option<Object>> {
-            self.latest
-                .get_object_received_at_version(owner, object_id, version, epoch)
-        }
-    }
-
     #[test]
-    fn implicit_system_object_pinning_is_lossless_or_fails() {
+
+    fn selected_implicit_system_object_survives_backing_store_pruning() {
         let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
-        let owner = Owner::Shared {
-            initial_shared_version: SequenceNumber::from_u64(1),
-        };
+        let initial_shared_version = SequenceNumber::from_u64(1);
         let mut root = Object::with_id_owner_version_for_testing(
             id,
             SequenceNumber::from_u64(10),
-            owner.clone(),
-        );
-        root.previous_transaction = TransactionDigest::new([7; 32]);
-        let make_store = |prune_before_load| PruningStore {
-            root: root.clone(),
-            latest: InMemoryStorage::new(vec![Object::with_id_owner_version_for_testing(
-                id,
-                SequenceNumber::from_u64(11),
-                owner.clone(),
-            )]),
-            pruned: Cell::new(false),
-            prune_before_load,
-        };
-        let inputs = InputObjects::new(vec![]);
-
-        // Pruning between version selection and materialization must stop simulation.
-        let backing_store = make_store(true);
-        let tracking_store = TrackingBackingStore::new(&backing_store);
-        assert_eq!(
-            tracking_store
-                .pin_system_objects(&inputs, true)
-                .unwrap_err(),
-            SuiErrorKind::UserInputError {
-                error: UserInputError::ObjectNotFound {
-                    object_id: id,
-                    version: Some(root.version()),
-                },
+            Owner::Shared {
+                initial_shared_version,
             },
         );
-
-        // Pruning after materialization must not erase an implicit Lamport input, even when no
-        // forwarding native runs. The effects must preserve both its reference and dependency.
-        let backing_store = make_store(false);
+        root.previous_transaction = TransactionDigest::new([7; 32]);
+        // Input preparation retained version 10 before storage advanced to version 11.
+        let backing_store = InMemoryStorage::new(vec![Object::with_id_owner_version_for_testing(
+            id,
+            SequenceNumber::from_u64(11),
+            Owner::Shared {
+                initial_shared_version,
+            },
+        )]);
         let tracking_store = TrackingBackingStore::new(&backing_store);
-        let versions = tracking_store.pin_system_objects(&inputs, true).unwrap();
+        tracking_store.retain_object(root.clone());
+        let versions = SystemObjectVersions::new(
+            None,
+            Some(ConsensusObjectVersion {
+                initial_shared_version,
+                version: root.version(),
+            }),
+        );
         let config = ProtocolConfig::get_for_max_version_UNSAFE();
         let digest = TransactionDigest::new([8; 32]);
         let mut dependencies = BTreeSet::new();
         let store = TemporaryStore::new_with_input_objects(
             &tracking_store,
-            inputs,
+            InputObjects::new(vec![]),
             vec![],
             digest,
             &config,

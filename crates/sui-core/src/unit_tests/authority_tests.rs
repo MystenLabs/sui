@@ -327,12 +327,16 @@ async fn test_shared_object_metrics_exclude_implicit_registry() {
     .await
     .unwrap();
     assert!(effects.data().status().is_ok(), "{effects:?}");
-    assert!(
+    assert_eq!(
         effects
             .data()
             .accessed_consensus_objects()
             .iter()
-            .any(|object| object.id_and_version().0 == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID),
+            .filter(|object| {
+                object.id_and_version().0 == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID
+            })
+            .count(),
+        1,
     );
     assert_eq!(
         authority.metrics.shared_obj_tx.get(),
@@ -376,6 +380,17 @@ async fn test_shared_object_metrics_exclude_implicit_registry() {
     .await
     .unwrap();
     assert!(effects.data().status().is_ok(), "{effects:?}");
+    assert_eq!(
+        effects
+            .data()
+            .accessed_consensus_objects()
+            .iter()
+            .filter(|object| {
+                object.id_and_version().0 == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID
+            })
+            .count(),
+        1,
+    );
     assert_eq!(
         authority.metrics.shared_obj_tx.get(),
         shared_transactions_before + 1,

@@ -18,7 +18,7 @@ use sui_types::{
     metrics::ExecutionMetrics,
     move_package::MovePackage,
     object::{Data, MoveObject, Object, Owner},
-    storage::{RuntimeObjectResolver, RuntimeSystemObjectResolver},
+    storage::ExecutionObjectResolver,
 };
 
 pub(super) struct ChildObject {
@@ -68,8 +68,7 @@ pub(crate) type ChildObjectEffects = BTreeMap<ObjectID, ChildObjectEffect>;
 
 struct Inner<'a> {
     // used for loading child objects
-    resolver: &'a dyn RuntimeObjectResolver,
-    system_object_resolver: &'a dyn RuntimeSystemObjectResolver,
+    resolver: &'a dyn ExecutionObjectResolver,
     // The version of the root object in ownership at the beginning of the transaction.
     // If it was a child object, it resolves to the root parent's sequence number.
     // Otherwise, it is just the sequence number at the beginning of the transaction.
@@ -91,7 +90,7 @@ struct Inner<'a> {
 }
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
-// from storage, through the `RuntimeObjectResolver`
+// from storage, through the `ExecutionObjectResolver`
 pub(super) struct ChildObjectStore<'a> {
     // contains object resolver and object cache
     // kept as a separate struct to deal with lifetime issues where the `store` is accessed
@@ -412,8 +411,7 @@ fn deserialize_move_object(
 
 impl<'a> ChildObjectStore<'a> {
     pub(super) fn new(
-        resolver: &'a dyn RuntimeObjectResolver,
-        system_object_resolver: &'a dyn RuntimeSystemObjectResolver,
+        resolver: &'a dyn ExecutionObjectResolver,
         root_version: BTreeMap<ObjectID, SequenceNumber>,
         wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
         is_metered: bool,
@@ -424,7 +422,6 @@ impl<'a> ChildObjectStore<'a> {
         Self {
             inner: Inner {
                 resolver,
-                system_object_resolver,
                 root_version,
                 wrapped_object_containers,
                 cached_objects: BTreeMap::new(),
@@ -445,7 +442,7 @@ impl<'a> ChildObjectStore<'a> {
     ) -> PartialVMResult<Option<Object>> {
         let Some(object) = self
             .inner
-            .system_object_resolver
+            .resolver
             .load_runtime_system_object(object_id)
             .map_err(|err| {
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
@@ -895,7 +892,6 @@ mod system_object_tests {
         let config = ProtocolConfig::get_for_max_version_UNSAFE();
         let metrics = Arc::new(ExecutionMetrics::new(&Default::default()));
         let mut store = ChildObjectStore::new(
-            &resolver,
             &resolver,
             BTreeMap::from([(id, input_version)]),
             BTreeMap::new(),
