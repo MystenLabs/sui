@@ -51,7 +51,7 @@ use sui_types::{
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
-    storage::{BackingPackageStore, ObjectFundsResolver, PackageObject, RuntimeObjectResolver},
+    storage::{BackingPackageStore, ExecutionObjectResolver, PackageObject, RuntimeObjectResolver},
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -84,6 +84,14 @@ pub struct InMemoryTestStore {
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
 impl InMemoryTestStore {
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(storage: InMemoryStorage) -> Self {
+        Self {
+            storage: RefCell::new(storage),
+            ..Default::default()
+        }
+    }
+
     fn settled_funds(&self, owner: SuiAddress, type_: &TypeTag) -> u128 {
         self.funds
             .borrow()
@@ -157,13 +165,21 @@ impl BackingPackageStore for InMemoryTestStore {
     }
 }
 
-impl ObjectFundsResolver for InMemoryTestStore {
+impl ExecutionObjectResolver for InMemoryTestStore {
     fn object_available_balance(
         &self,
         owner: SuiAddress,
         type_: &TypeTag,
     ) -> sui_types::error::SuiResult<u128> {
         Ok(self.settled_funds(owner, type_))
+    }
+
+    // Move unit tests have no sequencer; native reads use the scenario's current committed state.
+    fn load_runtime_system_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> sui_types::error::SuiResult<Option<Object>> {
+        Ok(self.storage.borrow().get_object(object_id).cloned())
     }
 }
 
