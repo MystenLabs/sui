@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["spawn_snowflake_monitors"],"struct":["SnowflakeMaxCheckpointReader"],"trait":["MaxCheckpointReader"]};

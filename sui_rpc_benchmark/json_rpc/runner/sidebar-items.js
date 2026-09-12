@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["run_queries"],"struct":["JsonRpcStats","PerMethodStats"]};

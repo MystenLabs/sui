@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["check_gas_data","check_gas_objects","half_digits_rounding","sender_rebate"],"struct":["PerObjectStorage","StorageGas"]};

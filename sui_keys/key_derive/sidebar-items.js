@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DERIVATION_PATH_COIN_TYPE","DERVIATION_PATH_PURPOSE_ED25519","DERVIATION_PATH_PURPOSE_SECP256K1","DERVIATION_PATH_PURPOSE_SECP256R1"],"fn":["derive_key_pair_from_path","generate_new_key","validate_path"]};

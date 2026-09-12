@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EitherError","PrimitiveArgumentLayout"],"fn":["bcs_argument_validate","check_compatibility","fetch_package","fetch_packages","finish","subst_signature"],"struct":["Context","CtxValue","InputObjectMetadata"]};

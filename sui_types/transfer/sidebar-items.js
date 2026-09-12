@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["RESOLVED_RECEIVING_STRUCT"],"struct":["Receiving"]};

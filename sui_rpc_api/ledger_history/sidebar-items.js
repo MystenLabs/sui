@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["filter","query_options","watermark"]};

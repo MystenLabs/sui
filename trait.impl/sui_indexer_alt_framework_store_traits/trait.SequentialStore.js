@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["sui_analytics_indexer",[["impl <a class=\"trait\" href=\"sui_indexer_alt_framework_store_traits/trait.SequentialStore.html\" title=\"trait sui_indexer_alt_framework_store_traits::SequentialStore\">SequentialStore</a> for <a class=\"struct\" href=\"sui_analytics_indexer/store/struct.AnalyticsStore.html\" title=\"struct sui_analytics_indexer::store::AnalyticsStore\">AnalyticsStore</a>",0]]],["sui_consistent_store",[["impl&lt;S: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.96.1/core/marker/trait.Send.html\" title=\"trait core::marker::Send\">Send</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.96.1/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a> + 'static&gt; <a class=\"trait\" href=\"sui_indexer_alt_framework_store_traits/trait.SequentialStore.html\" title=\"trait sui_indexer_alt_framework_store_traits::SequentialStore\">SequentialStore</a> for <a class=\"struct\" href=\"sui_consistent_store/store/struct.Store.html\" title=\"struct sui_consistent_store::store::Store\">Store</a>&lt;S&gt;",0]]],["sui_kvstore",[["impl SequentialStore for <a class=\"struct\" href=\"sui_kvstore/struct.BigTableStore.html\" title=\"struct sui_kvstore::BigTableStore\">BigTableStore</a>",0]]],["sui_pg_db",[["impl SequentialStore for <a class=\"struct\" href=\"sui_pg_db/struct.Db.html\" title=\"struct sui_pg_db::Db\">Db</a>",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[393,661,178,139]}

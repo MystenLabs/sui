@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_validator_by_pool_id"],"struct":["SuiSystemStateSummary","SuiValidatorSummary"]};

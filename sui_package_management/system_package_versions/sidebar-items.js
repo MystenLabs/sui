@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SYSTEM_GIT_REPO"],"fn":["latest_system_packages","system_packages_for_protocol"],"struct":["SystemPackage","SystemPackagesVersion"]};

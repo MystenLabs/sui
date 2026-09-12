@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["INSTANCE_ID","TABLES"],"fn":["cbtemulator_path","create_tables","require_bigtable_emulator"],"struct":["BigTableEmulator"]};

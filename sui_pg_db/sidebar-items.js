@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MIGRATIONS"],"derive":["FieldCount"],"fn":["merge_migrations","reset_database"],"macro":["sql"],"mod":["query","schema","store","temp"],"struct":["Connection","Db","DbArgs"],"trait":["FieldCount"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["block_height","chain_id","data_source","gas_usage","is_finalized","nonce","star","status","timestamp_ms","txn_hash","txn_sender"]};
