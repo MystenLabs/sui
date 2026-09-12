@@ -254,6 +254,20 @@ impl SystemObjectVersions {
         Self::new(None, None)
     }
 
+    pub fn from_map(
+        mut versions: std::collections::BTreeMap<ObjectID, ConsensusObjectVersion>,
+    ) -> Self {
+        let accumulator_version = versions.remove(&crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID);
+        let forwarding_address_registry_version =
+            versions.remove(&crate::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID);
+        assert!(
+            versions.is_empty(),
+            "{:?} are not implicitly read system objects",
+            versions.keys().collect::<Vec<_>>()
+        );
+        Self::new(accumulator_version, forwarding_address_registry_version)
+    }
+
     pub fn get(&self, object_id: &ObjectID) -> Option<ConsensusObjectVersion> {
         match *object_id {
             crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID => self.accumulator_version,

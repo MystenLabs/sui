@@ -1973,14 +1973,6 @@ impl TransactionKind {
             .any(|obj| obj.may_mutate() && obj.id.is_implicitly_read_system_object())
     }
 
-    /// Includes settlement batches and their barrier, which share the accumulator's clock.
-    pub fn is_accumulator_settle_tx(&self) -> bool {
-        matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
-            && self
-                .shared_input_objects()
-                .any(|obj| obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-    }
-
     pub fn is_accumulator_barrier_settle_tx(&self) -> bool {
         matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
             && self.shared_input_objects().any(|obj| {

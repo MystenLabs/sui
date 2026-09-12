@@ -11,8 +11,13 @@ use either::Either;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+use sui_types::SUI_CLOCK_OBJECT_ID;
+use sui_types::SUI_CLOCK_OBJECT_SHARED_VERSION;
+use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
 use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::ConsensusObjectVersion;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::SystemObjectVersions;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
@@ -29,10 +34,6 @@ use sui_types::{
     IMPLICITLY_READ_SYSTEM_OBJECTS, SUI_RANDOMNESS_STATE_OBJECT_ID, base_types::SequenceNumber,
     error::SuiResult,
 };
-use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-};
 use tracing::trace;
 
 pub struct SharedObjVerManager {}
@@ -42,13 +43,15 @@ pub struct SharedObjVerManager {}
 pub struct AssignedVersions {
     pub shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
     /// Versions of system objects, keyed by object ID, that this transaction may read during
-    /// execution. Each version is assigned deterministically during consensus sequencing, so that
-    /// every validator reads the same version of the object.
+    /// execution but that are not part of its declared shared inputs. Each version is assigned
+    /// deterministically during consensus sequencing, so that every validator reads the same
+    /// version of the object.
     ///
-    /// The accumulator root is always present while accumulator settlement is enabled. The
-    /// forwarding-address registry records the same effective input as
-    /// `shared_object_versions` for eligible transactions, whether it was implicit or declared.
-    /// Settlements and cancellations do not read it.
+    /// Today this holds the accumulator root version (as of the beginning of the consensus
+    /// commit this transaction belongs to) and the forwarding address registry version (as of the
+    /// point in the commit at which this transaction is sequenced). The accumulator root qualifies
+    /// because it is written at the end of every commit, so there is always a well-defined prior
+    /// version to read from.
     pub system_object_versions: SystemObjectVersions,
 }
 
@@ -57,26 +60,19 @@ impl AssignedVersions {
         shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
         system_object_versions: SystemObjectVersions,
     ) -> Self {
-        if let Some(registry_version) =
-            system_object_versions.get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-        {
-            let registry_assignment = shared_object_versions
+        debug_assert!(
+            shared_object_versions
                 .iter()
-                .find(|((id, _), _)| *id == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID);
-            if registry_assignment
-                != Some(&(
-                    (
-                        SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                        registry_version.initial_shared_version,
-                    ),
-                    registry_version.version,
-                ))
-            {
-                debug_fatal!(
-                    "forwarding registry assignment {registry_assignment:?} differs from system version {registry_version:?}"
-                );
-            }
-        }
+                .filter(|((id, _), version)| {
+                    id.is_implicitly_read_system_object() && !version.is_cancelled()
+                })
+                .all(|((id, _), version)| {
+                    system_object_versions
+                        .get(id)
+                        .is_none_or(|system_version| system_version.version == *version)
+                }),
+            "declared versions {shared_object_versions:?} disagree with {system_object_versions:?}"
+        );
         Self {
             shared_object_versions,
             system_object_versions,
@@ -87,23 +83,13 @@ impl AssignedVersions {
         Self::new(vec![], SystemObjectVersions::empty())
     }
 
-    /// Construct the system-object versions used by tests running at the latest protocol version.
+    /// Construct with only the accumulator root as the system object read during execution.
+    /// Production callers build the full `system_object_versions` map directly.
     #[cfg(test)]
     pub fn new_for_testing(
         shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
         accumulator_version: Option<SequenceNumber>,
     ) -> Self {
-        let forwarding_address_registry_version =
-            shared_object_versions
-                .iter()
-                .find_map(|((id, initial_shared_version), version)| {
-                    (*id == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID).then_some(
-                        ConsensusObjectVersion {
-                            initial_shared_version: *initial_shared_version,
-                            version: *version,
-                        },
-                    )
-                });
         Self::new(
             shared_object_versions,
             SystemObjectVersions::new(
@@ -111,7 +97,7 @@ impl AssignedVersions {
                     initial_shared_version: sui_types::object::OBJECT_START_VERSION,
                     version: v,
                 }),
-                forwarding_address_registry_version,
+                None,
             ),
         )
     }
@@ -397,66 +383,34 @@ impl SharedObjVerManager {
         );
         let mut assigned_versions = Vec::new();
         for (cert, effects, accumulator_version) in certs_and_effects {
-            let declared_shared_inputs = cert.transaction_data().shared_input_objects();
-            let declared_initial_versions: BTreeMap<_, _> = declared_shared_inputs
-                .iter()
-                .map(|input| input.id_and_version())
+            let initial_version_map: BTreeMap<_, _> = cert
+                .transaction_data()
+                .shared_input_objects()
+                .into_iter()
+                .map(|input| input.into_id_and_version())
                 .collect();
-            let mut accessed_versions = BTreeMap::new();
-            for accessed_object in effects.accessed_consensus_objects() {
-                let (id, version) = accessed_object.id_and_version();
-                let previous_version = accessed_versions.insert(id, version);
-                if id == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID && previous_version.is_some() {
-                    debug_fatal!(
-                        "forwarding address registry is assigned more than once in effects for tx {:?}",
-                        cert.digest()
-                    );
-                }
-            }
-            let mut cert_assigned_versions: Vec<_> = declared_shared_inputs
+            // Implicitly read system objects retrieve their accessed versions from this map.
+            let accessed_versions: BTreeMap<ObjectID, SequenceNumber> = effects
+                .accessed_consensus_objects()
+                .into_iter()
+                .map(|iso| iso.id_and_version())
+                .collect();
+            let cert_assigned_versions: Vec<_> = accessed_versions
                 .iter()
-                .filter_map(|input| {
-                    accessed_versions
-                        .get(&input.id)
-                        .map(|version| (input.id_and_version(), *version))
+                .filter_map(|(id, version)| {
+                    let v = initial_version_map
+                        .get(id)
+                        .map(|initial_version| ((*id, *initial_version), *version));
+                    if v.is_none() {
+                        debug_assert!(
+                            IMPLICITLY_READ_SYSTEM_OBJECTS.contains(id),
+                            "accessed consensus object is neither a declared input nor a known implicitly read system object: \
+                             accessed={accessed_versions:?} declared={initial_version_map:?}"
+                        );
+                    }
+                    v
                 })
                 .collect();
-            let forwarding_address_registry_initial_version = epoch_store
-                .protocol_config()
-                .enable_forwarding_addresses()
-                .then(|| {
-                    epoch_store
-                        .epoch_start_config()
-                        .forwarding_address_registry_obj_initial_shared_version()
-                })
-                .flatten();
-            if !declared_initial_versions.contains_key(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-                && let Some(version) =
-                    accessed_versions.get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-                && !version.is_cancelled()
-            {
-                let initial_shared_version = forwarding_address_registry_initial_version.expect(
-                    "forwarding address registry initial version must be known when it is accessed",
-                );
-                cert_assigned_versions.push((
-                    (
-                        SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                        initial_shared_version,
-                    ),
-                    *version,
-                ));
-            }
-            for id in accessed_versions.keys() {
-                if !declared_initial_versions.contains_key(id)
-                    && *id != SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID
-                {
-                    debug_assert!(
-                        IMPLICITLY_READ_SYSTEM_OBJECTS.contains(id),
-                        "accessed consensus object is neither a declared input nor a known implicitly read system object: \
-                         accessed={accessed_versions:?} declared={declared_initial_versions:?}"
-                    );
-                }
-            }
             if let (Some(effects_version), Some(sequenced_version)) = (
                 accessed_versions.get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID),
                 accumulator_version,
@@ -471,28 +425,40 @@ impl SharedObjVerManager {
                     cert.digest()
                 );
             }
-            // The accumulator version is still supplied by the checkpoint executor for legacy
-            // object-funds withdrawals. Forwarding registry metadata is derived from its single
-            // effective assignment so replay matches consensus sequencing.
-            let accumulator_version = accumulator_version.map(|version| {
+            let mut system_object_versions: BTreeMap<_, _> =
+                implicitly_read_system_objects(epoch_store)
+                    .into_iter()
+                    .filter_map(|(id, initial_shared_version)| {
+                        let version = *accessed_versions.get(&id)?;
+                        (!version.is_cancelled()).then_some((
+                            id,
+                            ConsensusObjectVersion {
+                                initial_shared_version,
+                                version,
+                            },
+                        ))
+                    })
+                    .collect();
+            // Note that for accumulator version, we cannot rely on the one from effects yet, since it won't
+            // be produced until implicitly read system objects are fully shipped. But the old object funds withdraw
+            // still need it. Hence we always use the one provided from the caller (i.e. checkpoint executor).
+            if let Some(version) = *accumulator_version {
                 let initial_shared_version = epoch_store
                     .epoch_start_config()
                     .accumulator_root_obj_initial_shared_version()
                     .expect(
                         "initial shared version must be known for an implicitly read system object",
                     );
-                ConsensusObjectVersion {
-                    initial_shared_version,
-                    version,
-                }
-            });
+                system_object_versions.insert(
+                    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                    ConsensusObjectVersion {
+                        initial_shared_version,
+                        version,
+                    },
+                );
+            }
+            let system_object_versions = SystemObjectVersions::from_map(system_object_versions);
             let tx_key = cert.key();
-            let system_object_versions = system_object_versions_from_assigned(
-                accumulator_version,
-                &cert_assigned_versions,
-                forwarding_address_registry_initial_version,
-                &tx_key,
-            );
             trace!(
                 ?tx_key,
                 ?cert_assigned_versions,
@@ -513,28 +479,35 @@ impl SharedObjVerManager {
         shared_input_next_versions: &mut HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> AssignedVersions {
-        let mut shared_input_objects: Vec<_> =
-            assignable.shared_input_objects(epoch_store).collect();
+        let shared_input_objects: Vec<_> = assignable.shared_input_objects(epoch_store).collect();
 
-        let accumulator_version = if epoch_store.accumulators_enabled() {
-            let accumulator_initial_version = epoch_store
-                .epoch_start_config()
-                .accumulator_root_obj_initial_shared_version()
-                .expect("accumulator root obj initial shared version should be set when accumulators are enabled");
+        let system_object_versions = SystemObjectVersions::from_map(
+            implicitly_read_system_objects(epoch_store)
+                .into_iter()
+                .map(|(id, initial_shared_version)| {
+                    let version = *shared_input_next_versions
+                        .get(&(id, initial_shared_version))
+                        .expect(
+                            "implicitly read system objects must be in shared_input_next_versions",
+                        );
+                    (
+                        id,
+                        ConsensusObjectVersion {
+                            initial_shared_version,
+                            version,
+                        },
+                    )
+                })
+                .collect(),
+        );
 
-            let accumulator_version = *shared_input_next_versions
-                .get(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_initial_version))
-                .expect("accumulator object must be in shared_input_next_versions when withdraws are enabled");
-
-            Some(ConsensusObjectVersion {
-                initial_shared_version: accumulator_initial_version,
-                version: accumulator_version,
-            })
-        } else {
-            None
-        };
+        if shared_input_objects.is_empty() {
+            // No shared object used by this transaction. No need to assign versions.
+            return AssignedVersions::new(vec![], system_object_versions);
+        }
 
         let tx_key = assignable.key();
+
         // Check if the transaction is cancelled due to congestion.
         let cancellation_info = tx_key
             .as_digest()
@@ -548,53 +521,6 @@ impl SharedObjVerManager {
                 None
             };
         let txn_cancelled = cancellation_info.is_some();
-
-        let forwarding_address_registry_initial_version = epoch_store
-            .protocol_config()
-            .enable_forwarding_addresses()
-            .then(|| {
-                epoch_store
-                    .epoch_start_config()
-                    .forwarding_address_registry_obj_initial_shared_version()
-            })
-            .flatten()
-            // Settlement batches and barriers advance only the accumulator's clock. Inheriting
-            // a higher registry version would violate their consecutive-version contract.
-            .filter(|_| match assignable {
-                Schedulable::AccumulatorSettlement(..) => false,
-                Schedulable::Transaction(tx) => !tx
-                    .as_tx()
-                    .transaction_data()
-                    .kind()
-                    .is_accumulator_settle_tx(),
-                Schedulable::RandomnessStateUpdate(..)
-                | Schedulable::ConsensusCommitPrologue(..) => true,
-            });
-        if !txn_cancelled
-            && let Some(initial_shared_version) = forwarding_address_registry_initial_version
-            && !shared_input_objects
-                .iter()
-                .any(|input| input.id == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-        {
-            shared_input_objects.push(SharedInputObject {
-                id: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                initial_shared_version,
-                mutability: SharedObjectMutability::Immutable,
-            });
-        }
-
-        if shared_input_objects.is_empty() {
-            // No shared object used by this transaction. No need to assign versions.
-            return AssignedVersions::new(
-                vec![],
-                system_object_versions_from_assigned(
-                    accumulator_version,
-                    &[],
-                    forwarding_address_registry_initial_version,
-                    &tx_key,
-                ),
-            );
-        }
 
         let mut input_object_keys = assignable.non_shared_input_object_keys();
         let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
@@ -688,12 +614,6 @@ impl SharedObjVerManager {
                 });
         }
 
-        let system_object_versions = system_object_versions_from_assigned(
-            accumulator_version,
-            &assigned_versions,
-            forwarding_address_registry_initial_version,
-            &tx_key,
-        );
         trace!(
             ?tx_key,
             ?assigned_versions,
@@ -706,52 +626,29 @@ impl SharedObjVerManager {
     }
 }
 
-fn system_object_versions_from_assigned(
-    accumulator_version: Option<ConsensusObjectVersion>,
-    assigned_versions: &[(ConsensusObjectSequenceKey, SequenceNumber)],
-    forwarding_address_registry_initial_version: Option<SequenceNumber>,
-    tx_key: &TransactionKey,
-) -> SystemObjectVersions {
-    let Some(expected_initial_version) = forwarding_address_registry_initial_version else {
-        return SystemObjectVersions::new(accumulator_version, None);
-    };
-    let mut registry_assignments = assigned_versions
-        .iter()
-        .filter(|((object_id, _), _)| *object_id == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID);
-    let forwarding_address_registry_version = registry_assignments.next().and_then(
-        |((_, initial_shared_version), version)| {
-            if let Some(((_, duplicate_initial_shared_version), duplicate_version)) =
-                registry_assignments.next()
-            {
-                debug_fatal!(
-                    "forwarding address registry assigned more than once for tx {:?}: \
-                     first=({:?}, {:?}), duplicate=({:?}, {:?})",
-                    tx_key,
-                    initial_shared_version,
-                    version,
-                    duplicate_initial_shared_version,
-                    duplicate_version
-                );
-            }
-            if version.is_cancelled() {
-                return None;
-            }
-            if expected_initial_version != *initial_shared_version {
-                debug_fatal!(
-                    "forwarding address registry assignment has unexpected initial version for tx {:?}: \
-                     assigned={:?}, expected={:?}",
-                    tx_key,
-                    initial_shared_version,
-                    expected_initial_version
-                );
-            }
-            Some(ConsensusObjectVersion {
-                initial_shared_version: *initial_shared_version,
-                version: *version,
-            })
-        },
-    );
-    SystemObjectVersions::new(accumulator_version, forwarding_address_registry_version)
+fn implicitly_read_system_objects(
+    epoch_store: &AuthorityPerEpochStore,
+) -> Vec<ConsensusObjectSequenceKey> {
+    let epoch_start_config = epoch_store.epoch_start_config();
+    let mut objects = Vec::new();
+    if epoch_store.accumulators_enabled() {
+        objects.push((
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            epoch_start_config
+                .accumulator_root_obj_initial_shared_version()
+                .expect("accumulator root obj initial shared version should be set"),
+        ));
+    }
+    if epoch_store.protocol_config().enable_forwarding_addresses()
+        && let Some(initial_shared_version) =
+            epoch_start_config.forwarding_address_registry_obj_initial_shared_version()
+    {
+        objects.push((
+            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+            initial_shared_version,
+        ));
+    }
+    objects
 }
 
 fn get_or_init_versions<'a>(
@@ -763,26 +660,7 @@ fn get_or_init_versions<'a>(
         .map(|so| so.into_id_and_version())
         .collect();
 
-    if epoch_store.accumulators_enabled() {
-        shared_input_objects.push((
-            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-            epoch_store
-                .epoch_start_config()
-                .accumulator_root_obj_initial_shared_version()
-                .expect("accumulator root obj initial shared version should be set"),
-        ));
-    }
-
-    if epoch_store.protocol_config().enable_forwarding_addresses()
-        && let Some(initial_shared_version) = epoch_store
-            .epoch_start_config()
-            .forwarding_address_registry_obj_initial_shared_version()
-    {
-        shared_input_objects.push((
-            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-            initial_shared_version,
-        ));
-    }
+    shared_input_objects.extend(implicitly_read_system_objects(epoch_store));
 
     shared_input_objects.sort();
     shared_input_objects.dedup();
@@ -794,15 +672,11 @@ fn get_or_init_versions<'a>(
 mod tests {
     use super::*;
 
-    use crate::accumulators::build_accumulator_barrier_tx;
     use crate::authority::AuthorityState;
-    use crate::authority::authority_test_utils::execute_from_consensus;
     use crate::authority::shared_object_version_manager::{
         ConsensusSharedObjVerAssignment, SharedObjVerManager,
     };
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
-    use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
-    use move_core_types::ident_str;
     use std::collections::{BTreeMap, HashMap};
     use std::sync::Arc;
     use sui_protocol_config::ProtocolConfig;
@@ -815,14 +689,30 @@ mod tests {
         CertificateProof, ExecutableTransaction, VerifiedExecutableTransaction,
     };
 
-    use sui_types::object::{Object, Owner};
+    use sui_types::object::Object;
     use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
 
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::FundsWithdrawalArg;
-    use sui_types::{
-        SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
-    };
+    use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+
+    fn assigned_versions_for_testing(
+        shared_object_versions: Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+        accumulator_version: Option<SequenceNumber>,
+        forwarding_address_registry_version: Option<SequenceNumber>,
+    ) -> AssignedVersions {
+        let at_start_version = |v| ConsensusObjectVersion {
+            initial_shared_version: sui_types::object::OBJECT_START_VERSION,
+            version: v,
+        };
+        AssignedVersions::new(
+            shared_object_versions,
+            SystemObjectVersions::new(
+                accumulator_version.map(at_start_version),
+                forwarding_address_registry_version.map(at_start_version),
+            ),
+        )
+    }
 
     #[tokio::test]
     async fn test_assign_versions_from_consensus_basic() {
@@ -840,10 +730,6 @@ mod tests {
             generate_shared_objs_tx_with_gas_version(&[(id, init_shared_version, true)], 11),
         ];
         let epoch_store = authority.epoch_store_for_testing();
-        let forwarding_address_registry_initial_version = epoch_store
-            .epoch_start_config()
-            .forwarding_address_registry_obj_initial_shared_version()
-            .unwrap();
         let assignables = certs
             .iter()
             .map(Schedulable::Transaction)
@@ -878,71 +764,40 @@ mod tests {
         // using lamport version, hence the next transaction will use the same version number.
         // In the following case, certs[2] has the same assignment as certs[1] for this reason.
         let expected_accumulator_version = SequenceNumber::from_u64(1);
+        let expected_registry_version = SequenceNumber::from_u64(1);
         assert_eq!(
             assigned_versions.0,
             vec![
                 (
                     certs[0].key(),
-                    AssignedVersions::new_for_testing(
-                        vec![
-                            ((id, init_shared_version), init_shared_version),
-                            (
-                                (
-                                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                                    forwarding_address_registry_initial_version,
-                                ),
-                                forwarding_address_registry_initial_version,
-                            ),
-                        ],
-                        Some(expected_accumulator_version)
+                    assigned_versions_for_testing(
+                        vec![((id, init_shared_version), init_shared_version)],
+                        Some(expected_accumulator_version),
+                        Some(expected_registry_version)
                     )
                 ),
                 (
                     certs[1].key(),
-                    AssignedVersions::new_for_testing(
-                        vec![
-                            ((id, init_shared_version), SequenceNumber::from_u64(4)),
-                            (
-                                (
-                                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                                    forwarding_address_registry_initial_version,
-                                ),
-                                forwarding_address_registry_initial_version,
-                            ),
-                        ],
-                        Some(expected_accumulator_version)
+                    assigned_versions_for_testing(
+                        vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
+                        Some(expected_accumulator_version),
+                        Some(expected_registry_version)
                     )
                 ),
                 (
                     certs[2].key(),
-                    AssignedVersions::new_for_testing(
-                        vec![
-                            ((id, init_shared_version), SequenceNumber::from_u64(4)),
-                            (
-                                (
-                                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                                    forwarding_address_registry_initial_version,
-                                ),
-                                forwarding_address_registry_initial_version,
-                            ),
-                        ],
-                        Some(expected_accumulator_version)
+                    assigned_versions_for_testing(
+                        vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
+                        Some(expected_accumulator_version),
+                        Some(expected_registry_version)
                     )
                 ),
                 (
                     certs[3].key(),
-                    AssignedVersions::new_for_testing(
-                        vec![
-                            ((id, init_shared_version), SequenceNumber::from_u64(10)),
-                            (
-                                (
-                                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                                    forwarding_address_registry_initial_version,
-                                ),
-                                forwarding_address_registry_initial_version,
-                            ),
-                        ],
-                        Some(expected_accumulator_version)
+                    assigned_versions_for_testing(
+                        vec![((id, init_shared_version), SequenceNumber::from_u64(10))],
+                        Some(expected_accumulator_version),
+                        Some(expected_registry_version)
                     )
                 ),
             ]
@@ -951,337 +806,146 @@ mod tests {
 
     #[tokio::test]
     async fn test_forwarding_registry_version_follows_consensus_order() {
-        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-        let other_shared_object = ObjectID::random();
-        config.set_create_forwarding_address_registry_for_testing(true);
-        config.set_enable_forwarding_addresses_for_testing(true);
-        let authority = TestAuthorityBuilder::new()
-            .with_protocol_config(config)
-            .build()
-            .await;
+        let authority = TestAuthorityBuilder::new().build().await;
         let epoch_store = authority.epoch_store_for_testing();
-        let initial_shared_version = epoch_store
+        let registry_initial_version = epoch_store
             .epoch_start_config()
             .forwarding_address_registry_obj_initial_shared_version()
             .unwrap();
+        let registry_key = (
+            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+            registry_initial_version,
+        );
         let certs = [
             generate_shared_objs_tx_with_gas_version(&[], 3),
             generate_shared_objs_tx_with_gas_version(
                 &[(
                     SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                    initial_shared_version,
+                    registry_initial_version,
                     true,
                 )],
                 5,
             ),
-            generate_shared_objs_tx_with_gas_version(
-                &[(other_shared_object, initial_shared_version, true)],
-                1,
-            ),
+            generate_shared_objs_tx_with_gas_version(&[], 1),
         ];
         let assignables = certs
             .iter()
             .map(Schedulable::Transaction)
             .collect::<Vec<_>>();
-
-        let assignment = SharedObjVerManager::assign_versions_from_consensus(
+        let ConsensusSharedObjVerAssignment {
+            shared_input_next_versions,
+            assigned_versions,
+        } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
             assignables.iter(),
             &BTreeMap::new(),
         )
         .unwrap();
-        let assigned_registry_versions = assignment
-            .assigned_versions
-            .0
-            .iter()
-            .map(|(_, versions)| {
-                let registry_assignments: Vec<_> = versions
-                    .shared_object_versions
-                    .iter()
-                    .filter(|((id, _), _)| *id == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-                    .collect();
-                assert_eq!(registry_assignments.len(), 1);
-                let ((_, assigned_initial_version), assigned_version) = registry_assignments[0];
-                let metadata = versions
-                    .system_object_versions
-                    .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-                    .unwrap();
-                assert_eq!(
-                    metadata,
-                    ConsensusObjectVersion {
-                        initial_shared_version: *assigned_initial_version,
-                        version: *assigned_version,
-                    }
-                );
-                *assigned_version
-            })
-            .collect::<Vec<_>>();
-
+        let registry_version = |version| ConsensusObjectVersion {
+            initial_shared_version: registry_initial_version,
+            version,
+        };
+        // The registration is sequenced second, so only the last transaction reads the
+        // registry at its post-registration version.
         assert_eq!(
-            assigned_registry_versions,
+            assigned_versions
+                .0
+                .iter()
+                .map(|(_, versions)| {
+                    (
+                        versions.shared_object_versions.clone(),
+                        versions
+                            .system_object_versions
+                            .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+                            .unwrap(),
+                    )
+                })
+                .collect::<Vec<_>>(),
             vec![
-                initial_shared_version,
-                initial_shared_version,
-                SequenceNumber::from_u64(6),
+                (vec![], registry_version(registry_initial_version)),
+                (
+                    vec![(registry_key, registry_initial_version)],
+                    registry_version(registry_initial_version),
+                ),
+                (vec![], registry_version(SequenceNumber::from_u64(6))),
             ]
         );
         assert_eq!(
-            assignment.shared_input_next_versions.get(&(
-                SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                initial_shared_version,
-            )),
+            shared_input_next_versions.get(&registry_key),
             Some(&SequenceNumber::from_u64(6))
-        );
-        assert_eq!(
-            assignment
-                .shared_input_next_versions
-                .get(&(other_shared_object, initial_shared_version)),
-            Some(&SequenceNumber::from_u64(7))
         );
     }
 
     #[tokio::test]
-    async fn test_forwarding_registry_does_not_advance_settlement_clock() {
-        let (sender, keypair) = get_account_key_pair();
-        let gas = Object::with_id_owner_version_for_testing(
-            ObjectID::random(),
-            SequenceNumber::from_u64(10_000),
-            Owner::AddressOwner(sender),
-        );
-        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-        config.set_create_forwarding_address_registry_for_testing(true);
-        config.set_enable_forwarding_addresses_for_testing(true);
-        config.set_forwarding_address_resolve_cost_base_for_testing(52);
-        config.set_forwarding_address_resolve_cost_per_byte_for_testing(
-            config.obj_access_cost_read_per_byte(),
-        );
-        let authority = TestAuthorityBuilder::new()
-            .with_starting_objects(std::slice::from_ref(&gas))
-            .with_protocol_config(config)
-            .build()
-            .await;
+    async fn test_forwarding_registry_version_from_effects() {
+        let authority = TestAuthorityBuilder::new().build().await;
         let epoch_store = authority.epoch_store_for_testing();
-        let epoch = epoch_store.epoch();
         let registry_initial_version = epoch_store
             .epoch_start_config()
             .forwarding_address_registry_obj_initial_shared_version()
             .unwrap();
-        let accumulator = authority
-            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .unwrap();
-        let accumulator_initial_version = accumulator.owner.start_version().unwrap();
-        let mut expected_accumulator_version = accumulator.version();
-        let mut builder = TestTransactionBuilder::new(
-            sender,
-            gas.compute_object_reference(),
-            epoch_store.reference_gas_price(),
-        );
-        let ptb = builder.ptb_builder_mut();
-        let registry = ptb
-            .obj(ObjectArg::SharedObject {
-                id: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                initial_shared_version: registry_initial_version,
-                mutability: SharedObjectMutability::Mutable,
-            })
-            .unwrap();
-        let master_id = ptb.pure(7u64).unwrap();
-        ptb.programmable_move_call(
-            SUI_FRAMEWORK_PACKAGE_ID,
-            ident_str!("forwarding_address").into(),
-            ident_str!("register").into(),
-            vec![],
-            vec![registry, master_id],
-        );
-        let registration =
-            VerifiedExecutableTransaction::new_for_testing(builder.build(), &keypair);
-        let barriers = [1, 2].map(|height| {
-            VerifiedExecutableTransaction::new_system(
-                VerifiedTransaction::new_system_transaction(build_accumulator_barrier_tx(
-                    epoch,
-                    accumulator_initial_version,
-                    height,
-                    &[],
-                )),
-                epoch,
-            )
-        });
-        let assignables = [
-            Schedulable::Transaction(registration.clone()),
-            Schedulable::AccumulatorSettlement(epoch, 1),
-            Schedulable::Transaction(barriers[1].clone()),
+        let registry_version = SequenceNumber::from_u64(4);
+        let certs = [
+            generate_shared_objs_tx_with_gas_version(&[], 3),
+            generate_shared_objs_tx_with_gas_version(
+                &[(
+                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                    registry_initial_version,
+                    false,
+                )],
+                5,
+            ),
         ];
-        let assignment = SharedObjVerManager::assign_versions_from_consensus(
-            &epoch_store,
-            authority.get_object_cache_reader().as_ref(),
-            assignables.iter(),
-            &BTreeMap::new(),
-        )
-        .unwrap();
-        let mut versions = assignment.assigned_versions.into_map();
-        let registration_versions = versions.remove(&registration.key()).unwrap();
-        let (effects, _) =
-            execute_from_consensus(&authority, registration, registration_versions).await;
-        assert!(effects.status().is_ok(), "{effects:?}");
-        let registry_version = authority
-            .get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-            .unwrap()
-            .version();
-        assert!(registry_version > expected_accumulator_version);
-
-        for (barrier, assignable) in barriers.into_iter().zip_debug_eq(&assignables[1..]) {
-            let assigned = versions.remove(&assignable.key()).unwrap();
-            let (effects, _) = execute_from_consensus(&authority, barrier, assigned).await;
-            assert!(effects.status().is_ok(), "{effects:?}");
-            let next_accumulator_version = effects
-                .mutated()
-                .into_iter()
-                .find_map(|(object_ref, _)| {
-                    (object_ref.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID).then_some(object_ref.1)
-                })
-                .unwrap();
-            expected_accumulator_version = expected_accumulator_version.next();
-            assert_eq!(next_accumulator_version, expected_accumulator_version);
-            assert!(effects.accessed_consensus_objects().iter().all(|object| {
-                object.id_and_version().0 != SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID
-            }));
-            authority
-                .execution_scheduler
-                .settle_address_funds(FundsSettlement {
-                    next_accumulator_version,
-                    funds_changes: BTreeMap::new(),
-                });
-        }
-        assert_eq!(
-            assignment
-                .shared_input_next_versions
-                .get(&(SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_initial_version)),
-            Some(&expected_accumulator_version)
-        );
-    }
-
-    #[tokio::test]
-    async fn test_forwarding_registry_version_reconstructed_from_explicit_input_effects() {
-        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-        config.set_create_forwarding_address_registry_for_testing(true);
-        config.set_enable_forwarding_addresses_for_testing(true);
-        let authority = TestAuthorityBuilder::new()
-            .with_protocol_config(config)
-            .build()
-            .await;
-        let epoch_store = authority.epoch_store_for_testing();
-        let initial_shared_version = epoch_store
-            .epoch_start_config()
-            .forwarding_address_registry_obj_initial_shared_version()
-            .unwrap();
-        let cert = generate_shared_objs_tx_with_gas_version(
-            &[(
-                SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                initial_shared_version,
-                true,
-            )],
-            3,
-        );
-        let effects = TestEffectsBuilder::new(cert.data())
-            .with_shared_input_versions(BTreeMap::from([(
-                SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                initial_shared_version,
-            )]))
-            .build();
-
-        let assignment = SharedObjVerManager::assign_versions_from_effects(
-            &[(&cert, &effects, None)],
-            &epoch_store,
-            authority.get_object_cache_reader().as_ref(),
-        );
-        let (_, assigned) = &assignment.0[0];
-        assert_eq!(
-            assigned.shared_object_versions,
-            vec![(
-                (
-                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                    initial_shared_version,
-                ),
-                initial_shared_version,
-            )]
-        );
-        assert_eq!(
-            assigned
-                .system_object_versions
-                .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID),
-            Some(ConsensusObjectVersion {
-                initial_shared_version,
-                version: initial_shared_version,
+        let effects = certs
+            .iter()
+            .map(|cert| {
+                TestEffectsBuilder::new(cert.data())
+                    .with_shared_input_versions(BTreeMap::from([(
+                        SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                        registry_version,
+                    )]))
+                    .build()
             })
-        );
-    }
-    #[tokio::test]
-    async fn test_forwarding_registry_version_reconstructed_from_implicit_input_effects() {
-        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-        config.set_create_forwarding_address_registry_for_testing(true);
-        config.set_enable_forwarding_addresses_for_testing(true);
-        let authority = TestAuthorityBuilder::new()
-            .with_protocol_config(config)
-            .build()
-            .await;
-        let epoch_store = authority.epoch_store_for_testing();
-        let initial_shared_version = epoch_store
-            .epoch_start_config()
-            .forwarding_address_registry_obj_initial_shared_version()
-            .unwrap();
-        let cert = generate_shared_objs_tx_with_gas_version(&[], 3);
-        let effects = TestEffectsBuilder::new(cert.data())
-            .with_shared_input_versions(BTreeMap::from([(
-                SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                initial_shared_version,
-            )]))
-            .build();
-
-        let assignment = SharedObjVerManager::assign_versions_from_effects(
-            &[(&cert, &effects, None)],
+            .collect::<Vec<_>>();
+        let assigned_versions = SharedObjVerManager::assign_versions_from_effects(
+            certs
+                .iter()
+                .zip_debug_eq(effects.iter())
+                .map(|(cert, effect)| (cert, effect, None))
+                .collect::<Vec<_>>()
+                .as_slice(),
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
         );
-        let (_, assigned) = &assignment.0[0];
-        let live_assignable = Schedulable::Transaction(&cert);
-        let live_assignment = SharedObjVerManager::assign_versions_from_consensus(
-            &epoch_store,
-            authority.get_object_cache_reader().as_ref(),
-            std::iter::once(&live_assignable),
-            &BTreeMap::new(),
-        )
-        .unwrap();
-        let (_, live_assigned) = &live_assignment.assigned_versions.0[0];
-        assert_eq!(
-            assigned.shared_object_versions,
-            live_assigned.shared_object_versions
-        );
-        assert_eq!(
-            assigned
-                .system_object_versions
-                .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID),
-            live_assigned
-                .system_object_versions
-                .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-        );
-        assert_eq!(
-            assigned.shared_object_versions,
-            vec![(
-                (
-                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                    initial_shared_version,
-                ),
-                initial_shared_version,
-            )]
-        );
-        assert_eq!(
-            assigned
-                .system_object_versions
-                .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID),
+        let system_object_versions = SystemObjectVersions::new(
+            None,
             Some(ConsensusObjectVersion {
-                initial_shared_version,
-                version: initial_shared_version,
-            })
+                initial_shared_version: registry_initial_version,
+                version: registry_version,
+            }),
+        );
+        assert_eq!(
+            assigned_versions.0,
+            vec![
+                (
+                    certs[0].key(),
+                    AssignedVersions::new(vec![], system_object_versions)
+                ),
+                (
+                    certs[1].key(),
+                    AssignedVersions::new(
+                        vec![(
+                            (
+                                SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                                registry_initial_version
+                            ),
+                            registry_version
+                        )],
+                        system_object_versions
+                    )
+                ),
+            ]
         );
     }
 
@@ -1292,10 +956,6 @@ mod tests {
         let randomness_obj_version = epoch_store
             .epoch_start_config()
             .randomness_obj_initial_shared_version()
-            .unwrap();
-        let forwarding_address_registry_initial_version = epoch_store
-            .epoch_start_config()
-            .forwarding_address_registry_obj_initial_shared_version()
             .unwrap();
         let certs = [
             VerifiedExecutableTransaction::new_system(
@@ -1355,66 +1015,43 @@ mod tests {
             next_randomness_obj_version
         );
         let expected_accumulator_version = SequenceNumber::from_u64(1);
+        let expected_registry_version = SequenceNumber::from_u64(1);
         assert_eq!(
             assigned_versions.0,
             vec![
                 (
                     certs[0].key(),
-                    AssignedVersions::new_for_testing(
-                        vec![
-                            (
-                                (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
-                                randomness_obj_version,
-                            ),
-                            (
-                                (
-                                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                                    forwarding_address_registry_initial_version,
-                                ),
-                                forwarding_address_registry_initial_version,
-                            ),
-                        ],
-                        Some(expected_accumulator_version)
+                    assigned_versions_for_testing(
+                        vec![(
+                            (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
+                            randomness_obj_version
+                        )],
+                        Some(expected_accumulator_version),
+                        Some(expected_registry_version)
                     )
                 ),
                 (
                     certs[1].key(),
                     // It is critical that the randomness object version is updated before the assignment.
-                    AssignedVersions::new_for_testing(
-                        vec![
-                            (
-                                (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
-                                next_randomness_obj_version,
-                            ),
-                            (
-                                (
-                                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                                    forwarding_address_registry_initial_version,
-                                ),
-                                forwarding_address_registry_initial_version,
-                            ),
-                        ],
-                        Some(expected_accumulator_version)
+                    assigned_versions_for_testing(
+                        vec![(
+                            (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
+                            next_randomness_obj_version
+                        )],
+                        Some(expected_accumulator_version),
+                        Some(expected_registry_version)
                     )
                 ),
                 (
                     certs[2].key(),
                     // It is critical that the randomness object version is updated before the assignment.
-                    AssignedVersions::new_for_testing(
-                        vec![
-                            (
-                                (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
-                                next_randomness_obj_version,
-                            ),
-                            (
-                                (
-                                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                                    forwarding_address_registry_initial_version,
-                                ),
-                                forwarding_address_registry_initial_version,
-                            ),
-                        ],
-                        Some(expected_accumulator_version)
+                    assigned_versions_for_testing(
+                        vec![(
+                            (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
+                            next_randomness_obj_version
+                        )],
+                        Some(expected_accumulator_version),
+                        Some(expected_registry_version)
                     )
                 ),
             ]
@@ -1490,10 +1127,6 @@ mod tests {
             ),
         ];
         let epoch_store = authority.epoch_store_for_testing();
-        let forwarding_address_registry_initial_version = epoch_store
-            .epoch_start_config()
-            .forwarding_address_registry_obj_initial_shared_version()
-            .unwrap();
 
         // Cancel transactions 2 and 4 due to congestion.
         let cancelled_txns: BTreeMap<TransactionDigest, CancelConsensusCertificateReason> = [
@@ -1552,65 +1185,54 @@ mod tests {
 
         // Check that the version assignment for each transaction is correct.
         let expected_accumulator_version = SequenceNumber::from_u64(1);
+        let expected_registry_version = SequenceNumber::from_u64(1);
         assert_eq!(
             assigned_versions.0,
             vec![
                 (
                     certs[0].key(),
-                    AssignedVersions::new_for_testing(
+                    assigned_versions_for_testing(
                         vec![
                             ((id1, init_shared_version_1), init_shared_version_1),
-                            ((id2, init_shared_version_2), init_shared_version_2),
-                            (
-                                (
-                                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                                    forwarding_address_registry_initial_version,
-                                ),
-                                forwarding_address_registry_initial_version,
-                            ),
+                            ((id2, init_shared_version_2), init_shared_version_2)
                         ],
-                        Some(expected_accumulator_version)
+                        Some(expected_accumulator_version),
+                        Some(expected_registry_version)
                     )
                 ),
                 (
                     certs[1].key(),
-                    AssignedVersions::new_for_testing(
+                    assigned_versions_for_testing(
                         vec![
                             ((id1, init_shared_version_1), SequenceNumber::CONGESTED),
                             ((id2, init_shared_version_2), SequenceNumber::CANCELLED_READ),
                         ],
-                        Some(expected_accumulator_version)
+                        Some(expected_accumulator_version),
+                        Some(expected_registry_version)
                     )
                 ),
                 (
                     certs[2].key(),
-                    AssignedVersions::new_for_testing(
-                        vec![
-                            ((id1, init_shared_version_1), SequenceNumber::from_u64(4)),
-                            (
-                                (
-                                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-                                    forwarding_address_registry_initial_version,
-                                ),
-                                forwarding_address_registry_initial_version,
-                            ),
-                        ],
-                        Some(expected_accumulator_version)
+                    assigned_versions_for_testing(
+                        vec![((id1, init_shared_version_1), SequenceNumber::from_u64(4))],
+                        Some(expected_accumulator_version),
+                        Some(expected_registry_version)
                     )
                 ),
                 (
                     certs[3].key(),
-                    AssignedVersions::new_for_testing(
+                    assigned_versions_for_testing(
                         vec![
                             ((id1, init_shared_version_1), SequenceNumber::CANCELLED_READ),
                             ((id2, init_shared_version_2), SequenceNumber::CONGESTED)
                         ],
-                        Some(expected_accumulator_version)
+                        Some(expected_accumulator_version),
+                        Some(expected_registry_version)
                     )
                 ),
                 (
                     certs[4].key(),
-                    AssignedVersions::new_for_testing(
+                    assigned_versions_for_testing(
                         vec![
                             (
                                 (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
@@ -1618,7 +1240,8 @@ mod tests {
                             ),
                             ((id2, init_shared_version_2), SequenceNumber::CANCELLED_READ)
                         ],
-                        Some(expected_accumulator_version)
+                        Some(expected_accumulator_version),
+                        Some(expected_registry_version)
                     )
                 ),
             ]
@@ -1675,29 +1298,33 @@ mod tests {
             vec![
                 (
                     certs[0].key(),
-                    AssignedVersions::new_for_testing(
+                    assigned_versions_for_testing(
                         vec![((id, init_shared_version), init_shared_version)],
+                        None,
                         None
                     )
                 ),
                 (
                     certs[1].key(),
-                    AssignedVersions::new_for_testing(
+                    assigned_versions_for_testing(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
+                        None,
                         None
                     )
                 ),
                 (
                     certs[2].key(),
-                    AssignedVersions::new_for_testing(
+                    assigned_versions_for_testing(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(4))],
+                        None,
                         None
                     )
                 ),
                 (
                     certs[3].key(),
-                    AssignedVersions::new_for_testing(
+                    assigned_versions_for_testing(
                         vec![((id, init_shared_version), SequenceNumber::from_u64(10))],
+                        None,
                         None
                     )
                 ),
@@ -1759,8 +1386,6 @@ mod tests {
             let shared_objects = vec![Object::shared_for_testing()];
             let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
             config.set_enable_accumulators_for_testing(true);
-            // These tests exercise accumulator sequencing in isolation.
-            config.set_create_forwarding_address_registry_for_testing(false);
             config.set_enable_forwarding_addresses_for_testing(false);
             let authority = TestAuthorityBuilder::new()
                 .with_starting_objects(&shared_objects)
@@ -1877,13 +1502,14 @@ mod tests {
                 assigned_versions: AssignedTxAndVersions::new(vec![
                     (
                         withdraw_key,
-                        AssignedVersions::new_for_testing(vec![], Some(acc_version))
+                        assigned_versions_for_testing(vec![], Some(acc_version), None)
                     ),
                     (
                         settlement_key,
-                        AssignedVersions::new_for_testing(
+                        assigned_versions_for_testing(
                             vec![((SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version), acc_version)],
-                            Some(acc_version)
+                            Some(acc_version),
+                            None
                         )
                     ),
                 ]),
@@ -1925,41 +1551,48 @@ mod tests {
                 assigned_versions: AssignedTxAndVersions::new(vec![
                     (
                         withdraw_key1,
-                        AssignedVersions::new_for_testing(vec![], Some(acc_version))
+                        assigned_versions_for_testing(vec![], Some(acc_version), None)
                     ),
                     (
                         settlement_key1,
-                        AssignedVersions::new_for_testing(
+                        assigned_versions_for_testing(
                             vec![((SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version), acc_version)],
-                            Some(acc_version)
+                            Some(acc_version),
+                            None
                         )
                     ),
                     (
                         withdraw_key2,
-                        AssignedVersions::new_for_testing(vec![], Some(acc_version.next()))
+                        assigned_versions_for_testing(vec![], Some(acc_version.next()), None)
                     ),
                     (
                         settlement_key2,
-                        AssignedVersions::new_for_testing(
+                        assigned_versions_for_testing(
                             vec![(
                                 (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
                                 acc_version.next()
                             )],
-                            Some(acc_version.next())
+                            Some(acc_version.next()),
+                            None
                         )
                     ),
                     (
                         withdraw_key3,
-                        AssignedVersions::new_for_testing(vec![], Some(acc_version.next().next()))
+                        assigned_versions_for_testing(
+                            vec![],
+                            Some(acc_version.next().next()),
+                            None
+                        )
                     ),
                     (
                         settlement_key3,
-                        AssignedVersions::new_for_testing(
+                        assigned_versions_for_testing(
                             vec![(
                                 (SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version),
                                 acc_version.next().next()
                             )],
-                            Some(acc_version.next().next())
+                            Some(acc_version.next().next()),
+                            None
                         )
                     ),
                 ]),
@@ -1996,16 +1629,18 @@ mod tests {
                 assigned_versions: AssignedTxAndVersions::new(vec![
                     (
                         withdraw_with_shared_key,
-                        AssignedVersions::new_for_testing(
+                        assigned_versions_for_testing(
                             vec![((shared_obj_id, shared_obj_version), shared_obj_version)],
-                            Some(acc_version)
+                            Some(acc_version),
+                            None
                         )
                     ),
                     (
                         settlement_key,
-                        AssignedVersions::new_for_testing(
+                        assigned_versions_for_testing(
                             vec![((SUI_ACCUMULATOR_ROOT_OBJECT_ID, acc_version), acc_version)],
-                            Some(acc_version)
+                            Some(acc_version),
+                            None
                         )
                     ),
                 ]),

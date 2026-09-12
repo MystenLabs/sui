@@ -296,7 +296,6 @@ async fn test_forwarding_address_deposit() {
     assert_eq!(env.get_sui_balance_ab(forwarding_address), 0);
     assert_forwarding_deposit_event(&env, &digest, forwarding_address, master, amount, tag);
     let depositor = env.get_sender(1);
-    let mut registry_dependency = digest;
     for additional_master_id in 8..11 {
         let (registration, effects) = register_master_id(
             &mut env,
@@ -307,26 +306,13 @@ async fn test_forwarding_address_deposit() {
         .await;
         assert!(effects.status().is_ok());
         env.cluster.wait_for_tx_settlement(&[registration]).await;
-        registry_dependency = registration;
     }
 
     let (stored_deposit, effects) =
         send_to_address_balance(&mut env, depositor, forwarding_address, amount).await;
     assert!(effects.status().is_ok());
     env.cluster.wait_for_tx_settlement(&[stored_deposit]).await;
-    assert!(
-        effects.dependencies().contains(&registry_dependency),
-        "the implicit registry read must depend on the transaction that produced its version"
-    );
-    let registry_version = effects
-        .accessed_consensus_objects()
-        .into_iter()
-        .find_map(|object| {
-            let (id, version) = object.id_and_version();
-            (id == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID).then_some(version)
-        })
-        .expect("deposit must record its registry read");
-    assert!(effects.lamport_version() > registry_version);
+    assert!(forwarding_address_registry_read_only_version(&effects).is_some());
 
     assert_eq!(
         env.get_sui_balance_ab(master),

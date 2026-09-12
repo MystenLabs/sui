@@ -109,20 +109,13 @@ impl SingleValidator {
     }
 
     pub async fn execute_raw_transaction(&self, transaction: Transaction) -> TransactionEffects {
-        let (_, assigned_versions) = self
-            .assigned_shared_object_versions(std::slice::from_ref(&transaction))
-            .await
-            .0
-            .pop()
-            .unwrap();
-        let executable = self.create_executable(transaction);
+        let executable = VerifiedExecutableTransaction::new_from_consensus(
+            VerifiedTransaction::new_unchecked(transaction),
+            0,
+        );
         let effects = self
             .get_validator()
-            .try_execute_immediately(
-                &executable,
-                ExecutionEnv::new().with_assigned_versions(assigned_versions),
-                &self.epoch_store,
-            )
+            .try_execute_immediately(&executable, ExecutionEnv::new(), &self.epoch_store)
             .unwrap()
             .0;
         assert!(effects.status().is_ok());
@@ -224,7 +217,7 @@ impl SingleValidator {
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,
-                assigned_versions.system_object_versions,
+                sui_types::base_types::SystemObjectVersions::empty(),
                 // The benchmark only measures execution throughput and never withdraws object
                 // funds, so there are no unsettled withdrawals to account for.
                 &sui_types::accumulator_root::EmptyUnsettledObjectFunds,

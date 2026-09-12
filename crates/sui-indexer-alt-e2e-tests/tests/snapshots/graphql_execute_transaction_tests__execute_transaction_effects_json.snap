@@ -75,15 +75,6 @@ expression: "result.pointer(\"/data/executeTransaction\")"
           "idOperation": "NONE",
           "objectType": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
         }
-      ],
-      "unchangedConsensusObjects": [
-        {
-          "kind": "READ_ONLY_ROOT",
-          "objectId": "[object_id]",
-          "version": "1",
-          "digest": "[digest]",
-          "objectType": "0x0000000000000000000000000000000000000000000000000000000000000002::forwarding_address::ForwardingAddressRegistry"
-        }
       ]
     },
     "balanceChangesJson": [

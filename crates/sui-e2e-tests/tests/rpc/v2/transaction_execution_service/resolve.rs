@@ -24,7 +24,6 @@ use sui_rpc::proto::sui::rpc::v2::simulate_transaction_request::TransactionCheck
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_expiration::TransactionExpirationKind;
 use sui_rpc_api::Client;
-use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -63,16 +62,6 @@ fn proto_to_response(
 
 #[sim_test]
 async fn resolve_transaction_simple_transfer() {
-    let _guard =
-        sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_create_forwarding_address_registry_for_testing(true);
-            config.set_enable_forwarding_addresses_for_testing(true);
-            config.set_forwarding_address_resolve_cost_base_for_testing(52);
-            config.set_forwarding_address_resolve_cost_per_byte_for_testing(
-                config.obj_access_cost_read_per_byte(),
-            );
-            config
-        });
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(1)
         .build()
@@ -121,23 +110,6 @@ async fn resolve_transaction_simple_transfer() {
         .await
         .unwrap()
         .into_inner();
-    let registry_id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID.to_string();
-    let registry = resolved
-        .transaction
-        .as_ref()
-        .and_then(|transaction| transaction.objects.as_ref())
-        .and_then(|objects| {
-            objects
-                .objects
-                .iter()
-                .find(|object| object.object_id() == registry_id)
-        })
-        .expect("simulation should include the implicitly read forwarding registry");
-    assert!(
-        registry
-            .object_type()
-            .ends_with("::forwarding_address::ForwardingAddressRegistry")
-    );
     let (transaction, effects_from_simulation, _events) = proto_to_response(resolved);
 
     let signed_transaction = test_cluster.wallet.sign_transaction(&transaction).await;

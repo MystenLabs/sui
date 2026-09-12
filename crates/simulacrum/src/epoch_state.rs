@@ -13,7 +13,7 @@ use sui_core::{
         funds_read::AccountFundsRead, object_funds_checker::metrics::ObjectFundsCheckerMetrics,
         unsettled_object_withdrawals::UnsettledObjectWithdrawals,
     },
-    transaction_simulation::{SimulationInputLoader, SimulationInputObjects, simulate_transaction},
+    transaction_simulation::{SimulationInputLoader, simulate_transaction},
 };
 use sui_execution::Executor;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -30,14 +30,13 @@ use sui_types::{
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
-    storage::TrackingBackingStore,
     sui_system_state::{
         SuiSystemState, SuiSystemStateTrait,
         epoch_start_sui_system_state::{EpochStartSystemState, EpochStartSystemStateTrait},
     },
     transaction::{
-        InputObjectKind, TransactionData, TransactionDataAPI, TxValidityCheckContext,
-        VerifiedTransaction,
+        InputObjectKind, InputObjects, ReceivingObjects, TransactionData, TransactionDataAPI,
+        TxValidityCheckContext, VerifiedTransaction,
     },
     transaction_executor::{SimulateTransactionResult, TransactionChecks},
 };
@@ -161,24 +160,11 @@ impl EpochState {
             &store,
         )?;
 
-        let include_forwarding_address_registry =
-            self.protocol_config.enable_forwarding_addresses()
-                && !tx_data.kind().is_accumulator_settle_tx();
-        let SimulationInputObjects {
-            input_objects,
-            receiving_objects,
-            system_object_versions,
-            retained_forwarding_address_registry,
-        } = store.read_objects_for_synchronous_execution(
+        let (input_objects, receiving_objects) = store.read_objects_for_synchronous_execution(
             &tx_digest,
             &input_object_kinds,
             &receiving_object_refs,
-            include_forwarding_address_registry,
         )?;
-        let tracking_store = TrackingBackingStore::new(store.backing_store());
-        if let Some(registry) = retained_forwarding_address_registry {
-            tracking_store.retain_object(registry);
-        }
 
         // Run the transaction input checks that would run when submitting the txn to a validator
         // for signing
@@ -194,10 +180,15 @@ impl EpochState {
 
         let transaction_data = transaction.data().transaction_data();
         let (kind, signer, gas_data) = transaction_data.execution_parts();
+        let system_object_versions =
+            sui_types::base_types::SystemObjectVersions::from_inputs_or_latest_in_store(
+                checked_input_objects.inner(),
+                store.backing_store(),
+            );
         let (inner_temp_store, gas_status, effects, _timings, result) = self
             .executor
             .execute_transaction_to_effects_and_execution_error(
-                &tracking_store,
+                store.backing_store(),
                 &self.protocol_config,
                 self.execution_metrics.clone(),
                 false, // enable_expensive_checks
@@ -334,13 +325,11 @@ impl<S: SimulatorStore> SimulationInputLoader for SimulatorInputLoader<'_, S> {
         input_object_kinds: &[InputObjectKind],
         receiving_object_refs: &[ObjectRef],
         _epoch_id: EpochId,
-        include_forwarding_address_registry: bool,
-    ) -> SuiResult<SimulationInputObjects> {
+    ) -> SuiResult<(InputObjects, ReceivingObjects)> {
         self.0.read_objects_for_synchronous_execution(
             transaction_digest,
             input_object_kinds,
             receiving_object_refs,
-            include_forwarding_address_registry,
         )
     }
 }

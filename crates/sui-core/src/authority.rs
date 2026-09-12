@@ -283,9 +283,11 @@ pub struct AuthorityMetrics {
     tx_orders: IntCounter,
     total_certs: IntCounter,
     total_effects: IntCounter,
+    // TODO: this tracks consensus object tx, not just shared. Consider renaming.
     pub shared_obj_tx: IntCounter,
     sponsored_tx: IntCounter,
     num_input_objs: Histogram,
+    // TODO: this tracks consensus object count, not just shared. Consider renaming.
     num_shared_objects: Histogram,
     batch_size: Histogram,
 
@@ -452,7 +454,7 @@ impl AuthorityMetrics {
 
             shared_obj_tx: register_int_counter_with_registry!(
                 "num_shared_obj_tx",
-                "Number of transactions with declared shared input objects",
+                "Number of transactions involving shared objects",
                 registry,
             )
             .unwrap(),
@@ -473,7 +475,7 @@ impl AuthorityMetrics {
             .unwrap(),
             num_shared_objects: register_histogram_with_registry!(
                 "num_shared_objects",
-                "Number of declared shared input objects per TX",
+                "Number of shared input objects per TX",
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry,
             )
@@ -1884,6 +1886,7 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedExecutableTransaction,
         inner_temporary_store: &InnerTemporaryStore,
+        effects: &TransactionEffects,
     ) {
         // count signature by scheme, for zklogin and multisig
         if certificate.has_zklogin_sig() {
@@ -1895,13 +1898,8 @@ impl AuthorityState {
         self.metrics.total_effects.inc();
         self.metrics.total_certs.inc();
 
-        // Effects include implicit system reads, not just the transaction's declared shared inputs.
-        let shared_input_count = certificate
-            .transaction_data()
-            .kind()
-            .shared_input_objects()
-            .count();
-        if shared_input_count > 0 {
+        let consensus_object_count = effects.accessed_consensus_objects().len();
+        if consensus_object_count > 0 {
             self.metrics.shared_obj_tx.inc();
         }
 
@@ -1915,7 +1913,7 @@ impl AuthorityState {
             .observe(input_object_count as f64);
         self.metrics
             .num_shared_objects
-            .observe(shared_input_count as f64);
+            .observe(consensus_object_count as f64);
         self.metrics.batch_size.observe(
             certificate
                 .data()
@@ -2261,7 +2259,7 @@ impl AuthorityState {
                 error!(?tx_digest, "tx post processing failed: {e}");
             });
 
-        self.update_metrics(certificate, &inner_temp_store);
+        self.update_metrics(certificate, &inner_temp_store, &effects);
 
         let transaction_outputs = TransactionOutputs::build_transaction_outputs(
             certificate.clone().into_unsigned(),

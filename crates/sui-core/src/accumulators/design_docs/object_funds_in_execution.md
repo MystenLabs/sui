@@ -71,11 +71,6 @@ Key properties:
   transactions in the same consensus commit are invisible in the settled read. They are
   subtracted via `UnsettledObjectWithdrawals` (see §3).
 
-Latest execution exposes funds resolution and pinned system-root reads through one
-`ExecutionObjectResolver: RuntimeObjectResolver`. `TemporaryStore` owns both capabilities: funds
-resolution subtracts unsettled withdrawals, while system-root resolution delegates to its existing
-implicit-object loader. Historical object resolvers need no new methods or permissive defaults.
-
 ## 3. Unsettled-withdrawal tracking
 
 `UnsettledObjectWithdrawals` (in `accumulators/unsettled_object_withdrawals.rs`) is the
@@ -107,42 +102,8 @@ executed-but-unsettled withdrawals.
 |------|-----------------------------------------------|
 | Live consensus execution | Assigned versions (`AssignedVersions.system_object_versions`). |
 | Checkpoint execution / crash recovery | Back-filled from the settlement barrier's input version, with recorded `ReadOnlyRoot` versions checked for consistency. See `CheckpointTransactionData::new` in the [checkpoint executor](../../checkpoints/checkpoint_executor/mod.rs). |
-| Dev-inspect / dry-run | Input loading selects each registry root once: an explicit access uses its declared object; an exclusively implicit access captures the latest object and derives its version from that object. `TrackingBackingStore` retains the selection before execution without adding a declared input. The old post-execution simulate check is bypassed when the flag is on. Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
+| Dev-inspect / dry-run | Captured from the latest stored root before execution (`SystemObjectVersions::from_latest_in_store`). The old post-execution simulate check is bypassed when the flag is on. Implicit reads are tracked so the response includes the objects referenced by effects. **Caveat:** the unsettled-withdrawal view is empty, so simulation can succeed when committed execution would reject the withdrawal. |
 | `sui-replay-2` | Reconstructed from expected effects (`SystemObjectVersions::from_effects`). **Caveat:** unsettled in-commit withdrawals are *not* reconstructed in isolated replay (`unsettled = 0`), which can diverge from the original execution — see the TODO in `crates/sui-replay-2/src/execution.rs`. Mainnet enablement is blocked on this. |
-| Single-node benchmarks | Every transaction retains its entry from the consensus assignment map, including owned-only transactions executed in parallel. The in-memory path also uses these assignments when generating checkpoint effects; raw setup execution obtains assignments through the same version manager. |
-
-Accumulator settlement batches and barriers exclude the forwarding registry from their implicit inputs.
-Their outputs use the accumulator's independent clock; a registry Lamport input could make the barrier
-skip versions and violate the address-funds schedulers' consecutive-version contract. Consensus
-assignment, simulation, and Simulacrum preserve this exclusion.
-
-Sequencing merges the implicit read-only registry input with any explicit registry access before
-assigning versions. Explicit mutability wins; each eligible transaction has one registry assignment.
-`SystemObjectVersions` projects that same assignment, and a debug-fatal invariant rejects conflicting
-assigned and system versions. Effects-based reconstruction follows the same representation.
-Readiness resolves declared inputs against this assignment map, then includes any remaining implicit
-assignments in the same asynchronous input wait. A missing registry version cannot dispatch an
-ordinary transaction into the blocking execution pool. Exact-version storage loading remains
-synchronous; there is no separate registry-readiness state.
-
-Runtime loading first reuses a retained explicit input at the assigned version. Simulation and replay
-can therefore keep using that root after its stored version is pruned. A retained input at a different
-version is not a fallback for the assigned root.
-
-For an exclusively implicit registry read, input loading retains the selected object itself in
-`TrackingBackingStore`. There is no separate version-selection/materialization gap; the retained
-exact-version object survives subsequent pruning.
-These retained reads are not added to declared inputs, so their storage-read gas treatment is unchanged.
-
-Shared-input metrics classify the transaction's declared inputs, not its effects. Mandatory implicit
-registry reads therefore do not turn an owned-only transaction into a shared-input transaction;
-explicit registry inputs still count.
-
-Forwarding resolution and user registry inputs activate at protocol 138 on devnet/Unknown only.
-Both mutable and immutable registry arguments require the feature flag, preserving pre-activation
-rejection even when the registry already exists. Protocol 137's frozen
-framework contains registry creation but not registration or resolution, so its configuration and
-bytecode snapshots must remain unchanged.
 
 ## 5. Failure and error semantics
 
@@ -158,8 +119,3 @@ bytecode snapshots must remain unchanged.
 - During committed validator/fullnode execution, a root that has not caught up locally is awaited,
   so temporary unavailability is invisible in effects. Dry-run reads do not wait and can instead
   produce a load error if the captured root version is unavailable.
-- An assigned forwarding registry must materialize before execution can produce effects, even when
-  the native is not invoked. A missing required version is an invariant failure: omitting its
-  read-only effect while retaining its Lamport contribution would make effects-based replay compute
-  a different timestamp. Simulation retains the selected implicit object during input loading, so
-  later pruning cannot make that root unavailable at execution.

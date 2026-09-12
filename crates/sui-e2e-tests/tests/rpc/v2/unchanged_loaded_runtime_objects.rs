@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use sui_macros::sim_test;
@@ -30,16 +29,6 @@ use crate::{stake_with_validator, transfer_coin};
 async fn test_unchanged_loaded_runtime_objects() {
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
-    let _guard =
-        sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_create_forwarding_address_registry_for_testing(true);
-            config.set_enable_forwarding_addresses_for_testing(true);
-            config.set_forwarding_address_resolve_cost_base_for_testing(52);
-            config.set_forwarding_address_resolve_cost_per_byte_for_testing(
-                config.obj_access_cost_read_per_byte(),
-            );
-            config
-        });
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(1)
         .build()
@@ -151,16 +140,10 @@ async fn test_unchanged_loaded_runtime_objects() {
         "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1"
     );
 
+    assert_eq!(t.effects().unchanged_consensus_objects().len(), 1);
     assert_eq!(
-        t.effects()
-            .unchanged_consensus_objects()
-            .iter()
-            .map(|object| object.object_id())
-            .collect::<BTreeSet<_>>(),
-        BTreeSet::from([
-            "0x0000000000000000000000000000000000000000000000000000000000000005",
-            "0x00000000000000000000000000000000000000000000000000000000000000fa",
-        ])
+        t.effects().unchanged_consensus_objects()[0].object_id(),
+        "0x0000000000000000000000000000000000000000000000000000000000000005"
     );
 }
 

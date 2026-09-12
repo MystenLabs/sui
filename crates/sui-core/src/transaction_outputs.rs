@@ -214,11 +214,6 @@ pub fn unchanged_loaded_runtime_objects(
         unchanged_loaded_runtime_objects.remove(&change.id);
     }
 
-    // Consensus objects are already represented in unchanged_consensus_objects.
-    for (object_id, _) in effects.unchanged_consensus_objects() {
-        unchanged_loaded_runtime_objects.remove(&object_id);
-    }
-
     unchanged_loaded_runtime_objects
         .into_iter()
         .map(|(id, v)| ObjectKey(id, v))

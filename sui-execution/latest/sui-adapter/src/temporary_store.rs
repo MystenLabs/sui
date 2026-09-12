@@ -36,7 +36,6 @@ use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapp
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
-    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -144,7 +143,7 @@ pub struct TemporaryStore<'backing> {
 
     /// System objects implicitly read during execution, keyed by object ID, with the version (and its
     /// digest) at which they were read.
-    /// Interior-mutable because system-object reads happen behind `&self`.
+    /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 
     unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
@@ -162,7 +161,6 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
-        transaction_dependencies: &mut BTreeSet<TransactionDigest>,
         transaction: (&TransactionKind, &GasData, SuiAddress),
         unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
@@ -176,7 +174,6 @@ impl<'backing> TemporaryStore<'backing> {
             protocol_config,
             cur_epoch,
             system_object_versions,
-            Some(transaction_dependencies),
             post_execution_check_inputs,
             unsettled_object_funds,
         )
@@ -195,7 +192,6 @@ impl<'backing> TemporaryStore<'backing> {
             protocol_config,
             0,
             SystemObjectVersions::empty(),
-            None,
             PostExecutionCheckInputs {
                 is_genesis: true,
                 ..Default::default()
@@ -214,21 +210,13 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
-        transaction_dependencies: Option<&mut BTreeSet<TransactionDigest>>,
         post_execution_check_inputs: PostExecutionCheckInputs,
         unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
 
-        let mut lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
-        if let Some(registry_version) = system_object_versions
-            .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-            .map(|version| version.version)
-        {
-            lamport_timestamp =
-                lamport_timestamp.max(SequenceNumber::lamport_increment([registry_version]));
-        }
+        let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
         let stream_ended_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
         #[cfg(debug_assertions)]
@@ -248,7 +236,7 @@ impl<'backing> TemporaryStore<'backing> {
                     .is_none()
             );
         }
-        let temporary_store = Self {
+        Self {
             store,
             tx_digest,
             input_objects: objects,
@@ -268,22 +256,7 @@ impl<'backing> TemporaryStore<'backing> {
             system_object_versions,
             loaded_system_objects: RefCell::new(BTreeMap::new()),
             unsettled_object_funds,
-        };
-        // An assigned registry participates in Lamport ordering even if resolution is not invoked.
-        // Materialize it through the same loader used at runtime so effects-based replay retains it.
-        if temporary_store
-            .system_object_versions
-            .get(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-            .is_some()
-        {
-            let registry = temporary_store
-                .load_implicitly_read_system_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-                .expect("assigned forwarding registry must be available before execution");
-            if let Some(dependencies) = transaction_dependencies {
-                dependencies.insert(registry.previous_transaction);
-            }
         }
-        temporary_store
     }
 
     /// Checks that the system object `object_id` is available at the version this transaction
@@ -302,16 +275,11 @@ impl<'backing> TemporaryStore<'backing> {
                 return None;
             }
         };
-        // Simulation and replay can retain an exact input after storage has pruned that version.
         let object = self
-            .input_objects
-            .get(object_id)
-            .filter(|object| object.version() == version.version)
-            .cloned()
-            .or_else(|| {
-                self.store
-                    .load_implicitly_read_system_object(object_id, version)
-            })?;
+            .store
+            // If this transaction needs to read an implicit system object,
+            // the version must be assigned before execution.
+            .load_implicitly_read_system_object(object_id, version)?;
         // Record the read version so it can be emitted into effects as a read-only consensus object and
         // reproduced on replay.
         self.loaded_system_objects
@@ -1532,60 +1500,12 @@ impl BackingPackageStore for TemporaryStore<'_> {
 #[cfg(test)]
 mod system_object_resolver_tests {
     use super::*;
-    use std::panic::{AssertUnwindSafe, catch_unwind};
+    use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
     use sui_types::base_types::ConsensusObjectVersion;
-    use sui_types::effects::{TransactionEffectsAPI, UnchangedConsensusKind};
     use sui_types::in_memory_storage::InMemoryStorage;
-    use sui_types::storage::TrackingBackingStore;
-    use sui_types::transaction::{
-        InputObjectKind, ObjectReadResult, ObjectReadResultKind, SharedObjectMutability,
-    };
 
     #[test]
-    #[should_panic]
-    fn missing_mandatory_system_object_cannot_produce_effects() {
-        let initial_shared_version = SequenceNumber::from_u64(1);
-        let backing_store = InMemoryStorage::new(vec![Object::with_id_owner_version_for_testing(
-            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-            SequenceNumber::from_u64(11),
-            Owner::Shared {
-                initial_shared_version,
-            },
-        )]);
-        let config = ProtocolConfig::get_for_max_version_UNSAFE();
-        let digest = TransactionDigest::new([8; 32]);
-        let mut dependencies = BTreeSet::new();
-        let store = TemporaryStore::new_with_input_objects(
-            &backing_store,
-            InputObjects::new(vec![]),
-            vec![],
-            digest,
-            &config,
-            0,
-            SystemObjectVersions::new(
-                None,
-                Some(ConsensusObjectVersion {
-                    initial_shared_version,
-                    version: SequenceNumber::from_u64(10),
-                }),
-            ),
-            Some(&mut dependencies),
-            PostExecutionCheckInputs::default(),
-            &EmptyUnsettledObjectFunds,
-        );
-        let _ = store.into_effects(
-            vec![],
-            &digest,
-            dependencies,
-            GasCostSummary::default(),
-            ExecutionStatus::Success,
-            None,
-            0,
-        );
-    }
-
-    #[test]
-    fn assigned_system_object_cannot_fall_back_to_missing_or_latest() {
+    fn runtime_system_object_requires_an_assigned_version() {
         let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
         let initial_shared_version = SequenceNumber::from_u64(1);
         let version = SequenceNumber::from_u64(10);
@@ -1599,7 +1519,7 @@ mod system_object_resolver_tests {
         let backing_store = InMemoryStorage::new(vec![object.clone()]);
         let config = ProtocolConfig::get_for_max_version_UNSAFE();
         let load = |assigned_version: Option<SequenceNumber>| {
-            let store = TemporaryStore::new_with_input_objects(
+            TemporaryStore::new_with_input_objects(
                 &backing_store,
                 InputObjects::new(vec![]),
                 vec![],
@@ -1613,14 +1533,12 @@ mod system_object_resolver_tests {
                         version,
                     }),
                 ),
-                None,
                 PostExecutionCheckInputs::default(),
                 &EmptyUnsettledObjectFunds,
-            );
-            store.load_runtime_system_object(&id)
+            )
+            .load_runtime_system_object(&id)
         };
 
-        // A root in storage is not permission to read it without a sequenced version.
         assert!(load(None).unwrap().is_none());
         assert_eq!(
             load(Some(version))
@@ -1628,147 +1546,6 @@ mod system_object_resolver_tests {
                 .unwrap()
                 .compute_object_reference(),
             object.compute_object_reference(),
-        );
-        // A pruned pin must not be mistaken for an unregistered master or read a newer root.
-        assert!(
-            catch_unwind(AssertUnwindSafe(|| {
-                load(Some(SequenceNumber::from_u64(9)))
-            }))
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn retained_system_object_survives_backing_store_pruning() {
-        let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
-        let initial_shared_version = SequenceNumber::from_u64(1);
-        let registry = |version| {
-            Object::with_id_owner_version_for_testing(
-                id,
-                SequenceNumber::from_u64(version),
-                Owner::Shared {
-                    initial_shared_version,
-                },
-            )
-        };
-        let retained_root = registry(10);
-        let inputs = InputObjects::new(vec![ObjectReadResult::new(
-            InputObjectKind::SharedMoveObject {
-                id,
-                initial_shared_version,
-                mutability: SharedObjectMutability::Mutable,
-            },
-            ObjectReadResultKind::Object(retained_root.clone()),
-        )]);
-        // Only the new version remains in storage after the explicit input was loaded.
-        let backing_store = InMemoryStorage::new(vec![registry(11)]);
-        let config = ProtocolConfig::get_for_max_version_UNSAFE();
-        let load = |versions| {
-            TemporaryStore::new_with_input_objects(
-                &backing_store,
-                inputs.clone(),
-                vec![],
-                TransactionDigest::default(),
-                &config,
-                0,
-                versions,
-                None,
-                PostExecutionCheckInputs::default(),
-                &EmptyUnsettledObjectFunds,
-            )
-            .load_runtime_system_object(&id)
-        };
-        let versions = SystemObjectVersions::new(
-            None,
-            Some(ConsensusObjectVersion {
-                initial_shared_version,
-                version: retained_root.version(),
-            }),
-        );
-        assert_eq!(
-            load(versions).unwrap().unwrap().compute_object_reference(),
-            retained_root.compute_object_reference(),
-        );
-        // A retained object is not a substitute for a different assigned version.
-        assert!(
-            catch_unwind(AssertUnwindSafe(|| {
-                load(SystemObjectVersions::new(
-                    None,
-                    Some(ConsensusObjectVersion {
-                        initial_shared_version,
-                        version: SequenceNumber::from_u64(9),
-                    }),
-                ))
-            }))
-            .is_err()
-        );
-    }
-
-    #[test]
-
-    fn selected_implicit_system_object_survives_backing_store_pruning() {
-        let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
-        let initial_shared_version = SequenceNumber::from_u64(1);
-        let mut root = Object::with_id_owner_version_for_testing(
-            id,
-            SequenceNumber::from_u64(10),
-            Owner::Shared {
-                initial_shared_version,
-            },
-        );
-        root.previous_transaction = TransactionDigest::new([7; 32]);
-        // Input preparation retained version 10 before storage advanced to version 11.
-        let backing_store = InMemoryStorage::new(vec![Object::with_id_owner_version_for_testing(
-            id,
-            SequenceNumber::from_u64(11),
-            Owner::Shared {
-                initial_shared_version,
-            },
-        )]);
-        let tracking_store = TrackingBackingStore::new(&backing_store);
-        tracking_store.retain_object(root.clone());
-        let versions = SystemObjectVersions::new(
-            None,
-            Some(ConsensusObjectVersion {
-                initial_shared_version,
-                version: root.version(),
-            }),
-        );
-        let config = ProtocolConfig::get_for_max_version_UNSAFE();
-        let digest = TransactionDigest::new([8; 32]);
-        let mut dependencies = BTreeSet::new();
-        let store = TemporaryStore::new_with_input_objects(
-            &tracking_store,
-            InputObjects::new(vec![]),
-            vec![],
-            digest,
-            &config,
-            0,
-            versions,
-            Some(&mut dependencies),
-            PostExecutionCheckInputs::default(),
-            &EmptyUnsettledObjectFunds,
-        );
-        let (_, effects) = store.into_effects(
-            vec![],
-            &digest,
-            dependencies,
-            GasCostSummary::default(),
-            ExecutionStatus::Success,
-            None,
-            0,
-        );
-        assert_eq!(
-            effects.unchanged_consensus_objects(),
-            vec![(
-                id,
-                UnchangedConsensusKind::ReadOnlyRoot((root.version(), root.digest())),
-            )],
-        );
-        assert_eq!(effects.dependencies(), &[root.previous_transaction]);
-        assert_eq!(
-            effects.lamport_version(),
-            SequenceNumber::lamport_increment([root.version()]),
         );
     }
 }

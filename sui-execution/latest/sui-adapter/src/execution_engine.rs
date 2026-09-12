@@ -262,7 +262,6 @@ pub(crate) mod checked {
             protocol_config,
             *epoch_id,
             system_object_versions,
-            &mut transaction_dependencies,
             (&transaction_kind, &gas_data, transaction_signer),
             unsettled_object_funds,
         );

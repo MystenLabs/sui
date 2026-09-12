@@ -13,7 +13,7 @@ use sui_config::{
 use sui_execution::Executor;
 use sui_transaction_checks::{check_dev_inspect_input, check_transaction_input};
 use sui_types::{
-    base_types::{ConsensusObjectVersion, EpochId, ObjectID, ObjectRef, SystemObjectVersions},
+    base_types::{EpochId, ObjectID, ObjectRef, SystemObjectVersions},
     coin_reservation::{CoinReservationResolverTrait, ParsedDigest},
     digests::{ChainIdentifier, TransactionDigest},
     effects::TransactionEffectsAPI,
@@ -44,60 +44,16 @@ use crate::{
     transaction_outputs::unchanged_loaded_runtime_objects,
 };
 
-/// Inputs selected for an uncommitted execution attempt.
-///
-/// `input_objects` contains only declared inputs. The retained registry is supplied through the
-/// backing store so it cannot affect input validation or gas accounting.
-pub struct SimulationInputObjects {
-    pub input_objects: InputObjects,
-    pub receiving_objects: ReceivingObjects,
-    pub system_object_versions: SystemObjectVersions,
-    pub retained_forwarding_address_registry: Option<Object>,
-}
-
-impl SimulationInputObjects {
-    pub fn new(
-        input_objects: InputObjects,
-        receiving_objects: ReceivingObjects,
-        accumulator_version: Option<ConsensusObjectVersion>,
-        forwarding_address_registry_version: Option<ConsensusObjectVersion>,
-        retained_forwarding_address_registry: Option<Object>,
-    ) -> Self {
-        Self {
-            input_objects,
-            receiving_objects,
-            system_object_versions: SystemObjectVersions::new(
-                accumulator_version,
-                forwarding_address_registry_version,
-            ),
-            retained_forwarding_address_registry,
-        }
-    }
-
-    pub fn consensus_object_version(object: &Object) -> ConsensusObjectVersion {
-        ConsensusObjectVersion {
-            initial_shared_version: object
-                .owner()
-                .start_version()
-                .expect("implicitly read system objects must be consensus objects"),
-            version: object.version(),
-        }
-    }
-}
-
 /// Load transaction inputs for simulation without preparing them for committed execution.
-///
-/// System-root selection is part of input loading so explicit and implicit registry accesses
-/// share the same object version.
 pub trait SimulationInputLoader {
+    /// Load the input and receiving objects at the state used for simulation.
     fn read_objects_for_simulation(
         &self,
         transaction_digest: &TransactionDigest,
         input_object_kinds: &[InputObjectKind],
         receiving_object_refs: &[ObjectRef],
         epoch_id: EpochId,
-        include_forwarding_address_registry: bool,
-    ) -> SuiResult<SimulationInputObjects>;
+    ) -> SuiResult<(InputObjects, ReceivingObjects)>;
 }
 
 /// Simulate a transaction without committing its outputs.
@@ -189,19 +145,11 @@ pub fn simulate_transaction(
     let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
 
     let transaction_digest = transaction.digest();
-    let include_forwarding_address_registry = protocol_config.enable_forwarding_addresses()
-        && !transaction.kind().is_accumulator_settle_tx();
-    let SimulationInputObjects {
-        mut input_objects,
-        receiving_objects,
-        system_object_versions,
-        retained_forwarding_address_registry,
-    } = input_loader.read_objects_for_simulation(
+    let (mut input_objects, receiving_objects) = input_loader.read_objects_for_simulation(
         &transaction_digest,
         &input_object_kinds,
         &receiving_object_refs,
         validity_check_context.epoch,
-        include_forwarding_address_registry,
     )?;
 
     // Add mock gas to input objects after loading (it doesn't exist in the store).
@@ -253,15 +201,16 @@ pub fn simulate_transaction(
     };
 
     let tracking_store = TrackingBackingStore::new(backing_store);
-    if let Some(registry) = retained_forwarding_address_registry {
-        tracking_store.retain_object(registry);
-    }
 
     // Clone inputs for potential retry if object funds check fails post-execution.
     let cloned_input_objects = checked_input_objects.clone();
     let cloned_gas = gas_data.clone();
     let cloned_kind = kind.clone();
     let tx_digest = transaction_digest;
+    let system_object_versions = SystemObjectVersions::from_inputs_or_latest_in_store(
+        checked_input_objects.inner(),
+        backing_store,
+    );
     let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
         &tracking_store,
         protocol_config,

@@ -241,7 +241,7 @@ impl BenchmarkContext {
         assigned_versions: AssignedTxAndVersions,
         print_sample_tx: bool,
     ) {
-        let mut assigned_versions = assigned_versions.into_map();
+        let assigned_versions = assigned_versions.into_map();
         if print_sample_tx {
             self.execute_sample_transaction(&transactions, &assigned_versions)
                 .await;
@@ -275,12 +275,11 @@ impl BenchmarkContext {
             let tasks: FuturesUnordered<_> = transactions
                 .into_iter()
                 .map(|tx| {
-                    let versions = assigned_versions.remove(&tx.key()).unwrap();
                     let validator = self.validator();
                     let component = self.benchmark_component;
                     tokio::spawn(async move {
                         validator
-                            .execute_transaction(tx, &versions, component)
+                            .execute_transaction(tx, &AssignedVersions::empty(), component)
                             .await
                     })
                 })
@@ -364,7 +363,10 @@ impl BenchmarkContext {
         // We must use the first transaction in case there are shared objects
         // and the transactions must be executed in order.
         let sample = &transactions[0];
-        let versions = assigned_versions.get(&sample.key()).unwrap();
+        let versions = assigned_versions
+            .get(&sample.key())
+            .cloned()
+            .unwrap_or_else(AssignedVersions::empty);
 
         info!(
             "Sample transaction digest={:?}: {:?}",
@@ -374,7 +376,7 @@ impl BenchmarkContext {
         let sandbox = self.validator.create_in_memory_store();
         let effects = self
             .validator
-            .execute_transaction_in_memory(sandbox, sample.clone(), versions)
+            .execute_transaction_in_memory(sandbox, sample.clone(), &versions)
             .await;
         info!("Sample effects: {:?}\n\n", effects);
         assert!(effects.status().is_ok());
@@ -462,7 +464,7 @@ impl BenchmarkContext {
         &self,
         store: InMemoryObjectStore,
         transactions: Vec<Transaction>,
-        mut assigned_versions: HashMap<TransactionKey, AssignedVersions>,
+        assigned_versions: HashMap<TransactionKey, AssignedVersions>,
     ) -> Vec<TransactionEffects> {
         let is_consensus_tx = transactions.iter().any(|tx| tx.is_consensus_tx());
         if is_consensus_tx {
@@ -485,12 +487,11 @@ impl BenchmarkContext {
             let tasks: FuturesUnordered<_> = transactions
                 .into_iter()
                 .map(|tx| {
-                    let versions = assigned_versions.remove(&tx.key()).unwrap();
                     let store = store.clone();
                     let validator = self.validator();
                     tokio::spawn(async move {
                         validator
-                            .execute_transaction_in_memory(store, tx, &versions)
+                            .execute_transaction_in_memory(store, tx, &AssignedVersions::empty())
                             .await
                     })
                 })
@@ -589,100 +590,6 @@ impl BenchmarkContext {
                 })
                 .collect();
             account.gas_objects = Arc::new(refreshed_gas_objects);
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::command::WorkloadKind;
-    use sui_macros::sim_test;
-    use sui_protocol_config::ProtocolConfig;
-    use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
-    use sui_types::effects::UnchangedConsensusKind;
-
-    #[sim_test]
-    async fn owned_baseline_benchmark_preserves_registry() {
-        assert_owned_benchmark_preserves_registry(Component::Baseline).await;
-    }
-
-    #[sim_test]
-    async fn owned_in_memory_benchmark_preserves_registry() {
-        assert_owned_benchmark_preserves_registry(Component::ExecutionOnly).await;
-    }
-
-    async fn assert_owned_benchmark_preserves_registry(component: Component) {
-        // Protocol overrides are process-global when native tests share a test binary.
-        static PROTOCOL_CONFIG_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-        let _lock = PROTOCOL_CONFIG_LOCK.lock().await;
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_create_forwarding_address_registry_for_testing(true);
-            config.set_enable_forwarding_addresses_for_testing(true);
-            config.set_forwarding_address_resolve_cost_base_for_testing(52);
-            config.set_forwarding_address_resolve_cost_per_byte_for_testing(
-                config.obj_access_cost_read_per_byte(),
-            );
-            config
-        });
-        let workload = Workload::new(
-            2,
-            WorkloadKind::PTB {
-                num_transfers: 1,
-                use_native_transfer: true,
-                num_dynamic_fields: 0,
-                computation: 0,
-                num_shared_objects: 0,
-                num_mints: 0,
-                nft_size: 32,
-                use_batch_mint: false,
-            },
-        );
-        let mut ctx = BenchmarkContext::new(workload.clone(), component, false).await;
-        let generator = workload.create_tx_generator(&mut ctx).await;
-        let transactions = ctx.generate_transactions(generator).await;
-        let state = ctx.validator.get_validator();
-
-        let registry = state
-            .get_object_cache_reader()
-            .get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-            .unwrap();
-        let assigned_versions = ctx
-            .validator
-            .assigned_shared_object_versions(&transactions)
-            .await;
-        let effects = if matches!(component, Component::Baseline) {
-            let digests: Vec<_> = transactions.iter().map(|tx| *tx.digest()).collect();
-            ctx.benchmark_transaction_execution(transactions, assigned_versions, false)
-                .await;
-            digests
-                .iter()
-                .map(|digest| {
-                    state
-                        .get_transaction_cache_reader()
-                        .get_executed_effects(digest)
-                        .unwrap()
-                })
-                .collect()
-        } else {
-            ctx.execute_transactions_in_memory(
-                ctx.validator.create_in_memory_store(),
-                transactions,
-                assigned_versions.into_map(),
-            )
-            .await
-        };
-        for effects in effects {
-            assert_eq!(
-                effects
-                    .unchanged_consensus_objects()
-                    .into_iter()
-                    .find(|(id, _)| *id == registry.id()),
-                Some((
-                    registry.id(),
-                    UnchangedConsensusKind::ReadOnlyRoot((registry.version(), registry.digest())),
-                )),
-            );
         }
     }
 }
