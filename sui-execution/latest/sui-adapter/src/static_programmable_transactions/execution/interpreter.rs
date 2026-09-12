@@ -29,6 +29,7 @@ use sui_types::{
     error::ExecutionErrorTrait,
     execution::{ExecutionTiming, ResultWithTimings},
     execution_status::{ExecutionErrorKind, PackageUpgradeError},
+    forwarding_address::ForwardingAddress,
     metrics::ExecutionMetrics,
     object::Owner,
 };
@@ -200,6 +201,14 @@ fn execute_command<Mode: ExecutionMode>(
             if is_gas_coin_send_funds {
                 assert_invariant!(arguments.len() == 2, "coin::send_funds should have 2 args");
                 let recipient = arguments.last().unwrap().to_address()?;
+                if context.env.protocol_config.enable_forwarding_addresses()
+                    && ForwardingAddress::parse(recipient.into()).is_some()
+                {
+                    return Err(Mode::Error::new_with_source(
+                        ExecutionErrorKind::FeatureNotYetSupported,
+                        "Sending the gas coin directly to a forwarding address is not supported",
+                    ));
+                }
                 context.record_gas_coin_transfer(GasCoinTransfer::SendFunds { recipient })?;
             }
             let res = context.vm_move_call(function, arguments, trace_builder_opt);

@@ -1794,6 +1794,10 @@ pub struct ProtocolConfig {
     package_original_package_id_impl_cost_base: Option<u64>,
     package_original_package_id_impl_cost_per_byte: Option<u64>,
 
+    // `forwarding_address` module
+    forwarding_address_resolve_cost_base: Option<u64>,
+    forwarding_address_resolve_cost_per_byte: Option<u64>,
+
     // `dynamic_field` module
     // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
     dynamic_field_hash_type_and_key_cost_base: Option<u64>,
@@ -2737,6 +2741,10 @@ impl ProtocolConfig {
 
             package_original_package_id_impl_cost_base: None,
             package_original_package_id_impl_cost_per_byte: None,
+
+            // `forwarding_address` module
+            forwarding_address_resolve_cost_base: None,
+            forwarding_address_resolve_cost_per_byte: None,
 
             // `dynamic_field` module
             // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -4804,6 +4812,9 @@ impl ProtocolConfig {
                 139 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_forwarding_addresses = true;
+                        cfg.forwarding_address_resolve_cost_base = Some(52);
+                        cfg.forwarding_address_resolve_cost_per_byte =
+                            Some(cfg.obj_access_cost_read_per_byte());
                     }
                 }
                 // Use this template when making changes:
