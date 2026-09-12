@@ -27,6 +27,7 @@ use self::{
         DynamicFieldHashTypeAndKeyCostParams, DynamicFieldRemoveChildObjectCostParams,
     },
     event::EventEmitCostParams,
+    forwarding_address::ForwardingAddressResolveCostParams,
     object::{BorrowUidCostParams, DeleteImplCostParams, RecordNewIdCostParams},
     package::PackageVersioningOriginalPackageIdImplCostParams,
     scratch::{
@@ -88,6 +89,7 @@ mod config;
 mod crypto;
 mod dynamic_field;
 pub mod event;
+mod forwarding_address;
 pub mod funds_accumulator;
 mod object;
 pub mod object_runtime;
@@ -118,6 +120,9 @@ pub struct NativesCostTable {
     // Package versioning
     pub package_original_package_id_impl_cost_params:
         PackageVersioningOriginalPackageIdImplCostParams,
+
+    // Forwarding address
+    pub forwarding_address_resolve_cost_params: ForwardingAddressResolveCostParams,
 
     // Dynamic field natives
     pub dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams,
@@ -261,6 +266,15 @@ impl NativesCostTable {
                         .package_original_package_id_impl_cost_per_byte_as_option()
                         .map(Into::into),
                 },
+
+            forwarding_address_resolve_cost_params: ForwardingAddressResolveCostParams {
+                base: protocol_config
+                    .forwarding_address_resolve_cost_base_as_option()
+                    .map(Into::into),
+                per_byte: protocol_config
+                    .forwarding_address_resolve_cost_per_byte_as_option()
+                    .map(Into::into),
+            },
 
             dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams {
                 dynamic_field_hash_type_and_key_cost_base: protocol_config
@@ -1129,6 +1143,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "funds_accumulator",
             "reserve_object_funds_for_withdrawal",
             make_native!(funds_accumulator::reserve_object_funds_for_withdrawal),
+        ),
+        (
+            "forwarding_address",
+            "resolve_impl",
+            make_native!(forwarding_address::resolve_impl),
         ),
         (
             "groth16",

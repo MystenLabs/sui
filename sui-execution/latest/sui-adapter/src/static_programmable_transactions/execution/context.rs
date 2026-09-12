@@ -419,7 +419,6 @@ where
         };
         let native_extensions = adapter::new_native_extensions(
             env.state_view,
-            env.state_view,
             input_object_map,
             !gas_charger.is_unmetered(),
             env.protocol_config,
