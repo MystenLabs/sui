@@ -174,8 +174,18 @@ macro_rules! assert_reachable_gated {
 #[cfg(all(test, not(msim)))]
 mod tests {
     use super::*;
-    use crate::{Chain, ProtocolVersion};
     use std::{path::Path, process::Command};
+
+    /// A config with the gating flag forced on or off.
+    ///
+    /// Pinning real protocol versions would couple this test to one flag's rollout schedule,
+    /// and would break once MIN_PROTOCOL_VERSION advances past them. The code under test only
+    /// ever sees a `ProtocolConfig`.
+    fn config_with_flag(enabled: bool) -> ProtocolConfig {
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_check_object_funds_withdraw_in_execution_for_testing(enabled);
+        config
+    }
 
     fn early_hit() {
         assert_reachable_gated!("gated reachability test: early", |pc| pc
@@ -265,7 +275,7 @@ mod tests {
         early_hit();
         assert_output(path, &expected[..2]);
 
-        let old = ProtocolConfig::get_for_version(ProtocolVersion::new(136), Chain::Unknown);
+        let old = config_with_flag(false);
         register_reachability_for_config(&old);
         register_reachability_for_config(&old);
         assert_output(path, &expected[..3]);
@@ -274,7 +284,7 @@ mod tests {
         legacy();
         assert_output(path, &expected[..4]);
 
-        let new = ProtocolConfig::get_for_version(ProtocolVersion::new(137), Chain::Unknown);
+        let new = config_with_flag(true);
         register_reachability_for_config(&new);
         register_reachability_for_config(&new);
         assert_output(path, &expected[..5]);
