@@ -845,6 +845,58 @@ mod test {
         execution_scheduler.check_empty_for_testing().await;
     }
 
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn execution_scheduler_waits_for_implicit_registry() {
+        let (owner, _keypair) = deterministic_random_account_key();
+        let gas = Object::with_id_owner_for_testing(ObjectID::random(), owner);
+        let state = init_state_with_objects(vec![gas.clone()]).await;
+        let (execution_scheduler, mut rx_ready_certificates) = make_execution_scheduler(&state);
+        let epoch_store = state.epoch_store_for_testing();
+        let mut registry = state
+            .get_object_cache_reader()
+            .get_object(&sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+            .unwrap();
+        let registry_key = (registry.id(), registry.owner().start_version().unwrap());
+        let required_version = 1000.into();
+        let transaction = make_transaction(gas, vec![]);
+        let execution_env = ExecutionEnv::new().with_assigned_versions(
+            AssignedVersions::new_for_testing(vec![(registry_key, required_version)], None),
+        );
+        let scheduling = execution_scheduler.clone().schedule_transaction(
+            transaction.clone(),
+            execution_env,
+            &epoch_store,
+        );
+        tokio::pin!(scheduling);
+
+        // An older registry root must not dispatch an implicit reader into the blocking pool.
+        assert!(futures::poll!(scheduling.as_mut()).is_pending());
+        assert!(matches!(
+            rx_ready_certificates.try_recv(),
+            Err(TryRecvError::Empty)
+        ));
+
+        registry
+            .data
+            .try_as_move_mut()
+            .unwrap()
+            .increment_version_to(required_version);
+        state
+            .get_cache_writer()
+            .write_object_entry_for_test(registry);
+
+        tokio::time::timeout(Duration::from_secs(1), scheduling)
+            .await
+            .unwrap();
+        let pending_certificate = rx_ready_certificates.recv().await.unwrap();
+        assert_eq!(
+            pending_certificate.certificate.digest(),
+            transaction.digest()
+        );
+        drop(pending_certificate);
+        execution_scheduler.check_empty_for_testing().await;
+    }
+
     // Tests when objects become available, correct set of transactions can be sent to execute.
     // Specifically, we have following setup,
     //         shared_object     shared_object_2

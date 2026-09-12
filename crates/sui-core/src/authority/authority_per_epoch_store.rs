@@ -1958,19 +1958,18 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    /// Resolves InputObjectKinds into InputKeys. `assigned_versions` is used to map shared inputs
-    /// to specific object versions.
+    /// Resolves declared inputs and implicit shared assignments into readiness keys.
     pub(crate) fn get_input_object_keys(
         &self,
         key: &TransactionKey,
         objects: &[InputObjectKind],
         assigned_versions: &AssignedVersions,
     ) -> BTreeSet<InputKey> {
-        let assigned_shared_versions = assigned_versions
+        let mut assigned_shared_versions = assigned_versions
             .iter()
             .cloned()
             .collect::<BTreeMap<_, _>>();
-        objects
+        let mut input_keys: BTreeSet<_> = objects
             .iter()
             .map(|kind| {
                 match kind {
@@ -1981,7 +1980,7 @@ impl AuthorityPerEpochStore {
                     } => {
                         // If we found assigned versions, but they are missing the assignment for
                         // this object, it indicates a serious inconsistency!
-                        let Some(version) = assigned_shared_versions.get(&(*id, *initial_shared_version)) else {
+                        let Some(version) = assigned_shared_versions.remove(&(*id, *initial_shared_version)) else {
                             panic!(
                                 "Shared object version should have been assigned. key: {key:?}, \
                                 obj id: {id:?}, initial_shared_version: {initial_shared_version:?}, \
@@ -1990,7 +1989,7 @@ impl AuthorityPerEpochStore {
                         };
                         InputKey::VersionedObject {
                             id: FullObjectID::new(*id, Some(*initial_shared_version)),
-                            version: *version,
+                            version,
                         }
                     }
                     InputObjectKind::MovePackage(id) => InputKey::Package { id: *id },
@@ -2000,7 +1999,15 @@ impl AuthorityPerEpochStore {
                     },
                 }
             })
-            .collect()
+            .collect();
+        // Implicit assignments must wait asynchronously too, before occupying an execution thread.
+        input_keys.extend(assigned_shared_versions.into_iter().map(
+            |((id, initial_shared_version), version)| InputKey::VersionedObject {
+                id: FullObjectID::new(id, Some(initial_shared_version)),
+                version,
+            },
+        ));
+        input_keys
     }
 
     pub fn get_last_consensus_stats(&self) -> SuiResult<ExecutionIndicesWithStatsV2> {

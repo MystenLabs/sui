@@ -120,6 +120,10 @@ Sequencing merges the implicit read-only registry input with any explicit regist
 assigning versions. Explicit mutability wins; each eligible transaction has one registry assignment.
 `SystemObjectVersions` projects that same assignment, and a debug-fatal invariant rejects conflicting
 assigned and system versions. Effects-based reconstruction follows the same representation.
+Readiness resolves declared inputs against this assignment map, then includes any remaining implicit
+assignments in the same asynchronous input wait. A missing registry version cannot dispatch an
+ordinary transaction into the blocking execution pool. Exact-version storage loading remains
+synchronous; there is no separate registry-readiness state.
 
 Runtime loading first reuses a retained explicit input at the assigned version. Simulation and replay
 can therefore keep using that root after its stored version is pruned. A retained input at a different
