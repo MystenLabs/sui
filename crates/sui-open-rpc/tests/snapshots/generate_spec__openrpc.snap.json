@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "137",
+              "maxSupportedProtocolVersion": "138",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1369,6 +1369,7 @@
                 "enable_coin_reservation_obj_refs": false,
                 "enable_display_registry": false,
                 "enable_effects_v2": false,
+                "enable_forwarding_addresses": false,
                 "enable_gasless": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
@@ -1718,6 +1719,8 @@
                   "u64": "2"
                 },
                 "execution_version": null,
+                "forwarding_address_resolve_cost_base": null,
+                "forwarding_address_resolve_cost_per_byte": null,
                 "gas_budget_based_txn_cost_absolute_cap_commit_count": null,
                 "gas_budget_based_txn_cost_cap_factor": null,
                 "gas_model_version": {
@@ -2282,6 +2285,7 @@
                 "enable_coin_reservation_obj_refs": false,
                 "enable_display_registry": false,
                 "enable_effects_v2": false,
+                "enable_forwarding_addresses": false,
                 "enable_gasless": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
