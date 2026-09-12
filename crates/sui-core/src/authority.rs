@@ -71,6 +71,7 @@ use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
+use sui_protocol_config::assert_reachable_gated;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::accumulator_root::UnsettledObjectFundsRead;
 use sui_types::base_types::SystemObjectVersions;
@@ -2108,7 +2109,8 @@ impl AuthorityState {
                     epoch_store,
                 )
             {
-                assert_reachable!("retry object withdraw later");
+                assert_reachable_gated!("retry object withdraw later", |pc| !pc
+                    .check_object_funds_withdraw_in_execution());
                 return ExecutionOutput::RetryLater;
             }
         } else {
@@ -2131,7 +2133,8 @@ impl AuthorityState {
                     if sui_types::funds_accumulator::is_object_funds_insufficient_abort(
                         &failure.error,
                     ) {
-                        assert_reachable!("object funds insufficient in execution");
+                        assert_reachable_gated!("object funds insufficient in execution", |pc| pc
+                            .check_object_funds_withdraw_in_execution());
                         self.object_funds_checker_metrics
                             .in_execution_check_result
                             .with_label_values(&["insufficient"])
