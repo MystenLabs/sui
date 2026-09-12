@@ -1,0 +1,28 @@
+[package]
+name = "sui-fork-e2e-tests"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[lints]
+workspace = true
+
+[[test]]
+name = "shell_tests"
+harness = false
+
+[dependencies]
+anyhow.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+sui-config.workspace = true
+
+[dev-dependencies]
+datatest-stable.workspace = true
+fs_extra.workspace = true
+move-command-line-common.workspace = true
+regex.workspace = true

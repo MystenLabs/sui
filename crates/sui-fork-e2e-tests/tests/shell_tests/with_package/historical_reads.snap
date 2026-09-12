@@ -1,0 +1,121 @@
+---
+source: crates/sui-fork-e2e-tests/tests/shell_tests.rs
+---
+----- script -----
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Publish a package and mutate a shared object on the localnet, fork at that point, and check that
+# the fork serves that history, executes against it, and ignores what the localnet does next.
+set -euo pipefail
+source ./lib.sh
+localnet_setup
+
+# object_bcs_field <where> <object id> <jq expression>: like object_field, over `object --bcs`,
+# whose `.data.Move.contents` holds the raw BCS bytes.
+object_bcs_field() { "$1" object "$2" --bcs --json | jq -r "$3"; }
+
+# counter_value <where> <counter id>: the `value` field of a Counter, decoded from the last eight
+# bytes of its BCS. The JSON rendering is not used because the fork cannot resolve the layout of a
+# package it only fetched on demand (see the known gaps in crates/sui-fork/design/storage.md), so
+# `object --json` returns raw contents on the fork and rendered fields on the localnet.
+counter_value() {
+  object_bcs_field "$1" "$2" \
+    '.data.Move.contents[-8:] as $b | reduce range(0; 8) as $i (0; . + $b[$i] * pow(2; 8 * $i))'
+}
+
+sender=$(on_localnet active-address)
+
+echo "=== localnet: publish, create, and increment before forking ==="
+add_env_to_toml counter localnet on_localnet
+run_json publish.json on_localnet publish counter --gas-budget 100000000
+package=$(published_package_id publish.json)
+run_json create.json on_localnet call --package "$package" --module counter --function create \
+  --gas-budget 50000000
+counter=$(created_object_id create.json "::counter::Counter")
+run_json increment.json on_localnet call --package "$package" --module counter \
+  --function increment --args "$counter" --gas-budget 50000000
+increment_digest=$(tx_digest_of increment.json)
+fork_point=$(wait_for_graphql_tx "$increment_digest")
+assert_eq "$(counter_value on_localnet "$counter")" 1 \
+  "the counter is 1 on the localnet before the fork"
+
+echo "=== fork at the increment's checkpoint ==="
+fork_start --checkpoint "$fork_point" --address "$sender"
+fork_env
+assert_eq "$FORK_CHECKPOINT" "$fork_point" "the fork point is the requested checkpoint"
+on_fork tx-block "$increment_digest" --json > fork_increment.json
+assert_eq "$(jq -r .digest fork_increment.json)" "$increment_digest" \
+  "the pre-fork transaction resolves on the fork"
+assert_eq "$(tx_status_of fork_increment.json)" success \
+  "the pre-fork transaction's effects are served"
+assert_eq "$(object_field on_fork "$counter" '[.version, .digest] | join(" ")')" \
+  "$(object_field on_localnet "$counter" '[.version, .digest] | join(" ")')" \
+  "the counter's version and digest match the localnet at the fork point"
+assert_eq "$(object_bcs_field on_fork "$counter" '.data | tojson')" \
+  "$(object_bcs_field on_localnet "$counter" '.data | tojson')" \
+  "the counter's contents match the localnet at the fork point"
+assert_eq "$(object_field on_fork "$package" .objType)" package \
+  "the pre-fork package resolves on the fork"
+
+echo "=== fork: call the pre-fork package ==="
+gas=$(gas_coin on_fork)
+run_json fork_call.json on_fork call --package "$package" --module counter --function increment \
+  --args "$counter" --gas "$gas" --gas-budget 50000000
+assert_eq "$(tx_status_of fork_call.json)" success \
+  "increment executed on the fork against the pre-fork package"
+assert_eq "$(counter_value on_fork "$counter")" 2 "the counter is 2 on the fork"
+assert_eq "$(counter_value on_localnet "$counter")" 1 "the counter is still 1 on the localnet"
+
+echo "=== localnet: move on after the fork ==="
+run_json localnet_increment.json on_localnet call --package "$package" --module counter \
+  --function increment --args "$counter" --gas-budget 50000000
+run_json localnet_create.json on_localnet call --package "$package" --module counter \
+  --function create --gas-budget 50000000
+post_fork_digest=$(tx_digest_of localnet_increment.json)
+post_fork_counter=$(created_object_id localnet_create.json "::counter::Counter")
+wait_for_graphql_tx "$(tx_digest_of localnet_create.json)" > /dev/null
+if on_fork tx-block "$post_fork_digest" > post_fork_tx.log 2>&1; then
+  fail "the fork must not know a localnet transaction finalized after the fork point"
+  cat post_fork_tx.log
+else
+  assert_grep "not found" post_fork_tx.log \
+    "the fork does not know the post-fork localnet transaction"
+fi
+if on_fork object "$post_fork_counter" > post_fork_object.log 2>&1; then
+  fail "the fork must not know an object created on the localnet after the fork point"
+  cat post_fork_object.log
+else
+  assert_grep "not found" post_fork_object.log \
+    "the fork does not know the post-fork localnet object"
+fi
+assert_eq "$(counter_value on_fork "$counter")" 2 "the fork's counter is unaffected by the localnet"
+assert_eq "$(counter_value on_localnet "$counter")" 2 "the localnet's counter advanced on its own"
+
+exit "$FAILED"
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+=== localnet: publish, create, and increment before forking ===
+ok: the counter is 1 on the localnet before the fork
+=== fork at the increment's checkpoint ===
+ok: the fork point is the requested checkpoint
+ok: the pre-fork transaction resolves on the fork
+ok: the pre-fork transaction's effects are served
+ok: the counter's version and digest match the localnet at the fork point
+ok: the counter's contents match the localnet at the fork point
+ok: the pre-fork package resolves on the fork
+=== fork: call the pre-fork package ===
+ok: increment executed on the fork against the pre-fork package
+ok: the counter is 2 on the fork
+ok: the counter is still 1 on the localnet
+=== localnet: move on after the fork ===
+ok: the fork does not know the post-fork localnet transaction
+ok: the fork does not know the post-fork localnet object
+ok: the fork's counter is unaffected by the localnet
+ok: the localnet's counter advanced on its own
+
+----- stderr -----
