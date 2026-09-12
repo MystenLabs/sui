@@ -32,6 +32,7 @@
 use crate::ProtocolConfig;
 use antithesis_sdk::assert::{AssertType, assert_raw};
 use antithesis_sdk::linkme::distributed_slice;
+use mysten_common::assert_reachable::log_expected_assertion;
 use serde_json::json;
 use std::sync::{
     Once,
@@ -89,6 +90,14 @@ impl GatedReachabilityPoint {
     }
 
     fn emit(&self, hit: bool) {
+        if !hit {
+            // Also feeds simtest seed-search, which would otherwise expect every gated site.
+            log_expected_assertion(&format!("{}:{}:{}", self.file, self.line, self.column));
+        }
+        // Calling in to the antithesis sdk breaks determinism in simtests (on linux only).
+        if cfg!(msim) {
+            return;
+        }
         // Mirror what the sdk's own macros put on the wire: catalog entries carry
         // `condition: false` and an empty payload, hits carry `condition: true`.
         let details = if hit { json!({}) } else { json!(null) };
@@ -115,10 +124,6 @@ impl GatedReachabilityPoint {
 /// Call this each time the node adopts a protocol config, including at startup. It is
 /// idempotent, so repeated calls with the same config emit nothing after the first.
 pub fn register_reachability_for_config(config: &ProtocolConfig) {
-    // Calling in to the antithesis sdk breaks determinism in simtests (on linux only).
-    if cfg!(msim) {
-        return;
-    }
     for point in GATED_REACHABILITY_CATALOG.iter() {
         if (point.expected_reachable)(config) {
             point.ensure_catalogued();
@@ -165,7 +170,7 @@ macro_rules! assert_reachable_gated {
         if !cfg!(msim) {
             POINT.reached();
         } else {
-            $crate::assert_reachable_simtest!($message);
+            $crate::assert_reachable_gated_simtest!($message);
         }
     }};
 }
@@ -174,7 +179,7 @@ macro_rules! assert_reachable_gated {
 #[cfg(all(test, not(msim)))]
 mod tests {
     use super::*;
-    use std::{path::Path, process::Command};
+    use std::{collections::BTreeSet, path::Path, process::Command};
 
     /// A config with the gating flag forced on or off.
     ///
@@ -256,6 +261,8 @@ mod tests {
                 ])
                 .env(CHILD, "1")
                 .env("ANTITHESIS_SDK_LOCAL_OUTPUT", &path)
+                .env("MSIM_LOG_REACHABLE_ASSERTIONS", dir.path())
+                .env("MSIM_TEST_SEED", "7")
                 .output()
                 .unwrap();
             assert!(
@@ -265,6 +272,26 @@ mod tests {
                 String::from_utf8_lossy(&output.stderr),
             );
             assert_output(&path, &expected);
+
+            // Every declared point, and only those, is logged for seed-search.
+            let loc = |suffix: &str| {
+                let message = format!("gated reachability test: {suffix}");
+                let point = GATED_REACHABILITY_CATALOG
+                    .iter()
+                    .find(|point| point.message == message)
+                    .unwrap();
+                format!("{}:{}:{}", point.file, point.line, point.column)
+            };
+            let logged: BTreeSet<String> = std::fs::read_to_string(dir.path().join("7.expected"))
+                .unwrap()
+                .lines()
+                .map(str::to_owned)
+                .collect();
+            let declared: BTreeSet<String> = ["early", "legacy", "upgraded"]
+                .into_iter()
+                .map(loc)
+                .collect();
+            assert_eq!(logged, declared);
             return;
         }
 

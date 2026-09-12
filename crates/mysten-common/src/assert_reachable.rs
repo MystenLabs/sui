@@ -45,8 +45,33 @@ static SOMETIMES_LOG_FILE: Lazy<Option<Mutex<std::fs::File>>> = Lazy::new(|| {
         .map(Mutex::new)
 });
 
+static EXPECTED_LOG_FILE: Lazy<Option<Mutex<std::fs::File>>> = Lazy::new(|| {
+    let dir = REACHABLE_LOG_DIR.as_ref()?;
+    let seed = std::env::var("MSIM_TEST_SEED").unwrap_or_else(|_| "unknown".to_string());
+    let filename = format!("{}.expected", seed);
+    let path = dir.join(filename);
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .ok()
+        .map(Mutex::new)
+});
+
 pub fn log_reached_assertion(loc: &'static str) {
     if let Some(file) = REACHABLE_LOG_FILE.as_ref()
+        && let Ok(mut f) = file.lock()
+    {
+        let _ = writeln!(f, "{}", loc);
+    }
+}
+
+/// Records that a gated reachability assertion is expected to be reached in this run, because
+/// the node adopted a protocol config that makes it live. Seed-search only counts a
+/// `reachable_gated` point as unreached if it appears here. See
+/// `sui_protocol_config::reachability`.
+pub fn log_expected_assertion(loc: &str) {
+    if let Some(file) = EXPECTED_LOG_FILE.as_ref()
         && let Ok(mut f) = file.lock()
     {
         let _ = writeln!(f, "{}", loc);
@@ -96,6 +121,20 @@ macro_rules! assert_reachable_simtest {
     ($message:literal) => {
         $crate::assert_reachable_simtest_impl!(
             "reachable",
+            true,
+            $message,
+            $crate::assert_reachable::log_reached_assertion
+        )
+    };
+}
+
+/// Like `assert_reachable_simtest!`, but tagged `reachable_gated` in the reach-points section so
+/// that seed-search expects the site only when `log_expected_assertion` was called for it.
+#[macro_export]
+macro_rules! assert_reachable_gated_simtest {
+    ($message:literal) => {
+        $crate::assert_reachable_simtest_impl!(
+            "reachable_gated",
             true,
             $message,
             $crate::assert_reachable::log_reached_assertion
