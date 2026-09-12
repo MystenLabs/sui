@@ -14,7 +14,7 @@ use ingestion::ArcStreamingClient;
 use ingestion::ClientArgs;
 use ingestion::IngestionConfig;
 use ingestion::IngestionFactory;
-use ingestion::IngestionService;
+use ingestion::ingestion_client::CheckpointEnvelope;
 use ingestion::ingestion_client::IngestionClient;
 use metrics::IndexerMetrics;
 use prometheus::Registry;
@@ -23,6 +23,7 @@ use sui_indexer_alt_framework_store_traits::Connection;
 use sui_indexer_alt_framework_store_traits::SequentialStore;
 use sui_indexer_alt_framework_store_traits::Store;
 use sui_indexer_alt_framework_store_traits::pipeline_task;
+use tokio::sync::mpsc;
 use tracing::info;
 
 use crate::metrics::IngestionMetrics;
@@ -180,9 +181,9 @@ pub(crate) struct Task {
     reader_interval: Duration,
 }
 
-/// A pipeline that has been registered but whose tasks have not been started yet. Pipelines are
-/// held in this form until [Indexer::run], when they are grouped into ingestion cohorts by how
-/// far behind the network tip they will resume from.
+/// A pipeline whose tasks have already been started, waiting for its cohort's ingestion service
+/// to subscribe to. Pipelines are held in this form until [Indexer::run], when they are grouped
+/// into ingestion cohorts by how far behind the network tip they will resume from.
 struct PendingPipeline {
     /// The pipeline's name, for logging cohort composition.
     name: &'static str,
@@ -190,19 +191,13 @@ struct PendingPipeline {
     /// The checkpoint this pipeline will resume processing from.
     next_checkpoint: u64,
 
-    /// Deferred constructor, invoked in [Indexer::run] once the pipeline's cohort has an
-    /// ingestion service to subscribe to.
-    build: PipelineBuilder,
-}
+    /// The sending half of the pipeline's checkpoint channel, registered with its cohort's
+    /// ingestion service in [Indexer::run].
+    tx: mpsc::Sender<Arc<CheckpointEnvelope>>,
 
-/// Subscribes a pipeline to its cohort's ingestion service and starts the pipeline's tasks,
-/// returning the service handle over those tasks.
-///
-/// `Sync` is required (in addition to `Send`) because the `Indexer` holding these builders is kept
-/// alive across await points, and the simulator test runtime requires the resulting futures to be
-/// `Sync`. The builder closures only capture `Send + Sync` state (the handler, store, config, and
-/// metrics), so this bound is satisfied.
-type PipelineBuilder = Box<dyn FnOnce(&mut IngestionService) -> Service + Send + Sync>;
+    /// The pipeline's already-started tasks.
+    service: Service,
+}
 
 impl TaskArgs {
     pub fn tasked(task: String, reader_interval_ms: u64) -> Self {
@@ -414,7 +409,8 @@ impl<S: Store> Indexer<S> {
             for pending in group {
                 start = start.min(pending.next_checkpoint);
                 names.push(pending.name);
-                members.push((pending.build)(&mut ingestion));
+                ingestion.subscribe(pending.tx);
+                members.push(pending.service);
             }
 
             info!(cohort, start, end = last_checkpoint, pipelines = ?names, "Ingestion range");
@@ -492,8 +488,9 @@ impl<S: Store> Indexer<S> {
 }
 
 impl<S: ConcurrentStore> Indexer<S> {
-    /// Adds a new pipeline to this indexer. Its tasks are started when the indexer is run, and
-    /// will be idle until its cohort's ingestion service serves it checkpoint data.
+    /// Adds a new pipeline to this indexer. Its tasks are started immediately, but stay idle
+    /// until its cohort's ingestion service (assigned when the indexer is run) serves it
+    /// checkpoint data.
     ///
     /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
     /// keep the watermark table up-to-date with the highest point they can guarantee all data
@@ -513,22 +510,21 @@ impl<S: ConcurrentStore> Indexer<S> {
         let store = self.store.clone();
         let task = self.task.clone();
         let metrics = self.metrics.clone();
+        let (tx, checkpoint_rx) = mpsc::channel(config.ingestion.subscriber_channel_size());
+        let service = concurrent::pipeline::<H>(
+            handler,
+            next_checkpoint,
+            config,
+            store,
+            task,
+            checkpoint_rx,
+            metrics,
+        );
         self.pipelines.push(PendingPipeline {
             name: H::NAME,
             next_checkpoint,
-            build: Box::new(move |ingestion| {
-                let checkpoint_rx =
-                    ingestion.subscribe_bounded(config.ingestion.subscriber_channel_size());
-                concurrent::pipeline::<H>(
-                    handler,
-                    next_checkpoint,
-                    config,
-                    store,
-                    task,
-                    checkpoint_rx,
-                    metrics,
-                )
-            }),
+            tx,
+            service,
         });
 
         Ok(())
@@ -536,8 +532,9 @@ impl<S: ConcurrentStore> Indexer<S> {
 }
 
 impl<T: SequentialStore> Indexer<T> {
-    /// Adds a new pipeline to this indexer. Its tasks are started when the indexer is run, and
-    /// will be idle until its cohort's ingestion service serves it checkpoint data.
+    /// Adds a new pipeline to this indexer. Its tasks are started immediately, but stay idle
+    /// until its cohort's ingestion service (assigned when the indexer is run) serves it
+    /// checkpoint data.
     ///
     /// Sequential pipelines commit checkpoint data in-order which sacrifices throughput, but may be
     /// required to handle pipelines that modify data in-place (where each update is not an insert,
@@ -568,21 +565,20 @@ impl<T: SequentialStore> Indexer<T> {
 
         let store = self.store.clone();
         let metrics = self.metrics.clone();
+        let (tx, checkpoint_rx) = mpsc::channel(config.ingestion.subscriber_channel_size());
+        let service = sequential::pipeline::<H>(
+            handler,
+            next_checkpoint,
+            config,
+            store,
+            checkpoint_rx,
+            metrics,
+        );
         self.pipelines.push(PendingPipeline {
             name: H::NAME,
             next_checkpoint,
-            build: Box::new(move |ingestion| {
-                let checkpoint_rx =
-                    ingestion.subscribe_bounded(config.ingestion.subscriber_channel_size());
-                sequential::pipeline::<H>(
-                    handler,
-                    next_checkpoint,
-                    config,
-                    store,
-                    checkpoint_rx,
-                    metrics,
-                )
-            }),
+            tx,
+            service,
         });
 
         Ok(())
