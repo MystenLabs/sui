@@ -36,7 +36,7 @@ mod checked {
         error::{ExecutionError, SuiError},
         execution_status::ExecutionErrorKind,
         metrics::ExecutionMetrics,
-        storage::RuntimeObjectResolver,
+        storage::ExecutionObjectResolver,
     };
     use sui_verifier::verifier::sui_verify_module_metered_check_timeout_only;
 
@@ -81,8 +81,7 @@ mod checked {
     }
 
     pub fn new_native_extensions<'r>(
-        child_resolver: &'r dyn RuntimeObjectResolver,
-        object_funds_resolver: &'r dyn sui_types::storage::ObjectFundsResolver,
+        object_resolver: &'r dyn ExecutionObjectResolver,
         input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
         is_metered: bool,
         protocol_config: &'r ProtocolConfig,
@@ -97,8 +96,7 @@ mod checked {
             )
         })?;
         exts.add(ObjectRuntime::new(
-            child_resolver,
-            object_funds_resolver,
+            object_resolver,
             input_objects,
             is_metered,
             protocol_config,
@@ -205,7 +203,7 @@ mod checked {
 
     /// Run both the Move verifier and the Sui verifier, checking just for timeouts. Returns Ok(())
     /// if the verifier completes within the module meter limit and the ticks are successfully
-    /// transfered to the package limit (regardless of whether verification succeeds or not).
+    /// transferred to the package limit (regardless of whether verification succeeds or not).
     fn verify_module_timeout_only(
         module: &CompiledModule,
         verifier_config: &VerifierConfig,
