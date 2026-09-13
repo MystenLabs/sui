@@ -55,9 +55,9 @@ use dashmap::mapref::entry::Entry as DashMapEntry;
 use futures::{FutureExt, future::BoxFuture};
 use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::ZipDebugEqIteratorExt;
+use mysten_common::debug_fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_common::{debug_fatal, debug_fatal_no_invariant, in_antithesis};
 use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashSet};
@@ -1467,9 +1467,7 @@ impl AccountFundsRead for WritebackCache {
             ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                 .unwrap()
                 .version();
-        let mut loop_iter = 0;
         loop {
-            loop_iter += 1;
             // Safe because of (1) and (2) above: the stability check below bounds the
             // lifetime of `pre_root_version` to a window in which no pruning happens.
             let value = self.get_account_amount_at_version(account_id, pre_root_version);
@@ -1478,16 +1476,6 @@ impl AccountFundsRead for WritebackCache {
                     .unwrap()
                     .version();
             if pre_root_version == post_root_version {
-                // Antithesis can resume a paused validator into a backlog of root updates.
-                // Allow those successful recovery reads more retries without changing the
-                // production diagnostic threshold.
-                let excessive_iteration_threshold = if in_antithesis() { 10 } else { 3 };
-                if loop_iter > excessive_iteration_threshold {
-                    debug_fatal_no_invariant!(
-                        "Root version stabilized after {} iterations during MVCC read",
-                        loop_iter
-                    );
-                }
                 return (value, pre_root_version);
             }
             debug!(
