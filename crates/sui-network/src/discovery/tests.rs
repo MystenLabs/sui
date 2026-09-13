@@ -635,6 +635,33 @@ async fn peers_are_added_from_endpoint_manager() -> Result<()> {
 }
 
 #[tokio::test]
+async fn discovery_tracks_peers_connected_before_startup() {
+    let (builder_1, network_1, key_1) = set_up_network(P2pConfig::default());
+    let (_builder_2, network_2, _key_2) = set_up_network(P2pConfig::default());
+    let (event_loop, _handle, state) = start_network(builder_1, network_1.clone(), key_1);
+
+    network_1.connect(network_2.local_addr()).await.unwrap();
+    assert_eq!(network_1.peers(), vec![network_2.peer_id()]);
+    tokio::spawn(event_loop.start());
+
+    timeout(Duration::from_secs(10), async {
+        loop {
+            if state
+                .read()
+                .unwrap()
+                .connected_peers
+                .contains_key(&network_2.peer_id())
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("discovery lost the connection established before startup");
+}
+
+#[tokio::test]
 async fn test_access_types() {
     // This test case constructs a mesh graph of 11 nodes, with the following topology.
     // Only seed peers are proactively connected. Allowlisted peers allow inbound connections
