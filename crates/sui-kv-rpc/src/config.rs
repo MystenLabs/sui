@@ -18,6 +18,9 @@ const DEFAULT_RENDER_AHEAD: usize = 4;
 const DEFAULT_BITMAP_BUCKET_BUDGET_TX: u64 = 4_000;
 const DEFAULT_BITMAP_BUCKET_BUDGET_EVENT: u64 = 4_000;
 const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;
+// Comfortably above the 10ms watermark refresh: a replica slower than this is genuinely behind,
+// and the client is better off retrying elsewhere.
+const DEFAULT_CONSISTENT_READ_WAIT_TIMEOUT_MS: u64 = 100;
 const DEFAULT_BITMAP_DRAIN_PROBE_ROWS: u32 = 50;
 const DEFAULT_REQUEST_BIGTABLE_CONCURRENCY: usize = 50;
 const DEFAULT_STAGE_CHUNK_SIZE: usize = 100;
@@ -261,6 +264,12 @@ pub struct LedgerHistoryConfig {
     /// Defaults to `10` if not specified.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_bitmap_filter_literals: Option<usize>,
+
+    /// How long a request carrying `x-sui-consistent-read-checkpoint` waits for this replica's
+    /// watermark to reach the requested checkpoint before being told to retry elsewhere. Requests
+    /// without that header never wait.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consistent_read_wait_timeout_ms: Option<u64>,
 }
 
 impl LedgerHistoryConfig {
@@ -298,6 +307,13 @@ impl LedgerHistoryConfig {
                     .unwrap_or(DEFAULT_BITMAP_DRAIN_PROBE_ROWS),
             ),
         }
+    }
+
+    pub fn consistent_read_wait_timeout(&self) -> Duration {
+        Duration::from_millis(
+            self.consistent_read_wait_timeout_ms
+                .unwrap_or(DEFAULT_CONSISTENT_READ_WAIT_TIMEOUT_MS),
+        )
     }
 
     pub fn max_bitmap_filter_literals(&self) -> usize {
