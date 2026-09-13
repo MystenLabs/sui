@@ -356,6 +356,16 @@ export default {
         'onchain-finance/funding-wallets',
       ],
     },
+    {
+      type: 'category',
+      label: 'Allowances',
+      link: { type: 'doc', id: 'onchain-finance/allowances/index' },
+      items: [
+        'onchain-finance/allowances/allowances-overview',
+        'onchain-finance/allowances/using-allowances',
+        'onchain-finance/allowances/allowances-faq',
+      ],
+    },
       {
         type: 'category',
         label: 'Example Asset Patterns',

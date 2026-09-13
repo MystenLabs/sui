@@ -1,0 +1,421 @@
+---
+title: Using Allowances
+description: >-
+  Issue, spend from, and revoke allowances on Sui using the sui::allowance
+  module and the Rust SDK, including app-bound allowances that route every
+  spend through your own Move logic.
+keywords:
+  - allowances
+  - sui::allowance
+  - AllowanceWithdrawal
+  - AllowanceCap
+  - balance_spend
+  - app_balance_spend
+  - FundsWithdrawalArg
+  - SenderAllowance
+  - rate limit
+  - revoke
+goal:
+  description: >-
+    Reader can issue an allowance, build a spending transaction against it,
+    bind an allowance to an app, and revoke it
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 3
+      label: Has code examples
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - headings:
+        - pattern: Issue
+        - pattern: Spend
+        - pattern: Revoke
+      label: Has issue, spend, and revoke sections
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Using allowances
+    stage: Authorization
+questions:
+  - How do I issue an allowance on Sui?
+  - How do I spend from an allowance?
+  - How do I bind an allowance to my app?
+  - How do I revoke an allowance?
+  - How do I find the allowances an address has granted?
+answer: >-
+  Issue an allowance by calling sui::allowance::new from the funder's address.
+  The spender then builds a transaction with a funds withdrawal whose source is
+  SenderAllowance, passes it to sui::allowance::balance_spend together with the
+  shared allowance object and the Clock, and receives a Balance to use in the
+  rest of the transaction. The funder revokes with sui::allowance::revoke and
+  the AllowanceCap.
+---
+
+An allowance is a shared object of type `sui::allowance::Allowance<Balance<T>>` that authorizes one spender to withdraw coin type `T` from the funder's [address balance](/onchain-finance/asset-custody/address-balances). The funder issues it, the spender uses it in their own transactions, and the funder revokes it. For the concepts and use cases, see [What Are Allowances?](/onchain-finance/allowances/allowances-overview). For the full module reference, see [`sui::allowance`](/references/framework/sui_sui/allowance). Allowances are available from Sui 1.80.
+
+## Issue an allowance
+
+The funder issues a direct allowance with `sui::allowance::new`. It is an `entry` function, so only a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) (PTB) signed by the funder can call it. A Move contract cannot issue an allowance over a caller's balance from inside another call.
+
+```move
+entry fun new<T>(
+    name: String,
+    spender: address,
+    lifetime_cap: Option<u256>,
+    start_timestamp_ms: Option<u64>,
+    expiration_timestamp_ms: Option<u64>,
+    rate_limit: Option<RateLimit>,
+    ctx: &mut TxContext,
+)
+```
+
+The type argument `T` is the balance type, for example `Balance<0x2::sui::SUI>`, not the coin type. The arguments are:
+
+- `name`: A label for wallets and dashboards, at most 128 bytes. Sui never reads it.
+- `spender`: The address allowed to spend. The spender must be the sender of every spending transaction.
+- `lifetime_cap`: The total that can ever be spent through this allowance, in the coin's smallest unit.
+- `start_timestamp_ms`: Optional activation time in milliseconds. Spends before it abort.
+- `expiration_timestamp_ms`: Optional expiration in milliseconds. Spends at or after it abort.
+- `rate_limit`: Optional recurring cap, built with one of the rate limit constructors below.
+
+At least one of `lifetime_cap` and `rate_limit` must be set, and at least one of `expiration_timestamp_ms` and `rate_limit` must be set. The call creates the allowance as a shared object and sends an `AllowanceCap` to the funder. The cap is the revocation key. It has only the `key` ability, so it cannot be transferred or wrapped.
+
+### Rate limits
+
+Build a rate limit with one of the constructors in the same module and pass it as `some(rate_limit)`:
+
+```move
+// At most `limit` per `period_ms`, counted from the first spend.
+public fun periodic_rate_limit(period_ms: u64, limit: u256): RateLimit
+
+// At most `limit` per `months` civil months (UTC), renewing on the anchor's day of month.
+public fun calendar_rate_limit(months: u8, limit: u256): RateLimit
+
+public fun monthly_rate_limit(limit: u256): RateLimit
+public fun quarterly_rate_limit(limit: u256): RateLimit
+public fun yearly_rate_limit(limit: u256): RateLimit
+```
+
+Windows are fixed, not sliding, and unused amounts do not carry over. See the [Allowances FAQ](/onchain-finance/allowances/allowances-faq) for how windows are anchored and how calendar months behave.
+
+### TypeScript SDK
+
+The following transaction issues an allowance of 1 SUI in total, with no rate limit and no start time, that expires at `expirationMs`. Because `Option<RateLimit>` is not a pure value, the `none` comes from a Move call:
+
+```typescript title='issue-allowance.ts'
+import { Transaction } from '@mysten/sui/transactions';
+
+const ALLOWANCE_TYPE = '0x2::balance::Balance<0x2::sui::SUI>';
+
+const tx = new Transaction();
+tx.setSender(funderAddress);
+
+const noRateLimit = tx.moveCall({
+	target: '0x1::option::none',
+	typeArguments: ['0x2::allowance::RateLimit'],
+});
+
+tx.moveCall({
+	target: '0x2::allowance::new',
+	typeArguments: [ALLOWANCE_TYPE],
+	arguments: [
+		tx.pure.string('Streaming plan'),
+		tx.pure.address(spenderAddress),
+		tx.pure.option('u256', 1_000_000_000n), // lifetime cap: 1 SUI
+		tx.pure.option('u64', null), // no start time
+		tx.pure.option('u64', expirationMs), // expiration
+		noRateLimit,
+	],
+});
+
+const result = await client.signAndExecuteTransaction({
+	transaction: tx,
+	signer: funderKeypair,
+	include: { effects: true },
+});
+
+// The allowance is the created shared object. The AllowanceCap is the created object owned by the funder.
+const allowance = result.Transaction.effects.changedObjects.find(
+	(change) => change.idOperation === 'Created' && change.outputOwner?.$kind === 'Shared',
+);
+const allowanceId = allowance.objectId;
+```
+
+### Rust SDK
+
+The following PTB issues the same allowance:
+
+```rust title='issue_allowance.rs'
+use move_core_types::identifier::Identifier;
+use move_core_types::u256::U256;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::{MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, TypeTag};
+
+let balance_type: TypeTag = "0x2::balance::Balance<0x2::sui::SUI>".parse().unwrap();
+let rate_limit_type: TypeTag = "0x2::allowance::RateLimit".parse().unwrap();
+
+let mut builder = ProgrammableTransactionBuilder::new();
+
+let no_rate_limit = builder.programmable_move_call(
+    MOVE_STDLIB_PACKAGE_ID,
+    Identifier::new("option").unwrap(),
+    Identifier::new("none").unwrap(),
+    vec![rate_limit_type],
+    vec![],
+);
+
+let args = vec![
+    builder.pure("Streaming plan".to_string()).unwrap(),
+    builder.pure(spender).unwrap(),
+    builder.pure(Some(U256::from(1_000_000_000u64))).unwrap(), // lifetime cap: 1 SUI
+    builder.pure(None::<u64>).unwrap(),                        // no start time
+    builder.pure(Some(expiration_ms)).unwrap(),                // expiration
+    no_rate_limit,
+];
+
+builder.programmable_move_call(
+    SUI_FRAMEWORK_PACKAGE_ID,
+    Identifier::new("allowance").unwrap(),
+    Identifier::new("new").unwrap(),
+    vec![balance_type],
+    args,
+);
+
+let pt = builder.finish();
+// Sign and execute as the funder.
+```
+
+The transaction effects list two created objects: the shared `Allowance` and the funder-owned `AllowanceCap`. Record the allowance's object ID. The spender needs it, along with the funder's address.
+
+## Spend from an allowance
+
+A spending transaction is a normal PTB sent by the spender. It has 3 parts:
+
+1. A funds withdrawal input whose source is `SenderAllowance { funder, allowance }`. This declares the amount, the funder whose balance is debited, and the allowance that authorizes it.
+2. The allowance as a mutable shared object input.
+3. A call to `sui::allowance::balance_spend`, which checks the limits, charges them, and returns a `Balance<T>` for the rest of the transaction to use.
+
+```move
+public fun balance_spend<C>(
+    self: &mut Allowance<Balance<C>>,
+    w: AllowanceWithdrawal<Balance<C>>,
+    clock: &Clock,
+    ctx: &TxContext,
+): Balance<C>
+```
+
+Before the transaction executes, Sui verifies that the allowance is an input of the transaction, that its funder matches the declared funder, that the transaction sender is its spender, and that the coin type matches. A transaction that fails these checks is rejected before execution and costs no gas. The amount is reserved against the funder's balance, exactly like a withdrawal from the sender's own balance.
+
+### TypeScript SDK
+
+Pass `withdrawFrom` to `tx.withdrawal()` to name the funder and the allowance. The following transaction spends 0.1 SUI through the allowance and keeps the resulting coin:
+
+```typescript title='spend-allowance.ts'
+import { Transaction } from '@mysten/sui/transactions';
+
+const SUI = '0x2::sui::SUI';
+
+const tx = new Transaction();
+tx.setSender(spenderAddress);
+
+const withdrawal = tx.withdrawal({
+	amount: 100_000_000n, // 0.1 SUI
+	type: SUI,
+	withdrawFrom: {
+		$kind: 'SenderAllowance',
+		SenderAllowance: { funder: funderAddress, allowance: allowanceId },
+	},
+});
+
+const balance = tx.moveCall({
+	target: '0x2::allowance::balance_spend',
+	typeArguments: [SUI],
+	arguments: [tx.object(allowanceId), withdrawal, tx.object.clock()],
+});
+
+const coin = tx.moveCall({
+	target: '0x2::coin::from_balance',
+	typeArguments: [SUI],
+	arguments: [balance],
+});
+
+tx.transferObjects([coin], spenderAddress);
+
+await client.signAndExecuteTransaction({ transaction: tx, signer: spenderKeypair });
+```
+
+`tx.withdrawal()` takes the coin type, while the allowance was issued with the balance type `Balance<0x2::sui::SUI>`. The SDK resolves the allowance object and the clock as shared inputs. The spender pays gas.
+
+### Rust SDK
+
+The following PTB spends `amount` MIST from `funder` through the allowance and keeps the resulting coin:
+
+```rust title='spend_allowance.rs'
+use move_core_types::identifier::Identifier;
+use sui_types::gas_coin::GAS;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{FundsWithdrawalArg, ObjectArg, SharedObjectMutability};
+use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID};
+
+let mut builder = ProgrammableTransactionBuilder::new();
+
+let allowance_arg = builder
+    .obj(ObjectArg::SharedObject {
+        id: allowance_id,
+        initial_shared_version,
+        mutability: SharedObjectMutability::Mutable,
+    })
+    .unwrap();
+
+let withdraw_arg = builder
+    .funds_withdrawal(FundsWithdrawalArg::balance_from_allowance(
+        amount,
+        GAS::type_tag(),
+        funder,
+        allowance_id,
+    ))
+    .unwrap();
+
+let clock_arg = builder
+    .obj(ObjectArg::SharedObject {
+        id: SUI_CLOCK_OBJECT_ID,
+        initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+        mutability: SharedObjectMutability::Immutable,
+    })
+    .unwrap();
+
+let spent = builder.programmable_move_call(
+    SUI_FRAMEWORK_PACKAGE_ID,
+    Identifier::new("allowance").unwrap(),
+    Identifier::new("balance_spend").unwrap(),
+    vec!["0x2::sui::SUI".parse().unwrap()],
+    vec![allowance_arg, withdraw_arg, clock_arg],
+);
+
+let coin = builder.programmable_move_call(
+    SUI_FRAMEWORK_PACKAGE_ID,
+    Identifier::new("coin").unwrap(),
+    Identifier::new("from_balance").unwrap(),
+    vec!["0x2::sui::SUI".parse().unwrap()],
+    vec![spent],
+);
+
+builder.transfer_arg(spender, coin);
+
+let pt = builder.finish();
+// Sign and execute as the spender. The spender pays gas.
+```
+
+`FundsWithdrawalArg::balance_from_allowance` and `balance_spend` both take the coin type (`0x2::sui::SUI`).
+
+The returned `Balance<C>` behaves like any other balance. Convert it to a coin with `coin::from_balance`, pass it to a Move function, or deposit it into an address balance with `balance::send_funds`.
+
+## Bind an allowance to an app
+
+An app-bound allowance routes every spend through the Move module that defines the app type `A`. Use it when your contract, not just the spender's key, must decide whether each pull is allowed, or when you need to rotate the spender key without involving the funder.
+
+Issuance has 2 steps. The funder calls `sui::allowance::propose_for_app` in a PTB, which returns an `AllowanceProposal` instead of creating anything. In the same PTB, the funder passes the proposal to a function in your module that accepts it with `sui::allowance::issue`:
+
+```move
+entry fun propose_for_app<T, A>(
+    name: String,
+    spender: address,
+    lifetime_cap: Option<u256>,
+    start_timestamp_ms: Option<u64>,
+    expiration_timestamp_ms: Option<u64>,
+    rate_limit: Option<RateLimit>,
+    ctx: &TxContext,
+): AllowanceProposal<T>
+
+public fun issue<T, A>(proposal: AllowanceProposal<T>, _: SettingsPermit<A>, ctx: &mut TxContext)
+```
+
+Your module obtains the permits from `std::internal::permit<A>()`, which only the module that defines `A` can call. A `SettingsPermit<A>` authorizes issuing and rotating the spender, and a `SpendPermit<A>` authorizes a single spend. The following module accepts proposals, spends, and rotates the spender for its `APP` type. Add your own checks before each call:
+
+```move title='allowance_app.move'
+module my_app::allowance_app;
+
+use sui::allowance::{Self, Allowance, AllowanceProposal, AllowanceWithdrawal};
+use sui::balance::Balance;
+use sui::clock::Clock;
+
+public struct APP has drop {}
+
+public fun issue<T>(proposal: AllowanceProposal<T>, ctx: &mut TxContext) {
+    allowance::issue(proposal, allowance::settings_permit(internal::permit<APP>()), ctx)
+}
+
+public fun rotate<T>(a: &mut Allowance<T>, new_spender: address) {
+    allowance::rotate_spender(a, allowance::settings_permit(internal::permit<APP>()), new_spender)
+}
+
+public fun spend<C>(
+    a: &mut Allowance<Balance<C>>,
+    w: AllowanceWithdrawal<Balance<C>>,
+    clock: &Clock,
+    ctx: &TxContext,
+): Balance<C> {
+    allowance::app_balance_spend(a, allowance::spend_permit(internal::permit<APP>()), w, clock, ctx)
+}
+```
+
+Spending works as in the direct case, except the spender calls your module's `spend` function instead of `balance_spend`. The transaction must still come from the allowance's spender. `balance_spend` aborts with `EHasApp` on an app-bound allowance, and `app_balance_spend` aborts with `EWrongApp` if the app type does not match.
+
+:::caution
+
+Any holder of `SettingsPermit<A>` can rotate the spender of every allowance bound to `A`, with no funder involvement. Guard the functions that mint permits as carefully as any other admin path in your module.
+
+:::
+
+## Revoke an allowance
+
+The funder revokes by passing the `AllowanceCap` and the allowance to `sui::allowance::revoke`. Sui deletes both objects, which reclaims their storage rebates:
+
+```move
+public fun revoke<T>(self: AllowanceCap<T>, allowance: Allowance<T>)
+```
+
+From the TypeScript SDK:
+
+```typescript title='revoke-allowance.ts'
+const tx = new Transaction();
+tx.setSender(funderAddress);
+
+tx.moveCall({
+	target: '0x2::allowance::revoke',
+	typeArguments: ['0x2::balance::Balance<0x2::sui::SUI>'],
+	arguments: [tx.object(allowanceCapId), tx.object(allowanceId)],
+});
+
+await client.signAndExecuteTransaction({ transaction: tx, signer: funderKeypair });
+```
+
+From the [Sui CLI](/references/cli/ptb), using the balance type as the type argument:
+
+```bash
+$ sui client ptb \
+    --move-call 0x2::allowance::revoke '<0x2::balance::Balance<0x2::sui::SUI>>' @ALLOWANCE_CAP_ID @ALLOWANCE_ID
+```
+
+After revocation, the allowance no longer exists, so Sui rejects any spend that names it before execution. A spend that was already in flight fails at execution instead. There is no way to update an allowance in place. To change its terms, revoke it and issue a new one.
+
+## Find allowances
+
+The funder's `AllowanceCap` objects point at the allowances they granted. List the caps an address owns, filtered by type `0x2::allowance::AllowanceCap<...>`, and read each cap's `allowance` field to get the allowance's object ID. Read the allowance object itself for its settings and cumulative spend:
+
+- `settings.funder`, `settings.spender`, `settings.app`: Who is involved.
+- `settings.lifetime_cap`, `settings.rate_limit`, `settings.start_timestamp_ms`, `settings.expiration_timestamp_ms`: The limits.
+- `current_spend`: Total spent so far.
+
+Spenders learn about allowances offchain: the funder shares the allowance ID, or an indexer maps spender addresses to allowance objects. The module does not emit events. Issuance and revocation show up as created and deleted objects in transaction effects, and spends show up as balance changes on the funder's address.
