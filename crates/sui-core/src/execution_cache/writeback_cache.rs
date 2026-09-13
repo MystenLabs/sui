@@ -1467,7 +1467,10 @@ impl AccountFundsRead for WritebackCache {
             ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                 .unwrap()
                 .version();
+        let starting_root_version = pre_root_version;
+        let mut loop_iter = 0;
         loop {
+            loop_iter += 1;
             // Safe because of (1) and (2) above: the stability check below bounds the
             // lifetime of `pre_root_version` to a window in which no pruning happens.
             let value = self.get_account_amount_at_version(account_id, pre_root_version);
@@ -1476,6 +1479,14 @@ impl AccountFundsRead for WritebackCache {
                     .unwrap()
                     .version();
             if pre_root_version == post_root_version {
+                if loop_iter > 10 {
+                    debug!(
+                        iterations = loop_iter,
+                        starting_root_version = %starting_root_version,
+                        ending_root_version = %post_root_version,
+                        "Root version stabilized after multiple iterations during MVCC read"
+                    );
+                }
                 return (value, pre_root_version);
             }
             debug!(
