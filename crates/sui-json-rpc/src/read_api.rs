@@ -1214,6 +1214,7 @@ impl ReadApiServer for ReadApi {
             true,
             true,
             true,
+            false, // accept_mldsa65_in_multisig: matches validators until the flag ships
             Some(30),
             true,
             true,

@@ -165,6 +165,7 @@ pub(crate) async fn verify_signature(
         true,
         true,
         true,
+        false, // accept_mldsa65_in_multisig: matches validators until the flag ships
         config.max_epoch_upper_bound_delta,
         true,
         true,

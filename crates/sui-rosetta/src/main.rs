@@ -212,6 +212,8 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
                 SuiKeyPair::Secp256r1(k) => {
                     (Hex::encode(k.private().as_bytes()), CurveType::Secp256r1)
                 }
+                // The ML-DSA private key is the 32-byte seed, not the expanded key.
+                SuiKeyPair::MLDSA65(k) => (Hex::encode(k.private().as_bytes()), CurveType::MLDSA65),
             };
             PrefundedAccount {
                 privkey,

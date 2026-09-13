@@ -1680,18 +1680,22 @@ impl From<&crate::crypto::ZkLoginPublicIdentifier> for ZkLoginPublicIdentifier {
 // SignatureScheme
 //
 
-impl From<crate::crypto::SignatureScheme> for SignatureScheme {
-    fn from(value: crate::crypto::SignatureScheme) -> Self {
+impl TryFrom<crate::crypto::SignatureScheme> for SignatureScheme {
+    type Error = crate::crypto::SignatureScheme;
+
+    /// Fails for schemes the proto enum has no variant for yet.
+    fn try_from(value: crate::crypto::SignatureScheme) -> Result<Self, Self::Error> {
         use crate::crypto::SignatureScheme as S;
 
         match value {
-            S::ED25519 => Self::Ed25519,
-            S::Secp256k1 => Self::Secp256k1,
-            S::Secp256r1 => Self::Secp256r1,
-            S::BLS12381 => Self::Bls12381,
-            S::MultiSig => Self::Multisig,
-            S::ZkLoginAuthenticator => Self::Zklogin,
-            S::PasskeyAuthenticator => Self::Passkey,
+            S::ED25519 => Ok(Self::Ed25519),
+            S::Secp256k1 => Ok(Self::Secp256k1),
+            S::Secp256r1 => Ok(Self::Secp256r1),
+            S::BLS12381 => Ok(Self::Bls12381),
+            S::MultiSig => Ok(Self::Multisig),
+            S::ZkLoginAuthenticator => Ok(Self::Zklogin),
+            S::PasskeyAuthenticator => Ok(Self::Passkey),
+            S::MLDSA65 => Err(value),
         }
     }
 }
@@ -1708,12 +1712,13 @@ impl From<crate::crypto::Signature> for SimpleSignature {
 
 impl From<&crate::crypto::Signature> for SimpleSignature {
     fn from(value: &crate::crypto::Signature) -> Self {
-        let scheme: SignatureScheme = value.scheme().into();
         let signature = value.signature_bytes();
         let public_key = value.public_key_bytes();
 
         let mut message = Self::default();
-        message.scheme = Some(scheme.into());
+        if let Ok(scheme) = SignatureScheme::try_from(value.scheme()) {
+            message.set_scheme(scheme);
+        }
         message.signature = Some(signature.to_vec().into());
         message.public_key = Some(public_key.to_vec().into());
         message
@@ -1746,7 +1751,8 @@ impl From<&crate::crypto::PublicKey> for MultisigMemberPublicKey {
             crate::crypto::PublicKey::Ed25519(_)
             | crate::crypto::PublicKey::Secp256k1(_)
             | crate::crypto::PublicKey::Secp256r1(_)
-            | crate::crypto::PublicKey::Passkey(_) => {
+            | crate::crypto::PublicKey::Passkey(_)
+            | crate::crypto::PublicKey::MLDSA65(_) => {
                 message.public_key = Some(value.as_ref().to_vec().into());
             }
             crate::crypto::PublicKey::ZkLogin(z) => {
@@ -1754,7 +1760,9 @@ impl From<&crate::crypto::PublicKey> for MultisigMemberPublicKey {
             }
         }
 
-        message.set_scheme(value.scheme().into());
+        if let Ok(scheme) = SignatureScheme::try_from(value.scheme()) {
+            message.set_scheme(scheme);
+        }
         message
     }
 }
@@ -1810,27 +1818,33 @@ impl From<&crate::crypto::CompressedSignature> for MultisigMemberSignature {
         let scheme = match value {
             crate::crypto::CompressedSignature::Ed25519(b) => {
                 message.signature = Some(b.0.to_vec().into());
-                SignatureScheme::Ed25519
+                Some(SignatureScheme::Ed25519)
             }
             crate::crypto::CompressedSignature::Secp256k1(b) => {
                 message.signature = Some(b.0.to_vec().into());
-                SignatureScheme::Secp256k1
+                Some(SignatureScheme::Secp256k1)
             }
             crate::crypto::CompressedSignature::Secp256r1(b) => {
                 message.signature = Some(b.0.to_vec().into());
-                SignatureScheme::Secp256r1
+                Some(SignatureScheme::Secp256r1)
             }
             crate::crypto::CompressedSignature::ZkLogin(_z) => {
                 //TODO
-                SignatureScheme::Zklogin
+                Some(SignatureScheme::Zklogin)
             }
             crate::crypto::CompressedSignature::Passkey(_p) => {
                 //TODO
-                SignatureScheme::Passkey
+                Some(SignatureScheme::Passkey)
+            }
+            crate::crypto::CompressedSignature::MLDSA65(b) => {
+                message.signature = Some(b.0.to_vec().into());
+                None
             }
         };
 
-        message.set_scheme(scheme);
+        if let Some(scheme) = scheme {
+            message.set_scheme(scheme);
+        }
         message
     }
 }
@@ -1889,16 +1903,16 @@ impl Merge<&crate::signature::GenericSignature> for UserSignature {
                 if mask.contains(Self::MULTISIG_FIELD) {
                     self.signature = Some(Signature::Multisig(multi_sig.into()));
                 }
-                SignatureScheme::Multisig
+                Some(SignatureScheme::Multisig)
             }
             crate::signature::GenericSignature::MultiSigLegacy(multi_sig_legacy) => {
                 if mask.contains(Self::MULTISIG_FIELD) {
                     self.signature = Some(Signature::Multisig(multi_sig_legacy.into()));
                 }
-                SignatureScheme::Multisig
+                Some(SignatureScheme::Multisig)
             }
             crate::signature::GenericSignature::Signature(signature) => {
-                let scheme = signature.scheme().into();
+                let scheme = SignatureScheme::try_from(signature.scheme()).ok();
                 if mask.contains(Self::SIMPLE_FIELD) {
                     self.signature = Some(Signature::Simple(signature.into()));
                 }
@@ -1908,17 +1922,19 @@ impl Merge<&crate::signature::GenericSignature> for UserSignature {
                 if mask.contains(Self::ZKLOGIN_FIELD) {
                     self.signature = Some(Signature::Zklogin(z.into()));
                 }
-                SignatureScheme::Zklogin
+                Some(SignatureScheme::Zklogin)
             }
             crate::signature::GenericSignature::PasskeyAuthenticator(p) => {
                 if mask.contains(Self::PASSKEY_FIELD) {
                     self.signature = Some(Signature::Passkey(p.into()));
                 }
-                SignatureScheme::Passkey
+                Some(SignatureScheme::Passkey)
             }
         };
 
-        if mask.contains(Self::SCHEME_FIELD) {
+        if mask.contains(Self::SCHEME_FIELD)
+            && let Some(scheme) = scheme
+        {
             self.set_scheme(scheme);
         }
     }

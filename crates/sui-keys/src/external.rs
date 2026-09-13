@@ -621,6 +621,25 @@ impl AccountKeystore for External {
                         address
                     )));
                 }
+                pk.verify(msg, &sig).map_err(|e| {
+                    signature::Error::from_source(anyhow!("Signature verification failed: {}", e))
+                })?;
+            }
+            Signature::MLDSA65SuiSignature(s) => {
+                let (sig, pk) = s.get_verification_inputs().map_err(|e| {
+                    signature::Error::from_source(anyhow!(
+                        "Failed to get verification inputs: {}",
+                        e
+                    ))
+                })?;
+                let signature_address = SuiAddress::from(&pk);
+                if signature_address != address {
+                    return Err(signature::Error::from_source(anyhow!(
+                        "Signature address {} does not match expected address {}",
+                        signature_address,
+                        address
+                    )));
+                }
 
                 pk.verify(msg, &sig).map_err(|e| {
                     signature::Error::from_source(anyhow!("Signature verification failed: {}", e))

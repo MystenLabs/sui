@@ -22,8 +22,9 @@ use crate::{
 use fastcrypto::{
     ed25519::Ed25519KeyPair,
     encoding::{Base64, Encoding},
-    traits::ToFromBytes,
+    traits::{KeyPair as _, ToFromBytes},
 };
+use fastcrypto_pq::mldsa65::MLDSA65KeyPair;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId, OIDCProvider, ZkLoginInputs, parse_jwks};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
@@ -434,6 +435,7 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         true,
         true,
         true,
+        true,
         Some(30),
         true,
         true, // enable zklogin pk validation
@@ -579,6 +581,7 @@ fn test_zklogin_public_identifier_additional_validation() {
         true,
         true,
         true,
+        true,
         Some(30),
         true,
         true,
@@ -609,6 +612,7 @@ fn test_zklogin_public_identifier_additional_validation() {
         true,
         true,
         true,
+        true,
         Some(30),
         true,
         false, // Disable validation
@@ -621,4 +625,96 @@ fn test_zklogin_public_identifier_additional_validation() {
         Arc::new(VerifiedDigestCache::new_empty()),
     );
     assert!(res_without_validation.is_ok());
+}
+
+#[test]
+fn test_multisig_mldsa65_hybrid() {
+    // Both members weight 1, threshold 2: the transaction needs both schemes'
+    // signatures, so it stays secure if either assumption breaks.
+    let ed_kp: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
+    let mldsa_kp = SuiKeyPair::MLDSA65(MLDSA65KeyPair::generate(&mut rand::thread_rng()));
+    let multisig_pk =
+        MultiSigPublicKey::new(vec![mldsa_kp.public(), ed_kp.public()], vec![1, 1], 2).unwrap();
+    let multisig_address = SuiAddress::from(&multisig_pk);
+
+    let msg = IntentMessage::new(
+        Intent::sui_transaction(),
+        PersonalMessage {
+            message: "Hello".as_bytes().to_vec(),
+        },
+    );
+    let mldsa_sig: GenericSignature = Signature::new_secure(&msg, &mldsa_kp).into();
+    let ed_sig: GenericSignature = Signature::new_secure(&msg, &ed_kp).into();
+    let multisig = MultiSig::combine(vec![mldsa_sig, ed_sig.clone()], multisig_pk.clone()).unwrap();
+
+    // Verify a committee parsed off the wire, not only the locally built value.
+    let generic = GenericSignature::MultiSig(multisig);
+    let GenericSignature::MultiSig(parsed) =
+        GenericSignature::from_bytes(generic.as_bytes()).unwrap()
+    else {
+        panic!("expected multisig");
+    };
+    let accept = VerifyParams {
+        accept_mldsa65_in_multisig: true,
+        additional_multisig_checks: true,
+        ..Default::default()
+    };
+    assert!(
+        parsed
+            .verify_claims(
+                &msg,
+                multisig_address,
+                &accept,
+                Arc::new(VerifiedDigestCache::new_empty()),
+            )
+            .is_ok()
+    );
+
+    // Default params (flag off) reject the same multisig.
+    let res = parsed
+        .verify_claims(
+            &msg,
+            multisig_address,
+            &VerifyParams::default(),
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+        .map_err(|e| e.into_inner());
+    assert!(
+        matches!(res, Err(crate::error::SuiErrorKind::InvalidSignature { error })
+            if error.contains("ML-DSA-65 sig not supported inside multisig"))
+    );
+
+    // The classical member alone cannot meet the threshold.
+    let ed_only = MultiSig::combine(vec![ed_sig.clone()], multisig_pk.clone()).unwrap();
+    let res = ed_only
+        .verify_claims(
+            &msg,
+            multisig_address,
+            &accept,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+        .map_err(|e| e.into_inner());
+    assert!(
+        matches!(res, Err(crate::error::SuiErrorKind::InvalidSignature { error })
+            if error.contains("Insufficient weight"))
+    );
+
+    // An ML-DSA signature over a different message fails verification.
+    let other_msg = IntentMessage::new(
+        Intent::sui_transaction(),
+        PersonalMessage {
+            message: "Bye".as_bytes().to_vec(),
+        },
+    );
+    let wrong_mldsa: GenericSignature = Signature::new_secure(&other_msg, &mldsa_kp).into();
+    let bad = MultiSig::combine(vec![wrong_mldsa, ed_sig], multisig_pk).unwrap();
+    assert!(
+        bad.verify_claims(
+            &msg,
+            multisig_address,
+            &accept,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+        .is_err()
+    );
 }

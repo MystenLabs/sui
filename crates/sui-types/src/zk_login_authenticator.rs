@@ -212,6 +212,17 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             .into());
         }
 
+        // zkLogin is classical (Groth16 over BN254); a PQ ephemeral key adds nothing.
+        match self.user_signature.scheme() {
+            SignatureScheme::ED25519 | SignatureScheme::Secp256k1 | SignatureScheme::Secp256r1 => {}
+            s => {
+                return Err(SuiErrorKind::InvalidSignature {
+                    error: format!("zkLogin ephemeral signature scheme not supported: {s}"),
+                }
+                .into());
+            }
+        }
+
         // Verify the ephemeral signature over the intent message of the transaction data.
         self.user_signature.verify_secure(
             intent_msg,

@@ -132,6 +132,7 @@ fn compressed_signature_to_scheme(sig: &CompressedSignature) -> Option<Signature
                 .ok()
                 .map(|native| SignatureScheme::Passkey(PasskeySignature { native }))
         }
+        CompressedSignature::MLDSA65(_) => None,
     }
 }
 
@@ -142,7 +143,7 @@ impl From<&sui_types::multisig::MultiSigPublicKey> for MultisigCommittee {
                 pk.pubkeys()
                     .iter()
                     .map(|(public_key, weight)| MultisigMember {
-                        public_key: Some(MultisigMemberPublicKey::from(public_key)),
+                        public_key: MultisigMemberPublicKey::try_from(public_key).ok(),
                         weight: Some(*weight),
                     })
                     .collect(),
@@ -152,9 +153,12 @@ impl From<&sui_types::multisig::MultiSigPublicKey> for MultisigCommittee {
     }
 }
 
-impl From<&PublicKey> for MultisigMemberPublicKey {
-    fn from(pk: &PublicKey) -> Self {
-        match pk {
+impl TryFrom<&PublicKey> for MultisigMemberPublicKey {
+    type Error = anyhow::Error;
+
+    /// Fails for member schemes with no GraphQL representation yet.
+    fn try_from(pk: &PublicKey) -> Result<Self, Self::Error> {
+        Ok(match pk {
             PublicKey::Ed25519(_) => MultisigMemberPublicKey::Ed25519(Ed25519PublicKey {
                 bytes: Some(Base64(pk.as_ref().to_vec())),
             }),
@@ -178,6 +182,9 @@ impl From<&PublicKey> for MultisigMemberPublicKey {
                         .unwrap_or_default(),
                 )
             }
-        }
+            PublicKey::MLDSA65(_) => {
+                anyhow::bail!("ML-DSA-65 multisig members have no GraphQL type yet")
+            }
+        })
     }
 }
