@@ -116,12 +116,7 @@ export default function AgentPrompt({ prompt }: { prompt: string }) {
                   key={agent.id}
                   type="button"
                   role="menuitem"
-                  className={[
-                    styles.item,
-                    "plausible-event-name=open+agent+prompt",
-                    `plausible-event-agent=${agent.id}`,
-                    `plausible-event-page=${pageName}`,
-                  ].join(" ")}
+                  className={`${styles.item} plausible-event-name=open+agent+prompt plausible-event-agent=${agent.id} plausible-event-page=${pageName}`}
                   onClick={() => openAgent(agent)}
                 >
                   {agent.label}
