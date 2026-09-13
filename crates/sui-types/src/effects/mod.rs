@@ -398,6 +398,9 @@ pub trait TransactionEffectsAPI {
 
     // Adding a tombstone for a deleted object.
     fn unsafe_add_object_tombstone_for_testing(&mut self, obj_ref: ObjectRef);
+
+    // Adding a newly created object.
+    fn unsafe_add_created_object_for_testing(&mut self, obj_ref: ObjectRef);
 }
 
 #[derive(Clone, Debug)]

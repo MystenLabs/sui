@@ -26,7 +26,7 @@ use itertools::Itertools;
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::{CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME, NotifyRead};
-use mysten_common::{assert_reachable, debug_fatal, fatal, in_antithesis};
+use mysten_common::{assert_reachable, debug_fatal, fatal, in_antithesis, in_test_configuration};
 use mysten_metrics::{MonitoredFutureExt, monitored_scope, spawn_monitored_task};
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
@@ -1641,6 +1641,7 @@ impl CheckpointBuilder {
 
             let _scope = monitored_scope("CheckpointBuilder::causal_sort");
             let ccp_digest = consensus_commit_prologue.map(|(d, _)| d);
+            Self::assert_already_causally_sorted(pending.details.checkpoint_height, &root_effects);
             let mut sorted = CausalOrder::causal_sort_with_ccp(root_effects, ccp_digest);
 
             if let Some(settlement_key) = &checkpoint_roots.settlement_root {
@@ -1760,6 +1761,21 @@ impl CheckpointBuilder {
             .into_iter()
             .chain(barrier_effects)
             .collect()
+    }
+
+    /// Verifies in test configurations that the root effects, in the order the consensus
+    /// handler wrote them, already satisfy every constraint `CausalOrder::causal_sort` enforces.
+    /// If this never fires, the sort can be removed.
+    fn assert_already_causally_sorted(
+        height: CheckpointHeight,
+        root_effects: &[TransactionEffects],
+    ) {
+        if !in_test_configuration() {
+            return;
+        }
+        if let Err(violation) = CausalOrder::check_already_sorted(root_effects) {
+            panic!("CAUSAL_SORT_VIOLATION: checkpoint height {height}: {violation}");
+        }
     }
 
     // Extracts the consensus commit prologue digest and effects from the root transactions.

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use sui_types::base_types::TransactionDigest;
+use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{InputConsensusObject, TransactionEffects};
 use sui_types::storage::ObjectKey;
@@ -56,6 +56,82 @@ impl CausalOrder {
             this.insert(item);
         }
         this.into_list()
+    }
+
+    /// Checks, using only object versions recorded in effects (never `dependencies()`),
+    /// that `effects` in the given order is already a valid causal order.
+    ///
+    /// The invariant is that each object's versions advance monotonically in batch order:
+    /// the first read of an object seeds its latest version, every later read must see that
+    /// latest version, and every write must produce a strictly newer version. Read-only inputs
+    /// therefore never advance the latest version. This subsumes the RWLock rule (a read-only
+    /// reader of N must precede the writer of N+1) and catches reads of versions produced by a
+    /// later transaction, including newly created objects.
+    ///
+    /// Reads of immutable objects and packages are not recorded in effects and are not checked.
+    /// Returns a description of the first violation found.
+    pub fn check_already_sorted(effects: &[TransactionEffects]) -> Result<(), String> {
+        let mut latest: HashMap<ObjectID, (SequenceNumber, usize)> = HashMap::new();
+        for (idx, e) in effects.iter().enumerate() {
+            let digest = e.transaction_digest();
+            for key in Self::input_versions(e) {
+                match latest.get(&key.0) {
+                    Some(&(seen, at)) if seen != key.1 => {
+                        return Err(format!(
+                            "stale read: tx {digest:?} at index {idx} reads {key:?}, but the \
+                             latest version observed (at index {at}) is {seen:?}"
+                        ));
+                    }
+                    Some(_) => {}
+                    None => {
+                        latest.insert(key.0, (key.1, idx));
+                    }
+                }
+            }
+            for key in Self::output_versions(e) {
+                if let Some(&(seen, at)) = latest.get(&key.0)
+                    && seen >= key.1
+                {
+                    return Err(format!(
+                        "non-monotonic write: tx {digest:?} at index {idx} writes {key:?}, but \
+                         version {seen:?} was already observed at index {at}"
+                    ));
+                }
+                latest.insert(key.0, (key.1, idx));
+            }
+        }
+        Ok(())
+    }
+
+    fn input_versions(e: &TransactionEffects) -> impl Iterator<Item = ObjectKey> + '_ {
+        e.modified_at_versions()
+            .into_iter()
+            .map(|(id, v)| ObjectKey(id, v))
+            .chain(
+                e.accessed_consensus_objects()
+                    .into_iter()
+                    .filter_map(|kind| match kind {
+                        InputConsensusObject::Mutate(r) | InputConsensusObject::ReadOnly(r) => {
+                            Some(ObjectKey(r.0, r.1))
+                        }
+                        InputConsensusObject::ReadConsensusStreamEnded(id, v)
+                        | InputConsensusObject::MutateConsensusStreamEnded(id, v) => {
+                            Some(ObjectKey(id, v))
+                        }
+                        InputConsensusObject::Cancelled(..) => None,
+                    }),
+            )
+    }
+
+    fn output_versions(e: &TransactionEffects) -> impl Iterator<Item = ObjectKey> + '_ {
+        e.all_changed_objects()
+            .into_iter()
+            .map(|(r, _, _)| ObjectKey(r.0, r.1))
+            .chain(
+                e.all_removed_objects()
+                    .into_iter()
+                    .map(|(r, _)| ObjectKey(r.0, r.1)),
+            )
     }
 
     fn from_vec(effects: Vec<TransactionEffects>) -> Self {
@@ -294,6 +370,105 @@ mod tests {
         // both [5] and [2] are present (but order is not fixed)
         assert!(r.contains(&5));
         assert!(r.contains(&2));
+    }
+
+    #[test]
+    pub fn test_check_already_sorted() {
+        // writer produces (o1, 5); consumer mutates (o1, 5) -> (o1, 7).
+        let writer = tx(d(1), 5, &[(o(1), 3)], &[]);
+        let consumer = tx(d(2), 7, &[(o(1), 5)], &[]);
+        assert!(CausalOrder::check_already_sorted(&[writer.clone(), consumer.clone()]).is_ok());
+        let err = CausalOrder::check_already_sorted(&[consumer, writer.clone()]).unwrap_err();
+        assert!(err.starts_with("stale read"), "{err}");
+
+        // read-only reader of (o1, 5) must precede the tx that overwrites it.
+        let reader = tx(d(3), 6, &[], &[(o(1), 5)]);
+        let overwriter = tx(d(4), 8, &[(o(1), 5)], &[]);
+        assert!(
+            CausalOrder::check_already_sorted(&[
+                writer.clone(),
+                reader.clone(),
+                overwriter.clone()
+            ])
+            .is_ok()
+        );
+        let err = CausalOrder::check_already_sorted(&[writer.clone(), overwriter, reader.clone()])
+            .unwrap_err();
+        assert!(err.starts_with("stale read"), "{err}");
+
+        // Readers of a deleted consensus object record the deleting tx's lamport version.
+        let mut deleter = tx(d(5), 9, &[], &[]);
+        deleter.unsafe_add_object_tombstone_for_testing((
+            o(1),
+            SequenceNumber::from_u64(5),
+            ObjectDigest::new(Default::default()),
+        ));
+        let mut ended_reader = tx(d(6), 10, &[], &[]);
+        ended_reader.unsafe_add_input_consensus_object_for_testing(
+            InputConsensusObject::ReadConsensusStreamEnded(o(1), SequenceNumber::from_u64(9)),
+        );
+        assert!(
+            CausalOrder::check_already_sorted(&[
+                writer.clone(),
+                deleter.clone(),
+                ended_reader.clone()
+            ])
+            .is_ok()
+        );
+        let err = CausalOrder::check_already_sorted(&[writer.clone(), ended_reader, deleter])
+            .unwrap_err();
+        assert!(err.starts_with("stale read"), "{err}");
+
+        // A tx that reads an object created by a later tx has no earlier version to compare
+        // against, so the violation is caught on the write side.
+        let mut creator = tx(d(7), 5, &[], &[]);
+        creator.unsafe_add_created_object_for_testing((
+            o(1),
+            SequenceNumber::from_u64(5),
+            ObjectDigest::new(Default::default()),
+        ));
+        assert!(CausalOrder::check_already_sorted(&[creator.clone(), reader.clone()]).is_ok());
+        let err = CausalOrder::check_already_sorted(&[reader, creator]).unwrap_err();
+        assert!(err.starts_with("non-monotonic write"), "{err}");
+    }
+
+    /// Effects for a tx with the given lamport version that mutates each `(id, input_version)`
+    /// in `mutated` and reads each `(id, version)` in `read_only` as a consensus object.
+    fn tx(
+        digest: TransactionDigest,
+        lamport: u64,
+        mutated: &[(ObjectID, u64)],
+        read_only: &[(ObjectID, u64)],
+    ) -> TransactionEffects {
+        use sui_types::execution_status::ExecutionStatus;
+        use sui_types::gas::GasCostSummary;
+
+        let obj_digest = ObjectDigest::new(Default::default());
+        let mut effects = TransactionEffects::new_from_execution_v2(
+            ExecutionStatus::Success,
+            0,
+            GasCostSummary::default(),
+            vec![],
+            digest,
+            SequenceNumber::from_u64(lamport),
+            Default::default(),
+            None,
+            None,
+            vec![],
+        );
+        for (id, v) in mutated {
+            effects.unsafe_add_deleted_live_object_for_testing((
+                *id,
+                SequenceNumber::from_u64(*v),
+                obj_digest,
+            ));
+        }
+        for (id, v) in read_only {
+            effects.unsafe_add_input_consensus_object_for_testing(InputConsensusObject::ReadOnly(
+                (*id, SequenceNumber::from_u64(*v), obj_digest),
+            ));
+        }
+        effects
     }
 
     fn extract(e: Vec<TransactionEffects>) -> Vec<u8> {

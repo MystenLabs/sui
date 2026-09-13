@@ -390,6 +390,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn unsafe_add_object_tombstone_for_testing(&mut self, object: ObjectRef) {
         self.deleted.push(object);
     }
+
+    fn unsafe_add_created_object_for_testing(&mut self, object: ObjectRef) {
+        self.created
+            .push((object, Owner::AddressOwner(SuiAddress::default())));
+    }
 }
 
 impl Display for TransactionEffectsV1 {
