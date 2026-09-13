@@ -38,10 +38,14 @@ struct Node {
     children: Vec<NodeID>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Memory {
     nodes: Vec<Node>,
     roots: BTreeMap<RootLocation, NodeID>,
+    /// Nodes that have at least one delta child. Only these can produce a cross-command extension,
+    /// so `has_cross_command_extensions` iterates this set instead of the full ancestor bitsets
+    /// when it is smaller. It stays empty for PTBs with no reference returns.
+    delta_parents: BTreeSet<NodeID>,
 }
 
 #[derive(Debug)]
@@ -52,7 +56,9 @@ enum Value {
 
 #[derive(Debug)]
 struct Location {
-    root: NodeID,
+    /// The location represented by this root. Its graph node is created on first borrow,
+    /// so values that are never borrowed need no node.
+    root: RootLocation,
     value: Option<Value>,
 }
 
@@ -67,6 +73,9 @@ struct Context {
     pure_inputs: Vec<Location>,
     receiving_inputs: Vec<Location>,
     results: Vec<Vec<Location>>,
+    /// Indices into `results` of rows that held at least one reference when produced.
+    /// This lets `all_references` skip result rows that never contained references.
+    result_ref_rows: Vec<usize>,
     // Temporary set of locations borrowed by arguments seen thus far for the current command.
     // Used exclusively for checking the validity copy/move.
     arg_roots: IndexSet<T::Location>,
@@ -115,13 +124,14 @@ impl BitSet {
         }
     }
 
-    /// Visits the intersection of two sets. `trailing_zeros` finds the lowest set bit and
-    /// `clear_lowest_bit` clears it, so only set bits are visited.
-    fn try_for_each_common(
+    /// Returns whether `f` holds for any node in the intersection of the two sets, stopping at the
+    /// first. `trailing_zeros` finds the lowest set bit and `clear_lowest_bit` clears it, so only
+    /// set bits are visited.
+    fn try_any_common(
         &self,
         other: &Self,
-        mut f: impl FnMut(usize) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
+        mut f: impl FnMut(usize) -> anyhow::Result<bool>,
+    ) -> anyhow::Result<bool> {
         // Ancestor sets are sized by node ID, so the two sets can have different word counts. The
         // missing trailing words are all zeros, so nothing past the shorter set can be common. As
         // such, truncating to the shorter length is correct.
@@ -130,11 +140,13 @@ impl BitSet {
         for (word_index, (left, right)) in words.enumerate() {
             let mut common = left & right;
             while common != 0 {
-                f(Self::bit_index(word_index, common)?)?;
+                if f(Self::bit_index(word_index, common)?)? {
+                    return Ok(true);
+                }
                 common = Self::clear_lowest_bit(common)?;
             }
         }
-        Ok(())
+        Ok(false)
     }
 
     /// Visits each set bit using `trailing_zeros` and clears it before the next iteration.
@@ -173,6 +185,14 @@ impl BitSet {
 }
 
 impl Memory {
+    fn new() -> Self {
+        Self {
+            nodes: vec![],
+            roots: BTreeMap::new(),
+            delta_parents: BTreeSet::new(),
+        }
+    }
+
     fn node(&self, id: NodeID) -> anyhow::Result<&Node> {
         self.nodes
             .get(id)
@@ -203,6 +223,9 @@ impl Memory {
         for &parent in parents {
             self.node_mut(parent)?.children.push(id);
         }
+        if let NodeKind::Delta { .. } = &kind {
+            self.delta_parents.extend(parents.iter().copied());
+        }
         self.nodes.push(Node {
             kind,
             ancestors,
@@ -221,6 +244,11 @@ impl Memory {
         Ok(id)
     }
 
+    /// Returns the node for a PTB location if one has been created
+    fn get_root(&self, root: RootLocation) -> Option<NodeID> {
+        self.roots.get(&root).copied()
+    }
+
     /// Creates a call-return delta reference, whose ancestors are derived from parent reference
     /// arguments passed to the command.
     /// For immutable references, the parents are all reference arguments.
@@ -234,35 +262,56 @@ impl Memory {
         Ok(self.node(node)?.ancestors.contains(ancestor))
     }
 
+    /// Returns whether the shared ancestor `common` has delta children from different commands in
+    /// `left_ancestors` and `right_ancestors`. Such extensions are conservatively treated as
+    /// potentially overlapping.
+    fn common_has_cross_command(
+        &self,
+        common: NodeID,
+        left_ancestors: &BitSet,
+        right_ancestors: &BitSet,
+    ) -> anyhow::Result<bool> {
+        let mut left_commands = IndexSet::new();
+        let mut right_commands = IndexSet::new();
+        for &child in &self.node(common)?.children {
+            let NodeKind::Delta { command } = &self.node(child)?.kind else {
+                continue;
+            };
+            if left_ancestors.contains(child) {
+                left_commands.insert(*command);
+            }
+            if right_ancestors.contains(child) {
+                right_commands.insert(*command);
+            }
+        }
+        Ok(left_commands
+            .iter()
+            .any(|left| right_commands.iter().any(|right| left != right)))
+    }
+
     /// Returns whether paths from a shared ancestor pass through delta children from different
-    /// commands. Such extensions are conservatively treated as potentially overlapping.
+    /// commands. Only `delta_parents` can contribute, so when that set is smaller than both
+    /// of the ancestor bitsets it is iterated directly; otherwise the bitsets are intersected.
     fn has_cross_command_extensions(&self, left: NodeID, right: NodeID) -> anyhow::Result<bool> {
         let left_ancestors = &self.node(left)?.ancestors;
         let right_ancestors = &self.node(right)?.ancestors;
-        let mut has_extensions = false;
-        left_ancestors.try_for_each_common(right_ancestors, |common| {
-            if has_extensions {
-                return Ok(());
-            }
-            let mut left_commands = IndexSet::new();
-            let mut right_commands = IndexSet::new();
-            for &child in &self.node(common)?.children {
-                let NodeKind::Delta { command } = &self.node(child)?.kind else {
-                    continue;
-                };
-                if left_ancestors.contains(child) {
-                    left_commands.insert(*command);
-                }
-                if right_ancestors.contains(child) {
-                    right_commands.insert(*command);
+        let min_width = left_ancestors.words.len().min(right_ancestors.words.len());
+        // check if it is cheaper to iterate over the delta parents or the ancestor bitsets
+        if self.delta_parents.len() <= min_width {
+            for &common in &self.delta_parents {
+                if left_ancestors.contains(common)
+                    && right_ancestors.contains(common)
+                    && self.common_has_cross_command(common, left_ancestors, right_ancestors)?
+                {
+                    return Ok(true);
                 }
             }
-            has_extensions = left_commands
-                .iter()
-                .any(|left| right_commands.iter().any(|right| left != right));
-            Ok(())
-        })?;
-        Ok(has_extensions)
+            Ok(false)
+        } else {
+            left_ancestors.try_any_common(right_ancestors, |common| {
+                self.common_has_cross_command(common, left_ancestors, right_ancestors)
+            })
+        }
     }
 
     /// Returns whether `left` may extend `right` through ancestry or cross-command extensions.
@@ -318,7 +367,7 @@ impl Value {
 }
 
 impl Location {
-    fn non_ref(root: NodeID) -> Self {
+    fn non_ref(root: RootLocation) -> Self {
         Self {
             root,
             value: Some(Value::NonRef),
@@ -345,14 +394,11 @@ impl Location {
         }
     }
 
-    fn borrow(&self, is_mut: bool) -> anyhow::Result<Value> {
+    fn assert_borrowable(&self) -> anyhow::Result<()> {
         match self.value.as_ref() {
             None => anyhow::bail!("Borrow of invalid memory location"),
             Some(Value::Ref { .. }) => anyhow::bail!("Cannot borrow a reference"),
-            Some(Value::NonRef) => Ok(Value::Ref {
-                is_mut,
-                node: self.root,
-            }),
+            Some(Value::NonRef) => Ok(()),
         }
     }
 }
@@ -371,40 +417,39 @@ impl Context {
             commands: _,
             unified_linkage: _,
         } = txn;
-        let mut memory = Memory::default();
-        let tx_context =
-            Location::non_ref(memory.root(RootLocation::Known(T::Location::TxContext))?);
-        let mut gas = Location::non_ref(memory.root(RootLocation::Known(T::Location::GasCoin))?);
+        let memory = Memory::new();
+        let tx_context = Location::non_ref(RootLocation::Known(T::Location::TxContext));
+        let mut gas = Location::non_ref(RootLocation::Known(T::Location::GasCoin));
         if gas_payment.is_none() {
             gas.move_value()
                 .map_err(|_| anyhow::anyhow!("gas coin should be initialized"))?;
         }
         let object_inputs = (0..objects.len())
             .map(|i| {
-                Ok(Location::non_ref(memory.root(RootLocation::Known(
+                Ok(Location::non_ref(RootLocation::Known(
                     T::Location::ObjectInput(checked_as!(i, u16)?),
-                ))?))
+                )))
             })
             .collect::<anyhow::Result<_>>()?;
         let withdrawal_inputs = (0..withdrawals.len())
             .map(|i| {
-                Ok(Location::non_ref(memory.root(RootLocation::Known(
+                Ok(Location::non_ref(RootLocation::Known(
                     T::Location::WithdrawalInput(checked_as!(i, u16)?),
-                ))?))
+                )))
             })
             .collect::<anyhow::Result<_>>()?;
         let pure_inputs = (0..pure.len())
             .map(|i| {
-                Ok(Location::non_ref(memory.root(RootLocation::Known(
+                Ok(Location::non_ref(RootLocation::Known(
                     T::Location::PureInput(checked_as!(i, u16)?),
-                ))?))
+                )))
             })
             .collect::<anyhow::Result<_>>()?;
         let receiving_inputs = (0..receiving.len())
             .map(|i| {
-                Ok(Location::non_ref(memory.root(RootLocation::Known(
+                Ok(Location::non_ref(RootLocation::Known(
                     T::Location::ReceivingInput(checked_as!(i, u16)?),
-                ))?))
+                )))
             })
             .collect::<anyhow::Result<_>>()?;
         Ok(Self {
@@ -417,6 +462,7 @@ impl Context {
             pure_inputs,
             receiving_inputs,
             results: vec![],
+            result_ref_rows: vec![],
             arg_roots: IndexSet::new(),
         })
     }
@@ -430,21 +476,23 @@ impl Context {
         results: impl IntoIterator<Item = Option<Value>>,
     ) -> anyhow::Result<()> {
         let command = self.current_command()?;
-        self.results.push(
-            results
-                .into_iter()
-                .enumerate()
-                .map(|(i, v)| {
-                    Ok(Location {
-                        root: self.memory.root(RootLocation::Known(T::Location::Result(
-                            command,
-                            checked_as!(i, u16)?,
-                        )))?,
-                        value: v,
-                    })
+        let row = results
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| {
+                Ok(Location {
+                    root: RootLocation::Known(T::Location::Result(command, checked_as!(i, u16)?)),
+                    value: v,
                 })
-                .collect::<anyhow::Result<_>>()?,
-        );
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        if row
+            .iter()
+            .any(|loc| matches!(loc.value, Some(Value::Ref { .. })))
+        {
+            self.result_ref_rows.push(self.results.len());
+        }
+        self.results.push(row);
         Ok(())
     }
 
@@ -504,11 +552,17 @@ impl Context {
         })
     }
 
+    /// Returns true iff any live reference borrows `location`.
+    fn location_is_borrowed(&self, location: &Location) -> anyhow::Result<bool> {
+        match self.memory.get_root(location.root) {
+            Some(node) => self.any_extends(node, /* ignore alias */ false),
+            None => Ok(false),
+        }
+    }
+
     fn check_usage(&self, usage: &T::Usage, location: &Location) -> anyhow::Result<()> {
-        // by marking "ignore alias" as `false`, we will also check for `Alias` paths, i.e. paths
-        // that point to the location itself without any extensions.
-        let is_borrowed = self.any_extends(location.root, /* ignore alias */ false)?
-            || self.arg_roots.contains(&usage.location());
+        let is_borrowed =
+            self.location_is_borrowed(location)? || self.arg_roots.contains(&usage.location());
         match usage {
             T::Usage::Move(_) => {
                 anyhow::ensure!(!is_borrowed, "Cannot move a value that is borrowed");
@@ -549,13 +603,14 @@ impl Context {
             | T::Argument__::Read(usage) => self.check_usage(usage, location)?,
             T::Argument__::Borrow(_, _) => (),
         };
-        let location = self.location_mut(arg.location())?;
         let value = match arg {
-            T::Argument__::Use(usage) => location.use_(usage)?,
-            T::Argument__::Freeze(usage) => location.use_(usage)?.freeze()?,
-            T::Argument__::Borrow(is_mut, _) => location.borrow(*is_mut)?,
+            T::Argument__::Use(usage) => self.location_mut(arg.location())?.use_(usage)?,
+            T::Argument__::Freeze(usage) => {
+                self.location_mut(arg.location())?.use_(usage)?.freeze()?
+            }
+            T::Argument__::Borrow(is_mut, _) => self.borrow_location(arg.location(), *is_mut)?,
             T::Argument__::Read(usage) => {
-                location.use_(usage)?;
+                self.location_mut(arg.location())?.use_(usage)?;
                 Value::NonRef
             }
         };
@@ -565,6 +620,17 @@ impl Context {
         Ok(value)
     }
 
+    /// Borrows a location, creating its graph node on first use.
+    fn borrow_location(&mut self, loc: T::Location, is_mut: bool) -> anyhow::Result<Value> {
+        let root = {
+            let location = self.location(loc)?;
+            location.assert_borrowable()?;
+            location.root
+        };
+        let node = self.memory.root(root)?;
+        Ok(Value::Ref { is_mut, node })
+    }
+
     fn arguments(&mut self, args: &[T::Argument]) -> anyhow::Result<Vec<Value>> {
         args.iter()
             .map(|arg| self.argument(arg))
@@ -572,24 +638,20 @@ impl Context {
     }
 
     fn all_references(&self) -> impl Iterator<Item = NodeID> + '_ {
-        let Self {
-            tx_context,
-            gas,
-            object_inputs,
-            withdrawal_inputs,
-            pure_inputs,
-            receiving_inputs,
-            results,
-            arg_roots: _,
-            ..
-        } = self;
-        std::iter::once(tx_context)
-            .chain(std::iter::once(gas))
-            .chain(object_inputs)
-            .chain(withdrawal_inputs)
-            .chain(pure_inputs)
-            .chain(receiving_inputs)
-            .chain(results.iter().flatten())
+        let fixed = std::iter::once(&self.tx_context)
+            .chain(std::iter::once(&self.gas))
+            .chain(&self.object_inputs)
+            .chain(&self.withdrawal_inputs)
+            .chain(&self.pure_inputs)
+            .chain(&self.receiving_inputs);
+        // Include result rows that held at least one reference when produced.
+        let result_refs = self
+            .result_ref_rows
+            .iter()
+            .filter_map(move |&i| self.results.get(i))
+            .flatten();
+        fixed
+            .chain(result_refs)
             .filter_map(|v| match v.value.as_ref() {
                 Some(Value::Ref { node, .. }) => Some(*node),
                 Some(Value::NonRef) | None => None,
@@ -800,12 +862,17 @@ fn call(
         all_nodes.retain(|node| !tx_context_nodes.contains(node));
     }
     let command = context.current_command()?;
-    let mut_nodes = if mut_nodes.is_empty() {
+    // Reference returns derive from an unknown root when no reference arguments feed them. Calls
+    // that return no references need no such node, so avoid creating one.
+    let has_reference_return = return_
+        .iter()
+        .any(|ty| matches!(ty, T::Type::Reference(_, _)));
+    let mut_nodes = if mut_nodes.is_empty() && has_reference_return {
         vec![context.memory.root(RootLocation::Unknown { command })?]
     } else {
         mut_nodes
     };
-    let all_nodes = if all_nodes.is_empty() {
+    let all_nodes = if all_nodes.is_empty() && has_reference_return {
         vec![context.memory.root(RootLocation::Unknown { command })?]
     } else {
         all_nodes
