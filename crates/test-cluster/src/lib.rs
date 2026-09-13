@@ -368,6 +368,18 @@ impl TestCluster {
         info!("Starting reconfiguration");
         let start = Instant::now();
 
+        let target_epoch = self.request_reconfiguration().await;
+        info!("close_epoch complete after {:?}", start.elapsed());
+
+        self.wait_for_epoch(Some(target_epoch)).await;
+        self.wait_for_epoch_all_nodes(target_epoch).await;
+
+        info!("reconfiguration complete after {:?}", start.elapsed());
+    }
+
+    /// Requests epoch closing on a quorum and returns a minimum target epoch.
+    /// Callers choose the readiness barrier: nodes may stop or advance past the target.
+    pub async fn request_reconfiguration(&self) -> EpochId {
         // Close epoch on 2f+1 validators.
         let cur_committee = self
             .fullnode_handle
@@ -391,12 +403,7 @@ impl TestCluster {
                 break;
             }
         }
-        info!("close_epoch complete after {:?}", start.elapsed());
-
-        self.wait_for_epoch(Some(cur_committee.epoch + 1)).await;
-        self.wait_for_epoch_all_nodes(cur_committee.epoch + 1).await;
-
-        info!("reconfiguration complete after {:?}", start.elapsed());
+        cur_committee.epoch + 1
     }
 
     /// To detect whether the network has reached such state, we use the fullnode as the
@@ -421,7 +428,7 @@ impl TestCluster {
         let mut state = None;
         timeout(timeout_dur, async {
             let epoch = handle.with(|node| node.state().epoch_store_for_testing().epoch());
-            if Some(epoch) == target_epoch {
+            if target_epoch.is_some_and(|target_epoch| epoch >= target_epoch) {
                 return handle.with(|node| node.state().get_sui_system_state_object_for_testing().unwrap());
             }
             while let Ok(system_state) = epoch_rx.recv().await {

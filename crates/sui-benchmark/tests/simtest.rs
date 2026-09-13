@@ -656,7 +656,14 @@ mod test {
             simulated_load_config,
             None,
             None,
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            Some(|cluster: Arc<TestCluster>| async move {
+                // Gas preparation can consume most of an epoch. Start both workloads in
+                // a fresh epoch so the surfer can submit before prolonged epoch closing.
+                // Trigger it explicitly so long epoch-duration overrides do not stall setup.
+                let target_epoch = cluster.request_reconfiguration().await;
+                // Short epochs can advance past the target; do not require an exact match.
+                cluster.wait_for_epoch(Some(target_epoch)).await;
+            }),
             true, // enable_surfer
         )
         .await;
@@ -2585,30 +2592,9 @@ mod test {
         drop(async_handle);
         drop(sync_handle);
 
-        // Close epoch on validators and wait for the default fullnode to reach
-        // epoch 1. We cannot use trigger_reconfiguration because it calls
-        // wait_for_epoch_all_nodes which may race with RunWithRange shutdown.
-        {
-            let cur_committee = test_cluster
-                .fullnode_handle
-                .sui_node
-                .with(|node| node.state().clone_committee_for_testing());
-            let mut cur_stake = 0;
-            for node in test_cluster.swarm.active_validators() {
-                node.get_node_handle()
-                    .unwrap()
-                    .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
-                    .await;
-                cur_stake +=
-                    cur_committee.weight(&node.get_node_handle().unwrap().with(|n| n.state().name));
-                if cur_stake >= cur_committee.quorum_threshold() {
-                    break;
-                }
-            }
-            test_cluster
-                .wait_for_epoch(Some(cur_committee.epoch + 1))
-                .await;
-        }
+        // Wait only for the default fullnode; RunWithRange nodes may already be stopped.
+        let target_epoch = test_cluster.request_reconfiguration().await;
+        test_cluster.wait_for_epoch(Some(target_epoch)).await;
 
         // Wait for both RunWithRange fullnodes to shut down. This guarantees
         // they have processed exactly through the end-of-epoch checkpoint and

@@ -38,6 +38,12 @@ async fn basic_reconfig_end_to_end_test() {
     sleep(Duration::from_secs(1)).await;
     let test_cluster = TestClusterBuilder::new().build().await;
     test_cluster.trigger_reconfiguration().await;
+
+    // A stale target must not wait for another epoch change.
+    let state = test_cluster
+        .wait_for_epoch_with_timeout(Some(0), Duration::from_secs(1))
+        .await;
+    assert_eq!(state.epoch(), 1);
 }
 
 #[sim_test]
