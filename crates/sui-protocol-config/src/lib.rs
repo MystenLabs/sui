@@ -625,10 +625,6 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     accept_passkey_in_multisig: bool,
 
-    // If true, multisig containing an ML-DSA-65 member is accepted.
-    #[serde(skip_serializing_if = "is_false")]
-    accept_mldsa65_in_multisig: bool,
-
     // If true, additional zkLogin public identifier structure is validated.
     #[serde(skip_serializing_if = "is_false")]
     validate_zklogin_public_identifier: bool,
@@ -772,8 +768,12 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     passkey_auth: bool,
 
-    // Enable ML-DSA-65 (FIPS 204) account signatures.
+    // Enable ML-DSA-65 (FIPS 204) account signatures, standalone and as
+    // multisig members. Kept out of the generated accessors, and with them out
+    // of the protocol-config listings, until the scheme's RPC surface lands;
+    // `mldsa65_auth()` and its test setter are hand-written.
     #[serde(skip_serializing_if = "is_false")]
+    #[skip_accessor]
     mldsa65_auth: bool,
 
     // Use AuthorityCapabilitiesV2
@@ -2235,6 +2235,15 @@ impl ProtocolConfig {
 
     pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
         self.feature_flags.consensus_transaction_ordering
+    }
+
+    // Hand-written because the field is `#[skip_accessor]`; see FeatureFlags.
+    pub fn mldsa65_auth(&self) -> bool {
+        self.feature_flags.mldsa65_auth
+    }
+
+    pub fn set_mldsa65_auth_for_testing(&mut self, val: bool) {
+        self.feature_flags.mldsa65_auth = val;
     }
 
     pub fn enable_jwk_consensus_updates(&self) -> bool {

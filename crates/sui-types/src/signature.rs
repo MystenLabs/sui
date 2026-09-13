@@ -57,7 +57,6 @@ impl VerifyParams {
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
         accept_passkey_in_multisig: bool,
-        accept_mldsa65_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
         additional_multisig_checks: bool,
         validate_zklogin_public_identifier: bool,
@@ -70,11 +69,20 @@ impl VerifyParams {
             verify_legacy_zklogin_address,
             accept_zklogin_in_multisig,
             accept_passkey_in_multisig,
-            accept_mldsa65_in_multisig,
+            accept_mldsa65_in_multisig: false,
             zklogin_max_epoch_upper_bound_delta,
             additional_multisig_checks,
             validate_zklogin_public_identifier,
         }
+    }
+
+    /// Whether an ML-DSA-65 member's signature inside a multisig is accepted.
+    /// Off by default: only the validator path turns it on, from the
+    /// `mldsa65_auth` protocol flag, so client-side verifiers match validators
+    /// until the scheme is enabled.
+    pub fn with_mldsa65_in_multisig(mut self, accept: bool) -> Self {
+        self.accept_mldsa65_in_multisig = accept;
+        self
     }
 }
 

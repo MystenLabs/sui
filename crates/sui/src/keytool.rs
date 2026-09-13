@@ -1317,7 +1317,6 @@ impl KeyToolCommand {
                             true,
                             true,
                             true,
-                            false, // accept_mldsa65_in_multisig: matches validators until the flag ships
                             Some(2),
                             true,
                             true,

@@ -435,7 +435,6 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         true,
         true,
         true,
-        true,
         Some(30),
         true,
         true, // enable zklogin pk validation
@@ -581,7 +580,6 @@ fn test_zklogin_public_identifier_additional_validation() {
         true,
         true,
         true,
-        true,
         Some(30),
         true,
         true,
@@ -609,7 +607,6 @@ fn test_zklogin_public_identifier_additional_validation() {
         vec![],
         ZkLoginEnv::Test,
         0, // v1 circuit mode only
-        true,
         true,
         true,
         true,
