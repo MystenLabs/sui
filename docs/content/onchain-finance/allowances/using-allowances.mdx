@@ -55,11 +55,10 @@ questions:
   - How do I find the allowances an address has granted?
 answer: >-
   Issue an allowance by calling sui::allowance::new from the funder's address.
-  The spender then builds a transaction with a funds withdrawal whose source is
-  SenderAllowance, passes it to sui::allowance::balance_spend together with the
-  shared allowance object and the Clock, and receives a Balance to use in the
-  rest of the transaction. The funder revokes with sui::allowance::revoke and
-  the AllowanceCap.
+  The spender then spends with tx.balance({ allowance, balance }) in the
+  TypeScript SDK, or builds a funds withdrawal whose source is SenderAllowance
+  and passes it to sui::allowance::balance_spend. The funder revokes with
+  sui::allowance::revoke and the AllowanceCap.
 ---
 
 An allowance is a shared object of type `sui::allowance::Allowance<Balance<T>>` that authorizes one spender to withdraw coin type `T` from the funder's [address balance](/onchain-finance/asset-custody/address-balances). The funder issues it, the spender uses it in their own transactions, and the funder revokes it. For the concepts and use cases, see [What Are Allowances?](/onchain-finance/allowances/allowances-overview). For the full module reference, see [`sui::allowance`](/references/framework/sui_sui/allowance). Allowances are available from Sui 1.80.
@@ -219,23 +218,38 @@ Before the transaction executes, Sui verifies that the allowance is an input of 
 
 ### TypeScript SDK
 
-Pass `withdrawFrom` to `tx.withdrawal()` to name the funder and the allowance. The following transaction spends 0.1 SUI through the allowance and keeps the resulting coin:
+`tx.balance()` accepts an `allowance` option. The SDK reads the allowance to find the funder, adds the withdrawal input, and calls `balance_spend` for you. The following transaction spends 0.1 SUI through the allowance and deposits it into the spender's address balance:
 
 ```typescript title='spend-allowance.ts'
 import { Transaction } from '@mysten/sui/transactions';
 
-const SUI = '0x2::sui::SUI';
-
 const tx = new Transaction();
 tx.setSender(spenderAddress);
 
+const balance = tx.balance({ allowance: allowanceId, balance: 100_000_000n }); // 0.1 SUI
+
+tx.moveCall({
+	target: '0x2::balance::send_funds',
+	typeArguments: ['0x2::sui::SUI'],
+	arguments: [balance, tx.pure.address(spenderAddress)],
+});
+
+await client.signAndExecuteTransaction({ transaction: tx, signer: spenderKeypair });
+```
+
+Pass `type` for a coin other than SUI. The returned `Balance<T>` works in any Move call. To skip the allowance lookup when you already know the funder, pass `{ objectId, funder }` as the `allowance`. For an app-bound allowance, pass `{ objectId, app: { type, permit } }`, where `permit` is a `SpendPermit` your module returned earlier in the same transaction.
+
+For full control over the transaction, build the withdrawal input yourself with `from: 'allowance'` and call `balance_spend` directly:
+
+```typescript title='spend-allowance-manual.ts'
+const SUI = '0x2::sui::SUI';
+
 const withdrawal = tx.withdrawal({
-	amount: 100_000_000n, // 0.1 SUI
+	amount: 100_000_000n,
 	type: SUI,
-	withdrawFrom: {
-		$kind: 'SenderAllowance',
-		SenderAllowance: { funder: funderAddress, allowance: allowanceId },
-	},
+	from: 'allowance',
+	allowance: allowanceId,
+	funder: funderAddress,
 });
 
 const balance = tx.moveCall({
@@ -243,19 +257,9 @@ const balance = tx.moveCall({
 	typeArguments: [SUI],
 	arguments: [tx.object(allowanceId), withdrawal, tx.object.clock()],
 });
-
-const coin = tx.moveCall({
-	target: '0x2::coin::from_balance',
-	typeArguments: [SUI],
-	arguments: [balance],
-});
-
-tx.transferObjects([coin], spenderAddress);
-
-await client.signAndExecuteTransaction({ transaction: tx, signer: spenderKeypair });
 ```
 
-`tx.withdrawal()` takes the coin type, while the allowance was issued with the balance type `Balance<0x2::sui::SUI>`. The SDK resolves the allowance object and the clock as shared inputs. The spender pays gas.
+Both forms take the coin type, while the allowance was issued with the balance type `Balance<0x2::sui::SUI>`. The spender pays gas.
 
 ### Rust SDK
 
