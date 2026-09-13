@@ -1,20 +1,59 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! The execution driver receives ready transactions from the ExecutionScheduler and
+//! runs them on blocking threads, admitting them in an order that makes it safe for
+//! execution to block waiting on values produced by other transactions.
+//!
+//! Execution can park its thread mid-transaction waiting for a value another
+//! transaction's execution will produce (the blocking primitives in
+//! `mysten_common::sync`). Declared inputs never cause this - the scheduler sends a
+//! transaction only once they are available; blocking happens only for *undeclared*
+//! dependencies on system objects (the clock, the accumulator root). With bounded
+//! concurrency this could deadlock: every slot parked on a value whose writer was
+//! never admitted.
+//!
+//! Admission prevents this using the causal index assigned to each unit in enqueue
+//! order (see `execution_scheduler::causal_order`); enqueue order is causal, so
+//! anything a transaction can wait for is produced by a unit with a *lower* index.
+//! Let C be the watermark below which every index is done (executed, or dropped as
+//! stale). A transaction with index `i` is admitted when
+//!
+//! ```text
+//!     in_flight < K  OR  i == C + 1
+//! ```
+//!
+//! with at most one over-limit (causal-next) admission outstanding at a time,
+//! bounding in-flight at K+1. The C+1 transaction can never block - everything below
+//! it is done - so it always runs to completion, C advances, and the next
+//! transaction inherits the same guarantee: progress is assured no matter how many
+//! admitted transactions are parked. Settlement transactions carry no index and are
+//! never blocked by admission (they can never block in execution - they are built
+//! from their batch's already-available effects - and running them is what unblocks
+//! their waiters), though they occupy a concurrency slot when one is free. Any
+//! transaction bypassing admission must be unable to block.
+//!
+//! Execution occupies at most K+1 threads of the shared tokio blocking pool (whose
+//! exhaustion by other subsystems would halt much of the node regardless). Parked
+//! transactions hold their concurrency slot; if that ever limits throughput, the
+//! escalation path is releasing the slot on park - see the deleted
+//! `mysten_common::sync::execution_permit` for the prior mechanism.
+
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 use std::sync::{Arc, Weak};
 
-use mysten_common::sync::execution_permit::set_execution_permit;
-use mysten_common::{fatal, random::get_rng};
+use mysten_common::{debug_fatal, fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
-use sui_macros::fail_point_async;
 use sui_types::execution::ExecutionOutput;
 use sui_types::transaction::TransactionDataAPI;
-use tokio::sync::{Semaphore, mpsc::UnboundedReceiver, oneshot};
+use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 use tracing::{Instrument, error_span, info, trace, warn};
 
 use crate::authority::AuthorityState;
 use crate::execution_scheduler::PendingCertificate;
+use crate::execution_scheduler::causal_order::{CausalAdmission, InFlightSlot};
 
 #[cfg(test)]
 #[path = "unit_tests/execution_driver_tests.rs"]
@@ -22,50 +61,114 @@ mod execution_driver_tests;
 
 const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.05;
 
+/// Heap entry ordering pending transactions by causal index (min-heap via `Reverse`).
+/// Index-less transactions (settlements, admitted unconditionally) sort first.
+struct QueuedCertificate(PendingCertificate);
+
+impl QueuedCertificate {
+    fn index(&self) -> Option<u64> {
+        self.0.execution_env.causal_index
+    }
+}
+
+impl PartialEq for QueuedCertificate {
+    fn eq(&self, other: &Self) -> bool {
+        self.index() == other.index()
+    }
+}
+impl Eq for QueuedCertificate {}
+impl PartialOrd for QueuedCertificate {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for QueuedCertificate {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.index().cmp(&other.index())
+    }
+}
+
+/// Waits until the transaction at the head of the heap is admissible, then pops it,
+/// returning it with its concurrency slot (None for unconditionally admitted
+/// settlement transactions).
+///
+/// Cancellation-safe: nothing is popped or admitted until the poll that completes.
+async fn pop(
+    waiting: &mut BinaryHeap<Reverse<QueuedCertificate>>,
+    causal_admission: &Arc<CausalAdmission>,
+) -> (PendingCertificate, Option<InFlightSlot>) {
+    loop {
+        match waiting.peek().map(|Reverse(head)| head.index()) {
+            // Settlement transactions bypass causal admission (they carry no index,
+            // and transactions may be parked waiting on the accumulator versions they
+            // write, so they must never be blocked) - but they respect the
+            // concurrency limit when there is room, taking a slot if one is free.
+            Some(None) => {
+                let cert = waiting.pop().unwrap().0.0;
+                debug_assert!(
+                    cert.certificate
+                        .transaction_data()
+                        .kind()
+                        .is_accumulator_settle_tx(),
+                    "only settlement transactions may bypass causal admission"
+                );
+                return (cert, causal_admission.try_take_slot());
+            }
+            Some(Some(index)) => {
+                if let Some(slot) = causal_admission.try_admit(index) {
+                    return (waiting.pop().unwrap().0.0, Some(slot));
+                }
+            }
+            None => {}
+        }
+        // The heap is empty or its head is not admissible; wait for the watermark to
+        // advance or a concurrency slot to free.
+        causal_admission.changed().await;
+    }
+}
+
 /// When a notification that a new pending transaction is received we activate
 /// processing the transaction in a loop.
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
     mut rx_ready_certificates: UnboundedReceiver<PendingCertificate>,
     mut rx_execution_shutdown: oneshot::Receiver<()>,
+    causal_admission: Arc<CausalAdmission>,
 ) {
     info!("Starting pending certificates execution process.");
 
-    // Rate limit concurrent executions to half of the available CPUs.
-    let execution_concurrency = std::cmp::max(1, num_cpus::get() / 2);
-    let normal_limit = Arc::new(Semaphore::new(execution_concurrency));
-    // This is an optimization to speed up the execution of transactions that mutate an implicitly-read system object.
-    // These transactions help unblock other transactions that read the same object.
-    // Give them a dedicated permit pool so they execute as fast as possible.
-    let system_object_writer_limit = Arc::new(Semaphore::new(execution_concurrency));
+    // Transactions that have arrived but are not yet admitted, ordered by causal index.
+    let mut waiting: BinaryHeap<Reverse<QueuedCertificate>> = BinaryHeap::new();
 
-    // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
         let _scope = monitored_scope("ExecutionDriver::loop");
 
-        let certificate;
-        let execution_env;
-        let txn_ready_time;
-        let executing_guard;
-        tokio::select! {
-            result = rx_ready_certificates.recv() => {
-                if let Some(pending_cert) = result {
-                    certificate = pending_cert.certificate;
-                    execution_env = pending_cert.execution_env;
-                    txn_ready_time = pending_cert.stats.ready_time.unwrap();
-                    executing_guard = pending_cert.executing_guard;
-                } else {
-                    // Should only happen after the AuthorityState has shut down and tx_ready_certificate
-                    // has been dropped by ExecutionScheduler.
-                    info!("No more certificate will be received. Exiting executor ...");
+        // Get the next admissible transaction, buffering arrivals meanwhile.
+        let (pending_cert, mut slot) = loop {
+            tokio::select! {
+                received = rx_ready_certificates.recv() => {
+                    let Some(pending_cert) = received else {
+                        // Should only happen after the AuthorityState has shut down and tx_ready_certificate
+                        // has been dropped by ExecutionScheduler.
+                        info!("No more certificate will be received. Exiting executor ...");
+                        return;
+                    };
+                    if let Some(authority) = authority_state.upgrade() {
+                        authority.metrics.execution_driver_dispatch_queue.dec();
+                    }
+                    waiting.push(Reverse(QueuedCertificate(pending_cert)));
+                }
+                next = pop(&mut waiting, &causal_admission) => break next,
+                _ = &mut rx_execution_shutdown => {
+                    info!("Shutdown signal received. Exiting executor ...");
                     return;
-                };
-            }
-            _ = &mut rx_execution_shutdown => {
-                info!("Shutdown signal received. Exiting executor ...");
-                return;
+                }
             }
         };
+        let certificate = pending_cert.certificate;
+        let execution_env = pending_cert.execution_env;
+        let txn_ready_time = pending_cert.stats.ready_time.unwrap();
+        let _executing_guard = pending_cert.executing_guard;
 
         let authority = if let Some(authority) = authority_state.upgrade() {
             authority
@@ -75,7 +178,6 @@ pub async fn execution_process(
             info!("Authority state has shutdown. Exiting ...");
             return;
         };
-        authority.metrics.execution_driver_dispatch_queue.dec();
 
         // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
         let epoch_store = authority.load_epoch_store_one_call_per_task();
@@ -84,24 +186,31 @@ pub async fn execution_process(
         trace!(?digest, "Pending certificate execution activated.");
 
         if epoch_store.epoch() != certificate.epoch() {
-            info!(
-                ?digest,
-                cur_epoch = epoch_store.epoch(),
-                cert_epoch = certificate.epoch(),
-                "Ignoring certificate from previous epoch."
+            // With enqueue deduplication, and every transaction committed in an epoch
+            // executing before the epoch closes, this should be impossible. Dropping
+            // the slot retires the causal index.
+            debug_fatal!(
+                "certificate from epoch {} in the execution driver at epoch {}",
+                certificate.epoch(),
+                epoch_store.epoch()
             );
             continue;
         }
 
-        let limit = if certificate
-            .transaction_data()
-            .kind()
-            .mutates_implicitly_read_system_object()
-        {
-            system_object_writer_limit.clone()
-        } else {
-            normal_limit.clone()
-        };
+        if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {
+            authority
+                .metrics
+                .execution_queueing_latency
+                .report(txn_ready_time.elapsed());
+            if let Some(latency) = authority.metrics.execution_queueing_latency.latency() {
+                authority
+                    .metrics
+                    .execution_queueing_delay_s
+                    .observe(latency.as_secs_f64());
+            }
+        }
+
+        authority.metrics.execution_rate_tracker.lock().record();
 
         // Certificate execution is CPU-bound and can take significant time, so run it on a
         // blocking thread to avoid stalling the async runtime's worker threads.
@@ -112,44 +221,11 @@ pub async fn execution_process(
         let blocking_span = execution_span.clone();
         spawn_monitored_task!(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
-            let _executing_guard = executing_guard;
-
-            if authority.is_tx_already_executed(&digest) {
-                return;
-            }
-
-            // `permit` is moved into the blocking closure below and installed on the
-            // execution thread, so that a blocking sync primitive can release it if
-            // execution has to wait on work that another execution must perform (which
-            // would otherwise deadlock under limited concurrency). Until then it is held
-            // by this task, and the early returns below drop it, freeing the slot.
-            let permit = {
-                // The scope measures time blocked waiting for a permit, i.e. how saturated
-                // execution concurrency is.
-                let _scope = monitored_scope("ExecutionDriver::acquire_permit");
-                // Unwrap is ok because we never close the semaphore in this context.
-                limit.acquire_owned().await.unwrap()
-            };
-
-            if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {
-                authority
-                    .metrics
-                    .execution_queueing_latency
-                    .report(txn_ready_time.elapsed());
-                if let Some(latency) = authority.metrics.execution_queueing_latency.latency() {
-                    authority
-                        .metrics
-                        .execution_queueing_delay_s
-                        .observe(latency.as_secs_f64());
-                }
-            }
-            authority.metrics.execution_rate_tracker.lock().record();
-
-            fail_point_async!("transaction_execution_delay");
 
             // Hold the epoch-alive guard across execution so that `epoch_terminated()` waits
-            // for in-flight execution to finish (previously guaranteed by `within_alive_epoch`,
-            // since execution has no yield points). Skip if the epoch has already ended.
+            // for in-flight execution to finish. Skip if the epoch has already ended; the
+            // slot drop retires the causal index, and the transaction is re-enqueued (and
+            // re-indexed) in the next epoch.
             let Some(_alive_guard) = epoch_store.enter_alive_epoch().await else {
                 info!("Epoch ended before execution could start; transaction will be retried in the next epoch");
                 return;
@@ -157,14 +233,7 @@ pub async fn execution_process(
 
             // Await unconditionally: once dispatched, execution always runs to completion
             // within the alive-epoch guard and is never detached at epoch end.
-            // TODO: Currently it is possible that enough transactions get blocked waiting during execution,
-            // and exhausted all blocking threads, causing the execution to stall. A fix is on the way.
             tokio::task::spawn_blocking(move || {
-                // Install the permit so a blocking sync primitive can release it while
-                // execution waits; otherwise it is released when this guard drops at the
-                // end of execution. Not re-acquired after a release - any transient
-                // over-subscription resolves itself as tasks complete.
-                let _permit_guard = set_execution_permit(Box::new(permit));
                 let _enter = blocking_span.enter();
                 let _scope = monitored_scope("ExecutionDriver::blocking_task");
                 match authority.try_execute_immediately(
@@ -185,7 +254,12 @@ pub async fn execution_process(
                         fatal!("Failed to execute certified transaction {digest:?}! error={e} certificate={certificate:?}");
                     }
                     ExecutionOutput::RetryLater => {
-                        // Transaction will be retried later and auto-rescheduled, so we ignore it here
+                        // Transaction will be retried later and auto-rescheduled under its
+                        // original causal index (carried in the retry's env clone), so keep
+                        // the index alive when the slot is released.
+                        if let Some(slot) = &mut slot {
+                            slot.skip_retire();
+                        }
                         authority
                             .metrics
                             .execution_driver_paused_transactions

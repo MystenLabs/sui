@@ -3205,7 +3205,27 @@ impl AuthorityPerEpochStore {
         output.set_default_commit_stats_for_testing();
         output.write_to_batch(self, &mut batch)?;
         batch.write()?;
-        Ok(assigned_versions)
+
+        // A test commit runs no settlement, so the accumulator root never advances
+        // between calls. Claiming a root version would make every later call a
+        // duplicate of the first version group and get it dropped by enqueue
+        // deduplication (see `execution_scheduler::causal_order`); versionless units
+        // bypass it. Tests that need a root version attach one explicitly.
+        Ok(AssignedTxAndVersions::new(
+            assigned_versions
+                .0
+                .into_iter()
+                .map(|(key, versions)| {
+                    (
+                        key,
+                        AssignedVersions::new(
+                            versions.shared_object_versions,
+                            sui_types::base_types::SystemObjectVersions::empty(),
+                        ),
+                    )
+                })
+                .collect(),
+        ))
     }
 
     pub(crate) fn process_notifications<'a>(
