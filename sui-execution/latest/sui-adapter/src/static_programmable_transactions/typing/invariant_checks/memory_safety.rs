@@ -56,9 +56,8 @@ enum Value {
 
 #[derive(Debug)]
 struct Location {
-    /// Logical identity of this location's graph root.
-    /// The node is created lazily on first borrow, so non-reference locations that are never
-    /// borrowed do not create a node.
+    /// The location represented by this root. Its graph node is created on first borrow,
+    /// so values that are never borrowed need no node.
     root: RootLocation,
     value: Option<Value>,
 }
@@ -74,8 +73,8 @@ struct Context {
     pure_inputs: Vec<Location>,
     receiving_inputs: Vec<Location>,
     results: Vec<Vec<Location>>,
-    /// Indices into `results` of rows that held at least one reference when produced. Inputs are
-    /// always non-reference, so these are the only locations `all_references` needs to scan.
+    /// Indices into `results` of rows that held at least one reference when produced.
+    /// This lets `all_references` skip result rows that never contained references.
     result_ref_rows: Vec<usize>,
     // Temporary set of locations borrowed by arguments seen thus far for the current command.
     // Used exclusively for checking the validity copy/move.
@@ -293,7 +292,6 @@ impl Memory {
     /// Returns whether paths from a shared ancestor pass through delta children from different
     /// commands. Only `delta_parents` can contribute, so when that set is smaller than both
     /// of the ancestor bitsets it is iterated directly; otherwise the bitsets are intersected.
-    /// Both are equivalent.
     fn has_cross_command_extensions(&self, left: NodeID, right: NodeID) -> anyhow::Result<bool> {
         let left_ancestors = &self.node(left)?.ancestors;
         let right_ancestors = &self.node(right)?.ancestors;
@@ -646,7 +644,7 @@ impl Context {
             .chain(&self.withdrawal_inputs)
             .chain(&self.pure_inputs)
             .chain(&self.receiving_inputs);
-        // Include result rows that held at least once reference when produced.
+        // Include result rows that held at least one reference when produced.
         let result_refs = self
             .result_ref_rows
             .iter()
