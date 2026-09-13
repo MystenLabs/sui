@@ -69,14 +69,6 @@ fn enable_mldsa() -> sui_protocol_config::OverrideGuard {
     })
 }
 
-fn enable_mldsa_in_multisig() -> sui_protocol_config::OverrideGuard {
-    ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_mldsa65_auth_for_testing(true);
-        config.set_accept_mldsa65_in_multisig_for_testing(true);
-        config
-    })
-}
-
 #[sim_test]
 async fn test_mldsa65_transfer_executes() {
     let _guard = enable_mldsa();
@@ -209,9 +201,12 @@ impl HybridCommittee {
 
 #[sim_test]
 async fn test_mldsa65_multisig_member_denied() {
-    // `mldsa65_auth` alone does not admit an ML-DSA member's signature inside
-    // a multisig: that is `accept_mldsa65_in_multisig`, off here.
-    let _guard = enable_mldsa();
+    // With the flag pinned off, an ML-DSA member's signature is rejected by
+    // the multisig verifier itself; membership in the committee is fine.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_mldsa65_auth_for_testing(false);
+        config
+    });
     let test_cluster = TestClusterBuilder::new().build().await;
     let committee = HybridCommittee::funded(&test_cluster, 1).await;
     for tx in committee.signed_by(&[&committee.mldsa_kp]) {
@@ -228,7 +223,7 @@ async fn test_mldsa65_multisig_member_denied() {
 async fn test_mldsa65_multisig_hybrid_executes() {
     // Threshold 2 of two weight-1 members: both the Ed25519 and the ML-DSA
     // signatures are required, and with the flag on the transfer executes.
-    let _guard = enable_mldsa_in_multisig();
+    let _guard = enable_mldsa();
     let test_cluster = TestClusterBuilder::new().build().await;
     let committee = HybridCommittee::funded(&test_cluster, 2).await;
     let [upgraded, _legacy] = committee.signed_by(&[&committee.ed_kp, &committee.mldsa_kp]);

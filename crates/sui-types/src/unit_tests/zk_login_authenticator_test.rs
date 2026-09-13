@@ -108,7 +108,6 @@ fn zklogin_sign_personal_message() {
         true,
         true,
         true,
-        true,
         Some(30),
         true,
         true,
