@@ -196,7 +196,7 @@ The following diagram shows the flow from event emission to light client verific
 │                   Light Client Verification                      │
 │  1. Fetch EventStreamHead with OCS inclusion proof              │
 │  2. Verify proof against checkpoint (signed by committee)       │
-│  3. Fetch events from ListAuthenticatedEvents RPC               │
+│  3. Fetch events from LedgerService.ListEvents RPC              │
 │  4. Recompute MMR from events, compare to EventStreamHead       │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -207,7 +207,7 @@ The following diagram shows the flow from event emission to light client verific
 |-----------|-------------|
 | `emit_authenticated<T>()` | Move function to emit verified events |
 | `EventStreamHead` | Onchain commitment structure per package |
-| `ListAuthenticatedEvents` | gRPC API to fetch events with pagination |
+| `LedgerService.ListEvents` | gRPC API that streams the events of a stream |
 | `AuthenticatedEventsClient` | Reference Rust client for verification |
 | MMR (Merkle Mountain Range) | Append-only commitment structure |
 
@@ -225,59 +225,51 @@ Events are batched and settled at checkpoint boundaries through the **accumulato
 
 ## API reference
 
-The authenticated events API provides services to fetch events and to verify object inclusion.
+Authenticated events use two services: the standard ledger service to read events, and the proof service to verify that the onchain commitment was written at a given checkpoint.
 
-### `EventService`
+### `LedgerService.ListEvents`
 
-The event service lists authenticated events for a stream:
+Events are read through the standard `LedgerService.ListEvents` server-streaming RPC in `sui.rpc.v2`. Authenticated events are ordinary events carrying extra metadata, so they need no separate event API.
 
 ```protobuf
-service EventService {
-  rpc ListAuthenticatedEvents(ListAuthenticatedEventsRequest)
-      returns (ListAuthenticatedEventsResponse);
+service LedgerService {
+  rpc ListEvents(ListEventsRequest) returns (stream ListEventsResponse);
 }
 ```
 
-**Request parameters:**
+The reference client sets:
 
-- `stream_id` (required): Package address that emitted the events
-- `start_checkpoint`: Checkpoint to start from (default: 0)
-- `page_size`: Events per page (default: 1000, maximum: 1000)
-- `page_token`: Pagination token from the previous response
+- `read_mask`: the fields it needs, which are `event_type`, `contents`, `checkpoint`, `transaction_index`, and `event_index`
+- `start_checkpoint`: the checkpoint to resume from
+- `filter`: restricts the stream to the events of one `stream_id`
+- `options`: query options, including the page size
 
-**Response:**
+Because the RPC streams, the client reads response frames until the server signals an end reason, and each frame carries a `watermark.cursor` it records for resumption.
 
-- `events`: List of `AuthenticatedEvent` with checkpoint, transaction index, event index, and payload
-- `highest_indexed_checkpoint`: Latest indexed checkpoint
-- `next_page_token`: Token for the next page (empty if no more events)
+### `ProofService.GetCheckpointObjectProof`
 
-### `ProofService`
-
-The proof service verifies that an object exists at a specific checkpoint:
+The proof service proves what happened to an object at a specific checkpoint. It lives in `sui.rpc.v2alpha`.
 
 ```protobuf
 service ProofService {
-  rpc GetObjectInclusionProof(GetObjectInclusionProofRequest)
-      returns (GetObjectInclusionProofResponse);
+  rpc GetCheckpointObjectProof(GetCheckpointObjectProofRequest)
+      returns (GetCheckpointObjectProofResponse);
 }
 ```
 
-Used to verify that the `EventStreamHead` object exists at a specific checkpoint.
+Used to verify that the `EventStreamHead` object was written at a specific checkpoint.
 
 **Request parameters:**
 
-- `object_id` (required): The `EventStreamHead` object ID (derived from the package address)
-- `checkpoint` (required): Checkpoint sequence number to prove inclusion at
+- `object_id` (required): The `EventStreamHead` object ID, hex-encoded, derived from the package address
+- `checkpoint` (required): Checkpoint sequence number to query
 
 **Response:**
 
-- `object_ref`: Object reference (object_id, version, digest)
-- `inclusion_proof`: OCS merkle proof containing:
-  - `merkle_proof`: BCS-encoded proof nodes
-  - `leaf_index`: Position in the merkle tree
-  - `tree_root`: Root digest (32 bytes)
-- `object_data`: BCS-encoded `EventStreamHead` object
-- `checkpoint_summary`: BCS-encoded checkpoint summary for verification
+- `checkpoint_summary`: BCS-encoded `CertifiedCheckpointSummary`, carrying the `checkpoint_artifacts_digest` that the proof's `tree_root` must reconstruct, and the BLS aggregate signature over it
+- `proof`: a `oneof` that is either
+  - `inclusion` (`OcsInclusionProof`): the object changed in this checkpoint. Contains `object_ref`, `merkle_proof`, `leaf_index`, `tree_root`, and `object_data`, the BCS-encoded object at the committed version. `object_data` is absent when the change was a deletion or a wrap.
+  - `non_inclusion` (`OcsNonInclusionProof`): the object did not change in this checkpoint
 
 The inclusion proof verifies that the `EventStreamHead` was written at the specified checkpoint. This is essential for resuming streams: the checkpoint must be one where events were actually emitted.
 
@@ -287,10 +279,9 @@ Configure the client with custom pagination, polling, and timeout settings:
 
 ```rust
 let config = ClientConfig::new(
-    page_size,                    // Events per RPC call (max 1000)
-    poll_interval,                // How often to poll for new events
-    max_pagination_iterations,    // Max pages before forcing checkpoint boundary
-    rpc_timeout,                  // RPC call timeout
+    page_size,       // Events per RPC call
+    poll_interval,   // How often to poll for new events
+    rpc_timeout,     // RPC call timeout
 )?;
 
 let client = AuthenticatedEventsClient::new_with_config(
