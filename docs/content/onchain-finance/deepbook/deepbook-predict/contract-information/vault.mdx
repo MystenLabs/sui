@@ -657,45 +657,7 @@ One `FlushExecuted` per flush carries the priced mark and its breakdown, so `poo
 
 ## Read and write the pool from a client {#read-vault-state-from-a-client}
 
-`@mysten/deepbook-v3` version 2.3.0 exposes the LP path on its `/predict` subpath for both networks. Every read runs against the Sui client's core API, with no indexer or server in the path.
-
-The 4 queue builders mirror the Move calls:
-
-| **Call** | **Signature** | **Units** |
-|---|---|---|
-| Queue a supply | `client.predict.tx.supplyPlp(owner, amountUsdc, { minPlpOut })` | USD decimal, `number` or `string`; `minPlpOut` is raw PLP shares as a `bigint` |
-| Queue a withdrawal | `client.predict.tx.withdrawPlp(owner, shares, { minUsdcOut })` | Raw PLP shares as a `bigint`, not USD; `minUsdcOut` is a USD decimal |
-| Cancel a supply | `client.predict.tx.cancelSupplyPlp(owner, index)` | `bigint` queue index |
-| Cancel a withdrawal | `client.predict.tx.cancelWithdrawPlp(owner, index)` | `bigint` queue index |
-
-`withdrawPlp` taking raw shares is the largest risk on this surface. Read the balance to withdraw with `client.predict.read.plpBalance(owner)`, which also returns a raw `bigint`, and pass it straight through.
-
-The options object carries the request's price floor. `minPlpOut` is the fewest 6-decimal PLP shares you accept for the whole supply, and `minUsdcOut` is the least USDC, after the withdraw fee, you accept for the whole withdrawal. Both are optional and default to no floor. Because both deployments run `lp_request_limit_flush_attempts` at `1`, the first flush whose mark misses a floor cancels and refunds that request, so set a floor at which you would rather take the refund than the fill.
-
-Recover the queue index from the request transaction with the decoder, which parses event BCS locally and makes no network call:
-
-```ts
-const req = client.predict.decode.plpRequest(supplyResult);
-req.kind;   // 'supply' | 'withdraw'
-req.index;  // bigint - pass to cancelSupplyPlp or cancelWithdrawPlp
-```
-
-`client.predict.read.pool()` returns a `PoolSummary`. The last 2 fields count requests rather than amounts:
-
-| **Field** | **Type** | **Meaning** |
-|---|---|---|
-| `plpTotalSupply` | `bigint` | Raw PLP supply. |
-| `idleUsdc` | `number` | Idle USDC as a USD decimal. |
-| `supplyRequestsPending` | `number` | Number of queued supply requests, not their total amount. |
-| `withdrawRequestsPending` | `number` | Number of queued withdraw requests, not their total amount. |
-
-The following example queues a supply request with a floor and reads back the receipt index. It selects its network from the examples' `NETWORK` constant:
-
-<ImportContent source="examples/deepbook-predict/src/supply.ts" mode="code" tag="supply" />
-
-This one queues a withdrawal and then cancels it:
-
-<ImportContent source="examples/deepbook-predict/src/withdraw.ts" mode="code" tag="withdraw" />
+`@mysten/deepbook-v3` version 2.3.0 queues and cancels supply and withdraw requests, reads the pool and a PLP balance, and decodes request receipts on its `/predict` subpath, running every read through the Sui client's core API. See [Predict Liquidity SDK](/onchain-finance/deepbook/deepbook-predict-sdk/liquidity) for each function, the units each floor takes, and examples.
 
 ## Error codes {#error-codes}
 
