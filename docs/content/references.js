@@ -198,6 +198,7 @@ const references = [
 	'references/ptb-commands',
 	'references/object-display-syntax',
 	'references/release-notes',
+	'developer-updates',
     'references/sui-glossary',
 	{
 		type: 'link',
