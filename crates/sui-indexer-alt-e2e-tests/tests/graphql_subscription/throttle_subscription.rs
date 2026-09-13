@@ -5,11 +5,9 @@
 //! handler, so it wraps every subscription identically; these tests drive it through the checkpoint
 //! and transaction subscriptions.
 //!
-//! Timing is made robust by measuring a backlog: the validator produces several checkpoints, then a
-//! subscription resumes from a past point so the backfill has every payload ready up front. The gaps
-//! between arrivals then reflect the throttle's enforced sleep (`cost / rate`), not the rate at
-//! which the validator produces checkpoints. All timing assertions are one-sided lower or upper
-//! bounds with generous margins, since delivery can lag the sleep (scheduling) but never beat it.
+//! Wall-clock upper bounds include query resolution and scheduling, not just throttling. Exact
+//! disabled-pacing and payload/depth intervals are covered with paused time in the library tests.
+//! These end-to-end cases use a ready backlog to check handler-path pacing and delivery.
 
 use std::collections::BTreeSet;
 use std::time::Duration;
@@ -88,62 +86,17 @@ async fn throttle_paces_backfilled_checkpoints() {
     );
 }
 
-/// Rate 0 disables pacing, so the same backlog drains at backfill speed (< 2s, not paced).
+/// A zero-budget handler subscription preserves the checkpoint backfill's sequence.
 #[tokio::test]
-async fn unthrottled_backfill_is_fast() {
+async fn unthrottled_backfill_preserves_checkpoint_order() {
     let cluster = SubscriptionTestCluster::new_with_throttle_budget(0).await;
     wait_for_tip(&cluster, 5).await;
 
     let mut stream = cluster
         .subscribe_with_variables(LEAN_QUERY, Some(json!({ "after": 0 })))
         .await;
-    let total = collect_next_n_arrivals(&mut stream, 4)
-        .await
-        .last()
-        .unwrap()
-        .0;
-
-    assert!(
-        total < Duration::from_secs(2),
-        "unthrottled backlog should drain fast, took {total:?}"
-    );
-}
-
-/// Cost tracks the payload: a rich checkpoint (cost 18) paces slower than a lean one (cost 10) at the
-/// same rate, 0.9s vs 0.5s per gap at 20 nodes/sec.
-#[tokio::test]
-async fn richer_payload_paces_slower() {
-    const RICH_QUERY: &str = "subscription($after: UInt53) { \
-        checkpoints(afterCheckpoint: $after) { node { \
-            sequenceNumber digest timestamp networkTotalTransactions \
-            epoch { epochId referenceGasPrice } } } }";
-
-    let cluster = SubscriptionTestCluster::new_with_throttle_budget(20).await;
-    wait_for_tip(&cluster, 5).await;
-
-    let mut lean = cluster
-        .subscribe_with_variables(LEAN_QUERY, Some(json!({ "after": 0 })))
-        .await;
-    let lean_total = collect_next_n_arrivals(&mut lean, 4)
-        .await
-        .last()
-        .unwrap()
-        .0;
-    drop(lean);
-
-    let mut rich = cluster
-        .subscribe_with_variables(RICH_QUERY, Some(json!({ "after": 0 })))
-        .await;
-    let rich_total = collect_next_n_arrivals(&mut rich, 4)
-        .await
-        .last()
-        .unwrap()
-        .0;
-
-    assert!(
-        rich_total > lean_total + Duration::from_secs(1),
-        "richer payload should pace slower: lean={lean_total:?} rich={rich_total:?}"
-    );
+    let arrivals = collect_next_n_arrivals(&mut stream, 4).await;
+    assert_eq!(checkpoint_seqs(&arrivals), vec![1, 2, 3, 4]);
 }
 
 /// The throttle wraps the transaction subscription too: each 4-node match costs 10, so at 20 nodes/sec
