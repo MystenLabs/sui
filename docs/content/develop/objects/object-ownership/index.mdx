@@ -48,7 +48,7 @@ Every object has an owner that determines who can use it in transactions and whe
 
 | Ownership type | Access model | Versioning path | Typical latency |
 | --- | --- | --- | --- |
-| [Address-owned](/develop/objects/object-ownership/address-owned) | A single address can use the object. | Fastpath | Lowest (no consensus needed) |
+| [Address-owned](/develop/objects/object-ownership/address-owned) | A single address can use the object. | Fastpath | Lowest (no contention on the object) |
 | [Shared](/develop/objects/object-ownership/shared) | Any address can use the object, subject to Move checks. | Consensus | Higher (consensus ordering required) |
 | [Immutable](/develop/objects/object-ownership/immutable) | Any address can read the object; no one can mutate it. | Fixed after it becomes immutable | Lowest (read-only, no versioning) |
 | [Wrapped](/develop/objects/object-ownership/wrapped) | Only accessible through the object that wraps it. | Depends on the wrapper | Depends on the wrapper |
@@ -58,13 +58,13 @@ Every object has an owner that determines who can use it in transactions and whe
 
 Choose the ownership type based on your access pattern.
 
-- **Use address-owned objects** when a single user owns and controls the object (for example, a user's NFT, a personal wallet, or a capability token). Address-owned objects skip consensus, so transactions against them have the lowest latency.
+- **Use address-owned objects** when a single user owns and controls the object (for example, a user's NFT, a personal wallet, or a capability token). Only the owner can use an address-owned object, so there is no contention for it, and the sender names the version in the object reference rather than waiting for consensus to assign one.
 - **Use shared objects** when multiple users need to read and write the same object (for example, a marketplace, a liquidity pool, or a game board). Shared objects go through consensus, which adds latency but enables concurrent access. Contention on a single shared object can reduce transaction throughput, so minimize the number of transactions that write to the same shared object in the same checkpoint ([Security Best Practices](/develop/security/best-practices)).
-- **Use immutable objects** for data that never changes after creation (for example, published packages, configuration constants, or reference data). Immutable objects have no versioning overhead and any transaction can read them without consensus.
+- **Use immutable objects** for data that never changes after creation (for example, published packages, configuration constants, or reference data). Immutable objects have no versioning overhead, and any number of transactions can read the same one concurrently.
 - **Use wrapped objects** when an object should only be accessible through its parent (for example, a ticket inside an envelope, or inventory items inside a character). See [Wrapped Objects](/develop/objects/object-ownership/wrapped) for details.
 #### Address-owned 
 
-Use address-owned objects when a single user owns and controls the object (for example, a user's NFT, a personal wallet, or a capability token). Address-owned objects skip consensus, so transactions against them have the lowest latency.
+Use address-owned objects when a single user owns and controls the object (for example, a user's NFT, a personal wallet, or a capability token). Only the owner can use an address-owned object, so there is no contention for it, and the sender names the version in the object reference rather than waiting for consensus to assign one.
 
 #### Shared
 
@@ -72,7 +72,7 @@ Use shared objects when multiple users need to read and write the same object (f
 
 #### Immutable 
 
-Use immutable objects for data that never changes after creation (for example, published packages, configuration constants, or reference data). Immutable objects have no versioning overhead and any transaction can read them without consensus.
+Use immutable objects for data that never changes after creation (for example, published packages, configuration constants, or reference data). Immutable objects have no versioning overhead, and any number of transactions can read the same one concurrently.
 
 #### Wrapped
 Use wrapped objects when an object should only be accessible through its parent (for example, a ticket inside an envelope, or inventory items inside a character). See [Wrapped Objects](/develop/objects/object-ownership/wrapped) for details.

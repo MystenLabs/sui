@@ -70,7 +70,7 @@ It is recommended to use [party objects](/develop/objects/object-ownership/party
 
 :::
 
-Fastpath objects can only be [address-owned](/develop/objects/object-ownership/address-owned) or [immutable](/develop/objects/object-ownership/immutable). Transactions using fastpath benefit from low latency and fast finality because they bypass consensus.
+Fastpath objects can only be [address-owned](/develop/objects/object-ownership/address-owned) or [immutable](/develop/objects/object-ownership/immutable). The sender names the exact version to use, so these objects need no consensus-assigned version and do not contend with other transactions for one.
 
 Every fastpath transaction must use the object's current version as input and use the output version as the reference for the next transaction. If a fastpath object is frequently used by multiple senders, coordinate offchain access or use a consensus object instead.
 
@@ -80,7 +80,7 @@ Fastpath is a good fit for applications that are extremely sensitive to latency 
 
 ## Consensus objects
 
-Consensus objects can be [address-owned](/develop/objects/object-ownership/address-owned), owned by a [party](/develop/objects/object-ownership/party), or [shared](/develop/objects/object-ownership/shared). Transactions that access one or more consensus objects require consensus to sequence reads and writes, which means higher gas cost and latency compared to fastpath, but version management is simpler, especially for frequently accessed or multi-party objects.
+Consensus objects can be [address-owned](/develop/objects/object-ownership/address-owned), owned by a [party](/develop/objects/object-ownership/party), or [shared](/develop/objects/object-ownership/shared). Consensus sequences reads and writes on these objects and assigns their versions, which can raise latency when multiple transactions contend for an object, but you manage versions more easily, especially for frequently accessed or multi-party objects.
 
 Transactions accessing multiple consensus objects or particularly popular objects might see increased latency due to contention. The trade-off is flexibility: multiple addresses can access the same object in a coordinated way without offchain coordination.
 
