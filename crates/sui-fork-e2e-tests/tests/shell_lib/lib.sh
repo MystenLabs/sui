@@ -101,7 +101,7 @@ run_json() {
 
 # graphql <query>: POST a query to the localnet GraphQL endpoint and print the raw response.
 graphql() {
-  curl -sS -X POST -H 'Content-Type: application/json' \
+  curl -sS --max-time 10 --connect-timeout 2 -X POST -H 'Content-Type: application/json' \
     --data "$(jq -cn --arg q "$1" '{query: $q}')" "$GRAPHQL_URL"
 }
 
