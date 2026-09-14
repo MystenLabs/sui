@@ -16,8 +16,13 @@ sender=$(on_localnet active-address)
 
 echo "=== fund an address whose key lives in another keystore ==="
 mkdir victim
-sui client --client.config victim/client.yaml -y envs > /dev/null
-victim=$(sui client --client.config victim/client.yaml active-address)
+victim_config=victim/client.yaml
+cp "$ISOLATED_LOCALNET_CONFIG_TEMPLATE" "$victim_config"
+victim=$(sui client --client.config "$victim_config" new-address ed25519 --json | jq -r .address)
+sui client --client.config "$victim_config" switch --address "$victim" > /dev/null
+victim_envs=$(sui client --client.config "$victim_config" envs --json \
+  | jq -r '[.[1], (.[0] | map(.alias) | join(","))] | join(" ")')
+assert_eq "$victim_envs" "localnet localnet" "the victim client only knows the localnet"
 on_localnet faucet --address "$victim" --url "$FAUCET_URL" > /dev/null
 victim_coin=$(gas_coin on_localnet "$victim")
 wait_for_graphql_tx "$(object_field on_localnet "$victim_coin" .prevTx)" > /dev/null
@@ -62,6 +67,7 @@ success: true
 exit_code: 0
 ----- stdout -----
 === fund an address whose key lives in another keystore ===
+ok: the victim client only knows the localnet
 ok: the victim holds SUI on the localnet
 ok: the victim's key is not in the client keystore
 === fork seeded with the victim ===

@@ -15,6 +15,7 @@
 
 : "${LOCALNET_CONFIG:?LOCALNET_CONFIG must be a scratch path for the localnet client.yaml}"
 : "${LOCALNET_CONFIG_TEMPLATE:?LOCALNET_CONFIG_TEMPLATE must name the localnet config template}"
+: "${ISOLATED_LOCALNET_CONFIG_TEMPLATE:?must name an isolated localnet config template}"
 : "${FORK_CONFIG:?FORK_CONFIG must be a scratch path for the fork client.yaml}"
 : "${GRAPHQL_URL:?GRAPHQL_URL must be the localnet GraphQL endpoint}"
 : "${FAUCET_URL:?FAUCET_URL must be the localnet faucet gas endpoint}"

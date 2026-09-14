@@ -5,8 +5,8 @@
 //!
 //! Every `.sh` file under `tests/shell_tests` is one test named `shell_tests::<relative path>`.
 //! The harness builds the `sui` and `sui-fork` binaries, spawns
-//! `sui start --force-regenesis --with-graphql --with-faucet` on ports it allocates, creates a
-//! localnet-only client config template, copies the script's directory, `tests/shell_lib`, and the
+//! `sui start --force-regenesis --with-graphql --with-faucet` on ports it allocates, creates
+//! localnet-only client config templates, copies the script's directory, `tests/shell_lib`, and the
 //! Sui framework packages into a sandbox, and runs the script with both binaries on `PATH`. The
 //! harness compares the normalised output with the `.snap` file next to the script. The output
 //! layout matches `crates/sui/tests/shell_tests.rs` so the two suites read the same way, and
@@ -16,6 +16,8 @@
 //! Scripts receive these variables:
 //!
 //! - `LOCALNET_CONFIG_TEMPLATE`: a localnet-only client config with an empty keystore.
+//! - `ISOLATED_LOCALNET_CONFIG_TEMPLATE`: the same config backed by a separate empty keystore for
+//!   tests that need an address the primary client does not manage.
 //! - `LOCALNET_CONFIG`: the path where `localnet_setup` copies the template, creates and funds its
 //!   active address, and adds a second address.
 //! - `FORK_CONFIG`: the path for a copy of that file sharing the same keystore, which scripts
@@ -61,6 +63,8 @@ const SHELL_LIB_DIR: &str = "tests/shell_lib";
 const CLIENT_CONFIG_TEMPLATE: &str = "client-template.yaml";
 const CLIENT_KEYSTORE: &str = "sui.keystore";
 const FORK_CLIENT_CONFIG: &str = "fork.yaml";
+const ISOLATED_CLIENT_CONFIG_TEMPLATE: &str = "isolated-client-template.yaml";
+const ISOLATED_CLIENT_KEYSTORE: &str = "isolated.keystore";
 const LOCALNET_CLIENT_CONFIG: &str = "client.yaml";
 
 /// Deadline for one script, kept below nextest's termination deadline for this package so the
@@ -95,8 +99,18 @@ async fn run_shell_test(path: &Path) -> datatest_stable::Result<()> {
     let sandbox = tempfile::tempdir()?;
     let config_dir = tempfile::tempdir()?;
     let fork_data = tempfile::tempdir()?;
-    let client_config_template =
-        create_client_config_template(config_dir.path(), source.rpc_url())?;
+    let client_config_template = config_dir.path().join(CLIENT_CONFIG_TEMPLATE);
+    let isolated_client_config_template = config_dir.path().join(ISOLATED_CLIENT_CONFIG_TEMPLATE);
+    create_client_config_template(
+        &client_config_template,
+        &config_dir.path().join(CLIENT_KEYSTORE),
+        source.rpc_url(),
+    )?;
+    create_client_config_template(
+        &isolated_client_config_template,
+        &config_dir.path().join(ISOLATED_CLIENT_KEYSTORE),
+        source.rpc_url(),
+    )?;
     let fork_rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), free_loopback_port());
     let copy = CopyOptions::new().content_only(true);
     fs_extra::dir::copy(path.parent().unwrap(), sandbox.path(), &copy)?;
@@ -129,6 +143,10 @@ async fn run_shell_test(path: &Path) -> datatest_stable::Result<()> {
             config_dir.path().join(LOCALNET_CLIENT_CONFIG),
         )
         .env("LOCALNET_CONFIG_TEMPLATE", client_config_template)
+        .env(
+            "ISOLATED_LOCALNET_CONFIG_TEMPLATE",
+            isolated_client_config_template,
+        )
         .env("FORK_CONFIG", config_dir.path().join(FORK_CLIENT_CONFIG))
         .env("GRAPHQL_URL", &redactions.graphql_url)
         .env("FAUCET_URL", &redactions.faucet_url)
@@ -159,13 +177,11 @@ async fn run_shell_test(path: &Path) -> datatest_stable::Result<()> {
     Ok(())
 }
 
-/// Create a client config that can only use this test's localnet.
-fn create_client_config_template(config_dir: &Path, rpc_url: &str) -> Result<PathBuf> {
-    let keystore = config_dir.join(CLIENT_KEYSTORE);
-    std::fs::write(&keystore, "[]\n")
+/// Create a localnet-only client config backed by an empty file keystore.
+fn create_client_config_template(template: &Path, keystore: &Path, rpc_url: &str) -> Result<()> {
+    std::fs::write(keystore, "[]\n")
         .with_context(|| format!("failed to create {}", keystore.display()))?;
 
-    let template = config_dir.join(CLIENT_CONFIG_TEMPLATE);
     let config = serde_json::json!({
         "keystore": { "File": keystore },
         "external_keys": null,
@@ -179,9 +195,9 @@ fn create_client_config_template(config_dir: &Path, rpc_url: &str) -> Result<Pat
         "active_address": null,
     });
     let contents = serde_yaml::to_string(&config).context("failed to serialize client config")?;
-    std::fs::write(&template, contents)
+    std::fs::write(template, contents)
         .with_context(|| format!("failed to create {}", template.display()))?;
-    Ok(template)
+    Ok(())
 }
 
 /// Assemble the snapshot body in the same layout as the Sui CLI shell tests.
