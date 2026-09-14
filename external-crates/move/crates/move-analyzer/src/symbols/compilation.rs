@@ -932,7 +932,6 @@ fn compute_pre_compiled_dep_data(
             Some(Arc::new(PreCompiledProgramInfo::new(
                 pre_compiled_modules.clone(),
             ))),
-            true,
             compiler_flags.clone(),
             Some(vfs_root.clone()),
         )

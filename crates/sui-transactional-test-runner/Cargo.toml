@@ -18,7 +18,6 @@ bincode = { version = "2.0.1", features = ["serde"] }
 clap.workspace = true
 eyre.workspace = true
 http.workspace = true
-once_cell.workspace = true
 rand.workspace = true
 regex.workspace = true
 tempfile.workspace = true
@@ -36,7 +35,6 @@ fastcrypto-zkp.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-command-line-common.workspace = true
-move-bytecode-source-map.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
 move-symbol-pool.workspace = true

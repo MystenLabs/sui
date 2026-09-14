@@ -24,6 +24,7 @@ use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     diagnostics::{Diagnostics, filter::unused_for_test_filter_scope},
     editions::{Edition, Flavor},
+    expansion::ast::Address,
     shared::{NumericalAddress, PackageConfig, files::MappedFiles},
 };
 use move_core_types::parsing::{
@@ -45,15 +46,13 @@ use std::{
     future::Future,
     io::Write,
     path::Path,
-    pin::Pin,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 use tempfile::NamedTempFile;
 
-/// Dependencies compiled ahead of the test. An adapter awaits it where it first needs the
-/// modules, so the caller can overlap the compile with the adapter's other setup.
-pub type PreCompiledProgramInfoFuture =
-    Pin<Box<dyn Future<Output = Arc<PreCompiledProgramInfo>> + Send>>;
+/// Dependencies compiled once per process. Forcing the lock is the compile, so an adapter can
+/// warm it on another thread and force it again where the modules are first needed.
+pub type PreCompiledDeps = &'static LazyLock<Arc<PreCompiledProgramInfo>>;
 
 pub struct CompiledState {
     pre_compiled_program_info_opt: Option<Arc<PreCompiledProgramInfo>>,
@@ -128,7 +127,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
     fn default_syntax(&self) -> SyntaxChoice;
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_module_info_opt: Option<PreCompiledProgramInfoFuture>,
+        pre_compiled_deps: Option<PreCompiledDeps>,
         init_data: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         path: &Path,
     ) -> (Self, Option<String>);
@@ -514,50 +513,59 @@ fn display_return_values(
 }
 
 impl CompiledState {
+    /// `dep_modules` is the bytecode for exactly the modules in `pre_compiled_deps`.
     pub fn new(
         named_address_mapping: BTreeMap<String, NumericalAddress>,
         pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
+        dep_modules: impl IntoIterator<Item = CompiledModule>,
         default_named_address_mapping: Option<NumericalAddress>,
         compiler_edition: Option<Edition>,
         flavor: Option<Flavor>,
     ) -> Self {
-        let pre_compiled_ids = match pre_compiled_deps.clone() {
-            None => BTreeSet::new(),
-            Some(pre_compiled_deps) => pre_compiled_deps
-                .iter()
-                .map(|(ident, _)| {
-                    (
-                        ident.value.address.into_addr_bytes().into_inner(),
-                        ident.value.module.to_string(),
-                    )
-                })
-                .collect(),
-        };
-        let mut state = Self {
-            pre_compiled_program_info_opt: pre_compiled_deps.clone(),
+        let mut pre_compiled_ids = BTreeSet::new();
+        let mut compiled_module_named_address_mapping = BTreeMap::new();
+        for (ident, _) in pre_compiled_deps.iter().flat_map(|deps| deps.iter()) {
+            let addr = ident.value.address.into_addr_bytes().into_inner();
+            let name = ident.value.module.to_string();
+            if let Address::Numerical {
+                name: Some(addr_name),
+                ..
+            } = ident.value.address
+            {
+                let id = ModuleId::new(addr, Identifier::new(name.as_str()).unwrap());
+                compiled_module_named_address_mapping.insert(id, addr_name.value);
+            }
+            pre_compiled_ids.insert((addr, name));
+        }
+        let modules = dep_modules
+            .into_iter()
+            .map(|module| {
+                let id = module.self_id();
+                assert!(
+                    pre_compiled_ids.contains(&(*id.address(), id.name().to_string())),
+                    "dependency module {id} was not pre-compiled"
+                );
+                (id, module)
+            })
+            .collect::<BTreeMap<_, _>>();
+        assert_eq!(
+            modules.len(),
+            pre_compiled_ids.len(),
+            "every pre-compiled module needs bytecode"
+        );
+        Self {
+            pre_compiled_program_info_opt: pre_compiled_deps,
             pre_compiled_ids,
-            modules: BTreeMap::new(),
+            modules,
             source_maps: BTreeMap::new(),
             syntax_choices: BTreeMap::new(),
-            compiled_module_named_address_mapping: BTreeMap::new(),
+            compiled_module_named_address_mapping,
             named_address_mapping,
             edition: compiler_edition.unwrap_or(Edition::LEGACY),
             flavor: flavor.unwrap_or(Flavor::Core),
             default_named_address_mapping,
             temp_files: BTreeMap::new(),
-        };
-
-        if let Some(pre_compiled_deps) = pre_compiled_deps {
-            for (_, module_info) in pre_compiled_deps.iter() {
-                let unit = module_info.compiled_unit.clone().unwrap();
-                let (named_addr_opt, _id) = unit.module_id();
-                state.add_precompiled(
-                    named_addr_opt.map(|n| n.value),
-                    unit.named_module.module.clone(),
-                );
-            }
         }
-        state
     }
 
     pub fn dep_modules(&self) -> impl Iterator<Item = &CompiledModule> {
@@ -628,15 +636,6 @@ impl CompiledState {
         if let Some(source_map) = source_map {
             self.source_maps.insert(id, source_map);
         }
-    }
-
-    fn add_precompiled(&mut self, named_addr_opt: Option<Symbol>, module: CompiledModule) {
-        let id = module.self_id();
-        if let Some(named_addr) = named_addr_opt {
-            self.compiled_module_named_address_mapping
-                .insert(id.clone(), named_addr);
-        }
-        self.modules.insert(id, module);
     }
 
     pub fn is_precompiled_dep(&self, id: &ModuleId) -> bool {
@@ -821,7 +820,7 @@ pub fn compile_ir_module(
 /// adapter if it is a `TaskCommand::Init`. Returns the adapter, output string, and remaining tasks.
 pub async fn create_adapter_and_taskify<'a, Adapter>(
     path: &Path,
-    pre_compiled_program: Option<PreCompiledProgramInfoFuture>,
+    pre_compiled_deps: Option<PreCompiledDeps>,
 ) -> Result<
     (
         String,
@@ -899,7 +898,7 @@ where
         }
     };
     let (adapter, result_opt) =
-        Adapter::init(default_syntax, pre_compiled_program, init_opt, path).await;
+        Adapter::init(default_syntax, pre_compiled_deps, init_opt, path).await;
 
     if let Some(result) = result_opt {
         if !init_comments.is_empty() {
@@ -960,7 +959,7 @@ where
 /// not need to extend the adapter.
 pub async fn run_test_impl<'a, Adapter>(
     path: &Path,
-    pre_compiled_program: Option<PreCompiledProgramInfoFuture>,
+    pre_compiled_deps: Option<PreCompiledDeps>,
     insta_options: Option<InstaOptions>,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
@@ -972,7 +971,7 @@ where
     Adapter::Subcommand: Debug,
 {
     let (output, adapter, tasks) =
-        create_adapter_and_taskify::<Adapter>(path, pre_compiled_program).await?;
+        create_adapter_and_taskify::<Adapter>(path, pre_compiled_deps).await?;
     run_tasks_with_adapter(path, adapter, output, tasks, insta_options).await?;
     Ok(())
 }
