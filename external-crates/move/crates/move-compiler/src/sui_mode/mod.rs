@@ -184,6 +184,13 @@ pub const INTERNAL_PERMIT_CALL_DIAG: DiagnosticInfo = custom(
     /* code */ 11,
     "invalid internal permit call",
 );
+pub const ZERO_NAMED_ADDRESS_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_ORIGIN,
+    Severity::Warning,
+    /* category */ TYPING,
+    /* code */ 12,
+    "named address with value 0x0",
+);
 
 // Bridge supported asset
 pub const BRIDGE_SUPPORTED_ASSET: &[&str] = &["btc", "eth", "usdc", "usdt"];

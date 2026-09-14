@@ -122,7 +122,7 @@ fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddres
         ("k", "0x19"),
     ];
     if flavor == Flavor::Sui {
-        mapping.extend([("sui", "0x2"), ("sui_system", "0x3")]);
+        mapping.extend([("sui", "0x2"), ("sui_system", "0x3"), ("my_package", "0x0")]);
     }
     mapping
         .into_iter()

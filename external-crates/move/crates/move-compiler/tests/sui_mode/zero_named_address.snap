@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+warning[WSC02012]: named address with value 0x0
+  ┌─ tests/sui_mode/zero_named_address.move:2:27
+  │
+2 │     const ZERO: address = @my_package;
+  │                           ^^^^^^^^^^^ The named address 'my_package' is set to 0x0. Using '@my_package' as an address expression evaluates to the zero address, not the package ID
+
+warning[WSC02012]: named address with value 0x0
+  ┌─ tests/sui_mode/zero_named_address.move:7:9
+  │
+7 │         @my_package
+  │         ^^^^^^^^^^^ The named address 'my_package' is set to 0x0. Using '@my_package' as an address expression evaluates to the zero address, not the package ID

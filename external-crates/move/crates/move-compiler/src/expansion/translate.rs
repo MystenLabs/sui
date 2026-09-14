@@ -3842,9 +3842,23 @@ pub(super) fn value_result(
 
     let value_ = match pvalue_ {
         PV::Address(addr) => {
-            Ok(EV::Address(top_level_address(
-                context, /* suggest_declaration */ true, addr,
-            )))
+            let address = top_level_address(context, /* suggest_declaration */ true, addr);
+            if context.env.package_config(context.current_package).flavor == Flavor::Sui
+                && let Address::Numerical {
+                    name: Some(name),
+                    value,
+                    ..
+                } = address
+                && value.value.into_inner() == AccountAddress::ZERO
+            {
+                let msg = format!(
+                    "The named address '{}' is set to 0x0. Using '@{}' as an address expression \
+                    evaluates to the zero address, not the package ID",
+                    name, name,
+                );
+                context.add_diag(diag!(crate::sui_mode::ZERO_NAMED_ADDRESS_DIAG, (loc, msg)));
+            }
+            Ok(EV::Address(address))
         }
         PV::Num(s) if s.ends_with("u8") => parse_num!(parse_u8(&s[..s.len() - 2]), EV::U8, "'u8'"),
         PV::Num(s) if s.ends_with("u16") => {
