@@ -983,11 +983,16 @@ pub fn make_stdlib_gas_params_for_protocol_config(
             swap: MSN::vector::SwapGasParameters {
                 base: get_gas_cost_or_default!(vector_swap_base_cost_as_option),
             },
+            reverse: MSN::vector::ReverseGasParameters {
+                base: 0.into(),
+                per_elem: 0.into(),
+            },
             keep: MSN::vector::KeepGasParameters {
                 base: 0.into(),
                 per_dropped_elem: 0.into(),
                 per_moved_elem: 0.into(),
             },
+            slice: MSN::vector::SliceGasParameters { base: 0.into() },
             splice: MSN::vector::SpliceGasParameters {
                 base: 0.into(),
                 per_elem: 0.into(),

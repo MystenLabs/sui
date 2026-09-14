@@ -70,18 +70,7 @@ public fun singleton<Element>(e: Element): vector<Element> {
 }
 
 /// Reverses the order of the elements in the vector `v` in place.
-public fun reverse<Element>(v: &mut vector<Element>) {
-    let len = v.length();
-    if (len == 0) return;
-
-    let mut front_index = 0;
-    let mut back_index = len - 1;
-    while (front_index < back_index) {
-        v.swap(front_index, back_index);
-        front_index = front_index + 1;
-        back_index = back_index - 1;
-    }
-}
+public native fun reverse<Element>(v: &mut vector<Element>);
 
 /// Pushes all of the elements of the `other` vector into the `lhs` vector.
 public fun append<Element>(lhs: &mut vector<Element>, other: vector<Element>) {
@@ -108,15 +97,7 @@ public fun drain<Element>(v: &mut vector<Element>, i: u64, j: u64): vector<Eleme
 
 /// Copies `v[i..j)` into a new vector; `v` is untouched.
 /// Aborts if `i > j` or `j > v.length()`.
-public fun slice<Element: copy>(v: &vector<Element>, mut i: u64, j: u64): vector<Element> {
-    if (i > j || j > v.length()) abort EINDEX_OUT_OF_BOUNDS;
-    let mut result = vector[];
-    while (i < j) {
-        result.push_back(v[i]);
-        i = i + 1;
-    };
-    result
-}
+public native fun slice<Element: copy>(v: &vector<Element>, i: u64, j: u64): vector<Element>;
 
 /// The general form of the bulk operations: removes `v[i..j)`, inserts all elements of
 /// `other` at position `i`, and returns the removed elements. The vector grows or shrinks

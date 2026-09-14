@@ -312,17 +312,7 @@ Reverses the order of the elements in the vector <code>v</code> in place.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_reverse">reverse</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;) {
-    <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
-    <b>if</b> (len == 0) <b>return</b>;
-    <b>let</b> <b>mut</b> front_index = 0;
-    <b>let</b> <b>mut</b> back_index = len - 1;
-    <b>while</b> (front_index &lt; back_index) {
-        v.<a href="../std/vector.md#std_vector_swap">swap</a>(front_index, back_index);
-        front_index = front_index + 1;
-        back_index = back_index - 1;
-    }
-}
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/vector.md#std_vector_reverse">reverse</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;);
 </code></pre>
 
 
@@ -449,15 +439,7 @@ Aborts if <code>i &gt; j</code> or <code>j &gt; v.<a href="../std/vector.md#std_
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_slice">slice</a>&lt;Element: <b>copy</b>&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, <b>mut</b> i: <a href="../std/u64.md#std_u64">u64</a>, j: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt; {
-    <b>if</b> (i &gt; j || j &gt; v.<a href="../std/vector.md#std_vector_length">length</a>()) <b>abort</b> <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>;
-    <b>let</b> <b>mut</b> result = <a href="../std/vector.md#std_vector">vector</a>[];
-    <b>while</b> (i &lt; j) {
-        result.<a href="../std/vector.md#std_vector_push_back">push_back</a>(v[i]);
-        i = i + 1;
-    };
-    result
-}
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/vector.md#std_vector_slice">slice</a>&lt;Element: <b>copy</b>&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, i: <a href="../std/u64.md#std_u64">u64</a>, j: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;;
 </code></pre>
 
 

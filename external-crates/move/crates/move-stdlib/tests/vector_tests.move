@@ -1356,13 +1356,13 @@ fun slice_copy_only_elements() {
     assert_eq!(original_third, 3);
 }
 
-#[test, expected_failure(abort_code = 0x20000, location = std::vector)]
+#[test, expected_failure(abort_code = 1, location = std::vector)]
 fun slice_inverted_range_aborts() {
     let v = vector[1, 2, 3u64];
     let _copied = v.slice(2, 1);
 }
 
-#[test, expected_failure(abort_code = 0x20000, location = std::vector)]
+#[test, expected_failure(abort_code = 1, location = std::vector)]
 fun slice_end_out_of_bounds_aborts() {
     let v = vector[1, 2, 3u64];
     let _copied = v.slice(0, 4);

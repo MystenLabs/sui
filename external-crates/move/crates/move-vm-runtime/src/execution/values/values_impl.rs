@@ -1890,6 +1890,17 @@ fn check_vector_range(i: usize, j: usize, len: usize) -> PartialVMResult<()> {
     Ok(())
 }
 
+fn checked_range<T>(v: &[T], i: usize, j: usize) -> PartialVMResult<&[T]> {
+    let len = v.len();
+    v.get(i..j).ok_or_else(|| {
+        partial_vm_error!(
+            VECTOR_OPERATION_ERROR,
+            "range [{i}, {j}) out of bounds for vector of length {len}",
+        )
+        .with_sub_status(INDEX_OUT_OF_BOUNDS)
+    })
+}
+
 /// Vec-to-Vec splice on pre-validated bounds: removes `v[i..j)`, inserts `other` at `i`,
 /// returns the removed elements.
 fn splice_impl<T>(v: &mut Vec<T>, i: usize, j: usize, other: Vec<T>) -> Vec<T> {
@@ -2111,6 +2122,66 @@ impl VectorRef {
         }
 
         Ok(())
+    }
+
+    /// Reverses `v` in place.
+    pub fn reverse(&self, type_param: &Type) -> PartialVMResult<()> {
+        let value = &mut *self.0.try_borrow_mut()?;
+        check_elem_layout(type_param, value)?;
+
+        macro_rules! reverse_vec {
+            ($vec:expr) => {{ $vec.reverse() }};
+        }
+
+        use PrimVec as PV;
+        use VectorMatch as V;
+
+        match value.vector_mut_ref()?.0 {
+            V::PrimVec(PV::VecU8(xs)) => reverse_vec!(xs),
+            V::PrimVec(PV::VecU16(xs)) => reverse_vec!(xs),
+            V::PrimVec(PV::VecU32(xs)) => reverse_vec!(xs),
+            V::PrimVec(PV::VecU64(xs)) => reverse_vec!(xs),
+            V::PrimVec(PV::VecU128(xs)) => reverse_vec!(xs),
+            V::PrimVec(PV::VecU256(xs)) => reverse_vec!(xs),
+            V::PrimVec(PV::VecBool(xs)) => reverse_vec!(xs),
+            V::PrimVec(PV::VecAddress(xs)) => reverse_vec!(xs),
+            V::Vec(items) => reverse_vec!(items),
+        }
+
+        Ok(())
+    }
+
+    /// Copies `v[i..j)` into a new vector; `v` is untouched. Elements of boxed vectors are
+    /// deep-copied.
+    pub fn slice(&self, i: usize, j: usize, type_param: &Type) -> PartialVMResult<Vector> {
+        let value = &*self.0.try_borrow()?;
+        check_elem_layout(type_param, value)?;
+
+        macro_rules! slice_vec {
+            ($vec:expr, $mk:expr) => {{ Vector($mk(checked_range($vec, i, j)?.to_vec())) }};
+        }
+
+        use PrimVec as PV;
+        use VectorMatch as V;
+
+        Ok(match value.vector_ref()?.0 {
+            V::PrimVec(PV::VecU8(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecU8(v))),
+            V::PrimVec(PV::VecU16(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecU16(v))),
+            V::PrimVec(PV::VecU32(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecU32(v))),
+            V::PrimVec(PV::VecU64(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecU64(v))),
+            V::PrimVec(PV::VecU128(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecU128(v))),
+            V::PrimVec(PV::VecU256(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecU256(v))),
+            V::PrimVec(PV::VecBool(xs)) => slice_vec!(xs, |v| Value::PrimVec(PV::VecBool(v))),
+            V::PrimVec(PV::VecAddress(xs)) => {
+                slice_vec!(xs, |v| Value::PrimVec(PV::VecAddress(v)))
+            }
+            V::Vec(items) => Vector(Value::Vec(
+                checked_range(items, i, j)?
+                    .iter()
+                    .map(|m| m.copy_value())
+                    .collect(),
+            )),
+        })
     }
 
     /// Removes `v[i..j)`, inserts all elements of `other` at position `i`, and returns the

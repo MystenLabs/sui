@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::natives::move_stdlib::vector::{
-    KeepGasParameters, SpliceGasParameters, keep_work, native_keep, native_splice, splice_work,
+    KeepGasParameters, ReverseGasParameters, SliceGasParameters, SpliceGasParameters, keep_work,
+    native_keep, native_reverse, native_slice, native_splice, splice_work,
 };
 use crate::{
     cache::identifier_interner::IdentifierInterner,
@@ -107,6 +108,19 @@ fn splice_work_is_zero_for_invalid_ranges() {
 
 #[test]
 fn successful_native_costs_match_work_formulas() {
+    let reverse_holder = MemBox::new(Value::vector_u8([1, 2, 3, 4]));
+    let reverse_inspect: VectorRef = VMValueCast::cast(reverse_holder.as_ref_value()).unwrap();
+    let reverse_args = VecDeque::from([reverse_holder.as_ref_value()]);
+    let reverse_params = ReverseGasParameters {
+        base: 5.into(),
+        per_elem: 3.into(),
+    };
+    let reverse_result = with_native_context(100, |context| {
+        native_reverse(&reverse_params, context, vec![Type::U8], reverse_args).unwrap()
+    });
+    assert_success_cost(&reverse_result, 5 + 4 * 3);
+    assert_eq!(*reverse_inspect.as_bytes_ref().unwrap(), vec![4, 3, 2, 1]);
+
     let keep_holder = MemBox::new(Value::vector_u8([1, 2, 3, 4, 5]));
     let keep_inspect: VectorRef = VMValueCast::cast(keep_holder.as_ref_value()).unwrap();
     let keep_args = VecDeque::from([keep_holder.as_ref_value(), Value::u64(1), Value::u64(4)]);
@@ -141,6 +155,19 @@ fn successful_native_costs_match_work_formulas() {
         *splice_inspect.as_bytes_ref().unwrap(),
         vec![1, 9, 10, 3, 4]
     );
+
+    let slice_holder = MemBox::new(Value::vector_u8([1, 2, 3, 4]));
+    let slice_args = VecDeque::from([slice_holder.as_ref_value(), Value::u64(1), Value::u64(3)]);
+    let slice_result = with_native_context(100, |context| {
+        native_slice(
+            &SliceGasParameters { base: 5.into() },
+            context,
+            vec![Type::U8],
+            slice_args,
+        )
+        .unwrap()
+    });
+    assert_success_cost(&slice_result, 5);
 }
 
 #[test]
@@ -205,6 +232,24 @@ fn keep_full_range_charges_only_base() {
 
     assert_success_cost(&result, 5);
     assert_eq!(*inspect.as_bytes_ref().unwrap(), vec![1, 2, 3, 4, 5]);
+}
+
+#[test]
+fn reverse_out_of_gas_does_not_mutate() {
+    let holder = MemBox::new(Value::vector_u8([1, 2, 3, 4]));
+    let inspect: VectorRef = VMValueCast::cast(holder.as_ref_value()).unwrap();
+    let args = VecDeque::from([holder.as_ref_value()]);
+    let params = ReverseGasParameters {
+        base: 5.into(),
+        per_elem: 3.into(),
+    };
+
+    let result = with_native_context(16, |context| {
+        native_reverse(&params, context, vec![Type::U8], args).unwrap()
+    });
+
+    assert_out_of_gas(result, 16);
+    assert_eq!(*inspect.as_bytes_ref().unwrap(), vec![1, 2, 3, 4]);
 }
 
 #[test]

@@ -312,6 +312,56 @@ pub fn make_native_swap(gas_params: SwapGasParameters) -> NativeFunction {
 }
 
 /***************************************************************************************************
+ * native fun reverse
+ *
+ *   gas cost: base_cost + per_elem * num_elements
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct ReverseGasParameters {
+    pub base: InternalGas,
+    pub per_elem: InternalGasPerArg,
+}
+
+pub fn native_reverse(
+    gas_params: &ReverseGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 1);
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+
+    let v = pop_arg!(args, VectorRef);
+    let ty = ty_args.safe_get(0)?;
+    let len = match vector_len(&v, ty) {
+        Ok(len) => len,
+        Err(error) => {
+            return NativeResult::map_partial_vm_result_empty(
+                context.gas_used(),
+                Err(native_error_to_abort(error)),
+            );
+        }
+    };
+    native_charge_gas_early_exit!(context, gas_params.per_elem * NumArgs::new(len));
+
+    NativeResult::map_partial_vm_result_empty(
+        context.gas_used(),
+        v.reverse(ty).map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_reverse(gas_params: ReverseGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_reverse(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+/***************************************************************************************************
  * native fun keep
  *
  *   gas cost: base_cost + per_dropped_elem * dropped
@@ -379,6 +429,49 @@ pub fn make_native_keep(gas_params: KeepGasParameters) -> NativeFunction {
     Arc::new(
         move |context, ty_args, args| -> PartialVMResult<NativeResult> {
             native_keep(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+/***************************************************************************************************
+ * native fun slice
+ *
+ *   native gas cost: base_cost
+ *   The VM gas meter separately charges the returned vector by its deep abstract size.
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct SliceGasParameters {
+    pub base: InternalGas,
+}
+
+pub fn native_slice(
+    gas_params: &SliceGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 3);
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+
+    let j = checked_as!(pop_arg!(args, u64), usize)?;
+    let i = checked_as!(pop_arg!(args, u64), usize)?;
+    let v = pop_arg!(args, VectorRef);
+
+    NativeResult::map_partial_vm_result_one(
+        context.gas_used(),
+        v.slice(i, j, ty_args.safe_get(0)?)
+            .map(Vector::into_value)
+            .map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_slice(gas_params: SliceGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_slice(&gas_params, context, ty_args, args)
         },
     )
 }
@@ -508,7 +601,9 @@ pub struct GasParameters {
     pub pop_back: PopBackGasParameters,
     pub destroy_empty: DestroyEmptyGasParameters,
     pub swap: SwapGasParameters,
+    pub reverse: ReverseGasParameters,
     pub keep: KeepGasParameters,
+    pub slice: SliceGasParameters,
     pub splice: SpliceGasParameters,
 }
 
@@ -525,7 +620,9 @@ pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, Nati
             make_native_destroy_empty(gas_params.destroy_empty),
         ),
         ("swap", make_native_swap(gas_params.swap)),
+        ("reverse", make_native_reverse(gas_params.reverse)),
         ("keep", make_native_keep(gas_params.keep)),
+        ("slice", make_native_slice(gas_params.slice)),
         ("splice", make_native_splice(gas_params.splice)),
     ];
 
