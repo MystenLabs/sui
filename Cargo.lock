@@ -14858,6 +14858,7 @@ dependencies = [
  "move-command-line-common",
  "regex",
  "serde_json",
+ "serde_yaml 0.8.26",
  "sui-config",
  "tempfile",
  "tokio",

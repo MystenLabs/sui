@@ -16,6 +16,7 @@ harness = false
 [dependencies]
 anyhow.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
 

@@ -4,7 +4,7 @@
 #
 # Shared helpers for the sui-fork shell tests. The harness copies this file into the sandbox root,
 # and every script starts with `set -euo pipefail`, `source ./lib.sh`, and `localnet_setup`, which
-# waits for the localnet the harness spawned and creates the funded client config.
+# copies the localnet-only client config and funds its active address.
 #
 # The helpers stay compatible with the bash 3.2 that macOS ships, so there are no associative
 # arrays, no mapfile, and no timeout(1). Two traps to keep in mind in a script: under pipefail,
@@ -14,8 +14,8 @@
 # one or more values, so only a following `--flag` terminates them.
 
 : "${LOCALNET_CONFIG:?LOCALNET_CONFIG must be a scratch path for the localnet client.yaml}"
+: "${LOCALNET_CONFIG_TEMPLATE:?LOCALNET_CONFIG_TEMPLATE must name the localnet config template}"
 : "${FORK_CONFIG:?FORK_CONFIG must be a scratch path for the fork client.yaml}"
-: "${LOCALNET_RPC_URL:?LOCALNET_RPC_URL must be the localnet fullnode RPC URL}"
 : "${GRAPHQL_URL:?GRAPHQL_URL must be the localnet GraphQL endpoint}"
 : "${FAUCET_URL:?FAUCET_URL must be the localnet faucet gas endpoint}"
 : "${FORK_DATA_DIR:?FORK_DATA_DIR must be an empty scratch directory}"
@@ -107,21 +107,23 @@ graphql() {
 
 # ------------------------------------------------------------------------------------ localnet
 
-# localnet_setup: wait for the localnet the harness spawned, then create LOCALNET_CONFIG with a
-# funded active address and a second, unfunded one for scripts that need a transfer recipient.
+# localnet_setup: copy the localnet-only client config, create and fund its active address, then
+# add a second, unfunded address for scripts that need a transfer recipient.
 #
-# `sui start` prints nothing when it is ready, so readiness is the first `faucet` call that
-# succeeds. `-y` creates the config and its keystore on that first call, and `--url` is required
-# because the CLI otherwise assumes the default faucet port. Fork seeding reads the coins through
-# GraphQL, so this returns only once GraphQL has indexed the transfer that delivered them.
+# Copying the template before the first client command prevents the CLI from creating its default
+# Testnet-active config. `sui start` prints nothing when it is ready, so readiness is the first
+# `faucet` call that succeeds. Fork seeding reads the coins through GraphQL, so this returns only
+# once GraphQL has indexed the transfer that delivered them.
 localnet_setup() {
-  if ! retry_until "$WAIT_TIMEOUT" on_localnet -y faucet --url "$FAUCET_URL"; then
+  cp "$LOCALNET_CONFIG_TEMPLATE" "$LOCALNET_CONFIG"
+  local address
+  address=$(on_localnet new-address ed25519 --json | jq -r .address)
+  on_localnet switch --address "$address" > /dev/null
+  if ! retry_until "$WAIT_TIMEOUT" on_localnet faucet --url "$FAUCET_URL"; then
     echo "timed out after ${WAIT_TIMEOUT}s waiting for the localnet faucet:" >&2
     cat retry.log >&2
     return 1
   fi
-  on_localnet new-env --alias localnet --rpc "$LOCALNET_RPC_URL" > /dev/null
-  on_localnet switch --env localnet > /dev/null
   on_localnet new-address ed25519 > /dev/null
   wait_for_graphql_tx "$(object_field on_localnet "$(gas_coin on_localnet)" .prevTx)" > /dev/null
 }

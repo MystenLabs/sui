@@ -8,8 +8,8 @@
 //! consistent store for the owned-object and balance enumerations that seeding relies on, and a
 //! GraphQL server over both. That is what `sui start --with-graphql` assembles, so
 //! [`SourceNetwork`] spawns the `sui` binary under test with that command on ports the harness
-//! allocates, and leaves the rest to the scripts: `localnet_setup` in `tests/shell_lib/lib.sh`
-//! waits for the faucet to answer, creates the client config, and funds it, all through the same
+//! allocates. The shell harness creates a localnet-only client config for that RPC URL, and
+//! `localnet_setup` in `tests/shell_lib/lib.sh` copies it and funds a new address through the same
 //! binary.
 //!
 //! Two habits of `--force-regenesis` are sandboxed. It keeps its config directory under the

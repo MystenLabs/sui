@@ -5,21 +5,21 @@
 //!
 //! Every `.sh` file under `tests/shell_tests` is one test named `shell_tests::<relative path>`.
 //! The harness builds the `sui` and `sui-fork` binaries, spawns
-//! `sui start --force-regenesis --with-graphql --with-faucet` on ports it allocates, copies the
-//! script's directory, `tests/shell_lib`, and the Sui framework packages into a sandbox, runs the
-//! script with both binaries on `PATH`, and compares the normalised output with the `.snap` file
-//! next to the script. The output layout matches `crates/sui/tests/shell_tests.rs` so the two
-//! suites read the same way, and snapshots are reviewed the same way, with
+//! `sui start --force-regenesis --with-graphql --with-faucet` on ports it allocates, creates a
+//! localnet-only client config template, copies the script's directory, `tests/shell_lib`, and the
+//! Sui framework packages into a sandbox, and runs the script with both binaries on `PATH`. The
+//! harness compares the normalised output with the `.snap` file next to the script. The output
+//! layout matches `crates/sui/tests/shell_tests.rs` so the two suites read the same way, and
+//! snapshots are reviewed the same way, with
 //! `cargo insta test -p sui-fork-e2e-tests --test shell_tests --review`.
 //!
 //! Scripts receive these variables:
 //!
-//! - `LOCALNET_CONFIG`: the path for the localnet `client.yaml`. `localnet_setup` in `lib.sh`
-//!   creates it with the `sui` CLI once the faucet answers, funds its active address, and adds a
-//!   second address; its active env is `localnet`.
+//! - `LOCALNET_CONFIG_TEMPLATE`: a localnet-only client config with an empty keystore.
+//! - `LOCALNET_CONFIG`: the path where `localnet_setup` copies the template, creates and funds its
+//!   active address, and adds a second address.
 //! - `FORK_CONFIG`: the path for a copy of that file sharing the same keystore, which scripts
 //!   extend with a `fork` env once they know the fork's port.
-//! - `LOCALNET_RPC_URL`: the localnet fullnode's RPC URL.
 //! - `GRAPHQL_URL`: the localnet GraphQL endpoint, which is the fork's `--network`.
 //! - `FAUCET_URL`: the localnet faucet's gas endpoint.
 //! - `FORK_DATA_DIR`: an empty directory for `sui-fork start --data-dir`.
@@ -57,9 +57,11 @@ const TEST_PATTERN: &str = r"\.sh$";
 /// Directory of shared shell helpers, copied into every sandbox root.
 const SHELL_LIB_DIR: &str = "tests/shell_lib";
 
-/// Names of the client configs a script creates in its config directory.
-const LOCALNET_CLIENT_CONFIG: &str = "client.yaml";
+/// Names of the client files the harness and scripts create in their config directory.
+const CLIENT_CONFIG_TEMPLATE: &str = "client-template.yaml";
+const CLIENT_KEYSTORE: &str = "sui.keystore";
 const FORK_CLIENT_CONFIG: &str = "fork.yaml";
+const LOCALNET_CLIENT_CONFIG: &str = "client.yaml";
 
 /// Deadline for one script, kept below nextest's termination deadline for this package so the
 /// harness itself kills a hung script and reports its partial output. It covers the wait for the
@@ -93,6 +95,8 @@ async fn run_shell_test(path: &Path) -> datatest_stable::Result<()> {
     let sandbox = tempfile::tempdir()?;
     let config_dir = tempfile::tempdir()?;
     let fork_data = tempfile::tempdir()?;
+    let client_config_template =
+        create_client_config_template(config_dir.path(), source.rpc_url())?;
     let fork_rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), free_loopback_port());
     let copy = CopyOptions::new().content_only(true);
     fs_extra::dir::copy(path.parent().unwrap(), sandbox.path(), &copy)?;
@@ -124,8 +128,8 @@ async fn run_shell_test(path: &Path) -> datatest_stable::Result<()> {
             "LOCALNET_CONFIG",
             config_dir.path().join(LOCALNET_CLIENT_CONFIG),
         )
+        .env("LOCALNET_CONFIG_TEMPLATE", client_config_template)
         .env("FORK_CONFIG", config_dir.path().join(FORK_CLIENT_CONFIG))
-        .env("LOCALNET_RPC_URL", &redactions.localnet_rpc_url)
         .env("GRAPHQL_URL", &redactions.graphql_url)
         .env("FAUCET_URL", &redactions.faucet_url)
         .env("FORK_DATA_DIR", fork_data.path())
@@ -153,6 +157,31 @@ async fn run_shell_test(path: &Path) -> datatest_stable::Result<()> {
     }
     stopped?;
     Ok(())
+}
+
+/// Create a client config that can only use this test's localnet.
+fn create_client_config_template(config_dir: &Path, rpc_url: &str) -> Result<PathBuf> {
+    let keystore = config_dir.join(CLIENT_KEYSTORE);
+    std::fs::write(&keystore, "[]\n")
+        .with_context(|| format!("failed to create {}", keystore.display()))?;
+
+    let template = config_dir.join(CLIENT_CONFIG_TEMPLATE);
+    let config = serde_json::json!({
+        "keystore": { "File": keystore },
+        "external_keys": null,
+        "envs": [{
+            "alias": "localnet",
+            "rpc": rpc_url,
+            "ws": null,
+            "basic_auth": null,
+        }],
+        "active_env": "localnet",
+        "active_address": null,
+    });
+    let contents = serde_yaml::to_string(&config).context("failed to serialize client config")?;
+    std::fs::write(&template, contents)
+        .with_context(|| format!("failed to create {}", template.display()))?;
+    Ok(template)
 }
 
 /// Assemble the snapshot body in the same layout as the Sui CLI shell tests.
