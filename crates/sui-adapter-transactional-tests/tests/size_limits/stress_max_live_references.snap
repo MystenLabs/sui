@@ -1,0 +1,23 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+// Stress test with max_ptb_live_references (64) concurrent mutable borrows of distinct inputs in a
+// single command.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-148:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5958400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 150-152:
+//# programmable --sender A --inputs 0u64 1u64 2u64 3u64 4u64 5u64 6u64 7u64 8u64 9u64 10u64 11u64 12u64 13u64 14u64 15u64 16u64 17u64 18u64 19u64 20u64 21u64 22u64 23u64 24u64 25u64 26u64 27u64 28u64 29u64 30u64 31u64 32u64 33u64 34u64 35u64 36u64 37u64 38u64 39u64 40u64 41u64 42u64 43u64 44u64 45u64 46u64 47u64 48u64 49u64 50u64 51u64 52u64 53u64 54u64 55u64 56u64 57u64 58u64 59u64 60u64 61u64 62u64 63u64 --gas-budget 50000000000000
+//> test::stress::mut64(Input(0), Input(1), Input(2), Input(3), Input(4), Input(5), Input(6), Input(7), Input(8), Input(9), Input(10), Input(11), Input(12), Input(13), Input(14), Input(15), Input(16), Input(17), Input(18), Input(19), Input(20), Input(21), Input(22), Input(23), Input(24), Input(25), Input(26), Input(27), Input(28), Input(29), Input(30), Input(31), Input(32), Input(33), Input(34), Input(35), Input(36), Input(37), Input(38), Input(39), Input(40), Input(41), Input(42), Input(43), Input(44), Input(45), Input(46), Input(47), Input(48), Input(49), Input(50), Input(51), Input(52), Input(53), Input(54), Input(55), Input(56), Input(57), Input(58), Input(59), Input(60), Input(61), Input(62), Input(63));
+//> test::stress::imm64(Input(0), Input(1), Input(2), Input(3), Input(4), Input(5), Input(6), Input(7), Input(8), Input(9), Input(10), Input(11), Input(12), Input(13), Input(14), Input(15), Input(16), Input(17), Input(18), Input(19), Input(20), Input(21), Input(22), Input(23), Input(24), Input(25), Input(26), Input(27), Input(28), Input(29), Input(30), Input(31), Input(32), Input(33), Input(34), Input(35), Input(36), Input(37), Input(38), Input(39), Input(40), Input(41), Input(42), Input(43), Input(44), Input(45), Input(46), Input(47), Input(48), Input(49), Input(50), Input(51), Input(52), Input(53), Input(54), Input(55), Input(56), Input(57), Input(58), Input(59), Input(60), Input(61), Input(62), Input(63));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
