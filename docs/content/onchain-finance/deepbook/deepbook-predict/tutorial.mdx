@@ -18,8 +18,8 @@ keywords:
   - pool vault
   - liquidity provider
   - no-trade window
-last_verified: 2026-09-10
-verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
+last_verified: 2026-09-14
+verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 goal:
   description: >-
     Reader can complete a full DeepBook Predict flow against the selected
@@ -63,17 +63,17 @@ import TabItem from '@theme/TabItem';
 
 A complete DeepBook Predict flow covers pricing a market board, creating an account, quoting and minting directional and two-sided range positions, closing before and after settlement, and running the queued liquidity provider flow. It continues from the [DeepBook Predict quickstart](/onchain-finance/deepbook/deepbook-predict), which covers install, funding, and a first mint.
 
-Every transaction and every read on this page goes through the `/predict` subpath of `@mysten/deepbook-v3`, version 2.3.0 or later. The SDK carries both the `deepbook-predict-mainnet` and `deepbook-predict-testnet` deployments, and the samples select one with a single `NETWORK` constant that defaults to `'testnet'`. The walkthrough runs on Testnet, where the quote coin is a mintable test coin and markets trade every minute. Set `NETWORK` to `'mainnet'` to point the same code at Mainnet, where the quote coin is native USDC. The SDK builds transactions and never signs them, and every read it exposes runs against the Sui client core API, so no indexer or server sits on the critical path. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`). This document does not execute them, so run the [manual verification steps](#verify-on-testnet) before you rely on the write paths.
+The walkthrough sends every transaction and every read through the `/predict` subpath of `@mysten/deepbook-v3`, version 2.5.0 or later. The SDK carries both the `deepbook-predict-mainnet` and `deepbook-predict-testnet` deployments, and the samples select one with a single `NETWORK` constant that defaults to `'testnet'`. The walkthrough runs on Testnet, where the quote coin is a mintable test coin. Set `NETWORK` to `'mainnet'` to point the same code at Mainnet, where the quote coin is native USDC. The SDK builds transactions and never signs them, and every read it exposes runs against the Sui client core API, so no indexer or server sits on the critical path. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`). This document does not execute them, so run the [manual verification steps](#verify-on-testnet) before you rely on the write paths.
 
 :::caution
 
-As of 2026-09-10 the Mainnet deployment is onchain with its configuration in place, but its pool holds only the bootstrap minimum and no market has been tradable there yet. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state. Package IDs, object IDs, and function signatures on these pages belong to the 2 current deployments.
+Both deployments went live on 2026-09-12. As of 2026-09-14 the markets created at deployment have expired unsettled, no market has opened since, and no oracle update has landed since deployment, so the walkthrough's quotes and mints abort on either network. The Mainnet pool holds only the bootstrap minimum. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state. Package IDs, object IDs, and function signatures on these pages belong to the 2 current deployments.
 
 :::
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
-- [x] Node.js 22 or later, with `@mysten/deepbook-v3` 2.3.0 or later and its `@mysten/sui` 2.30.0 or later peer dependency installed. See the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for client setup.
+- [x] Node.js 22 or later, with `@mysten/deepbook-v3` 2.5.0 or later and its `@mysten/sui` 2.30.0 or later peer dependency installed. See the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for client setup.
 - [x] A Testnet address funded with SUI for gas from a [Sui Testnet faucet](/getting-started/onboarding/get-coins). Hold at least 1 SUI as a working reserve.
 - [x] Test USDC from the [DeepBook Predict Testnet token request form](https://tally.so/r/Xx102L). Wallets display it as DUSDC. It never pays gas, so you need SUI as well. On Mainnet the quote asset is native USDC and there is no faucet.
 - [x] The deployment identifiers from [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).
@@ -131,7 +131,7 @@ Freshness bounds are protocol configuration, and pricing aborts on a stale input
 
 `read.market({ underlying, expiryMs })` returns the same fields plus `nav`, the market's current net asset value, and returns `null` when no market exists at that expiry. [Predict Markets and Pricing SDK](/onchain-finance/deepbook/deepbook-predict-sdk/markets#markets) documents every market and pricing read.
 
-Both networks enable 2 cadences for BTC, 1m and 5m, with 2 expiries of each live at once. The configuration also lists the 1h, 1d, 1w, and 1mo cadences, all disabled. Testnet creates a new 1m market every minute. `tickSize` is `$0.01` and `admissionTickSize` is `$1` on both enabled cadences, so every finite strike lands on a whole dollar.
+Both networks enable 2 cadences for BTC, 1m and 5m, with 2 expiries of each live at once. The configuration also lists the 1h, 1d, 1w, and 1mo cadences, all disabled. The 1m cadence spaces expiries 1 minute apart, and a market-lifecycle call creates each market. `tickSize` is `$0.01` and `admissionTickSize` is `$1` on both enabled cadences, so every finite strike lands on a whole dollar.
 
 The soonest expiry is a poor default for 3 reasons, and the sample's `tradeableMarket(minTtlMs = 30_000)` handles the first 2:
 
@@ -206,9 +206,9 @@ Read live state through the SDK first. Every `read` method runs against the full
 
 For a live tape, stream events from the full node over gRPC and back it with a `ListEvents` backfill, as [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#stream-events-over-grpc) shows.
 
-### Indexed read services for the previous Testnet deployment
+### Indexed read services for the `predict-8-21` Testnet deployment
 
-As of 2026-09-10 no indexed read service exists for `deepbook-predict-testnet` or for Mainnet. The 3 public read-only JSON services that do exist index the previous-generation `predict-8-21` Testnet deployment: their responses carry that deployment's package and object IDs, and they know nothing about accounts, positions, or markets on the current ones. They are indexed views rather than transaction authorities, they are not part of any audited manifest, and their operators can retire or repoint them independently of the onchain packages. This section stays for readers still working against `predict-8-21` and as the shape a future service is likely to follow.
+As of 2026-09-14 no indexed read service exists for `deepbook-predict-testnet` or for Mainnet. The 3 public read-only JSON services that do exist index `predict-8-21`, an earlier Testnet deployment: their responses carry that deployment's package and object IDs, and they know nothing about accounts, positions, or markets on the current ones. They are indexed views rather than transaction authorities, they are not part of any audited manifest, and their operators can retire or repoint them independently of the onchain packages. This section stays for readers still working against `predict-8-21` and as the shape a future service is likely to follow.
 
 | **Service** | **Base URL** | **Primary data** |
 |---------|----------|--------------|
@@ -320,6 +320,8 @@ A two-sided range pays out when settlement lands in the half-open band `(lower, 
 
 Both bounds are finite USD numbers that must land on the market's admission grid, and `lower` must sit below `upper`. `strike: 'reference'` has no meaning here, because the range arm carries no `strike` field. `read.quoteMint` accepts a range descriptor unchanged, and `pricer.range(lower, upper)` prices the band locally before you commit to it. The sample passes `maxProbability` alongside `maxCost`, the same as the directional one, because a cost cap alone still lets the fill price move.
 
+At mint, the chain treats each finite boundary of a two-sided range as its own leg. It charges a trading fee on each leg, so `fees.trading` in the quote sums 2 boundary fees, each with its own floor, where a directional position pays 1. It also applies the entry-probability band to each leg as well as to the range, so a very wide range aborts with `EEntryProbabilityOutOfBounds` when the probability that settlement lands above its lower bound, or at or below its upper bound, exceeds the band's maximum, even when its range probability sits inside the band. `pricer.range` returns only the range probability, which sets the premium, so take the fee from `read.quoteMint`. [Design](/onchain-finance/deepbook/deepbook-predict/design#fee-components) works through the fee on an example range.
+
 ## Redeem and settlement
 
 Closing a position follows either of 2 paths, and which one applies depends on whether the market has settled. [Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#redeem) documents both close builders. The following sample quotes and closes a live position, then claims a settled one.
@@ -422,7 +424,7 @@ Cancel a queued withdrawal with `tx.cancelWithdrawPlp(owner, index)`, using the 
 | `supplyRequestsPending` | The number of queued supply requests, not an amount |
 | `withdrawRequestsPending` | The number of queued withdrawal requests, not an amount |
 
-There is no synchronous share price. The pool prices PLP only inside a flush, at the mark that flush freezes, so no read returns a price you could trade against. Use `idleUsdc` and the queue depths instead to judge how much of a withdrawal the pool can settle soon and how many requests sit ahead of yours. On Mainnet, as of 2026-09-10, `plpTotalSupply` is the 10 USDC bootstrap lock and both queues are empty.
+There is no synchronous share price. The pool prices PLP only inside a flush, at the mark that flush freezes, so no read returns a price you could trade against. Use `idleUsdc` and the queue depths instead to judge how much of a withdrawal the pool can settle soon and how many requests sit ahead of yours. On Mainnet, as of 2026-09-14, `plpTotalSupply` is the 10 USDC bootstrap lock and both queues are empty.
 
 ## Vault strategy considerations
 

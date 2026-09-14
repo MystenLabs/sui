@@ -51,8 +51,8 @@ answer: >-
   returns it with no chain read, even before the account exists.
   client.predict.tx.withdraw sends USDC to the owner's address balance by
   default, and { toCoinObject: true } transfers a coin object instead.
-last_verified: 2026-09-10
-verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); Mainnet deployment 14a7e8f8; Testnet deployment a928bd2d'
+last_verified: 2026-09-14
+verified_against: '@mysten/deepbook-v3 2.5.0 (ts-sdks 59526327); Mainnet deployment 7b169bde; Testnet deployment 4d752fb8'
 ---
 
 The account functions create a trader's shared `AccountWrapper`, move USDC in and out of it, and attach a builder code, and the `/account` subpath exposes the account primitive underneath for transactions you compose yourself. [Accounts and Custody](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager) explains the custody mechanism: the wrapper, the `Auth` hot potato, settlement, and the account events.
@@ -71,7 +71,7 @@ It takes this parameter:
 
 - `owner`: The address that owns the account.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="322-322" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="323-323" />
 
 ### `deriveAccountWrapperId` {#derive-account-wrapper-id}
 
@@ -82,7 +82,7 @@ It takes these parameters:
 - `cfg`: The `PredictConfig` for the deployment, such as the `getConfig` result for Mainnet.
 - `owner`: The address that owns the account.
 
-<ImportContent source="packages/deepbook-v3/src/predict/tx/common.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="89-89" />
+<ImportContent source="packages/deepbook-v3/src/predict/tx/common.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="89-89" />
 
 The following function derives the ID from the Mainnet configuration:
 
@@ -109,7 +109,7 @@ Use `tx.createManager` to create the signer's account wrapper and share it. It r
 
 It takes no parameters. The transaction sender becomes the owner, because `account_registry::new` records the sender. The builder does no chain read, so a second creation for the same owner aborts with `EAccountAlreadyExists`, as [Create an account](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#create-a-manager) describes. To create and fund the account in the same transaction, use [`tx.deposit`](#deposit) with `{ create: true }`.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="541-541" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="542-542" />
 
 Decode the result with [`decode.createManager`](#decode-create-manager) to read the new wrapper ID and account ID.
 
@@ -123,7 +123,7 @@ It takes these parameters:
 - `amountUsdc`: The amount to deposit in USDC, as a decimal `number` or `string` such as `250` or `'12.5'`. The SDK throws `PredictInputError` for a negative value or for more than 6 decimal places.
 - `opts.create`: An optional flag. When `true`, the transaction creates the account wrapper, deposits into it, and shares it last, in a single PTB. If you omit it, the SDK deposits into an existing account.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="559-563" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="560-564" />
 
 :::caution
 
@@ -145,7 +145,7 @@ It takes these parameters:
 - `amountUsdc`: The amount to withdraw in USDC, as a decimal `number` or `string`. The SDK throws `PredictInputError` for a negative value or for more than 6 decimal places.
 - `opts.toCoinObject`: An optional flag. When `true`, the transaction transfers the withdrawn USDC to `owner` as a `Coin<T>` object. If you omit it, the funds go to the owner's address balance.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="601-605" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="602-606" />
 
 The contract aborts with `EBalanceTooLow` when the amount exceeds the account's stored balance after that settlement. Withdrawal lives in the account package, so it keeps working while an admin has paused or frozen Predict trading, as [Predict does not gate withdrawal](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#withdrawal-is-ungated) describes. To use the withdrawn coin in further commands of your own, build the withdrawal with [`AccountContract.withdrawFunds`](#account-contract-withdraw-funds), which returns the coin as a transaction result.
 
@@ -163,7 +163,7 @@ It takes this parameter:
 
 - `owner`: The address that owns the account.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="924-924" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="925-925" />
 
 To compare the 2 balances, read the wallet side with the Sui client's `getBalance` for the deployment's quote coin type:
 
@@ -194,7 +194,7 @@ It takes these parameters:
 - `owner`: The address that owns the account. It must sign the transaction.
 - `builderCodeId`: The object ID of an existing `BuilderCode` object.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="747-747" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="748-748" />
 
 ### `tx.unsetBuilderCode` {#unset-builder-code}
 
@@ -204,7 +204,7 @@ It takes this parameter:
 
 - `owner`: The address that owns the account. It must sign the transaction.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="758-758" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="759-759" />
 
 Decode either result with [`decode.builderCode`](#decode-builder-code).
 
@@ -222,11 +222,11 @@ It takes this parameter:
 
 - `r`: The executed transaction result, including its events.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="957-957" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="958-958" />
 
 It returns this receipt:
 
-<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="197-202" />
+<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="197-202" />
 
 The receipt carries 4 fields:
 
@@ -243,7 +243,7 @@ It takes this parameter:
 
 - `r`: The executed transaction result, including its events.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="959-959" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="960-960" />
 
 ### `decode.withdraw` {#decode-withdraw}
 
@@ -253,11 +253,11 @@ It takes this parameter:
 
 - `r`: The executed transaction result, including its events.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="961-961" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="962-962" />
 
 Both `decode.deposit` and `decode.withdraw` return this receipt:
 
-<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="204-211" />
+<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="204-211" />
 
 The receipt carries 5 fields:
 
@@ -275,11 +275,11 @@ It takes this parameter:
 
 - `r`: The executed transaction result, including its events.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="967-967" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="968-968" />
 
 It returns this receipt:
 
-<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="236-241" />
+<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="236-241" />
 
 The receipt carries 3 fields:
 
@@ -308,11 +308,11 @@ It takes this parameter:
 
 - `network`: The network to resolve, Mainnet or Testnet.
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="54-54" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="54-54" />
 
 `AccountConfig` holds the 2 IDs every `AccountContract` builder needs:
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="37-42" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="37-42" />
 
 It carries these fields:
 
@@ -329,7 +329,7 @@ It takes this parameter:
 
 - `config`: The `AccountConfig` for the deployment.
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="85-85" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="85-85" />
 
 Every method except `deriveAccountWrapperId` returns a function that takes a `Transaction`, so you pass it to `tx.add` and compose several methods into a single PTB. Where a Move function takes the `Clock` or the `AccumulatorRoot`, the SDK supplies it.
 
@@ -341,19 +341,19 @@ It takes this parameter:
 
 - `owner`: The address that owns the account.
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="96-96" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="96-96" />
 
 ### `AccountContract.generateAuth` {#account-contract-generate-auth}
 
 Use `generateAuth` to add `account::generate_auth`, which mints owner authority bound to the transaction sender. The function it returns adds the command and returns the `Auth` result, which the next account-loading call in the PTB must consume. Each gated call consumes its own `Auth`, so add a `generateAuth` before each gated call. It takes no parameters.
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="111-111" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="111-111" />
 
 ### `AccountContract.createAccount` {#account-contract-create-account}
 
 Use `createAccount` to create the sender's wrapper and share it. The function it returns adds `account_registry::new` followed by `account::share` and returns nothing. The `new` call aborts if the wrapper already exists. `tx.createManager` wraps this method in a new `Transaction`. It takes no parameters.
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="122-122" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="122-122" />
 
 ### `AccountContract.createAccountAndDeposit` {#account-contract-create-account-and-deposit}
 
@@ -364,7 +364,7 @@ It takes these parameters:
 - `coin`: The coin to deposit, as a transaction argument.
 - `coinType`: The fully qualified type of that coin.
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="138-138" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="138-138" />
 
 You cannot decompose it into `createAccount` plus `depositFunds`. An object input can only name an object that existed when the PTB started, so a wrapper that the PTB creates is reachable only through the result handle `new` returns, and sharing that handle ends its by-value use. That is why `share` comes last.
 
@@ -378,7 +378,7 @@ It takes these parameters:
 - `coin`: The coin to deposit, as a transaction argument.
 - `coinType`: The fully qualified type of that coin.
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="160-160" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="160-160" />
 
 ### `AccountContract.withdrawFunds` {#account-contract-withdraw-funds}
 
@@ -390,7 +390,7 @@ It takes these parameters:
 - `amount`: The amount in the coin's raw units, as a `bigint`. For USDC, convert a decimal amount with `usdcToRaw` from `@mysten/deepbook-v3/predict`.
 - `coinType`: The fully qualified type of the coin to withdraw.
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="181-181" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="181-181" />
 
 The following function withdraws USDC and transfers the coin to the owner, which is what `tx.withdraw` does with `{ toCoinObject: true }`:
 
@@ -424,7 +424,7 @@ It takes this parameter:
 
 - `wrapperId`: The account's wrapper ID.
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="200-200" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="200-200" />
 
 ### `AccountContract.balance` {#account-contract-balance}
 
@@ -435,13 +435,13 @@ It takes these parameters:
 - `owner`: The address that owns the account. The SDK derives the wrapper ID from it.
 - `coinType`: The fully qualified type of the coin to read.
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="212-212" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="212-212" />
 
 ### Wrapper ID and account ID {#wrapper-and-account-ids}
 
 Only the wrapper ID derives from `AccountContract`. The canonical account identity is a second, different derived object whose key is `AccountKey(owner)` rather than `AccountWrapperKey(owner)`, and the SDK derives it with [`SessionsContract.deriveAccountId`](/onchain-finance/deepbook/deepbook-predict-sdk/sessions#derive-ids) in the `/sessions` subpath. Pass the wrapper ID to Predict calls, and expect the account ID in the `account_id` field of events. A live `OrderMinted` carries the account ID, not the wrapper ID.
 
-Offchain read services make the same split, and getting it wrong fails quietly. As of 2026-09-10 the only public read services are the Testnet v4 hosts that [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#account-and-portfolio-data) lists, and they index the previous-generation `predict-8-21` deployment, not the 2 current deployments. No read service exists yet for either current deployment, and no SDK read needs one. On those hosts the account and position paths key on the canonical account ID. A request with a wrapper ID returns status `200` with an empty array rather than an error, so a wrong key looks like an empty portfolio until you compare both: in a 2026-09-03 check for a real trader on that deployment, the wrapper ID returned 0 balances and 0 positions while the account ID returned 2 balance rows and 5 open positions. The same wrapper-against-account trap applies to session grants, as [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate) describes. The wrapper ID stays correct for every onchain call that takes the shared `AccountWrapper` object.
+Offchain read services make the same split, and getting it wrong fails quietly. As of 2026-09-14 the only public read services are the Testnet v4 hosts that [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#account-and-portfolio-data) lists, and they index `predict-8-21`, an earlier Testnet deployment, not either current deployment. No read service exists yet for either current deployment, and no SDK read needs one. On those hosts the account and position paths key on the canonical account ID. A request with a wrapper ID returns status `200` with an empty array rather than an error, so a wrong key looks like an empty portfolio until you compare both: in a 2026-09-03 check for a real trader on that deployment, the wrapper ID returned 0 balances and 0 positions while the account ID returned 2 balance rows and 5 open positions. The same wrapper-against-account trap applies to session grants, as [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate) describes. The wrapper ID stays correct for every onchain call that takes the shared `AccountWrapper` object.
 
 ### Generated bindings {#generated-bindings}
 
@@ -458,7 +458,7 @@ The subpath also exports the generated bindings, for callers who build their own
   - `AppDeauthorized`
 - `Account` and `AccountWrapper`: The BCS structs for the embedded account and the shared wrapper, for parsing a wrapper object's contents.
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="237-240" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="237-240" />
 
 :::caution
 
@@ -475,7 +475,7 @@ The subpath re-exports the deployment provenance helpers, so you can tell which 
 - `TESTNET_DEPLOYMENT` and `TESTNET_UNITS`: The Testnet records as constants.
 - `NetworkArg` and `DeployedNetwork`: The types for a network argument and for the networks with a recorded deployment.
 
-<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="19-21" />
+<ImportContent source="packages/deepbook-v3/src/account.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="19-21" />
 
 Both functions throw a plain `Error` for a network with no recorded deployment. The subpath does not re-export the Mainnet constants: call `getDeployment` and `getUnits` with the Mainnet network name, or import `MAINNET_DEPLOYMENT` and `MAINNET_UNITS` from `@mysten/deepbook-v3/predict`.
 
