@@ -32,11 +32,7 @@ pub struct Binaries {
 }
 
 impl Binaries {
-    /// Build both binaries in the profile of the running test and return their paths.
-    ///
-    /// The result is cached for the life of the process because `cargo test` runs every script in
-    /// one process. Errors are cached too, so a broken build is reported once per process rather
-    /// than retried for every script.
+    /// Build both binaries in the running test's profile and cache the result for this process.
     pub fn build() -> Result<&'static Self> {
         static BINARIES: OnceLock<Result<Binaries, String>> = OnceLock::new();
         BINARIES
