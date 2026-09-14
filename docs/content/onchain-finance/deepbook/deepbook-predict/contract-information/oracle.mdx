@@ -325,7 +325,7 @@ The forward and SVI batches take a parallel `expiries_ms` vector and abort with 
 
 `apply_spot_batch` offers its spot to both spot histories:
 
-- **Recent history:** The store accepts the spot only when its source timestamp is nonzero, no later than the transaction's clock, and strictly newer than the newest entry. It appends until the buffer holds 10 entries, then overwrites the oldest. A new timestamp advances the history even when the price is unchanged, and an equal, older, zero, or future timestamp changes nothing and emits nothing. Each accepted spot emits `BlockScholesObservationRecorded` with `series_kind` `0` and `expiry_ms` `0`.
+- **Recent history:** The store accepts the spot only when its source timestamp is nonzero, no later than the transaction's clock, and strictly newer than the newest entry. It appends until the buffer holds 10 entries, then overwrites the oldest. A new timestamp advances the history even when the price is unchanged, and an equal, older, zero, or future timestamp changes nothing in the recent history. Each accepted spot emits `BlockScholesObservationRecorded` with `series_kind` `0` and `expiry_ms` `0`.
 - **Minute-boundary history:** The store inserts the spot when its source timestamp passes the same validity check and falls on a minute boundary, its value is nonzero and fits in a `u64`, and that minute has no entry yet. Each insert emits `BlockScholesObservationInserted`.
 
 `insert_at` offers a spot to the minute-boundary history only and never touches the recent history. A forward batch touches neither spot history: it keeps each forward only when its source timestamp is valid and strictly newer than the stored forward for that expiry, and emits `BlockScholesObservationRecorded` with `series_kind` `1` for each forward it keeps. Applying a batch emits `BlockScholesBatchIngested` alongside per-observation events. The batch event's `batch_timestamp_ms` is the envelope time and proves only that the feed is running; it is never a freshness or roll-down clock, which is why an ingested batch that advances no series still emits it with `applied` at zero.
@@ -476,7 +476,7 @@ Live pricing stays unavailable until the matching spot lands or a newer forward 
 
 ### Freshness windows
 
-Predict measures freshness against the wall clock, not against how recently a value changed, and the age of an observation is `now - source_timestamp_ms`, the provider's per-update time. The deployed configuration, verified 2026-09-10 on both networks, sets these windows on `ProtocolConfig`:
+Predict measures freshness against the wall clock, not against how recently a value changed, and the age of an observation is `now - source_timestamp_ms`, the provider's per-update time. The deployed configuration, verified 2026-09-14 on both networks, sets these windows on `ProtocolConfig`:
 
 | **Setting** | **Value** | **Meaning** |
 | --- | --- | --- |
@@ -496,7 +496,7 @@ These 4 values are mutable protocol state with no public getter, so read them ra
 | Mainnet | `0x5fa6efbe7691809565a660adde23f0c184ca1d19cefafa4e1c88d655fe279580` |
 | Testnet | `0x422a45c31128e69d0310ab3bed28bd14f730acf9f5681f70936d20c60d26bfb0` |
 
-One route that looks plausible returns nothing. The deployed package declares `PricingConfigUpdated` and `EwmaConfigUpdated` but emits them only when an admin changes a value. As of 2026-09-10 no admin setter has run on either network's `ProtocolConfig`, so an event query for either type returns an empty list, and polling events tells you nothing beyond that the values above are still the deployed ones. The public read services index the earlier `predict-8-21` deployment, not the 2 current deployments, so their `GET /config` is not a source for these values either.
+One route that looks plausible returns nothing. The deployed package declares `PricingConfigUpdated` and `EwmaConfigUpdated` but emits them only when an admin changes a value. As of 2026-09-14 no admin setter has run on either network's `ProtocolConfig`, so an event query for either type returns an empty list, and polling events tells you nothing beyond that the values above are still the deployed ones. The public read services index the earlier `predict-8-21` deployment, not the 2 current deployments, so their `GET /config` is not a source for these values either.
 
 ### The same-transaction write guard
 

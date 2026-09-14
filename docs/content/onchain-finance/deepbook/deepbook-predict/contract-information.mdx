@@ -63,7 +63,7 @@ DeepBook Predict runs on Sui Mainnet and Sui Testnet as 2 separate deployments, 
 
 Every identifier on this page belongs to one of the 2 current deployments. The current deployments supersede every earlier Testnet deployment, and the accounts, positions, and markets on those earlier deployments are not visible on the current ones, so ignore identifiers from them in local configuration files and scripts.
 
-Both deployments were published on 2026-09-12. As of 2026-09-14 neither runs a market service: the 4 markets each network created at deployment expired unsettled on 2026-09-12, no market has opened since, and no oracle update has landed since deployment. The Mainnet pool holds only the bootstrap minimum. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object rather than assuming either network's state.
+Both deployments went live on 2026-09-12. As of 2026-09-14 the 4 markets each network created at deployment have expired unsettled, no market has opened since, and no oracle update has landed since deployment. The Mainnet pool holds only the bootstrap minimum. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object rather than assuming either network's state.
 
 :::
 
@@ -272,13 +272,13 @@ The strike-exposure template matches earlier deployments:
 - Inventory impact rate of 0
 - Expiry fee window of 1 day with a 1x maximum multiplier
 
-The contract charges the fee, and applies its minimum, separately at each finite boundary of a range, so a two-sided range pays at least twice the minimum fee. It also applies the entry probability band to each finite boundary as well as to the range. [Design](/onchain-finance/deepbook/deepbook-predict/design#fee-components) explains the fee.
+The contract charges the fee, and applies its minimum, separately at each finite boundary of a range, so a two-sided range pays at least twice the minimum fee. It also applies the entry-probability band to each finite boundary as well as to the range. [Design](/onchain-finance/deepbook/deepbook-predict/design#fee-components) explains the fee.
 
 Every package is at version 1 on both networks.
 
 ## Public read APIs for the `predict-8-21` Testnet deployment
 
-As of 2026-09-14 no indexed read service exists for `deepbook-predict-testnet` or for `deepbook-predict-mainnet`. The 3 public read services below still index `predict-8-21`, an earlier Testnet deployment, Testnet deployment, so their responses carry that deployment's package and object IDs and none of the identifiers above. Nothing on the SDK path needs them: every `client.predict.read` method runs against a full node, and the event decoders parse a transaction result locally.
+As of 2026-09-14 no indexed read service exists for `deepbook-predict-testnet` or for `deepbook-predict-mainnet`. The 3 public read services below still index `predict-8-21`, an earlier Testnet deployment, so their responses carry that deployment's package and object IDs and none of the identifiers above. Nothing on the SDK path needs them: every `client.predict.read` method runs against a full node, and the event decoders parse a transaction result locally.
 
 The tables stay here for readers who still work against `predict-8-21`, and because the shape of these services is what a future service for the current deployments is likely to follow. Each exposes read-only JSON `GET` endpoints with permissive browser cross-origin resource sharing (CORS), and none accepts writes:
 
@@ -406,7 +406,7 @@ The SDK carries both deployments' identifiers, so keep them in a single network-
 The 2 deployments run the same contracts and the same initial configuration. What differs is around them:
 
 - **Quote asset and funding:** Testnet quotes in a test coin you can request for free, and Testnet SUI is free. Mainnet quotes in native USDC, there is no faucet, and any top-up path that assumes free replenishment needs replacing.
-- **Activity:** As of 2026-09-14 neither network runs a market service, so no market opens or settles on either until the services run again. The Mainnet pool holds only the bootstrap minimum. `read.markets()` lists live-and-unsettled markets, which includes an expired market nobody has settled, so check each entry's expiry before you quote against it.
+- **Activity:** As of 2026-09-14 no market has opened or settled on either network since the markets created at deployment expired on 2026-09-12. The Mainnet pool holds only the bootstrap minimum. `read.markets()` lists live-and-unsettled markets, which includes an expired market nobody has settled, so check each entry's expiry before you quote against it.
 - **Read services:** None exists for either current deployment as of 2026-09-14.
 - **DeepBook core authorization:** The session spot wrappers work on Testnet and not yet on Mainnet, per [App authorization](#app-authorization).
 

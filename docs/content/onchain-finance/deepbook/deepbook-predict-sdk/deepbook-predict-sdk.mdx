@@ -300,6 +300,7 @@ const tx = new Transaction();
 // Owner authority for the sender, which the next account-loading call consumes.
 const auth = tx.add(generateAuth(cfg));
 
+// WRAPPER_ID is the account's wrapper ID, such as client.predict.wrapperIdFor(owner).
 // Queue 100 USDC, in base units, with no floor on the PLP the flush pays out.
 tx.add(
 	plpMoveCalls.requestSupply({

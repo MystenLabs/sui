@@ -368,7 +368,7 @@ It takes these parameters:
 
 <ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5952632740af0598d4ca40669ba8247b2b1d041e" lines="168-168" />
 
-The chain reanchors only while `use_pyth_spot_for_forward` is on and the Pyth spot is inside its freshness window, and it uses the Block Scholes forward otherwise. The chain also takes `bsSpot` from the store's recent spot history at the forward's source timestamp rather than from the latest spot, as [Forward and spot pairing](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle#forward-spot-pairing) describes. `forward` checks neither condition and pairs nothing, so apply both rules before you call it, or use `read.pricer`, which returns the forward the chain resolved. [Freshness windows](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle#freshness-windows) lists both settings.
+The chain reanchors only while `use_pyth_spot_for_forward` is on and the Pyth spot is inside its freshness window, and it uses the Block Scholes forward otherwise. The chain also takes `bsSpot` from the store's recent spot history at the forward's source timestamp rather than from the latest spot, as [Forward and spot pairing](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle#forward-spot-pairing) describes. `forward` checks none of these conditions and pairs nothing, so apply the flag, freshness, and pairing rules before you call it, or use `read.pricer`, which returns the forward the chain resolved. [Freshness windows](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle#freshness-windows) lists both settings.
 
 ### `boardPricer` {#board-pricer}
 

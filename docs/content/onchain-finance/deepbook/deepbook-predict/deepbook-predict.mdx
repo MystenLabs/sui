@@ -57,7 +57,7 @@ Predict runs on Sui Mainnet as `deepbook-predict-mainnet` and on Sui Testnet as 
 
 :::caution
 
-These pages describe the 2 current deployments, both published on 2026-09-12. As of 2026-09-14 neither runs a market service: the 4 markets each network created at deployment expired unsettled on 2026-09-12, no market has opened since, and no oracle update has landed since deployment, so a quote or a mint aborts until those services run again. The Mainnet pool holds only the bootstrap minimum. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state, and treat the package IDs and object IDs on these pages as pinned to those 2 deployments.
+These pages describe the 2 current deployments, which went live on 2026-09-12. As of 2026-09-14 the 4 markets each network created at deployment have expired unsettled, no market has opened since, and no oracle update has landed since deployment, so a quote or a mint aborts on either network. The Mainnet pool holds only the bootstrap minimum. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state, and treat the package IDs and object IDs on these pages as pinned to those 2 deployments.
 
 :::
 

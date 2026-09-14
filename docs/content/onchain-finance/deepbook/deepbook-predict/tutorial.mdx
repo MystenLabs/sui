@@ -67,7 +67,7 @@ The walkthrough sends every transaction and every read through the `/predict` su
 
 :::caution
 
-Both deployments were published on 2026-09-12. As of 2026-09-14 neither runs a market service: the markets created at deployment expired unsettled on 2026-09-12, no market has opened since, and no oracle update has landed since deployment, so the walkthrough's quotes and mints abort until those services run again. The Mainnet pool holds only the bootstrap minimum. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state. Package IDs, object IDs, and function signatures on these pages belong to the 2 current deployments.
+Both deployments went live on 2026-09-12. As of 2026-09-14 the markets created at deployment have expired unsettled, no market has opened since, and no oracle update has landed since deployment, so the walkthrough's quotes and mints abort on either network. The Mainnet pool holds only the bootstrap minimum. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state. Package IDs, object IDs, and function signatures on these pages belong to the 2 current deployments.
 
 :::
 
@@ -131,7 +131,7 @@ Freshness bounds are protocol configuration, and pricing aborts on a stale input
 
 `read.market({ underlying, expiryMs })` returns the same fields plus `nav`, the market's current net asset value, and returns `null` when no market exists at that expiry. [Predict Markets and Pricing SDK](/onchain-finance/deepbook/deepbook-predict-sdk/markets#markets) documents every market and pricing read.
 
-Both networks enable 2 cadences for BTC, 1m and 5m, with 2 expiries of each live at once. The configuration also lists the 1h, 1d, 1w, and 1mo cadences, all disabled. While the market service runs, each network gains a new 1m market every minute. `tickSize` is `$0.01` and `admissionTickSize` is `$1` on both enabled cadences, so every finite strike lands on a whole dollar.
+Both networks enable 2 cadences for BTC, 1m and 5m, with 2 expiries of each live at once. The configuration also lists the 1h, 1d, 1w, and 1mo cadences, all disabled. The 1m cadence spaces expiries 1 minute apart, and a market-lifecycle call creates each market. `tickSize` is `$0.01` and `admissionTickSize` is `$1` on both enabled cadences, so every finite strike lands on a whole dollar.
 
 The soonest expiry is a poor default for 3 reasons, and the sample's `tradeableMarket(minTtlMs = 30_000)` handles the first 2:
 
@@ -424,7 +424,7 @@ Cancel a queued withdrawal with `tx.cancelWithdrawPlp(owner, index)`, using the 
 | `supplyRequestsPending` | The number of queued supply requests, not an amount |
 | `withdrawRequestsPending` | The number of queued withdrawal requests, not an amount |
 
-There is no synchronous share price. The pool prices PLP only inside a flush, at the mark that flush freezes, so no read returns a price you could trade against. Use `idleUsdc` and the queue depths instead to judge how much of a withdrawal the pool can settle soon and how many requests sit ahead of yours. On Mainnet, as of 2026-09-10, `plpTotalSupply` is the 10 USDC bootstrap lock and both queues are empty.
+There is no synchronous share price. The pool prices PLP only inside a flush, at the mark that flush freezes, so no read returns a price you could trade against. Use `idleUsdc` and the queue depths instead to judge how much of a withdrawal the pool can settle soon and how many requests sit ahead of yours. On Mainnet, as of 2026-09-14, `plpTotalSupply` is the 10 USDC bootstrap lock and both queues are empty.
 
 ## Vault strategy considerations
 
