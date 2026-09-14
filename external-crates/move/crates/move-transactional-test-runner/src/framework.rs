@@ -50,8 +50,7 @@ use std::{
 };
 use tempfile::NamedTempFile;
 
-/// Dependencies compiled once per process. Forcing the lock is the compile, so an adapter can
-/// warm it on another thread and force it again where the modules are first needed.
+/// Lazily initialized dependency type and macro information.
 pub type PreCompiledDeps = &'static LazyLock<Arc<PreCompiledProgramInfo>>;
 
 pub struct CompiledState {

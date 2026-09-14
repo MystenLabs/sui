@@ -723,11 +723,8 @@ impl IntoIterator for PreCompiledProgramInfo {
     }
 }
 
-/// Given a set of dependencies, pre-compile them and save all data needed to compile
-/// against these dependencies without having to recompile them again. You can pass
-/// already pre-compiled transitive dependencies to avoid re-compiling them
-/// (`pre_compiled_program_opt` parameter). The dependencies are compiled as libraries,
-/// which skips code generation; the saved typing and macro information does not need it.
+/// Collect type and macro information for dependencies without generating bytecode.
+/// Pass previously compiled dependencies in `pre_compiled_program_opt` to reuse their metadata.
 pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
     targets: Vec<PackagePaths<Paths, NamedAddress>>,
     interface_files_dir_opt: Option<String>,

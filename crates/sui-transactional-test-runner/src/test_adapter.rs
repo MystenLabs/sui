@@ -2765,8 +2765,8 @@ static NAMED_ADDRESSES: LazyLock<BTreeMap<String, NumericalAddress>> = LazyLock:
     map
 });
 
-/// Type and macro information for the system packages. Only their interfaces are compiled here.
-/// The bytecode the adapter links against comes from `BuiltInFramework`.
+/// Compiler metadata for the system packages, including macro definitions.
+/// Bytecode is loaded separately from `BuiltInFramework`.
 pub static PRE_COMPILED: LazyLock<Arc<PreCompiledProgramInfo>> = LazyLock::new(|| {
     // TODO invoke package system? Or otherwise pull the versions for these packages as per their
     // actual Move.toml files. They way they are treated here is odd, too, though.
@@ -2842,10 +2842,8 @@ async fn create_validator_fullnode(
         Arc::new(builder.build())
     };
 
-    // The two nodes are built on separate tasks so their store and genesis setup run
-    // in parallel. `TestAuthorityBuilder::with_protocol_config` installs a
-    // process-wide override that forbids a second one, so install it here once
-    // and hold it across both builds instead.
+    // Both builds need the same process-wide protocol config override.
+    // Install it here because separate overrides in each build would conflict.
     let _guard = {
         let protocol_config = protocol_config.clone();
         ProtocolConfig::apply_overrides_for_testing(move |_, _| protocol_config.clone())
