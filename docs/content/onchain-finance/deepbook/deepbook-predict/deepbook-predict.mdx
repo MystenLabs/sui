@@ -14,8 +14,8 @@ keywords:
   - plp
   - deepbook
   - sui
-last_verified: 2026-09-10
-verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
+last_verified: 2026-09-14
+verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 goal:
   description: >-
     Reader understands what DeepBook Predict is, knows which network to run
@@ -53,17 +53,17 @@ answer: >-
 
 DeepBook Predict is an expiry-based prediction market protocol on Sui. Each market covers one underlying and one expiry timestamp, and every position is a range contract: it pays a fixed amount when the settlement price lands inside a chosen strike range, and nothing otherwise. Liquidity providers supply USDC to a shared pool, receive `PLP` shares, and take the other side of every trade.
 
-Predict runs on Sui Mainnet as `deepbook-predict-mainnet` and on Sui Testnet as `deepbook-predict-testnet`, with identical package sources: the Testnet publish comes from the `deepbook-predict-testnet` branch, and the Mainnet publish from the [`deepbook-predict-mainnet` branch](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-mainnet/packages/predict) of the DeepBookV3 repository. Version 2.3.0 or later of the [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) package ships a `/predict` subpath that carries both deployments, builds every transaction, and answers every read, so trading needs no indexer. The examples on these pages select a network with one constant and default to Testnet.
+Predict runs on Sui Mainnet as `deepbook-predict-mainnet` and on Sui Testnet as `deepbook-predict-testnet`, with identical package sources: the Testnet publish comes from the `deepbook-predict-testnet` branch, and the Mainnet publish from the [`deepbook-predict-mainnet` branch](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-mainnet/packages/predict) of the DeepBookV3 repository. Version 2.5.0 or later of the [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) package ships a `/predict` subpath that carries both deployments, builds every transaction, and answers every read, so trading needs no indexer. The examples on these pages select a network with one constant and default to Testnet.
 
 :::caution
 
-These pages describe the 2 current deployments. As of 2026-09-10 the Mainnet deployment is onchain with its configuration in place, but its pool holds only the bootstrap minimum and no market has been tradable there yet. Testnet creates and settles markets every minute. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state, and treat the package IDs and object IDs on these pages as pinned to those 2 deployments.
+These pages describe the 2 current deployments, both published on 2026-09-12. As of 2026-09-14 neither runs a market service: the 4 markets each network created at deployment expired unsettled on 2026-09-12, no market has opened since, and no oracle update has landed since deployment, so a quote or a mint aborts until those services run again. The Mainnet pool holds only the bootstrap minimum. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state, and treat the package IDs and object IDs on these pages as pinned to those 2 deployments.
 
 :::
 
 ## Quickstart: mint a position
 
-The following 7 steps install the DeepBook TypeScript SDK, prepare a funded Predict account, and quote and mint a position on a live market under a cost cap and a fill price cap. They run on Testnet, where the quote coin is a mintable test coin. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`) against `@mysten/deepbook-v3` version 2.3.0 or later and `@mysten/sui` version 2.30.0 or later. They pass compile checks but do not run against Testnet during the documentation build, so work through [Verify on Testnet](#verify-on-testnet) before you rely on them.
+The following 7 steps install the DeepBook TypeScript SDK, prepare a funded Predict account, and quote and mint a position on a live market under a cost cap and a fill price cap. They run on Testnet, where the quote coin is a mintable test coin. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`) against `@mysten/deepbook-v3` version 2.5.0 or later and `@mysten/sui` version 2.30.0 or later. They pass compile checks but do not run against Testnet during the documentation build, so work through [Verify on Testnet](#verify-on-testnet) before you rely on them.
 
 ### 1. Install the SDK
 

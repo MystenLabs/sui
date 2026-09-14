@@ -49,8 +49,8 @@ answer: >-
   same transaction, or with AccountContract from the deepbook-v3 account
   subpath. A single-use Auth hot potato gates access, and Predict keeps
   positions in a PredictData slot attached to the Account.
-last_verified: 2026-09-10
-verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
+last_verified: 2026-09-14
+verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 ---
 
 DeepBook Predict has no `PredictManager` and no `predict_manager` module. Custody and identity moved into a standalone `account` package, where each trader owns one shared `AccountWrapper` holding an embedded `Account`. Predict attaches its own per-account data to that `Account` rather than storing positions itself.
@@ -59,19 +59,19 @@ If you arrived from the old Predict Manager title, you are in the right place. T
 
 This surface belongs to 2 modules, both under `packages/account/sources/` rather than under the Predict package:
 
-- **`account::account`:** The `AccountWrapper` object, the embedded `Account`, the `Auth` type, and the custody functions, at [`account.move`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/account/sources/account.move).
-- **`account::account_registry`:** Account creation, address derivation, and the app authorization allowlist, at [`account_registry.move`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/account/sources/account_registry.move).
+- `account::account`: The `AccountWrapper` object, the embedded `Account`, the `Auth` type, and the custody functions, at [`account.move`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/account/sources/account.move).
+- `account::account_registry`: Account creation, address derivation, and the app authorization allowlist, at [`account_registry.move`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/account/sources/account_registry.move).
 
-Predict's own per-account slot lives in [`deepbook_predict::predict_account`](https://github.com/MystenLabs/deepbookv3/blob/14a7e8f822e0397df2d61fbfbce3ef21086891c2/packages/predict/sources/predict_account.move).
+Predict's own per-account slot lives in [`deepbook_predict::predict_account`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict/sources/predict_account.move).
 
-Sui Mainnet and Sui Testnet each run a separate deployment of the `account` package from identical sources, and the Move snippets on this page pin the Mainnet source commit, which is also the `deepbook-predict-mainnet` branch. An account on one network does not exist on the other, and neither deployment shares accounts with the previous-generation `predict-8-21` deployment. Take the IDs from `getAccountConfig(network)` rather than transcribing them:
+Sui Mainnet and Sui Testnet each run a separate deployment of the `account` package from identical sources, and the Move snippets on this page pin the Mainnet source commit, which is also the `deepbook-predict-mainnet` branch. An account on one network does not exist on the other, and neither deployment shares accounts with an earlier deployment. Take the IDs from `getAccountConfig(network)` rather than transcribing them:
 
 | **Object** | **Mainnet** | **Testnet** |
 |---|---|---|
-| `account` package | `0xa6f1b22aaeb429f6fd8f01c13f605256e00876457fd122da8a0e2c1045c75929` | `0x543139156cb90d1a73df33b5dca37d7c8bdce62506c7874ebc854afd319b98f1` |
-| `AccountRegistry` | `0x210ba485d973b5356e9078318837137efabdd5ffb9eeb3705ba7eef3340324fc` | `0xb889caefe327cbdea58e529e3b9e10dc93f1e661ddef32824d28527edf8d6385` |
+| `account` package | `0x4e1dd01465713c9d832313fed5f45c222a4d5c62a533d6da96764c8b2a245d58` | `0x1e57d6554b99e4ca68330322c3e5c409ba1b681642726b603bf1be92c1840ca9` |
+| `AccountRegistry` | `0x8c52c6f5b2374e33f4a726d9c32337b1aee3a71410d41c18faa91d938d66e4bc` | `0x511e11f7f5d5c1043d795180657603d59e06e90fbfcafd3f90c67ff0836bbd0c` |
 
-The registry authorizes `PredictApp`, `SessionsApp`, and `DeepbookCoreAccountApp` on both networks, verified 2026-09-10.
+The registry authorizes `PredictApp`, `SessionsApp`, and `DeepbookCoreAccountApp` on both networks, verified 2026-09-14.
 
 ## Lifecycle {#lifecycle}
 
@@ -141,7 +141,7 @@ Creating an account twice for the same owner aborts with `EAccountAlreadyExists`
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
 	fun="new,new_with_referrer"
 	noComments
 />
@@ -171,7 +171,7 @@ That determinism removes the 2-transaction sequence the old manager required. Yo
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
 	fun="derived_address,derived_wrapper_address,derived_exists,derived_wrapper_exists"
 	noComments
 />
@@ -217,7 +217,7 @@ Field order in the table is declaration order. Creation writes the 2 referrer fi
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
 	struct="AccountWrapper,Account"
 />
 
@@ -254,7 +254,7 @@ Owner authority comes from 2 constructors, and app authority from 1 package-issu
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
 	struct="Auth"
 />
 
@@ -263,7 +263,7 @@ Owner authority comes from 2 constructors, and app authority from 1 package-issu
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
 	fun="generate_auth,generate_auth_as_object,share,load_account_mut"
 	noComments
 />
@@ -313,7 +313,7 @@ Predict's own trading functions settle USDC through the wrapper before they pric
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
 	fun="deposit_funds,withdraw_funds,settle"
 	noComments
 />
@@ -354,7 +354,7 @@ Because it includes unsettled funds, it does not go stale between a payout and t
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
 	fun="owner,receive_address,account_id,balance,referrer_account_id,referrer_receive_address"
 	noComments
 />
@@ -386,7 +386,7 @@ An order ID alone does not identify a position. It carries the quantity and the 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
 	struct="PositionKey,Position,PredictData"
 />
 
@@ -403,7 +403,7 @@ public fun builder_code_id(account: &Account): Option<ID>
 
 Both return the empty answer rather than aborting when the account has no Predict slot yet, so `false` and `none` do not distinguish an unused account from a closed position.
 
-`has_position` answers one exact question and needs the market ID and order ID up front, so it cannot enumerate a portfolio. To list what an account holds, read the dynamic fields of the `positions` table, where each field key is a `PositionKey` in Binary Canonical Serialization (BCS). The SDK's `client.predict.read.positions(owner)` does this on either network and returns `{ marketId, orderId }` pairs, and `client.predict.read.hasPosition(owner, marketId, orderId)` wraps the single read. The public offchain read services answer the same question over HTTP for the previous-generation `predict-8-21` deployment only, and their account and position paths key on the canonical account ID rather than the wrapper ID; see [Wrapper ID and account ID](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#wrapper-and-account-ids).
+`has_position` answers one exact question and needs the market ID and order ID up front, so it cannot enumerate a portfolio. To list what an account holds, read the dynamic fields of the `positions` table, where each field key is a `PositionKey` in Binary Canonical Serialization (BCS). The SDK's `client.predict.read.positions(owner)` does this on either network and returns `{ marketId, orderId }` pairs, and `client.predict.read.hasPosition(owner, marketId, orderId)` wraps the single read. The public offchain read services answer the same question over HTTP for the earlier `predict-8-21` deployment only, and their account and position paths key on the canonical account ID rather than the wrapper ID; see [Wrapper ID and account ID](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#wrapper-and-account-ids).
 
 To value a position, pass its order ID to the market: `expiry_market::live_order_value` with a market-bound pricer while the market is live, or `expiry_market::settled_order_payout` once it has settled. See [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#read-accessors) for both.
 
@@ -432,7 +432,7 @@ Both consume an `Auth` and both emit `BuilderCodeSet` from `deepbook_predict::bu
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
 	fun="has_position,builder_code_id,set_builder_code,unset_builder_code"
 	noComments
 />
@@ -495,8 +495,8 @@ You can compose creating an account, funding it, and trading into one programmab
 
 The facade builders under `client.predict.tx.*` do not compose. Each one returns its own fresh `Transaction` carrying just that builder's commands, so you cannot chain 2 of them into one block. What the facade does offer is 2 prebuilt compositions:
 
-- **`client.predict.tx.deposit(owner, amount, { create: true })`:** Creates the wrapper, deposits through the fresh handle, and shares last, in one block. The `owner` must be the signer, because `account_registry::new` derives from the transaction sender, and the call aborts if the account already exists.
-- **`client.predict.tx.mint(owner, descriptor, opts)`:** A standalone transaction containing `load_live_pricer`, `generate_auth`, and `mint_exact_quantity`, and nothing else. There is no create, share, split, or deposit in it.
+- `client.predict.tx.deposit(owner, amount, { create: true })`: Creates the wrapper, deposits through the fresh handle, and shares last, in one block. The `owner` must be the signer, because `account_registry::new` derives from the transaction sender, and the call aborts if the account already exists.
+- `client.predict.tx.mint(owner, descriptor, opts)`: A standalone transaction containing `load_live_pricer`, `generate_auth`, and `mint_exact_quantity`, and nothing else. There is no create, share, split, or deposit in it.
 
 The example below is the second of those. It reads a quote, derives a `maxCost` cap from it, and returns an unsigned mint transaction:
 
@@ -552,9 +552,9 @@ Value moves in and out under 3 events, and each carries the same 4 fields:
 
 The 3 differ only in what caused the move:
 
-- **`Deposited`:** A coin entered stored balance through `deposit`, reached from `deposit_funds`.
-- **`Withdrawn`:** Stored balance left as a coin through `withdraw`, reached from `withdraw_funds`.
-- **`FundsSettled`:** Accumulator funds at the wrapper address folded into stored balance. `settle` emits it only when the settled amount is greater than zero, so a no-op `settle` is silent.
+- `Deposited`: A coin entered stored balance through `deposit`, reached from `deposit_funds`.
+- `Withdrawn`: Stored balance left as a coin through `withdraw`, reached from `withdraw_funds`.
+- `FundsSettled`: Accumulator funds at the wrapper address folded into stored balance. `settle` emits it only when the settled amount is greater than zero, so a no-op `settle` is silent.
 
 A redemption payout credits stored balance inside the redeeming transaction, so it surfaces as `Deposited`. Builder fees, referral shares, and filled liquidity requests travel through the accumulator instead and surface as `FundsSettled` on the next settling call. Index all 3 events to reconstruct a full account ledger, and read the order events described in [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#events) for the trades themselves.
 
@@ -568,7 +568,7 @@ The module declares 2 further events, `AppAuthorized` and `AppDeauthorized`, whi
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
 	struct="AccountCreated,Deposited,Withdrawn,FundsSettled"
 />
 
