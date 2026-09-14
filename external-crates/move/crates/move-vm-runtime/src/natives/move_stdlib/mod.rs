@@ -97,6 +97,15 @@ impl GasParameters {
                 pop_back: vector::PopBackGasParameters { base: 0.into() },
                 destroy_empty: vector::DestroyEmptyGasParameters { base: 0.into() },
                 swap: vector::SwapGasParameters { base: 0.into() },
+                keep: vector::KeepGasParameters {
+                    base: 0.into(),
+                    per_dropped_elem: 0.into(),
+                    per_moved_elem: 0.into(),
+                },
+                splice: vector::SpliceGasParameters {
+                    base: 0.into(),
+                    per_elem: 0.into(),
+                },
             },
             #[cfg(feature = "testing")]
             unit_test: unit_test::GasParameters {
