@@ -579,6 +579,21 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             },
         ))
     }
+
+    // The created object's version is the effects' lamport version; `obj_ref.1` is ignored.
+    fn unsafe_add_created_object_for_testing(&mut self, obj_ref: ObjectRef) {
+        self.changed_objects.push((
+            obj_ref.0,
+            EffectsObjectChange {
+                input_state: ObjectIn::NotExist,
+                output_state: ObjectOut::ObjectWrite((
+                    obj_ref.2,
+                    Owner::AddressOwner(SuiAddress::default()),
+                )),
+                id_operation: IDOperation::Created,
+            },
+        ))
+    }
 }
 
 impl TransactionEffectsV2 {

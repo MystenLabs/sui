@@ -14,6 +14,7 @@ use crate::{
     execution_scheduler::execution_scheduler_impl::{BarrierDependencyBuilder, ExecutionScheduler},
     execution_scheduler::funds_withdraw_scheduler::FundsSettlement,
 };
+use mysten_common::in_test_configuration;
 use mysten_metrics::{monitored_mpsc, spawn_monitored_task};
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -194,6 +195,11 @@ impl SettlementScheduler {
 
         let ccp_digest = self.extract_consensus_commit_prologue_digest(&digests, &effects);
 
+        if in_test_configuration()
+            && let Err(violation) = CausalOrder::check_already_sorted(&effects)
+        {
+            panic!("CAUSAL_SORT_VIOLATION: settlement {settlement_key:?}: {violation}");
+        }
         let sorted_effects = CausalOrder::causal_sort_with_ccp(effects, ccp_digest);
 
         let epoch = epoch_store.epoch();
