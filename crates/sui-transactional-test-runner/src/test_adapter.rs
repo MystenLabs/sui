@@ -15,13 +15,16 @@ use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::traits::KeyPair;
 use iso8601::Duration as IsoDuration;
 use move_binary_format::CompiledModule;
+use move_bytecode_source_map::source_map::SourceMap;
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::error_bitset::ErrorBitset;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     Flags, PreCompiledProgramInfo,
+    compiled_unit::{AnnotatedCompiledUnit, NamedCompiledModule},
     editions::{Edition, Flavor},
-    shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
+    expansion::ast::Address,
+    shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths, unique_map::UniqueMap},
 };
 use move_core_types::ident_str;
 use move_core_types::parsing::address::ParsedAddress;
@@ -35,7 +38,9 @@ use move_symbol_pool::Symbol;
 use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
 use move_transactional_test_runner::tasks::TaskCommand;
 use move_transactional_test_runner::{
-    framework::{CompiledState, MoveTestAdapter, compile_any, store_modules},
+    framework::{
+        CompiledState, MoveTestAdapter, PreCompiledProgramInfoFuture, compile_any, store_modules,
+    },
     tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
 };
 use move_vm_runtime::dev_utils::vm_arguments::ValueFrame;
@@ -57,7 +62,7 @@ use std::{
 use sui_core::authority::AuthorityState;
 use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
-use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_framework::{BuiltInFramework, DEFAULT_FRAMEWORK_PATH};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionBlockResponse, SuiAccumulatorOperation,
@@ -418,7 +423,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
+        pre_compiled_deps: Option<PreCompiledProgramInfoFuture>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -428,10 +433,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         _path: &Path,
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
-        assert!(
-            pre_compiled_deps.is_some(),
-            "Must populate 'pre_compiled_deps' with Sui framework"
-        );
+        let pre_compiled_deps =
+            pre_compiled_deps.expect("Must populate 'pre_compiled_deps' with Sui framework");
 
         // Unpack the init arguments
         let AdapterInitConfig {
@@ -488,6 +491,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
 
+        // Wait here so framework compilation can overlap with executor setup.
+        let pre_compiled_deps = pre_compiled_deps.await;
+
         sui_types::transaction::clear_gasless_tokens_for_testing();
 
         let mut test_adapter = Self {
@@ -499,7 +505,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             read_replica,
             compiled_state: CompiledState::new(
                 named_address_mapping,
-                pre_compiled_deps,
+                Some(pre_compiled_deps),
                 Some(NumericalAddress::new(
                     AccountAddress::ZERO.into_bytes(),
                     NumberFormat::Hex,
@@ -2763,6 +2769,17 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
     map
 });
 
+/// Starts framework compilation immediately so it can overlap with executor setup.
+pub fn compile_framework_in_background() -> PreCompiledProgramInfoFuture {
+    let (tx, rx) = futures::channel::oneshot::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(Arc::new(PRE_COMPILED.clone()));
+    });
+    Box::pin(async move { rx.await.expect("framework compile thread panicked") })
+}
+
+/// Type and macro information for the system packages. Compile only their interfaces;
+/// the adapter loads the bytecode from `BuiltInFramework`.
 pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
     // TODO invoke package system? Or otherwise pull the versions for these packages as per their
     // actual Move.toml files. They way they are treated here is odd, too, though.
@@ -2811,18 +2828,61 @@ pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
         }],
         None,
         None,
-        false,
+        /* interface_only */ true,
         Flags::empty(),
         None,
     )
     .unwrap();
-    match pre_compiled_program {
+    let mut pre_compiled = match pre_compiled_program {
         Err((files, diags)) => {
             eprintln!("!!!Sui framework failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, diags)
         }
         Ok(res) => res,
+    };
+    // set the compiled units for the framework modules with the actual bytecode
+    // TODO: should we try to use old versions of the framework if the init sets an old
+    // protocol version?
+    let mut bytecode: BTreeMap<ModuleId, CompiledModule> = BuiltInFramework::iter_system_packages()
+        .flat_map(|package| package.modules())
+        .map(|module| (module.self_id(), module))
+        .collect();
+    for (mident, module_info) in pre_compiled.iter_mut() {
+        let Address::Numerical {
+            name: address_name,
+            value: address,
+            ..
+        } = mident.value.address
+        else {
+            panic!("framework module {mident} has an unassigned address")
+        };
+        let module_name = mident.value.module.0;
+        let module_id = ModuleId::new(
+            address.value.into_inner(),
+            Identifier::new(module_name.value.as_str()).unwrap(),
+        );
+        let module = bytecode
+            .remove(&module_id)
+            .unwrap_or_else(|| panic!("no bytecode for framework module {module_id}"));
+        let loc = module_info.info.defined_loc;
+        let compiled_unit = AnnotatedCompiledUnit {
+            loc,
+            attributes: module_info.info.attributes.clone(),
+            module_name_loc: module_name.loc,
+            named_module: NamedCompiledModule {
+                package_name: module_info.info.package,
+                address: address.value,
+                address_name,
+                name: module_name.value,
+                source_map: SourceMap::dummy_from_view(&module, loc).unwrap(),
+                module,
+            },
+            // unused within the test adapter
+            function_infos: UniqueMap::new(),
+        };
+        Arc::get_mut(module_info).unwrap().compiled_unit = Some(compiled_unit);
     }
+    pre_compiled
 });
 
 async fn create_validator_fullnode(
@@ -2836,30 +2896,35 @@ async fn create_validator_fullnode(
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
                 .with_reference_gas_price(reference_gas_price.unwrap_or(500));
         builder = builder.with_protocol_version(protocol_config.version);
-        builder.build()
+        Arc::new(builder.build())
     };
 
-    let validator = TestAuthorityBuilder::new()
-        .with_protocol_config(protocol_config.clone())
-        .with_starting_objects(objects)
-        .with_shared_network_config(&network_config)
-        .insert_genesis_checkpoint()
-        .skip_genesis_owner_index()
-        .build()
-        .await;
-
-    let fullnode_key_pair = get_authority_key_pair().1;
-    let fullnode = TestAuthorityBuilder::new()
-        .with_protocol_config(protocol_config.clone())
-        .with_starting_objects(objects)
-        .with_shared_network_config(&network_config)
-        .with_keypair(&fullnode_key_pair)
-        .insert_genesis_checkpoint()
-        .skip_genesis_owner_index()
-        .build()
-        .await;
-
-    (validator, fullnode)
+    // Build the nodes in parallel, but share one protocol config override:
+    // `with_protocol_config` would try to install a separate process-wide override
+    // for each node, which is not allowed. Keep this guard alive until both finish.
+    let _guard = {
+        let protocol_config = protocol_config.clone();
+        ProtocolConfig::apply_overrides_for_testing(move |_, _| protocol_config.clone())
+    };
+    let build_node = |keypair: Option<AuthorityKeyPair>| {
+        let network_config = network_config.clone();
+        let objects = objects.to_vec();
+        tokio::spawn(async move {
+            let mut builder = TestAuthorityBuilder::new()
+                .with_starting_objects(&objects)
+                .with_shared_network_config(&network_config)
+                .insert_genesis_checkpoint()
+                .skip_genesis_owner_index();
+            if let Some(keypair) = &keypair {
+                builder = builder.with_keypair(keypair);
+            }
+            builder.build().await
+        })
+    };
+    let validator = build_node(None);
+    let fullnode = build_node(Some(get_authority_key_pair().1));
+    let (validator, fullnode) = tokio::join!(validator, fullnode);
+    (validator.unwrap(), fullnode.unwrap())
 }
 
 async fn create_val_fullnode_executor(
