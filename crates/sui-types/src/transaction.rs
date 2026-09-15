@@ -1975,11 +1975,6 @@ impl TransactionKind {
         )
     }
 
-    pub fn mutates_implicitly_read_system_object(&self) -> bool {
-        self.shared_input_objects()
-            .any(|obj| obj.may_mutate() && obj.id.is_implicitly_read_system_object())
-    }
-
     pub fn is_accumulator_barrier_settle_tx(&self) -> bool {
         matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
             && self.shared_input_objects().any(|obj| {
