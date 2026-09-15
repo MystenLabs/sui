@@ -8,7 +8,7 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@mysten/deepbook-v3": "^2.3.0",
+    "@mysten/deepbook-v3": "^2.5.0",
     "@mysten/sui": "^2.30.0"
   },
   "devDependencies": {
