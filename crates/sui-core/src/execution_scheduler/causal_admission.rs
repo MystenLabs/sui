@@ -39,6 +39,8 @@ use tokio::sync::Notify;
 
 use crate::authority::ExecutionEnv;
 
+const TEST_CONCURRENCY_LIMIT: usize = 4;
+
 /// Shared state between the ExecutionScheduler (index assignment and enqueue
 /// deduplication) and the execution driver (admission and retirement). See the module
 /// comment and `execution_driver.rs`.
@@ -70,17 +72,21 @@ struct AdmissionInner {
 
 impl CausalAdmission {
     /// Default sizing: execution parallelism K at half the CPUs, leaving the rest for
-    /// consensus, networking and checkpointing. In test configurations the limit is
-    /// randomized instead - both because the host's CPU count must not influence
-    /// simulation behavior, and to explore admission interleavings, including small
-    /// limits that force transactions through the causal-next lane.
+    /// consensus, networking and checkpointing. Test configurations use a fixed limit
+    /// so the host's CPU count does not influence simulation behavior. The
+    /// `execution-concurrency-limit` fail point overrides it, letting selected tests
+    /// explore admission interleavings, including limits small enough to force
+    /// transactions through the causal-next lane.
     pub fn new_with_default_sizing() -> Arc<Self> {
-        let concurrency_limit = if mysten_common::in_test_configuration() {
-            use rand::Rng;
-            mysten_common::random::get_rng().gen_range(1..=8)
+        #[allow(unused_mut)]
+        let mut concurrency_limit = if mysten_common::in_test_configuration() {
+            TEST_CONCURRENCY_LIMIT
         } else {
             std::cmp::max(1, num_cpus::get() / 2)
         };
+        sui_macros::fail_point_arg!("execution-concurrency-limit", |limit: usize| {
+            concurrency_limit = limit;
+        });
         tracing::info!("execution concurrency limit: {concurrency_limit}");
         Self::new(concurrency_limit)
     }
