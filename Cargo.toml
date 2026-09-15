@@ -120,6 +120,7 @@ members = [
     "crates/sui-field-count",
     "crates/sui-field-count-derive",
     "crates/sui-fork",
+    "crates/sui-fork-e2e-tests",
     "crates/sui-framework",
     "crates/sui-framework-snapshot",
     "crates/sui-framework-tests",

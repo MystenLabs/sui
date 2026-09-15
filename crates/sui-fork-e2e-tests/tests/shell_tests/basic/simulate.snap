@@ -1,0 +1,78 @@
+---
+source: crates/sui-fork-e2e-tests/tests/shell_tests.rs
+---
+----- script -----
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Simulate transactions on a fork with `--dry-run` and `--dev-inspect`, and check that the
+# simulation drives gas estimation and gas selection without touching the fork's state.
+set -euo pipefail
+source ./lib.sh
+localnet_setup
+
+sender=$(on_localnet active-address)
+recipient=$(other_address "$sender")
+fork_start --address "$sender"
+fork_env
+coin=$(gas_coin on_fork)
+amount=1000000
+tip_before=$(fork_status_field checkpoint_sequence_number)
+total_before=$(gas_total on_fork)
+
+echo "=== --dry-run ==="
+run_json dry_run.json on_fork transfer-sui --to "$recipient" --sui-coin-object-id "$coin" \
+  --amount "$amount" --gas-budget 10000000 --dry-run
+assert_eq "$(tx_status_of dry_run.json)" success "the dry run reports success"
+assert_eq "$(jq -r --arg r "$recipient" \
+  'first(.balanceChanges[] | select(.owner.AddressOwner == $r)) | .amount' dry_run.json)" \
+  "$amount" "the dry run reports the recipient's balance change"
+assert_gt "$(jq -r '.effects.gasUsed.computationCost' dry_run.json)" 0 \
+  "the dry run reports the gas it would use"
+
+echo "=== --dev-inspect ==="
+run_json dev_inspect.json on_fork transfer-sui --to "$recipient" --sui-coin-object-id "$coin" \
+  --amount "$amount" --gas-budget 10000000 --dev-inspect
+assert_eq "$(jq -r '.transaction.effects | (.V2 // .V1) | .status' dev_inspect.json)" Success "dev-inspect reports success"
+
+assert_eq "$(fork_status_field checkpoint_sequence_number)" "$tip_before" \
+  "simulations seal no checkpoint"
+assert_eq "$(gas_total on_fork)" "$total_before" "simulations move no SUI"
+assert_eq "$(gas_count on_fork "$recipient")" 0 "simulations create no coin for the recipient"
+
+echo "=== gas estimation and gas selection run a simulation ==="
+run_json estimated.json on_fork transfer-sui --to "$recipient" --sui-coin-object-id "$coin" \
+  --amount "$amount"
+assert_eq "$(tx_status_of estimated.json)" success \
+  "transfer-sui without --gas-budget executes with an estimated budget"
+second_coin=$(on_fork gas --json | jq -r '.gasCoins[1].gasCoinId')
+run_json selected.json on_fork transfer --to "$recipient" --object-id "$second_coin" \
+  --gas-budget 10000000
+assert_eq "$(tx_status_of selected.json)" success "transfer without --gas executes with a selected gas coin"
+assert_eq "$(($(fork_status_field checkpoint_sequence_number) - tip_before))" 2 \
+  "the two executed transactions sealed two checkpoints"
+assert_eq "$(gas_count on_fork "$recipient")" 2 "the recipient owns the two transferred coins"
+
+exit "$FAILED"
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+=== --dry-run ===
+ok: the dry run reports success
+ok: the dry run reports the recipient's balance change
+ok: the dry run reports the gas it would use
+=== --dev-inspect ===
+ok: dev-inspect reports success
+ok: simulations seal no checkpoint
+ok: simulations move no SUI
+ok: simulations create no coin for the recipient
+=== gas estimation and gas selection run a simulation ===
+ok: transfer-sui without --gas-budget executes with an estimated budget
+ok: transfer without --gas executes with a selected gas coin
+ok: the two executed transactions sealed two checkpoints
+ok: the recipient owns the two transferred coins
+
+----- stderr -----
