@@ -14,7 +14,7 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{error, warn};
 
-use crate::{block::Transaction, context::Context};
+use crate::{adaptive_block_cap::AdaptiveBlockCap, block::Transaction, context::Context};
 
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
 const MAX_PENDING_TRANSACTIONS: usize = 2_000;
@@ -63,6 +63,7 @@ pub(crate) struct TransactionConsumer {
     priority_tx_receiver: Receiver<TransactionsGuard>,
     max_transactions_in_block_bytes: u64,
     max_num_transactions_in_block: u64,
+    adaptive_block_cap: Option<Arc<AdaptiveBlockCap>>,
     pending_transactions: Option<TransactionsGuard>,
     block_status_subscribers: Arc<Mutex<BTreeMap<BlockRef, Vec<oneshot::Sender<BlockStatus>>>>>,
 }
@@ -114,6 +115,7 @@ impl TransactionConsumer {
                 .protocol_config
                 .max_transactions_in_block_bytes(),
             max_num_transactions_in_block: context.protocol_config.max_num_transactions_in_block(),
+            adaptive_block_cap: context.adaptive_block_cap.clone(),
             pending_transactions: None,
             block_status_subscribers: Arc::new(Mutex::new(BTreeMap::new())),
         }
@@ -135,6 +137,15 @@ impl TransactionConsumer {
         let mut total_bytes = 0;
         let mut limit_reached = LimitReached::AllTransactionsIncluded;
 
+        // The adaptive cap only ever lowers this author's own block budget; the protocol
+        // maximum remains the hard bound.
+        let hard_max_block_bytes = self.max_transactions_in_block_bytes;
+        let max_block_bytes = self
+            .adaptive_block_cap
+            .as_ref()
+            .map(|cap| cap.budget_bytes().min(hard_max_block_bytes))
+            .unwrap_or(hard_max_block_bytes);
+
         // Handle one batch of incoming transactions from TransactionGuard.
         // The method will return `None` if all the transactions can be included in the block. Otherwise none of the transactions will be
         // included in the block and the method will return the TransactionGuard.
@@ -150,9 +161,16 @@ impl TransactionConsumer {
             // Check if the total bytes of the transactions exceed the max transactions in block bytes.
             let transactions_bytes =
                 t.transactions.iter().map(|t| t.data().len()).sum::<usize>() as u64;
-            if total_bytes + transactions_bytes > self.max_transactions_in_block_bytes {
-                limit_reached = LimitReached::MaxBytes;
-                return Some(t);
+            if total_bytes + transactions_bytes > max_block_bytes {
+                // Block size is `max(budget, one submission)`. An empty block always admits a
+                // submission, bounded only by the protocol limit, so the budget is free to fall
+                // below the size of a single transaction without stalling it.
+                let admit_into_empty_block =
+                    transactions.is_empty() && transactions_bytes <= hard_max_block_bytes;
+                if !admit_into_empty_block {
+                    limit_reached = LimitReached::MaxBytes;
+                    return Some(t);
+                }
             }
             if transactions.len() as u64 + transactions_num > self.max_num_transactions_in_block {
                 limit_reached = LimitReached::MaxNumOfTransactions;
@@ -1129,6 +1147,127 @@ mod tests {
             let r = w.await;
             assert!(r.is_ok());
         }
+    }
+
+    #[tokio::test]
+    async fn budget_limits_block_size() {
+        let (context, _) = Context::new_for_test(4);
+        let mut protocol_config = context.protocol_config.clone();
+        protocol_config.set_max_transaction_size_bytes_for_testing(2_000);
+        protocol_config.set_max_transactions_in_block_bytes_for_testing(100_000);
+        protocol_config.set_max_num_transactions_in_block_for_testing(100);
+        let context = Arc::new(context.with_protocol_config(protocol_config));
+
+        context
+            .adaptive_block_cap
+            .as_ref()
+            .expect("damper should be enabled")
+            .set_budget_bytes_for_testing(4_000);
+
+        let (client, tx_receiver, priority_tx_receiver) = TransactionClient::new(context.clone());
+        let mut consumer =
+            TransactionConsumer::new(tx_receiver, priority_tx_receiver, context.clone());
+
+        // Ten 1 KB submissions against a 4 KB budget and a 100 KB protocol limit: the budget is
+        // the only thing that can stop accumulation here.
+        let mut acks = Vec::new();
+        for _ in 0..10 {
+            acks.push(
+                client
+                    .submit_no_wait(vec![vec![0u8; 1_000]], Priority::Normal)
+                    .await
+                    .expect("Should submit successfully transaction"),
+            );
+        }
+
+        let (transactions, _ack, limit) = consumer.next();
+        let bytes: usize = transactions.iter().map(|t| t.data().len()).sum();
+        assert!(
+            bytes <= 4_000,
+            "block took {bytes} bytes, above the 4000 byte budget"
+        );
+        assert!(transactions.len() < 10, "budget did not bound the block");
+        assert_eq!(limit, LimitReached::MaxBytes);
+    }
+
+    #[tokio::test]
+    async fn disabled_damper_leaves_block_building_unchanged() {
+        let (context, _) = Context::new_for_test(4);
+        let mut parameters = context.parameters.clone();
+        parameters.adaptive_block_cap_enabled = false;
+        let mut protocol_config = context.protocol_config.clone();
+        protocol_config.set_max_transaction_size_bytes_for_testing(2_000);
+        protocol_config.set_max_transactions_in_block_bytes_for_testing(4_000);
+        protocol_config.set_max_num_transactions_in_block_for_testing(100);
+        let context = Arc::new(
+            context
+                .with_parameters(parameters)
+                .with_protocol_config(protocol_config),
+        );
+
+        assert!(
+            context.adaptive_block_cap.is_none(),
+            "damper must be absent when disabled"
+        );
+
+        let (client, tx_receiver, priority_tx_receiver) = TransactionClient::new(context.clone());
+        let mut consumer =
+            TransactionConsumer::new(tx_receiver, priority_tx_receiver, context.clone());
+
+        let mut acks = Vec::new();
+        for _ in 0..10 {
+            acks.push(
+                client
+                    .submit_no_wait(vec![vec![0u8; 1_000]], Priority::Normal)
+                    .await
+                    .expect("Should submit successfully transaction"),
+            );
+        }
+
+        let (transactions, _ack, limit) = consumer.next();
+        let bytes: usize = transactions.iter().map(|t| t.data().len()).sum();
+        assert_eq!(transactions.len(), 4, "should fill to the protocol limit");
+        assert_eq!(bytes, 4_000);
+        assert_eq!(limit, LimitReached::MaxBytes);
+    }
+
+    /// A submission larger than the current budget must still be proposed: block size is
+    /// `max(budget, one submission)`. If the budget could veto it, the submission would be
+    /// deferred forever and then dropped, silently losing it rather than delaying it.
+    #[tokio::test]
+    async fn submission_larger_than_budget_is_still_included() {
+        let (context, _) = Context::new_for_test(4);
+        let mut protocol_config = context.protocol_config.clone();
+        protocol_config.set_max_transaction_size_bytes_for_testing(2_000);
+        protocol_config.set_max_transactions_in_block_bytes_for_testing(10_000);
+        protocol_config.set_max_num_transactions_in_block_for_testing(100);
+        // `with_protocol_config` rebuilds the damper; it is enabled by default in Parameters.
+        let context = Arc::new(context.with_protocol_config(protocol_config));
+
+        let cap = context
+            .adaptive_block_cap
+            .as_ref()
+            .expect("damper should be enabled");
+        // Wind the budget below a single transaction, as a sustained slow round period would.
+        cap.set_budget_bytes_for_testing(64);
+
+        let (client, tx_receiver, priority_tx_receiver) = TransactionClient::new(context.clone());
+        let mut consumer =
+            TransactionConsumer::new(tx_receiver, priority_tx_receiver, context.clone());
+
+        let transaction = vec![0u8; 1_000];
+        let _wait = client
+            .submit_no_wait(vec![transaction], Priority::Normal)
+            .await
+            .expect("Should submit successfully transaction");
+
+        let (transactions, _ack, _limit) = consumer.next();
+        assert_eq!(
+            transactions.len(),
+            1,
+            "a submission above the budget must still be proposed, not deferred"
+        );
+        assert_eq!(transactions[0].data().len(), 1_000);
     }
 
     #[tokio::test]
