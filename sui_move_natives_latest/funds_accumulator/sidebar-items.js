@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_to_accumulator_address","reserve_object_funds_for_withdrawal","withdraw_from_accumulator_address"],"struct":["ReserveObjectFundsForWithdrawalCostParams"]};

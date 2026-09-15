@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CommitterLayer","ConcurrentLayer","IndexerConfig","IngestionLayer","PipelineIngestionLayer","PipelineLayer","PrunerLayer","SequentialLayer"],"trait":["Merge"]};

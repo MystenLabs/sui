@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_BATCH_ROWS"],"enum":["Row"],"fn":["gather_tombstones"],"struct":["Backtest","BacktestBatch"],"trait":["CommitRows"]};

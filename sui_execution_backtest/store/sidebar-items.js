@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["child_at_bound","collect_roots","prefetch_package_closure","received_object","resolve_input_objects","shared_kind"],"struct":["PackageCache","ScanStore"]};

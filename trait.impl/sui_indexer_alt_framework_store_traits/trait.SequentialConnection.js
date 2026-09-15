@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["sui_analytics_indexer",[["impl <a class=\"trait\" href=\"sui_indexer_alt_framework_store_traits/trait.SequentialConnection.html\" title=\"trait sui_indexer_alt_framework_store_traits::SequentialConnection\">SequentialConnection</a> for <a class=\"struct\" href=\"sui_analytics_indexer/store/struct.AnalyticsConnection.html\" title=\"struct sui_analytics_indexer::store::AnalyticsConnection\">AnalyticsConnection</a>&lt;'_&gt;",0]]],["sui_consistent_store",[["impl&lt;S: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.96.1/core/marker/trait.Send.html\" title=\"trait core::marker::Send\">Send</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.96.1/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a>&gt; <a class=\"trait\" href=\"sui_indexer_alt_framework_store_traits/trait.SequentialConnection.html\" title=\"trait sui_indexer_alt_framework_store_traits::SequentialConnection\">SequentialConnection</a> for <a class=\"struct\" href=\"sui_consistent_store/store/struct.Connection.html\" title=\"struct sui_consistent_store::store::Connection\">Connection</a>&lt;'_, S&gt;",0]]],["sui_kvstore",[["impl SequentialConnection for <a class=\"struct\" href=\"sui_kvstore/struct.BigTableConnection.html\" title=\"struct sui_kvstore::BigTableConnection\">BigTableConnection</a>&lt;'_&gt;",0]]],["sui_pg_db",[["impl SequentialConnection for <a class=\"struct\" href=\"sui_pg_db/struct.Connection.html\" title=\"struct sui_pg_db::Connection\">Connection</a>&lt;'_&gt;",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[433,685,208,178]}
