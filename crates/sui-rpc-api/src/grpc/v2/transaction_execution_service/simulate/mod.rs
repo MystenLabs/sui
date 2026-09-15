@@ -664,6 +664,17 @@ fn select_gas(
             })
             .collect_vec();
 
+        let address_balance_reservation = address_balance.filter(|balance| {
+            protocol_config.enable_coin_reservation_obj_refs() && gas_coin_used && *balance > 0
+        });
+        // Legacy configs require fewer than the maximum payments. A reservation also
+        // consumes a payment slot, so leave room for it before selecting real coins.
+        let max_gas_coins = (protocol_config.max_gas_payment_objects() as usize)
+            .saturating_sub(usize::from(
+                !protocol_config.correct_gas_payment_limit_check(),
+            ))
+            .saturating_sub(usize::from(address_balance_reservation.is_some()));
+
         let gas_coins = reader
             .inner()
             .indexes()
@@ -679,7 +690,7 @@ fn select_gas(
                     .ok()
                     .map(|coin| (object.compute_object_reference(), coin.value()))
             })
-            .take(protocol_config.max_gas_payment_objects() as usize);
+            .take(max_gas_coins);
 
         let mut selected_gas = vec![];
         let mut selected_gas_value = 0;
@@ -693,11 +704,7 @@ fn select_gas(
 
         // When GasCoin is used and there's address balance, prepend a coin reservation
         // to make all SUI in the account available (coins + address balance)
-        if protocol_config.enable_coin_reservation_obj_refs()
-            && gas_coin_used
-            && let Some(ab_value) = address_balance
-            && ab_value > 0
-        {
+        if let Some(ab_value) = address_balance_reservation {
             let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
 
             let accumulator_obj_id =
