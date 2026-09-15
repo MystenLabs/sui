@@ -448,6 +448,14 @@ mod test {
 
         register_fail_point_if("select-random-cache", || true);
 
+        // Randomize each node's execution concurrency limit (re-drawn on restart),
+        // including limits small enough to force transactions through the causal-next
+        // admission lane. Only this test does so: low draws cut cluster throughput,
+        // which would skew the transaction-count assertions of other tests.
+        register_fail_point_arg("execution-concurrency-limit", || {
+            Some(thread_rng().gen_range(1..=8usize))
+        });
+
         let test_cluster = Arc::new(
             init_test_cluster_builder(4, 10000)
                 .with_num_unpruned_validators(4)
@@ -1589,10 +1597,7 @@ mod test {
 
         // With load stopped, the observer (when present) must be able to reach the
         // network's latest checkpoint via block streaming, in any scenario.
-        // Generous: with the execution driver's concurrency limit randomized in test
-        // configurations (as low as 1), a slow-drawing observer can legitimately take
-        // well over two minutes to replay a heavy workload.
-        wait_for_observer_catch_up(&test_cluster, Duration::from_secs(300)).await;
+        wait_for_observer_catch_up(&test_cluster, Duration::from_secs(120)).await;
     }
 
     // A checkpoint fork (vs the transaction fork below): one validator participates in consensus
@@ -2207,15 +2212,13 @@ mod test {
             assert!(metrics_sum.success_count > 150);
             assert!(metrics_sum.permanent_failure_count > 50);
         }
-        // Congestion-induced cancellations vary seed-to-seed. The band was ~98-121
-        // over a 200-seed sweep with fixed execution concurrency; with the execution
-        // driver's concurrency limit randomized in test configurations (1..=8),
-        // low-concurrency draws reduce cluster throughput and with it the
-        // cancellation count (observed low 40s). A `> 20` bar still asserts that
-        // shared-object congestion control actually kicked in, with margin below
-        // the observed floor.
+        // Congestion-induced cancellations vary seed-to-seed in a narrow band that
+        // can dip just below 100 (observed ~98-121 over a 200-seed sweep), making a
+        // `> 100` bar flake ~3% of the time. A `> 50` bar still asserts that
+        // shared-object congestion control actually kicked in, with comfortable
+        // margin below the observed floor.
         assert!(
-            metrics_sum.cancellation_count > 20,
+            metrics_sum.cancellation_count > 50,
             "cancellation_count too low: {}",
             metrics_sum.cancellation_count
         );
