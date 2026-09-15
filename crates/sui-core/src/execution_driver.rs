@@ -14,7 +14,7 @@
 //! never admitted.
 //!
 //! Admission prevents this using the causal index assigned to each unit in enqueue
-//! order (see `execution_scheduler::causal_order`); enqueue order is causal, so
+//! order (see `execution_scheduler::causal_admission`); enqueue order is causal, so
 //! anything a transaction can wait for is produced by a unit with a *lower* index.
 //! Let C be the watermark below which every index is done (executed, or dropped as
 //! stale). A transaction with index `i` is admitted when
@@ -53,7 +53,7 @@ use tracing::{Instrument, error_span, info, trace, warn};
 
 use crate::authority::AuthorityState;
 use crate::execution_scheduler::PendingCertificate;
-use crate::execution_scheduler::causal_order::{CausalAdmission, InFlightSlot};
+use crate::execution_scheduler::causal_admission::{CausalAdmission, InFlightSlot};
 
 #[cfg(test)]
 #[path = "unit_tests/execution_driver_tests.rs"]

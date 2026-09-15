@@ -3209,7 +3209,7 @@ impl AuthorityPerEpochStore {
         // A test commit runs no settlement, so the accumulator root never advances
         // between calls. Claiming a root version would make every later call a
         // duplicate of the first version group and get it dropped by enqueue
-        // deduplication (see `execution_scheduler::causal_order`); versionless units
+        // deduplication (see `execution_scheduler::causal_admission`); versionless units
         // bypass it. Tests that need a root version attach one explicitly.
         Ok(AssignedTxAndVersions::new(
             assigned_versions

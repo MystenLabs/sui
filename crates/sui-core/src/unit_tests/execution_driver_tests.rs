@@ -487,7 +487,7 @@ async fn test_execution_with_dependencies() {
     // Enqueue executables in causal (dependency) order, as one batch. This is a
     // contract of the execution scheduler: enqueue order defines the causal index used
     // for execution admission, and every dependency must point at an earlier-enqueued
-    // unit (see `execution_scheduler::causal_order`). Production sources (consensus
+    // unit (see `execution_scheduler::causal_admission`). Production sources (consensus
     // handler, checkpoint executor) enqueue in this order by construction. Here the
     // causal order is the order the certs were originally executed in: the two setup
     // certs, then each iteration's owned cert followed by its shared cert (the chains
