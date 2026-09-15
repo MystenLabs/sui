@@ -57,7 +57,7 @@ answer: >-
   every value without an indexer.
 ---
 
-DeepBook Predict runs on Sui Mainnet and Sui Testnet as 2 separate deployments, `deepbook-predict-mainnet` and `deepbook-predict-testnet`. Version 2.5.0 or later of [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) carries both, so `getConfig` returns the identifiers on this page for either network. The Mainnet publish comes from the [`deepbook-predict-mainnet` branch](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-mainnet/packages/predict) of the DeepBookV3 repository, and the Testnet publish from the [`deepbook-predict-testnet` branch](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-testnet/packages/predict). The 2 source commits carry byte-identical Move sources, so one source pin serves both networks.
+DeepBook Predict runs on Sui Mainnet and Sui Testnet as 2 separate deployments, `deepbook-predict-mainnet` and `deepbook-predict-testnet`. Version 2.5.0 or later of [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) carries both, so `getConfig` returns the identifiers on this page for either network. The Mainnet publish comes from DeepBookV3 source commit [`7b169bde`](https://github.com/MystenLabs/deepbookv3/tree/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict), and the Testnet publish from source commit [`4d752fb8`](https://github.com/MystenLabs/deepbookv3/tree/4d752fb82d909a821c85bcc5d3963725efb546f4/packages/predict). The 2 source commits carry byte-identical Move sources, so one source pin serves both networks.
 
 :::caution
 
@@ -77,7 +77,6 @@ The deployment manifest is the stable identity record. It names the chain, the s
 | Network | Mainnet |
 | Chain ID | `35834a8a` |
 | Source commit | `7b169bde2c2a25fee3ac9aa4686e346309bfe570` |
-| Source branch | [`deepbook-predict-mainnet`](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-mainnet/packages/predict) |
 | Indexing start checkpoint | `320360057` |
 
 ### Mainnet packages {#packages}
@@ -128,7 +127,6 @@ Predict has no single top-level object. It splits state across shared objects th
 | Network | Testnet |
 | Chain ID | `4c78adac` |
 | Source commit | `4d752fb82d909a821c85bcc5d3963725efb546f4` |
-| Source branch | [`deepbook-predict-testnet`](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-testnet/packages/predict) |
 | Indexing start checkpoint | `381301489` |
 
 ### Testnet packages
@@ -496,7 +494,7 @@ Subscriptions begin at the current tip and accept no resume point, so recovering
 
 ## Source pointers
 
-The links below pin every module to the Mainnet source commit `7b169bde2c2a25fee3ac9aa4686e346309bfe570`, which the [`deepbook-predict-mainnet`](https://github.com/MystenLabs/deepbookv3/tree/deepbook-predict-mainnet) branch carries. The Testnet deployment's Move sources are byte-identical, so the same links serve both networks. There is no `entry fun` in any Predict package: every integrator call is a `public fun` invoked as a `moveCall`, and several of them return values that a later command in the same transaction must consume.
+The links below pin every module to the Mainnet source commit `7b169bde2c2a25fee3ac9aa4686e346309bfe570`. The Testnet deployment's Move sources are byte-identical, so the same links serve both networks. There is no `entry fun` in any Predict package: every integrator call is a `public fun` invoked as a `moveCall`, and several of them return values that a later command in the same transaction must consume.
 
 | **Area** | **Source** |
 | --- | --- |

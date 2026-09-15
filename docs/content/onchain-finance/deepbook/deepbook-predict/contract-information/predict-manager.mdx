@@ -64,7 +64,7 @@ This surface belongs to 2 modules, both under `packages/account/sources/` rather
 
 Predict's own per-account slot lives in [`deepbook_predict::predict_account`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict/sources/predict_account.move).
 
-Sui Mainnet and Sui Testnet each run a separate deployment of the `account` package from identical sources, and the Move snippets on this page pin the Mainnet source commit, which is also the `deepbook-predict-mainnet` branch. An account on one network does not exist on the other, and neither deployment shares accounts with an earlier deployment. Take the IDs from `getAccountConfig(network)` rather than transcribing them:
+Sui Mainnet and Sui Testnet each run a separate deployment of the `account` package from identical sources, and the Move snippets on this page pin the Mainnet source commit, `7b169bde`. An account on one network does not exist on the other, and neither deployment shares accounts with an earlier deployment. Take the IDs from `getAccountConfig(network)` rather than transcribing them:
 
 | **Object** | **Mainnet** | **Testnet** |
 |---|---|---|

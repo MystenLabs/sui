@@ -59,7 +59,7 @@ verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d
 
 Trading on DeepBook Predict runs through the `deepbook_predict::expiry_market` module. One shared `ExpiryMarket` object exists per underlying and expiry, and it owns that expiry's USDC custody, strike exposure index, congestion estimator, mint pause flag, and flush stamp. Every call on this page is a `public fun` that you invoke from a programmable transaction block with a `moveCall`. Several of them take values only another command in the same block can produce, a transaction-local `Pricer` and a single-use account `Auth`, so plan the whole flow as one block.
 
-The module lives at [`packages/predict/sources/expiry_market.move`](https://github.com/MystenLabs/deepbookv3/blob/deepbook-predict-mainnet/packages/predict/sources/expiry_market.move) on the `deepbook-predict-mainnet` branch. The Move snippets on this page pin the Mainnet source commit, which serves both deployments. For the package and object IDs of each network, see [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).
+The module lives at [`packages/predict/sources/expiry_market.move`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict/sources/expiry_market.move) at the Mainnet source commit. The Move snippets on this page pin the Mainnet source commit, which serves both deployments. For the package and object IDs of each network, see [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).
 
 :::info
 
