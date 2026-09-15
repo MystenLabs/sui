@@ -278,14 +278,23 @@ impl CheckpointContents {
 }
 
 impl Checkpoint {
-    /// Construct a checkpoint that is represented by just its identifier (its sequence number).
+    /// Construct a checkpoint that is represented by just its identifier (its sequence number). Its
+    /// contents resolve lazily from the durable index.
     ///
-    /// If no sequence_number is provided, defaults to the scope's checkpoint.
-    /// Returns `None` if the checkpoint is set in the future relative to the current scope's
-    /// checkpoint, or when no checkpoint is set in scope (e.g. execution scope, where checkpoint
-    /// queries return None to prevent temporal inconsistency).
+    /// When the scope has a `checkpoint_viewed_at` consistency cutoff, the sequence number defaults
+    /// to it and a checkpoint past it resolves to `None` (temporal consistency for the Query API). A
+    /// scope with no cutoff (a subscription/streamed scope) applies no bound and honors an explicit
+    /// sequence number as-is; with neither a cutoff nor an explicit sequence number there is nothing
+    /// to anchor to, so it returns `None`.
     pub(crate) fn with_sequence_number(scope: Scope, sequence_number: Option<u64>) -> Option<Self> {
-        let scope_checkpoint = scope.checkpoint_viewed_at()?;
+        let Some(scope_checkpoint) = scope.checkpoint_viewed_at() else {
+            return sequence_number.map(|sequence_number| Self {
+                scope,
+                sequence_number,
+                streamed_data: None,
+            });
+        };
+
         let sequence_number = sequence_number.unwrap_or(scope_checkpoint);
 
         (sequence_number <= scope_checkpoint).then_some(Self {
@@ -293,6 +302,19 @@ impl Checkpoint {
             sequence_number,
             streamed_data: None,
         })
+    }
+
+    /// Construct a checkpoint backed by in-memory streamed data, so its contents resolve without
+    /// touching the durable index, which may not have reached this checkpoint yet.
+    pub(crate) fn with_streamed_checkpoint(
+        scope: Scope,
+        processed: &Arc<ProcessedCheckpoint>,
+    ) -> Self {
+        Self {
+            sequence_number: processed.summary.sequence_number,
+            scope,
+            streamed_data: Some(Arc::clone(processed)),
+        }
     }
 
     /// Resolve a checkpoint by its digest. Translates the digest to a sequence number via the
