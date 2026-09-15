@@ -560,8 +560,8 @@ impl Proposer for ValidatorProposer {
                 let (new_causal_history, mut cutoff_round) = {
                     let mut dag_state = self.dag_state.write();
                     // Core cannot advance the DAG commit state during a proposal, so the GC round
-                    // stays the same below. Tracker GC never exceeds DAG GC, so this cutoff
-                    // covers each target which get_own_votes() omits because of GC.
+                    // stays the same below. Tracker GC never exceeds DAG GC, so every target
+                    // returned below is also above the tracker GC round.
                     let cutoff_round = dag_state.gc_round();
                     let new_causal_history: Vec<BlockRef> = ancestors
                         .iter()

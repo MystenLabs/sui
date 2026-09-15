@@ -9,7 +9,7 @@ use std::{
 
 use consensus_config::ProtocolKeyPair;
 #[cfg(test)]
-use consensus_config::{AuthorityIndex, Stake, local_committee_and_keys};
+use consensus_config::{AuthorityIndex, Committee, Stake, local_committee_and_keys};
 use consensus_types::block::{BlockRef, Round};
 use itertools::Itertools as _;
 #[cfg(test)]
@@ -1289,6 +1289,19 @@ impl CoreTestFixture {
         store: Arc<MemStore>,
     ) -> Self {
         let (committee, mut signers) = local_committee_and_keys(0, authorities.clone());
+        // Production uses v3 committee thresholds when v3 is enabled. A crash-only
+        // fault budget gives these tests the v2 quorum threshold and no equivocation
+        // tolerance.
+        let committee = if context.protocol_config.enable_v3() {
+            Committee::new_v3(
+                committee.epoch(),
+                committee.authorities_slice().to_vec(),
+                /* malicious_stake */ 0,
+                /* crash_stake */ 1,
+            )
+        } else {
+            committee
+        };
         let mut context = context.clone();
         context = context
             .with_committee(committee)
@@ -1780,11 +1793,13 @@ mod test {
         assert_eq!(proposed.transaction_votes_cutoff_round(), gc_round);
     }
 
-    // Adds 3 rounds of peer blocks. The local authority rejects transaction 0 in each block.
-    // Then proposes a block.
+    // Adds peer blocks through `last_round`. One peer can equivocate in round 1. The local
+    // authority rejects transaction 0 in each block. Then it proposes a block.
     // Returns the fixture, the proposed block and the peer blocks.
     async fn propose_after_peer_blocks_with_reject_votes(
         context: Context,
+        last_round: Round,
+        round_one_equivocations: usize,
     ) -> (CoreTestFixture, VerifiedBlock, Vec<VerifiedBlock>) {
         let mut fixture = CoreTestFixture::new(
             context,
@@ -1794,11 +1809,30 @@ mod test {
         )
         .await;
         let mut builder = DagBuilder::new(fixture.core.context.clone());
-        builder
-            .layers(1..=3)
-            .authorities(vec![fixture.core.context.own_index])
-            .skip_block()
-            .build();
+        if round_one_equivocations == 0 {
+            builder
+                .layers(1..=last_round)
+                .authorities(vec![fixture.core.context.own_index])
+                .skip_block()
+                .build();
+        } else {
+            builder
+                .layer(1)
+                .authorities(vec![AuthorityIndex::new_for_test(1)])
+                .equivocate(round_one_equivocations)
+                .build();
+            builder
+                .blocks
+                .retain(|block_ref, _| block_ref.author != fixture.core.context.own_index);
+            builder
+                .last_ancestors
+                .retain(|block_ref| block_ref.author != fixture.core.context.own_index);
+            builder
+                .layers(2..=last_round)
+                .authorities(vec![fixture.core.context.own_index])
+                .skip_block()
+                .build();
+        }
         let blocks = builder.blocks.values().cloned().collect::<Vec<_>>();
         fixture
             .transaction_vote_tracker
@@ -1818,7 +1852,7 @@ mod test {
         let vote_target_limit = max_transaction_vote_targets(&context);
 
         let (_fixture, proposed, blocks) =
-            propose_after_peer_blocks_with_reject_votes(context).await;
+            propose_after_peer_blocks_with_reject_votes(context, 3, 0).await;
 
         // V2 blocks have no signed cutoff round, so the V3 limit must not remove their targets.
         assert!(blocks.len() > vote_target_limit);
@@ -1830,11 +1864,11 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let (mut context, _) = Context::new_for_test(4);
         context.protocol_config.set_enable_v3_for_testing(true);
-        context.protocol_config.set_gc_depth_for_testing(1);
+        context.protocol_config.set_gc_depth_for_testing(3);
         let vote_target_limit = max_transaction_vote_targets(&context);
 
         let (fixture, proposed, blocks) =
-            propose_after_peer_blocks_with_reject_votes(context).await;
+            propose_after_peer_blocks_with_reject_votes(context, 2, 8).await;
 
         assert!(blocks.len() > vote_target_limit);
         assert!(!proposed.transaction_votes().is_empty());

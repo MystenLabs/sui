@@ -381,8 +381,7 @@ impl DagState {
         if self.context.protocol_config.enable_v3() {
             // Update votes accounting in BlockInfo.
             for ancestor in block.ancestors() {
-                // Only update children info when the link is potentially a leader vote.
-                if ancestor.round + 1 != block_ref.round || ancestor.round <= self.gc_round() {
+                if ancestor.round <= self.gc_round() {
                     continue;
                 }
                 let block_info = self.recent_blocks.get_mut(ancestor).unwrap_or_else(|| {
@@ -391,10 +390,14 @@ impl DagState {
                         ancestor, block_ref
                     )
                 });
+                // The V3 transaction finalizer traverses both parent and weak links.
                 block_info.children.insert(block_ref);
-                block_info
-                    .children_stake
-                    .add_unique(block_ref.author, &self.context.committee);
+                // Only a next-round child can vote for a leader decision.
+                if ancestor.round + 1 == block_ref.round {
+                    block_info
+                        .children_stake
+                        .add_unique(block_ref.author, &self.context.committee);
+                }
             }
             self.update_round_info(block);
         }
@@ -541,13 +544,8 @@ impl DagState {
         blocks
     }
 
-    /// Gets all uncommitted blocks in a round.
-    /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
-    pub(crate) fn get_uncommitted_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
-        if round <= self.last_commit_round() {
-            panic!("Round {} have committed blocks!", round);
-        }
-
+    /// Gets all cached blocks in a round, including committed blocks.
+    pub(crate) fn get_cached_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
         let mut blocks = vec![];
         for (_block_ref, block_info) in self.recent_blocks.range((
             Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
@@ -562,7 +560,17 @@ impl DagState {
         blocks
     }
 
-    #[cfg(test)]
+    /// Gets all uncommitted blocks in a round.
+    /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
+    pub(crate) fn get_uncommitted_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
+        if round <= self.last_commit_round() {
+            panic!("Round {} have committed blocks!", round);
+        }
+
+        self.get_cached_blocks_at_round(round)
+    }
+
+    /// Gets all direct children of a cached block above the GC round.
     pub(crate) fn get_block_children(&self, block_ref: &BlockRef) -> Option<Vec<BlockRef>> {
         if block_ref.round <= self.gc_round() {
             return None;
@@ -1427,11 +1435,10 @@ impl DagState {
 pub(crate) struct BlockInfo {
     pub(crate) block: VerifiedBlock,
 
-    /// Used in computing commits and leader schedule in Mysticeti v3.
-    /// Next-round blocks which have this block as an ancestor.
+    /// Blocks which have this block as an ancestor. The V3 transaction finalizer uses these links
+    /// for reverse causal traversal.
     pub(crate) children: BTreeSet<BlockRef>,
-    /// Total stake from distinct authorities that have authored
-    /// one of the blocks in `children`.
+    /// Total stake from distinct authorities with a next-round block in `children`.
     pub(crate) children_stake: StakeAggregator<QuorumThreshold>,
 
     // Whether the block has been committed
@@ -2185,7 +2192,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_block_children_exclusion() {
+    async fn test_block_children_include_weak_links_without_voting_stake() {
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = 10;
         context.protocol_config.set_gc_depth_for_testing(3);
@@ -2195,38 +2202,50 @@ mod test {
         let store = Arc::new(MemStore::new());
         let mut dag_state = DagState::new(context.clone(), store.clone());
 
-        // Accept rounds 1..=2 with default full links.
+        // Accept all round-1 blocks and round-2 blocks from authorities 1, 2, and 3. The missing
+        // round-2 block from authority 0 lets this test detect if a later weak link incorrectly
+        // adds authority 0 to the voting stake.
         let mut dag_builder = DagBuilder::new(context.clone());
         dag_builder.layers(1..=2).build();
-        let base_blocks = dag_builder.all_blocks();
+        let author_0 = AuthorityIndex::new_for_test(0);
+        let base_blocks: Vec<_> = dag_builder
+            .all_blocks()
+            .into_iter()
+            .filter(|block| block.round() != 2 || block.author() != author_0)
+            .collect();
         dag_state.accept_blocks(base_blocks.clone());
 
         // Craft a round-3 block with mixed strong + weak ancestors:
-        //   strong: three round-2 blocks (ancestor.round + 1 == 3, authority other than 0)
+        //   strong: three round-2 blocks (ancestor.round + 1 == 3, authorities 1, 2, and 3)
         //   weak:   one round-1 block (ancestor.round + 1 == 2, not 3, authority 0)
         let round_2_refs: Vec<BlockRef> = base_blocks
             .iter()
-            .filter(|b| b.round() == 2 && b.author() != AuthorityIndex::new_for_test(0))
+            .filter(|b| b.round() == 2)
             .map(|b| b.reference())
             .collect();
         let weak_ancestor = base_blocks
             .iter()
-            .find(|b| b.round() == 1 && b.author() == AuthorityIndex::new_for_test(0))
+            .find(|b| b.round() == 1 && b.author() == author_0)
             .expect("should have a round-1 authority-0 block")
             .reference();
+        let weak_children_authorities_before = dag_state
+            .get_block_children_authorities(&weak_ancestor)
+            .expect("weak ancestor should still be present");
+        let weak_children_stake_before = dag_state
+            .get_block_total_children_stake(&weak_ancestor)
+            .expect("weak ancestor should still be present");
 
         let mut ancestors = round_2_refs.clone();
         ancestors.push(weak_ancestor);
         let round_3 =
-            VerifiedBlock::new_for_test(TestBlock::new(3, 1).set_ancestors_raw(ancestors).build());
+            VerifiedBlock::new_for_test(TestBlock::new(3, 0).set_ancestors_raw(ancestors).build());
         let round_3_ref = round_3.reference();
         dag_state.accept_block(round_3);
 
         // Strong ancestors (round 2): each should now list round_3_ref as a child.
-        // Derived fields: only authority 1 (round_3's author) is represented, so
-        // children_authorities == {1} and total_children_stake == stake(1).
-        let author_1 = AuthorityIndex::new_for_test(1);
-        let stake_1 = context.committee.stake(author_1);
+        // Derived fields: only authority 0 (round_3's author) is represented, so
+        // children_authorities == {0} and total_children_stake == stake(0).
+        let stake_0 = context.committee.stake(author_0);
         for r2_ref in &round_2_refs {
             let children = dag_state
                 .get_block_children(r2_ref)
@@ -2240,53 +2259,42 @@ mod test {
                 .expect("round-2 block should still be present");
             assert_eq!(
                 authorities,
-                BTreeSet::from([author_1]),
-                "round-2 parent {r2_ref:?} should have children_authorities == {{1}}",
+                BTreeSet::from([author_0]),
+                "round-2 parent {r2_ref:?} should have children_authorities == {{0}}",
             );
             assert_eq!(
                 dag_state
                     .get_block_total_children_stake(r2_ref)
                     .expect("round-2 block should still be present"),
-                stake_1,
+                stake_0,
                 "round-2 parent {r2_ref:?} total_children_stake mismatch",
             );
         }
 
-        // Weak ancestor (round 1): must NOT have round_3_ref as a child, and
-        // its children set should only contain the natural round-2 population.
+        // The weak ancestor keeps the round-3 block in its reverse causal links.
         let weak_children = dag_state
             .get_block_children(&weak_ancestor)
             .expect("weak ancestor should still be present");
         assert!(
-            !weak_children.contains(&round_3_ref),
-            "weak ancestor {weak_ancestor:?} must NOT have round-3 block as child",
+            weak_children.contains(&round_3_ref),
+            "weak ancestor {weak_ancestor:?} should have round-3 block as a child",
         );
-        for c in &weak_children {
-            assert_eq!(
-                c.round, 2,
-                "weak ancestor's children should all be round 2, got {c:?}"
-            );
-        }
-        // Derived fields for the weak ancestor: children are the 4 natural
-        // round-2 blocks authored by all 4 authorities, so authorities =
-        // {0,1,2,3} and stake = total_stake. round_3 does not contribute
-        // because the weak link was filtered out.
+        // The weak ancestor has natural round-2 children from authorities 1, 2, and 3. The weak
+        // round-3 link from authority 0 does not add authority 0 or its stake to leader voting.
         let weak_authorities = dag_state
             .get_block_children_authorities(&weak_ancestor)
             .expect("weak ancestor should still be present");
         let expected_weak_authorities: BTreeSet<AuthorityIndex> =
-            (0..4).map(AuthorityIndex::new_for_test).collect();
+            (1..4).map(AuthorityIndex::new_for_test).collect();
         assert_eq!(
             weak_authorities, expected_weak_authorities,
-            "weak ancestor {weak_ancestor:?} children_authorities should cover all 4 round-2 authors",
+            "weak ancestor {weak_ancestor:?} children_authorities should contain only round-2 authors",
         );
-        assert_eq!(
-            dag_state
-                .get_block_total_children_stake(&weak_ancestor)
-                .expect("weak ancestor should still be present"),
-            context.committee.total_stake(),
-            "weak ancestor {weak_ancestor:?} total_children_stake should equal total committee stake",
-        );
+        assert_eq!(weak_authorities, weak_children_authorities_before);
+        let weak_children_stake_after = dag_state
+            .get_block_total_children_stake(&weak_ancestor)
+            .expect("weak ancestor should still be present");
+        assert_eq!(weak_children_stake_after, weak_children_stake_before);
     }
 
     #[tokio::test]
