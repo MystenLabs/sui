@@ -1749,10 +1749,6 @@ impl ObjectID {
     pub fn is_clock(&self) -> bool {
         *self == SUI_CLOCK_OBJECT_ID
     }
-
-    pub fn is_implicitly_read_system_object(&self) -> bool {
-        crate::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(self)
-    }
 }
 
 impl From<SuiAddress> for ObjectID {
