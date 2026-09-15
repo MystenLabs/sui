@@ -384,7 +384,7 @@ pub fn check_restricted_name_all_cases(
     let n_str = n.value.as_str();
     let can_be_vector = matches!(case, NameCase::Module | NameCase::ModuleAlias);
     if n_str == ModuleName::SELF_NAME
-        || (!can_be_vector && n_str == crate::naming::ast::BuiltinTypeName_::VECTOR)
+        || (!can_be_vector && n_str == crate::shared::builtin_types::VECTOR)
     {
         reporter.add_diag(restricted_name_error(case, n.loc, n_str));
         Err(())
