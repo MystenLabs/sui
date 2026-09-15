@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 137;
+const MAX_PROTOCOL_VERSION: u64 = 138;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -407,6 +407,7 @@ const MAINNET_USDB: &str =
 //              Enable allowed_proposers on testnet and mainnet.
 //              Validate PTB indices at signing time.
 //              Enable memory_safety_invariant_check_v2.
+// Version 138: Enable BumpOnly
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4768,6 +4769,9 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.validate_ptb_argument_indices = true;
                     cfg.feature_flags.memory_safety_invariant_check_v2 = true;
+                }
+                138 => {
+                    cfg.gas_model_version = Some(15);
                 }
                 // Use this template when making changes:
                 //
