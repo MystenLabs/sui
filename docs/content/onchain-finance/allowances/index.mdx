@@ -1,0 +1,42 @@
+---
+title: Allowances
+description: >-
+  Allowances let an address authorize another address to spend from its
+  address balance within limits it sets, and revoke that permission at any
+  time.
+keywords:
+  - allowances
+  - delegated spending
+  - address balances
+  - subscriptions
+  - agent payments
+  - spending limits
+  - rate limit
+  - revocation
+goal:
+  description: >-
+    Provide a brief introduction to allowances on Sui and link to subtopics.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What are allowances in Sui?
+  - What topics do allowances cover?
+  - How do allowances work on Sui?
+answer: >-
+  Allowances let an address authorize another address to spend from its
+  address balance within limits it sets, and revoke that permission at any
+  time.
+---
+
+Allowances let an address authorize another address to spend from its [address balance](/onchain-finance/asset-custody/address-balances) within limits it sets, and revoke that permission at any time. Funds stay in the funder's balance until a spend succeeds, so an allowance is a permission, not a deposit.
+
+import DocCardList from '@theme/DocCardList';
+
+<DocCardList />
