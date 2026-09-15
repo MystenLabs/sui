@@ -10,7 +10,7 @@ use crate::{
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
         ExecutingGuard, PendingCertificateStats,
-        causal_order::CausalAdmission,
+        causal_admission::CausalAdmission,
         funds_withdraw_scheduler::{
             AddressFundsSchedulerMetrics, FundsSettlement, ScheduleStatus, TxFundsWithdraw,
             WithdrawReservations, scheduler::FundsWithdrawScheduler,

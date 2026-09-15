@@ -5,7 +5,7 @@
 //!
 //! Funds-withdrawing transactions are executed through the execution scheduler, in the
 //! shape consensus produces: all transactions of one accumulator root version are
-//! enqueued together as a single batch (see `execution_scheduler::causal_order`). Since
+//! enqueued together as a single batch (see `execution_scheduler::causal_admission`). Since
 //! withdrawing mutates the vault, several withdraws at one version need a shared vault,
 //! which consensus sequences within the batch.
 

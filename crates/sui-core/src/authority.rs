@@ -909,7 +909,7 @@ pub struct ExecutionEnv {
     /// retires the index when the transaction finishes executing or is dropped as no
     /// longer needed. None at the driver means the transaction is admitted
     /// unconditionally (settlement transactions - see
-    /// `execution_scheduler::causal_order`).
+    /// `execution_scheduler::causal_admission`).
     pub(crate) causal_index: Option<u64>,
 }
 
