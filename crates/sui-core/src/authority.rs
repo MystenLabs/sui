@@ -3943,9 +3943,6 @@ impl AuthorityState {
         }
     }
 
-    /// Executes accumulator settlement for testing purposes.
-    /// Returns a list of (transaction, execution_env) pairs that can be replayed on another
-    /// AuthorityState (e.g., a fullnode) using `replay_settlement_for_testing`.
     /// The accumulator root version a transaction executed right now would read, or
     /// None when accumulators are not enabled. Test paths that execute directly attach
     /// this to their assigned versions: the test version-assignment helper assigns no
@@ -3964,6 +3961,9 @@ impl AuthorityState {
         })
     }
 
+    /// Executes accumulator settlement for testing purposes.
+    /// Returns a list of (transaction, execution_env) pairs that can be replayed on another
+    /// AuthorityState (e.g., a fullnode) using `replay_settlement_for_testing`.
     pub async fn settle_accumulator_for_testing(
         &self,
         effects: &[TransactionEffects],

@@ -222,7 +222,10 @@ impl CausalAdmission {
 
     /// Whether every assigned index is retired and nothing is in flight.
     pub fn is_quiescent(&self) -> bool {
-        let inner = self.inner.lock();
+        Self::is_quiescent_locked(&self.inner.lock())
+    }
+
+    fn is_quiescent_locked(inner: &AdmissionInner) -> bool {
         inner.in_flight == 0
             && !inner.next_admitted
             && inner.done_above.is_empty()
@@ -237,11 +240,7 @@ impl CausalAdmission {
     /// retiring into reset bookkeeping would corrupt the watermark.
     pub fn check_quiescent_at_epoch_boundary(&self) {
         let inner = self.inner.lock();
-        let quiescent = inner.in_flight == 0
-            && !inner.next_admitted
-            && inner.done_above.is_empty()
-            && inner.watermark + 1 == inner.next_index;
-        if !quiescent {
+        if !Self::is_quiescent_locked(&inner) {
             debug_fatal!(
                 "causal admission not quiescent at epoch boundary: watermark={} next_index={} \
                  in_flight={} next_admitted={} done_above={:?}",

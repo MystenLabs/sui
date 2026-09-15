@@ -296,7 +296,7 @@ impl SingleValidator {
             .collect();
         // The benchmark runs no settlements, so it must not claim an accumulator root
         // version: transactions are enqueued one at a time, and a version group is only
-        // enqueued once (see `execution_scheduler::causal_order`).
+        // enqueued once (see `execution_scheduler::causal_admission`).
         self.epoch_store
             .assign_shared_object_versions_for_tests(
                 self.get_validator().get_object_cache_reader().as_ref(),
