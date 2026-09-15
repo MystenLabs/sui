@@ -2404,6 +2404,7 @@ impl ProtocolConfig {
         } else {
             self.consensus_max_transactions_in_block_bytes
                 .unwrap_or(512 * 1024)
+                .min(32 * 1024)
         }
     }
 
