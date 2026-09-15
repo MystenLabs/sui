@@ -181,7 +181,7 @@ Set `exact_quantity` to `true` to price a fixed size, in which case `min_quantit
 
 Both Move functions price and stop there. Neither checks the `max_cost` or `max_probability` slippage caps, because neither takes them, and neither checks whether the expiry has the cash to back the resulting payout liability. `quote_mint` in particular knows nothing about an account: it has no `AccountWrapper` argument, so it cannot see a balance, a builder code, or a referrer. One bound both quotes do enforce is that the all-in cost can never exceed the position's maximum payout: a quote whose `all_in_cost` would exceed `quantity` aborts with `EMintCostAboveMaxPayout`.
 
-The SDK's `client.predict.read.quoteMint` is a different thing at a different layer. It dry-runs the identical transaction `client.predict.tx.mint` builds, against the real account and the real fee path, so it does double as preflight and raises the same typed errors the mint would, insufficient balance included. When a page says a quote is a preflight, it means that dry run, not the Move functions above.
+The SDK's `client.predict.read.quoteMint` is a different thing at a different layer. It dry-runs the transaction `client.predict.tx.mint` builds for the options you pass, against the real account and the real fee path, so it does double as preflight and raises the same typed errors the mint would, including insufficient balance. Called with only `quantity`, it carries no slippage cap. When a page says a quote is a preflight, it means that dry run, not the Move functions above.
 
 <details>
 <summary>Quote source</summary>

@@ -73,7 +73,7 @@ Install the DeepBook SDK and its Sui peer dependency.
 npm install @mysten/deepbook-v3 @mysten/sui
 ```
 
-The Predict client lives on the `@mysten/deepbook-v3/predict` subpath. You do not need a separate Predict package.
+The Predict client lives on the `@mysten/deepbook-v3/predict` subpath. You do not need a separate Predict package. [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk) documents every function it exports.
 
 ### 2. Request Testnet tokens
 
@@ -136,7 +136,7 @@ A brand-new market also opens with zero working cash and rejects a mint until po
 
 ### 6. Quote, then mint under both caps
 
-Quote first. `client.predict.read.quoteMint` dry-runs the identical transaction the mint builder produces, against the real account and the real fee path, so it doubles as a preflight check and raises the same typed errors the mint would, insufficient balance included. It returns the all-in account debit as `cost` and the fill price as `entryProbability`.
+Quote first. `client.predict.read.quoteMint` dry-runs the transaction the mint builder produces for the options you pass, against the real account and the real fee path, so it doubles as a preflight check and raises the same typed errors the mint would, including insufficient balance. Called with only `quantity`, it carries no slippage cap. It returns the all-in account debit as `cost` and the fill price as `entryProbability`.
 
 The mint takes 2 independent caps, and they bound different things:
 

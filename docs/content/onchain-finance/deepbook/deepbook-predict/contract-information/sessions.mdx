@@ -171,19 +171,7 @@ Read before and after when the difference matters. `session_expiration_ms` retur
 
 Revocation deliberately takes no `SessionsConfig` and has no version gate, so an owner can still remove grants after the watermark retires a package version.
 
-<details>
-<summary>Authorize a session with the SDK</summary>
-
-<ImportContent source="examples/deepbook-predict/src/sessions-authorize.ts" mode="code" tag="sessions-authorize" />
-
-</details>
-
-<details>
-<summary>Revoke and confirm with the SDK</summary>
-
-<ImportContent source="examples/deepbook-predict/src/sessions-revoke.ts" mode="code" tag="sessions-revoke" />
-
-</details>
+The Predict Sessions SDK page shows how to [authorize a session](/onchain-finance/deepbook/deepbook-predict-sdk/sessions#authorize) and how to [revoke a grant and confirm the result](/onchain-finance/deepbook/deepbook-predict-sdk/sessions#revoke) with the TypeScript SDK.
 
 ## Enumerate an account's grants {#enumerate}
 
@@ -198,29 +186,9 @@ There is no bulk onchain read. `session_expiration_ms` answers one address at a 
 	struct="SessionsApp,SessionsData"
 />
 
-Getting there takes 4 steps, and the SDK exposes each one:
-
-1. Derive the canonical account address from the owner with `deriveAccountId`.
-2. Derive the `DataKey<SessionsApp>` field ID under that address with `deriveSessionsFieldId`.
-3. Fetch that object with the core `getObject`, including Binary Canonical Serialization (BCS) content.
-4. Decode the bytes with the static `decodeSessions`, then split the result with `activeSessions` and `expiredSessions`.
-
-That path has 3 traps:
-
-- **Account, not wrapper:** The field hangs off the account, not the wrapper. An owner has 2 derived objects, the shared `AccountWrapper` that every call takes as an argument, and the canonical `Account` identity that app data attaches to. Grants hang off the second one. Deriving the field under the wrapper address yields an ID that points at nothing.
-- **Plain dynamic field:** `account::attach` writes the slot with `dynamic_field::add`, whereas the registry claims the account and wrapper IDs through `derived_object::claim`. Derive it with `deriveDynamicFieldID`. Using `deriveObjectID` wraps the type tag in a `DerivedObjectKey`, producing a different, empty address.
-- **Whole-field decoding:** Decode the whole field, not the inner value. `decodeSessions` takes the complete `Field<DataKey, SessionsData>` bytes the core API returns. `DataKey` is empty in source, but Move inserts a hidden `dummy_field: bool`, so one zero byte sits between the field ID and the value. Decoding the value alone reads the field ID's first byte as the map length. The decoder also throws on truncated or padded bytes rather than returning an empty list, so an empty result means the account genuinely holds no grants.
-
-Split the result with the 2 helpers rather than by hand. The chain asserts `now < expires_at_ms`, so `activeSessions` filters on `nowMs < expiresAtMs` and `expiredSessions` on `nowMs >= expiresAtMs`. A filter written the intuitive way, as `nowMs > expiresAtMs`, leaves the grant expiring exactly at `nowMs` classified as neither, and that grant then occupies a slot forever.
+[Predict Sessions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/sessions#list) walks through deriving that field's ID under the canonical account rather than the wrapper, fetching it, and decoding it into a list of grants.
 
 Nothing prunes expired grants. Time passing executes no Move code, so a dead grant counts toward the 20-address limit until the owner revokes it, and the 21st `authorize_session` aborts `ESessionLimitExceeded` even when every stored grant is long dead. List, revoke what has expired, then grant.
-
-<details>
-<summary>List grants and reclaim slots with the SDK</summary>
-
-<ImportContent source="examples/deepbook-predict/src/sessions-list.ts" mode="code" tag="sessions-list" />
-
-</details>
 
 ## Predict wrappers {#predict-wrappers}
 
@@ -239,10 +207,7 @@ Each one validates the package version and the session against the supplied acco
 
 ### Slippage bounds differ from the facade {#slippage-bounds}
 
-The `@mysten/deepbook-v3/sessions` builders and the `@mysten/deepbook-v3/predict` facade disagree about slippage protection in both directions, and both differences favor the session key holder being explicit:
-
-- **Required mint caps:** The session mint builders require both caps. `mintExactQuantity` takes `maxCost` and `maxProbability` as required parameters, and `mintExactAmount` requires `maxCost`. The `/predict` facade instead sends `U64_MAX` for a cap you omit, which is a cap that can never trip. On a session builder there is no default to fall into.
-- **Close-side floors on `redeemLive`:** `minProbability` and `minProceeds` are optional parameters that reach the contract. The `/predict` facade sends zero for both and offers no option to raise them. Omitting a floor on the session builder also means zero, and zero on a delegated key closes the position at any price the mark gives. Pass real floors on anything a session key can reach.
+The `@mysten/deepbook-v3/sessions` mint builders require the slippage caps that the `@mysten/deepbook-v3/predict` facade leaves uncapped when you omit them, and the session `redeemLive` accepts the close-side floors that the facade always sends as 0. [Predict Sessions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/sessions#slippage-bounds) describes both differences.
 
 <details>
 <summary>Predict wrapper source</summary>
@@ -259,12 +224,7 @@ The `@mysten/deepbook-v3/sessions` builders and the `@mysten/deepbook-v3/predict
 
 </details>
 
-<details>
-<summary>Trade as a session key with the SDK</summary>
-
-<ImportContent source="examples/deepbook-predict/src/sessions-trade.ts" mode="code" tag="sessions-trade" />
-
-</details>
+[Predict Sessions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/sessions#trade) shows how to mint, close, and claim as a session key with the TypeScript SDK.
 
 ## DeepBook spot wrappers {#spot-wrappers}
 
@@ -274,7 +234,7 @@ The DeepBook admin-cap owner must authorize `DeepbookCoreAccountApp` in the supp
 
 Do not read that state out of the deployment manifest. The manifest is the audited initial-deployment snapshot, and its `externalAuthorizations` entry records whether the authorization was in place when the deployment ran, not whether it is in place now: both manifests record `authorized: false`, and Testnet has since gained the authorization. The DeepBook admin-cap owner grants it in a separate transaction after deployment, and the DeepBook registry is the live authority from that point on. Check the registry with `deepbook::registry::assert_app_is_authorized<DeepbookCoreAccountApp>` in a simulated transaction, using the `deepbookRegistry` and `deepbookCoreAccountPackageId` that `getSessionsConfig(network)` returns, rather than trusting the recorded flag or this page.
 
-The TypeScript SDK generates these calls but does not wrap them on `SessionsContract`, because the SDK does not yet model the surrounding workflow of discovering the embedded balance manager, reading resting orders, and reading locked balances. Reach them through the generated `sessionsMoveCalls` namespace meanwhile, and watch the argument positions: `place_limit_order` and `place_market_order` carry `deepbook_registry` between `pool` and `account_registry`, which pushes `account_registry` to index 2 and `sessions_config` to index 4. The other 3 take no `deepbook_registry`, so they keep those arguments at 1 and 3, matching the Predict wrappers.
+The TypeScript SDK does not wrap these calls on `SessionsContract`, and [Predict Sessions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/sessions#spot-wrappers) shows how to reach them through the generated `sessionsMoveCalls` bindings.
 
 <details>
 <summary>Spot wrapper signatures</summary>

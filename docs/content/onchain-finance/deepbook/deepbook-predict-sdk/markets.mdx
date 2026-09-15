@@ -1,0 +1,389 @@
+---
+title: Predict Markets and Pricing SDK
+sidebar_label: Markets and Pricing
+description: >-
+  Use the DeepBook Predict SDK to list live markets, describe a position with a
+  market descriptor, keep strikes on the admission grid, and price strikes
+  onchain or locally.
+keywords:
+  - deepbook predict
+  - predict SDK
+  - typescript SDK
+  - market descriptor
+  - admission tick size
+  - reference price
+  - board pricer
+  - pos_inf_tick
+  - svi pricing
+goal:
+  description: >-
+    Developer can use the DeepBook Predict SDK to discover markets, build strikes
+    the contract admits, and price positions onchain or locally
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+      label: Has required frontmatter fields
+    - pattern: '```'
+      min: 1
+      label: Has SDK code examples
+    - min_words: 200
+      label: Needs more API documentation
+    - pattern: 'import|require|use '
+      min: 1
+      label: Shows SDK import or setup
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - How do I list the live DeepBook Predict markets with the TypeScript SDK?
+  - How do I keep a DeepBook Predict strike on the admission grid?
+  - How do I price a whole board of DeepBook Predict strikes from a single chain read?
+answer: >-
+  `client.predict.read.markets()` returns each active market with its expiry,
+  tick size, admission tick size, mint pause flag, and reference price. A
+  numeric mint strike must be a whole multiple of `admissionTickSize` or equal
+  the market's `referencePrice`, and the SDK throws `PredictInputError` before
+  it builds the transaction otherwise. `read.price` returns the chain's up and
+  down probabilities for a single strike, and `read.pricer` reads the resolved
+  pricer once and prices every strike locally.
+last_verified: 2026-09-10
+verified_against: '@mysten/deepbook-v3 2.3.0 (ts-sdks e490ec84); Mainnet deployment 14a7e8f8; Testnet deployment a928bd2d'
+---
+
+The markets and pricing surface of `@mysten/deepbook-v3/predict` finds live expiry markets, turns a position you describe in US dollars (USD) into the tick pair the contract takes, and prices strikes onchain or locally. [Strikes and Ticks](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys) explains the tick grid and the admission grid, and [Oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle) explains the pricer that every price read loads.
+
+The market and pricing methods belong to `client.predict`, the extension that [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#client) registers. Reads run as simulated transactions against the full node for the configured network, so they need no indexer, no account, and no signature.
+
+## Market reads
+
+Both market reads convert the contract's raw integers into decimals. Treat those decimals as display values, and see [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#units) for the raw scales behind them.
+
+### `read.markets` {#markets}
+
+Use `read.markets` to list the pool's active expiry markets with the state you need to render a board and build a mint. It returns a `Promise<ActiveMarket[]>`, and it takes no parameters. It reads the market IDs, then reads every market's state in a single batched simulation.
+
+The list is the pool's active set as `plp::active_expiry_markets` reports it, not a tradable set; [Vault](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#reading-vault-state) describes that accessor. Settlement is a separate permissionless call, so an expired market that nobody has settled is still in the list, and quoting against it aborts. Compare each entry's `expiryMs` with the clock and check `mintPaused` before you quote.
+
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="771-771" />
+
+Each `ActiveMarket` carries these fields:
+
+- `id`: The `ExpiryMarket` shared object ID.
+- `expiryMs`: The expiry as a Unix millisecond timestamp, typed `bigint`.
+- `tickSize`: The fine strike grid in USD, which the SDK converts from the market's raw `tick_size` at the 1e9 price scale.
+- `admissionTickSize`: The coarser grid in USD that every new finite mint strike must land on, unless the strike equals `referencePrice`.
+- `mintPaused`: Whether the market rejects new mints. The builders do not check it, and the contract aborts a mint while the flag is `true`.
+- `referencePrice`: The market's reference strike in USD, which is its recorded `reference_tick` multiplied by `tickSize`, or `null` until someone records that tick.
+
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="161-175" />
+
+### `read.market` {#market}
+
+Use `read.market` to read a single market's current state, including its net asset value (NAV). It returns a `Promise<MarketSummary | null>`, and it resolves to `null` when the registry holds no market for that underlying and expiry.
+
+It takes this parameter:
+
+- `m`: The market coordinates, an object with these fields:
+  - `underlying`: The underlying symbol, a key of `getConfig(network).underlyings`.
+  - `expiryMs`: The expiry as a Unix millisecond timestamp, as a `number` or a `bigint`.
+
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="900-902" />
+
+`read.market` always looks the market up in the registry rather than reading through the client's market cache, and it refreshes that cache with what it reads so later builders use the same state. It does not accept `marketId`. An unknown `underlying` throws `PredictInputError`. The SDK computes `nav` from a freshly loaded live pricer, so the call throws the `PredictMoveError` the chain raises when it cannot load one, for example at or after the market's expiry or while an oracle input is stale.
+
+`MarketSummary` carries every `ActiveMarket` field plus 1 more:
+
+- `nav`: The market's current NAV in USD from `expiry_market::current_nav`, which is free expiry cash minus the marked liability of the exposure book, with a floor of 0.
+
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="178-192" />
+
+## The `MarketDescriptor` type {#market-descriptor}
+
+Builders and reads that act on a market take a `MarketDescriptor`, which names the market by underlying and expiry and describes the position's strikes in USD. The SDK resolves the market and converts each strike to a tick, so you pass neither an `ExpiryMarket` object ID nor a tick unless you choose to pin the market.
+
+Every descriptor carries these fields:
+
+- `underlying`: The underlying symbol, a key of `getConfig(network).underlyings`. An unknown symbol throws `PredictInputError`.
+- `expiryMs`: The market's expiry as a Unix millisecond timestamp, as a `number` or a `bigint`.
+- `marketId`: An optional `ExpiryMarket` object ID that the SDK uses instead of looking the market up in the registry. The SDK throws `PredictInputError` when the value is not a valid Sui object ID or when that market's expiry differs from `expiryMs`. It does not compare the pinned market's underlying with `underlying`, which still selects the oracle feeds the transaction passes.
+
+The rest of the descriptor is 1 of 2 arms:
+
+- **Binary arm:** Sets `side` to `'up'` or `'down'` and `strike` to a USD number or the literal `'reference'`, which resolves to the market's reference price when the SDK builds. An up position wins when settlement lands above the strike, and a down position wins when settlement lands at or below it.
+- **Range arm:** Sets `side` to `'range'` and both `lower` and `upper` to finite USD numbers, with `lower` below `upper`. The position wins when settlement lands in `(lower, upper]`, and the arm has no `'reference'` form.
+
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="84-112" />
+
+Each call reads a different part of the descriptor:
+
+| **Call** | **What it takes** | **What it reads** |
+|---|---|---|
+| `tx.mint`, `tx.mintAmount`, `read.quoteMint` | A full `MarketDescriptor` | Every field. The SDK resolves each strike to a tick and admission-checks it. |
+| `tx.redeem`, `read.quoteRedeem` | A full `MarketDescriptor` | Only `underlying`, `expiryMs`, and `marketId`, because the order ID identifies the position |
+| `tx.claimSettled` | `underlying`, `expiryMs`, and an optional `marketId` | All of them |
+| `read.price` | `underlying`, `expiryMs`, an optional `marketId`, and `strike` | All of them. The SDK checks the strike against the fine grid only. |
+| `read.market`, `read.pricer` | `underlying` and `expiryMs` | Both of them |
+
+[Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint) documents the mint, redeem, and claim builders.
+
+## Strikes and the admission grid {#strikes}
+
+A new mint's numeric strike has to pass the same grid checks the contract applies, and the SDK runs them before it builds the transaction, so an off-grid strike fails with a typed error instead of an onchain abort. [The tick grid and the admission grid](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys#validation-rules) explains both grids.
+
+For each finite boundary of a mint, the SDK runs these checks in order and throws `PredictInputError` at the first one that fails:
+
+1. It converts the USD value to the 1e9 raw price scale, which fails on a negative value or on a value carrying more than 9 decimals.
+1. It divides by the market's raw `tick_size`, which fails when the strike is not a whole multiple of `tickSize`.
+1. It checks that the tick falls inside the finite domain, `1` through `POS_INF_TICK - 1`.
+1. It checks that the tick lands on the admission grid, a whole multiple of `admissionTickSize`, or equals the market's recorded reference tick. The SDK reads the reference tick only on this failing path.
+
+The 2 sentinel ticks skip the admission check, so the open end of an up or down position never fails it. For a range, the SDK first throws when `lower` is not below `upper`, then runs every check on both bounds. A range bound that equals the market's `referencePrice` passes the admission check, because the chain admits the reference tick at any finite boundary. `read.price` runs the first 3 checks and skips the admission check, so it prices any strike on the fine grid.
+
+Read the step from the market rather than hardcoding it: the cadence configuration sets it, and each market keeps the value it received at creation. Snap a target price with plain arithmetic, then trim the floating-point residue a sub-dollar step leaves behind, because the SDK throws on a value with more than 9 decimals:
+
+```ts
+const [market] = await client.predict.read.markets();
+const step = market.admissionTickSize;
+// Round onto the admission grid, then trim residue such as 96519.90000000001.
+const strike = Number((Math.round(target / step) * step).toFixed(9));
+```
+
+`strike: 'reference'` trades at the market's reference price. The SDK reads the reference tick fresh on every build rather than from its market cache, and uses it as the finite boundary directly, so it passes every grid check by construction. While the market has no reference tick recorded, the SDK throws `PredictInputError`. Recording one is permissionless, so you can call `expiry_market::set_reference_tick` yourself rather than wait; see [Reference ticks and pause control](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#keeper-and-admin). With `strike: 'reference'`, the SDK does not validate `side` at runtime and treats any value other than `'up'` as down, so validate `side` yourself when it comes from untyped input such as JSON.
+
+## Tick helpers {#ticks}
+
+The descriptor hides the tick arithmetic, and the SDK also exports the tick primitives for code that builds its own transactions or checks a position's shape. Each descriptor arm maps onto the tick pair the contract takes, where `K`, `L`, and `H` are USD strikes and `tickSize` is the market's fine grid:
+
+| **Descriptor** | **`lowerTick`** | **`higherTick`** |
+|---|---|---|
+| `{ side: 'up', strike: K }` | `K / tickSize` | `POS_INF_TICK` |
+| `{ side: 'down', strike: K }` | `0` | `K / tickSize` |
+| `{ side: 'up', strike: 'reference' }` | The market's reference tick | `POS_INF_TICK` |
+| `{ side: 'down', strike: 'reference' }` | `0` | The market's reference tick |
+| `{ side: 'range', lower: L, upper: H }` | `L / tickSize` | `H / tickSize` |
+
+Tick `0` is the negative-infinity sentinel and `POS_INF_TICK` is the positive-infinity sentinel, as [Sentinel ticks](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys#sentinels) describes. The following snippet converts an up strike with the exported helpers, taking the tick size from a live market:
+
+```ts
+import { POS_INF_TICK, binaryRangeTicks, priceToRaw } from '@mysten/deepbook-v3/predict';
+
+const [market] = await client.predict.read.markets();
+const { lowerTick, higherTick } = binaryRangeTicks(
+	priceToRaw(105_000),
+	'up',
+	priceToRaw(market.tickSize),
+);
+// An up position is (strike tick, positive infinity], so higherTick is the sentinel.
+console.log(lowerTick, higherTick === POS_INF_TICK);
+```
+
+### `binaryRangeTicks` {#binary-range-ticks}
+
+Use `binaryRangeTicks` to convert a raw strike and a side into the tick pair an up or down mint takes. It returns `{ lowerTick: bigint; higherTick: bigint }`, where an up side yields `(tick, POS_INF_TICK)` and a down side yields `(0, tick)`.
+
+It takes these parameters:
+
+- `strikeRaw`: The strike at the 1e9 raw price scale as a `bigint`, which `priceToRaw` produces from a USD value.
+- `side`: The position side, either `'up'` or `'down'`.
+- `tickSize`: The market's raw `tick_size` as a `bigint`.
+
+<ImportContent source="packages/deepbook-v3/src/predict/ticks.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="16-20" />
+
+It throws `PredictInputError` when `side` is any value other than `'up'` or `'down'`, when the strike is not a whole multiple of `tickSize`, or when the tick falls outside `1` through `POS_INF_TICK - 1`. The runtime `side` check catches a value from JSON or storage that the TypeScript type cannot. It checks the fine grid only, so apply the admission grid yourself as [Strikes and the admission grid](#strikes) describes.
+
+### `POS_INF_TICK` {#pos-inf-tick}
+
+`POS_INF_TICK` is the positive-infinity sentinel tick, a `bigint` equal to `1073741823n`, which is the largest value the 30-bit tick field holds. Use it as the `higherTick` of an up position or of any range with an open upper end. The matching onchain constant is not callable from your own package, so this export is the SDK's source for the value.
+
+<ImportContent source="packages/deepbook-v3/src/predict/ticks.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="7-7" />
+
+### `Side` {#side}
+
+`Side` is the string union that `binaryRangeTicks` and the binary descriptor arm take for direction. An up position wins when settlement lands above the strike, and a down position wins when settlement lands at or below it. The range arm sets `side: 'range'` instead, which `Side` does not include.
+
+<ImportContent source="packages/deepbook-v3/src/predict/ticks.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="9-9" />
+
+### `POSITION_LOT_SIZE` {#position-lot-size}
+
+`POSITION_LOT_SIZE` is the Testnet deployment's `position_lot_size` as a `bigint`: `10000n` raw payout units, which is 0.01 USD of payout. A position quantity must be a whole number of lots, and `tx.mint`, `tx.redeem`, and their quote reads throw `PredictInputError` otherwise. Those builders validate against the lot size of the configuration the client runs with, not against this constant, so on Mainnet read `getConfig(network).units.positionLotSize` or `getUnits(network).positionLotSize` instead; see [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk#configuration).
+
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="73-73" />
+
+## Pricing reads
+
+Both pricing reads price against the chain's own live pricer, which `expiry_market::load_live_pricer` builds from the oracle feeds, so neither needs an account. Unlike `read.market`, both throw `PredictInputError` when no market exists at that expiry. When the chain cannot load a pricer, for example because the market has reached its expiry or an oracle input is stale, both throw the `PredictMoveError` the simulation surfaced. [The pricer](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle#the-pricer) covers the load, its freshness windows, and its abort codes.
+
+### `read.price` {#price}
+
+Use `read.price` to get the chain's probability for both sides of a single strike. It returns a `Promise<{ up: number; down: number }>`, where each value is a probability between 0 and 1: `up` for settlement above the strike and `down` for settlement at or below it.
+
+It takes this parameter:
+
+- `m`: The market coordinates and strike, an object with these fields:
+  - `underlying`: The underlying symbol.
+  - `expiryMs`: The expiry as a Unix millisecond timestamp.
+  - `marketId`: An optional `ExpiryMarket` object ID that pins the market, which the SDK validates as [The `MarketDescriptor` type](#market-descriptor) describes.
+  - `strike`: A USD strike on the market's fine tick grid, or `'reference'` for the market's reference price.
+
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="807-807" />
+
+The parameter type is internal to the client module:
+
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="260-262" />
+
+The SDK loads the pricer and reads `pricing::range_price` for `(strike, positive infinity]` and `(negative infinity, strike]` in the same simulation, so `down` is the chain's own value rather than `1 - up`. The call takes no `side` and always returns both. `strike: 'reference'` throws `PredictInputError` while the market has no reference tick. Each call simulates a transaction for a single strike, so use `read.pricer` to price a whole board.
+
+### `read.pricer` {#pricer}
+
+Use `read.pricer` to read a market's resolved live pricer once and price every strike locally from it. It returns a `Promise<BoardPricer & { asOf: PricerSnapshot['sources'] }>`: a board pricer bound to that snapshot, plus the source timestamps behind it.
+
+It takes this parameter:
+
+- `m`: The market coordinates, an object with these fields:
+  - `underlying`: The underlying symbol.
+  - `expiryMs`: The expiry as a Unix millisecond timestamp.
+
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="829-831" />
+
+The SDK simulates `expiry_market::load_live_pricer` and decodes the returned `Pricer`, so the chain has already chosen the forward and rolled the stochastic volatility inspired (SVI) surface down to the current time. Every later call on the returned object runs locally with no chain read. The returned object has these members:
+
+- `up(strike)`: The probability that settlement lands above `strike`.
+- `down(strike)`: The probability that settlement lands at or below `strike`, which the board computes as `1 - up(strike)`.
+- `probability(strike, side)`: The probability for `side`, either `'up'` or `'down'`, at `strike`.
+- `range(lower, higher)`: The probability mass in `(lower, higher]`, with a floor of 0. Pass a `lower` of 0 or below for negative infinity and `Infinity` for an open upper end.
+- `strikeAtProbability(p)`: The strike whose up probability is `p`, or `null` when `p` is not strictly between 0 and 1 or no crossing exists within 64 percent of the forward.
+- `forward`: The forward price the surface prices against, in USD.
+- `svi`: The rolled-down SVI parameters as decimals, in the `Svi` shape that the [`pricing` namespace](#pricing) uses.
+- `asOf`: The source timestamps, in milliseconds, of the Pyth spot and the Block Scholes spot, forward, and SVI observations behind the snapshot. Its `pythSpotMs` is 0 when no usable Pyth spot existed.
+
+<ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="176-187" />
+
+The `asOf` shape is the `sources` field of `PricerSnapshot`, which `/predict` exports as a type:
+
+<ImportContent source="packages/deepbook-v3/src/predict/reads/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="27-34" />
+
+The local math is a floating-point port of the deployed `pricing::compute_nd2`, and it stays within about 0.0001 of the chain's probability, which is close enough for display. `read.price` and `read.quoteMint` on [Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#quote-mint) remain the authoritative quote at trade time. A snapshot keeps pricing locally after its oracle inputs go stale, so check `asOf` before you render a board from an old one.
+
+## Functions in the `pricing` namespace {#pricing}
+
+The `/predict` subpath exports the local pricing math as the `pricing` namespace, for code that already holds its own oracle inputs and wants to price without any chain read. `read.pricer` builds its return value from the same functions. They work on decimals, not on the chain's fixed-point integers:
+
+```ts
+import { pricing } from '@mysten/deepbook-v3/predict';
+
+// A resolved forward and an already rolled-down SVI surface, both in decimals.
+const inputs = { forward, svi: { a, b, rho, m, sigma } };
+const up = pricing.upProbability(inputs, 105_000);
+const board = pricing.boardPricer(inputs);
+```
+
+Most functions take a `PricerInputs`, which pairs a forward with a rolled-down `Svi` surface:
+
+<ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="31-37" />
+
+<ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="42-46" />
+
+### `upProbability` {#up-probability}
+
+Use `upProbability` to compute the probability that settlement lands above `strike`, with the SVI skew correction the chain applies. It returns a `number` between 0 and 1. It returns 0 when `forward` is not positive and 1 when `strike` is 0 or below.
+
+It takes these parameters:
+
+- `inputs`: The resolved forward and rolled-down SVI surface.
+- `strike`: The strike, in the same units as `forward`.
+
+<ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="78-78" />
+
+### `downProbability` {#down-probability}
+
+Use `downProbability` to compute the probability that settlement lands at or below `strike`. It returns `1 - upProbability(inputs, strike)`, which matches the chain's range price for `(negative infinity, strike]`.
+
+It takes these parameters:
+
+- `inputs`: The resolved forward and rolled-down SVI surface.
+- `strike`: The strike, in the same units as `forward`.
+
+<ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="102-102" />
+
+### `rangeProbability` {#range-probability}
+
+Use `rangeProbability` to compute the probability mass in `(lower, higher]`. It returns a `number` with a floor of 0, which matches the chain's saturating subtraction.
+
+It takes these parameters:
+
+- `inputs`: The resolved forward and rolled-down SVI surface.
+- `lower`: The lower bound. Pass 0 or below for negative infinity.
+- `higher`: The upper bound. Pass `Infinity` for positive infinity.
+
+<ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="108-108" />
+
+### `probability` {#probability}
+
+Use `probability` to compute the probability for a given side at `strike`. It returns the `upProbability` result for `'up'` and 1 minus that result for `'down'`.
+
+It takes these parameters:
+
+- `inputs`: The resolved forward and rolled-down SVI surface.
+- `strike`: The strike, in the same units as `forward`.
+- `side`: The position side, either `'up'` or `'down'`.
+
+<ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="117-117" />
+
+### `strikeAtProbability` {#strike-at-probability}
+
+Use `strikeAtProbability` to find the strike whose up probability equals `p`, by bisection. It returns a `number`, or `null` when `p` is not strictly between 0 and 1, when `forward` is not positive, or when no crossing exists within 64 percent of the forward.
+
+It takes these parameters:
+
+- `inputs`: The resolved forward and rolled-down SVI surface.
+- `p`: The target up probability.
+
+<ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="124-124" />
+
+### `rollDown` {#roll-down}
+
+Use `rollDown` to decay a provider SVI surface toward expiry the way the chain does before it prices. It returns a new `Svi` that scales `a` and `b` by `remainingMs / anchorTteMs` and keeps `rho`, `m`, and `sigma`. When `anchorTteMs` is 0 or below, it returns `a` and `b` as 0.
+
+It takes these parameters:
+
+- `svi`: The surface as the provider published it, before any roll-down.
+- `remainingMs`: The time left before expiry, in milliseconds.
+- `anchorTteMs`: The expiry minus the SVI observation's provider timestamp, in milliseconds. Anchor on the provider's per-update `svi_timestamp`, which the chain keys freshness and roll-down on, not on the batch's ingestion time.
+
+<ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="156-156" />
+
+`read.pricer` returns an already rolled surface, so apply `rollDown` only to a surface you read from the feed yourself.
+
+### `forward` {#forward}
+
+Use `forward` to compute the forward the contract prices against from raw feed values. It returns `pythSpot * (bsForward / bsSpot)`, the Pyth spot after the Block Scholes basis reanchors it, when both spots are positive, and `bsForward` otherwise.
+
+It takes these parameters:
+
+- `pythSpot`: The Pyth spot. Pass 0 or below to force the Block Scholes forward.
+- `bsSpot`: The Block Scholes spot.
+- `bsForward`: The Block Scholes forward for the market's expiry.
+
+<ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="168-168" />
+
+The chain reanchors only while `use_pyth_spot_for_forward` is on and the Pyth spot is inside its freshness window, and it uses the Block Scholes forward otherwise. `forward` checks neither condition, so apply them before you call it, or use `read.pricer`, which returns the forward the chain resolved. [Freshness windows](/onchain-finance/deepbook/deepbook-predict/contract-information/oracle#freshness-windows) lists both settings.
+
+### `boardPricer` {#board-pricer}
+
+Use `boardPricer` to bind a `PricerInputs` snapshot to the board methods. It returns a `BoardPricer`, the shape `read.pricer` returns without `asOf`, and it makes no chain call.
+
+It takes this parameter:
+
+- `inputs`: The resolved forward and rolled-down SVI surface.
+
+<ImportContent source="packages/deepbook-v3/src/predict/pricing.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="e490ec848b4e949ae69afdc77c2038a4765a7e39" lines="190-190" />
+
+## Example {#example}
+
+The following example lists the active markets in expiry order, picks a market with enough time left to quote and sign, reads a market's state, and snaps a target strike onto the admission grid:
+
+<ImportContent source="examples/deepbook-predict/src/markets.ts" mode="code" tag="markets" />
+
+`tradeableMarket` skips markets whose `referencePrice` is still `null` and requires 30 seconds before expiry by default. Raise `minTtlMs` for a flow that waits on a person to sign.

@@ -94,7 +94,7 @@ Register the Predict extension on any client that exposes the core API. The foll
 
 <ImportContent source="examples/deepbook-predict/src/client.ts" mode="code" tag="client" />
 
-`predict({ network })` lands the extension on `client.predict`, which exposes 3 groups. `tx` builds ready-to-sign transactions, `read` runs simulations and object reads, and `decode` parses receipts out of an executed transaction's events with no network call at all.
+`predict({ network })` lands the extension on `client.predict`, which exposes 3 groups. `tx` builds ready-to-sign transactions, `read` runs simulations and object reads, and `decode` parses receipts out of an executed transaction's events with no network call at all. [DeepBook Predict SDK](/onchain-finance/deepbook/deepbook-predict-sdk) documents every function in these 3 groups.
 
 :::info
 
@@ -104,14 +104,7 @@ Every write below asks the account owner to sign. An application that would rath
 
 ### Errors the SDK raises
 
-Almost every failure you handle in application code falls under 2 typed errors:
-
-- `PredictInputError`: Client-side validation rejected the call before it built anything. Common causes are an unknown underlying, a strike off the tick or admission grid, a quantity that is not a whole lot, an amount carrying more decimals than the coin allows, and a range whose `lower` is not below `upper`.
-- `PredictMoveError`: A simulation hit a Move abort. It carries `module`, the exact `code`, and `abortName`, the `E`-prefixed constant name. `abortName` is `null` over JSON-RPC, because only gRPC and GraphQL surface the clever-error constant name.
-
-Resolve `module` before you look up `code`. Error numbers restart at `0` in every module, so the same number means something different depending on where it came from. [Find the page for a Move abort](/onchain-finance/deepbook/deepbook-predict/contract-information#abort-module-map) maps each module to the reference page carrying its table.
-
-Both SDK quote methods dry-run the identical transaction their matching builder produces, against the real account and the real fee path, so they raise the same errors the write would, insufficient balance included. Treat a successful SDK quote as a preflight. The Move `expiry_market::quote_mint` is a different thing with a similar name: it prices only, and it checks no account, no slippage cap, and no exposure capacity.
+The SDK raises 2 typed errors: `PredictInputError` when it rejects an argument before building anything, and `PredictMoveError` when a simulation hits a Move abort. [Errors](/onchain-finance/deepbook/deepbook-predict-sdk#errors) in the DeepBook Predict SDK section covers both, how to map an abort to its module's error table, and why a quote doubles as a preflight.
 
 ## Understand the oracle
 
@@ -136,7 +129,7 @@ Freshness bounds are protocol configuration, and pricing aborts on a stale input
 
 <ImportContent source="examples/deepbook-predict/src/markets.ts" mode="code" tag="markets" />
 
-`read.market({ underlying, expiryMs })` returns the same fields plus `nav`, the market's current net asset value, and returns `null` when no market exists at that expiry.
+`read.market({ underlying, expiryMs })` returns the same fields plus `nav`, the market's current net asset value, and returns `null` when no market exists at that expiry. [Predict Markets and Pricing SDK](/onchain-finance/deepbook/deepbook-predict-sdk/markets#markets) documents every market and pricing read.
 
 Both networks enable 2 cadences for BTC, 1m and 5m, with 2 expiries of each live at once. The configuration also lists the 1h, 1d, 1w, and 1mo cadences, all disabled. Testnet creates a new 1m market every minute. `tickSize` is `$0.01` and `admissionTickSize` is `$1` on both enabled cadences, so every finite strike lands on a whole dollar.
 
@@ -182,7 +175,7 @@ Every value here is a decimal float rather than chain fixed-point, and every cal
 
 Each owner has exactly one Predict account: a shared `AccountWrapper` object holding an `Account`. The wrapper holds your quote coin balance, your PLP balance, and Predict's per-account data. A position is a packed order ID recorded against that account rather than an object in your wallet, so scanning owned objects never finds one.
 
-`client.predict.tx.createManager()` takes no arguments and returns a transaction that creates the wrapper and shares it. The method name carries legacy DeepBook balance-manager naming; the object it creates is an account wrapper.
+`client.predict.tx.createManager()` takes no arguments and returns a transaction that creates the wrapper and shares it. The method name carries legacy DeepBook balance-manager naming; the object it creates is an account wrapper. [Predict Accounts SDK](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#create-manager) documents every account function.
 
 <ImportContent source="examples/deepbook-predict/src/create-manager.ts" mode="code" tag="create-manager" />
 
@@ -278,11 +271,11 @@ All 3 services share 4 conventions:
 
 ## Deposit and mint a directional position
 
-A directional position pays `$1` per contract when settlement lands inside its range, and nothing otherwise. `quantity` is therefore the maximum payout in USD, and it must be a whole `$0.01` lot.
+A directional position pays `$1` per contract when settlement lands inside its range, and nothing otherwise. `quantity` is therefore the maximum payout in USD, and it must be a whole `$0.01` lot. [Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint) documents every parameter of the mint builders.
 
 The lot size is the granularity of a quantity, not a size you can trade. `strike_exposure_config::assert_mint_admission` rejects any mint whose premium falls below 1 USDC with code `3`, `EPremiumBelowMinimum`, and the premium is `quantity` multiplied by the quoted `entryProbability`. Because `max_entry_probability` caps that probability at 0.99, no market accepts a quantity below about 1.02, and the floor climbs as the strike moves out of the money: a strike quoting near 50 percent needs roughly 2 contracts, and a strike quoting at 0.08 needs 12.5. Size by the product, not by the grid, and quote before you pick a quantity.
 
-Quote before you mint. `read.quoteMint(owner, descriptor, { quantity })` dry-runs the identical transaction `tx.mint` builds, against the real account and the real fee path, so it doubles as a price preview and a preflight, and its fee numbers are exact rather than estimated:
+Quote before you mint. `read.quoteMint(owner, descriptor, { quantity })` dry-runs the transaction `tx.mint` builds, without its slippage caps, against the real account and the real fee path, so it doubles as a price preview and a preflight, and its fee numbers are exact rather than estimated:
 
 | **Field** | **Meaning** |
 |-------|---------|
@@ -321,7 +314,7 @@ To size by budget instead of by payout, `tx.mintAmount` takes `spend` as a premi
 
 ## Mint a two-sided range position
 
-A two-sided range pays out when settlement lands in the half-open band `(lower, upper]`, left-open and right-closed. It uses the same builder, quote, and close path as a directional position, with the range arm of the descriptor.
+A two-sided range pays out when settlement lands in the half-open band `(lower, upper]`, left-open and right-closed. It uses the same builder, quote, and close path as a directional position, with the range arm of the [market descriptor](/onchain-finance/deepbook/deepbook-predict-sdk/markets#market-descriptor).
 
 <ImportContent source="examples/deepbook-predict/src/mint-range.ts" mode="code" tag="mint-range" />
 
@@ -329,7 +322,7 @@ Both bounds are finite USD numbers that must land on the market's admission grid
 
 ## Redeem and settlement
 
-Closing a position takes one of 2 paths, and which one applies depends on whether the market has settled. The following sample quotes and closes a live position, then claims a settled one.
+Closing a position follows either of 2 paths, and which one applies depends on whether the market has settled. [Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#redeem) documents both close builders. The following sample quotes and closes a live position, then claims a settled one.
 
 <ImportContent source="examples/deepbook-predict/src/redeem.ts" mode="code" tag="redeem" />
 
@@ -390,7 +383,7 @@ The protocol pays the caller no fee, rebate, or share of the payout, so no econo
 
 Liquidity providers supply the quote coin to the shared `PoolVault` and hold PLP, a proportional claim on pool value. The pool is the counterparty to every Predict trade, so PLP value tracks pool profit and loss rather than a fixed yield.
 
-Supply and withdrawal are asynchronous. Neither call mints or burns PLP. Each one escrows your funds, returns a queue index, and waits for the next pool flush, which prices both queues against one pool-wide mark.
+Supply and withdrawal are asynchronous. Neither call mints or burns PLP. Each one escrows your funds, returns a queue index, and waits for the next pool flush, which prices both queues against one pool-wide mark. [Predict Liquidity SDK](/onchain-finance/deepbook/deepbook-predict-sdk/liquidity#supply) documents every liquidity function.
 
 :::info
 

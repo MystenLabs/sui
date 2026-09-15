@@ -498,6 +498,18 @@ export default {
                 'onchain-finance/deepbook/deepbook-predict/contract-information/registry',
               ],
             },
+            {
+              type: 'category',
+              label: 'DeepBook Predict SDK',
+              link: { type: 'doc', id: 'onchain-finance/deepbook/deepbook-predict-sdk/deepbook-predict-sdk' },
+              items: [
+                'onchain-finance/deepbook/deepbook-predict-sdk/accounts',
+                'onchain-finance/deepbook/deepbook-predict-sdk/markets',
+                'onchain-finance/deepbook/deepbook-predict-sdk/positions',
+                'onchain-finance/deepbook/deepbook-predict-sdk/liquidity',
+                'onchain-finance/deepbook/deepbook-predict-sdk/sessions',
+              ],
+            },
           ],
         },
         {

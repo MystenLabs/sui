@@ -206,7 +206,7 @@ Split reads by freshness and purpose:
 
 Preflight is a property of the SDK layer, not of the Move layer, and the 2 quote surfaces differ:
 
-- **In the SDK:** `read.quoteMint` and `read.quoteRedeem` each dry-run the identical transaction their matching builder produces, against the real account and the real fee path, so they raise the same typed errors the write would, insufficient balance included. A successful SDK quote is a preflight.
+- **In the SDK:** `read.quoteMint` and `read.quoteRedeem` each dry-run the transaction their matching builder produces for the options you pass, against the real account and the real fee path, so they raise the same typed errors the write would, including insufficient balance. A mint quote called with only `quantity` carries no slippage cap. A successful SDK quote is a preflight.
 - **Onchain:** `expiry_market::quote_mint` prices only. It applies the live-mint and admission gates, including the no-trade window, and it checks no account, no slippage cap, and no exposure capacity, so a successful Move quote says nothing about whether the mint would land.
 
 For package IDs, object IDs, and deployed configuration, see [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).
