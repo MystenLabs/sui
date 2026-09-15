@@ -32,7 +32,7 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use mysten_common::{assert_reachable, assert_sometimes};
+use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 use parking_lot::Mutex;
 use sui_types::base_types::SequenceNumber;
 use tokio::sync::Notify;
@@ -214,6 +214,40 @@ impl CausalAdmission {
         }
     }
 
+    /// Whether every assigned index is retired and nothing is in flight.
+    pub fn is_quiescent(&self) -> bool {
+        let inner = self.inner.lock();
+        inner.in_flight == 0
+            && !inner.next_admitted
+            && inner.done_above.is_empty()
+            && inner.watermark + 1 == inner.next_index
+    }
+
+    /// Checks quiescence at an epoch boundary: every unit enqueued in an epoch executes
+    /// or is dropped before the epoch closes, and the next epoch has not enqueued yet.
+    /// A violation means an index leaked, which silently disables the causal-next
+    /// lane for the rest of the process since the watermark can never pass it. State
+    /// is deliberately not reset: indices are process-global, and a straggling slot
+    /// retiring into reset bookkeeping would corrupt the watermark.
+    pub fn check_quiescent_at_epoch_boundary(&self) {
+        let inner = self.inner.lock();
+        let quiescent = inner.in_flight == 0
+            && !inner.next_admitted
+            && inner.done_above.is_empty()
+            && inner.watermark + 1 == inner.next_index;
+        if !quiescent {
+            debug_fatal!(
+                "causal admission not quiescent at epoch boundary: watermark={} next_index={} \
+                 in_flight={} next_admitted={} done_above={:?}",
+                inner.watermark,
+                inner.next_index,
+                inner.in_flight,
+                inner.next_admitted,
+                inner.done_above
+            );
+        }
+    }
+
     #[cfg(test)]
     pub fn watermark_for_testing(&self) -> u64 {
         self.inner.lock().watermark
@@ -362,5 +396,36 @@ mod tests {
         admission.mark_done(1);
         assert_eq!(admission.watermark_for_testing(), 1);
         assert!(admission.try_admit(2).is_some());
+    }
+
+    #[test]
+    fn quiescence_requires_every_index_retired_and_nothing_in_flight() {
+        let admission = CausalAdmission::new(2);
+        assert!(admission.is_quiescent());
+        assign(&admission, 3);
+        assert!(!admission.is_quiescent());
+
+        let slot1 = admission.try_admit(1).unwrap();
+        admission.mark_done(2);
+        admission.mark_done(3);
+        // Indices 2 and 3 are done above the watermark; 1 is still in flight.
+        assert!(!admission.is_quiescent());
+        drop(slot1);
+        assert!(admission.is_quiescent());
+
+        // A settlement slot holds no index but still counts as in flight.
+        let settle = admission.try_take_slot().unwrap();
+        assert!(!admission.is_quiescent());
+        drop(settle);
+        assert!(admission.is_quiescent());
+
+        // A retry that kept its index alive (skip_retire) leaves it unretired.
+        assign(&admission, 1);
+        let mut slot4 = admission.try_admit(4).unwrap();
+        slot4.skip_retire();
+        drop(slot4);
+        assert!(!admission.is_quiescent());
+        admission.mark_done(4);
+        assert!(admission.is_quiescent());
     }
 }

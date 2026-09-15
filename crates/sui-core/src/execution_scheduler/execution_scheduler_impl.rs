@@ -662,6 +662,7 @@ impl ExecutionScheduler {
         new_epoch_store: &Arc<AuthorityPerEpochStore>,
         account_funds_read: &Arc<dyn AccountFundsRead>,
     ) {
+        self.causal_admission.check_quiescent_at_epoch_boundary();
         let address_funds_withdraw_scheduler = Self::initialize_funds_withdraw_scheduler(
             new_epoch_store,
             &self.object_cache_read,
