@@ -51,7 +51,10 @@ expression: item
           "epoch": {
             "epochId": 0
           },
-          "checkpoint": null,
+          "checkpoint": {
+            "sequenceNumber": "[seq]",
+            "digest": "[digest]"
+          },
           "gasEffects": {
             "gasObject": {
               "address": "[address]"

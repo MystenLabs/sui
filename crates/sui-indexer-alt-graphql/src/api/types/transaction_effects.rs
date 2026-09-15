@@ -96,13 +96,17 @@ impl TransactionEffects {
 impl EffectsContents {
     /// The checkpoint this transaction was finalized in.
     async fn checkpoint(&self) -> Option<Checkpoint> {
-        let Some(content) = &self.contents else {
-            return None;
-        };
+        let cp = self.contents.as_ref()?.cp_sequence_number()?;
 
-        content
-            .cp_sequence_number()
-            .and_then(|cp| Checkpoint::with_sequence_number(self.scope.clone(), Some(cp)))
+        // A live subscription carries the streamed checkpoint in scope, so resolve its fields from
+        // that in-memory data (the durable index may not have reached it yet). Otherwise (a backfill
+        // or an ordinary query) resolve by sequence number, hydrating fields from the index.
+        match self.scope.streamed_checkpoint() {
+            Some(processed) if processed.summary.sequence_number == cp => Some(
+                Checkpoint::with_streamed_checkpoint(self.scope.clone(), processed),
+            ),
+            _ => Checkpoint::with_sequence_number(self.scope.clone(), Some(cp)),
+        }
     }
 
     /// Whether the transaction executed successfully or not.

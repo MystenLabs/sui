@@ -383,6 +383,16 @@ impl Scope {
         }
     }
 
+    /// The streamed checkpoint backing this scope, present only in the live streamed mode. Lets
+    /// checkpoint-valued fields resolve the whole checkpoint from memory rather than the durable
+    /// index, which may not have caught up to it yet.
+    pub(crate) fn streamed_checkpoint(&self) -> Option<&Arc<ProcessedCheckpoint>> {
+        if let DataSource::Streamed { checkpoint, .. } = &self.data_source {
+            return Some(checkpoint);
+        }
+        None
+    }
+
     /// The streamed transaction store backing this scope, present only in the live streamed mode.
     /// A just-streamed transaction runs ahead of the durable index, so this serves its contents by
     /// digest until the index catches up.
