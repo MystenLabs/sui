@@ -17,6 +17,7 @@ use serde_json::json;
 use sui_futures::service::Service;
 use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt::setup_indexer;
+use sui_indexer_alt_e2e_tests::wait_for_kv_packages;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
@@ -186,6 +187,10 @@ impl GraphQlTestCluster {
 
         let pipelines: Vec<String> = indexer.pipelines().map(|s| s.to_string()).collect();
         let s_indexer = indexer.run().await.expect("Failed to start indexer");
+
+        // Layout resolution falls back to `kv_packages` for system types such as `UID`; wait for
+        // genesis so a simulation cannot observe the indexer before those packages are available.
+        wait_for_kv_packages(&database, 0).await;
 
         let kv_args = KvArgs {
             ledger_grpc_url: Some(validator_cluster.rpc_url().parse().unwrap()),
