@@ -168,7 +168,7 @@ pub async fn execution_process(
         let certificate = pending_cert.certificate;
         let execution_env = pending_cert.execution_env;
         let txn_ready_time = pending_cert.stats.ready_time.unwrap();
-        let _executing_guard = pending_cert.executing_guard;
+        let executing_guard = pending_cert.executing_guard;
 
         let authority = if let Some(authority) = authority_state.upgrade() {
             authority
@@ -221,6 +221,9 @@ pub async fn execution_process(
         let blocking_span = execution_span.clone();
         spawn_monitored_task!(async move {
             let _scope = monitored_scope("ExecutionDriver::task");
+            // Held until execution finishes: it backs the executing-certificates gauge
+            // that overload control counts as in-flight load.
+            let _executing_guard = executing_guard;
 
             // Hold the epoch-alive guard across execution so that `epoch_terminated()` waits
             // for in-flight execution to finish. Skip if the epoch has already ended; the
