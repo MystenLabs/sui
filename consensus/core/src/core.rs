@@ -302,6 +302,7 @@ impl Core {
                 .new_block(ExtendedBlock {
                     block: last_proposed_block.clone(),
                     excluded_ancestors: vec![],
+                    slim: None,
                 })
                 .unwrap();
             last_proposed_block
