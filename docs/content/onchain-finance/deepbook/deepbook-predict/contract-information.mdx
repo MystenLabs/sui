@@ -494,18 +494,18 @@ Subscriptions begin at the current tip and accept no resume point, so recovering
 
 ## Source pointers
 
-The links below pin every module to the Mainnet source commit `7b169bde2c2a25fee3ac9aa4686e346309bfe570`. The Testnet deployment's Move sources are byte-identical, so the same links serve both networks. There is no `entry fun` in any Predict package: every integrator call is a `public fun` invoked as a `moveCall`, and several of them return values that a later command in the same transaction must consume.
+The links below pin every module to DeepBookV3 `main` at `76b11922f3144be5bdaacb66c38c7c3524a02ff3`, whose Move sources are byte-identical to both deployed source commits, so the same links serve both networks. There is no `entry fun` in any Predict package: every integrator call is a `public fun` invoked as a `moveCall`, and several of them return values that a later command in the same transaction must consume.
 
 | **Area** | **Source** |
 | --- | --- |
-| Markets, quoting, trading, and settlement | [`packages/predict/sources/expiry_market.move`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict/sources/expiry_market.move) |
-| Market catalog, cadences, and capabilities | [`packages/predict/sources/registry/registry.move`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict/sources/registry/registry.move) |
-| Protocol configuration and gating | [`packages/predict/sources/config/protocol_config.move`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict/sources/config/protocol_config.move) |
-| PLP pool, liquidity queues, and valuation | [`packages/predict/sources/plp/plp.move`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict/sources/plp/plp.move) |
-| Pool valuation capability | [`packages/predict/sources/capabilities/pool_valuation_cap.move`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict/sources/capabilities/pool_valuation_cap.move) |
-| Account custody and authorization | [`packages/account/sources/account.move`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/account/sources/account.move) |
-| Oracle registry and bindings | [`packages/propbook/sources/registry.move`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/propbook/sources/registry.move) |
-| Pyth and Block Scholes feeds | [`packages/propbook/sources/feeds`](https://github.com/MystenLabs/deepbookv3/tree/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/propbook/sources/feeds) |
+| Markets, quoting, trading, and settlement | [`packages/predict/sources/expiry_market.move`](https://github.com/MystenLabs/deepbookv3/blob/76b11922f3144be5bdaacb66c38c7c3524a02ff3/packages/predict/sources/expiry_market.move) |
+| Market catalog, cadences, and capabilities | [`packages/predict/sources/registry/registry.move`](https://github.com/MystenLabs/deepbookv3/blob/76b11922f3144be5bdaacb66c38c7c3524a02ff3/packages/predict/sources/registry/registry.move) |
+| Protocol configuration and gating | [`packages/predict/sources/config/protocol_config.move`](https://github.com/MystenLabs/deepbookv3/blob/76b11922f3144be5bdaacb66c38c7c3524a02ff3/packages/predict/sources/config/protocol_config.move) |
+| PLP pool, liquidity queues, and valuation | [`packages/predict/sources/plp/plp.move`](https://github.com/MystenLabs/deepbookv3/blob/76b11922f3144be5bdaacb66c38c7c3524a02ff3/packages/predict/sources/plp/plp.move) |
+| Pool valuation capability | [`packages/predict/sources/capabilities/pool_valuation_cap.move`](https://github.com/MystenLabs/deepbookv3/blob/76b11922f3144be5bdaacb66c38c7c3524a02ff3/packages/predict/sources/capabilities/pool_valuation_cap.move) |
+| Account custody and authorization | [`packages/account/sources/account.move`](https://github.com/MystenLabs/deepbookv3/blob/76b11922f3144be5bdaacb66c38c7c3524a02ff3/packages/account/sources/account.move) |
+| Oracle registry and bindings | [`packages/propbook/sources/registry.move`](https://github.com/MystenLabs/deepbookv3/blob/76b11922f3144be5bdaacb66c38c7c3524a02ff3/packages/propbook/sources/registry.move) |
+| Pyth and Block Scholes feeds | [`packages/propbook/sources/feeds`](https://github.com/MystenLabs/deepbookv3/tree/76b11922f3144be5bdaacb66c38c7c3524a02ff3/packages/propbook/sources/feeds) |
 
 ### Find the page for a Move abort {#abort-module-map}
 

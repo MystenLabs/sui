@@ -55,10 +55,10 @@ Sessions is an account app. It stores grants in the account's app-local data slo
 
 The surface spans 2 modules:
 
-- `deepbook_sessions::sessions`: Grant storage, the lifecycle calls, and every trading wrapper ([source](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/sessions/sources/sessions.move)).
-- `deepbook_sessions::session_config`: The shared `SessionsConfig` object and the package version floor ([source](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/sessions/sources/session_config.move)).
+- `deepbook_sessions::sessions`: Grant storage, the lifecycle calls, and every trading wrapper ([source](https://github.com/MystenLabs/deepbookv3/blob/76b11922f3144be5bdaacb66c38c7c3524a02ff3/packages/sessions/sources/sessions.move)).
+- `deepbook_sessions::session_config`: The shared `SessionsConfig` object and the package version floor ([source](https://github.com/MystenLabs/deepbookv3/blob/76b11922f3144be5bdaacb66c38c7c3524a02ff3/packages/sessions/sources/session_config.move)).
 
-Sui Mainnet and Sui Testnet each run a separate deployment of the package from identical sources, and the Move snippets on this page pin the Mainnet source commit, `7b169bde`. In TypeScript, `getSessionsConfig(network)` from `@mysten/deepbook-v3/sessions` resolves the current Mainnet and Testnet deployments from version 2.5.0 and returns both IDs, plus the account registry that authorizes the app, the Predict protocol config, and the 2 extra IDs the DeepBook spot wrappers take. The full tables are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#packages):
+Sui Mainnet and Sui Testnet each run a separate deployment of the package from identical sources, and the Move snippets on this page pin DeepBookV3 `main` at `76b11922`, whose sources match both deployments. In TypeScript, `getSessionsConfig(network)` from `@mysten/deepbook-v3/sessions` resolves the current Mainnet and Testnet deployments from version 2.5.0 and returns both IDs, plus the account registry that authorizes the app, the Predict protocol config, and the 2 extra IDs the DeepBook spot wrappers take. The full tables are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#packages):
 
 | **Object** | **Mainnet** | **Testnet** |
 |---|---|---|
@@ -104,7 +104,7 @@ Each trading wrapper resolves authority through one private helper before it tou
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="generate_auth_as_session"
 />
 
@@ -125,7 +125,7 @@ The registry administrator must authorize `SessionsApp` on the account registry 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="deauthorize_app,generate_auth_as_app"
 />
 
@@ -140,7 +140,7 @@ The whole lifecycle takes 3 calls. Owner authority derives from the transaction 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="session_expiration_ms,authorize_session,revoke_session"
 	noComments
 />
@@ -182,7 +182,7 @@ There is no bulk onchain read. `session_expiration_ms` answers one address at a 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="SessionsApp,SessionsData"
 />
 
@@ -217,7 +217,7 @@ The `@mysten/deepbook-v3/sessions` mint builders require the slippage caps that 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="mint_exact_quantity,mint_exact_amount,redeem_live,redeem_settled"
 	noComments
 />
@@ -244,7 +244,7 @@ The TypeScript SDK does not wrap these calls on `SessionsContract`, and [Predict
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="place_limit_order,place_market_order,cancel_live_order,cancel_live_orders,withdraw_settled_amounts"
 	signatureOnly
 />
@@ -260,7 +260,7 @@ Publishing the package creates a shared `SessionsConfig` at the package's compil
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="SessionsConfig"
 />
 
@@ -271,7 +271,7 @@ Each package upgrade increments a compiled-in version constant. After clients mo
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="version_watermark,bump_version_watermark"
 	noComments
 />
@@ -287,7 +287,7 @@ The lifecycle emits 2 events. Predict and DeepBook core keep emitting their own 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="SessionAuthorized,SessionRevoked"
 />
 

@@ -59,7 +59,7 @@ verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d
 
 Trading on DeepBook Predict runs through the `deepbook_predict::expiry_market` module. One shared `ExpiryMarket` object exists per underlying and expiry, and it owns that expiry's USDC custody, strike exposure index, congestion estimator, mint pause flag, and flush stamp. Every call on this page is a `public fun` that you invoke from a programmable transaction block with a `moveCall`. Several of them take values only another command in the same block can produce, a transaction-local `Pricer` and a single-use account `Auth`, so plan the whole flow as one block.
 
-The module lives at [`packages/predict/sources/expiry_market.move`](https://github.com/MystenLabs/deepbookv3/blob/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict/sources/expiry_market.move) at the Mainnet source commit. The Move snippets on this page pin the Mainnet source commit, which serves both deployments. For the package and object IDs of each network, see [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).
+The module lives at [`packages/predict/sources/expiry_market.move`](https://github.com/MystenLabs/deepbookv3/blob/76b11922f3144be5bdaacb66c38c7c3524a02ff3/packages/predict/sources/expiry_market.move) on DeepBookV3 `main`. The Move snippets on this page pin DeepBookV3 `main` at `76b11922`, whose sources match both deployments. For the package and object IDs of each network, see [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).
 
 :::info
 
@@ -93,7 +93,7 @@ The field order in the table is declaration order, which is also the Binary Cano
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="ExpiryMarket,ValuationStamp"
 />
 
@@ -134,7 +134,7 @@ See [Oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/ora
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="load_live_pricer"
 	noComments
 />
@@ -193,7 +193,7 @@ The SDK's `client.predict.read.quoteMint` is a different thing at a different la
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="quote_mint,quote_mint_for_account"
 	noComments
 />
@@ -228,7 +228,7 @@ The congestion surcharge is one mechanism with 2 names, `penalty_fee` onchain an
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="MintQuote"
 />
 
@@ -237,7 +237,7 @@ The congestion surcharge is one mechanism with 2 names, `penalty_fee` onchain an
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="quantity,entry_probability,premium,trading_fee,fee_incentive_subsidy,builder_fee,penalty_fee,inventory_impact_charge,all_in_cost"
 	noComments
 />
@@ -320,7 +320,7 @@ You address positions by absolute integer ticks, with `0` as the open lower end 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="mint_exact_quantity,mint_exact_amount"
 	noComments
 />
@@ -423,7 +423,7 @@ Both settled paths run the version gate and refuse to run inside a pool flush's 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="redeem_live,redeem_settled,redeem_settled_permissionless"
 	noComments
 />
@@ -476,7 +476,7 @@ Settled redeems, pool rebalancing, and the flush's snapshot stage only read the 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="try_settle"
 	noComments
 />
@@ -504,7 +504,7 @@ The call always returns the resolved tick as a `u64`, but it emits `ReferenceTic
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="set_reference_tick,set_mint_paused"
 	noComments
 />
@@ -547,7 +547,7 @@ public fun settled_order_payout(market: &ExpiryMarket, order_id: u256): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="id,expiry,is_settled,try_settlement_price,cash_balance,required_cash,payout_liability,tick_size,admission_tick_size,reference_tick,mint_paused,is_pending_valuation"
 	noComments
 />
@@ -557,7 +557,7 @@ public fun settled_order_payout(market: &ExpiryMarket, order_id: u256): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="current_nav,live_order_value,settled_order_payout"
 	noComments
 />
@@ -702,7 +702,7 @@ The event carries the payout but not the settlement price. Read that from the `M
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="7b169bde2c2a25fee3ac9aa4686e346309bfe570"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="OrderMinted,LiveOrderRedeemed,SettledOrderRedeemed"
 />
 
