@@ -26,6 +26,7 @@ use crate::consensus_adapter::{
     processing_error,
 };
 use crate::consensus_handler::{SequencedConsensusTransactionKey, tx_type_label};
+use crate::staggered_submission::{StaggerQuota, StaggeredSlot, proposers_metric_label};
 use async_trait::async_trait;
 use consensus_core::{BlockStatus, ClientError, LimitReached, Transaction, TransactionPool};
 use consensus_types::block::{
@@ -208,11 +209,21 @@ struct PoolEntry {
     total_bytes: usize,
     gas_price: u64,
     tx_type: &'static str, // tx label for metrics
+    /// See `proposers_metric_label`.
+    proposers: &'static str,
     ack: PendingAck,
     metrics: Arc<AdmissionQueueMetrics>,
     /// Empty for system and ping submissions: the `ConsensusAdapter` already
     /// checks those before they reach the pool.
     processed: Vec<ProcessedWatch>,
+    /// Staggered submission of transactions without allowed proposers: `Some` for held
+    /// entries, carrying the eligibility time — `take()` leaves the entry queued until
+    /// then, so a copy committed by an earlier-slotted validator during the hold
+    /// resolves it through the `processed` watches without it ever occupying block
+    /// space — and the quota registration, released when the entry is consumed into a
+    /// proposal and rolled back on drop otherwise. `None` submits on the next
+    /// proposal.
+    staggered_slot: Option<StaggeredSlot>,
 }
 
 /// `Some` once every watch has observed processing. Bundles are proposed
@@ -293,6 +304,8 @@ struct ProposedBlock {
 struct ProposedEntry {
     lane: TakenLane,
     tx_type: &'static str,
+    /// See `proposers_metric_label`.
+    proposers: &'static str,
     created: Instant,
 }
 
@@ -307,11 +320,13 @@ enum Inner {
 /// user transactions never delay system ones.
 ///
 /// Backpressure for user RPCs is provided solely by the capacity limit of the
-/// `user` priority queue.
+/// `user` priority queue; staggered (held) entries are additionally bounded by the
+/// quota in [`StaggerQuota::submission_slot`].
 pub struct ConsensusTransactionPool {
     epoch_store: Arc<AuthorityPerEpochStore>,
     metrics: Arc<AdmissionQueueMetrics>,
     adapter_metrics: ConsensusAdapterMetrics,
+    stagger_quota: StaggerQuota,
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -342,6 +357,10 @@ impl ConsensusTransactionPool {
             epoch_store,
             metrics: metrics.clone(),
             adapter_metrics,
+            stagger_quota: StaggerQuota::new(
+                max_pending_transactions,
+                metrics.pool_staggered_held.clone(),
+            ),
             inner: Arc::new(Mutex::new(Inner::Open(Pool {
                 user: UserLane::Open(PriorityAdmissionQueue::new(
                     max_pending_transactions,
@@ -407,16 +426,27 @@ impl ConsensusTransactionPool {
         }
 
         let tx_type = tx_type_label(&transactions);
-        let (transactions, total_bytes) = self.serialize_and_validate(&transactions)?;
+        let (serialized, total_bytes) = self.serialize_and_validate(&transactions)?;
+
+        let user_transactions: Vec<_> = transactions
+            .iter()
+            .filter_map(|transaction| transaction.kind.as_user_transaction())
+            .collect();
+        let staggered_slot = self
+            .stagger_quota
+            .submission_slot(&user_transactions, &self.epoch_store)?;
+        let stagger_delay = staggered_slot.as_ref().map(|slot| slot.delay());
         let (sender, receiver) = oneshot::channel();
         let entry = PoolEntry {
-            transactions,
+            transactions: serialized,
             total_bytes,
             gas_price,
             tx_type,
+            proposers: proposers_metric_label(&transactions, &self.epoch_store),
             ack: PendingAck::new(EntryAck::User(sender), keys),
             metrics: self.metrics.clone(),
             processed,
+            staggered_slot,
         };
 
         let mut inner = self.inner.lock();
@@ -432,6 +462,14 @@ impl ConsensusTransactionPool {
         drop(inner);
 
         let newly_inserted = outcome.notify()?;
+        // Observed only for entries actually admitted, mirroring the adapter path where
+        // the histogram records delays that are really applied. The entry (and with it
+        // the slot) is in the pool, but the slot's delay was captured at creation.
+        if let Some(delay) = stagger_delay {
+            self.adapter_metrics
+                .sequencing_staggered_delay
+                .observe(delay.as_secs_f64());
+        }
         self.metrics.pool_depth.with_label_values(&["user"]).inc();
         self.metrics
             .pool_bytes
@@ -490,12 +528,14 @@ impl ConsensusTransactionPool {
             total_bytes,
             gas_price: 0,
             tx_type: tx_type_label(transactions),
+            proposers: "na",
             ack: PendingAck::new(
                 EntryAck::SystemOrPing(sender),
                 transactions.iter().map(ConsensusTransaction::key).collect(),
             ),
             metrics: self.metrics.clone(),
             processed: Vec::new(),
+            staggered_slot: None,
         };
 
         {
@@ -733,6 +773,17 @@ struct TakenEntry {
     entry: PoolEntry,
 }
 
+impl TakenEntry {
+    /// The entry has been consumed into a proposal: its staggered quota registration,
+    /// if any, is released here. Requeue after a dropped acknowledgement rearms it.
+    fn new(lane: TakenLane, mut entry: PoolEntry) -> Self {
+        if let Some(slot) = &mut entry.staggered_slot {
+            slot.release();
+        }
+        Self { lane, entry }
+    }
+}
+
 /// Holds the entries handed out by one `take()` until their fate is known:
 /// `acknowledge` (the proposer created a block) resolves every waiter with its
 /// position/inclusion ack, while dropping the guard uninvoked (failed proposal or
@@ -769,6 +820,7 @@ impl TakenTransactionsGuard {
             block.entries.push(ProposedEntry {
                 lane,
                 tx_type: entry.tx_type,
+                proposers: entry.proposers,
                 created: entry.ack.created,
             });
             watches_to_drop.push(std::mem::take(&mut entry.processed));
@@ -782,7 +834,7 @@ impl TakenTransactionsGuard {
                 .collect::<Vec<_>>();
             self.metrics
                 .queue_wait_latency
-                .with_label_values(&[lane.label()])
+                .with_label_values(&[lane.label(), entry.proposers])
                 .observe(entry.ack.created.elapsed().as_secs_f64());
             entry
                 .ack
@@ -791,7 +843,7 @@ impl TakenTransactionsGuard {
         for ping in pings {
             self.metrics
                 .queue_wait_latency
-                .with_label_values(&["ping"])
+                .with_label_values(&["ping", "na"])
                 .observe(ping.created.elapsed().as_secs_f64());
             ping.resolve_included(
                 self.epoch,
@@ -840,7 +892,7 @@ impl Drop for TakenTransactionsGuard {
         let mut halted = Vec::new();
         // Capacity is bypassed because these entries were already admitted. Concurrent
         // inserts can put us over capacity, which we accept transiently.
-        for taken in entries.into_iter().rev() {
+        for mut taken in entries.into_iter().rev() {
             match taken.lane {
                 TakenLane::System => {
                     requeued += 1;
@@ -866,6 +918,9 @@ impl Drop for TakenTransactionsGuard {
                             .pool_bytes
                             .with_label_values(&["user"])
                             .add(taken.entry.total_bytes as i64);
+                        if let Some(slot) = &mut taken.entry.staggered_slot {
+                            slot.rearm();
+                        }
                         user.reinsert_front(taken.entry);
                     }
                     UserLane::Closed => halted.push(taken.entry),
@@ -977,10 +1032,7 @@ impl TransactionPool for ConsensusTransactionPool {
             total_bytes += entry.total_bytes;
             transactions.extend(entry.transactions.iter().cloned());
             self.decrement_lane_metrics("system", &entry);
-            entries.push(TakenEntry {
-                lane: TakenLane::System,
-                entry,
-            });
+            entries.push(TakenEntry::new(TakenLane::System, entry));
         }
 
         let mut already_processed = Vec::new();
@@ -990,11 +1042,26 @@ impl TransactionPool for ConsensusTransactionPool {
         {
             let mut pending_count = transactions.len();
             let mut pending_bytes = total_bytes;
+            let now = Instant::now();
             let popped;
             (popped, already_processed) = user.pop_batch_while(|entry| {
                 // An already-processed entry is excluded without consuming block budget.
+                // Checked before the staggered hold, so a copy committed elsewhere
+                // resolves a held entry immediately instead of after its delay.
                 if all_processed(&mut entry.processed).is_some() {
                     return PopAction::Exclude;
+                }
+                // A staggered entry stays queued (occupying pool capacity, which is the
+                // overload backstop) until its delay elapses — even if staggering was
+                // disarmed after the hold was stamped, bounding the residual by
+                // max_delay. Held entries deliberately leave `limit_reached` untouched:
+                // no block limit was hit.
+                if entry
+                    .staggered_slot
+                    .as_ref()
+                    .is_some_and(|slot| slot.eligible_at() > now)
+                {
+                    return PopAction::Skip;
                 }
                 match entry_limit(entry, pending_count, pending_bytes, max_count, max_bytes) {
                     Some(limit) => {
@@ -1011,10 +1078,7 @@ impl TransactionPool for ConsensusTransactionPool {
             for entry in popped {
                 self.decrement_lane_metrics("user", &entry);
                 transactions.extend(entry.transactions.iter().cloned());
-                entries.push(TakenEntry {
-                    lane: TakenLane::User,
-                    entry,
-                });
+                entries.push(TakenEntry::new(TakenLane::User, entry));
             }
         }
         drop(inner);
@@ -1138,19 +1202,15 @@ impl ConsensusTransactionPool {
 
     fn report_commit_latency(&self, entries: &[ProposedEntry]) {
         let now = Instant::now();
-        let user = self
-            .metrics
-            .pool_commit_latency
-            .with_label_values(&["user"]);
-        let system = self
-            .metrics
-            .pool_commit_latency
-            .with_label_values(&["system"]);
         for entry in entries {
-            let histogram = match entry.lane {
-                TakenLane::User => &user,
-                TakenLane::System => &system,
+            let lane = match entry.lane {
+                TakenLane::User => "user",
+                TakenLane::System => "system",
             };
+            let histogram = self
+                .metrics
+                .pool_commit_latency
+                .with_label_values(&[lane, entry.proposers]);
             histogram.observe(now.saturating_duration_since(entry.created).as_secs_f64());
         }
     }
@@ -1470,9 +1530,11 @@ mod tests {
             total_bytes: serialized.len(),
             gas_price: 1,
             tx_type: tx_type_label(std::slice::from_ref(&consensus_transaction)),
+            proposers: "na",
             ack: PendingAck::new(EntryAck::User(sender), vec![consensus_transaction.key()]),
             metrics,
             processed: Vec::new(),
+            staggered_slot: None,
         };
         let UserLane::Open(user) = &mut lane else {
             unreachable!("new user lane must be open");
@@ -1835,10 +1897,10 @@ mod tests {
                 .with_label_values(&["owned_user_transaction_v2", status])
                 .get()
         };
-        let commit_latency_count = |lane: &str| {
+        let commit_latency_count = |lane: &str, proposers: &str| {
             pool.metrics
                 .pool_commit_latency
-                .with_label_values(&[lane])
+                .with_label_values(&[lane, proposers])
                 .get_sample_count()
         };
 
@@ -1857,8 +1919,8 @@ mod tests {
         assert_eq!(status("sequenced"), 1);
         assert_eq!(status("garbage_collected"), 1);
         // System entries report through the adapter; only their latency is recorded here.
-        assert_eq!(commit_latency_count("user"), 1);
-        assert_eq!(commit_latency_count("system"), 1);
+        assert_eq!(commit_latency_count("user", "unrestricted"), 1);
+        assert_eq!(commit_latency_count("system", "na"), 1);
     }
 
     #[tokio::test]
