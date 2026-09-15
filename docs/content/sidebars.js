@@ -354,6 +354,7 @@ export default {
         'onchain-finance/payment-kit',
         'onchain-finance/payment-intents',
         'onchain-finance/funding-wallets',
+        'onchain-finance/gas-station',
       ],
     },
       {

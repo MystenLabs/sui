@@ -1,0 +1,20 @@
+{
+  "name": "gas-station",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Gas station examples for Sui docs",
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mysten-incubation/sponsor": "^0.2.10",
+    "@mysten/sui": "^2.23.2",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.10",
+    "typescript": "^5.5.3"
+  }
+}
