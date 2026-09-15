@@ -490,6 +490,14 @@ vector_borrow_base_cost: 52
 vector_pop_back_base_cost: 52
 vector_destroy_empty_base_cost: 52
 vector_swap_base_cost: 52
+vector_reverse_base_cost: 52
+vector_reverse_per_elem_cost: 8
+vector_keep_base_cost: 52
+vector_keep_per_dropped_elem_cost: 1
+vector_keep_per_moved_elem_cost: 8
+vector_slice_base_cost: 52
+vector_splice_base_cost: 52
+vector_splice_per_elem_cost: 8
 debug_print_base_cost: 52
 debug_print_stack_trace_base_cost: 52
 execution_version: 4

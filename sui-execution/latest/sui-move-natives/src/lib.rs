@@ -891,6 +891,14 @@ pub fn make_stdlib_gas_params_for_protocol_config(
             protocol_config.$name().map(Into::into).unwrap_or(0.into())
         }};
     }
+    macro_rules! get_gas_cost_or_default_since {
+        ($name: ident, $version: expr) => {{
+            debug_assert!(
+                protocol_config.version.as_u64() < $version || protocol_config.$name().is_some()
+            );
+            protocol_config.$name().map(Into::into).unwrap_or(0.into())
+        }};
+    }
     GasParameters::new(
         MSN::bcs::GasParameters {
             to_bytes: MSN::bcs::ToBytesGasParameters {
@@ -984,18 +992,32 @@ pub fn make_stdlib_gas_params_for_protocol_config(
                 base: get_gas_cost_or_default!(vector_swap_base_cost_as_option),
             },
             reverse: MSN::vector::ReverseGasParameters {
-                base: 0.into(),
-                per_elem: 0.into(),
+                base: get_gas_cost_or_default_since!(vector_reverse_base_cost_as_option, 138),
+                per_elem: get_gas_cost_or_default_since!(
+                    vector_reverse_per_elem_cost_as_option,
+                    138
+                ),
             },
             keep: MSN::vector::KeepGasParameters {
-                base: 0.into(),
-                per_dropped_elem: 0.into(),
-                per_moved_elem: 0.into(),
+                base: get_gas_cost_or_default_since!(vector_keep_base_cost_as_option, 138),
+                per_dropped_elem: get_gas_cost_or_default_since!(
+                    vector_keep_per_dropped_elem_cost_as_option,
+                    138
+                ),
+                per_moved_elem: get_gas_cost_or_default_since!(
+                    vector_keep_per_moved_elem_cost_as_option,
+                    138
+                ),
             },
-            slice: MSN::vector::SliceGasParameters { base: 0.into() },
+            slice: MSN::vector::SliceGasParameters {
+                base: get_gas_cost_or_default_since!(vector_slice_base_cost_as_option, 138),
+            },
             splice: MSN::vector::SpliceGasParameters {
-                base: 0.into(),
-                per_elem: 0.into(),
+                base: get_gas_cost_or_default_since!(vector_splice_base_cost_as_option, 138),
+                per_elem: get_gas_cost_or_default_since!(
+                    vector_splice_per_elem_cost_as_option,
+                    138
+                ),
             },
         },
     )
@@ -1577,4 +1599,35 @@ pub(crate) fn abstract_size(
         include_vector_size: true,
         traverse_references: false,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_protocol_config::{Chain, ProtocolVersion};
+
+    #[test]
+    fn vector_bulk_native_gas_mapping_is_protocol_gated() {
+        let before = ProtocolConfig::get_for_version(ProtocolVersion::new(137), Chain::Unknown);
+        let before = make_stdlib_gas_params_for_protocol_config(&before);
+        assert_eq!(before.vector.reverse.base, 0.into());
+        assert_eq!(before.vector.reverse.per_elem, 0.into());
+        assert_eq!(before.vector.keep.base, 0.into());
+        assert_eq!(before.vector.keep.per_dropped_elem, 0.into());
+        assert_eq!(before.vector.keep.per_moved_elem, 0.into());
+        assert_eq!(before.vector.slice.base, 0.into());
+        assert_eq!(before.vector.splice.base, 0.into());
+        assert_eq!(before.vector.splice.per_elem, 0.into());
+
+        let active = ProtocolConfig::get_for_version(ProtocolVersion::new(138), Chain::Unknown);
+        let active = make_stdlib_gas_params_for_protocol_config(&active);
+        assert_eq!(active.vector.reverse.base, 52.into());
+        assert_eq!(active.vector.reverse.per_elem, 8.into());
+        assert_eq!(active.vector.keep.base, 52.into());
+        assert_eq!(active.vector.keep.per_dropped_elem, 1.into());
+        assert_eq!(active.vector.keep.per_moved_elem, 8.into());
+        assert_eq!(active.vector.slice.base, 52.into());
+        assert_eq!(active.vector.splice.base, 52.into());
+        assert_eq!(active.vector.splice.per_elem, 8.into());
+    }
 }
