@@ -31,7 +31,7 @@ use sui_types::execution::{
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
-use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsResolver, PackageObject};
+use sui_types::storage::{BackingStore, DenyListResult, ExecutionObjectResolver, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
@@ -1203,7 +1203,16 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
     }
 }
 
-impl ObjectFundsResolver for TemporaryStore<'_> {
+impl ExecutionObjectResolver for TemporaryStore<'_> {
+    fn load_runtime_system_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
+        if self.system_object_versions.get(object_id).is_none() {
+            return Ok(None);
+        }
+        TemporaryStore::load_implicitly_read_system_object(self, object_id)
+            .map(Some)
+            .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
+    }
+
     /// Loads the object balance at the required version and subtracts withdrawals from the same
     /// checkpoint that have not settled yet.
     /// This function is expected never to fail; an error indicates an invariant violation.
@@ -1485,5 +1494,58 @@ impl BackingPackageStore for TemporaryStore<'_> {
                 }
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod system_object_resolver_tests {
+    use super::*;
+    use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+    use sui_types::base_types::ConsensusObjectVersion;
+    use sui_types::in_memory_storage::InMemoryStorage;
+
+    #[test]
+    fn runtime_system_object_requires_an_assigned_version() {
+        let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+        let initial_shared_version = SequenceNumber::from_u64(1);
+        let version = SequenceNumber::from_u64(10);
+        let object = Object::with_id_owner_version_for_testing(
+            id,
+            version,
+            Owner::Shared {
+                initial_shared_version,
+            },
+        );
+        let backing_store = InMemoryStorage::new(vec![object.clone()]);
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let load = |assigned_version: Option<SequenceNumber>| {
+            TemporaryStore::new_with_input_objects(
+                &backing_store,
+                InputObjects::new(vec![]),
+                vec![],
+                TransactionDigest::default(),
+                &config,
+                0,
+                SystemObjectVersions::new(
+                    None,
+                    assigned_version.map(|version| ConsensusObjectVersion {
+                        initial_shared_version,
+                        version,
+                    }),
+                ),
+                PostExecutionCheckInputs::default(),
+                &EmptyUnsettledObjectFunds,
+            )
+            .load_runtime_system_object(&id)
+        };
+
+        assert!(load(None).unwrap().is_none());
+        assert_eq!(
+            load(Some(version))
+                .unwrap()
+                .unwrap()
+                .compute_object_reference(),
+            object.compute_object_reference(),
+        );
     }
 }

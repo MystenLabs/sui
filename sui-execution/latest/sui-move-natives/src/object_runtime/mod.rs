@@ -46,8 +46,8 @@ use sui_types::{
     id::UID,
     metrics::ExecutionMetrics,
     move_package::MovePackage,
-    object::{MoveObject, Owner},
-    storage::{ObjectFundsResolver, ObjectFundsSufficiency, RuntimeObjectResolver},
+    object::{MoveObject, Object, Owner},
+    storage::{ExecutionObjectResolver, ObjectFundsSufficiency},
 };
 use tracing::error;
 
@@ -138,7 +138,7 @@ pub(crate) struct ObjectRuntimeState {
 #[derive(Tid)]
 pub struct ObjectRuntime<'a> {
     child_object_store: ChildObjectStore<'a>,
-    object_funds_resolver: &'a dyn ObjectFundsResolver,
+    object_resolver: &'a dyn ExecutionObjectResolver,
     // inventories for test scenario
     pub(crate) test_inventories: TestInventories,
     // the internal state
@@ -186,8 +186,7 @@ impl ObjectFundsAvailable {
 
 impl<'a> ObjectRuntime<'a> {
     pub fn new(
-        object_resolver: &'a dyn RuntimeObjectResolver,
-        object_funds_resolver: &'a dyn ObjectFundsResolver,
+        object_resolver: &'a dyn ExecutionObjectResolver,
         input_objects: BTreeMap<ObjectID, InputObject>,
         is_metered: bool,
         protocol_config: &'a ProtocolConfig,
@@ -223,7 +222,7 @@ impl<'a> ObjectRuntime<'a> {
                 metrics.clone(),
                 epoch_id,
             ),
-            object_funds_resolver,
+            object_resolver,
             test_inventories: TestInventories::new(),
             state: ObjectRuntimeState {
                 input_objects: input_object_owners,
@@ -261,15 +260,13 @@ impl<'a> ObjectRuntime<'a> {
             .entry(key)
             .or_insert_with(ObjectFundsAvailable::init);
         if entry.needs_store_read(amount) {
-            let settled_available = match self
-                .object_funds_resolver
-                .object_available_balance(owner, type_)
-            {
-                Ok(balance) => balance,
-                Err(e) => {
-                    return ObjectFundsSufficiency::LoadError(e.to_string());
-                }
-            };
+            let settled_available =
+                match self.object_resolver.object_available_balance(owner, type_) {
+                    Ok(balance) => balance,
+                    Err(e) => {
+                        return ObjectFundsSufficiency::LoadError(e.to_string());
+                    }
+                };
             let Some(available) = entry.available.checked_add(U256::from(settled_available)) else {
                 return ObjectFundsSufficiency::Overflow;
             };
@@ -494,6 +491,14 @@ impl<'a> ObjectRuntime<'a> {
 
     pub fn take_user_events(&mut self) -> Vec<(StructTag, Value)> {
         std::mem::take(&mut self.state.events)
+    }
+
+    pub fn load_runtime_system_object(
+        &mut self,
+        object_id: &ObjectID,
+    ) -> PartialVMResult<Option<Object>> {
+        self.child_object_store
+            .load_runtime_system_object(object_id)
     }
 
     // TODO: Eventually we may want to allow larger types for accumulators,

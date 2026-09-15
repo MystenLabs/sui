@@ -331,7 +331,7 @@ async fn test_tto_receive_twice() {
 
     //
     // Run the `receive` function to receive the coin from TTO twice, which will result in a fail
-    // but the recieved object should have been read during execution and been unchanged.
+    // but the received object should have been read during execution and been unchanged.
     //
 
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -609,7 +609,7 @@ async fn test_tto_success() {
 
     //
     // Run the `receive` function to receive the coin from TTO twice, which will result in a fail
-    // but the recieved object should have been read during execution and been unchanged.
+    // but the received object should have been read during execution and been unchanged.
     //
 
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -973,7 +973,7 @@ async fn test_receive_input() {
 
     //
     // Run the `receive` function to receive the coin from TTO twice, which will result in a fail
-    // but the recieved object should have been read during execution and been unchanged.
+    // but the received object should have been read during execution and been unchanged.
     //
 
     let mut builder = ProgrammableTransactionBuilder::new();
