@@ -8,20 +8,22 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
     u256::U256,
 };
+use shared_crypto::intent::{Intent, IntentMessage};
 use sui_core::transaction_driver::SubmitTransactionOptions;
 use sui_macros::*;
 use sui_test_transaction_builder::FundSource;
 use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID,
     base_types::SuiAddress,
+    crypto::{AccountKeyPair, Signature, get_key_pair},
     effects::TransactionEffectsAPI,
     gas::GasCostSummary,
     gas_coin::GAS,
-    messages_grpc::SubmitTxRequest,
+    messages_grpc::{SubmitTxRequest, SubmitTxResult},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        self, Command, FundsWithdrawalArg, GasData, ObjectArg, TransactionData, TransactionDataV1,
-        TransactionExpiration, TransactionKind,
+        self, Command, FundsWithdrawalArg, GasData, ObjectArg, Transaction, TransactionData,
+        TransactionDataV1, TransactionExpiration, TransactionKind,
     },
 };
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
@@ -998,6 +1000,76 @@ async fn test_gasless_rate_limit_rejects() {
     assert!(
         err_str.contains("ValidatorOverloaded") || err_str.contains("retry"),
         "Expected validator overloaded error, got: {err_str}"
+    );
+
+    test_env.trigger_reconfiguration().await;
+}
+
+// Only admitted gasless transactions count toward the per-validator gasless rate limit.
+#[cfg_attr(not(msim), ignore)]
+#[sim_test]
+async fn test_gasless_rate_limit_not_consumed_by_rejected_submissions() {
+    const MAX_TPS: u64 = 5;
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_gasless_max_tps_for_testing(MAX_TPS);
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, sender)]).await;
+
+    let client = test_env
+        .cluster
+        .authority_aggregator()
+        .authority_clients
+        .values()
+        .next()
+        .unwrap()
+        .clone();
+
+    // Gasless transactions signed by a key that does not own `sender` are rejected at
+    // signature verification. Submit as many as the window allows.
+    let (_, bogus_keypair): (SuiAddress, AccountKeyPair) = get_key_pair();
+    for nonce in 0..MAX_TPS as u32 {
+        let tx_data = test_env.create_gasless_transaction(
+            100,
+            coin_type.clone(),
+            sender,
+            recipient,
+            nonce,
+            0,
+        );
+        let sig = Signature::new_secure(
+            &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
+            &bogus_keypair,
+        );
+        let tx = Transaction::from_data(tx_data, vec![sig]);
+        let result = client
+            .submit_transaction(SubmitTxRequest::new_transaction(tx), None)
+            .await;
+        assert!(
+            result.is_err(),
+            "bogus signature should be rejected, got: {result:?}"
+        );
+    }
+
+    // A correctly signed transaction submitted to the same validator within the same window
+    // must still be admitted.
+    let tx_data =
+        test_env.create_gasless_transaction(100, coin_type, sender, recipient, MAX_TPS as u32, 0);
+    let signed_tx = test_env.cluster.wallet.sign_transaction(&tx_data).await;
+    let response = client
+        .submit_transaction(SubmitTxRequest::new_transaction(signed_tx), None)
+        .await
+        .expect("valid gasless submission should not fail");
+    assert!(
+        matches!(response.results[0], SubmitTxResult::Submitted { .. }),
+        "valid gasless transaction should be admitted after rejected submissions, got: {:?}",
+        response.results[0]
     );
 
     test_env.trigger_reconfiguration().await;
