@@ -25,7 +25,7 @@ use std::{sync::Arc, time::Instant};
 use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::RandomnessRound;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
-use sui_types::transaction::{TransactionDataAPI, TransactionKind};
+use sui_types::transaction::{TransactionDataAPI, TransactionKey, TransactionKind};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     node_role::{FullNodeSyncMode, NodeRole},
@@ -983,6 +983,22 @@ impl CheckpointExecutor {
                 },
             ),
         );
+
+        // Resolve non-digest transaction keys (e.g. randomness updates). Consensus
+        // enqueues these as keyed placeholders before their digest is known, and the
+        // usual resolver (RandomnessRoundReceiver) is best-effort per node - the
+        // signature may never arrive. The placeholder owns its version group's causal
+        // index, so this digest-carrying enqueue must resolve the key or the
+        // transaction is never executed. The certified checkpoint makes the mapping
+        // authoritative.
+        for (txn, _) in &unexecuted_txns {
+            let key = txn.key();
+            if !matches!(key, TransactionKey::Digest(_))
+                && self.epoch_store.insert_tx_key(key, *txn.digest()).is_err()
+            {
+                debug!("epoch ended while resolving transaction key");
+            }
+        }
 
         // Enqueue unexecuted transactions with their expected effects digests
         self.execution_scheduler

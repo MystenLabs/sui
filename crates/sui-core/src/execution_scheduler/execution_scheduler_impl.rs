@@ -554,6 +554,11 @@ impl ExecutionScheduler {
         self.schedule_funds_withdraws(tx_with_withdraws, epoch_store);
     }
 
+    /// Enqueues digest-carrying transactions. Any transaction with a non-digest key
+    /// (e.g. a randomness update) must already have its key resolved in the epoch
+    /// store: the consensus path enqueues such transactions as keyed placeholders that
+    /// own their version group's causal index, and dedup drops this enqueue as a
+    /// duplicate, so only the resolved key lets the placeholder execute.
     pub fn enqueue_transactions(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
@@ -579,18 +584,21 @@ impl ExecutionScheduler {
             })
             .collect();
 
-        // Resolve non-digest transaction keys. The consensus path enqueues keyed
-        // transactions (e.g. randomness updates) before their digest is known, and the
-        // usual resolver (RandomnessRoundReceiver) is best-effort per node - the
-        // signature may never arrive. The keyed copy owns its version group's causal
-        // index and dedup drops later enqueues of the group as duplicates, so a
-        // digest-carrying enqueue must resolve the key or the transaction is lost.
+        // Precondition: non-digest keys are already resolved (see the doc comment).
+        // Checked here because a violation is silent - the placeholder just never
+        // executes.
+        #[cfg(debug_assertions)]
         for (cert, _) in &certs {
             let key = cert.key();
-            if !matches!(key, TransactionKey::Digest(_))
-                && epoch_store.insert_tx_key(key, *cert.digest()).is_err()
-            {
-                debug!("epoch ended while resolving transaction key");
+            if !matches!(key, TransactionKey::Digest(_)) {
+                assert!(
+                    epoch_store
+                        .tx_key_to_digest(&key)
+                        .map(|d| d.is_some())
+                        .unwrap_or(true),
+                    "enqueued transaction {} with unresolved key {key:?}",
+                    cert.digest()
+                );
             }
         }
 
