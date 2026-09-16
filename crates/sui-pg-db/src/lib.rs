@@ -40,6 +40,7 @@ mod tls;
 
 use crate::metrics::PoolMetrics;
 pub use sui_field_count::FieldCount;
+pub use sui_sql_macro::query;
 pub use sui_sql_macro::sql;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
