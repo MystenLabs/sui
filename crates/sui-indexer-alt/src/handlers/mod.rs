@@ -23,7 +23,6 @@ pub(crate) mod obj_versions;
 pub(crate) mod sum_displays;
 pub(crate) mod tx_affected_addresses;
 pub(crate) mod tx_affected_objects;
-pub(crate) mod tx_balance_changes;
 pub(crate) mod tx_calls;
 pub(crate) mod tx_digests;
 pub(crate) mod tx_kinds;
