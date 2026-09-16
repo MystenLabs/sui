@@ -135,22 +135,23 @@ impl WriteTestCluster {
             client: Client::new(),
         };
 
-        // Dev-inspect reads its gas defaults from `kv_epoch_starts` and `kv_protocol_configs`.
-        // The latter is only populated once the indexer's pipeline processes the genesis
-        // checkpoint, so wait for it before handing the cluster to a test.
+        // Feature flags can make this RPC succeed before the separate protocol-config
+        // pipeline has committed the gas parameter required by dev-inspect.
         tokio::time::timeout(Duration::from_secs(60), async {
             loop {
                 let response = cluster
                     .execute_jsonrpc("sui_getProtocolConfig", json!([]))
                     .await;
-                if matches!(&response, Ok(r) if r["error"].is_null()) {
+                if matches!(&response, Ok(r) if r["error"].is_null()
+                    && !r["result"]["attributes"]["max_tx_gas"].is_null())
+                {
                     break;
                 }
                 tokio::time::sleep(Duration::from_millis(200)).await;
             }
         })
         .await
-        .context("Timed out waiting for the genesis protocol config to be indexed")?;
+        .context("Timed out waiting for the genesis gas parameters to be indexed")?;
 
         Ok(cluster)
     }
