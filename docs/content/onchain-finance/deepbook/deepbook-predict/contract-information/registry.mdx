@@ -18,8 +18,8 @@ keywords:
   - builder code
   - no_trade_window_ms
   - max_valuation_window_ms
-last_verified: 2026-09-10
-verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
+last_verified: 2026-09-14
+verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 goal:
   description: >-
     Reader can look up markets and cadence terms in the Predict Registry, and
@@ -53,7 +53,7 @@ answer: >-
 
 `deepbook_predict::registry::Registry` is the shared object that holds the market catalog and the cadence configuration for every registered underlying. It also holds the allowlists that decide which `PauseCap`, which `MarketLifecycleCap`, and which `PoolValuationCap` still carry authority.
 
-Publishing the Predict package creates `Registry` and `ProtocolConfig` together and transfers the single `AdminCap` to the publisher at that moment. The registry object ID for each deployment is on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#shared-objects), and `getConfig(network).objects.registry` in the SDK resolves the same ID. The Move snippets on this page pin the Mainnet source commit, which serves both deployments.
+Publishing the Predict package creates `Registry` and `ProtocolConfig` together and transfers the single `AdminCap` to the publisher at that moment. The registry object ID for each deployment is on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#shared-objects), and `getConfig(network).objects.registry` in the SDK resolves the same ID. The Move snippets on this page pin DeepBookV3 `main` at `76b11922`, whose sources match both deployments.
 
 Most application integrations call only the read functions here. The rest are operator and governance surfaces. None of them is an `entry fun`: every function on this page is a `public fun` invoked as a `moveCall`. The capability-minting functions and `generate_pool_valuation_proof` return values that a later command in the same transaction must consume, because Sui rejects an unused return value only when its type lacks `drop`. The 2 creation functions each return an `ID`, which has `drop`, so a transaction can leave it unused.
 
@@ -66,7 +66,7 @@ The registry holds the market catalog inline rather than in a separate object:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="Registry"
 />
 
@@ -81,7 +81,7 @@ Each market is its own shared `ExpiryMarket` object, addressed by the underlying
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="id,expiry_market_id"
 	noComments
 />
@@ -110,7 +110,7 @@ A cadence ID above `5` aborts with `EInvalidCadence`. Read one cadence or all 6:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="cadence_config,cadence_configs"
 	noComments
 />
@@ -124,7 +124,7 @@ Both reads return `CadenceConfig` by value, and it carries the 5 terms a market 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="CadenceConfig"
 />
 
@@ -135,7 +135,7 @@ Read the terms with the accessors rather than by field:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="cadence_tick_size,cadence_admission_tick_size,cadence_max_expiry_allocation,cadence_initial_expiry_cash,cadence_window_size,cadence_enabled"
 	noComments
 />
@@ -166,7 +166,7 @@ Privileged functions sit behind 4 capability types, and each one is a distinct o
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="MarketLifecycleCap"
 />
 
@@ -175,7 +175,7 @@ Privileged functions sit behind 4 capability types, and each one is a distinct o
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="PoolValuationCap"
 />
 
@@ -190,7 +190,7 @@ Pause capabilities are deliberately not version-gated, so an emergency stop stil
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="mint_pause_cap,revoke_pause_cap"
 	noComments
 />
@@ -206,7 +206,7 @@ Lifecycle capabilities are version-gated, unlike pause capabilities:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="mint_lifecycle_cap,revoke_lifecycle_cap"
 	noComments
 />
@@ -222,7 +222,7 @@ Pool valuation capabilities follow the same version-gated mint and ungated revok
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="mint_pool_valuation_cap,revoke_pool_valuation_cap,generate_pool_valuation_proof"
 	noComments
 />
@@ -240,7 +240,7 @@ The registry has 3 emergency-stop functions, and each validates the capability I
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="pause_trading_pause_cap,freeze_protocol_pause_cap,pause_expiry_market_mint_pause_cap"
 	noComments
 />
@@ -262,7 +262,7 @@ An admin must register an underlying before any market on it can exist:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="register_underlying,set_template_cadence_config"
 	noComments
 />
@@ -275,14 +275,14 @@ Changing a cadence does not touch markets that already exist. Each market snapsh
 
 ## Market creation
 
-Market creation is the only lifecycle-capability surface in the registry, and its signature matches the previous deployment:
+Market creation is the only lifecycle-capability surface in the registry, and its signature is unchanged from earlier deployments:
 
 <ImportContent
 	source="packages/predict/sources/registry/registry.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="create_and_share_expiry_market"
 	noComments
 />
@@ -310,7 +310,7 @@ Builder-code creation is the only permissionless function in the registry that c
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="create_and_share_builder_code"
 	noComments
 />
@@ -328,7 +328,7 @@ An account attaches a code with `predict_account::set_builder_code` and detaches
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="set_no_trade_window_ms,set_max_valuation_window_ms"
 	noComments
 />
@@ -393,8 +393,8 @@ Registry activity surfaces through `deepbook_predict::config_events`:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="MarketCreated,CadenceConfigUpdated,NoTradeWindowUpdated"
 />
 
-`MarketCreated` carries the full snapshot a market took at creation, so an indexer can build the market catalog from events alone. `CadenceConfigUpdated` carries the registry ID alongside the new terms, so an indexer can replay cadence history without re-reading the object; its layout matches the previous deployment. `NoTradeWindowUpdated` carries the new window and the onchain timestamp of the change.
+`MarketCreated` carries the full snapshot a market took at creation, so an indexer can build the market catalog from events alone. `CadenceConfigUpdated` carries the registry ID alongside the new terms, so an indexer can replay cadence history without re-reading the object; its layout is unchanged from earlier deployments. `NoTradeWindowUpdated` carries the new window and the onchain timestamp of the change.
