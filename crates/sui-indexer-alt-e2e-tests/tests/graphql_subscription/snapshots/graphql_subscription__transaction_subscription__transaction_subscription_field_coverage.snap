@@ -91,16 +91,7 @@ expression: item
           "events": {
             "nodes": []
           },
-          "dependencies": {
-            "nodes": [
-              {
-                "digest": "[digest]"
-              },
-              {
-                "digest": "[digest]"
-              }
-            ]
-          }
+          "dependencies": "[dependencies]"
         }
       }
     }

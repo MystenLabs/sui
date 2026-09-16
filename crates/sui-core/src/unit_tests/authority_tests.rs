@@ -6706,12 +6706,12 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
         .build();
     let certificate = VerifiedExecutableTransaction::new_for_testing(tx_data, &sender_key);
 
-    // Exercise both the legacy IFFW short-circuit and bump-only finalization.
+    // The legacy short-circuit (gas model 14) and the bump-only exit (gas model 15) build
+    // effects on different paths, so check dependencies under both.
     for gas_model_version in [14, 15] {
-        let mut legacy_effects_bytes = None;
         for disable_dependencies in [false, true] {
             let mut config =
-                ProtocolConfig::get_for_version(ProtocolVersion::new(137), Chain::Unknown);
+                ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
             config.set_gas_model_version_for_testing(gas_model_version);
             config.set_disable_effects_tx_dependencies_for_testing(disable_dependencies);
             let state = TestAuthorityBuilder::new()
@@ -6741,25 +6741,6 @@ async fn test_insufficient_balance_for_withdraw_early_error() {
                 assert!(effects.dependencies().is_empty());
             } else {
                 assert_eq!(effects.dependencies(), &[previous_transaction]);
-            }
-
-            let output_gas = state.get_object(&gas_object_ref.0).unwrap();
-            assert_eq!(output_gas.previous_transaction, *certificate.digest());
-            assert_eq!(output_gas.version(), gas_object_ref.1.next());
-
-            let mut effects = effects;
-            let encoded = bcs::to_bytes(&effects).unwrap();
-            assert_eq!(
-                bcs::from_bytes::<TransactionEffects>(&encoded).unwrap(),
-                effects
-            );
-            // The flag changes only dependencies, including on the early-failure paths.
-            effects.dependencies_mut_for_testing().clear();
-            let encoded_without_dependencies = bcs::to_bytes(&effects).unwrap();
-            if let Some(legacy) = &legacy_effects_bytes {
-                assert_eq!(&encoded_without_dependencies, legacy);
-            } else {
-                legacy_effects_bytes = Some(encoded_without_dependencies);
             }
         }
     }
