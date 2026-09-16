@@ -186,6 +186,12 @@ move-vm-runtime = { path = "crates/move-vm-runtime" }
 [profile.bench]
 debug = true
 
+# bench + fat LTO, for optimization-flag sweeps of the VM benchmarks
+[profile.bench-lto]
+inherits = "bench"
+lto = true
+codegen-units = 1
+
 [profile.dev]
 debug = true
 
