@@ -554,11 +554,10 @@ impl ExecutionScheduler {
         self.schedule_funds_withdraws(tx_with_withdraws, epoch_store);
     }
 
-    /// Enqueues digest-carrying transactions. Any transaction with a non-digest key
-    /// (e.g. a randomness update) must already have its key resolved in the epoch
-    /// store: the consensus path enqueues such transactions as keyed placeholders that
-    /// own their version group's causal index, and dedup drops this enqueue as a
-    /// duplicate, so only the resolved key lets the placeholder execute.
+    /// Enqueues digest-carrying transactions. A transaction with a non-digest key (e.g.
+    /// a randomness update) must already have its key resolved in the epoch store:
+    /// consensus enqueued it as a keyed placeholder, and this enqueue is deduplicated
+    /// against that placeholder, so only the resolved key lets it execute.
     pub fn enqueue_transactions(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
