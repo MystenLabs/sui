@@ -27,7 +27,7 @@ use std::{
 };
 use sui_config::node::{AuthorityOverloadConfig, FundsWithdrawSchedulerType};
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ACTIVE_DENY_LIST_OBJECT_ID,
     base_types::{FullObjectID, ObjectID},
     digests::TransactionDigest,
     error::SuiResult,
@@ -228,6 +228,22 @@ impl ExecutionScheduler {
             input_object_keys.push(InputKey::VersionedObject {
                 id: FullObjectID::new(SUI_ACCUMULATOR_ROOT_OBJECT_ID, Some(initial_shared_version)),
                 version: accumulator_version,
+            });
+        }
+
+        // Every user transaction may read the active deny list during execution (the set of
+        // regulated coins it touches is only known at runtime), so wait for the version it was
+        // assigned. System transactions never transfer regulated coins.
+        if !tx_data.is_system_tx()
+            && let Some(active_deny_list_version) =
+                execution_env.assigned_versions.active_deny_list_version()
+        {
+            input_object_keys.push(InputKey::VersionedObject {
+                id: FullObjectID::new(
+                    SUI_ACTIVE_DENY_LIST_OBJECT_ID,
+                    Some(active_deny_list_version.initial_shared_version),
+                ),
+                version: active_deny_list_version.version,
             });
         }
 

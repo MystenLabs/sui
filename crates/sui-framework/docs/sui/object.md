@@ -17,6 +17,8 @@ Sui object identifiers
 -  [Function `authenticator_state`](#sui_object_authenticator_state)
 -  [Function `randomness_state`](#sui_object_randomness_state)
 -  [Function `sui_deny_list_object_id`](#sui_object_sui_deny_list_object_id)
+-  [Function `sui_active_deny_list_object_id`](#sui_object_sui_active_deny_list_object_id)
+-  [Function `sui_active_deny_list_address`](#sui_object_sui_active_deny_list_address)
 -  [Function `sui_accumulator_root_object_id`](#sui_object_sui_accumulator_root_object_id)
 -  [Function `sui_accumulator_root_address`](#sui_object_sui_accumulator_root_address)
 -  [Function `sui_coin_registry_object_id`](#sui_object_sui_coin_registry_object_id)
@@ -169,6 +171,16 @@ The hardcoded ID for the singleton DenyList.
 
 
 <pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_DENY_LIST_OBJECT_ID">SUI_DENY_LIST_OBJECT_ID</a>: <b>address</b> = 0x403;
+</code></pre>
+
+
+
+<a name="sui_object_SUI_ACTIVE_DENY_LIST_OBJECT_ID"></a>
+
+The hardcoded ID for the singleton ActiveDenyList.
+
+
+<pre><code><b>const</b> <a href="../sui/object.md#sui_object_SUI_ACTIVE_DENY_LIST_OBJECT_ID">SUI_ACTIVE_DENY_LIST_OBJECT_ID</a>: <b>address</b> = 0x404;
 </code></pre>
 
 
@@ -477,6 +489,58 @@ This should only be called once from <code><a href="../sui/deny_list.md#sui_deny
     <a href="../sui/object.md#sui_object_UID">UID</a> {
         <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_DENY_LIST_OBJECT_ID">SUI_DENY_LIST_OBJECT_ID</a> },
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_object_sui_active_deny_list_object_id"></a>
+
+## Function `sui_active_deny_list_object_id`
+
+Create the <code><a href="../sui/object.md#sui_object_UID">UID</a></code> for the singleton <code>ActiveDenyList</code> object.
+This should only be called once from <code><a href="../sui/deny_list.md#sui_deny_list">deny_list</a></code>.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_active_deny_list_object_id">sui_active_deny_list_object_id</a>(): <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_active_deny_list_object_id">sui_active_deny_list_object_id</a>(): <a href="../sui/object.md#sui_object_UID">UID</a> {
+    <a href="../sui/object.md#sui_object_UID">UID</a> {
+        <a href="../sui/object.md#sui_object_id">id</a>: <a href="../sui/object.md#sui_object_ID">ID</a> { bytes: <a href="../sui/object.md#sui_object_SUI_ACTIVE_DENY_LIST_OBJECT_ID">SUI_ACTIVE_DENY_LIST_OBJECT_ID</a> },
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_object_sui_active_deny_list_address"></a>
+
+## Function `sui_active_deny_list_address`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_active_deny_list_address">sui_active_deny_list_address</a>(): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/object.md#sui_object_sui_active_deny_list_address">sui_active_deny_list_address</a>(): <b>address</b> {
+    <a href="../sui/object.md#sui_object_SUI_ACTIVE_DENY_LIST_OBJECT_ID">SUI_ACTIVE_DENY_LIST_OBJECT_ID</a>
 }
 </code></pre>
 

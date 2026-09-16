@@ -7,7 +7,6 @@ mod read_store;
 mod shared_in_memory_store;
 mod write_store;
 
-use crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use crate::base_types::{
     ConsensusObjectSequenceKey, ConsensusObjectVersion, FullObjectID, FullObjectRef, SuiAddress,
     SystemObjectVersions, TransactionDigest, VersionNumber,
@@ -23,6 +22,7 @@ use crate::move_package::MovePackage;
 use crate::storage::error::Error as StorageError;
 use crate::transaction::TransactionData;
 use crate::transaction::{SenderSignedData, TransactionDataAPI};
+use crate::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ACTIVE_DENY_LIST_OBJECT_ID};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
@@ -841,50 +841,54 @@ pub fn get_transaction_output_objects(
 impl SystemObjectVersions {
     /// Obtains pinned system object versions from effects, queries the store for the initial shared versions.
     pub fn from_effects(effects: &TransactionEffects, store: &dyn ObjectStore) -> Self {
-        let accumulator_version = effects
-            .accessed_consensus_objects()
-            .into_iter()
-            .find_map(|ico| match ico {
-                InputConsensusObject::Mutate((id, version, _))
-                | InputConsensusObject::ReadOnly((id, version, _))
-                    if id == SUI_ACCUMULATOR_ROOT_OBJECT_ID =>
-                {
-                    Some(version)
-                }
-                _ => None,
-            })
-            .map(|version| {
-                let initial_shared_version = store
-                    .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-                    .and_then(|object| object.owner().start_version())
-                    // unwrap safe because if effects contain the accumulator root object, it must
-                    // exist in the store and is a shared object.
-                    .unwrap();
-                ConsensusObjectVersion {
-                    initial_shared_version,
-                    version,
-                }
-            });
-        Self::new(accumulator_version)
+        let version_from_effects = |object_id: ObjectID| {
+            effects
+                .accessed_consensus_objects()
+                .into_iter()
+                .find_map(|ico| match ico {
+                    InputConsensusObject::Mutate((id, version, _))
+                    | InputConsensusObject::ReadOnly((id, version, _))
+                        if id == object_id =>
+                    {
+                        Some(version)
+                    }
+                    _ => None,
+                })
+                .map(|version| {
+                    let initial_shared_version = store
+                        .get_object(&object_id)
+                        .and_then(|object| object.owner().start_version())
+                        // unwrap safe because if effects contain the system object, it must
+                        // exist in the store and is a shared object.
+                        .unwrap();
+                    ConsensusObjectVersion {
+                        initial_shared_version,
+                        version,
+                    }
+                })
+        };
+        Self::new(version_from_effects(SUI_ACCUMULATOR_ROOT_OBJECT_ID))
+            .with_active_deny_list_version(version_from_effects(SUI_ACTIVE_DENY_LIST_OBJECT_ID))
     }
 
     /// Before execution, get the latest versions of the implicitly read system objects from the store,
     /// and use these versions as the exact version to read during execution.
     /// This is used only in environments where there is no consensus to assign versions, e.g. simulacrum and dry-run.
     pub fn from_latest_in_store(store: &dyn ObjectStore) -> Self {
-        let accumulator_version = store
-            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .map(|object| {
+        let latest = |object_id: ObjectID| {
+            store.get_object(&object_id).map(|object| {
                 let initial_shared_version = object
                     .owner()
                     .start_version()
-                    .expect("accumulator root must be a consensus object");
+                    .expect("implicitly read system object must be a consensus object");
                 ConsensusObjectVersion {
                     initial_shared_version,
                     version: object.version(),
                 }
-            });
-        Self::new(accumulator_version)
+            })
+        };
+        Self::new(latest(SUI_ACCUMULATOR_ROOT_OBJECT_ID))
+            .with_active_deny_list_version(latest(SUI_ACTIVE_DENY_LIST_OBJECT_ID))
     }
 }
 

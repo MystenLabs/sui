@@ -64,6 +64,7 @@ pub const RANDOMNESS_STATE_TYPE_NAME: Symbol = symbol!("Random");
 pub const RANDOMNESS_STATE_CREATE: Symbol = symbol!("create");
 pub const DENY_LIST_MODULE_NAME: Symbol = symbol!("deny_list");
 pub const DENY_LIST_CREATE: Symbol = symbol!("create");
+pub const DENY_LIST_CREATE_ACTIVE: Symbol = symbol!("create_active");
 pub const BRIDGE_ADDR_NAME: Symbol = symbol!("bridge");
 pub const BRIDGE_MODULE_NAME: Symbol = symbol!("bridge");
 pub const BRIDGE_TYPE_NAME: Symbol = symbol!("Bridge");

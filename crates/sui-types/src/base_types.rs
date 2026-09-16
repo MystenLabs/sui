@@ -236,13 +236,23 @@ pub struct ConsensusObjectVersion {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SystemObjectVersions {
     accumulator_version: Option<ConsensusObjectVersion>,
+    active_deny_list_version: Option<ConsensusObjectVersion>,
 }
 
 impl SystemObjectVersions {
     pub fn new(accumulator_version: Option<ConsensusObjectVersion>) -> Self {
         Self {
             accumulator_version,
+            active_deny_list_version: None,
         }
+    }
+
+    pub fn with_active_deny_list_version(
+        mut self,
+        active_deny_list_version: Option<ConsensusObjectVersion>,
+    ) -> Self {
+        self.active_deny_list_version = active_deny_list_version;
+        self
     }
 
     pub fn empty() -> Self {
@@ -252,6 +262,8 @@ impl SystemObjectVersions {
     pub fn get(&self, object_id: &ObjectID) -> Option<ConsensusObjectVersion> {
         if *object_id == crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID {
             self.accumulator_version
+        } else if *object_id == crate::SUI_ACTIVE_DENY_LIST_OBJECT_ID {
+            self.active_deny_list_version
         } else {
             panic!("{object_id} is not an implicitly read system object")
         }

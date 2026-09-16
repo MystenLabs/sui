@@ -2257,9 +2257,9 @@ impl TransactionKind {
                 }
             }
             TransactionKind::ProgrammableSystemTransaction(_) => {
-                if !config.enable_accumulators() {
+                if !config.enable_accumulators() && !config.enable_deny_list_seal_activate() {
                     return Err(UserInputError::Unsupported(
-                        "accumulators not enabled".to_string(),
+                        "programmable system transactions not enabled".to_string(),
                     ));
                 }
             }

@@ -408,6 +408,7 @@ const MAINNET_USDB: &str =
 //              Validate PTB indices at signing time.
 //              Enable memory_safety_invariant_check_v2.
 // Version 138: Enable BumpOnly
+//              Add the deny list seal/activate parameters (feature flag off).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1291,6 +1292,13 @@ struct FeatureFlags {
     // If true, use the bitset implementation for PTB memory safety invariant check.
     #[serde(skip_serializing_if = "is_false")]
     memory_safety_invariant_check_v2: bool,
+
+    // If true, deny list writes take effect within the epoch through the seal/activate
+    // system transactions issued by the consensus handler, and execution checks the
+    // `ActiveDenyList` object instead of the per-epoch config values.
+    // Requires `deny_list_activation_lag_commits` and `deny_list_staging_slots`.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_deny_list_seal_activate: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2190,6 +2198,14 @@ pub struct ProtocolConfig {
     /// The number of commits to consider when computing a deterministic commit rate.
     consensus_commit_rate_estimation_window_size: Option<u32>,
 
+    /// Number of consensus commits between sealing a deny list generation and activating it.
+    /// The lag is the time a deny list writer has to execute before readers depend on it.
+    /// Must be at least 1 and less than `deny_list_staging_slots`.
+    deny_list_activation_lag_commits: Option<u64>,
+
+    /// Number of staging slots in the deny list staging ring. Fixed when the ring is created.
+    deny_list_staging_slots: Option<u64>,
+
     /// A list of effective AliasedAddress.
     /// For each pair, `aliased` is allowed to act as `original` for any of the transaction digests
     /// listed in `tx_digests`
@@ -3075,6 +3091,8 @@ impl ProtocolConfig {
             use_object_per_epoch_marker_table_v2: None,
 
             consensus_commit_rate_estimation_window_size: None,
+            deny_list_activation_lag_commits: None,
+            deny_list_staging_slots: None,
 
             aliased_addresses: vec![],
 
@@ -4772,6 +4790,13 @@ impl ProtocolConfig {
                 }
                 138 => {
                     cfg.gas_model_version = Some(15);
+
+                    // Parameters of the deny list seal/activate protocol. The feature flag
+                    // itself stays off on every network until the protocol has been tested
+                    // and the migration of existing deny entries is in place; tests enable
+                    // it with `set_enable_deny_list_seal_activate_for_testing`.
+                    cfg.deny_list_activation_lag_commits = Some(3);
+                    cfg.deny_list_staging_slots = Some(8);
                 }
                 // Use this template when making changes:
                 //

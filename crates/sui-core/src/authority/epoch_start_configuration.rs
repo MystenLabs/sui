@@ -18,9 +18,9 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID,
-    SUI_DENY_LIST_OBJECT_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ACTIVE_DENY_LIST_OBJECT_ID,
+    SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
+    SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID,
     SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
 };
 
@@ -29,6 +29,7 @@ use sui_types::{
 /// version available at epoch start, add its object id here -- no new
 /// `EpochStartConfiguration` version is required.
 const SYSTEM_SHARED_OBJECT_IDS: &[ObjectID] = &[
+    SUI_ACTIVE_DENY_LIST_OBJECT_ID,
     SUI_AUTHENTICATOR_STATE_OBJECT_ID,
     SUI_RANDOMNESS_STATE_OBJECT_ID,
     SUI_DENY_LIST_OBJECT_ID,
@@ -293,6 +294,10 @@ impl EpochStartConfiguration {
 
     pub fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         self.system_object_initial_shared_version(SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+    }
+
+    pub fn active_deny_list_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.system_object_initial_shared_version(SUI_ACTIVE_DENY_LIST_OBJECT_ID)
     }
 }
 

@@ -37,6 +37,9 @@ use sui_types::{
         SequenceNumber, TransactionDigest,
     },
     crypto::RandomnessRound,
+    deny_list_active::{
+        deny_list_activate_tx, deny_list_create_active_tx, deny_list_flush_tx, deny_list_seal_tx,
+    },
     digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest, Digest},
     executable_transaction::{
         TrustedExecutableTransaction, VerifiedExecutableTransaction,
@@ -1207,14 +1210,21 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 commit_info.consensus_commit_ref.index,
             ));
 
+        let DenyListSystemTransactions {
+            before_user_transactions: deny_list_before,
+            after_user_transactions: deny_list_after,
+        } = self.create_deny_list_system_transactions(&commit_info, final_round);
+
         let schedulables: Vec<_> = itertools::chain!(
             consensus_commit_prologue.into_iter(),
             authenticator_state_update_transaction
                 .into_iter()
                 .map(Schedulable::Transaction),
+            deny_list_before.into_iter().map(Schedulable::Transaction),
             transactions_to_schedule
                 .into_iter()
                 .map(Schedulable::Transaction),
+            deny_list_after.into_iter().map(Schedulable::Transaction),
         )
         .collect();
 
@@ -2493,6 +2503,102 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         (timestamp, leader_author, commit_sub_dag_index)
     }
 
+    /// The deny list seal/activate system transactions for this commit. See
+    /// `sui_types::deny_list_active` for the protocol.
+    ///
+    /// Everything here is a function of the commit index, the epoch start configuration and
+    /// the protocol config, so re-processing a commit after a restart produces the same
+    /// transactions.
+    fn create_deny_list_system_transactions(
+        &self,
+        commit_info: &ConsensusCommitInfo,
+        final_round: bool,
+    ) -> DenyListSystemTransactions {
+        let mut txns = DenyListSystemTransactions::default();
+        let protocol_config = self.epoch_store.protocol_config();
+        if !protocol_config.enable_deny_list_seal_activate() {
+            return txns;
+        }
+        let Some(deny_list_initial_shared_version) = self
+            .epoch_store
+            .epoch_start_config()
+            .coin_deny_list_obj_initial_shared_version()
+        else {
+            // The deny list is created by an end-of-epoch transaction; nothing to do until it
+            // exists.
+            return txns;
+        };
+        let epoch = self.epoch_store.epoch();
+        let num_slots = protocol_config.deny_list_staging_slots();
+        let system_tx = |kind| {
+            VerifiedExecutableTransactionWithAliases::no_aliases(
+                VerifiedExecutableTransaction::new_system(
+                    VerifiedTransaction::new_system_transaction(kind),
+                    epoch,
+                ),
+            )
+        };
+
+        let Some(active_initial_shared_version) =
+            self.epoch_store.active_deny_list_initial_shared_version()
+        else {
+            // First epoch with the flag on: create the objects in the last commit so that the
+            // next epoch's start configuration records their initial shared version. Placed
+            // before the user transactions so writes ordered after it are recorded.
+            if final_round {
+                info!("creating the active deny list");
+                txns.before_user_transactions
+                    .push(system_tx(deny_list_create_active_tx(
+                        deny_list_initial_shared_version,
+                        num_slots,
+                    )));
+            }
+            return txns;
+        };
+
+        // Consensus commit indices restart at 1 every epoch, so the generation sealed at
+        // commit `c` is `c`, and the first commit of the epoch has no earlier generation to
+        // activate.
+        let commit_index = u64::from(commit_info.consensus_commit_ref.index);
+        let lag = protocol_config.deny_list_activation_lag_commits();
+        assert!(
+            (1..num_slots).contains(&lag),
+            "deny_list_activation_lag_commits must be in [1, deny_list_staging_slots)"
+        );
+        let activated_generation = commit_index.checked_sub(lag).filter(|g| *g >= 1);
+        if let Some(generation) = activated_generation {
+            txns.before_user_transactions
+                .push(system_tx(deny_list_activate_tx(
+                    epoch,
+                    generation,
+                    num_slots,
+                    active_initial_shared_version,
+                )));
+        }
+        if final_round {
+            // Generations sealed in this epoch but not activated by the activate above.
+            let unactivated = (activated_generation.unwrap_or(0) + 1)..commit_index;
+            txns.after_user_transactions
+                .push(system_tx(deny_list_flush_tx(
+                    epoch,
+                    unactivated,
+                    num_slots,
+                    deny_list_initial_shared_version,
+                    active_initial_shared_version,
+                )));
+        } else {
+            txns.after_user_transactions
+                .push(system_tx(deny_list_seal_tx(
+                    epoch,
+                    commit_index,
+                    num_slots,
+                    deny_list_initial_shared_version,
+                    active_initial_shared_version,
+                )));
+        }
+        txns
+    }
+
     fn create_authenticator_state_update(
         &self,
         last_committed_round: u64,
@@ -3281,6 +3387,18 @@ impl MysticetiConsensusHandler {
     pub(crate) async fn abort(&mut self) {
         self.tasks.shutdown().await;
     }
+}
+
+/// Deny list system transactions of one commit, split by their position relative to the
+/// commit's user transactions.
+#[derive(Default)]
+struct DenyListSystemTransactions {
+    /// The create or activate transaction. Activate precedes the user transactions so that
+    /// they read the version it produces.
+    before_user_transactions: Vec<VerifiedExecutableTransactionWithAliases>,
+    /// The seal or flush transaction. It follows the user transactions so that their deny
+    /// list writes are included in the generation being sealed.
+    after_user_transactions: Vec<VerifiedExecutableTransactionWithAliases>,
 }
 
 fn authenticator_state_update_transaction(

@@ -27,6 +27,7 @@ use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::{ident_str, vm_status::StatusCode};
 use std::{collections::BTreeMap, error::Error, num::NonZeroU64};
 use sui_types::bridge::BRIDGE_MODULE_NAME;
+use sui_types::deny_list_active::DENY_LIST_CREATE_ACTIVE_FUNC;
 use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
 use sui_types::{
     BRIDGE_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
@@ -94,6 +95,11 @@ const SUI_DENY_LIST_CREATE: FunctionIdent = (
     DENY_LIST_MODULE,
     DENY_LIST_CREATE_FUNC,
 );
+const SUI_DENY_LIST_CREATE_ACTIVE: FunctionIdent = (
+    SUI_FRAMEWORK_ADDRESS,
+    DENY_LIST_MODULE,
+    DENY_LIST_CREATE_ACTIVE_FUNC,
+);
 
 const SUI_BRIDGE_CREATE: FunctionIdent = (BRIDGE_ADDRESS, BRIDGE_MODULE_NAME, ident_str!("create"));
 const SUI_ACCUMULATOR_CREATE: FunctionIdent = (
@@ -133,6 +139,7 @@ const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_AUTHENTICATOR_STATE_CREATE,
     SUI_RANDOMNESS_STATE_CREATE,
     SUI_DENY_LIST_CREATE,
+    SUI_DENY_LIST_CREATE_ACTIVE,
     SUI_BRIDGE_CREATE,
     SUI_ACCUMULATOR_CREATE,
     SUI_COIN_REGISTRY_CREATE,

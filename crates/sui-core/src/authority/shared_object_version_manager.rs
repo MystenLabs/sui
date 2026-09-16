@@ -30,8 +30,8 @@ use sui_types::storage::{
 use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionKey};
 use sui_types::{
-    IMPLICITLY_READ_SYSTEM_OBJECTS, SUI_RANDOMNESS_STATE_OBJECT_ID, base_types::SequenceNumber,
-    error::SuiResult,
+    IMPLICITLY_READ_SYSTEM_OBJECTS, SUI_ACTIVE_DENY_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    base_types::SequenceNumber, error::SuiResult,
 };
 use tracing::trace;
 
@@ -90,6 +90,13 @@ impl AssignedVersions {
         self.system_object_versions
             .get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .map(|v| v.version)
+    }
+
+    /// The `ActiveDenyList` version this transaction reads, if the seal/activate protocol is
+    /// running.
+    pub fn active_deny_list_version(&self) -> Option<ConsensusObjectVersion> {
+        self.system_object_versions
+            .get(&SUI_ACTIVE_DENY_LIST_OBJECT_ID)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &(ConsensusObjectSequenceKey, SequenceNumber)> {
@@ -424,7 +431,21 @@ impl SharedObjVerManager {
                         initial_shared_version,
                         version,
                     }
-                }));
+                }))
+                // The active deny list read is recorded in effects from the first transaction
+                // that reads it, so effects are the source of truth here.
+                .with_active_deny_list_version(
+                    accessed_versions
+                        .get(&SUI_ACTIVE_DENY_LIST_OBJECT_ID)
+                        .map(|version| ConsensusObjectVersion {
+                            initial_shared_version: epoch_store
+                                .active_deny_list_initial_shared_version()
+                                .expect(
+                                    "a transaction read the active deny list, so the seal/activate protocol must be running",
+                                ),
+                            version: *version,
+                        }),
+                );
             let tx_key = cert.key();
             trace!(
                 ?tx_key,
@@ -465,7 +486,22 @@ impl SharedObjVerManager {
         } else {
             None
         };
-        let system_object_versions = SystemObjectVersions::new(accumulator_version);
+        // Readers of the active deny list use the version produced by the latest activate
+        // transaction ordered before them; activate is placed before the user transactions of
+        // its commit, so the entry has already been bumped when they are assigned.
+        let active_deny_list_version = epoch_store
+            .active_deny_list_initial_shared_version()
+            .map(|initial_shared_version| {
+                let version = *shared_input_next_versions
+                    .get(&(SUI_ACTIVE_DENY_LIST_OBJECT_ID, initial_shared_version))
+                    .expect("active deny list must be in shared_input_next_versions when the seal/activate protocol is running");
+                ConsensusObjectVersion {
+                    initial_shared_version,
+                    version,
+                }
+            });
+        let system_object_versions = SystemObjectVersions::new(accumulator_version)
+            .with_active_deny_list_version(active_deny_list_version);
 
         if shared_input_objects.is_empty() {
             // No shared object used by this transaction. No need to assign versions.
@@ -609,6 +645,10 @@ fn get_or_init_versions<'a>(
                 .accumulator_root_obj_initial_shared_version()
                 .expect("accumulator root obj initial shared version should be set"),
         ));
+    }
+
+    if let Some(initial_shared_version) = epoch_store.active_deny_list_initial_shared_version() {
+        shared_input_objects.push((SUI_ACTIVE_DENY_LIST_OBJECT_ID, initial_shared_version));
     }
 
     shared_input_objects.sort();

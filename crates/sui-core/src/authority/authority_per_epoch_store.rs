@@ -1207,6 +1207,18 @@ impl AuthorityPerEpochStore {
             .is_some()
     }
 
+    /// The initial shared version of the `ActiveDenyList`, when the deny list seal/activate
+    /// protocol runs in this epoch: the feature flag is on and the object existed at epoch
+    /// start. In the epoch where the flag first turns on, the object is created in the last
+    /// commit and the protocol starts in the next epoch.
+    pub fn active_deny_list_initial_shared_version(&self) -> Option<SequenceNumber> {
+        if !self.protocol_config().enable_deny_list_seal_activate() {
+            return None;
+        }
+        self.epoch_start_configuration
+            .active_deny_list_obj_initial_shared_version()
+    }
+
     pub fn get_parent_path(&self) -> PathBuf {
         self.parent_path.clone()
     }

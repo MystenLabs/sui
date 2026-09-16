@@ -61,6 +61,7 @@ static_symbols!(
     "UID",
     "sui_system",
     "create",
+    "create_active",
     "clock",
     "option",
     "Option",

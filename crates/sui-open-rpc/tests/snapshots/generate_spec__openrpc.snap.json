@@ -1367,6 +1367,7 @@
                 "enable_coin_deny_list_v2": false,
                 "enable_coin_registry": false,
                 "enable_coin_reservation_obj_refs": false,
+                "enable_deny_list_seal_activate": false,
                 "enable_display_registry": false,
                 "enable_effects_v2": false,
                 "enable_gasless": false,
@@ -1556,6 +1557,8 @@
                 },
                 "debug_print_base_cost": null,
                 "debug_print_stack_trace_base_cost": null,
+                "deny_list_activation_lag_commits": null,
+                "deny_list_staging_slots": null,
                 "dynamic_field_add_child_object_cost_base": {
                   "u64": "100"
                 },
@@ -2280,6 +2283,7 @@
                 "enable_coin_deny_list_v2": false,
                 "enable_coin_registry": false,
                 "enable_coin_reservation_obj_refs": false,
+                "enable_deny_list_seal_activate": false,
                 "enable_display_registry": false,
                 "enable_effects_v2": false,
                 "enable_gasless": false,

@@ -530,6 +530,8 @@ gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
 use_object_per_epoch_marker_table_v2: true
 consensus_commit_rate_estimation_window_size: 10
+deny_list_activation_lag_commits: 3
+deny_list_staging_slots: 8
 translation_per_command_base_charge: 1
 translation_per_input_base_charge: 1
 translation_pure_input_per_byte_charge: 1

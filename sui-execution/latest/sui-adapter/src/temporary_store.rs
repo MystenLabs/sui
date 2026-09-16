@@ -19,6 +19,7 @@ use sui_types::accumulator_root::{
 use sui_types::base_types::{SystemObjectVersions, VersionDigest};
 use sui_types::coin_reservation::ParsedDigest;
 use sui_types::committee::EpochId;
+use sui_types::deny_list_active::check_coin_deny_list_active_during_execution;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, TransactionEffects,
@@ -35,7 +36,7 @@ use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsResolver, Pack
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ACTIVE_DENY_LIST_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -1434,6 +1435,24 @@ impl Storage for TemporaryStore<'_> {
         &self,
         receiving_funds_type_and_owners: BTreeMap<TypeTag, BTreeSet<SuiAddress>>,
     ) -> DenyListResult {
+        // With the seal/activate protocol running, the in-effect deny entries live under the
+        // `ActiveDenyList`, read at the version this transaction was assigned.
+        if let Some(active_deny_list_version) = self
+            .system_object_versions
+            .get(&SUI_ACTIVE_DENY_LIST_OBJECT_ID)
+        {
+            let result = check_coin_deny_list_active_during_execution(
+                receiving_funds_type_and_owners,
+                active_deny_list_version.version,
+                self.store,
+            );
+            // Record the read only when the deny list was actually consulted, mirroring the
+            // per-epoch-config marker below.
+            if result.num_non_gas_coin_owners > 0 {
+                self.load_implicitly_read_system_object(&SUI_ACTIVE_DENY_LIST_OBJECT_ID);
+            }
+            return result;
+        }
         let result = check_coin_deny_list_v2_during_execution(
             receiving_funds_type_and_owners,
             self.cur_epoch,

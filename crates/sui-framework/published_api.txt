@@ -2218,6 +2218,27 @@ GlobalPauseKey
 PerTypeConfigCreated
 	public struct
 	0x2::deny_list
+ActiveDenyList
+	public struct
+	0x2::deny_list
+DenyListStaging
+	public struct
+	0x2::deny_list
+DenyListUpdate
+	public struct
+	0x2::deny_list
+PendingUpdatesKey
+	public struct
+	0x2::deny_list
+StagingSlotKey
+	public struct
+	0x2::deny_list
+ActiveAddressKey
+	public struct
+	0x2::deny_list
+ActiveGlobalPauseKey
+	public struct
+	0x2::deny_list
 PerTypeList
 	public struct
 	0x2::deny_list
@@ -2258,6 +2279,30 @@ borrow_per_type_config
 	fun
 	0x2::deny_list
 per_type_exists
+	fun
+	0x2::deny_list
+create_active
+	fun
+	0x2::deny_list
+seal
+	fun
+	0x2::deny_list
+activate
+	fun
+	0x2::deny_list
+flush_pending
+	fun
+	0x2::deny_list
+record_update
+	fun
+	0x2::deny_list
+pending_updates_mut
+	fun
+	0x2::deny_list
+apply_update
+	fun
+	0x2::deny_list
+set_active
 	fun
 	0x2::deny_list
 v1_add
@@ -3092,6 +3137,12 @@ randomness_state
 	public(package) fun
 	0x2::object
 sui_deny_list_object_id
+	public(package) fun
+	0x2::object
+sui_active_deny_list_object_id
+	public(package) fun
+	0x2::object
+sui_active_deny_list_address
 	public(package) fun
 	0x2::object
 sui_accumulator_root_object_id

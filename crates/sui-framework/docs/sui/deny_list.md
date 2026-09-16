@@ -13,6 +13,13 @@ list.
 -  [Struct `AddressKey`](#sui_deny_list_AddressKey)
 -  [Struct `GlobalPauseKey`](#sui_deny_list_GlobalPauseKey)
 -  [Struct `PerTypeConfigCreated`](#sui_deny_list_PerTypeConfigCreated)
+-  [Struct `ActiveDenyList`](#sui_deny_list_ActiveDenyList)
+-  [Struct `DenyListStaging`](#sui_deny_list_DenyListStaging)
+-  [Struct `DenyListUpdate`](#sui_deny_list_DenyListUpdate)
+-  [Struct `PendingUpdatesKey`](#sui_deny_list_PendingUpdatesKey)
+-  [Struct `StagingSlotKey`](#sui_deny_list_StagingSlotKey)
+-  [Struct `ActiveAddressKey`](#sui_deny_list_ActiveAddressKey)
+-  [Struct `ActiveGlobalPauseKey`](#sui_deny_list_ActiveGlobalPauseKey)
 -  [Struct `PerTypeList`](#sui_deny_list_PerTypeList)
 -  [Constants](#@Constants_0)
 -  [Function `v2_add`](#sui_deny_list_v2_add)
@@ -29,6 +36,14 @@ list.
 -  [Function `borrow_per_type_config`](#sui_deny_list_borrow_per_type_config)
 -  [Function `per_type_exists`](#sui_deny_list_per_type_exists)
 -  [Macro function `per_type_config_entry`](#sui_deny_list_per_type_config_entry)
+-  [Function `create_active`](#sui_deny_list_create_active)
+-  [Function `seal`](#sui_deny_list_seal)
+-  [Function `activate`](#sui_deny_list_activate)
+-  [Function `flush_pending`](#sui_deny_list_flush_pending)
+-  [Function `record_update`](#sui_deny_list_record_update)
+-  [Function `pending_updates_mut`](#sui_deny_list_pending_updates_mut)
+-  [Function `apply_update`](#sui_deny_list_apply_update)
+-  [Function `set_active`](#sui_deny_list_set_active)
 -  [Function `v1_add`](#sui_deny_list_v1_add)
 -  [Function `v1_per_type_list_add`](#sui_deny_list_v1_per_type_list_add)
 -  [Function `v1_remove`](#sui_deny_list_v1_remove)
@@ -52,6 +67,7 @@ list.
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/bcs.md#sui_bcs">sui::bcs</a>;
 <b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
+<b>use</b> <a href="../sui/derived_object.md#sui_derived_object">sui::derived_object</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
 <b>use</b> <a href="../sui/dynamic_object_field.md#sui_dynamic_object_field">sui::dynamic_object_field</a>;
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
@@ -239,6 +255,238 @@ tracking the <code>ID</code> of a type's <code>Config</code> object.
 
 </details>
 
+<a name="sui_deny_list_ActiveDenyList"></a>
+
+## Struct `ActiveDenyList`
+
+The object whose dynamic fields hold the in-effect deny entries. Its ID is fixed.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">ActiveDenyList</a> <b>has</b> key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="../sui/object.md#sui_object_UID">sui::object::UID</a></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_deny_list_DenyListStaging"></a>
+
+## Struct `DenyListStaging`
+
+One slot of the staging ring. Written by <code><a href="../sui/deny_list.md#sui_deny_list_seal">seal</a></code>, read by <code><a href="../sui/deny_list.md#sui_deny_list_activate">activate</a></code>.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/deny_list.md#sui_deny_list_DenyListStaging">DenyListStaging</a> <b>has</b> key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="../sui/object.md#sui_object_UID">sui::object::UID</a></code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>epoch: u64</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>generation: u64</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>updates: vector&lt;<a href="../sui/deny_list.md#sui_deny_list_DenyListUpdate">sui::deny_list::DenyListUpdate</a>&gt;</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_deny_list_DenyListUpdate"></a>
+
+## Struct `DenyListUpdate`
+
+A single recorded deny list write.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/deny_list.md#sui_deny_list_DenyListUpdate">DenyListUpdate</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>per_type_index: u64</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>per_type_key: vector&lt;u8&gt;</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>addr: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;</code>
+</dt>
+<dd>
+ <code>None</code> targets the global pause of the type.
+</dd>
+<dt>
+<code>denied: bool</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_deny_list_PendingUpdatesKey"></a>
+
+## Struct `PendingUpdatesKey`
+
+Dynamic field key under <code><a href="../sui/deny_list.md#sui_deny_list_DenyList">DenyList</a>.id</code> for the <code>vector&lt;<a href="../sui/deny_list.md#sui_deny_list_DenyListUpdate">DenyListUpdate</a>&gt;</code> of pending writes.
+Its presence is what turns on recording, so writes made before <code><a href="../sui/deny_list.md#sui_deny_list_create_active">create_active</a></code> ran are not
+recorded.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/deny_list.md#sui_deny_list_PendingUpdatesKey">PendingUpdatesKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+</dl>
+
+
+</details>
+
+<a name="sui_deny_list_StagingSlotKey"></a>
+
+## Struct `StagingSlotKey`
+
+Derived object key under <code><a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">ActiveDenyList</a>.id</code> for staging slot <code>i</code>.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/deny_list.md#sui_deny_list_StagingSlotKey">StagingSlotKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>0: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_deny_list_ActiveAddressKey"></a>
+
+## Struct `ActiveAddressKey`
+
+Dynamic field key under <code><a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">ActiveDenyList</a>.id</code> marking <code>addr</code> as denied for the type.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/deny_list.md#sui_deny_list_ActiveAddressKey">ActiveAddressKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>per_type_index: u64</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>per_type_key: vector&lt;u8&gt;</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>addr: <b>address</b></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_deny_list_ActiveGlobalPauseKey"></a>
+
+## Struct `ActiveGlobalPauseKey`
+
+Dynamic field key under <code><a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">ActiveDenyList</a>.id</code> marking the type as globally paused.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/deny_list.md#sui_deny_list_ActiveGlobalPauseKey">ActiveGlobalPauseKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>per_type_index: u64</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>per_type_key: vector&lt;u8&gt;</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
 <a name="sui_deny_list_PerTypeList"></a>
 
 ## Struct `PerTypeList`
@@ -316,6 +564,26 @@ The specified address cannot be added to the deny list.
 
 
 
+<a name="sui_deny_list_EWrongEpoch"></a>
+
+A seal/activate system call was made for an epoch other than the current one.
+
+
+<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_EWrongEpoch">EWrongEpoch</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="sui_deny_list_EWrongGeneration"></a>
+
+The staging slot does not hold the generation the activation expected.
+
+
+<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_EWrongGeneration">EWrongGeneration</a>: u64 = 3;
+</code></pre>
+
+
+
 <a name="sui_deny_list_COIN_INDEX"></a>
 
 The index into the deny list vector for the <code><a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a></code> type.
@@ -333,7 +601,7 @@ The addresses listed are well known package and object addresses. So it would be
 meaningless to add them to the deny list.
 
 
-<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_RESERVED">RESERVED</a>: vector&lt;<b>address</b>&gt; = vector[0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0x403, 0xdee9];
+<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_RESERVED">RESERVED</a>: vector&lt;<b>address</b>&gt; = vector[0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0x403, 0x404, 0xdee9];
 </code></pre>
 
 
@@ -369,6 +637,7 @@ meaningless to add them to the deny list.
         ctx,
     );
     *next_epoch_entry = <b>true</b>;
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.<a href="../sui/deny_list.md#sui_deny_list_record_update">record_update</a>(per_type_index, per_type_key, option::some(addr), <b>true</b>);
 }
 </code></pre>
 
@@ -405,6 +674,7 @@ meaningless to add them to the deny list.
         setting_name,
         ctx,
     );
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.<a href="../sui/deny_list.md#sui_deny_list_record_update">record_update</a>(per_type_index, per_type_key, option::some(addr), <b>false</b>);
 }
 </code></pre>
 
@@ -507,6 +777,7 @@ meaningless to add them to the deny list.
         ctx,
     );
     *next_epoch_entry = <b>true</b>;
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.<a href="../sui/deny_list.md#sui_deny_list_record_update">record_update</a>(per_type_index, per_type_key, option::none(), <b>true</b>);
 }
 </code></pre>
 
@@ -542,6 +813,7 @@ meaningless to add them to the deny list.
         setting_name,
         ctx,
     );
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.<a href="../sui/deny_list.md#sui_deny_list_record_update">record_update</a>(per_type_index, per_type_key, option::none(), <b>false</b>);
 }
 </code></pre>
 
@@ -647,8 +919,8 @@ meaningless to add them to the deny list.
         }
     });
     <b>let</b> per_type_config = <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.<a href="../sui/deny_list.md#sui_deny_list_per_type_config_entry">per_type_config_entry</a>!(per_type_index, per_type_key, ctx);
-    elements.do!(|addr| {
-        <b>let</b> setting_name = <a href="../sui/deny_list.md#sui_deny_list_AddressKey">AddressKey</a>(addr);
+    elements.do_ref!(|addr| {
+        <b>let</b> setting_name = <a href="../sui/deny_list.md#sui_deny_list_AddressKey">AddressKey</a>(*addr);
         <b>let</b> next_epoch_entry = per_type_config.<b>entry</b>!&lt;_, <a href="../sui/deny_list.md#sui_deny_list_AddressKey">AddressKey</a>, bool&gt;(
             &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_ConfigWriteCap">ConfigWriteCap</a>(),
             setting_name,
@@ -656,6 +928,9 @@ meaningless to add them to the deny list.
             ctx,
         );
         *next_epoch_entry = <b>true</b>;
+    });
+    elements.do!(|addr| {
+        <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.<a href="../sui/deny_list.md#sui_deny_list_record_update">record_update</a>(per_type_index, per_type_key, option::some(addr), <b>true</b>);
     });
 }
 </code></pre>
@@ -809,6 +1084,267 @@ meaningless to add them to the deny list.
         <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.<a href="../sui/deny_list.md#sui_deny_list_add_per_type_config">add_per_type_config</a>(per_type_index, per_type_key, ctx);
     };
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.<a href="../sui/deny_list.md#sui_deny_list_borrow_per_type_config_mut">borrow_per_type_config_mut</a>(per_type_index, per_type_key)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_deny_list_create_active"></a>
+
+## Function `create_active`
+
+Creates the <code><a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">ActiveDenyList</a></code> and <code>num_staging_slots</code> staging slots, and turns on recording
+of pending updates. Called once, by a system transaction.
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_create_active">create_active</a>(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, num_staging_slots: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_create_active">create_active</a>(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">DenyList</a>, num_staging_slots: u64, ctx: &TxContext) {
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/deny_list.md#sui_deny_list_ENotSystemAddress">ENotSystemAddress</a>);
+    df::add(&<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.id, <a href="../sui/deny_list.md#sui_deny_list_PendingUpdatesKey">PendingUpdatesKey</a>(), vector&lt;<a href="../sui/deny_list.md#sui_deny_list_DenyListUpdate">DenyListUpdate</a>&gt;[]);
+    <b>let</b> <b>mut</b> active = <a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">ActiveDenyList</a> { id: <a href="../sui/object.md#sui_object_sui_active_deny_list_object_id">object::sui_active_deny_list_object_id</a>() };
+    num_staging_slots.do!(|slot| {
+        <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/deny_list.md#sui_deny_list_DenyListStaging">DenyListStaging</a> {
+            id: <a href="../sui/derived_object.md#sui_derived_object_claim">derived_object::claim</a>(&<b>mut</b> active.id, <a href="../sui/deny_list.md#sui_deny_list_StagingSlotKey">StagingSlotKey</a>(slot)),
+            epoch: 0,
+            generation: 0,
+            updates: vector[],
+        });
+    });
+    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(active);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_deny_list_seal"></a>
+
+## Function `seal`
+
+Moves the pending updates into <code>staging</code>, stamped with <code>generation</code>.
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_seal">seal</a>(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, staging: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyListStaging">sui::deny_list::DenyListStaging</a>, epoch: u64, generation: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_seal">seal</a>(
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">DenyList</a>,
+    staging: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyListStaging">DenyListStaging</a>,
+    epoch: u64,
+    generation: u64,
+    ctx: &TxContext,
+) {
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/deny_list.md#sui_deny_list_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(epoch == ctx.epoch(), <a href="../sui/deny_list.md#sui_deny_list_EWrongEpoch">EWrongEpoch</a>);
+    <b>let</b> pending = <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.<a href="../sui/deny_list.md#sui_deny_list_pending_updates_mut">pending_updates_mut</a>();
+    staging.epoch = epoch;
+    staging.generation = generation;
+    staging.updates = *pending;
+    *pending = vector[];
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_deny_list_activate"></a>
+
+## Function `activate`
+
+Applies the updates sealed for <code>generation</code> in the current epoch to <code>active</code>.
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_activate">activate</a>(active: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">sui::deny_list::ActiveDenyList</a>, staging: &<a href="../sui/deny_list.md#sui_deny_list_DenyListStaging">sui::deny_list::DenyListStaging</a>, epoch: u64, generation: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_activate">activate</a>(
+    active: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">ActiveDenyList</a>,
+    staging: &<a href="../sui/deny_list.md#sui_deny_list_DenyListStaging">DenyListStaging</a>,
+    epoch: u64,
+    generation: u64,
+    ctx: &TxContext,
+) {
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/deny_list.md#sui_deny_list_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(epoch == ctx.epoch(), <a href="../sui/deny_list.md#sui_deny_list_EWrongEpoch">EWrongEpoch</a>);
+    <b>assert</b>!(staging.epoch == epoch && staging.generation == generation, <a href="../sui/deny_list.md#sui_deny_list_EWrongGeneration">EWrongGeneration</a>);
+    staging.updates.do_ref!(|update| active.<a href="../sui/deny_list.md#sui_deny_list_apply_update">apply_update</a>(update));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_deny_list_flush_pending"></a>
+
+## Function `flush_pending`
+
+Applies the updates that have not been sealed yet directly to <code>active</code>. Used at the end of
+the epoch, after the still-unactivated staging slots have been applied.
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_flush_pending">flush_pending</a>(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, active: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">sui::deny_list::ActiveDenyList</a>, epoch: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_flush_pending">flush_pending</a>(
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">DenyList</a>,
+    active: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">ActiveDenyList</a>,
+    epoch: u64,
+    ctx: &TxContext,
+) {
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/deny_list.md#sui_deny_list_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(epoch == ctx.epoch(), <a href="../sui/deny_list.md#sui_deny_list_EWrongEpoch">EWrongEpoch</a>);
+    <b>let</b> pending = <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.<a href="../sui/deny_list.md#sui_deny_list_pending_updates_mut">pending_updates_mut</a>();
+    pending.do_ref!(|update| active.<a href="../sui/deny_list.md#sui_deny_list_apply_update">apply_update</a>(update));
+    *pending = vector[];
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_deny_list_record_update"></a>
+
+## Function `record_update`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_record_update">record_update</a>(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, per_type_index: u64, per_type_key: vector&lt;u8&gt;, addr: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<b>address</b>&gt;, denied: bool)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_record_update">record_update</a>(
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">DenyList</a>,
+    per_type_index: u64,
+    per_type_key: vector&lt;u8&gt;,
+    addr: Option&lt;<b>address</b>&gt;,
+    denied: bool,
+) {
+    <b>if</b> (!df::exists(&<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.id, <a href="../sui/deny_list.md#sui_deny_list_PendingUpdatesKey">PendingUpdatesKey</a>())) <b>return</b>;
+    <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>
+        .<a href="../sui/deny_list.md#sui_deny_list_pending_updates_mut">pending_updates_mut</a>()
+        .push_back(<a href="../sui/deny_list.md#sui_deny_list_DenyListUpdate">DenyListUpdate</a> { per_type_index, per_type_key, addr, denied });
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_deny_list_pending_updates_mut"></a>
+
+## Function `pending_updates_mut`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_pending_updates_mut">pending_updates_mut</a>(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>): &<b>mut</b> vector&lt;<a href="../sui/deny_list.md#sui_deny_list_DenyListUpdate">sui::deny_list::DenyListUpdate</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_pending_updates_mut">pending_updates_mut</a>(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_DenyList">DenyList</a>): &<b>mut</b> vector&lt;<a href="../sui/deny_list.md#sui_deny_list_DenyListUpdate">DenyListUpdate</a>&gt; {
+    df::borrow_mut(&<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.id, <a href="../sui/deny_list.md#sui_deny_list_PendingUpdatesKey">PendingUpdatesKey</a>())
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_deny_list_apply_update"></a>
+
+## Function `apply_update`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_apply_update">apply_update</a>(active: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">sui::deny_list::ActiveDenyList</a>, update: &<a href="../sui/deny_list.md#sui_deny_list_DenyListUpdate">sui::deny_list::DenyListUpdate</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_apply_update">apply_update</a>(active: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">ActiveDenyList</a>, update: &<a href="../sui/deny_list.md#sui_deny_list_DenyListUpdate">DenyListUpdate</a>) {
+    <b>let</b> per_type_index = update.per_type_index;
+    <b>let</b> per_type_key = update.per_type_key;
+    <b>if</b> (update.addr.is_some()) {
+        <b>let</b> addr = *update.addr.<a href="../sui/borrow.md#sui_borrow">borrow</a>();
+        active.<a href="../sui/deny_list.md#sui_deny_list_set_active">set_active</a>(<a href="../sui/deny_list.md#sui_deny_list_ActiveAddressKey">ActiveAddressKey</a> { per_type_index, per_type_key, addr }, update.denied);
+    } <b>else</b> {
+        active.<a href="../sui/deny_list.md#sui_deny_list_set_active">set_active</a>(<a href="../sui/deny_list.md#sui_deny_list_ActiveGlobalPauseKey">ActiveGlobalPauseKey</a> { per_type_index, per_type_key }, update.denied);
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_deny_list_set_active"></a>
+
+## Function `set_active`
+
+A denied entry is the presence of the field; removal deletes it.
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_set_active">set_active</a>&lt;K: <b>copy</b>, drop, store&gt;(active: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">sui::deny_list::ActiveDenyList</a>, key: K, denied: bool)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_set_active">set_active</a>&lt;K: <b>copy</b> + drop + store&gt;(active: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_ActiveDenyList">ActiveDenyList</a>, key: K, denied: bool) {
+    <b>let</b> exists = df::exists(&active.id, key);
+    <b>if</b> (denied && !exists) {
+        df::add(&<b>mut</b> active.id, key, <b>true</b>);
+    } <b>else</b> <b>if</b> (!denied && exists) {
+        df::remove&lt;K, bool&gt;(&<b>mut</b> active.id, key);
+    }
 }
 </code></pre>
 

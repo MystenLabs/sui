@@ -8,6 +8,8 @@ module sui::deny_list;
 
 use sui::bag::{Self, Bag};
 use sui::config::{Self, Config};
+use sui::derived_object;
+use sui::dynamic_field as df;
 use sui::dynamic_object_field as ofield;
 use sui::table::{Self, Table};
 use sui::vec_set::{Self, VecSet};
@@ -18,6 +20,10 @@ const ENotSystemAddress: u64 = 0;
 const ENotDenied: u64 = 1;
 /// The specified address cannot be added to the deny list.
 const EInvalidAddress: u64 = 1;
+/// A seal/activate system call was made for an epoch other than the current one.
+const EWrongEpoch: u64 = 2;
+/// The staging slot does not hold the generation the activation expected.
+const EWrongGeneration: u64 = 3;
 
 /// The index into the deny list vector for the `sui::coin::Coin` type.
 const COIN_INDEX: u64 = 0;
@@ -43,6 +49,7 @@ const RESERVED: vector<address> = vector[
     @0xE,
     @0xF,
     @0x403,
+    @0x404,
     @0xDEE9,
 ];
 
@@ -95,6 +102,7 @@ public(package) fun v2_add(
         ctx,
     );
     *next_epoch_entry = true;
+    deny_list.record_update(per_type_index, per_type_key, option::some(addr), true);
 }
 
 public(package) fun v2_remove(
@@ -111,6 +119,7 @@ public(package) fun v2_remove(
         setting_name,
         ctx,
     );
+    deny_list.record_update(per_type_index, per_type_key, option::some(addr), false);
 }
 
 public(package) fun v2_contains_current_epoch(
@@ -160,6 +169,7 @@ public(package) fun v2_enable_global_pause(
         ctx,
     );
     *next_epoch_entry = true;
+    deny_list.record_update(per_type_index, per_type_key, option::none(), true);
 }
 
 public(package) fun v2_disable_global_pause(
@@ -175,6 +185,7 @@ public(package) fun v2_disable_global_pause(
         setting_name,
         ctx,
     );
+    deny_list.record_update(per_type_index, per_type_key, option::none(), false);
 }
 
 public(package) fun v2_is_global_pause_enabled_current_epoch(
@@ -226,8 +237,8 @@ public(package) fun migrate_v1_to_v2(
         }
     });
     let per_type_config = deny_list.per_type_config_entry!(per_type_index, per_type_key, ctx);
-    elements.do!(|addr| {
-        let setting_name = AddressKey(addr);
+    elements.do_ref!(|addr| {
+        let setting_name = AddressKey(*addr);
         let next_epoch_entry = per_type_config.entry!<_, AddressKey, bool>(
             &mut ConfigWriteCap(),
             setting_name,
@@ -235,6 +246,9 @@ public(package) fun migrate_v1_to_v2(
             ctx,
         );
         *next_epoch_entry = true;
+    });
+    elements.do!(|addr| {
+        deny_list.record_update(per_type_index, per_type_key, option::some(addr), true);
     });
 }
 
@@ -288,6 +302,171 @@ macro fun per_type_config_entry(
         deny_list.add_per_type_config(per_type_index, per_type_key, ctx);
     };
     deny_list.borrow_per_type_config_mut(per_type_index, per_type_key)
+}
+
+// === Seal / activate ===
+//
+// Deny list writes above take effect at the next epoch. When the seal/activate protocol is
+// enabled, every write is additionally recorded as a pending update under the `DenyList`, and
+// system transactions issued by the consensus handler move it into effect within the epoch:
+//
+// * `seal` (end of every consensus commit) moves the pending updates into a staging slot and
+//   stamps them with the commit index (the "generation").
+// * `activate` (start of a commit, a fixed number of commits later) applies one sealed
+//   generation to the `ActiveDenyList`, which is the only object execution reads for the
+//   deny check.
+// * `flush_pending` (last commit of the epoch) applies everything still unactivated.
+//
+// The `ActiveDenyList` is written only by `activate`/`flush_pending`, never by user writers, so
+// the readers of a given version are always ordered before the next write to it. The staging
+// slots form a ring so that a slot is not rewritten before the activation that reads it.
+
+/// The object whose dynamic fields hold the in-effect deny entries. Its ID is fixed.
+public struct ActiveDenyList has key {
+    id: UID,
+}
+
+/// One slot of the staging ring. Written by `seal`, read by `activate`.
+public struct DenyListStaging has key {
+    id: UID,
+    epoch: u64,
+    generation: u64,
+    updates: vector<DenyListUpdate>,
+}
+
+/// A single recorded deny list write.
+public struct DenyListUpdate has copy, drop, store {
+    per_type_index: u64,
+    per_type_key: vector<u8>,
+    /// `None` targets the global pause of the type.
+    addr: Option<address>,
+    denied: bool,
+}
+
+/// Dynamic field key under `DenyList.id` for the `vector<DenyListUpdate>` of pending writes.
+/// Its presence is what turns on recording, so writes made before `create_active` ran are not
+/// recorded.
+public struct PendingUpdatesKey() has copy, drop, store;
+
+/// Derived object key under `ActiveDenyList.id` for staging slot `i`.
+public struct StagingSlotKey(u64) has copy, drop, store;
+
+/// Dynamic field key under `ActiveDenyList.id` marking `addr` as denied for the type.
+public struct ActiveAddressKey has copy, drop, store {
+    per_type_index: u64,
+    per_type_key: vector<u8>,
+    addr: address,
+}
+
+/// Dynamic field key under `ActiveDenyList.id` marking the type as globally paused.
+public struct ActiveGlobalPauseKey has copy, drop, store {
+    per_type_index: u64,
+    per_type_key: vector<u8>,
+}
+
+#[allow(unused_function)]
+/// Creates the `ActiveDenyList` and `num_staging_slots` staging slots, and turns on recording
+/// of pending updates. Called once, by a system transaction.
+fun create_active(deny_list: &mut DenyList, num_staging_slots: u64, ctx: &TxContext) {
+    assert!(ctx.sender() == @0x0, ENotSystemAddress);
+    df::add(&mut deny_list.id, PendingUpdatesKey(), vector<DenyListUpdate>[]);
+    let mut active = ActiveDenyList { id: object::sui_active_deny_list_object_id() };
+    num_staging_slots.do!(|slot| {
+        transfer::share_object(DenyListStaging {
+            id: derived_object::claim(&mut active.id, StagingSlotKey(slot)),
+            epoch: 0,
+            generation: 0,
+            updates: vector[],
+        });
+    });
+    transfer::share_object(active);
+}
+
+#[allow(unused_function)]
+/// Moves the pending updates into `staging`, stamped with `generation`.
+fun seal(
+    deny_list: &mut DenyList,
+    staging: &mut DenyListStaging,
+    epoch: u64,
+    generation: u64,
+    ctx: &TxContext,
+) {
+    assert!(ctx.sender() == @0x0, ENotSystemAddress);
+    assert!(epoch == ctx.epoch(), EWrongEpoch);
+    let pending = deny_list.pending_updates_mut();
+    staging.epoch = epoch;
+    staging.generation = generation;
+    staging.updates = *pending;
+    *pending = vector[];
+}
+
+#[allow(unused_function)]
+/// Applies the updates sealed for `generation` in the current epoch to `active`.
+fun activate(
+    active: &mut ActiveDenyList,
+    staging: &DenyListStaging,
+    epoch: u64,
+    generation: u64,
+    ctx: &TxContext,
+) {
+    assert!(ctx.sender() == @0x0, ENotSystemAddress);
+    assert!(epoch == ctx.epoch(), EWrongEpoch);
+    assert!(staging.epoch == epoch && staging.generation == generation, EWrongGeneration);
+    staging.updates.do_ref!(|update| active.apply_update(update));
+}
+
+#[allow(unused_function)]
+/// Applies the updates that have not been sealed yet directly to `active`. Used at the end of
+/// the epoch, after the still-unactivated staging slots have been applied.
+fun flush_pending(
+    deny_list: &mut DenyList,
+    active: &mut ActiveDenyList,
+    epoch: u64,
+    ctx: &TxContext,
+) {
+    assert!(ctx.sender() == @0x0, ENotSystemAddress);
+    assert!(epoch == ctx.epoch(), EWrongEpoch);
+    let pending = deny_list.pending_updates_mut();
+    pending.do_ref!(|update| active.apply_update(update));
+    *pending = vector[];
+}
+
+fun record_update(
+    deny_list: &mut DenyList,
+    per_type_index: u64,
+    per_type_key: vector<u8>,
+    addr: Option<address>,
+    denied: bool,
+) {
+    if (!df::exists(&deny_list.id, PendingUpdatesKey())) return;
+    deny_list
+        .pending_updates_mut()
+        .push_back(DenyListUpdate { per_type_index, per_type_key, addr, denied });
+}
+
+fun pending_updates_mut(deny_list: &mut DenyList): &mut vector<DenyListUpdate> {
+    df::borrow_mut(&mut deny_list.id, PendingUpdatesKey())
+}
+
+fun apply_update(active: &mut ActiveDenyList, update: &DenyListUpdate) {
+    let per_type_index = update.per_type_index;
+    let per_type_key = update.per_type_key;
+    if (update.addr.is_some()) {
+        let addr = *update.addr.borrow();
+        active.set_active(ActiveAddressKey { per_type_index, per_type_key, addr }, update.denied);
+    } else {
+        active.set_active(ActiveGlobalPauseKey { per_type_index, per_type_key }, update.denied);
+    }
+}
+
+/// A denied entry is the presence of the field; removal deletes it.
+fun set_active<K: copy + drop + store>(active: &mut ActiveDenyList, key: K, denied: bool) {
+    let exists = df::exists(&active.id, key);
+    if (denied && !exists) {
+        df::add(&mut active.id, key, true);
+    } else if (!denied && exists) {
+        df::remove<K, bool>(&mut active.id, key);
+    }
 }
 
 // === V1 ===
@@ -435,4 +614,72 @@ public fun new_for_testing(ctx: &mut TxContext): DenyList {
 #[deprecated(note = b"Use `create_for_testing` instead")]
 public fun create_for_test(ctx: &mut TxContext) {
     create_for_testing(ctx);
+}
+
+#[test_only]
+public fun create_active_for_testing(
+    deny_list: &mut DenyList,
+    num_staging_slots: u64,
+    ctx: &mut TxContext,
+) {
+    create_active(deny_list, num_staging_slots, ctx)
+}
+
+#[test_only]
+public fun seal_for_testing(
+    deny_list: &mut DenyList,
+    staging: &mut DenyListStaging,
+    epoch: u64,
+    generation: u64,
+    ctx: &TxContext,
+) {
+    seal(deny_list, staging, epoch, generation, ctx)
+}
+
+#[test_only]
+public fun activate_for_testing(
+    active: &mut ActiveDenyList,
+    staging: &DenyListStaging,
+    epoch: u64,
+    generation: u64,
+    ctx: &TxContext,
+) {
+    activate(active, staging, epoch, generation, ctx)
+}
+
+#[test_only]
+public fun flush_pending_for_testing(
+    deny_list: &mut DenyList,
+    active: &mut ActiveDenyList,
+    epoch: u64,
+    ctx: &TxContext,
+) {
+    flush_pending(deny_list, active, epoch, ctx)
+}
+
+#[test_only]
+public fun active_contains_address(
+    active: &ActiveDenyList,
+    per_type_index: u64,
+    per_type_key: vector<u8>,
+    addr: address,
+): bool {
+    df::exists(&active.id, ActiveAddressKey { per_type_index, per_type_key, addr })
+}
+
+#[test_only]
+public fun active_global_pause_enabled(
+    active: &ActiveDenyList,
+    per_type_index: u64,
+    per_type_key: vector<u8>,
+): bool {
+    df::exists(&active.id, ActiveGlobalPauseKey { per_type_index, per_type_key })
+}
+
+#[test_only]
+public fun staging_slot_address(slot: u64): address {
+    derived_object::derive_address(
+        object::sui_active_deny_list_address().to_id(),
+        StagingSlotKey(slot),
+    )
 }

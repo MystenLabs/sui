@@ -43,6 +43,7 @@ pub mod collection_types;
 pub mod committee;
 pub mod config;
 pub mod crypto;
+pub mod deny_list_active;
 pub mod deny_list_v1;
 pub mod deny_list_v2;
 pub mod derived_object;
@@ -143,6 +144,7 @@ built_in_ids! {
     SUI_COIN_REGISTRY_ADDRESS / SUI_COIN_REGISTRY_OBJECT_ID = 0xc;
     SUI_DISPLAY_REGISTRY_ADDRESS / SUI_DISPLAY_REGISTRY_OBJECT_ID = 0xd;
     SUI_DENY_LIST_ADDRESS / SUI_DENY_LIST_OBJECT_ID = 0x403;
+    SUI_ACTIVE_DENY_LIST_ADDRESS / SUI_ACTIVE_DENY_LIST_OBJECT_ID = 0x404;
     SUI_ACCUMULATOR_ROOT_ADDRESS / SUI_ACCUMULATOR_ROOT_OBJECT_ID = 0xacc;
     SUI_ADDRESS_ALIAS_STATE_ADDRESS / SUI_ADDRESS_ALIAS_STATE_OBJECT_ID = 0xa;
     SUI_FORWARDING_ADDRESS_REGISTRY_ADDRESS / SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID = 0xfa;
@@ -163,7 +165,10 @@ pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION
 /// a settlement transaction mutating the accumulator root, or a user transaction that passes it
 /// in); declared inputs are version-assigned through the normal shared-input path, independent of
 /// this set. Extend this as more implicitly-read system objects arise.
-pub const IMPLICITLY_READ_SYSTEM_OBJECTS: &[ObjectID] = &[SUI_ACCUMULATOR_ROOT_OBJECT_ID];
+pub const IMPLICITLY_READ_SYSTEM_OBJECTS: &[ObjectID] = &[
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    SUI_ACTIVE_DENY_LIST_OBJECT_ID,
+];
 
 pub fn sui_framework_address_concat_string(suffix: &str) -> String {
     format!("{}{suffix}", SUI_FRAMEWORK_ADDRESS.to_hex_literal())
