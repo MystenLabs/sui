@@ -982,13 +982,9 @@ impl CheckpointExecutor {
             ),
         );
 
-        // Resolve non-digest transaction keys (e.g. randomness updates). Consensus
-        // enqueues these as keyed placeholders before their digest is known, and the
-        // usual resolver (RandomnessRoundReceiver) is best-effort per node - the
-        // signature may never arrive. The placeholder owns its version group's causal
-        // index, so this digest-carrying enqueue must resolve the key or the
-        // transaction is never executed. The certified checkpoint makes the mapping
-        // authoritative.
+        // When a randomness update arrives via checkpoint rather than being constructed
+        // locally from the round's signature, nothing else resolves its transaction key,
+        // and the keyed placeholder enqueued by consensus would wait forever.
         for (txn, _) in &unexecuted_txns {
             let key = txn.key();
             if !matches!(key, TransactionKey::Digest(_))
