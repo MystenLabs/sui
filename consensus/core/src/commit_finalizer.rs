@@ -907,6 +907,7 @@ pub(crate) fn persist_finalized_commits(
     dag_state: &Arc<RwLock<DagState>>,
     transaction_vote_tracker: &TransactionVoteTracker,
     finalized_commits: &[CommittedSubDag],
+    // False when transaction voting is disabled or rejected transactions were already recovered.
     record_rejected_transactions: bool,
 ) {
     if finalized_commits.is_empty() {

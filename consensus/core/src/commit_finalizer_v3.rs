@@ -36,15 +36,16 @@ use crate::{
 ///
 /// - Direct finalization uses local descendants as implicit accept votes. For a target block in a
 ///   commit with leader round L, the first descendant on each authority chain votes through round
-///   L + 1. It gets explicit reject votes from [`TransactionVoteTracker`]. The finalizer retries
-///   this rule for pending commits when it receives a new commit. It counts accept votes only when
-///   the target is above the GC round for L. Every vote is a strict descendant of the target, so
-///   this rule keeps the vote evidence above GC until the depth-two decision.
+///   L + 1. A first vote whose cutoff covers the target rejects all its transactions. These votes
+///   combine with explicit reject votes from [`TransactionVoteTracker`] toward a reject quorum.
+///   The finalizer retries this rule for pending commits when it receives a new commit. The local
+///   DAG only traverses targets above its current GC round, where descendant votes remain available.
 /// - Indirect finalization checks pending transactions when later commits enter the queue. It uses
 ///   the same voting window, but it uses only committed descendants. It accepts a transaction when
-///   the accept stake reaches the certification threshold. It uses the same GC guard as direct
-///   finalization. When a committed anchor reaches the required depth, it rejects all other pending
-///   transactions.
+///   the target is above L - gc_depth and the accept stake reaches the certification threshold.
+///   A quorum of committed first votes can reject transactions through cutoffs or explicit rejects.
+///   The GC bound keeps first-vote evidence available through the depth-two decision. When a
+///   committed anchor reaches the required depth, it rejects all other pending transactions.
 ///
 /// The finalizer keeps a commit in its pending queue until every transaction in the commit has a decision.
 pub(crate) struct CommitFinalizerV3 {
@@ -145,12 +146,13 @@ impl CommitFinalizerV3 {
         //
         // 1. The validator traverses local descendants of B through round L + 1.
         // 2. The first block on each authority chain whose causal history includes B casts a vote.
-        //    A cutoff that covers B or an explicit reject prevents an implicit accept. Later blocks
-        //    on the same authority chain do not vote again. Each side counts an authority once.
-        // 3. The validator counts accept votes only if B is above the GC round for L. Every vote is
-        //    a strict descendant of B. Thus, this rule keeps all vote evidence above GC until the
-        //    depth-two decision and prevents a later block from looking like the first vote.
-        // 4. It reads explicit reject stake from the transaction vote tracker.
+        //    A cutoff that covers B rejects all its transactions; otherwise, explicit rejects
+        //    apply per transaction and the rest are accepted. Later blocks on the same authority
+        //    chain do not vote again. Each side counts an authority once.
+        // 3. DagState only traverses B above its current GC round. All descendants are newer than
+        //    B, so GC cannot hide an earlier first vote while leaving B traversable.
+        // 4. It combines cutoff reject voters with explicit reject voters from the tracker,
+        //    counting each authority only once even if it appears in both sources.
         // 5. It accepts the transaction when accept stake reaches quorum. It rejects the
         //    transaction when reject stake reaches quorum. Otherwise, the transaction stays
         //    pending.
@@ -174,8 +176,9 @@ impl CommitFinalizerV3 {
         //
         // For each pending transaction in block B, the validator traverses committed descendants
         // through the round after B's commit leader. It applies the same first-vote rule as direct
-        // finalization and the same GC guard. It accepts the transaction when this stake reaches
-        // the certification threshold. The direct pass above has already applied current explicit
+        // finalization, with a fixed GC bound to keep earlier first votes from being pruned before
+        // they commit. It accepts at the certification threshold and rejects at a quorum of
+        // committed cutoff or explicit rejects. The direct pass above has already applied local
         // reject quorums.
         //
         // A commit must leave the queue when the newest leader round is
@@ -222,19 +225,16 @@ impl CommitFinalizerV3 {
     fn try_direct_finalize_commit(&mut self, commit_index: usize) {
         let leader_round = self.pending_commits[commit_index].commit.leader.round;
         let last_voting_round = leader_round.saturating_add(1);
-        let vote_evidence_gc_round = self.vote_evidence_gc_round(leader_round);
         let pending_transactions = self.pending_commits[commit_index]
             .pending_transactions
             .clone();
         for (block_ref, transaction_indices) in pending_transactions {
+            // First votes come from the earliest blocks on each authority chain that include
+            // block_ref in their causal history. Only rounds through leader_round + 1 are eligible;
+            // DagState returns no children for targets at or below its current GC round.
             let first_votes = {
                 let dag_state = self.dag_state.read();
-                self.collect_gc_safe_first_votes(
-                    &*dag_state,
-                    block_ref,
-                    last_voting_round,
-                    vote_evidence_gc_round,
-                )
+                collect_first_votes(&*dag_state, block_ref, last_voting_round)
             };
             let decisions =
                 self.compute_direct_decisions(block_ref, &transaction_indices, &first_votes);
@@ -248,19 +248,10 @@ impl CommitFinalizerV3 {
         }
     }
 
-    /// Returns the GC round for accept-vote evidence in a commit with leader round L.
-    ///
-    /// Consensus builds each committed sub-DAG before it advances GC. Leader rounds increase, and
-    /// consensus creates at most one commit for each leader round. Therefore, every commit before
-    /// the first depth-two decision uses a GC round at most one round above this value. Each first
-    /// vote is in a later round than its target. If the target is above this value, each first vote
-    /// is also above every GC round used to build the committed voting prefix.
-    fn vote_evidence_gc_round(&self, leader_round: Round) -> Round {
-        self.dag_state.read().calculate_gc_round(leader_round)
-    }
-
     fn report_gc_guarded_blocks(&self, commit_state: &CommitStateV3) {
-        let vote_evidence_gc_round = self.vote_evidence_gc_round(commit_state.commit.leader.round);
+        let leader_round = commit_state.commit.leader.round;
+        let vote_evidence_gc_round =
+            leader_round.saturating_sub(self.context.protocol_config.gc_depth());
         for block_ref in commit_state.pending_transactions.keys() {
             if block_ref.round > vote_evidence_gc_round {
                 continue;
@@ -278,55 +269,43 @@ impl CommitFinalizerV3 {
         }
     }
 
-    fn collect_gc_safe_first_votes(
-        &self,
-        graph: &impl ReverseBlockGraph,
-        block_ref: BlockRef,
-        last_voting_round: Round,
-        vote_evidence_gc_round: Round,
-    ) -> Vec<VotingBlock> {
-        if block_ref.round <= vote_evidence_gc_round {
-            return vec![];
-        }
-        collect_first_votes(graph, block_ref, last_voting_round)
-    }
-
     fn compute_direct_decisions(
         &self,
         block_ref: BlockRef,
         transaction_indices: &BTreeSet<TransactionIndex>,
         first_votes: &[VotingBlock],
     ) -> TransactionDecisions {
-        let reject_stake_by_transaction: BTreeMap<_, _> = self
+        let explicit_reject_votes = self
             .transaction_vote_tracker
-            .get_reject_votes(&block_ref)
+            .get_reject_vote_aggregators(&block_ref)
             .unwrap_or_else(|| {
                 panic!(
                     "No vote info found for {block_ref}. It is incorrectly GC'ed or failed to be recovered after crash."
                 )
-            })
-            .into_iter()
-            .collect();
+            });
 
-        let accept_votes: AcceptVotes<QuorumThreshold> =
+        let accept_votes: TransactionVotes<QuorumThreshold> =
             self.collect_accept_votes(block_ref, transaction_indices, first_votes);
+        let reject_votes = self.collect_reject_votes(
+            block_ref,
+            transaction_indices,
+            first_votes,
+            explicit_reject_votes,
+        );
 
         let mut decisions = TransactionDecisions::default();
         for transaction_index in transaction_indices {
             let transaction_accept_votes = accept_votes.for_transaction(*transaction_index);
             let accepted = transaction_accept_votes.reached_threshold(&self.context.committee);
-            let reject_stake = reject_stake_by_transaction
-                .get(transaction_index)
-                .copied()
-                .unwrap_or_default();
-            let rejected = reject_stake >= self.context.committee.quorum_threshold();
+            let transaction_reject_votes = reject_votes.for_transaction(*transaction_index);
+            let rejected = transaction_reject_votes.reached_threshold(&self.context.committee);
             assert!(
                 !(accepted && rejected),
-                "Transaction {} in block {} cannot have both accept and reject quorums. Accept voters: {:?}, reject stake: {}",
+                "Transaction {} in block {} cannot have both accept and reject quorums. Accept voters: {:?}, reject voters: {:?}",
                 transaction_index,
                 block_ref,
                 transaction_accept_votes.authorities(),
-                reject_stake,
+                transaction_reject_votes.authorities(),
             );
             if accepted {
                 decisions.accepted.push(*transaction_index);
@@ -345,18 +324,23 @@ impl CommitFinalizerV3 {
         let pending_transactions = self.pending_commits[0].pending_transactions.clone();
         let leader_round = self.pending_commits[0].commit.leader.round;
         let last_voting_round = leader_round.saturating_add(1);
-        let vote_evidence_gc_round = self.vote_evidence_gc_round(leader_round);
+        // The first depth-two anchor's predecessor has leader round at most L + 1. Linearizing
+        // that anchor can prune through L + 1 - gc_depth. Since first votes are strictly newer
+        // than their targets, target > L - gc_depth keeps all first-vote evidence available.
+        // A signed cutoff cannot replace this bound: a later block can have a low cutoff but
+        // omit a reject already cast by an ancestor that GC would skip during linearization.
+        let vote_evidence_gc_round =
+            leader_round.saturating_sub(self.context.protocol_config.gc_depth());
 
         for (block_ref, transaction_indices) in pending_transactions {
             // An accept voter is a descendant of the target block. Thus, it cannot commit before
             // the target block. For an eligible target, GC cannot remove an earlier first vote.
             // Therefore, the first committed descendant from each authority is its true first vote.
-            let first_votes = self.collect_gc_safe_first_votes(
-                committed_voting_graph,
-                block_ref,
-                last_voting_round,
-                vote_evidence_gc_round,
-            );
+            let first_votes = if block_ref.round > vote_evidence_gc_round {
+                collect_first_votes(committed_voting_graph, block_ref, last_voting_round)
+            } else {
+                vec![]
+            };
             let decisions = self.compute_indirect_decisions(
                 block_ref,
                 &transaction_indices,
@@ -380,18 +364,33 @@ impl CommitFinalizerV3 {
         first_votes: &[VotingBlock],
         reject_remaining: bool,
     ) -> TransactionDecisions {
-        let accept_votes: AcceptVotes<CertificationThreshold> =
+        let accept_votes: TransactionVotes<CertificationThreshold> =
             self.collect_accept_votes(block_ref, transaction_indices, first_votes);
+        // Rejection still needs a full quorum: Q + C > N + f ensures it intersects any accept
+        // certificate in honest stake. Crash faults cannot supply conflicting first votes.
+        let reject_votes =
+            self.collect_reject_votes(block_ref, transaction_indices, first_votes, BTreeMap::new());
 
         let mut decisions = TransactionDecisions::default();
         for transaction_index in transaction_indices {
             let transaction_accept_votes = accept_votes.for_transaction(*transaction_index);
             let accepted = transaction_accept_votes.reached_threshold(&self.context.committee);
+            let transaction_reject_votes = reject_votes.for_transaction(*transaction_index);
+            let rejected = transaction_reject_votes.reached_threshold(&self.context.committee);
+            assert!(
+                !(accepted && rejected),
+                "Transaction {} in block {} cannot have both an accept certificate and a reject quorum. Accept voters: {:?}, reject voters: {:?}",
+                transaction_index,
+                block_ref,
+                transaction_accept_votes.authorities(),
+                transaction_reject_votes.authorities(),
+            );
             if accepted {
                 decisions.accepted.push(*transaction_index);
-            } else if reject_remaining {
-                // At depth two, any direct accept quorum must leave an accept certificate in the
-                // committed prefix. Therefore, no certificate means that rejection is safe.
+            } else if rejected || reject_remaining {
+                // A reject quorum decides immediately. At depth two, even without a reject
+                // quorum, no accept certificate means that rejection is safe: any direct accept
+                // quorum must leave an accept certificate in the committed prefix.
                 decisions.rejected.push(*transaction_index);
             }
         }
@@ -403,7 +402,7 @@ impl CommitFinalizerV3 {
         block_ref: BlockRef,
         transaction_indices: &BTreeSet<TransactionIndex>,
         first_votes: &[VotingBlock],
-    ) -> AcceptVotes<T> {
+    ) -> TransactionVotes<T> {
         // Most transactions have no explicit reject. Use one shared aggregator for them, and
         // create transaction-specific aggregators only when a first vote contains a reject.
         let mut shared = StakeAggregator::<T>::new();
@@ -437,7 +436,43 @@ impl CommitFinalizerV3 {
             }
         }
 
-        AcceptVotes {
+        TransactionVotes {
+            shared,
+            by_transaction,
+        }
+    }
+
+    fn collect_reject_votes(
+        &self,
+        block_ref: BlockRef,
+        transaction_indices: &BTreeSet<TransactionIndex>,
+        first_votes: &[VotingBlock],
+        mut by_transaction: BTreeMap<TransactionIndex, StakeAggregator<QuorumThreshold>>,
+    ) -> TransactionVotes<QuorumThreshold> {
+        by_transaction.retain(|index, _| transaction_indices.contains(index));
+        // A cutoff rejects every transaction in the target, so these voters share one aggregator.
+        let mut shared = StakeAggregator::new();
+        for voting_block in first_votes {
+            let author = voting_block.block_ref.author;
+            if !voting_block.can_accept(block_ref) {
+                shared.add_unique(author, &self.context.committee);
+            } else if let Some(rejects) = voting_block.explicit_rejects.get(&block_ref) {
+                for index in rejects.intersection(transaction_indices) {
+                    by_transaction
+                        .entry(*index)
+                        .or_default()
+                        .add_unique(author, &self.context.committee);
+                }
+            }
+        }
+        // An equivocating authority may contribute both a cutoff and an explicit reject.
+        // Union the voters rather than adding their stake totals.
+        for reject_votes in by_transaction.values_mut() {
+            for author in shared.authorities() {
+                reject_votes.add_unique(*author, &self.context.committee);
+            }
+        }
+        TransactionVotes {
             shared,
             by_transaction,
         }
@@ -687,12 +722,12 @@ impl VotingBlock {
     }
 }
 
-struct AcceptVotes<T> {
+struct TransactionVotes<T> {
     shared: StakeAggregator<T>,
     by_transaction: BTreeMap<TransactionIndex, StakeAggregator<T>>,
 }
 
-impl<T> AcceptVotes<T> {
+impl<T> TransactionVotes<T> {
     fn for_transaction(&self, transaction_index: TransactionIndex) -> &StakeAggregator<T> {
         self.by_transaction
             .get(&transaction_index)
@@ -788,19 +823,29 @@ mod tests {
         }
 
         fn new_with_protocol_config(configure: impl FnOnce(&mut Context)) -> Self {
-            let (mut context, _) = Context::new_with_test_options(COMMITTEE_SIZE, false);
+            let fixture = Self::with_fault_budget(COMMITTEE_SIZE, 1, 0, configure);
+            assert_eq!(fixture.context.committee.quorum_threshold(), 5);
+            assert_eq!(fixture.context.committee.certification_threshold(), 3);
+            fixture
+        }
+
+        fn with_fault_budget(
+            committee_size: usize,
+            malicious_stake: u64,
+            crash_stake: u64,
+            configure: impl FnOnce(&mut Context),
+        ) -> Self {
+            let (mut context, _) = Context::new_with_test_options(committee_size, false);
             configure(&mut context);
             let committee = Committee::new_v3(
                 context.committee.epoch(),
                 context.committee.authorities_slice().to_vec(),
-                1,
-                0,
+                malicious_stake,
+                crash_stake,
             );
             context = context.with_committee(committee);
             context.protocol_config.set_enable_v3_for_testing(true);
             let context = Arc::new(context);
-            assert_eq!(context.committee.quorum_threshold(), 5);
-            assert_eq!(context.committee.certification_threshold(), 3);
 
             let store = Arc::new(MemStore::new());
             let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -831,7 +876,7 @@ mod tests {
                 .into_iter()
                 .map(|block| block.reference())
                 .collect();
-            let blocks: Vec<_> = (0..COMMITTEE_SIZE as u32)
+            let blocks: Vec<_> = (0..self.context.committee.size() as u32)
                 .map(|author| {
                     let transactions = vec![
                         Transaction::new(vec![1]);
@@ -1011,7 +1056,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn gc_guard_counts_direct_accept_evidence_above_commit_gc() {
+    async fn direct_accepts_above_local_gc_round() {
         let mut fixture = Fixture::with_gc_depth(3);
         let (target, round_two_blocks) = fixture.make_round_two_target(1);
         let round_two_refs: Vec<_> = round_two_blocks
@@ -1034,21 +1079,15 @@ mod tests {
             0,
         );
         fixture.add_blocks(std::slice::from_ref(&first_leader));
-        let vote_evidence_gc_round = fixture
-            .finalizer
-            .vote_evidence_gc_round(first_leader.round());
-        assert_eq!(vote_evidence_gc_round, 1);
-        assert_eq!(target.round(), vote_evidence_gc_round + 1);
+        let mut linearizer =
+            crate::linearizer::Linearizer::new(fixture.context.clone(), fixture.dag_state.clone());
+        let commit = linearizer.handle_commit(vec![first_leader]).pop().unwrap();
+        assert_eq!(fixture.dag_state.read().gc_round(), 1);
+        assert_eq!(target.round(), fixture.dag_state.read().gc_round() + 1);
 
-        // The target is one round above GC for its commit. Each vote is a strict descendant of the
-        // target and stays above GC, so the finalizer can use this accept quorum.
-        let mut first_commit_blocks = round_two_blocks;
-        first_commit_blocks.extend(voters.iter().cloned());
-        first_commit_blocks.push(first_leader.clone());
-        let finalized =
-            fixture
-                .finalizer
-                .process_commit(make_commit(1, &first_leader, first_commit_blocks));
+        // Linearization advances local GC before finalization. The target and its first votes
+        // remain above that cutoff, so the finalizer can still use this accept quorum.
+        let finalized = fixture.finalizer.process_commit(commit);
 
         assert_eq!(finalized.len(), 1);
         assert!(finalized[0].rejected_transactions_by_block.is_empty());
@@ -1096,28 +1135,36 @@ mod tests {
                 .collect(),
         );
         fixture.add_blocks(std::slice::from_ref(&first_leader));
-        let vote_evidence_gc_round = fixture
-            .finalizer
-            .vote_evidence_gc_round(first_leader.round());
-        assert_eq!(target.round(), vote_evidence_gc_round + 1);
+        let mut linearizer =
+            crate::linearizer::Linearizer::new(fixture.context.clone(), fixture.dag_state.clone());
+        let first_commit = linearizer
+            .handle_commit(vec![first_leader.clone()])
+            .pop()
+            .unwrap();
+        assert_eq!(target.round(), fixture.dag_state.read().gc_round() + 1);
+        assert!(fixture.finalizer.process_commit(first_commit).is_empty());
 
-        let mut first_commit_blocks = vec![target.clone()];
-        first_commit_blocks.extend(voters.iter().cloned());
-        first_commit_blocks.extend(non_voters);
-        first_commit_blocks.push(first_leader.clone());
-        assert!(
-            fixture
-                .finalizer
-                .process_commit(make_commit(1, &first_leader, first_commit_blocks))
-                .is_empty()
-        );
-
-        let anchor = fixture.make_graph_block(4, 0, vec![first_leader.reference()], vec![], 0);
+        // These peers provide the anchor's parent quorum without casting additional accepts.
+        let round_three_peers: Vec<_> = (1..5)
+            .map(|author| {
+                fixture.make_graph_block(
+                    3,
+                    author,
+                    first_leader.ancestors().to_vec(),
+                    vec![],
+                    target.round(),
+                )
+            })
+            .collect();
+        fixture.add_blocks(&round_three_peers);
+        let anchor_ancestors = std::iter::once(first_leader.reference())
+            .chain(round_three_peers.iter().map(|block| block.reference()))
+            .collect();
+        let anchor = fixture.make_graph_block(4, 0, anchor_ancestors, vec![], 0);
         fixture.add_blocks(std::slice::from_ref(&anchor));
-        let finalized =
-            fixture
-                .finalizer
-                .process_commit(make_commit(2, &anchor, vec![anchor.clone()]));
+        let second_commit = linearizer.handle_commit(vec![anchor]).pop().unwrap();
+        assert_eq!(target.round(), fixture.dag_state.read().gc_round());
+        let finalized = fixture.finalizer.process_commit(second_commit);
 
         assert_eq!(finalized.len(), 2);
         assert!(finalized[0].rejected_transactions_by_block.is_empty());
@@ -1125,7 +1172,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn gc_guard_does_not_count_incomplete_accept_evidence() {
+    async fn gc_guard_rejects_target_at_commit_gc_round() {
         let mut fixture = Fixture::with_gc_depth(3);
         let (target, round_one_refs) = fixture.make_round_one(1);
         let voters: Vec<_> = (0..5)
@@ -1143,57 +1190,52 @@ mod tests {
             .collect();
         fixture.add_blocks(&voters);
 
-        // The target is at the GC round for its commit. Some nodes can miss an earlier first vote
-        // after GC and count a later descendant as an accept vote. Therefore, the finalizer does
-        // not use the apparent accept quorum.
-        let round_three = fixture.make_anchor(
-            voters
+        let mut previous_round = voters;
+        let mut leaders = vec![];
+        for round in 3..=6 {
+            let ancestors: Vec<_> = previous_round
                 .iter()
-                .map(|voting_block| voting_block.reference())
-                .collect(),
-        );
-        fixture.add_blocks(std::slice::from_ref(&round_three));
-        let first_leader = fixture.make_graph_block(4, 0, vec![round_three.reference()], vec![], 0);
-        fixture.add_blocks(std::slice::from_ref(&first_leader));
-        assert_eq!(
-            target.round(),
-            fixture
-                .finalizer
-                .vote_evidence_gc_round(first_leader.round())
-        );
-        let mut first_commit_blocks = vec![target.clone()];
-        first_commit_blocks.extend(voters.iter().cloned());
-        first_commit_blocks.push(round_three);
-        first_commit_blocks.push(first_leader.clone());
+                .map(|block| block.reference())
+                .collect();
+            let blocks: Vec<_> = (0..5)
+                .map(|author| fixture.make_graph_block(round, author, ancestors.clone(), vec![], 0))
+                .collect();
+            fixture.add_blocks(&blocks);
+            if round >= 4 {
+                leaders.push(blocks[0].clone());
+            }
+            previous_round = blocks;
+        }
+        let mut linearizer =
+            crate::linearizer::Linearizer::new(fixture.context.clone(), fixture.dag_state.clone());
+        let first_commit = linearizer
+            .handle_commit(vec![leaders[0].clone()])
+            .pop()
+            .unwrap();
+
+        // At this boundary local traversal already hides the target's children. The indirect
+        // guard must also exclude the committed accept quorum, whose first-vote history is no
+        // longer guaranteed to survive until the depth-two decision.
+        assert_eq!(target.round(), fixture.dag_state.read().gc_round());
         assert!(
             fixture
-                .finalizer
-                .process_commit(make_commit(1, &first_leader, first_commit_blocks))
-                .is_empty()
+                .dag_state
+                .read()
+                .get_block_children(&target.reference())
+                .is_none()
         );
+        assert!(fixture.finalizer.process_commit(first_commit).is_empty());
 
-        let depth_one_anchor =
-            fixture.make_graph_block(5, 0, vec![first_leader.reference()], vec![], 0);
-        fixture.add_blocks(std::slice::from_ref(&depth_one_anchor));
-        assert!(
-            fixture
-                .finalizer
-                .process_commit(make_commit(
-                    2,
-                    &depth_one_anchor,
-                    vec![depth_one_anchor.clone()],
-                ))
-                .is_empty()
-        );
-
-        let depth_two_anchor =
-            fixture.make_graph_block(6, 0, vec![depth_one_anchor.reference()], vec![], 0);
-        fixture.add_blocks(std::slice::from_ref(&depth_two_anchor));
-        let finalized = fixture.finalizer.process_commit(make_commit(
-            3,
-            &depth_two_anchor,
-            vec![depth_two_anchor.clone()],
-        ));
+        let second_commit = linearizer
+            .handle_commit(vec![leaders[1].clone()])
+            .pop()
+            .unwrap();
+        assert!(fixture.finalizer.process_commit(second_commit).is_empty());
+        let third_commit = linearizer
+            .handle_commit(vec![leaders[2].clone()])
+            .pop()
+            .unwrap();
+        let finalized = fixture.finalizer.process_commit(third_commit);
 
         assert_eq!(finalized.len(), 3);
         assert_eq!(
@@ -1221,7 +1263,146 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn direct_keeps_transactions_pending_at_the_voter_cutoff() {
+    async fn gc_guard_prevents_later_vote_from_replacing_a_pruned_reject() {
+        let mut fixture = Fixture::with_gc_depth(3);
+        let round_one = fixture.make_round_one_blocks(&[0, 0, 0, 0, 0, 1]);
+        let target = round_one[5].clone();
+        let target_ref = target.reference();
+        let reject = || {
+            vec![BlockTransactionVotes {
+                block_ref: target_ref,
+                rejects: vec![0],
+            }]
+        };
+
+        // Authority 4 rejects the target in round 2, then its branch is withheld from the
+        // round-4 and round-5 leaders. Every block still has a quorum of previous-round parents.
+        // Only authorities 3 and 5 accept; authorities 0..=2 first see and reject it in round 3.
+        let mut rounds = vec![round_one];
+        for round in 2..=5 {
+            let previous = rounds.last().unwrap();
+            let blocks: Vec<_> = (0..COMMITTEE_SIZE as u32)
+                .filter(|author| round == 2 || *author != 4)
+                .map(|author| {
+                    let ancestors = previous
+                        .iter()
+                        .filter(|block| {
+                            if round == 2 {
+                                author >= 4 || block.author() != target.author()
+                            } else {
+                                block.author() != AuthorityIndex::new_for_test(4)
+                            }
+                        })
+                        .map(|block| block.reference())
+                        .collect();
+                    let votes = if (round == 2 && author == 4) || (round == 3 && author < 3) {
+                        reject()
+                    } else {
+                        vec![]
+                    };
+                    fixture.make_graph_block(round, author, ancestors, votes, 0)
+                })
+                .collect();
+            fixture.add_blocks(&blocks);
+            rounds.push(blocks);
+        }
+        let first_reject = &rounds[1][4];
+
+        // This proposal was created before GC, so its signed cutoff remains zero. Its own
+        // round-2 ancestor already included the target, so proposal logic does not repeat the
+        // reject. Its other parents also provide a path back to the target.
+        let mut later_ancestors: Vec<_> = rounds[2].iter().map(|block| block.reference()).collect();
+        later_ancestors.push(first_reject.reference());
+        let later_vote = fixture.make_graph_block(4, 4, later_ancestors, vec![], 0);
+        fixture.add_blocks(std::slice::from_ref(&later_vote));
+        let mut anchor_ancestors: Vec<_> =
+            rounds[4].iter().map(|block| block.reference()).collect();
+        anchor_ancestors.push(later_vote.reference());
+        let depth_two_anchor = fixture.make_graph_block(6, 0, anchor_ancestors, vec![], 0);
+        fixture.add_blocks(std::slice::from_ref(&depth_two_anchor));
+
+        let transaction_indices = BTreeSet::from([0]);
+        let complete_first_votes = collect_first_votes(&*fixture.dag_state.read(), target_ref, 5);
+        let complete_accepts: TransactionVotes<CertificationThreshold> = fixture
+            .finalizer
+            .collect_accept_votes(target_ref, &transaction_indices, &complete_first_votes);
+        assert_eq!(complete_accepts.for_transaction(0).stake(), 2);
+        assert!(
+            !complete_accepts
+                .for_transaction(0)
+                .reached_threshold(&fixture.context.committee)
+        );
+
+        let mut linearizer =
+            crate::linearizer::Linearizer::new(fixture.context.clone(), fixture.dag_state.clone());
+        let first_commit = linearizer
+            .handle_commit(vec![rounds[3][0].clone()])
+            .pop()
+            .unwrap();
+        assert!(
+            first_commit
+                .blocks
+                .iter()
+                .any(|block| block.reference() == target_ref)
+        );
+        assert!(fixture.finalizer.process_commit(first_commit).is_empty());
+        let second_commit = linearizer
+            .handle_commit(vec![rounds[4][0].clone()])
+            .pop()
+            .unwrap();
+        assert!(fixture.finalizer.process_commit(second_commit).is_empty());
+        assert_eq!(fixture.dag_state.read().gc_round(), first_reject.round());
+
+        let third_commit = linearizer
+            .handle_commit(vec![depth_two_anchor])
+            .pop()
+            .unwrap();
+        let committed_graph = CommittedBlockGraph::new(
+            fixture
+                .finalizer
+                .pending_commits
+                .iter()
+                .flat_map(|state| state.commit.blocks.iter().cloned())
+                .chain(third_commit.blocks.iter().cloned()),
+        );
+        assert!(
+            !committed_graph
+                .blocks
+                .contains_key(&first_reject.reference())
+        );
+        assert!(committed_graph.blocks.contains_key(&later_vote.reference()));
+        assert_eq!(later_vote.transaction_votes_cutoff_round(), 0);
+        assert!(VotingBlock::new(later_vote.clone()).can_accept(target_ref));
+
+        // The real linearizer omitted the round-2 reject at GC, but retained the round-4
+        // descendant. The per-block cutoff therefore permits a false accept certificate.
+        let incomplete_first_votes = collect_first_votes(&committed_graph, target_ref, 5);
+        assert!(
+            incomplete_first_votes
+                .iter()
+                .any(|vote| vote.block_ref == later_vote.reference())
+        );
+        let incomplete_accepts: TransactionVotes<CertificationThreshold> = fixture
+            .finalizer
+            .collect_accept_votes(target_ref, &transaction_indices, &incomplete_first_votes);
+        assert_eq!(incomplete_accepts.for_transaction(0).stake(), 3);
+        assert!(
+            incomplete_accepts
+                .for_transaction(0)
+                .reached_threshold(&fixture.context.committee)
+        );
+
+        let finalized = fixture.finalizer.process_commit(third_commit);
+        assert_eq!(finalized.len(), 3);
+        assert_eq!(
+            finalized[0].rejected_transactions_by_block.get(&target_ref),
+            Some(&vec![0])
+        );
+        assert!(fixture.finalizer.is_empty());
+    }
+
+    #[tokio::test]
+    async fn direct_rejects_all_transactions_with_a_cutoff_quorum() {
         let mut fixture = Fixture::new();
         let (target, round_one_refs) = fixture.make_round_one(2);
         let voters: Vec<_> = (0..5)
@@ -1244,13 +1425,523 @@ mod tests {
                 .finalizer
                 .process_commit(make_commit(1, &target, vec![target.clone()]));
 
-        assert!(finalized.is_empty());
+        assert_eq!(finalized.len(), 1);
+        assert_eq!(
+            finalized[0]
+                .rejected_transactions_by_block
+                .get(&target.reference()),
+            Some(&vec![0, 1])
+        );
+        assert!(fixture.finalizer.is_empty());
+    }
+
+    #[tokio::test]
+    async fn cutoff_and_explicit_rejects_combine_per_transaction() {
+        let mut fixture = Fixture::new();
+        let (target, round_one_refs) = fixture.make_round_one(2);
+        let voters: Vec<_> = (0..5)
+            .map(|author| {
+                let rejects = match author {
+                    2 => vec![0, 1],
+                    3 | 4 => vec![0],
+                    _ => vec![],
+                };
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    true,
+                    rejects,
+                    if author < 2 { 1 } else { 0 },
+                    None,
+                )
+            })
+            .collect();
+        fixture.add_blocks(&voters);
+        let graph = CommittedBlockGraph::new(voters);
+        let first_votes = collect_first_votes(&graph, target.reference(), 2);
+        let transaction_indices = BTreeSet::from([0, 1]);
+
+        // Both transactions have two cutoff rejects. Explicit rejects bring only transaction 0
+        // to quorum; transaction 1 has three rejects and two accepts, so it remains pending.
+        for decisions in [
+            fixture.finalizer.compute_direct_decisions(
+                target.reference(),
+                &transaction_indices,
+                &first_votes,
+            ),
+            fixture.finalizer.compute_indirect_decisions(
+                target.reference(),
+                &transaction_indices,
+                &first_votes,
+                false,
+            ),
+        ] {
+            assert!(decisions.accepted.is_empty());
+            assert_eq!(decisions.rejected, vec![0]);
+        }
+        assert!(
+            fixture
+                .finalizer
+                .process_commit(make_commit(1, &target, vec![target.clone()]))
+                .is_empty()
+        );
         assert_eq!(
             fixture.finalizer.pending_commits[0]
                 .pending_transactions
                 .get(&target.reference()),
-            Some(&BTreeSet::from([0, 1]))
+            Some(&BTreeSet::from([1]))
         );
+    }
+
+    #[tokio::test]
+    async fn cutoff_and_explicit_rejects_do_not_double_count_an_equivocator() {
+        let fixture = Fixture::new();
+        let (target, round_one_refs) = fixture.make_round_one(1);
+        let mut voters: Vec<_> = (0..3)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    true,
+                    vec![],
+                    1,
+                    None,
+                )
+            })
+            .collect();
+        voters.extend((2..4).map(|author| {
+            fixture.make_voter(
+                author,
+                &round_one_refs,
+                target.reference(),
+                true,
+                vec![0],
+                0,
+                Some(author as u8),
+            )
+        }));
+        fixture.add_blocks(&voters);
+        let transaction_indices = BTreeSet::from([0]);
+
+        // Authority 2's cutoff and explicit reject are two branches of the same vote. Only the
+        // later addition of authority 4 can bring the four distinct reject voters to quorum.
+        for reaches_quorum in [false, true] {
+            if reaches_quorum {
+                let fifth_reject = fixture.make_voter(
+                    4,
+                    &round_one_refs,
+                    target.reference(),
+                    true,
+                    vec![0],
+                    0,
+                    None,
+                );
+                fixture.add_blocks(std::slice::from_ref(&fifth_reject));
+                voters.push(fifth_reject);
+            }
+            let graph = CommittedBlockGraph::new(voters.iter().cloned());
+            let first_votes = collect_first_votes(&graph, target.reference(), 2);
+            for decisions in [
+                fixture.finalizer.compute_direct_decisions(
+                    target.reference(),
+                    &transaction_indices,
+                    &first_votes,
+                ),
+                fixture.finalizer.compute_indirect_decisions(
+                    target.reference(),
+                    &transaction_indices,
+                    &first_votes,
+                    false,
+                ),
+            ] {
+                assert!(decisions.accepted.is_empty());
+                assert_eq!(
+                    decisions.rejected,
+                    if reaches_quorum { vec![0] } else { vec![] }
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cutoff_certificate_without_quorum_waits_until_depth_two() {
+        let mut fixture = Fixture::with_gc_depth(3);
+        let (target, round_one_refs) = fixture.make_round_one(1);
+        let voters: Vec<_> = (0..5)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    true,
+                    vec![],
+                    if author < 3 { 1 } else { 0 },
+                    None,
+                )
+            })
+            .collect();
+        fixture.add_blocks(&voters);
+        let mut previous_round = voters;
+        let mut leaders = vec![];
+        for round in 3..=5 {
+            let ancestors: Vec<_> = previous_round
+                .iter()
+                .map(|block| block.reference())
+                .collect();
+            let blocks: Vec<_> = (0..5)
+                .map(|author| fixture.make_graph_block(round, author, ancestors.clone(), vec![], 0))
+                .collect();
+            fixture.add_blocks(&blocks);
+            leaders.push(blocks[0].clone());
+            previous_round = blocks;
+        }
+
+        // Three cutoff rejects reach certification stake, but rejection requires the full
+        // five-authority quorum. Two accepts also fall short of an accept certificate.
+        let mut linearizer =
+            crate::linearizer::Linearizer::new(fixture.context.clone(), fixture.dag_state.clone());
+        for (depth, leader) in leaders.into_iter().enumerate() {
+            let commit = linearizer.handle_commit(vec![leader]).pop().unwrap();
+            let finalized = fixture.finalizer.process_commit(commit);
+            if depth < 2 {
+                assert!(finalized.is_empty());
+            } else {
+                assert_eq!(finalized.len(), 3);
+                assert_eq!(
+                    finalized[0]
+                        .rejected_transactions_by_block
+                        .get(&target.reference()),
+                    Some(&vec![0])
+                );
+            }
+        }
+        assert!(fixture.finalizer.is_empty());
+    }
+
+    #[tokio::test]
+    async fn later_cutoffs_cannot_retract_first_accept_votes() {
+        let mut fixture = Fixture::new();
+        let (target, round_one_refs) = fixture.make_round_one(1);
+        let first_accepts: Vec<_> = (0..5)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    true,
+                    vec![],
+                    0,
+                    None,
+                )
+            })
+            .collect();
+        fixture.add_blocks(&first_accepts);
+        let ancestors: Vec<_> = first_accepts
+            .iter()
+            .map(|block| block.reference())
+            .collect();
+        let later_cutoffs: Vec<_> = (0..5)
+            .map(|author| fixture.make_graph_block(3, author, ancestors.clone(), vec![], 1))
+            .collect();
+        fixture.add_blocks(&later_cutoffs);
+
+        let graph = CommittedBlockGraph::new(first_accepts.iter().chain(&later_cutoffs).cloned());
+        let first_votes = collect_first_votes(&graph, target.reference(), 3);
+        assert!(first_votes.iter().all(|vote| vote.block_ref.round == 2));
+        let indirect = fixture.finalizer.compute_indirect_decisions(
+            target.reference(),
+            &BTreeSet::from([0]),
+            &first_votes,
+            false,
+        );
+        assert_eq!(indirect.accepted, vec![0]);
+        assert!(indirect.rejected.is_empty());
+
+        let finalized = fixture.finalizer.process_commit(make_commit(
+            1,
+            &first_accepts[0],
+            vec![target.clone(), first_accepts[0].clone()],
+        ));
+        assert_eq!(finalized.len(), 1);
+        assert!(finalized[0].rejected_transactions_by_block.is_empty());
+        assert!(fixture.finalizer.is_empty());
+    }
+
+    #[tokio::test]
+    async fn indirect_rejects_a_cutoff_quorum_before_depth_two_after_local_gc() {
+        let mut fixture = Fixture::with_gc_depth(3);
+        let (target, round_one_refs) = fixture.make_round_one(1);
+        let voters: Vec<_> = (0..5)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    author < 4,
+                    vec![],
+                    1,
+                    None,
+                )
+            })
+            .collect();
+        fixture.add_blocks(&voters);
+        let first_leader =
+            fixture.make_anchor(voters.iter().map(|block| block.reference()).collect());
+        fixture.add_blocks(std::slice::from_ref(&first_leader));
+        let mut linearizer =
+            crate::linearizer::Linearizer::new(fixture.context.clone(), fixture.dag_state.clone());
+        let first_commit = linearizer
+            .handle_commit(vec![first_leader.clone()])
+            .pop()
+            .unwrap();
+        assert!(fixture.finalizer.process_commit(first_commit).is_empty());
+
+        // Authority 4's round-3 block is its first vote on the target. Linearizing the anchor
+        // advances local GC before direct finalization can count this fifth cutoff reject.
+        let round_three_peers: Vec<_> = (1..5)
+            .map(|author| {
+                fixture.make_graph_block(3, author, first_leader.ancestors().to_vec(), vec![], 1)
+            })
+            .collect();
+        fixture.add_blocks(&round_three_peers);
+        let ancestors = std::iter::once(first_leader.reference())
+            .chain(round_three_peers.iter().map(|block| block.reference()))
+            .collect();
+        let anchor = fixture.make_graph_block(4, 0, ancestors, vec![], 0);
+        fixture.add_blocks(std::slice::from_ref(&anchor));
+        let second_commit = linearizer.handle_commit(vec![anchor]).pop().unwrap();
+        assert_eq!(fixture.dag_state.read().gc_round(), target.round());
+        assert!(
+            fixture
+                .dag_state
+                .read()
+                .get_block_children(&target.reference())
+                .is_none()
+        );
+        let finalized = fixture.finalizer.process_commit(second_commit);
+        assert_eq!(finalized.len(), 2);
+        assert_eq!(
+            finalized[0]
+                .rejected_transactions_by_block
+                .get(&target.reference()),
+            Some(&vec![0])
+        );
+        let statuses = &fixture
+            .context
+            .metrics
+            .node_metrics
+            .finalizer_transaction_status;
+        assert_eq!(statuses.with_label_values(&["direct_reject"]).get(), 0);
+        assert_eq!(statuses.with_label_values(&["indirect_reject"]).get(), 1);
+        assert!(fixture.finalizer.is_empty());
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "cannot have both")]
+    async fn indirect_detects_conflicting_accept_and_cutoff_quorums() {
+        let fixture = Fixture::new();
+        let (target, round_one_refs) = fixture.make_round_one(1);
+        let mut voters: Vec<_> = (0..3)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    true,
+                    vec![],
+                    0,
+                    None,
+                )
+            })
+            .collect();
+        voters.extend((1..6).map(|author| {
+            fixture.make_voter(
+                author,
+                &round_one_refs,
+                target.reference(),
+                true,
+                vec![],
+                1,
+                Some(author as u8),
+            )
+        }));
+        let graph = CommittedBlockGraph::new(voters);
+        let first_votes = collect_first_votes(&graph, target.reference(), 2);
+        fixture.finalizer.compute_indirect_decisions(
+            target.reference(),
+            &BTreeSet::from([0]),
+            &first_votes,
+            false,
+        );
+    }
+
+    #[tokio::test]
+    async fn cutoff_votes_remain_safe_with_byzantine_and_crash_stake() {
+        // Cover Byzantine-only, hybrid, crash-only, and one Byzantine authority with stake two.
+        for (size, byzantine_stake, crash_stake, weighted) in [
+            (6, 1, 0, false),
+            (9, 1, 1, false),
+            (4, 0, 1, false),
+            (10, 2, 0, true),
+        ] {
+            for reject_quorum in [false, true] {
+                // Separate observers can receive different forks from the Byzantine authority.
+                for view in [0, 1, 2] {
+                    let active_authorities = size - crash_stake as usize;
+                    let byzantine_author = active_authorities - 1;
+                    let fixture =
+                        Fixture::with_fault_budget(size, byzantine_stake, crash_stake, |context| {
+                            if weighted {
+                                let mut authorities =
+                                    context.committee.authorities_slice().to_vec();
+                                authorities[byzantine_author].stake = 2;
+                                context.committee =
+                                    Committee::new(context.committee.epoch(), authorities);
+                            }
+                        });
+                    let committee = &fixture.context.committee;
+                    let quorum = 4 * byzantine_stake + 2 * crash_stake + 1;
+                    let certificate = 2 * byzantine_stake + crash_stake + 1;
+                    assert_eq!(committee.quorum_threshold(), quorum);
+                    assert_eq!(committee.certification_threshold(), certificate);
+
+                    // The target's author is either Byzantine or crashes before round two, so
+                    // no honest proposer needs to emit an explicit reject for its own block.
+                    let mut transaction_counts = vec![0; size];
+                    transaction_counts[size - 1] = 1;
+                    let round_one_blocks = fixture.make_round_one_blocks(&transaction_counts);
+                    let target = &round_one_blocks[size - 1];
+                    let round_one_refs: Vec<_> = round_one_blocks
+                        .iter()
+                        .map(|block| block.reference())
+                        .collect();
+                    let faulty_authorities = usize::from(byzantine_stake > 0);
+                    let honest_accepts = if reject_quorum {
+                        // Honest rejects plus Byzantine stake reach exactly Q.
+                        committee.total_stake() - crash_stake - quorum
+                    } else {
+                        // Honest accepts plus Byzantine stake reach exactly C.
+                        certificate - byzantine_stake
+                    } as usize;
+                    let mut voters: Vec<_> = (0..active_authorities - faulty_authorities)
+                        .map(|author| {
+                            let accepts = author < honest_accepts;
+                            let explicit_reject = !accepts && author % 2 == 0;
+                            fixture.make_voter(
+                                author as u32,
+                                &round_one_refs,
+                                target.reference(),
+                                true,
+                                if explicit_reject { vec![0] } else { vec![] },
+                                u32::from(!accepts && !explicit_reject),
+                                None,
+                            )
+                        })
+                        .collect();
+                    // The crashed authority produced round one, then stopped before voting.
+                    // The Byzantine authority can send an accept, rejects, or both to an observer.
+                    if byzantine_stake > 0 && view != 1 {
+                        voters.push(fixture.make_voter(
+                            byzantine_author as u32,
+                            &round_one_refs,
+                            target.reference(),
+                            true,
+                            vec![],
+                            0,
+                            None,
+                        ));
+                    }
+                    if byzantine_stake > 0 && view != 0 {
+                        for marker in 1..=3 {
+                            voters.push(fixture.make_voter(
+                                byzantine_author as u32,
+                                &round_one_refs,
+                                target.reference(),
+                                true,
+                                vec![],
+                                1,
+                                Some(marker),
+                            ));
+                        }
+                        voters.push(fixture.make_voter(
+                            byzantine_author as u32,
+                            &round_one_refs,
+                            target.reference(),
+                            true,
+                            vec![0],
+                            0,
+                            Some(4),
+                        ));
+                    }
+                    fixture.add_blocks(&voters);
+                    let graph = CommittedBlockGraph::new(voters);
+                    let first_votes = collect_first_votes(&graph, target.reference(), 2);
+                    let transactions = BTreeSet::from([0]);
+                    let direct = fixture.finalizer.compute_direct_decisions(
+                        target.reference(),
+                        &transactions,
+                        &first_votes,
+                    );
+                    let indirect = fixture.finalizer.compute_indirect_decisions(
+                        target.reference(),
+                        &transactions,
+                        &first_votes,
+                        false,
+                    );
+                    assert!(direct.accepted.is_empty());
+                    let should_reject = reject_quorum && (byzantine_stake == 0 || view != 0);
+                    let expected_rejects = if should_reject { vec![0] } else { vec![] };
+                    assert_eq!(direct.rejected, expected_rejects);
+                    assert_eq!(indirect.rejected, expected_rejects);
+                    let should_accept = !reject_quorum && (byzantine_stake == 0 || view != 1);
+                    assert_eq!(
+                        indirect.accepted,
+                        if should_accept { vec![0] } else { vec![] }
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn high_cutoffs_without_a_causal_link_do_not_reject() {
+        let fixture = Fixture::new();
+        let (target, round_one_refs) = fixture.make_round_one(1);
+        let voters: Vec<_> = (1..6)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    false,
+                    vec![],
+                    1,
+                    None,
+                )
+            })
+            .collect();
+        fixture.add_blocks(&voters);
+        let committed = CommittedBlockGraph::new(voters);
+        let local_votes = collect_first_votes(&*fixture.dag_state.read(), target.reference(), 2);
+        let committed_votes = collect_first_votes(&committed, target.reference(), 2);
+        assert!(local_votes.is_empty());
+        assert!(committed_votes.is_empty());
+        let transactions = BTreeSet::from([0]);
+        let direct = fixture.finalizer.compute_direct_decisions(
+            target.reference(),
+            &transactions,
+            &local_votes,
+        );
+        let indirect = fixture.finalizer.compute_indirect_decisions(
+            target.reference(),
+            &transactions,
+            &committed_votes,
+            false,
+        );
+        assert!(direct.accepted.is_empty() && direct.rejected.is_empty());
+        assert!(indirect.accepted.is_empty() && indirect.rejected.is_empty());
     }
 
     #[tokio::test]
@@ -2226,6 +2917,273 @@ mod tests {
                 .rejected_transactions_by_block
                 .get(&target.reference()),
             Some(&vec![0])
+        );
+    }
+
+    #[tokio::test]
+    async fn recovery_recomputes_partial_cutoff_rejections_after_local_gc() {
+        let mut fixture = Fixture::with_gc_depth(3);
+        let (target, round_one_refs) = fixture.make_round_one(2);
+        let voters: Vec<_> = (0..5)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    true,
+                    match author {
+                        2 => vec![0, 1],
+                        3 | 4 => vec![0],
+                        _ => vec![],
+                    },
+                    if author < 2 { 1 } else { 0 },
+                    None,
+                )
+            })
+            .collect();
+        fixture.add_blocks(&voters);
+        let mut previous_round = voters;
+        let mut leaders = vec![];
+        for round in 3..=5 {
+            let ancestors: Vec<_> = previous_round
+                .iter()
+                .map(|block| block.reference())
+                .collect();
+            let blocks: Vec<_> = (0..5)
+                .map(|author| fixture.make_graph_block(round, author, ancestors.clone(), vec![], 0))
+                .collect();
+            fixture.add_blocks(&blocks);
+            leaders.push(blocks[0].clone());
+            previous_round = blocks;
+        }
+
+        let mut linearizer =
+            crate::linearizer::Linearizer::new(fixture.context.clone(), fixture.dag_state.clone());
+        for leader in &leaders[..2] {
+            let commit = linearizer
+                .handle_commit(vec![leader.clone()])
+                .pop()
+                .unwrap();
+            assert!(fixture.finalizer.process_commit(commit).is_empty());
+        }
+        let first_state = &fixture.finalizer.pending_commits[0];
+        assert_eq!(
+            first_state.rejected_transactions.get(&target.reference()),
+            Some(&BTreeSet::from([0]))
+        );
+        assert_eq!(
+            first_state.pending_transactions.get(&target.reference()),
+            Some(&BTreeSet::from([1]))
+        );
+        let first_commit_ref = first_state.commit.commit_ref;
+        assert_eq!(fixture.dag_state.read().gc_round(), target.round());
+        fixture.dag_state.write().flush();
+        assert!(
+            fixture
+                .store
+                .read_rejected_transactions(first_commit_ref)
+                .unwrap()
+                .is_none()
+        );
+
+        // Only commits and blocks are durable at this crash point. The partial transaction-0
+        // rejection exists only in the finalizer, and local GC already hides the target.
+        // First compute the uninterrupted result without flushing past that durable image.
+        let last_commit = linearizer
+            .handle_commit(vec![leaders[2].clone()])
+            .pop()
+            .unwrap();
+        let expected = fixture.finalizer.process_commit(last_commit);
+        assert_eq!(expected.len(), 3);
+        assert_eq!(
+            expected[0]
+                .rejected_transactions_by_block
+                .get(&target.reference()),
+            Some(&vec![0, 1])
+        );
+        let context = fixture.context.clone();
+        let store = fixture.store.clone();
+        drop(linearizer);
+        drop(fixture);
+
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        assert_eq!(dag_state.read().gc_round(), target.round());
+        assert!(
+            dag_state
+                .read()
+                .get_block_children(&target.reference())
+                .is_none()
+        );
+        let tracker = TransactionVoteTracker::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier),
+            dag_state.clone(),
+        );
+        assert!(tracker.get_reject_votes(&target.reference()).is_none());
+        let indirect_rejects = context
+            .metrics
+            .node_metrics
+            .finalizer_transaction_status
+            .with_label_values(&["indirect_reject"]);
+        let rejects_before_recovery = indirect_rejects.get();
+        let (consumer, mut receiver) = crate::commit_consumer::CommitConsumerArgs::new(0, 0);
+        let mut observer = crate::commit_observer::CommitObserver::new(
+            context,
+            consumer,
+            dag_state,
+            tracker.clone(),
+        )
+        .await;
+        assert_eq!(
+            tracker.get_reject_votes(&target.reference()),
+            Some(vec![(0, 3), (1, 1)])
+        );
+        // Replay must reconstruct transaction 0's cutoff quorum before the depth-two fallback
+        // exists. Transaction 1 must still keep the commit pending at this point.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while indirect_rejects.get() == rejects_before_recovery {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("Recovery must reestablish the partial rejection at depth one");
+        assert_eq!(indirect_rejects.get(), rejects_before_recovery + 1);
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        ));
+        observer
+            .handle_committed_leaders(vec![leaders[2].clone()], true)
+            .unwrap();
+
+        for expected_commit in &expected {
+            let replayed = tokio::time::timeout(Duration::from_secs(5), receiver.recv())
+                .await
+                .expect("Recovery must finalize after the depth-two anchor")
+                .unwrap();
+            assert_eq!(replayed.commit_ref, expected_commit.commit_ref);
+            assert_eq!(
+                replayed.rejected_transactions_by_block,
+                expected_commit.rejected_transactions_by_block
+            );
+        }
+        observer.stop().await;
+        assert_eq!(
+            store.read_rejected_transactions(first_commit_ref).unwrap(),
+            Some(expected[0].rejected_transactions_by_block.clone())
+        );
+        assert_eq!(
+            store.read_last_finalized_commit().unwrap(),
+            Some(expected.last().unwrap().commit_ref)
+        );
+    }
+
+    #[tokio::test]
+    async fn recovery_preserves_persisted_cutoff_rejection_without_local_votes() {
+        let mut fixture = Fixture::with_gc_depth(3);
+        let (target, round_one_refs) = fixture.make_round_one(1);
+        let voters: Vec<_> = (0..5)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    true,
+                    vec![],
+                    1,
+                    None,
+                )
+            })
+            .collect();
+        fixture.add_blocks(&voters);
+        let first_voter_ref = voters[0].reference();
+        let mut previous_round = voters;
+        let mut leaders = vec![];
+        for round in 3..=5 {
+            let ancestors: Vec<_> = previous_round
+                .iter()
+                .map(|block| block.reference())
+                .collect();
+            let blocks: Vec<_> = (0..5)
+                .map(|author| fixture.make_graph_block(round, author, ancestors.clone(), vec![], 0))
+                .collect();
+            fixture.add_blocks(&blocks);
+            leaders.push(blocks[0].clone());
+            previous_round = blocks;
+        }
+        let mut linearizer =
+            crate::linearizer::Linearizer::new(fixture.context.clone(), fixture.dag_state.clone());
+        let mut expected = vec![];
+        for leader in leaders {
+            let commit = linearizer.handle_commit(vec![leader]).pop().unwrap();
+            let finalized = fixture.finalizer.process_commit(commit);
+            assert_eq!(finalized.len(), 1);
+            persist_finalized_commits(
+                &fixture.dag_state,
+                &fixture.transaction_vote_tracker,
+                &finalized,
+                true,
+            );
+            expected.extend(finalized);
+        }
+        assert_eq!(
+            expected[0]
+                .rejected_transactions_by_block
+                .get(&target.reference()),
+            Some(&vec![0])
+        );
+        let context = fixture.context.clone();
+        let store = fixture.store.clone();
+        drop(linearizer);
+        drop(fixture);
+
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        assert_eq!(dag_state.read().gc_round(), first_voter_ref.round);
+        assert!(
+            dag_state
+                .read()
+                .get_block_children(&first_voter_ref)
+                .is_none()
+        );
+        let tracker = TransactionVoteTracker::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier),
+            dag_state.clone(),
+        );
+        let (consumer, mut receiver) = crate::commit_consumer::CommitConsumerArgs::new(0, 0);
+        let mut observer = crate::commit_observer::CommitObserver::new(
+            context,
+            consumer,
+            dag_state,
+            tracker.clone(),
+        )
+        .await;
+
+        // Real recovery loads the persisted rejection marker and bypasses voting. Neither the
+        // local first-vote traversal nor the fresh tracker can reconstruct this old decision.
+        assert!(tracker.get_reject_votes(&target.reference()).is_none());
+        for expected_commit in &expected {
+            let replayed = tokio::time::timeout(Duration::from_secs(5), receiver.recv())
+                .await
+                .expect("Persisted cutoff decisions must be replayed without voting")
+                .unwrap();
+            assert!(replayed.recovered_rejected_transactions);
+            assert_eq!(replayed.commit_ref, expected_commit.commit_ref);
+            assert_eq!(
+                replayed.rejected_transactions_by_block,
+                expected_commit.rejected_transactions_by_block
+            );
+        }
+        observer.stop().await;
+        assert_eq!(
+            store
+                .read_rejected_transactions(expected[0].commit_ref)
+                .unwrap(),
+            Some(expected[0].rejected_transactions_by_block.clone())
+        );
+        assert_eq!(
+            store.read_last_finalized_commit().unwrap(),
+            Some(expected.last().unwrap().commit_ref)
         );
     }
 }
