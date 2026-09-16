@@ -407,9 +407,9 @@ const MAINNET_USDB: &str =
 //              Enable allowed_proposers on testnet and mainnet.
 //              Validate PTB indices at signing time.
 //              Enable memory_safety_invariant_check_v2.
-//              Disable effects transaction dependencies on devnet.
 // Version 138: Enable BumpOnly
 //              Enable check_object_funds_withdraw_in_execution on testnet.
+//              Disable effects transaction dependencies on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4767,7 +4767,6 @@ impl ProtocolConfig {
                     cfg.feature_flags.charge_ld_const_abstract_size = true;
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
-                        cfg.feature_flags.disable_effects_tx_dependencies = true;
                     }
                     cfg.reserve_object_funds_for_withdrawal_cost_base = Some(52);
                     // Equivalent to the fixed portion of a dynamic-field lookup (52 + 52) plus
@@ -4783,6 +4782,9 @@ impl ProtocolConfig {
                     cfg.gas_model_version = Some(15);
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
+                    }
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.disable_effects_tx_dependencies = true;
                     }
                 }
                 // Use this template when making changes:

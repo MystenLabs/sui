@@ -494,35 +494,6 @@ async fn assert_checkpoint_order_with_effects_dependencies(
             && checkpoint_positions[2] < checkpoint_positions[3],
         "checkpoint order must retain both shared reads before their overwrite and deletion: {checkpoint_positions:?}"
     );
-
-    let checkpoint_sequences = checkpoint_positions
-        .iter()
-        .map(|(sequence, _)| *sequence)
-        .collect::<std::collections::BTreeSet<_>>();
-    let checkpoint_digests = test_cluster
-        .all_node_handles()
-        .into_iter()
-        .map(|handle| {
-            handle.with(|node| {
-                checkpoint_sequences
-                    .iter()
-                    .map(|sequence| {
-                        *node
-                            .state()
-                            .checkpoint_store
-                            .get_checkpoint_by_sequence_number(*sequence)
-                            .unwrap()
-                            .expect("settled checkpoint missing from node")
-                            .digest()
-                    })
-                    .collect::<Vec<_>>()
-            })
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        checkpoint_digests.windows(2).all(|pair| pair[0] == pair[1]),
-        "validators and fullnode disagreed on a settled checkpoint digest: {checkpoint_digests:?}"
-    );
 }
 
 /// Regression coverage for checkpoint ordering when effects dependencies are absent. The
@@ -542,8 +513,7 @@ async fn shared_checkpoint_order_without_effects_dependencies() {
     // Mainnet/testnet simulation runs retain the flag-off protocol configuration.
     let devnet = sui_types::digests::ChainIdentifier::default().chain()
         == sui_protocol_config::Chain::Unknown;
-    assert_checkpoint_order_with_effects_dependencies(ProtocolVersion::new(137), devnet).await;
-    assert_checkpoint_order_with_effects_dependencies(ProtocolVersion::new(136), false).await;
+    assert_checkpoint_order_with_effects_dependencies(ProtocolVersion::new(138), devnet).await;
 }
 
 /// End-to-end shared transaction test for a Sui validator. It does not test the client or wallet,

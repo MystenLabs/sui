@@ -24,6 +24,7 @@ use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_macros::sim_test;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::get_available_port;
+use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::SuiAddress;
 use sui_types::gas_coin::GasCoin;
@@ -633,6 +634,12 @@ async fn test_execute_transaction_object_changes_input_output() {
 
 #[sim_test]
 async fn test_execute_transaction_effects_json() {
+    // Empty dependencies are omitted from effectsJson, so force the flag on to keep one snapshot
+    // across chain overrides.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_effects_tx_dependencies_for_testing(true);
+        config
+    });
     let validator_cluster = TestClusterBuilder::new()
         .with_num_validators(1)
         .build()
@@ -668,20 +675,8 @@ async fn test_execute_transaction_effects_json() {
         .await
         .expect("GraphQL request failed");
 
-    let dependencies_disabled = validator_cluster.fullnode_handle.sui_node.with(|node| {
-        node.state()
-            .load_epoch_store_one_call_per_task()
-            .protocol_config()
-            .disable_effects_tx_dependencies()
-    });
-    let snapshot = if dependencies_disabled {
-        "execute_transaction_effects_json_without_dependencies"
-    } else {
-        "execute_transaction_effects_json"
-    };
-
     // Use redactions to mask dynamic values that change between runs
-    insta::assert_json_snapshot!(snapshot, result.pointer("/data/executeTransaction"), {
+    insta::assert_json_snapshot!("execute_transaction_effects_json", result.pointer("/data/executeTransaction"), {
         // Object IDs and addresses
         ".**.objectId" => "[object_id]",
         ".**.address" => "[address]",
@@ -690,13 +685,10 @@ async fn test_execute_transaction_effects_json() {
         ".**.transactionDigest" => "[digest]",
         ".**.inputDigest" => "[digest]",
         ".**.outputDigest" => "[digest]",
-        // Dependencies array contains digest strings
-        ".effects.effectsJson.dependencies[]" => "[digest]",
         // BCS values
         ".**.bcs.value" => "[bcs]",
         // Sort arrays that may have non-deterministic order
         ".effects.effectsJson.changedObjects" => insta::sorted_redaction(),
-        ".effects.effectsJson.dependencies" => insta::sorted_redaction(),
         ".effects.balanceChangesJson" => insta::sorted_redaction(),
     });
 }

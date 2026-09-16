@@ -31,6 +31,7 @@ use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::TempDb;
 use sui_pg_db::temp::get_available_port;
+use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
@@ -1272,6 +1273,12 @@ async fn test_simulate_transaction_with_gas_selection() {
 
 #[tokio::test]
 async fn test_simulate_transaction_effects_json() {
+    // Empty dependencies are omitted from effectsJson, so force the flag on to keep one snapshot
+    // across chain overrides.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_effects_tx_dependencies_for_testing(true);
+        config
+    });
     let validator_cluster = TestClusterBuilder::new().build().await;
     let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
 
@@ -1307,21 +1314,9 @@ async fn test_simulate_transaction_effects_json() {
         .await
         .expect("GraphQL request failed");
 
-    let dependencies_disabled = validator_cluster.fullnode_handle.sui_node.with(|node| {
-        node.state()
-            .load_epoch_store_one_call_per_task()
-            .protocol_config()
-            .disable_effects_tx_dependencies()
-    });
-    let snapshot = if dependencies_disabled {
-        "simulate_transaction_effects_json_without_dependencies"
-    } else {
-        "simulate_transaction_effects_json"
-    };
-
     // Use redactions to mask dynamic values that change between runs
     // The `.**.field` syntax matches the field at any nesting level
-    insta::assert_json_snapshot!(snapshot, result.pointer("/data/simulateTransaction"), {
+    insta::assert_json_snapshot!("simulate_transaction_effects_json", result.pointer("/data/simulateTransaction"), {
         // Object IDs and addresses
         ".**.objectId" => "[object_id]",
         ".**.address" => "[address]",
@@ -1331,13 +1326,10 @@ async fn test_simulate_transaction_effects_json() {
         ".**.eventsDigest" => "[digest]",
         ".**.inputDigest" => "[digest]",
         ".**.outputDigest" => "[digest]",
-        // Dependencies array contains digest strings
-        ".effects.effectsJson.dependencies[]" => "[digest]",
         // BCS values
         ".**.bcs.value" => "[bcs]",
         // Sort arrays that may have non-deterministic order
         ".effects.effectsJson.changedObjects" => insta::sorted_redaction(),
-        ".effects.effectsJson.dependencies" => insta::sorted_redaction(),
         ".effects.balanceChangesJson" => insta::sorted_redaction(),
     });
 }
