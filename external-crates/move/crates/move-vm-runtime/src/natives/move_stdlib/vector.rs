@@ -22,7 +22,7 @@ use move_binary_format::{
     partial_vm_error,
 };
 use move_core_types::{
-    gas_algebra::{InternalGas, InternalGasPerAbstractMemoryUnit},
+    gas_algebra::{InternalGas, InternalGasPerAbstractMemoryUnit, InternalGasPerArg, NumArgs},
     vm_status::StatusCode,
 };
 use std::{collections::VecDeque, sync::Arc};
@@ -311,6 +311,262 @@ pub fn make_native_swap(gas_params: SwapGasParameters) -> NativeFunction {
     )
 }
 
+/***************************************************************************************************
+ * native fun reverse
+ *
+ *   gas cost: base_cost + per_elem * num_elements
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct ReverseGasParameters {
+    pub base: InternalGas,
+    pub per_elem: InternalGasPerArg,
+}
+
+pub fn native_reverse(
+    gas_params: &ReverseGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 1);
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+
+    let v = pop_arg!(args, VectorRef);
+    let ty = ty_args.safe_get(0)?;
+    let len = match vector_len(&v, ty) {
+        Ok(len) => len,
+        Err(error) => {
+            return NativeResult::map_partial_vm_result_empty(
+                context.gas_used(),
+                Err(native_error_to_abort(error)),
+            );
+        }
+    };
+    native_charge_gas_early_exit!(context, gas_params.per_elem * NumArgs::new(len));
+
+    NativeResult::map_partial_vm_result_empty(
+        context.gas_used(),
+        v.reverse(ty).map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_reverse(gas_params: ReverseGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_reverse(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+/***************************************************************************************************
+ * native fun keep
+ *
+ *   gas cost: base_cost + per_dropped_elem * dropped
+ *       + per_moved_elem * retained elements moved
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct KeepGasParameters {
+    pub base: InternalGas,
+    pub per_dropped_elem: InternalGasPerArg,
+    pub per_moved_elem: InternalGasPerArg,
+}
+
+pub(crate) fn keep_work(len: u64, start: u64, end: u64) -> (u64, u64) {
+    if start > end || end > len {
+        return (0, 0);
+    }
+
+    let retained = end - start;
+    let dropped = len - retained;
+    let moved = if start == 0 { 0 } else { retained };
+    (dropped, moved)
+}
+
+pub fn native_keep(
+    gas_params: &KeepGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 3);
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+
+    let end_arg = pop_arg!(args, u64);
+    let start_arg = pop_arg!(args, u64);
+    let end = checked_as!(end_arg, usize)?;
+    let start = checked_as!(start_arg, usize)?;
+    let v = pop_arg!(args, VectorRef);
+    let ty = ty_args.safe_get(0)?;
+
+    let len = match vector_len(&v, ty) {
+        Ok(len) => len,
+        Err(error) => {
+            return NativeResult::map_partial_vm_result_empty(
+                context.gas_used(),
+                Err(native_error_to_abort(error)),
+            );
+        }
+    };
+    // `VectorRef::keep` performs the actual validation. Do not charge per-element work for a
+    // range which it will reject.
+    let (dropped, moved) = keep_work(len, start_arg, end_arg);
+    native_charge_gas_early_exit!(context, gas_params.per_dropped_elem * NumArgs::new(dropped));
+    native_charge_gas_early_exit!(context, gas_params.per_moved_elem * NumArgs::new(moved));
+
+    NativeResult::map_partial_vm_result_empty(
+        context.gas_used(),
+        v.keep(start, end, ty).map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_keep(gas_params: KeepGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_keep(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+/***************************************************************************************************
+ * native fun slice
+ *
+ *   native gas cost: base_cost
+ *   The VM gas meter separately charges the returned vector by its deep abstract size.
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct SliceGasParameters {
+    pub base: InternalGas,
+}
+
+pub fn native_slice(
+    gas_params: &SliceGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 3);
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+
+    let j = checked_as!(pop_arg!(args, u64), usize)?;
+    let i = checked_as!(pop_arg!(args, u64), usize)?;
+    let v = pop_arg!(args, VectorRef);
+
+    NativeResult::map_partial_vm_result_one(
+        context.gas_used(),
+        v.slice(i, j, ty_args.safe_get(0)?)
+            .map(Vector::into_value)
+            .map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_slice(gas_params: SliceGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_slice(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+/***************************************************************************************************
+ * native fun splice
+ *
+ *   native gas cost: base_cost + per_elem * (num_inserted + tail_moved)
+ *   The VM gas meter separately charges the returned, removed vector by its deep abstract size.
+ *
+ **************************************************************************************************/
+#[derive(Debug, Clone)]
+pub struct SpliceGasParameters {
+    pub base: InternalGas,
+    pub per_elem: InternalGasPerArg,
+}
+
+pub(crate) fn splice_work(len: u64, i: u64, j: u64, n_in: u64) -> u64 {
+    if i > j || j > len {
+        return 0;
+    }
+
+    let n_removed = j - i;
+    let tail_moved = if n_in == n_removed { 0 } else { len - j };
+    n_in.saturating_add(tail_moved)
+}
+
+pub fn native_splice(
+    gas_params: &SpliceGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 4);
+
+    native_charge_gas_early_exit!(context, gas_params.base);
+
+    // get arguments from the Move call frame
+    let other = pop_arg!(args, Vector);
+    let j_arg = pop_arg!(args, u64);
+    let i_arg = pop_arg!(args, u64);
+    let j = checked_as!(j_arg, usize)?;
+    let i = checked_as!(i_arg, usize)?;
+    let v = pop_arg!(args, VectorRef);
+
+    // charge according to the moved elements (relocation)
+    let n_in = other.elem_len()? as u64;
+    let ty = ty_args.safe_get(0)?;
+    let len = match vector_len(&v, ty) {
+        Ok(len) => len,
+        Err(error) => {
+            return NativeResult::map_partial_vm_result_one(
+                context.gas_used(),
+                Err(native_error_to_abort(error)),
+            );
+        }
+    };
+    native_charge_gas_early_exit!(
+        context,
+        gas_params.per_elem * NumArgs::new(splice_work(len, i_arg, j_arg, n_in))
+    );
+
+    NativeResult::map_partial_vm_result_one(
+        context.gas_used(),
+        v.splice(
+            i,
+            j,
+            other,
+            ty,
+            context.runtime_limits_config().vector_len_max,
+        )
+        .map(Vector::into_value)
+        .map_err(native_error_to_abort),
+    )
+}
+
+pub fn make_native_splice(gas_params: SpliceGasParameters) -> NativeFunction {
+    Arc::new(
+        move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+            native_splice(&gas_params, context, ty_args, args)
+        },
+    )
+}
+
+fn vector_len(v: &VectorRef, ty: &Type) -> PartialVMResult<u64> {
+    match v.len(ty)? {
+        Value::U64(len) => Ok(len),
+        _ => Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "vector::length must return a u64"
+        )),
+    }
+}
+
 fn native_error_to_abort(err: PartialVMError) -> PartialVMError {
     let (major_status, sub_status_opt, message_opt, exec_state_opt, indices, offsets) =
         err.all_data();
@@ -345,6 +601,10 @@ pub struct GasParameters {
     pub pop_back: PopBackGasParameters,
     pub destroy_empty: DestroyEmptyGasParameters,
     pub swap: SwapGasParameters,
+    pub reverse: ReverseGasParameters,
+    pub keep: KeepGasParameters,
+    pub slice: SliceGasParameters,
+    pub splice: SpliceGasParameters,
 }
 
 pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, NativeFunction)> {
@@ -360,6 +620,10 @@ pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, Nati
             make_native_destroy_empty(gas_params.destroy_empty),
         ),
         ("swap", make_native_swap(gas_params.swap)),
+        ("reverse", make_native_reverse(gas_params.reverse)),
+        ("keep", make_native_keep(gas_params.keep)),
+        ("slice", make_native_slice(gas_params.slice)),
+        ("splice", make_native_splice(gas_params.splice)),
     ];
 
     make_module_natives(natives)

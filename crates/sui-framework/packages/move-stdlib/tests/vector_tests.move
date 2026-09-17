@@ -11,6 +11,8 @@ use std::unit_test::assert_eq;
 public struct R has store {}
 public struct Droppable has drop {}
 public struct NotDroppable {}
+public struct TaggedNotDroppable { value: u64 }
+public struct CopyNotDroppable has copy { value: u64 }
 
 #[test]
 fun test_singleton_contains() {
@@ -103,6 +105,109 @@ fun append_respects_order_nonempty_rhs_lhs() {
         assert_eq!(v1[i], i);
         i = i + 1;
     }
+}
+
+#[test]
+fun append_nested_vectors_preserves_order() {
+    let mut lhs = vector[vector[0u8, 1]];
+    lhs.append(vector[vector[2, 3], vector[4, 5]]);
+    assert_eq!(lhs.length(), 3);
+    assert_eq!(lhs[0][0], 0u8);
+    assert_eq!(lhs[1][1], 3u8);
+    assert_eq!(lhs[2][0], 4u8);
+}
+
+#[test]
+fun append_not_droppable_preserves_order() {
+    let mut lhs = vector[TaggedNotDroppable { value: 1 }];
+    lhs.append(vector[TaggedNotDroppable { value: 2 }, TaggedNotDroppable { value: 3 }]);
+
+    let TaggedNotDroppable { value: third } = lhs.pop_back();
+    let TaggedNotDroppable { value: second } = lhs.pop_back();
+    let TaggedNotDroppable { value: first } = lhs.pop_back();
+    assert_eq!(first, 1u64);
+    assert_eq!(second, 2);
+    assert_eq!(third, 3);
+    lhs.destroy_empty();
+}
+
+#[test]
+fun truncate_shrinks() {
+    let mut v = vector[0u64, 1, 2, 3, 4];
+    v.truncate(2);
+    assert_eq!(v.length(), 2);
+    assert_eq!(v[0], 0);
+    assert_eq!(v[1], 1);
+}
+
+#[test]
+fun truncate_to_zero() {
+    let mut v = vector[0u64, 1, 2];
+    v.truncate(0);
+    assert!(v.is_empty());
+}
+
+#[test]
+fun truncate_equal_len_is_noop() {
+    let mut v = vector[0u64, 1, 2];
+    v.truncate(3);
+    assert_eq!(v.length(), 3);
+    assert_eq!(v[2], 2);
+}
+
+#[test]
+fun truncate_larger_len_is_noop() {
+    let mut v = vector[0u64, 1, 2];
+    v.truncate(100);
+    assert_eq!(v.length(), 3);
+    assert_eq!(v[0], 0);
+    assert_eq!(v[2], 2);
+}
+
+#[test]
+fun truncate_empty_is_noop() {
+    let mut v = vector<u64>[];
+    v.truncate(0);
+    assert!(v.is_empty());
+}
+
+#[test]
+fun truncate_nested_vectors() {
+    let mut v = vector[vector[0u8, 1], vector[2, 3], vector[4, 5]];
+    v.truncate(1);
+    assert_eq!(v.length(), 1);
+    assert_eq!(v[0].length(), 2);
+    assert_eq!(v[0][0], 0u8);
+    assert_eq!(v[0][1], 1);
+}
+
+#[test]
+fun truncate_droppable_structs() {
+    let mut v = vector[Droppable {}, Droppable {}, Droppable {}];
+    v.truncate(1);
+    assert_eq!(v.length(), 1);
+}
+
+#[test]
+fun truncate_max_u64_len_is_noop() {
+    let mut v = vector[0u64, 1, 2];
+    v.truncate(18446744073709551615);
+    assert_eq!(v.length(), 3);
+    assert_eq!(v[2], 2);
+}
+
+#[test]
+fun truncate_deeply_nested() {
+    let mut v = vector[
+        vector[vector[0u8, 1], vector[2]],
+        vector[vector[3, 4]],
+        vector[vector[5], vector[6, 7, 8]],
+    ];
+    v.truncate(1);
+    assert_eq!(v.length(), 1);
+    assert_eq!(v[0].length(), 2);
+    assert_eq!(v[0][0][1], 1u8);
+    assert_eq!(v[0][1][0], 2u8);
 }
 
 #[test, expected_failure(vector_error, minor_status = 1, location = Self)]
@@ -311,6 +416,24 @@ fun reverse_vector_nonempty_odd_length_non_singleton() {
     assert_eq!(v[0], 2);
 }
 
+#[test]
+fun reverse_not_droppable_container() {
+    let mut v = vector[
+        TaggedNotDroppable { value: 1 },
+        TaggedNotDroppable { value: 2 },
+        TaggedNotDroppable { value: 3 },
+    ];
+    v.reverse();
+
+    let TaggedNotDroppable { value: first } = v.pop_back();
+    let TaggedNotDroppable { value: second } = v.pop_back();
+    let TaggedNotDroppable { value: third } = v.pop_back();
+    assert_eq!(first, 1u64);
+    assert_eq!(second, 2);
+    assert_eq!(third, 3);
+    v.destroy_empty();
+}
+
 #[test, expected_failure(vector_error, minor_status = 1, location = Self)]
 fun swap_empty() {
     let mut v = vector<u64>[];
@@ -397,6 +520,7 @@ fun skip() {
     assert_eq!(vector[0, 1, 2u64].skip(2), vector[2]);
     assert_eq!(vector[0, 1, 2u64].skip(0), vector[0, 1, 2]);
     assert_eq!(vector[0u64, 1, 2].skip(3), vector[]);
+    assert_eq!(vector[0u64, 1, 2].skip(100), vector[]);
 }
 
 #[test]
@@ -560,6 +684,20 @@ fun insert_at_end() {
 
     v.insert(7, 1);
     assert_eq!(v, vector[6, 7]);
+}
+
+#[test]
+fun insert_and_remove_not_droppable() {
+    let mut v = vector[TaggedNotDroppable { value: 1 }, TaggedNotDroppable { value: 3 }];
+    v.insert(TaggedNotDroppable { value: 2 }, 1);
+
+    let TaggedNotDroppable { value: middle } = v.remove(1);
+    let TaggedNotDroppable { value: last } = v.pop_back();
+    let TaggedNotDroppable { value: first } = v.pop_back();
+    assert_eq!(first, 1u64);
+    assert_eq!(middle, 2);
+    assert_eq!(last, 3);
+    v.destroy_empty();
 }
 
 #[test, expected_failure(abort_code = std::vector::EINDEX_OUT_OF_BOUNDS)]
@@ -1037,4 +1175,262 @@ fun skip_while() {
     assert_eq!(v.skip_while!(|e| *e == 1u64), vector[2, 2, 2, 3, 3, 3]);
     assert_eq!(v.skip_while!(|e| *e <= 2), vector[3, 3, 3]);
     assert_eq!(v.skip_while!(|_| true), vector[]);
+}
+
+// === keep ===
+
+#[test]
+fun keep_middle_range() {
+    let mut v = vector[1, 2, 3, 4, 5u64];
+    v.keep(1, 4);
+    assert_eq!(v, vector[2, 3, 4]);
+}
+
+#[test]
+fun keep_empty_range() {
+    let mut v = vector[1, 2, 3u64];
+    v.keep(2, 2);
+    assert_eq!(v, vector[]);
+}
+
+#[test]
+fun keep_whole_vector() {
+    let mut v = vector[1, 2, 3u64];
+    v.keep(0, 3);
+    assert_eq!(v, vector[1, 2, 3]);
+}
+
+#[test]
+fun keep_nested_vectors() {
+    let mut v = vector[vector[1u8], vector[2], vector[3]];
+    v.keep(1, 3);
+    assert_eq!(v, vector[vector[2], vector[3]]);
+}
+
+#[test]
+fun keep_droppable_structs() {
+    let mut v = vector[Droppable {}, Droppable {}, Droppable {}];
+    v.keep(1, 2);
+    assert_eq!(v.length(), 1);
+}
+
+#[test, expected_failure(abort_code = 1, location = std::vector)]
+fun keep_inverted_range_aborts() {
+    let mut v = vector[1, 2, 3u64];
+    v.keep(2, 1);
+}
+
+#[test, expected_failure(abort_code = 1, location = std::vector)]
+fun keep_end_out_of_bounds_aborts() {
+    let mut v = vector[1, 2, 3u64];
+    v.keep(1, 4);
+}
+
+// === drain ===
+
+#[test]
+fun drain_middle_range() {
+    let mut v = vector[1, 2, 3, 4, 5u64];
+    let removed = v.drain(1, 4);
+    assert_eq!(v, vector[1, 5]);
+    assert_eq!(removed, vector[2, 3, 4]);
+}
+
+#[test]
+fun drain_empty_range_is_noop() {
+    let mut v = vector[1, 2, 3u64];
+    let removed = v.drain(1, 1);
+    assert_eq!(v, vector[1, 2, 3]);
+    assert_eq!(removed, vector[]);
+}
+
+#[test]
+fun drain_whole_vector() {
+    let mut v = vector[1, 2, 3u64];
+    let removed = v.drain(0, 3);
+    assert_eq!(v, vector[]);
+    assert_eq!(removed, vector[1, 2, 3]);
+}
+
+#[test]
+fun drain_empty_vector_empty_range() {
+    let mut v = vector<u64>[];
+    let removed = v.drain(0, 0);
+    assert_eq!(removed, vector[]);
+    assert_eq!(v, vector[]);
+}
+
+#[test]
+fun drain_not_droppable_elements() {
+    let mut v = vector[NotDroppable {}, NotDroppable {}, NotDroppable {}];
+    let removed = v.drain(0, 2);
+    assert_eq!(v.length(), 1);
+    assert_eq!(removed.length(), 2);
+    removed.destroy!(|NotDroppable {}| ());
+    v.destroy!(|NotDroppable {}| ());
+}
+
+#[test]
+fun drain_nested_vectors() {
+    let mut v = vector[vector[1u8], vector[2], vector[3]];
+    let removed = v.drain(1, 2);
+    assert_eq!(v, vector[vector[1], vector[3]]);
+    assert_eq!(removed, vector[vector[2]]);
+}
+
+#[test, expected_failure(abort_code = 1, location = std::vector)]
+fun drain_inverted_range_aborts() {
+    let mut v = vector[1, 2, 3u64];
+    let _removed = v.drain(2, 1);
+}
+
+#[test, expected_failure(abort_code = 1, location = std::vector)]
+fun drain_end_out_of_bounds_aborts() {
+    let mut v = vector[1, 2, 3u64];
+    let _removed = v.drain(1, 4);
+}
+
+// === slice ===
+
+#[test]
+fun slice_middle_range() {
+    let v = vector[1, 2, 3, 4, 5u64];
+    let copied = v.slice(1, 4);
+    assert_eq!(copied, vector[2, 3, 4]);
+    assert_eq!(v, vector[1, 2, 3, 4, 5]);
+}
+
+#[test]
+fun slice_empty_range() {
+    let v = vector[1, 2, 3u64];
+    assert_eq!(v.slice(2, 2), vector[]);
+}
+
+#[test]
+fun slice_whole_vector() {
+    let v = vector[1, 2, 3u64];
+    assert_eq!(v.slice(0, 3), vector[1, 2, 3]);
+}
+
+#[test]
+fun slice_nested_vectors() {
+    let v = vector[vector[1u8], vector[2], vector[3]];
+    assert_eq!(v.slice(0, 2), vector[vector[1], vector[2]]);
+    assert_eq!(v, vector[vector[1], vector[2], vector[3]]);
+}
+
+#[test]
+fun slice_copy_only_elements() {
+    let mut v = vector[
+        CopyNotDroppable { value: 1 },
+        CopyNotDroppable { value: 2 },
+        CopyNotDroppable { value: 3 },
+    ];
+    let mut copied = v.slice(1, 3);
+
+    let CopyNotDroppable { value: copied_third } = copied.pop_back();
+    let CopyNotDroppable { value: copied_second } = copied.pop_back();
+    copied.destroy_empty();
+    assert_eq!(copied_second, 2u64);
+    assert_eq!(copied_third, 3);
+
+    let CopyNotDroppable { value: original_third } = v.pop_back();
+    let CopyNotDroppable { value: original_second } = v.pop_back();
+    let CopyNotDroppable { value: original_first } = v.pop_back();
+    v.destroy_empty();
+    assert_eq!(original_first, 1u64);
+    assert_eq!(original_second, 2);
+    assert_eq!(original_third, 3);
+}
+
+#[test, expected_failure(abort_code = 1, location = std::vector)]
+fun slice_inverted_range_aborts() {
+    let v = vector[1, 2, 3u64];
+    let _copied = v.slice(2, 1);
+}
+
+#[test, expected_failure(abort_code = 1, location = std::vector)]
+fun slice_end_out_of_bounds_aborts() {
+    let v = vector[1, 2, 3u64];
+    let _copied = v.slice(0, 4);
+}
+
+// === splice ===
+
+#[test]
+fun splice_replace_grow() {
+    let mut v = vector[1, 2, 3, 4, 5u64];
+    let removed = v.splice(1, 3, vector[10, 11, 12]);
+    assert_eq!(v, vector[1, 10, 11, 12, 4, 5]);
+    assert_eq!(removed, vector[2, 3]);
+}
+
+#[test]
+fun splice_insert_only() {
+    let mut v = vector[1, 2u64];
+    let removed = v.splice(1, 1, vector[9, 9]);
+    assert_eq!(v, vector[1, 9, 9, 2]);
+    assert_eq!(removed, vector[]);
+}
+
+#[test]
+fun splice_remove_only() {
+    let mut v = vector[1, 2, 3, 4u64];
+    let removed = v.splice(1, 3, vector[]);
+    assert_eq!(v, vector[1, 4]);
+    assert_eq!(removed, vector[2, 3]);
+}
+
+#[test]
+fun splice_exact_replace() {
+    let mut v = vector[1, 2, 3u64];
+    let removed = v.splice(1, 2, vector[9]);
+    assert_eq!(v, vector[1, 9, 3]);
+    assert_eq!(removed, vector[2]);
+}
+
+#[test]
+fun splice_append_shape() {
+    let mut v = vector[1, 2u64];
+    let removed = v.splice(2, 2, vector[3, 4]);
+    assert_eq!(v, vector[1, 2, 3, 4]);
+    assert_eq!(removed, vector[]);
+}
+
+#[test]
+fun splice_whole_vector_swap() {
+    let mut v = vector[1, 2, 3u64];
+    let removed = v.splice(0, 3, vector[7, 8]);
+    assert_eq!(v, vector[7, 8]);
+    assert_eq!(removed, vector[1, 2, 3]);
+}
+
+#[test]
+fun splice_not_droppable_elements() {
+    let mut v = vector[NotDroppable {}, NotDroppable {}];
+    let removed = v.splice(1, 2, vector[NotDroppable {}, NotDroppable {}]);
+    assert_eq!(v.length(), 3);
+    assert_eq!(removed.length(), 1);
+    removed.destroy!(|NotDroppable {}| ());
+    v.destroy!(|NotDroppable {}| ());
+}
+
+#[test]
+fun splice_nested_vectors() {
+    let mut v = vector[vector[1u8], vector[2], vector[3]];
+    let removed = v.splice(0, 1, vector[vector[7], vector[8]]);
+    assert_eq!(v, vector[vector[7], vector[8], vector[2], vector[3]]);
+    assert_eq!(removed, vector[vector[1]]);
+}
+
+#[test, expected_failure(abort_code = 1, location = std::vector)]
+fun splice_inverted_range_aborts() {
+    let mut v = vector[1, 2, 3u64];
+    let _removed = v.splice(2, 1, vector[]);
+}
+
+#[test, expected_failure(abort_code = 1, location = std::vector)]
+fun splice_end_out_of_bounds_aborts() {
+    let mut v = vector[1, 2, 3u64];
+    let _removed = v.splice(1, 4, vector[]);
 }

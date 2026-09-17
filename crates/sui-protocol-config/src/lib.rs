@@ -407,7 +407,9 @@ const MAINNET_USDB: &str =
 //              Enable allowed_proposers on testnet and mainnet.
 //              Validate PTB indices at signing time.
 //              Enable memory_safety_invariant_check_v2.
-// Version 138: Enable BumpOnly
+// Version 138: Enable BumpOnly.
+//              Add native vector bulk operations (keep, slice, splice, and reverse) and their
+//              gas costs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2068,6 +2070,14 @@ pub struct ProtocolConfig {
     vector_pop_back_base_cost: Option<u64>,
     vector_destroy_empty_base_cost: Option<u64>,
     vector_swap_base_cost: Option<u64>,
+    vector_reverse_base_cost: Option<u64>,
+    vector_reverse_per_elem_cost: Option<u64>,
+    vector_keep_base_cost: Option<u64>,
+    vector_keep_per_dropped_elem_cost: Option<u64>,
+    vector_keep_per_moved_elem_cost: Option<u64>,
+    vector_slice_base_cost: Option<u64>,
+    vector_splice_base_cost: Option<u64>,
+    vector_splice_per_elem_cost: Option<u64>,
     debug_print_base_cost: Option<u64>,
     debug_print_stack_trace_base_cost: Option<u64>,
 
@@ -2995,6 +3005,14 @@ impl ProtocolConfig {
             vector_pop_back_base_cost: None,
             vector_destroy_empty_base_cost: None,
             vector_swap_base_cost: None,
+            vector_reverse_base_cost: None,
+            vector_reverse_per_elem_cost: None,
+            vector_keep_base_cost: None,
+            vector_keep_per_dropped_elem_cost: None,
+            vector_keep_per_moved_elem_cost: None,
+            vector_slice_base_cost: None,
+            vector_splice_base_cost: None,
+            vector_splice_per_elem_cost: None,
             debug_print_base_cost: None,
             debug_print_stack_trace_base_cost: None,
 
@@ -4774,6 +4792,14 @@ impl ProtocolConfig {
                 }
                 138 => {
                     cfg.gas_model_version = Some(15);
+                    cfg.vector_reverse_base_cost = Some(52);
+                    cfg.vector_reverse_per_elem_cost = Some(8);
+                    cfg.vector_keep_base_cost = Some(52);
+                    cfg.vector_keep_per_dropped_elem_cost = Some(1);
+                    cfg.vector_keep_per_moved_elem_cost = Some(8);
+                    cfg.vector_slice_base_cost = Some(52);
+                    cfg.vector_splice_base_cost = Some(52);
+                    cfg.vector_splice_per_elem_cost = Some(8);
                 }
                 // Use this template when making changes:
                 //
@@ -5234,6 +5260,34 @@ mod test {
             prot.max_arguments(),
             prot.max_arguments_as_option().unwrap()
         );
+    }
+
+    #[test]
+    fn vector_bulk_native_gas_costs_start_at_version_138() {
+        for chain in [Chain::Unknown, Chain::Mainnet, Chain::Testnet] {
+            let before = ProtocolConfig::get_for_version(ProtocolVersion::new(137), chain);
+            assert_eq!(before.vector_reverse_base_cost_as_option(), None);
+            assert_eq!(before.vector_reverse_per_elem_cost_as_option(), None);
+            assert_eq!(before.vector_keep_base_cost_as_option(), None);
+            assert_eq!(before.vector_keep_per_dropped_elem_cost_as_option(), None);
+            assert_eq!(before.vector_keep_per_moved_elem_cost_as_option(), None);
+            assert_eq!(before.vector_slice_base_cost_as_option(), None);
+            assert_eq!(before.vector_splice_base_cost_as_option(), None);
+            assert_eq!(before.vector_splice_per_elem_cost_as_option(), None);
+
+            let active = ProtocolConfig::get_for_version(ProtocolVersion::new(138), chain);
+            assert_eq!(active.vector_reverse_base_cost_as_option(), Some(52));
+            assert_eq!(active.vector_reverse_per_elem_cost_as_option(), Some(8));
+            assert_eq!(active.vector_keep_base_cost_as_option(), Some(52));
+            assert_eq!(
+                active.vector_keep_per_dropped_elem_cost_as_option(),
+                Some(1)
+            );
+            assert_eq!(active.vector_keep_per_moved_elem_cost_as_option(), Some(8));
+            assert_eq!(active.vector_slice_base_cost_as_option(), Some(52));
+            assert_eq!(active.vector_splice_base_cost_as_option(), Some(52));
+            assert_eq!(active.vector_splice_per_elem_cost_as_option(), Some(8));
+        }
     }
 
     #[test]
