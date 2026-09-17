@@ -115,6 +115,30 @@ Use `#[tokio::test]` for async tests, not `#[test]`.
 
 When modifying `crates/sui-protocol-config/src/lib.rs`, always invoke `/protocol-config` to verify changes are safe. Incorrect changes can break network consensus.
 
+### On-Wire Data Structure Changes (two-PR rule):
+
+Anything reachable from `CheckpointData` in `crates/sui-types/src/full_checkpoint_content.rs`
+(`CertifiedCheckpointSummary`, `CheckpointContents`, `CheckpointTransaction`, and everything they
+contain: `TransactionData`, `TransactionEffects`, `Object`, events, etc.) is BCS-serialized and
+decoded by external consumers (Rust SDK, TypeScript SDK, indexers, GraphQL, internal services)
+that ship on their own schedule. BCS cannot skip an unknown enum variant, so a variant that
+appears on chain before consumers have the new type definition makes them panic.
+
+Any change that alters `crates/sui-types/tests/snapshots/format__sui.yaml.snap` (new enum variant,
+new field, changed layout) MUST be split into two PRs:
+
+1. **PR 1: add the type.** Add the variant/field and the protocol feature flag that gates producing
+   it. The flag must NOT be enabled in any protocol version, or only under the devnet guard
+   (`chain != Chain::Mainnet && chain != Chain::Testnet`). Nothing may produce the new shape on
+   testnet or mainnet.
+2. **PR 2: enable it.** Flip the flag in a later protocol version only after PR 1 has shipped in a
+   Sui release AND the downstream decoders (sui-rust-sdk `sui-sdk-types`, TypeScript SDK, indexer
+   and GraphQL pipelines) have released with the new type. Leave at least one release cycle
+   between PR 1 and PR 2.
+
+Never add a new on-wire variant and enable it on testnet/mainnet in the same PR.
+Note in the PR description which downstream consumers were updated.
+
 ### Raising a PR:
 
 When opening or updating a PR in this repo, always invoke the `/send-pr` skill.
