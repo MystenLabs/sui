@@ -191,7 +191,7 @@ fn build_test_info<'func>(
     if is_random_test {
         for (_mut, var, s_type) in &function.signature.parameters {
             let sp!(_, _) = var.0;
-            let generated_type = match convert_builtin_type_to_typetag(&s_type.value) {
+            let generated_type = match convert_builtin_type_to_typetag(context, &s_type.value) {
                 Some(generated_type) => generated_type,
                 None => {
                     let msg = "Unsupported type for generated input for test. Only built-in types \
@@ -358,13 +358,13 @@ fn convert_minor_code_to_sub_status_code(
     }
 }
 
-fn convert_builtin_type_to_typetag(s_type: &HA::SingleType_) -> Option<TypeTag> {
-    fn get_builtin_type_inner(bt: &HA::BaseType) -> Option<TypeTag> {
+fn convert_builtin_type_to_typetag(context: &Context, s_type: &HA::SingleType_) -> Option<TypeTag> {
+    fn get_builtin_type_inner(context: &Context, bt: &HA::BaseType) -> Option<TypeTag> {
         match &bt.value {
             HA::BaseType_::Apply(_, sp!(_, HA::TypeName_::Builtin(b)), bts) => {
                 let mut tts = bts
                     .iter()
-                    .map(get_builtin_type_inner)
+                    .map(|bt| get_builtin_type_inner(context, bt))
                     .collect::<Option<Vec<_>>>()?;
                 let tag = match b.value {
                     NA::BuiltinTypeName_::Bool => TypeTag::Bool,
@@ -382,6 +382,19 @@ fn convert_builtin_type_to_typetag(s_type: &HA::SingleType_) -> Option<TypeTag> 
                         TypeTag::Vector(Box::new(tts.remove(0)))
                     }
                     NA::BuiltinTypeName_::Signer => TypeTag::Signer,
+                    // TODO (signed-ints): support signed ints once they exist in the bytecode.
+                    NA::BuiltinTypeName_::I8
+                    | NA::BuiltinTypeName_::I16
+                    | NA::BuiltinTypeName_::I32
+                    | NA::BuiltinTypeName_::I64
+                    | NA::BuiltinTypeName_::I128
+                    | NA::BuiltinTypeName_::I256 => {
+                        context.add_diag(ice!((
+                            bt.loc,
+                            "signed integer type reached the unit test plan builder"
+                        )));
+                        return None;
+                    }
                 };
                 Some(tag)
             }
@@ -392,7 +405,7 @@ fn convert_builtin_type_to_typetag(s_type: &HA::SingleType_) -> Option<TypeTag> 
         }
     }
     match s_type {
-        HA::SingleType_::Base(bt) => get_builtin_type_inner(bt),
+        HA::SingleType_::Base(bt) => get_builtin_type_inner(context, bt),
         _ => None,
     }
 }
