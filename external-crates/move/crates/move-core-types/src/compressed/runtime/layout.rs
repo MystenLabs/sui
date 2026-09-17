@@ -2,70 +2,77 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::compressed::{LayoutRef, LeafType, ResolvedRef};
+use crate::compressed::backend::DefaultRuntime;
 use crate::runtime_value as RV;
 use anyhow::Result as AResult;
-use indexmap::IndexSet;
 use std::fmt;
-use std::sync::Arc;
 
-pub use crate::compressed::LayoutHandle;
-
-static EMPTY_POOL: std::sync::LazyLock<Arc<MoveTypeLayoutPool>> =
-    std::sync::LazyLock::new(|| Arc::from(Vec::<MoveTypeNode>::new()));
+/// The default compressed-runtime layout builder. Alias so most users can just write
+/// `MoveTypeLayoutBuilder::new()`.
+///
+/// To use a different backend, name its concrete builder type directly (e.g.
+/// `RuntimeBoxPoolBuilder`) — call sites are otherwise identical.
+pub use crate::compressed::backend::DefaultRuntimeBuilder as MoveTypeLayoutBuilder;
 
 // =============================================================================
-// Type declarations
+// Trait: TypeLayout
 // =============================================================================
 
-// --- Node types (internal) ---
+/// A backing store for compressed runtime layouts. Implementors decide how
+/// roots are encoded and where node data lives.
+///
+/// This trait is **per-flavor** rather than shared with the annotated flavor
+/// because each flavor returns its own concrete `MoveLayoutView<'_, Self>`,
+/// and a shared trait with a GAT `type View<'a>` runs into the stable-Rust
+/// interaction between the GAT's implicit `Self: 'a` bound and HRTB use sites
+/// (e.g. `Display` on the owned `MoveTypeLayout<T>`), which forces
+/// `T: 'static` — too restrictive for backends that hold borrowed data.
+pub trait TypeLayout: Sized {
+    /// Cheap-to-`Clone` reference into the backend's storage. Typically `Copy`
+    /// (e.g. a packed index) but not required to be — Arc-handle backends use
+    /// a `Clone`-only `Root` carrying a refcounted pointer.
+    type Root: Clone + fmt::Debug;
 
-/// Struct layout node: field types stored as [`LayoutRef`]s.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct MoveStructNode {
-    pub(crate) fields: Box<[LayoutRef]>,
+    /// Resolve a root to its resolved view at that node. `r` is borrowed so
+    /// the returned view can borrow into data the `Root` keeps alive (e.g.
+    /// an `Arc<TreeNode>` inside the root).
+    fn realize_view<'a>(&'a self, r: &'a Self::Root) -> MoveLayoutView<'a, Self>;
+
+    /// Number of compound nodes accessible through this backend.
+    fn node_count(&self) -> usize;
 }
 
-/// Enum layout node: each variant is either a known list of field
-/// [`LayoutRef`]s, or `None` indicating the variant exists but its
-/// field layout is not available.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct MoveEnumNode {
-    pub(crate) variants: Box<[Option<Box<[LayoutRef]>>]>,
-}
+// =============================================================================
+// Owned and borrowed layout types
+// =============================================================================
 
-/// A compound layout node in the compressed node table.
-/// Leaf types (primitives) are encoded inline in [`LayoutRef`] and never
-/// appear in the table.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) enum MoveTypeNode {
-    Vector(LayoutRef),
-    Struct(MoveStructNode),
-    Enum(MoveEnumNode),
-}
-
-/// The backing store of compound layout nodes.
-pub(crate) type MoveTypeLayoutPool = [MoveTypeNode];
-
-// --- Owned layout types ---
-
-/// A deduplicated, flat representation of a [`RV::MoveTypeLayout`] tree.
-/// Cloning is cheap — the pool is shared via `Arc`.
+/// A deduplicated, flat representation of a [`RV::MoveTypeLayout`] tree,
+/// generic over the backend `T`.
 ///
 /// NOTE: `Eq`/`PartialEq`/`Hash` are intentionally not derived. Two layouts
 /// representing the same type may have different pool orderings (node
 /// permutations), so structural equality on the raw fields would produce
 /// false negatives. Compare by inflating to tree form or by comparing views.
 #[derive(Debug, Clone)]
-pub struct MoveTypeLayout {
-    pool: Arc<MoveTypeLayoutPool>,
-    root: LayoutRef,
+pub struct MoveTypeLayout<T: TypeLayout = DefaultRuntime> {
+    pool: T,
+    root: T::Root,
 }
 
-/// A resolved view of a layout node. Leaf types are unit variants;
-/// compound types contain owned layout types for direct navigation.
-#[derive(Debug, Clone)]
-pub enum MoveLayoutView {
+/// Borrowed view onto a [`MoveTypeLayout`] without cloning the pool.
+#[derive(Debug)]
+pub struct MoveTypeLayoutRef<'a, T: TypeLayout = DefaultRuntime> {
+    pub(crate) pool: &'a T,
+    pub(crate) root: &'a T::Root,
+}
+
+// =============================================================================
+// View types (all borrowed, Copy)
+// =============================================================================
+
+/// A resolved view of a layout node.
+#[derive(Debug)]
+pub enum MoveLayoutView<'a, T: TypeLayout = DefaultRuntime> {
     Bool,
     U8,
     U16,
@@ -75,57 +82,150 @@ pub enum MoveLayoutView {
     U256,
     Address,
     Signer,
-    Vector(Box<MoveTypeLayout>),
-    Struct(Box<MoveStructLayout>),
-    Enum(Box<MoveEnumLayout>),
-}
-
-/// The layout of a Move datatype, which is either a struct or an enum.
-#[derive(Debug, Clone)]
-pub enum MoveDatatypeLayout {
-    Struct(Box<MoveStructLayout>),
-    Enum(Box<MoveEnumLayout>),
+    Vector(MoveTypeLayoutRef<'a, T>),
+    Struct(MoveStructLayout<'a, T>),
+    Enum(MoveEnumLayout<'a, T>),
 }
 
 /// The enum layout of an enum type, as a view into a shared pool.
-#[derive(Debug, Clone)]
-pub struct MoveEnumLayout {
-    pub(crate) variants: Box<[VariantLayout]>,
+#[derive(Debug)]
+pub struct MoveEnumLayout<'a, T: TypeLayout = DefaultRuntime> {
+    pub(crate) pool: &'a T,
+    pub(crate) variants: &'a [Option<Box<[T::Root]>>],
 }
 
 /// The struct layout of a struct type, as a view into a shared pool.
-#[derive(Debug, Clone)]
-pub struct MoveStructLayout(pub MoveFieldsLayout);
+#[derive(Debug)]
+pub struct MoveStructLayout<'a, T: TypeLayout = DefaultRuntime> {
+    pub(crate) fields: MoveFieldsLayout<'a, T>,
+}
 
 /// The result of looking up a variant in an enum view.
-#[derive(Debug, Clone)]
-pub enum VariantLayout {
+#[derive(Debug)]
+pub enum VariantLayout<'a, T: TypeLayout = DefaultRuntime> {
     /// The variant's field layout is known.
-    Known(MoveFieldsLayout),
+    Known(MoveFieldsLayout<'a, T>),
     /// The variant exists but its field layout is not available.
     Unknown,
 }
 
 /// The field layout of a struct or enum variant, as a view into a shared pool.
-#[derive(Debug, Clone)]
-pub struct MoveFieldsLayout {
-    pool: Arc<MoveTypeLayoutPool>,
-    fields: Box<[LayoutRef]>,
+#[derive(Debug)]
+pub struct MoveFieldsLayout<'a, T: TypeLayout = DefaultRuntime> {
+    pub(crate) pool: &'a T,
+    pub(crate) fields: &'a [T::Root],
 }
 
-// --- Builder type ---
+// `#[derive(Copy, Clone)]` would over-constrain to `T: Copy`; these are all
+// `&'a T` plus Copy fields, so they're unconditionally Copy.
+macro_rules! impl_copy_clone {
+    ($($t:ident),* $(,)?) => { $(
+        impl<T: TypeLayout> Clone for $t<'_, T> { fn clone(&self) -> Self { *self } }
+        impl<T: TypeLayout> Copy for $t<'_, T> {}
+    )* };
+}
+impl_copy_clone!(
+    MoveTypeLayoutRef,
+    MoveLayoutView,
+    MoveEnumLayout,
+    MoveStructLayout,
+    VariantLayout,
+    MoveFieldsLayout,
+);
 
-/// Incrementally builds a [`MoveTypeLayout`] with automatic deduplication.
-/// Leaf types are encoded inline in [`LayoutRef`] and never stored in the
-/// node table.
-pub struct MoveTypeLayoutBuilder {
-    nodes: IndexSet<MoveTypeNode>,
+// =============================================================================
+// Builder trait + generic builder
+// =============================================================================
+
+/// Backend-write-side abstraction: each method constructs a layout root for
+/// one Move type-constructor. Each concrete backend (see e.g.
+/// [`crate::compressed::backend::arc_pool`]) decides how to allocate, encode,
+/// or deduplicate the root and where to store any compound node data.
+///
+/// `intern_tree` and `build` are provided as default methods so callers can drive
+/// any backend builder directly without an extra wrapper.
+pub trait BackendBuilder: Sized {
+    /// Cheap-to-`Clone` reference into the backend's storage (matches
+    /// `<Self::Output as TypeLayout>::Root`).
+    type Root: Clone + fmt::Debug;
+    /// The TypeLayout backend produced by `finalize`.
+    type Output: TypeLayout<Root = Self::Root>;
+    /// Errors raised by compound constructors (e.g. capacity-limit failures).
+    type Error;
+
+    fn bool(&mut self) -> Self::Root;
+    fn u8(&mut self) -> Self::Root;
+    fn u16(&mut self) -> Self::Root;
+    fn u32(&mut self) -> Self::Root;
+    fn u64(&mut self) -> Self::Root;
+    fn u128(&mut self) -> Self::Root;
+    fn u256(&mut self) -> Self::Root;
+    fn address(&mut self) -> Self::Root;
+    fn signer(&mut self) -> Self::Root;
+
+    fn vector(&mut self, element: Self::Root) -> Result<Self::Root, Self::Error>;
+    fn struct_layout(&mut self, fields: &[Self::Root]) -> Result<Self::Root, Self::Error>;
+    fn enum_layout(
+        &mut self,
+        variants: &[Option<&[Self::Root]>],
+    ) -> Result<Self::Root, Self::Error>;
+
+    /// Finalize the builder into an immutable [`TypeLayout`] backend.
+    fn finalize(self, root: Self::Root) -> Self::Output;
+
+    /// Recursively intern a tree-based layout, deduplicating shared subtrees.
+    /// Tree-based enum layouts always have known variants, so all variants are
+    /// wrapped in `Some`.
+    fn intern_tree(&mut self, layout: &RV::MoveTypeLayout) -> Result<Self::Root, Self::Error> {
+        Ok(match layout {
+            RV::MoveTypeLayout::Bool => self.bool(),
+            RV::MoveTypeLayout::U8 => self.u8(),
+            RV::MoveTypeLayout::U16 => self.u16(),
+            RV::MoveTypeLayout::U32 => self.u32(),
+            RV::MoveTypeLayout::U64 => self.u64(),
+            RV::MoveTypeLayout::U128 => self.u128(),
+            RV::MoveTypeLayout::U256 => self.u256(),
+            RV::MoveTypeLayout::Address => self.address(),
+            RV::MoveTypeLayout::Signer => self.signer(),
+            RV::MoveTypeLayout::Vector(inner) => {
+                let inner_h = self.intern_tree(inner)?;
+                self.vector(inner_h)?
+            }
+            RV::MoveTypeLayout::Struct(s) => {
+                let fields = s
+                    .fields()
+                    .iter()
+                    .map(|f| self.intern_tree(f))
+                    .collect::<Result<Vec<_>, _>>()?;
+                self.struct_layout(&fields)?
+            }
+            RV::MoveTypeLayout::Enum(e) => {
+                let variant_handles =
+                    e.0.iter()
+                        .map(|v| {
+                            v.iter()
+                                .map(|f| self.intern_tree(f))
+                                .collect::<Result<Vec<_>, _>>()
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                let variant_refs: Vec<Option<&[Self::Root]>> =
+                    variant_handles.iter().map(|v| Some(v.as_slice())).collect();
+                self.enum_layout(&variant_refs)?
+            }
+        })
+    }
+
+    /// Finalize the builder and wrap the result in a [`MoveTypeLayout`].
+    fn build(self, root: Self::Root) -> MoveTypeLayout<Self::Output> {
+        let pool = self.finalize(root.clone());
+        MoveTypeLayout::from_parts(pool, root)
+    }
 }
 
-// --- Display helper ---
+// =============================================================================
+// Display helper
+// =============================================================================
 
-/// Helper type that uses `T`'s `Display` implementation as its own `Debug` implementation,
-/// to allow other `Display` implementations to take advantage of structured formatting helpers.
 struct DebugAsDisplay<'a, T>(&'a T);
 
 // =============================================================================
@@ -134,93 +234,110 @@ struct DebugAsDisplay<'a, T>(&'a T);
 
 // --- MoveTypeLayout ---
 
-impl MoveTypeLayout {
-    /// Number of compound nodes in the table (excludes inline leaf types).
+impl<T: TypeLayout> MoveTypeLayout<T> {
+    /// Construct a layout from its raw parts. Used by backends to build their
+    /// concrete instantiations from a finalized pool + root.
+    pub fn from_parts(pool: T, root: T::Root) -> Self {
+        MoveTypeLayout { pool, root }
+    }
+}
+
+impl<T: TypeLayout> MoveTypeLayout<T> {
+    /// Number of compound nodes accessible through the backend.
     pub fn node_count(&self) -> usize {
-        self.pool.len()
+        self.pool.node_count()
     }
 
-    fn leaf(ty: LeafType) -> Self {
-        MoveTypeLayout {
-            pool: EMPTY_POOL.clone(),
-            root: LayoutRef::leaf(ty),
+    /// Borrow this layout without cloning the pool.
+    #[inline]
+    pub fn as_ref(&self) -> MoveTypeLayoutRef<'_, T> {
+        MoveTypeLayoutRef {
+            pool: &self.pool,
+            root: &self.root,
         }
     }
 
-    pub fn bool() -> Self {
-        Self::leaf(LeafType::Bool)
-    }
-    pub fn u8() -> Self {
-        Self::leaf(LeafType::U8)
-    }
-    pub fn u16() -> Self {
-        Self::leaf(LeafType::U16)
-    }
-    pub fn u32() -> Self {
-        Self::leaf(LeafType::U32)
-    }
-    pub fn u64() -> Self {
-        Self::leaf(LeafType::U64)
-    }
-    pub fn u128() -> Self {
-        Self::leaf(LeafType::U128)
-    }
-    pub fn u256() -> Self {
-        Self::leaf(LeafType::U256)
-    }
-    pub fn address() -> Self {
-        Self::leaf(LeafType::Address)
-    }
-    pub fn signer() -> Self {
-        Self::leaf(LeafType::Signer)
-    }
-
     /// Create a resolved view for navigating this layout.
-    pub fn as_view(&self) -> MoveLayoutView {
-        resolve_ref(&self.pool, self.root)
+    #[inline]
+    pub fn as_view(&self) -> MoveLayoutView<'_, T> {
+        self.as_ref().as_view()
     }
 
     /// Reconstruct the equivalent tree-based layout. Returns an error
     /// if any enum variant has an unknown layout.
     pub fn inflate(&self) -> AResult<RV::MoveTypeLayout> {
+        self.as_ref().inflate()
+    }
+}
+
+impl<T: TypeLayout> fmt::Display for MoveTypeLayout<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if f.alternate() {
+            write!(f, "{:#}", self.as_ref())
+        } else {
+            write!(f, "{}", self.as_ref())
+        }
+    }
+}
+
+// --- MoveTypeLayoutRef ---
+
+impl<'a, T: TypeLayout> MoveTypeLayoutRef<'a, T> {
+    /// Construct a borrowed layout from a pool reference and a root reference.
+    #[inline]
+    pub fn new(pool: &'a T, root: &'a T::Root) -> Self {
+        MoveTypeLayoutRef { pool, root }
+    }
+
+    /// Clone the backend to produce an owned layout (cheap when the backend's
+    /// `Clone` impl is itself cheap, e.g. an `Arc` refcount bump).
+    pub fn to_owned(self) -> MoveTypeLayout<T>
+    where
+        T: Clone,
+    {
+        MoveTypeLayout {
+            pool: self.pool.clone(),
+            root: self.root.clone(),
+        }
+    }
+
+    /// Number of compound nodes accessible through the backend.
+    pub fn node_count(self) -> usize {
+        self.pool.node_count()
+    }
+
+    /// Create a resolved view for navigating this layout.
+    #[inline]
+    pub fn as_view(self) -> MoveLayoutView<'a, T> {
+        self.pool.realize_view(self.root)
+    }
+
+    /// Reconstruct the equivalent tree-based layout. Returns an error
+    /// if any enum variant has an unknown layout.
+    pub fn inflate(self) -> AResult<RV::MoveTypeLayout> {
         self.as_view().inflate()
     }
 }
 
-impl TryFrom<&RV::MoveTypeLayout> for MoveTypeLayout {
-    type Error = anyhow::Error;
-    fn try_from(layout: &RV::MoveTypeLayout) -> Result<Self, Self::Error> {
-        let mut b = MoveTypeLayoutBuilder::new();
-        let root = b.from_tree(layout)?;
-        Ok(b.build(root))
+impl<'a, T: TypeLayout> From<&'a MoveTypeLayout<T>> for MoveTypeLayoutRef<'a, T> {
+    fn from(layout: &'a MoveTypeLayout<T>) -> Self {
+        layout.as_ref()
     }
 }
 
-impl fmt::Display for MoveTypeLayout {
+impl<T: TypeLayout> fmt::Display for MoveTypeLayoutRef<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.as_view() {
-            MoveLayoutView::Bool => write!(f, "bool"),
-            MoveLayoutView::U8 => write!(f, "u8"),
-            MoveLayoutView::U16 => write!(f, "u16"),
-            MoveLayoutView::U32 => write!(f, "u32"),
-            MoveLayoutView::U64 => write!(f, "u64"),
-            MoveLayoutView::U128 => write!(f, "u128"),
-            MoveLayoutView::U256 => write!(f, "u256"),
-            MoveLayoutView::Address => write!(f, "address"),
-            MoveLayoutView::Signer => write!(f, "signer"),
-            MoveLayoutView::Vector(vv) if f.alternate() => write!(f, "vector<{:#}>", vv),
-            MoveLayoutView::Vector(vv) => write!(f, "vector<{}>", vv),
-            MoveLayoutView::Struct(fv) if f.alternate() => write!(f, "{:#}", &*fv),
-            MoveLayoutView::Struct(fv) => write!(f, "{}", &*fv),
-            MoveLayoutView::Enum(ev) if f.alternate() => write!(f, "{ev:#}"),
-            MoveLayoutView::Enum(ev) => write!(f, "{ev}"),
+        if f.alternate() {
+            write!(f, "{:#}", self.as_view())
+        } else {
+            write!(f, "{}", self.as_view())
         }
     }
 }
 
 // --- MoveLayoutView ---
 
-impl MoveLayoutView {
+impl<T: TypeLayout> MoveLayoutView<'_, T> {
     /// Reconstruct the equivalent tree-based layout. Returns an error
     /// if any enum variant has an unknown layout.
     pub fn inflate(&self) -> AResult<RV::MoveTypeLayout> {
@@ -235,15 +352,18 @@ impl MoveLayoutView {
             MoveLayoutView::Address => RV::MoveTypeLayout::Address,
             MoveLayoutView::Signer => RV::MoveTypeLayout::Signer,
             MoveLayoutView::Vector(vv) => RV::MoveTypeLayout::Vector(Box::new(vv.inflate()?)),
-            MoveLayoutView::Struct(fv) => {
-                let fields = fv.0.fields().map(|f| f.inflate()).collect::<AResult<_>>()?;
+            MoveLayoutView::Struct(sv) => {
+                let fields = sv
+                    .fields
+                    .fields()
+                    .map(|f| f.inflate())
+                    .collect::<AResult<_>>()?;
                 RV::MoveTypeLayout::Struct(Box::new(RV::MoveStructLayout::new(fields)))
             }
             MoveLayoutView::Enum(ev) => {
                 let variants = ev
                     .variants()
-                    .iter()
-                    .map(|vfv| match vfv {
+                    .map(|vl| match vl {
                         VariantLayout::Known(fv) => {
                             fv.fields().map(|f| f.inflate()).collect::<AResult<_>>()
                         }
@@ -258,57 +378,91 @@ impl MoveLayoutView {
     }
 }
 
+impl<T: TypeLayout> fmt::Display for MoveLayoutView<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MoveLayoutView::Bool => write!(f, "bool"),
+            MoveLayoutView::U8 => write!(f, "u8"),
+            MoveLayoutView::U16 => write!(f, "u16"),
+            MoveLayoutView::U32 => write!(f, "u32"),
+            MoveLayoutView::U64 => write!(f, "u64"),
+            MoveLayoutView::U128 => write!(f, "u128"),
+            MoveLayoutView::U256 => write!(f, "u256"),
+            MoveLayoutView::Address => write!(f, "address"),
+            MoveLayoutView::Signer => write!(f, "signer"),
+            MoveLayoutView::Vector(vv) if f.alternate() => write!(f, "vector<{vv:#}>"),
+            MoveLayoutView::Vector(vv) => write!(f, "vector<{vv}>"),
+            MoveLayoutView::Struct(sv) if f.alternate() => write!(f, "{sv:#}"),
+            MoveLayoutView::Struct(sv) => write!(f, "{sv}"),
+            MoveLayoutView::Enum(ev) if f.alternate() => write!(f, "{ev:#}"),
+            MoveLayoutView::Enum(ev) => write!(f, "{ev}"),
+        }
+    }
+}
+
 // --- MoveFieldsLayout ---
 
-impl MoveFieldsLayout {
+impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
     /// Number of fields.
-    pub fn field_count(&self) -> usize {
+    #[inline]
+    pub fn field_count(self) -> usize {
         self.fields.len()
     }
 
     /// Access a field by index.
-    pub fn field(&self, i: usize) -> Option<MoveTypeLayout> {
-        self.fields.get(i).map(|f| MoveTypeLayout {
-            pool: self.pool.clone(),
-            root: *f,
+    #[inline]
+    pub fn field(self, i: usize) -> Option<MoveTypeLayoutRef<'a, T>> {
+        self.fields.get(i).map(|f| MoveTypeLayoutRef {
+            pool: self.pool,
+            root: f,
         })
     }
 
-    /// Iterate over all fields as layout views.
-    pub fn fields(&self) -> impl ExactSizeIterator<Item = MoveTypeLayout> {
-        self.fields.iter().map(move |f| MoveTypeLayout {
-            pool: self.pool.clone(),
-            root: *f,
+    /// Iterate over all fields as layouts.
+    #[inline]
+    pub fn fields(self) -> impl ExactSizeIterator<Item = MoveTypeLayoutRef<'a, T>> {
+        self.fields.iter().map(move |f| MoveTypeLayoutRef {
+            pool: self.pool,
+            root: f,
         })
     }
 }
 
 // --- MoveStructLayout ---
 
-impl MoveStructLayout {
+impl<'a, T: TypeLayout> MoveStructLayout<'a, T> {
+    /// Access the fields layout.
+    #[inline]
+    pub fn fields_layout(self) -> MoveFieldsLayout<'a, T> {
+        self.fields
+    }
+
     /// Number of fields.
-    pub fn field_count(&self) -> usize {
-        self.0.field_count()
+    #[inline]
+    pub fn field_count(self) -> usize {
+        self.fields.field_count()
     }
 
     /// Access a field by index.
-    pub fn field(&self, i: usize) -> Option<MoveTypeLayout> {
-        self.0.field(i)
+    #[inline]
+    pub fn field(self, i: usize) -> Option<MoveTypeLayoutRef<'a, T>> {
+        self.fields.field(i)
     }
 
     /// Iterate over all fields as layouts.
-    pub fn fields(&self) -> impl ExactSizeIterator<Item = MoveTypeLayout> {
-        self.0.fields()
+    #[inline]
+    pub fn fields(self) -> impl ExactSizeIterator<Item = MoveTypeLayoutRef<'a, T>> {
+        self.fields.fields()
     }
 }
 
-impl fmt::Display for MoveStructLayout {
+impl<T: TypeLayout> fmt::Display for MoveStructLayout<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "struct {}", self.0)
+        write!(f, "struct {}", self.fields)
     }
 }
 
-impl fmt::Display for MoveFieldsLayout {
+impl<T: TypeLayout> fmt::Display for MoveFieldsLayout<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use DebugAsDisplay as DD;
 
@@ -316,9 +470,9 @@ impl fmt::Display for MoveFieldsLayout {
         for (i, field) in self.fields.iter().enumerate() {
             map.entry(
                 &i,
-                &DD(&MoveTypeLayout {
-                    pool: self.pool.clone(),
-                    root: *field,
+                &DD(&MoveTypeLayoutRef {
+                    pool: self.pool,
+                    root: field,
                 }),
             );
         }
@@ -328,29 +482,44 @@ impl fmt::Display for MoveFieldsLayout {
 
 // --- MoveEnumLayout ---
 
-impl MoveEnumLayout {
+impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
     /// Number of variants.
-    pub fn variant_count(&self) -> usize {
+    #[inline]
+    pub fn variant_count(self) -> usize {
         self.variants.len()
     }
 
     /// Access a variant by index.
-    pub fn variant(&self, i: usize) -> Option<&VariantLayout> {
-        self.variants.get(i)
+    #[inline]
+    pub fn variant(self, i: usize) -> Option<VariantLayout<'a, T>> {
+        self.variants.get(i).map(|v| make_variant(self.pool, v))
     }
 
     /// Iterate over all variants.
-    pub fn variants(&self) -> &[VariantLayout] {
-        &self.variants
+    #[inline]
+    pub fn variants(self) -> impl ExactSizeIterator<Item = VariantLayout<'a, T>> {
+        let pool = self.pool;
+        self.variants.iter().map(move |v| make_variant(pool, v))
     }
 }
 
-impl fmt::Display for MoveEnumLayout {
+#[inline]
+fn make_variant<'a, T: TypeLayout>(
+    pool: &'a T,
+    v: &'a Option<Box<[T::Root]>>,
+) -> VariantLayout<'a, T> {
+    match v {
+        Some(fields) => VariantLayout::Known(MoveFieldsLayout { pool, fields }),
+        None => VariantLayout::Unknown,
+    }
+}
+
+impl<T: TypeLayout> fmt::Display for MoveEnumLayout<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "enum ")?;
-        for (tag, vfv) in self.variants().iter().enumerate() {
+        for (tag, vl) in self.variants().enumerate() {
             write!(f, "variant_tag: {} {{ ", tag)?;
-            match vfv {
+            match vl {
                 VariantLayout::Known(fv) => {
                     for (i, field) in fv.fields().enumerate() {
                         write!(f, "{}: {}, ", i, field)?;
@@ -373,179 +542,5 @@ impl<T: fmt::Display> fmt::Debug for DebugAsDisplay<'_, T> {
         } else {
             write!(f, "{}", self.0)
         }
-    }
-}
-
-// --- MoveTypeLayoutBuilder ---
-
-impl MoveTypeLayoutBuilder {
-    pub fn new() -> Self {
-        Self {
-            nodes: IndexSet::new(),
-        }
-    }
-
-    fn add_node(&mut self, node: MoveTypeNode) -> AResult<LayoutHandle> {
-        let (idx, _) = self.nodes.insert_full(node);
-        Ok(LayoutHandle(LayoutRef::index(idx)?))
-    }
-
-    pub fn bool(&mut self) -> LayoutHandle {
-        LayoutHandle(LayoutRef::leaf(LeafType::Bool))
-    }
-    pub fn u8(&mut self) -> LayoutHandle {
-        LayoutHandle(LayoutRef::leaf(LeafType::U8))
-    }
-    pub fn u16(&mut self) -> LayoutHandle {
-        LayoutHandle(LayoutRef::leaf(LeafType::U16))
-    }
-    pub fn u32(&mut self) -> LayoutHandle {
-        LayoutHandle(LayoutRef::leaf(LeafType::U32))
-    }
-    pub fn u64(&mut self) -> LayoutHandle {
-        LayoutHandle(LayoutRef::leaf(LeafType::U64))
-    }
-    pub fn u128(&mut self) -> LayoutHandle {
-        LayoutHandle(LayoutRef::leaf(LeafType::U128))
-    }
-    pub fn u256(&mut self) -> LayoutHandle {
-        LayoutHandle(LayoutRef::leaf(LeafType::U256))
-    }
-    pub fn address(&mut self) -> LayoutHandle {
-        LayoutHandle(LayoutRef::leaf(LeafType::Address))
-    }
-    pub fn signer(&mut self) -> LayoutHandle {
-        LayoutHandle(LayoutRef::leaf(LeafType::Signer))
-    }
-
-    pub fn vector(&mut self, element: LayoutHandle) -> AResult<LayoutHandle> {
-        self.add_node(MoveTypeNode::Vector(element.0))
-    }
-
-    pub fn struct_layout(&mut self, fields: &[LayoutHandle]) -> AResult<LayoutHandle> {
-        let field_refs: Box<[LayoutRef]> = fields.iter().map(|h| h.0).collect();
-        self.add_node(MoveTypeNode::Struct(MoveStructNode { fields: field_refs }))
-    }
-
-    pub fn enum_layout(&mut self, variants: &[Option<&[LayoutHandle]>]) -> AResult<LayoutHandle> {
-        let variant_refs: Box<[Option<Box<[LayoutRef]>>]> = variants
-            .iter()
-            .map(|v| v.map(|fields| fields.iter().map(|h| h.0).collect()))
-            .collect();
-        self.add_node(MoveTypeNode::Enum(MoveEnumNode {
-            variants: variant_refs,
-        }))
-    }
-
-    /// Recursively intern a tree-based layout, deduplicating shared subtrees.
-    /// Tree-based enum layouts always have known variants, so all variants
-    /// are wrapped in `Some`.
-    pub fn from_tree(&mut self, layout: &RV::MoveTypeLayout) -> AResult<LayoutHandle> {
-        Ok(match layout {
-            RV::MoveTypeLayout::Bool => self.bool(),
-            RV::MoveTypeLayout::U8 => self.u8(),
-            RV::MoveTypeLayout::U16 => self.u16(),
-            RV::MoveTypeLayout::U32 => self.u32(),
-            RV::MoveTypeLayout::U64 => self.u64(),
-            RV::MoveTypeLayout::U128 => self.u128(),
-            RV::MoveTypeLayout::U256 => self.u256(),
-            RV::MoveTypeLayout::Address => self.address(),
-            RV::MoveTypeLayout::Signer => self.signer(),
-            RV::MoveTypeLayout::Vector(inner) => {
-                let inner_h = self.from_tree(inner)?;
-                self.vector(inner_h)?
-            }
-            RV::MoveTypeLayout::Struct(s) => {
-                let fields = s
-                    .fields()
-                    .iter()
-                    .map(|f| self.from_tree(f))
-                    .collect::<AResult<Vec<_>>>()?;
-                self.struct_layout(&fields)?
-            }
-            RV::MoveTypeLayout::Enum(e) => {
-                let variant_handles =
-                    e.0.iter()
-                        .map(|v| {
-                            v.iter()
-                                .map(|f| self.from_tree(f))
-                                .collect::<AResult<Vec<_>>>()
-                        })
-                        .collect::<AResult<Vec<_>>>()?;
-                let variant_refs: Vec<Option<&[LayoutHandle]>> =
-                    variant_handles.iter().map(|v| Some(v.as_slice())).collect();
-                self.enum_layout(&variant_refs)?
-            }
-        })
-    }
-
-    /// Finalize the builder into an immutable [`MoveTypeLayout`].
-    pub fn build(self, root: LayoutHandle) -> MoveTypeLayout {
-        let nodes: Vec<MoveTypeNode> = self.nodes.into_iter().collect();
-        MoveTypeLayout {
-            pool: Arc::from(nodes),
-            root: root.0,
-        }
-    }
-}
-
-impl Default for MoveTypeLayoutBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// =============================================================================
-// Free functions
-// =============================================================================
-
-fn leaf_to_layout_view(leaf: LeafType) -> MoveLayoutView {
-    match leaf {
-        LeafType::Bool => MoveLayoutView::Bool,
-        LeafType::U8 => MoveLayoutView::U8,
-        LeafType::U16 => MoveLayoutView::U16,
-        LeafType::U32 => MoveLayoutView::U32,
-        LeafType::U64 => MoveLayoutView::U64,
-        LeafType::U128 => MoveLayoutView::U128,
-        LeafType::U256 => MoveLayoutView::U256,
-        LeafType::Address => MoveLayoutView::Address,
-        LeafType::Signer => MoveLayoutView::Signer,
-    }
-}
-
-/// Resolve a [`LayoutRef`] against the pool into a [`MoveLayoutView`].
-///
-/// Panics if the reference points to an out-of-bounds table index.
-fn resolve_ref(pool: &Arc<MoveTypeLayoutPool>, r: LayoutRef) -> MoveLayoutView {
-    match r.resolve() {
-        ResolvedRef::Leaf(leaf) => leaf_to_layout_view(leaf),
-        ResolvedRef::Index(idx) => match &pool[idx] {
-            MoveTypeNode::Vector(inner) => MoveLayoutView::Vector(Box::new(MoveTypeLayout {
-                pool: pool.clone(),
-                root: *inner,
-            })),
-            MoveTypeNode::Struct(s) => {
-                MoveLayoutView::Struct(Box::new(MoveStructLayout(MoveFieldsLayout {
-                    pool: pool.clone(),
-                    fields: s.fields.clone(),
-                })))
-            }
-            MoveTypeNode::Enum(e) => MoveLayoutView::Enum(Box::new(MoveEnumLayout {
-                variants: e
-                    .variants
-                    .iter()
-                    .map(|v| {
-                        v.as_ref().map(|fields| MoveFieldsLayout {
-                            pool: pool.clone(),
-                            fields: fields.clone(),
-                        })
-                    })
-                    .map(|v| match v {
-                        Some(fields) => VariantLayout::Known(fields),
-                        None => VariantLayout::Unknown,
-                    })
-                    .collect(),
-            })),
-        },
     }
 }
