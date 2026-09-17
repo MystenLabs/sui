@@ -8,11 +8,11 @@ use mysten_common::random::get_rng;
 use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 pub use operations::{
     ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, AccumulatorBalanceRead,
-    AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AllowanceIssue,
-    AllowanceWithdraw, AuthenticatedEventEmit, CoinReservationWithdraw, INVALID_ALIAS_TX,
-    ImmutableObjectRead, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
-    OperationDescriptor, RandomnessRead, SharedCounterIncrement, SharedCounterRead,
-    TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
+    AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AllowanceWithdraw,
+    AuthenticatedEventEmit, CoinReservationWithdraw, INVALID_ALIAS_TX, ImmutableObjectRead,
+    ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw, OperationDescriptor,
+    RandomnessRead, SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit,
+    TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -27,7 +27,10 @@ use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams, 
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use futures::future::join_all;
-use operations::{AllowanceInfo, InitRequirement, Operation, OperationResources, ResourceRequest};
+use operations::{
+    AllowanceInfo, InitRequirement, Operation, OperationResources, ResourceRequest,
+    add_allowance_issue_commands,
+};
 use rand::Rng;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -325,7 +328,6 @@ impl CompositeWorkloadConfig {
         probabilities.insert(AuthenticatedEventEmit::NAME, 0.1);
         probabilities.insert(ImmutableObjectRead::NAME, 0.2);
         probabilities.insert(CoinReservationWithdraw::NAME, 0.1);
-        probabilities.insert(AllowanceIssue::NAME, 0.1);
         probabilities.insert(AllowanceWithdraw::NAME, 0.2);
         Self {
             probabilities,
@@ -621,14 +623,8 @@ impl CompositePayload {
             if filter_authenticated_events {
                 ops.retain(|op| op.name() != AuthenticatedEventEmit::NAME);
             }
-            if filter_allowances {
-                ops.retain(|op| {
-                    !op.resource_requests()
-                        .iter()
-                        .any(|r| matches!(r, ResourceRequest::Allowance))
-                });
-            } else if self.allowance.is_none() {
-                // No ring allowance for this payload: only issuance can run.
+            // Spends need the init-issued ring allowance.
+            if filter_allowances || self.allowance.is_none() {
                 ops.retain(|op| op.name() != AllowanceWithdraw::NAME);
             }
             if !ops.is_empty() {
@@ -1618,7 +1614,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 let spender = senders[(idx + 1) % n];
 
                 let mut tx_builder = TestTransactionBuilder::new(*sender, gas, gas_price);
-                AllowanceIssue::add_issue_commands(tx_builder.ptb_builder_mut(), spender);
+                add_allowance_issue_commands(tx_builder.ptb_builder_mut(), spender);
                 let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
 
                 let proxy_ref = execution_proxy.clone();

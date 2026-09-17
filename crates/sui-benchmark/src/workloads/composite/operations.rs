@@ -66,7 +66,6 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     AuthenticatedEventEmit::DESCRIPTOR,
     ImmutableObjectRead::DESCRIPTOR,
     CoinReservationWithdraw::DESCRIPTOR,
-    AllowanceIssue::DESCRIPTOR,
     AllowanceWithdraw::DESCRIPTOR,
 ];
 
@@ -1238,61 +1237,34 @@ fn add_allowance_spend_commands(
     );
 }
 
-pub struct AllowanceIssue;
-
-impl AllowanceIssue {
-    pub const NAME: &'static str = "allowance_issue";
-    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
-        name: Self::NAME,
-        factory: || Box::new(AllowanceIssue),
-    };
-
-    /// Issues an `Allowance<Balance<SUI>>` funded by the tx sender for `spender`.
-    /// The cap and expiration are effectively unlimited so spends never trip them.
-    pub fn add_issue_commands(builder: &mut ProgrammableTransactionBuilder, spender: SuiAddress) {
-        let no_rate_limit = builder.programmable_move_call(
-            MOVE_STDLIB_PACKAGE_ID,
-            Identifier::new("option").unwrap(),
-            Identifier::new("none").unwrap(),
-            vec![rate_limit_type()],
-            vec![],
-        );
-        let args = vec![
-            builder.pure("".to_string()).unwrap(),
-            builder.pure(spender).unwrap(),
-            builder.pure(Some(U256::from(u64::MAX))).unwrap(),
-            builder.pure(None::<u64>).unwrap(),
-            builder.pure(Some(u64::MAX)).unwrap(),
-            no_rate_limit,
-        ];
-        builder.programmable_move_call(
-            SUI_FRAMEWORK_PACKAGE_ID,
-            Identifier::new("allowance").unwrap(),
-            Identifier::new("new").unwrap(),
-            vec![Balance::type_tag(GAS::type_tag())],
-            args,
-        );
-    }
-}
-
-impl Operation for AllowanceIssue {
-    fn name(&self) -> &'static str {
-        Self::NAME
-    }
-
-    fn resource_requests(&self) -> Vec<ResourceRequest> {
-        vec![ResourceRequest::Allowance]
-    }
-
-    fn apply(
-        &self,
-        builder: &mut ProgrammableTransactionBuilder,
-        _resources: &OperationResources,
-        account_state: &AccountState,
-    ) {
-        // Untracked: spends use the init-issued ring.
-        Self::add_issue_commands(builder, account_state.partner_address);
-    }
+/// Issues an `Allowance<Balance<SUI>>` funded by the tx sender for `spender`.
+/// The cap and expiration are effectively unlimited so spends never trip them.
+pub fn add_allowance_issue_commands(
+    builder: &mut ProgrammableTransactionBuilder,
+    spender: SuiAddress,
+) {
+    let no_rate_limit = builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        Identifier::new("option").unwrap(),
+        Identifier::new("none").unwrap(),
+        vec![rate_limit_type()],
+        vec![],
+    );
+    let args = vec![
+        builder.pure("".to_string()).unwrap(),
+        builder.pure(spender).unwrap(),
+        builder.pure(Some(U256::from(u64::MAX))).unwrap(),
+        builder.pure(None::<u64>).unwrap(),
+        builder.pure(Some(u64::MAX)).unwrap(),
+        no_rate_limit,
+    ];
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("allowance").unwrap(),
+        Identifier::new("new").unwrap(),
+        vec![Balance::type_tag(GAS::type_tag())],
+        args,
+    );
 }
 
 pub struct AllowanceWithdraw;
