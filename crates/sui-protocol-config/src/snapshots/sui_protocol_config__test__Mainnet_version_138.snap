@@ -180,7 +180,6 @@ feature_flags:
   granular_post_execution_checks: true
   early_exit_on_iffw: true
   enable_unified_linkage: true
-  enable_allowances: true
   fix_ptb_generated_reads: true
   memory_safety_invariant_check_v2: true
 max_tx_size_bytes: 131072
