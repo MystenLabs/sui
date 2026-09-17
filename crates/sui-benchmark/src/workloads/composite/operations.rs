@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::u256::U256;
 use mysten_common::random::get_rng;
 use rand::Rng;
 use sui_types::TypeTag;
@@ -16,8 +17,8 @@ use sui_types::transaction::{
     Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
 };
 use sui_types::{
-    Identifier, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
-    SUI_RANDOMNESS_STATE_OBJECT_ID,
+    Identifier, MOVE_STDLIB_PACKAGE_ID, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+    SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
 };
 
 use super::AccountState;
@@ -31,7 +32,11 @@ pub enum InitRequirement {
     SeedTestCoinAddressBalance,
     EnableAddressAlias,
     CreateImmutableObject,
+    IssueAllowances,
 }
+
+/// (allowance id, initial shared version, funder) of an init-issued allowance.
+pub type AllowanceInfo = (ObjectID, SequenceNumber, SuiAddress);
 
 pub const ALIAS_TX: &str = "alias_tx";
 pub const ALIAS_REMOVE: &str = "alias_remove";
@@ -61,6 +66,8 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     AuthenticatedEventEmit::DESCRIPTOR,
     ImmutableObjectRead::DESCRIPTOR,
     CoinReservationWithdraw::DESCRIPTOR,
+    AllowanceIssue::DESCRIPTOR,
+    AllowanceWithdraw::DESCRIPTOR,
 ];
 
 #[derive(Debug, Clone)]
@@ -73,6 +80,7 @@ pub enum ResourceRequest {
     AccumulatorRoot,
     ImmutableObject,
     CoinReservation,
+    Allowance,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -92,6 +100,7 @@ pub struct OperationResources {
     pub immutable_object: Option<ObjectRef>,
     pub chain_identifier: Option<ChainIdentifier>,
     pub current_epoch: Option<EpochId>,
+    pub allowance: Option<AllowanceInfo>,
 }
 
 pub trait Operation: Send + Sync {
@@ -1172,6 +1181,172 @@ impl Operation for ImmutableObjectRead {
             Identifier::new("value").unwrap(),
             vec![],
             vec![obj_arg],
+        );
+    }
+}
+
+fn rate_limit_type() -> TypeTag {
+    "0x2::allowance::RateLimit".parse().unwrap()
+}
+
+/// Spends `amount` through the allowance and returns it to the funder, keeping its balance level.
+fn add_allowance_spend_commands(
+    builder: &mut ProgrammableTransactionBuilder,
+    allowance_id: ObjectID,
+    initial_shared_version: SequenceNumber,
+    funder: SuiAddress,
+    amount: u64,
+) {
+    let allowance_arg = builder
+        .obj(ObjectArg::SharedObject {
+            id: allowance_id,
+            initial_shared_version,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+    let withdraw_arg = builder
+        .funds_withdrawal(FundsWithdrawalArg::balance_from_allowance(
+            amount,
+            GAS::type_tag(),
+            funder,
+            allowance_id,
+        ))
+        .unwrap();
+    let clock_arg = builder
+        .obj(ObjectArg::SharedObject {
+            id: SUI_CLOCK_OBJECT_ID,
+            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+            mutability: SharedObjectMutability::Immutable,
+        })
+        .unwrap();
+
+    let spent_balance = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("allowance").unwrap(),
+        Identifier::new("balance_spend").unwrap(),
+        vec![GAS::type_tag()],
+        vec![allowance_arg, withdraw_arg, clock_arg],
+    );
+
+    let funder_arg = builder.pure(funder).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec![GAS::type_tag()],
+        vec![spent_balance, funder_arg],
+    );
+}
+
+pub struct AllowanceIssue;
+
+impl AllowanceIssue {
+    pub const NAME: &'static str = "allowance_issue";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(AllowanceIssue),
+    };
+
+    /// Issues an `Allowance<Balance<SUI>>` funded by the tx sender for `spender`.
+    /// The cap and expiration are effectively unlimited so spends never trip them.
+    pub fn add_issue_commands(builder: &mut ProgrammableTransactionBuilder, spender: SuiAddress) {
+        let no_rate_limit = builder.programmable_move_call(
+            MOVE_STDLIB_PACKAGE_ID,
+            Identifier::new("option").unwrap(),
+            Identifier::new("none").unwrap(),
+            vec![rate_limit_type()],
+            vec![],
+        );
+        let args = vec![
+            builder.pure("".to_string()).unwrap(),
+            builder.pure(spender).unwrap(),
+            builder.pure(Some(U256::from(u64::MAX))).unwrap(),
+            builder.pure(None::<u64>).unwrap(),
+            builder.pure(Some(u64::MAX)).unwrap(),
+            no_rate_limit,
+        ];
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("allowance").unwrap(),
+            Identifier::new("new").unwrap(),
+            vec![Balance::type_tag(GAS::type_tag())],
+            args,
+        );
+    }
+}
+
+impl Operation for AllowanceIssue {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::Allowance]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        _resources: &OperationResources,
+        account_state: &AccountState,
+    ) {
+        // Untracked: spends use the init-issued ring.
+        Self::add_issue_commands(builder, account_state.partner_address);
+    }
+}
+
+pub struct AllowanceWithdraw;
+
+impl AllowanceWithdraw {
+    pub const NAME: &'static str = "allowance_withdraw";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(AllowanceWithdraw),
+    };
+}
+
+impl Operation for AllowanceWithdraw {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::Allowance]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![
+            InitRequirement::SeedAddressBalance,
+            InitRequirement::IssueAllowances,
+        ]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        _account_state: &AccountState,
+    ) {
+        let (allowance_id, initial_shared_version, funder) =
+            resources.allowance.expect("Allowance not resolved");
+
+        let mut amount = if resources.address_balance_amount > 0 {
+            resources.address_balance_amount
+        } else {
+            get_rng().gen_range(100..1000)
+        };
+        // Sometimes reserve around the funder's seeded balance, so the spend can fail admission.
+        if get_rng().gen_bool(0.2) {
+            let seed = amount * 100;
+            amount = get_rng().gen_range(seed / 2..=seed * 3 / 2);
+        }
+
+        add_allowance_spend_commands(
+            builder,
+            allowance_id,
+            initial_shared_version,
+            funder,
+            amount,
         );
     }
 }
