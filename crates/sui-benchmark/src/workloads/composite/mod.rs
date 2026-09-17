@@ -8,11 +8,11 @@ use mysten_common::random::get_rng;
 use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 pub use operations::{
     ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, AccumulatorBalanceRead,
-    AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AuthenticatedEventEmit,
-    CoinReservationWithdraw, INVALID_ALIAS_TX, ImmutableObjectRead, ObjectBalanceDeposit,
-    ObjectBalanceOverdraw, ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead,
-    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
-    TestCoinMint, TestCoinObjectWithdraw,
+    AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AllowanceIssue,
+    AllowanceWithdraw, AuthenticatedEventEmit, CoinReservationWithdraw, INVALID_ALIAS_TX,
+    ImmutableObjectRead, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
+    OperationDescriptor, RandomnessRead, SharedCounterIncrement, SharedCounterRead,
+    TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -27,7 +27,7 @@ use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams, 
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use futures::future::join_all;
-use operations::{InitRequirement, Operation, OperationResources, ResourceRequest};
+use operations::{AllowanceInfo, InitRequirement, Operation, OperationResources, ResourceRequest};
 use rand::Rng;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -73,6 +73,12 @@ fn address_alias_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
 fn authenticated_events_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
     protocol_config
         .map(|cfg| !cfg.enable_authenticated_event_streams())
+        .unwrap_or(false)
+}
+
+fn allowances_disabled(protocol_config: Option<&ProtocolConfig>) -> bool {
+    protocol_config
+        .map(|cfg| !cfg.enable_allowances())
         .unwrap_or(false)
 }
 
@@ -319,6 +325,8 @@ impl CompositeWorkloadConfig {
         probabilities.insert(AuthenticatedEventEmit::NAME, 0.1);
         probabilities.insert(ImmutableObjectRead::NAME, 0.2);
         probabilities.insert(CoinReservationWithdraw::NAME, 0.1);
+        probabilities.insert(AllowanceIssue::NAME, 0.1);
+        probabilities.insert(AllowanceWithdraw::NAME, 0.2);
         Self {
             probabilities,
             alias_tx_probability: 0.3,
@@ -369,6 +377,10 @@ impl CompositeWorkloadConfig {
 
         if self.alias_tx_probability > 0.0 && !address_alias_disabled(protocol_config) {
             requirements.insert(InitRequirement::EnableAddressAlias);
+        }
+
+        if allowances_disabled(protocol_config) {
+            requirements.remove(&InitRequirement::IssueAllowances);
         }
 
         requirements
@@ -433,6 +445,8 @@ pub struct CompositePayload {
     nonce_counter: AtomicU32,
     alias_state: Option<AliasState>,
     partner_address: SuiAddress,
+    /// The init-issued allowance this payload's sender is the spender of.
+    allowance: Option<AllowanceInfo>,
 }
 
 /// Tracks the lifecycle of an alias revoke-and-re-add cycle for a single payload.
@@ -521,6 +535,7 @@ impl CompositePayload {
         pool: &OperationPool,
         config: &CompositeWorkloadConfig,
         current_epoch: u64,
+        payload_allowance: Option<AllowanceInfo>,
     ) -> OperationResources {
         let mut counter = None;
         let mut randomness = None;
@@ -529,6 +544,7 @@ impl CompositePayload {
         let mut test_coin_cap = None;
         let mut chain_identifier = None;
         let mut epoch = None;
+        let mut allowance = None;
 
         for req in op.resource_requests() {
             match req {
@@ -554,6 +570,9 @@ impl CompositePayload {
                     epoch = Some(current_epoch);
                     accumulator_root = Some(pool.accumulator_root_initial_shared_version);
                 }
+                ResourceRequest::Allowance => {
+                    allowance = payload_allowance;
+                }
             }
         }
 
@@ -569,6 +588,7 @@ impl CompositePayload {
             immutable_object: pool.immutable_object,
             chain_identifier,
             current_epoch: epoch,
+            allowance,
         }
     }
 
@@ -581,6 +601,7 @@ impl CompositePayload {
             .clone();
         let filter_address_balance = address_balance_disabled(protocol_config.as_ref());
         let filter_authenticated_events = authenticated_events_disabled(protocol_config.as_ref());
+        let filter_allowances = allowances_disabled(protocol_config.as_ref());
 
         loop {
             let mut ops = self.config.sample_operations();
@@ -599,6 +620,16 @@ impl CompositePayload {
             }
             if filter_authenticated_events {
                 ops.retain(|op| op.name() != AuthenticatedEventEmit::NAME);
+            }
+            if filter_allowances {
+                ops.retain(|op| {
+                    !op.resource_requests()
+                        .iter()
+                        .any(|r| matches!(r, ResourceRequest::Allowance))
+                });
+            } else if self.allowance.is_none() {
+                // No ring allowance for this payload: only issuance can run.
+                ops.retain(|op| op.name() != AllowanceWithdraw::NAME);
             }
             if !ops.is_empty() {
                 return ops;
@@ -639,6 +670,7 @@ impl CompositePayload {
                     &self.pool,
                     &self.config,
                     current_epoch,
+                    self.allowance,
                 );
                 op.apply(builder, &resources, account_state);
             }
@@ -1364,6 +1396,7 @@ impl WorkloadBuilder<dyn Payload> for CompositeWorkloadBuilder {
             metrics: self.metrics.clone(),
             chain_identifier: None,
             alias_infos: vec![],
+            allowance_infos: vec![],
         }))
     }
 }
@@ -1384,6 +1417,8 @@ pub struct CompositeWorkload {
     metrics: Arc<Mutex<CompositionMetrics>>,
     chain_identifier: Option<sui_types::digests::ChainIdentifier>,
     alias_infos: Vec<Option<AliasInitInfo>>,
+    /// Indexed by the issuing payload; payload `i + 1` is the spender.
+    allowance_infos: Vec<Option<AllowanceInfo>>,
 }
 
 impl CompositeWorkload {
@@ -1564,6 +1599,54 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 update_gas!(&mut self.payload_gas[idx].0[0], effects);
             }
             info!("Seeded {} address balances", self.payload_gas.len());
+        }
+
+        if init_requirements.contains(&InitRequirement::IssueAllowances) {
+            info!("Issuing allowances for {} payloads", self.payload_gas.len());
+            let senders: Vec<SuiAddress> = self
+                .payload_gas
+                .iter()
+                .map(|(_, sender, _)| *sender)
+                .collect();
+            let n = senders.len();
+
+            let mut futures = vec![];
+            for (idx, (gas_coins, sender, keypair)) in self.payload_gas.iter().enumerate() {
+                assert_eq!(gas_coins.len(), 1);
+                let gas = gas_coins[0];
+                // Payload `idx` funds the allowance that payload `idx + 1` spends.
+                let spender = senders[(idx + 1) % n];
+
+                let mut tx_builder = TestTransactionBuilder::new(*sender, gas, gas_price);
+                AllowanceIssue::add_issue_commands(tx_builder.ptb_builder_mut(), spender);
+                let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
+
+                let proxy_ref = execution_proxy.clone();
+                futures.push(async move {
+                    let execution_result = proxy_ref.execute_transaction_block(tx).await;
+                    let effects = execution_result.expect("Allowance issuance should succeed");
+                    (idx, effects)
+                });
+            }
+
+            let results = join_all(futures).await;
+            self.allowance_infos = vec![None; n];
+            for (idx, effects) in results {
+                update_gas!(&mut self.payload_gas[idx].0[0], effects);
+                let (allowance_ref, initial_shared_version) = effects
+                    .created()
+                    .iter()
+                    .find_map(|(obj_ref, owner)| match owner {
+                        Owner::Shared {
+                            initial_shared_version,
+                        } => Some((*obj_ref, *initial_shared_version)),
+                        _ => None,
+                    })
+                    .expect("the allowance is created as a shared object");
+                self.allowance_infos[idx] =
+                    Some((allowance_ref.0, initial_shared_version, senders[idx]));
+            }
+            info!("Issued {} allowances", self.allowance_infos.len());
         }
 
         if init_requirements.contains(&InitRequirement::CreateBalancePool) {
@@ -1976,6 +2059,13 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     },
                 );
             let partner_address = get_partner_address(i as usize);
+            // Payload `i` spends the allowance issued by payload `i - 1`.
+            let allowance = if self.allowance_infos.is_empty() {
+                None
+            } else {
+                let n = self.allowance_infos.len();
+                self.allowance_infos[(i as usize + n - 1) % n]
+            };
             payloads.push(Box::new(CompositePayload {
                 config: config.clone(),
                 fullnode_proxies: fullnode_proxies.clone(),
@@ -1988,6 +2078,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 nonce_counter: AtomicU32::new(0),
                 alias_state,
                 partner_address,
+                allowance,
             }));
         }
 
