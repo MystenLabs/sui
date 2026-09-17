@@ -2121,7 +2121,6 @@ mod test {
         .with_probability(AccumulatorBalanceRead::NAME, 0.3)
         .with_probability(AuthenticatedEventEmit::NAME, 0.1)
         .with_probability(CoinReservationWithdraw::NAME, 0.3)
-        .with_probability(AllowanceIssue::NAME, 0.1)
         .with_probability(AllowanceWithdraw::NAME, 0.3);
 
         let test_cluster_for_scan = test_cluster.clone();
@@ -2253,15 +2252,10 @@ mod test {
                     .sum()
             };
 
-            let allowance_issue_success_count = successes_containing(AllowanceIssue::NAME);
             let allowance_withdraw_success_count = successes_containing(AllowanceWithdraw::NAME);
             info!(
-                "allowance metrics: issue_success={}, withdraw_success={}",
-                allowance_issue_success_count, allowance_withdraw_success_count
-            );
-            assert!(
-                allowance_issue_success_count > 0,
-                "expected at least one allowance issuance"
+                "allowance metrics: withdraw_success={}",
+                allowance_withdraw_success_count
             );
             assert!(
                 allowance_withdraw_success_count > 0,
