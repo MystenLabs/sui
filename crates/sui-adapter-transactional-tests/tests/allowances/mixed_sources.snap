@@ -1,0 +1,157 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+// An allowance spend and the sender's own withdrawal in one PTB: two
+// reservation keys (funder and sender), each settled against its own
+// address balance.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 10-13:
+//# programmable --sender A --inputs 5000 @A
+// Fund A's (the funder) address balance.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 5000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-18:
+//# programmable --sender B --inputs 1000 @B
+// Fund B's (the spender) address balance.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,1)
+accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 20:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 22-25:
+//# programmable --sender A --inputs b"mixed" @B vector[1000u256] vector[] vector[99999999999999]
+// A issues an allowance to B: 1000 lifetime cap.
+//> 0: std::option::none<sui::allowance::RateLimit>();
+//> 1: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6437200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 27-33:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(400,@A,object(4,0)) withdraw<sui::balance::Balance<sui::sui::SUI>>(300) mutshared(4,0) immshared(6) @A @B
+// B spends 400 of A's allowance to themselves and 300 of their own balance
+// to A. Settlement nets per address: A -100, B +100.
+//> 0: sui::allowance::balance_spend<sui::sui::SUI>(Input(2), Input(0), Input(3));
+//> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(5));
+//> 2: sui::balance::redeem_funds<sui::sui::SUI>(Input(1));
+//> 3: sui::balance::send_funds<sui::sui::SUI>(Result(2), Input(4));
+mutated: object(0,1), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
+gas summary: computation_cost: 1000000, storage_cost: 4142000,  storage_rebate: 4100580, non_refundable_storage_fee: 41420
+
+task 6, lines 35-39:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(200,@A,object(4,0)) mutshared(4,0) immshared(6) @A
+// B spends 200 and sends all of it back to A: the flow nets to zero at both
+// addresses, yet the allowance is still charged the gross amount.
+//> 0: sui::allowance::balance_spend<sui::sui::SUI>(Input(1), Input(0), Input(2));
+//> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(3));
+mutated: object(0,1), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 0)
+gas summary: computation_cost: 1000000, storage_cost: 4142000,  storage_rebate: 4100580, non_refundable_storage_fee: 41420
+
+task 7, lines 41-42:
+//# view-object 4,0
+Owner: Shared( 3 )
+Version: 5
+Contents: sui::allowance::Allowance<sui::balance::Balance<sui::sui::SUI>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    settings: sui::allowance::Settings {
+        funder: A,
+        spender: std::option::Option<address> {
+            vec: vector[
+                B,
+            ],
+        },
+        app: std::option::Option<std::type_name::TypeName> {
+            vec: vector[],
+        },
+        lifetime_cap: std::option::Option<u256> {
+            vec: vector[
+                1000u256,
+            ],
+        },
+        start_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        expiration_timestamp_ms: std::option::Option<u64> {
+            vec: vector[
+                99999999999999u64,
+            ],
+        },
+        rate_limit: std::option::Option<sui::allowance::RateLimit> {
+            vec: vector[],
+        },
+        name: std::string::String {
+            bytes: vector[
+                109u8,
+                105u8,
+                120u8,
+                101u8,
+                100u8,
+            ],
+        },
+    },
+    current_spend: 600u256,
+}
+
+// and the net-zero settlement never touched it.
+
+task 8, line 45:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 9, lines 47-48:
+//# view-object 1,0
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000acc )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::balance::Balance<sui::sui::SUI>>, sui::accumulator::U128> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,0),
+        },
+    },
+    name: sui::accumulator::Key<sui::balance::Balance<sui::sui::SUI>> {
+        address: A,
+    },
+    value: sui::accumulator::U128 {
+        value: 4900u128,
+    },
+}
+
+task 10, lines 50-51:
+//# view-object 2,0
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000acc )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::balance::Balance<sui::sui::SUI>>, sui::accumulator::U128> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::accumulator::Key<sui::balance::Balance<sui::sui::SUI>> {
+        address: B,
+    },
+    value: sui::accumulator::U128 {
+        value: 1100u128,
+    },
+}

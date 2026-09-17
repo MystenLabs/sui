@@ -61,17 +61,15 @@ Sui full nodes:
 - Serve read requests from clients.
 
 ## State synchronization 
-Sui full nodes sync with validators to receive new transactions on the network.
+Sui full nodes sync through the state sync protocol, which disseminates certified [checkpoints](/develop/sui-architecture/checkpoint-verification) between nodes. A full node does not need to follow individual validators to learn about new transactions.
 
-A transaction requires a few round trips to 2f+1 validators to form a transaction certificate (TxCert).
+The synchronization process includes:
 
-This synchronization process includes:
+1. Receiving certified checkpoints over state sync, from validators or from other full nodes.
+1. Verifying the checkpoint signatures against the current validator committee, which the node learns from the last checkpoint of the previous epoch.
+1. Executing the transactions the checkpoint contains and comparing the resulting effects digests against the ones the checkpoint records.
 
-1. Following 2f+1 validators and listening for newly committed transactions.
-1. Making sure that 2f+1 validators recognize the transaction and that it reaches finality.
-1. Executing the transaction locally and updating the local DB.
-
-This synchronization process requires listening to at a minimum `2f+1` validators to ensure that a full node has properly processed all new transactions. Sui improves the synchronization process with the introduction of checkpoints and the ability to synchronize with other full nodes.
+Because a checkpoint carries a quorum of validator signatures, a full node that verifies one has proof the network committed those transactions, without trusting the peer it received the checkpoint from.
 
 ## Architecture 
 
@@ -145,7 +143,7 @@ To serve the [gRPC API](/develop/accessing-data/grpc), you must enable it on you
 
 Enable gRPC indexing on your full node by adding the following entry to the `fullnode.yaml` configuration:
 
-```sh
+```yaml
 
 rpc:
   enable-indexing: true
@@ -214,9 +212,9 @@ rpc:
 
 #### Disable legacy JSON-RPC indexing {#disable-legacy-json-rpc-indexing}
 
-You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. JSON-RPC is disabled on Sui Foundation mainnet full nodes the week of July 27, 2026, with full decommission (including code removal) in mid-October 2026. See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) for the complete timeline. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
+You can reclaim the storage used by legacy JSON-RPC indexing after all your client applications have migrated from JSON-RPC. Sui Foundation disabled JSON-RPC on Mainnet full nodes the week of July 27, 2026, and plans full decommission, including code removal, for mid-October 2026. See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) for the complete timeline. Add the following to the `fullnode.yaml` configuration of your full node to disable legacy JSON-RPC index processing:
 
-```sh
+```yaml
 
 enable-index-processing: false
 
@@ -226,7 +224,7 @@ enable-index-processing: false
 
 You can configure the retention window for the gRPC index on your full node by adding the following to its `fullnode.yaml` configuration:
 
-```sh
+```yaml
 
 authority-store-pruning-config:
   num-epochs-to-retain: 14
@@ -427,7 +425,7 @@ When you are ready to run `sui-node` in your production environment, you can set
 
     <TabItem label="Mainnet" value="mainnet">
 
-    ```sh
+    ```yaml
     p2p-config:
       seed-peers:
         - address: /dns/mel-00.mainnet.sui.io/udp/8084
@@ -455,7 +453,7 @@ When you are ready to run `sui-node` in your production environment, you can set
     </TabItem>
     <TabItem label="Testnet" value="testnet">
 
-    ```sh
+    ```yaml
     p2p-config:
       seed-peers:
         - address: /dns/yto-tnt-ssfn-01.testnet.sui.io/udp/8084
@@ -482,7 +480,7 @@ When you are ready to run `sui-node` in your production environment, you can set
 1. Update the `db-path` field with the path to the full node database.
     `db-path: "/db-files/sui-fullnode"`
 1. Update the `genesis-file-location` with the path to genesis.blob.
-    ```sh
+    ```yaml
     genesis:
         genesis-file-location: "/sui-fullnode/genesis.blob"
     ```
@@ -512,7 +510,7 @@ panicked at error binding to 0.0.0.0:9184: error creating server listener: Addre
 
 Then update the metrics address in your `fullnode.yaml` file to use port `9180`.
 
-```sh
+```yaml
 metrics-address: "0.0.0.0:9180"
 ```
 
@@ -656,7 +654,7 @@ For network-specific upgrade instructions, see [Node Updates](/operators/full-no
 | Node cannot start after upgrade | Configuration format changed between versions | Check release notes for `fullnode.yaml` changes. Compare your config with the [template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml). |
 | Node falls behind after restart | Node is syncing from last checkpoint, not from tip | Restore from a recent [snapshot](/operators/snapshots) instead of waiting for catch-up. |
 | `Address already in use` on port 9184 | Another process is using the metrics port | Change `metrics-address` in `fullnode.yaml` to a different port (for example, `0.0.0.0:9180`). |
-| Disk full (7TB+) | Pruning not configured or not active | Apply a [pruning configuration](/operators/data-management/managing-data#pruning-quickstart) and wait 3 to 5 days for compaction. |
+| Disk full (7TB+) | Pruning not configured or not active | Apply a [pruning configuration](/operators/data-management/managing-data#pruning) and wait 3 to 5 days for compaction. |
 | `genesis.blob` chain mismatch | Wrong genesis file for target network | Download the correct `genesis.blob` from [sui-genesis](https://github.com/MystenLabs/sui-genesis). See [Genesis](/operators/genesis#network-identity). |
 | Peer connections rejected | Firewall blocking P2P ports | Open ports 8080 (P2P) and 8084 (discovery) in your firewall. See [Node Updates](/operators/full-node/updates) for port requirements. |
 | gRPC queries return `NOT_FOUND` for old data | Data pruned beyond retention window | Query the [Archival Service](/develop/accessing-data/archival-store) for historical data, or increase `num-epochs-to-retain` in your pruning config. |

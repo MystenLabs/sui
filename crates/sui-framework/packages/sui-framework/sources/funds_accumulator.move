@@ -36,6 +36,11 @@ const EObjectFundsWithdrawNotEnabled: vector<u8> = b"Object funds withdraw is no
 #[allow(unused_const)]
 const EAccumulatorTypeTooLarge: u64 = 4;
 
+/// Attempted to withdraw more funds than are currently available to an object.
+#[error(code = 5)]
+#[allow(unused_const)]
+const EObjectFundsInsufficient: vector<u8> = b"Object has insufficient funds";
+
 /// Allows for withdrawing funds from a given address. The `Withdrawal` can be created in PTBs for
 /// the transaction sender, or dynamically from an object via `withdraw_from_object`.
 /// The redemption of the funds must be initiated from the module that defines `T`.
@@ -83,10 +88,15 @@ public(package) fun redeem<T: store>(withdrawal: Withdrawal<T>, _: internal::Per
     withdraw_impl(owner, value)
 }
 
-// Allows for creating a withdrawal from an object
-// (note no internal check needed since this will be gated at redemption)
-// Does not abort even if the value is greater than the amount in the object, unless we keep track
-// at each withdraw from object, we need to check it again at redeem so this seems fine?
+// Reserves funds from an object for a given limit.
+// This is similar to the reservation for address balance withdraws in transaction inputs, except that
+// this happens dynamically at runtime and applies to object balances.
+// The current available balance is checked against the `limit`, which is also deducted from the
+// available balance.
+// Aborts if `limit` exceeds the funds currently available to the object balance.
+// Note: If deposits are made to the object during the same transaction, those deposits will increase
+// the available balance. However, deposits made in earlier transactions are not guaranteed to be
+// immediately reflected in the available balance. They settle only at checkpoint boundaries.
 // TODO When this becomes `public` we need
 // - custom verifier rules for `T`
 #[allow(unused_mut_parameter)]
@@ -96,6 +106,7 @@ public(package) fun withdraw_from_object<T: store>(obj: &mut UID, limit: u256): 
         EObjectFundsWithdrawNotEnabled,
     );
     let owner = obj.to_address();
+    reserve_object_funds_for_withdrawal<T>(owner, limit);
     Withdrawal { owner, limit }
 }
 
@@ -126,6 +137,8 @@ native fun withdraw_from_accumulator_address<T: store>(
     owner: address,
     value: u256,
 ): T;
+
+native fun reserve_object_funds_for_withdrawal<T: store>(owner: address, limit: u256);
 
 // TODO remove once Withdrawal is supported in PTBs
 public(package) fun create_withdrawal<T: store>(owner: address, limit: u256): Withdrawal<T> {

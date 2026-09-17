@@ -4,7 +4,7 @@
 
 use crate::accumulators::coin_reservations::CachingCoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
-use crate::accumulators::object_funds_checker::ObjectFundsChecker;
+use crate::accumulators::object_funds_checker::ObjectFundsCheckerDEPRECATED;
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
 use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::accumulators::unsettled_object_withdrawals::UnsettledObjectWithdrawals;
@@ -71,7 +71,10 @@ use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
+use sui_protocol_config::assert_reachable_gated;
 use sui_types::accumulator_root::AccumulatorObjId;
+use sui_types::accumulator_root::UnsettledObjectFundsRead;
+use sui_types::base_types::SystemObjectVersions;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
 use sui_types::execution::ExecutionTimeObservationKey;
@@ -142,6 +145,7 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::{InnerTemporaryStore, ObjectMap, TxCoins, WrittenObjects};
 use sui_types::message_envelope::Message;
@@ -905,7 +909,7 @@ pub struct ExecutionEnv {
 impl Default for ExecutionEnv {
     fn default() -> Self {
         Self {
-            assigned_versions: Default::default(),
+            assigned_versions: AssignedVersions::empty(),
             expected_effects_digest: None,
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
@@ -1053,7 +1057,7 @@ pub struct AuthorityState {
     /// Notification channel for reconfiguration
     notify_epoch: tokio::sync::watch::Sender<EpochId>,
 
-    pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsChecker>,
+    pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsCheckerDEPRECATED>,
     object_funds_checker_metrics: Arc<ObjectFundsCheckerMetrics>,
     pub(crate) unsettled_object_withdrawals: Arc<UnsettledObjectWithdrawals>,
 
@@ -1179,11 +1183,11 @@ impl AuthorityState {
             self.coin_reservation_resolver.as_ref(),
         )?;
 
-        let funds_withdraw_types = declared_withdrawals
+        let funds_withdrawals = declared_withdrawals
             .values()
-            .filter_map(|(_, type_tag, _)| {
+            .filter_map(|(_, type_tag, funder)| {
                 Balance::maybe_get_balance_type_param(type_tag)
-                    .map(|ty| ty.to_canonical_string(false))
+                    .map(|ty| (*funder, ty.to_canonical_string(false)))
             })
             .collect::<BTreeSet<_>>();
 
@@ -1192,7 +1196,7 @@ impl AuthorityState {
                 tx_data.sender(),
                 checked_input_objects,
                 receiving_objects,
-                funds_withdraw_types.clone(),
+                funds_withdrawals.clone(),
                 &self.get_object_store(),
             )?;
         }
@@ -1202,7 +1206,7 @@ impl AuthorityState {
                 tx_data.sender(),
                 checked_input_objects,
                 receiving_objects,
-                funds_withdraw_types.clone(),
+                funds_withdrawals,
                 &self.get_object_store(),
             )?;
         }
@@ -1894,7 +1898,7 @@ impl AuthorityState {
         self.metrics.total_effects.inc();
         self.metrics.total_certs.inc();
 
-        let consensus_object_count = effects.input_consensus_objects().len();
+        let consensus_object_count = effects.accessed_consensus_objects().len();
         if consensus_object_count > 0 {
             self.metrics.shared_obj_tx.inc();
         }
@@ -1932,7 +1936,8 @@ impl AuthorityState {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: SystemObjectVersions,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas_data: GasData,
         gas_status: SuiGasStatus,
         kind: TransactionKind,
@@ -1958,6 +1963,7 @@ impl AuthorityState {
                 epoch_timestamp_ms,
                 input_objects,
                 system_object_versions,
+                unsettled_object_funds,
                 gas_data,
                 gas_status,
                 kind,
@@ -2033,12 +2039,7 @@ impl AuthorityState {
             self.config.certificate_deny_config.certificate_deny_set(),
             &execution_env.funds_withdraw_status,
         );
-        // Versions of system objects this transaction may read during execution, each at the version
-        // it was sequenced against.
-        let system_object_versions = execution_env
-            .assigned_versions
-            .system_object_versions
-            .clone();
+        let system_object_versions = execution_env.assigned_versions.system_object_versions;
         let accumulator_version = execution_env.assigned_versions.accumulator_version();
         let execution_params = match early_execution_error {
             None => ExecutionOrEarlyError::ok(accumulator_version),
@@ -2062,6 +2063,9 @@ impl AuthorityState {
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
+        let unsettled_object_funds =
+            self.unsettled_object_withdrawals.as_ref() as &dyn UnsettledObjectFundsRead;
+
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
             .execute_transaction_to_effects(
@@ -2081,6 +2085,7 @@ impl AuthorityState {
                     .epoch_start_timestamp(),
                 input_objects,
                 system_object_versions,
+                unsettled_object_funds,
                 gas_data,
                 gas_status,
                 kind,
@@ -2089,20 +2094,54 @@ impl AuthorityState {
                 tx_digest,
             );
 
-        let object_funds_checker = self.object_funds_checker.load();
-        if let Some(object_funds_checker) = object_funds_checker.as_ref()
-            && !object_funds_checker.should_commit_object_funds_withdraws(
-                certificate,
-                &effects,
-                &inner_temp_store.accumulator_running_max_withdraws,
-                &execution_env,
-                self.get_account_funds_read(),
-                &self.execution_scheduler,
-                epoch_store,
-            )
-        {
-            assert_reachable!("retry object withdraw later");
-            return ExecutionOutput::RetryLater;
+        if !protocol_config.check_object_funds_withdraw_in_execution() {
+            // TODO: Move the object funds checker to the executor so that it can eventually be
+            // removed from the active code path.
+            let object_funds_checker = self.object_funds_checker.load();
+            if let Some(object_funds_checker) = object_funds_checker.as_ref()
+                && !object_funds_checker.should_commit_object_funds_withdraws(
+                    certificate,
+                    &effects,
+                    &inner_temp_store.accumulator_running_max_withdraws,
+                    &execution_env,
+                    self.get_account_funds_read(),
+                    &self.execution_scheduler,
+                    epoch_store,
+                )
+            {
+                assert_reachable_gated!("retry object withdraw later", |pc| !pc
+                    .check_object_funds_withdraw_in_execution());
+                return ExecutionOutput::RetryLater;
+            }
+        } else {
+            match effects.status() {
+                ExecutionStatus::Success => {
+                    if let Some(accumulator_version) =
+                        execution_env.assigned_versions.accumulator_version()
+                    {
+                        self.unsettled_object_withdrawals
+                            .record_object_funds_withdraws(
+                                certificate.transaction_data(),
+                                &effects,
+                                &inner_temp_store.accumulator_running_max_withdraws,
+                                accumulator_version,
+                                self.chain_identifier,
+                            );
+                    }
+                }
+                ExecutionStatus::Failure(failure) => {
+                    if sui_types::funds_accumulator::is_object_funds_insufficient_abort(
+                        &failure.error,
+                    ) {
+                        assert_reachable_gated!("object funds insufficient in execution", |pc| pc
+                            .check_object_funds_withdraw_in_execution());
+                        self.object_funds_checker_metrics
+                            .in_execution_check_result
+                            .with_label_values(&["insufficient"])
+                            .inc();
+                    }
+                }
+            }
         }
 
         // (test-only) Inject a fork before the effects-digest check below. Placed here so that a
@@ -3552,7 +3591,7 @@ impl AuthorityState {
         {
             if self.object_funds_checker.load().is_none() {
                 let inner = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).map(|o| {
-                    Arc::new(ObjectFundsChecker::new(
+                    Arc::new(ObjectFundsCheckerDEPRECATED::new(
                         o.version(),
                         self.unsettled_object_withdrawals.clone(),
                         self.object_funds_checker_metrics.clone(),
@@ -6601,7 +6640,7 @@ impl NodeStateDump {
 
         // Record all the shared objects
         let mut shared_objects = Vec::new();
-        for kind in effects.input_consensus_objects() {
+        for kind in effects.accessed_consensus_objects() {
             match kind {
                 InputConsensusObject::Mutate(obj_ref) | InputConsensusObject::ReadOnly(obj_ref) => {
                     if let Some(w) = object_store.get_object_by_key(&obj_ref.0, obj_ref.1) {

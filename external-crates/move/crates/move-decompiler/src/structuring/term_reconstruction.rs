@@ -230,10 +230,11 @@ fn trivials(map: &mut BTreeMap<RegId, Out::Exp>, trivs: Vec<Trivial>) -> Vec<Out
 fn trivial(map: &mut BTreeMap<RegId, Out::Exp>, triv: Trivial) -> Out::Exp {
     match triv {
         // If it is not there, just use the register as-is: it probably came from an unpack or a
-        // call with multiple return values.
+        // call with multiple return values. Mint the bare name (`reg_N`), never the ascribed
+        // debug rendering: name comparisons across the crate assume bare names.
         Trivial::Register(reg_id) => map
             .remove(&reg_id.name)
-            .unwrap_or_else(|| Out::Exp::Variable(reg_id.to_string())),
+            .unwrap_or_else(|| Out::Exp::Variable(reg_id.name())),
         Trivial::Immediate(value) => Out::Exp::Value(value),
     }
 }

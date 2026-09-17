@@ -4,14 +4,14 @@
 use move_binary_format::CompiledModule;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
-use std::collections::BTreeMap;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
+    accumulator_root::{EmptyUnsettledObjectFunds, UnsettledObjectFundsRead},
+    base_types::{SuiAddress, SystemObjectVersions, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -74,7 +74,8 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: SystemObjectVersions,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -99,6 +100,7 @@ impl executor::Executor for Executor {
             store,
             input_objects,
             system_object_versions,
+            unsettled_object_funds,
             gas,
             gas_status,
             transaction_kind,
@@ -130,7 +132,8 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        system_object_versions: BTreeMap<ObjectID, SequenceNumber>,
+        system_object_versions: SystemObjectVersions,
+        unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -155,6 +158,7 @@ impl executor::Executor for Executor {
             store,
             input_objects,
             system_object_versions,
+            unsettled_object_funds,
             gas,
             gas_status,
             transaction_kind,
@@ -186,6 +190,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
+        system_object_versions: SystemObjectVersions,
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -211,8 +216,10 @@ impl executor::Executor for Executor {
             } = execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
-                // TODO: Support system object versions for dev-inspect.
-                BTreeMap::new(),
+                system_object_versions,
+                // Dev-inspect and dry-run results are never committed, so they do not need to
+                // account for unsettled withdrawals from other transactions.
+                &EmptyUnsettledObjectFunds,
                 gas,
                 gas_status,
                 transaction_kind,
@@ -239,8 +246,10 @@ impl executor::Executor for Executor {
             } = execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
                 store,
                 input_objects,
-                // TODO: Support system object versions for dev-inspect.
-                BTreeMap::new(),
+                system_object_versions,
+                // Dev-inspect and dry-run results are never committed, so they do not need to
+                // account for unsettled withdrawals from other transactions.
+                &EmptyUnsettledObjectFunds,
                 gas,
                 gas_status,
                 transaction_kind,

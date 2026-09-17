@@ -9,11 +9,15 @@ processed 10 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 9-45:
+task 1, lines 9-41:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 6999600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+//
+// Test share object allows non-zero child count
+//
 
 task 2, line 47:
 //# run test::m::mint_and_share --sender A

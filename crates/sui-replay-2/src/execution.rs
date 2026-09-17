@@ -23,7 +23,7 @@ use std::{
 use sui_data_store::{EpochStore, ObjectKey, ObjectStore, VersionQuery};
 use sui_execution::Executor;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SystemObjectVersions, VersionNumber},
     committee::EpochId,
     digests::TransactionDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
@@ -129,6 +129,7 @@ pub fn execute_transaction_to_effects(
         None => ExecutionOrEarlyError::ok(None),
         Some(errors) => ExecutionOrEarlyError::failed(errors, None),
     };
+    let system_object_versions = SystemObjectVersions::from_effects(&expected_effects, &store);
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor
         .execute_transaction_to_effects_and_execution_error(
@@ -140,7 +141,13 @@ pub fn execute_transaction_to_effects(
             &epoch,
             epoch_start_timestamp,
             input_objects,
-            std::collections::BTreeMap::new(),
+            system_object_versions,
+            // TODO: Replaying a transaction that withdrew object funds needs the unsettled
+            // withdrawals that earlier transactions in the same consensus commit had accumulated
+            // at execution time. Reconstruct them by walking the containing checkpoint and folding
+            // the object-funds withdrawals of the transactions that precede this one at the same
+            // accumulator version, then pass that here instead of the empty reader.
+            &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
             txn_data.gas_data().clone(),
             gas_status,
             txn_data.kind().clone(),

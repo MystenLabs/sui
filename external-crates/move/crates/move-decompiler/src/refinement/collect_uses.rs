@@ -194,8 +194,11 @@ fn rewrite_self_types(exp: &mut Exp, current_mid: ModuleId<Symbol>) {
         Exp::Match(subject, t, arms) => {
             unself(t);
             rewrite_self_types(subject, current_mid);
-            for (_, _, body) in arms {
-                rewrite_self_types(body, current_mid);
+            for arm in arms {
+                arm.guard
+                    .iter_mut()
+                    .for_each(|g| rewrite_self_types(g, current_mid));
+                rewrite_self_types(&mut arm.rhs, current_mid);
             }
         }
         Exp::MatchLit(scrutinee, arms) => {
@@ -407,8 +410,9 @@ fn count_type_refs_exp(exp: &Exp, out: &mut BTreeMap<(ModuleId<Symbol>, Symbol),
         Exp::Match(subject, t, arms) => {
             note(t, out);
             count_type_refs_exp(subject, out);
-            for (_, _, body) in arms {
-                count_type_refs_exp(body, out);
+            for arm in arms {
+                arm.guard.iter().for_each(|g| count_type_refs_exp(g, out));
+                count_type_refs_exp(&arm.rhs, out);
             }
         }
         Exp::MatchLit(scrutinee, arms) => {
@@ -526,8 +530,11 @@ fn count_module_refs_exp(
         Exp::Match(subject, t, arms) => {
             note_type_module(t, out);
             count_module_refs_exp(subject, type_uses, out);
-            for (_, _, body) in arms {
-                count_module_refs_exp(body, type_uses, out);
+            for arm in arms {
+                arm.guard
+                    .iter()
+                    .for_each(|g| count_module_refs_exp(g, type_uses, out));
+                count_module_refs_exp(&arm.rhs, type_uses, out);
             }
         }
         Exp::MatchLit(scrutinee, arms) => {
@@ -611,8 +618,11 @@ fn rewrite(
         Exp::Match(subject, t, arms) => {
             alias_type(t, uses, type_uses);
             rewrite(subject, uses, type_uses);
-            for (_, _, body) in arms {
-                rewrite(body, uses, type_uses);
+            for arm in arms {
+                arm.guard
+                    .iter_mut()
+                    .for_each(|g| rewrite(g, uses, type_uses));
+                rewrite(&mut arm.rhs, uses, type_uses);
             }
         }
         Exp::MatchLit(scrutinee, arms) => {

@@ -105,7 +105,7 @@ Finally, Tom sends all of his SUI coins to John. For this transaction, the input
 
 ## Anatomy of a transaction response
 
-When you query a transaction (for example, from Sui Explorer or `getTransaction`), the response contains the following fields:
+When you query a transaction, whether through a block explorer or directly with gRPC `LedgerService.GetTransaction` or the GraphQL `Query.transaction` field, the response describes the following:
 
 | Field             | Description                                                        |
 |-------------------|--------------------------------------------------------------------|
@@ -118,7 +118,9 @@ When you query a transaction (for example, from Sui Explorer or `getTransaction`
 | `balanceChanges`  | Net SUI/token balance changes per address.                         |
 | `objectChanges`   | Objects created, mutated, wrapped, or deleted.                     |
 | `checkpoint`      | The checkpoint (similar to a block number) that includes this transaction. |
-| `timestampMs`     | Millisecond timestamp of the checkpoint.                           |
+| `timestamp`       | Timestamp of the checkpoint.                                       |
+
+Exact field names and nesting differ by transport, and each transport returns only what you ask for. See the [gRPC](/develop/accessing-data/grpc) and [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) documentation for the response shape you get.
 
 ## Limits on transactions, objects, and data
 

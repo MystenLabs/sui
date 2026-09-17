@@ -66,12 +66,19 @@ const tx = new Transaction();
 Using this, you can then add transactions to the PTB:
 
 ```ts
-// Create a new coin with balance 100, based on the coins used as gas payment.
-// You can define any balance here.
-const [coin] = tx.splitCoins(tx.gas, [tx.pure('u64', 100)]);
+// Send 100 MIST to the recipient's address balance. tx.balance() draws from the
+// sender's coin objects and address balance, so you do not select coins yourself.
+tx.moveCall({
+	target: '0x2::balance::send_funds',
+	typeArguments: ['0x2::sui::SUI'],
+	arguments: [tx.balance({ balance: 100n }), tx.pure.address('0xSomeSuiAddress')],
+});
+```
 
-// Transfer the split coin to a specific address.
-tx.transferObjects([coin], tx.pure('address', '0xSomeSuiAddress'));
+A balance transfer creates no new objects for the recipient to manage. When the recipient needs a `Coin<T>` object instead, such as a payment a downstream Move call consumes, use `tx.coin()` with `transferObjects`:
+
+```ts
+tx.transferObjects([tx.coin({ balance: 100n })], '0xSomeSuiAddress');
 ```
 
 You can attach multiple transaction commands of the same type to a PTB. For example, to get a list of transfers, and iterate over them to transfer coins to each:
@@ -87,15 +94,9 @@ const transfers: Transfer[] = getTransfers();
 
 const tx = new Transaction();
 
-// First, split the gas coin into multiple coins:
-const coins = tx.splitCoins(
-	tx.gas,
-	transfers.map((transfer) => tx.pure('u64', transfer.amount)),
-);
-
-// Next, create a transfer transaction for each coin:
-transfers.forEach((transfer, index) => {
-	tx.transferObjects([coins[index]], tx.pure('address', transfer.to));
+// tx.coin() sources each amount for you, so there is no split step to manage.
+transfers.forEach((transfer) => {
+	tx.transferObjects([tx.coin({ balance: BigInt(transfer.amount) })], transfer.to);
 });
 ```
 
@@ -163,14 +164,26 @@ tx.transferObjects([mintMany[0], mintMany[1]], tx.pure.address(address));
 
 ## Use the gas coin
 
-With PTBs, you can use the gas payment coin to construct coins with a set balance using `splitCoin`. This is useful for SUI payments and avoids the need for up-front coin selection. You can use `tx.gas` to access the gas coin in a PTB and it is valid as input for any arguments. With the exception of `transferObjects`, `tx.gas` must be used by reference. This means you can also add to the gas coin with `mergeCoins` or borrow it for Move functions with `moveCall`.
+For most transactions, reach for [`tx.coin()` and `tx.balance()`](https://sdk.mystenlabs.com/sui/transactions/coins-and-balances) rather than the gas coin. They are the recommended way to source tokens, and they draw from coin objects and address balances without you selecting either.
 
-You can transfer the gas coin using `transferObjects` in the event that you want to transfer all of your coin balance to another address. You can also transfer other coins in your wallet using their `Object ID`. For example,
+`tx.gas` still matters when you want the gas coin specifically, and it is valid as input for any argument.
+
+`tx.gas` is available whichever way the transaction pays for gas. When you supply coin objects, the protocol smashes them into a single gas coin. When you pass an empty array to `setGasPayment([])` to draw gas from an [address balance](/onchain-finance/asset-custody/address-balances/using-address-balances), the protocol materializes a synthetic gas coin from the sender's or sponsor's balance. `tx.gas` refers to that coin in either case, so building against it does not force client-side coin or balance resolution. That matters for [offline building](#building-offline), where an unresolved `tx.coin()` or `tx.balance()` intent would need a balance lookup.
+
+You can borrow the gas coin by reference freely: add to it with `mergeCoins`, split from it with `splitCoins`, or pass it to a Move function with `moveCall`. Consuming it by value is restricted to 2 commands:
+
+- `transferObjects`, to send the whole remaining balance to another address.
+- `sui::coin::send_funds`, to deposit it into an address balance.
+
+Any other by-value use fails with `InvalidGasCoinUsage`.
+
+You can also split from and transfer other coins in your wallet using their object ID. For example,
 
 ```ts
 const otherCoin = tx.object('0xCoinObjectId');
-const coin = tx.splitCoins(otherCoin, [tx.pure.u64(100)]);
-tx.transferObjects([coin], tx.pure.address(address));
+// splitCoins returns an array of coins, so destructure the first result.
+const [coin] = tx.splitCoins(otherCoin, [tx.pure.u64(100)]);
+tx.transferObjects([coin], address);
 ```
 
 ## Get PTB bytes
@@ -188,10 +201,10 @@ const tx = new Transaction();
 
 // ... add some transactions...
 
-await tx.build({ provider });
+await tx.build({ client });
 ```
 
-In most cases, building requires your JSON RPC provider to fully resolve input values. If you have PTB bytes, you can also convert them back into a `Transaction` class:
+In most cases, building requires a client to resolve input values such as object versions and coin selection. If you have PTB bytes, you can also convert them back into a `Transaction` class:
 
 ```ts
 const bytes = getTransactionBytesFromSomewhere();
@@ -200,22 +213,22 @@ const tx = Transaction.from(bytes);
 
 ## Building offline
 
-If you want to build a PTB offline, such that no `provider` is required, you need to fully define all of your input values and gas configuration. For pure values, you can provide a `Uint8Array` which is used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
+To build a PTB offline, with no client available, define all input values and gas configuration yourself. For pure values, provide a `Uint8Array`, which the transaction uses directly. For objects, construct the reference explicitly.
 
 ```ts
-import { Inputs } from '@mysten/sui/transactions';
-
 // For pure values:
 tx.pure(pureValueAsBytes);
 
-// For owned or immutable objects:
-tx.object(Inputs.ObjectRef({ digest, objectId, version }));
+// For owned or immutable objects, supply the exact version and digest:
+tx.objectRef({ objectId, version, digest });
 
-// For shared objects:
-tx.object(Inputs.SharedObjectRef({ objectId, initialSharedVersion, mutable }));
+// For shared and party objects, initialSharedVersion is stable:
+tx.sharedObjectRef({ objectId, initialSharedVersion, mutable });
 ```
 
-You can then omit the `provider` object when calling `build` on the transaction. If there is any required data that is missing, this will throw an error.
+Every offline build must also set the sender, gas price, gas budget, and gas payment. When the transaction uses no owned objects for gas or inputs, such as when `setGasPayment([])` draws gas from an address balance, set a `ValidDuring` expiration as well.
+
+You can then omit the `client` argument when calling `build` on the transaction. If any required data is missing, `build` throws an error.
 
 ## Gas configuration
 
@@ -235,7 +248,7 @@ By default, the SDK automatically derives the gas budget by executing a dry-run 
 
 :::info
 
-Sui represents the gas budget in SUI and you should take the gas price of the PTB into account.
+Set the gas budget in MIST, not SUI. 1 SUI is 1,000,000,000 MIST, so `tx.setGasBudget(50_000_000)` caps the transaction at 0.05 SUI. Take the gas price of the PTB into account when choosing a value.
 
 :::
 
@@ -293,7 +306,7 @@ The PTB builder can support sponsored PTBs by using the `onlyTransactionKind` fl
 const tx = new Transaction();
 // ... add some transactions...
 
-const kindBytes = await tx.build({ provider, onlyTransactionKind: true });
+const kindBytes = await tx.build({ client, onlyTransactionKind: true });
 
 // Construct a sponsored transaction from the kind bytes:
 const sponsoredTx = Transaction.fromKind(kindBytes);
@@ -362,16 +375,20 @@ tx.moveCall({
 
 ### `waitForTransaction`
 
-After you submit a transaction, use `waitForTransaction` to confirm the transaction is indexed before you query its effects. This prevents race conditions where querying immediately after submission returns no results.
+Reads are served from indexed state, which trails execution. After you submit a transaction, use `waitForTransaction` before you query its effects. This prevents race conditions where querying immediately after submission returns no results.
+
+Pass the execution result directly. `signAndExecuteTransaction` returns a discriminated union of `Transaction` and `FailedTransaction`, so the digest is not on the result itself.
 
 ```typescript
-await client.waitForTransaction({ digest: result.digest });
+const result = await client.signAndExecuteTransaction({ transaction: tx, signer: keypair });
+
+await client.waitForTransaction({ result });
+
+const transaction = result.Transaction ?? result.FailedTransaction;
 const txn = await client.getTransaction({
-  digest: result.digest,
+  digest: transaction.digest,
   include: { effects: true },
 });
 ```
 
-## See also
-
-- [PTB Cookbook](/develop/transactions/ptbs/ptb-cookbook): End-to-end recipes for sponsored transactions, kiosk operations, coin selection, and multi-recipient transfers.
+For end-to-end recipes covering sponsored transactions, kiosk operations, coin selection, and multi-recipient transfers, see the [PTB Cookbook](/develop/transactions/ptbs/ptb-cookbook).

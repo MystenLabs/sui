@@ -10,11 +10,15 @@ processed 6 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 10-69:
+task 1, lines 10-65:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 8443600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+//
+// Test deleting parent and child in the same txn, parent first
+//
 
 task 2, line 71:
 //# run test::m::mint --sender A

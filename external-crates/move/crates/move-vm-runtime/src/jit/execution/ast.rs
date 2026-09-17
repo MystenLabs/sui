@@ -138,7 +138,11 @@ impl Drop for Module {
 pub(crate) struct Constant {
     pub(crate) value: ConstantValue,
     pub(crate) type_: ArenaType,
-    // Size of constant -- used for gas charging.
+    // Size of constant -- used for gas charging. When
+    // `VMConfig::charge_ld_const_abstract_size` is set this is the abstract value size of the
+    // constant; otherwise it is the serialized byte length.
+    // TODO(Gas): Once `charge_ld_const_abstract_size` is the only behavior, rename this to
+    // `abstract_size` and charge it as an abstract size rather than as `NumBytes`.
     pub size: u64,
 }
 

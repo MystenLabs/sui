@@ -17,11 +17,13 @@ created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 3906400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 17-24:
+task 2, lines 17-22:
 //# publish
 created: object(2,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 3906400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// Failing
 
 task 3, lines 26-31:
 //# publish --dry-run

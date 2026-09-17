@@ -20,6 +20,7 @@ use crate::{
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         types::{DefiningTypeId, OriginalId, VersionId},
         unique_map,
+        views::{SizeConfig, ValueView as _},
         vm_pointer::VMPointer,
     },
 };
@@ -52,6 +53,7 @@ use std::{
 struct PackageContext<'borrows> {
     pub natives: &'borrows NativeFunctions,
     pub interner: &'borrows IdentifierInterner,
+    pub vm_config: &'borrows VMConfig,
 
     pub type_origin_table: HashMap<IntraPackageKey, DefiningTypeId>,
 
@@ -262,6 +264,7 @@ pub fn package(
     let mut package_context = PackageContext {
         natives,
         interner,
+        vm_config,
         version_id,
         original_id,
         loaded_modules: IndexMap::new(),
@@ -278,6 +281,7 @@ pub fn package(
         version_id,
         natives: _,
         interner: _,
+        vm_config: _,
         original_id,
         loaded_modules,
         package_arena,
@@ -1022,16 +1026,30 @@ fn constants(
         .constant_pool()
         .iter()
         .map(|constant| {
-            let value = Value::deserialize_constant(constant)
-                .ok_or_else(|| {
-                    partial_vm_error!(
-                        VERIFIER_INVARIANT_VIOLATION,
-                        "Verifier failed to verify the deserialization of constants"
-                    )
-                })?
-                .into_constant_value(&context.package_arena)?;
+            let deserialized_value = Value::deserialize_constant(constant).ok_or_else(|| {
+                partial_vm_error!(
+                    VERIFIER_INVARIANT_VIOLATION,
+                    "Verifier failed to verify the deserialization of constants"
+                )
+            })?;
+            let size = if context.vm_config.charge_ld_const_abstract_size {
+                // Charge for the abstract value size of the constant -- the cost of materializing
+                // it on the operand stack -- rather than its serialized byte length. Serialized
+                // length undercharges values that are cheap to encode but expensive to
+                // materialize, e.g. nested vectors, where an empty inner vector is a single
+                // serialized byte but materializes as a heap-allocated container.
+                //
+                // Constants cannot contain references, so `traverse_references` is irrelevant;
+                // `include_vector_size` matches the non-legacy size config in the Sui gas meter.
+                u64::from(deserialized_value.abstract_memory_size(&SizeConfig {
+                    traverse_references: false,
+                    include_vector_size: true,
+                })?)
+            } else {
+                constant.data.len() as u64
+            };
+            let value = deserialized_value.into_constant_value(&context.package_arena)?;
             let type_ = make_arena_type(context, module, &constant.type_)?;
-            let size = constant.data.len() as u64;
             let const_ = Constant { value, type_, size };
             Ok(const_)
         })

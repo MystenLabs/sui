@@ -89,9 +89,9 @@ You can read more in [The Move Book](https://move-book.com/programmability/capab
 
 In this example, a new user can only be created by presenting an `AdminCap` object during the function call.
 
-```Move
+```move
 /// Grants the owner the right to create new users in the system.
-public struct AdminCap {}
+public struct AdminCap has key { id: UID }
 
 /// Creates a new user in the system. Requires the `AdminCap` capability to be
 /// passed as the first argument.
@@ -144,7 +144,7 @@ See [Building Programmable Transaction Blocks](/develop/transactions/ptbs/buildi
 | Oracles | Third party | Third party |
 | Network upgrade strategy | Protocol flags and framework upgrades are voted on by validators then enabled. | EIPs + Hardforking, no onchain mechanism. |
 | IDE | VSCode | Many |
-| Transaction lifecycle | Two round trips from client to validators to generate a transaction certificate (guaranteeing execution), and another round trip for shared objects to ensure ordering. Very low latency. | Transaction gossiped to network, verified and added to mempool, validators select transactions from mempool. Random validator proposes a block, other validators vote yes or no on block. After a sufficient number of blocks have passed, a transaction is considered final. High latency due to block height requirement for finality. |
+| Transaction lifecycle | The client submits the transaction to a full node, which forwards it to a validator through Transaction Driver. Validators vote on it, consensus commits it in a block, and every validator executes it against the same ordered state. Low latency. | The network gossips the transaction, verifies it, and adds it to the mempool. Validators select transactions from the mempool. A random validator proposes a block, and the other validators vote on it. After enough blocks pass, the network considers a transaction final. High latency, because finality depends on block height. |
 | Parallel execution vs Ethereum serial execution, fast path | Transactions that can be parallel are run in parallel. | Every transaction is sequentially run. |
 | Storage fees, storage rebates, storage accounts to pay for fees over time | Low, rebates on destroying objects. | High, no rebates. |
 | Contract immutability | Native mutable and immutable support using upgrade capabilities. | Not native, requires auditing the Solidity code deployed. Can be discerned by some operation codes. |

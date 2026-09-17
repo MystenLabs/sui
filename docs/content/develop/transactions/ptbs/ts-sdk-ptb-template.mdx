@@ -1,10 +1,9 @@
 ---
-title: TypeScript SDK PTB Template
-sidebar_label: PTB Template
+title: Sending PTBs with the TypeScript SDK
+sidebar_label: Sending PTBs
 description: >-
-  A minimal starter template for building a programmable transaction block with
-  the Sui TypeScript SDK, with separate backend keypair and frontend wallet
-  examples.
+  Add programmable transaction blocks to an existing app with the Sui TypeScript
+  SDK, with separate backend keypair and frontend wallet examples.
 keywords:
   - typescript sdk
   - ptb
@@ -12,27 +11,27 @@ keywords:
   - transaction
   - sui dapp kit
 questions:
-  - What is TypeScript SDK PTB Template in Sui?
-  - How do I set up your project?
+  - How do I send a PTB from my app with the TypeScript SDK?
+  - How do I add the Sui TypeScript SDK to an existing project?
   - How do I send a transaction from a backend script?
   - How do I send a transaction from a frontend wallet?
 answer: >-
-  A minimal starter template for building a programmable transaction block with
-  the Sui TypeScript SDK, with separate backend keypair and frontend wallet
-  examples.
+  Install `@mysten/sui` in your project, build a `Transaction`, then sign it
+  with a keypair in a backend script or hand it to the user's wallet through
+  dApp Kit in a frontend app.
 ---
 
-A [Programmable Transaction Block](/develop/transactions/ptbs/prog-txn-blocks) (PTB) groups several onchain actions into a single transaction that succeeds or fails as a unit. This page gives you a minimal template to start from, and points you to the full guide. The Sui TypeScript SDK documentation already covers transaction building in depth, so use this page to get moving, then follow the links for the complete reference.
+A [Programmable Transaction Block](/develop/transactions/ptbs/prog-txn-blocks) (PTB) groups several onchain actions into a single transaction that succeeds or fails as a unit. Send one from an app you already have, whether it signs with its own key pair or relies on a user's wallet.
 
-:::tip Starter template
+:::tip
 
-This page is a starting point, not the full guide. For complete coverage of transaction building, including inputs, commands, results, and execution, see [Sui Programmable Transaction Basics](https://sdk.mystenlabs.com/typescript/transaction-building/basics) in the TypeScript SDK documentation.
+The sections below cover the integration points, not the full API. For complete coverage of transaction building, including inputs, commands, results, and execution, see [Sui Programmable Transaction Basics](https://sdk.mystenlabs.com/typescript/transaction-building/basics) in the TypeScript SDK documentation.
 
 :::
 
-## Set up your project
+## Configure your project for ES modules
 
-The Sui TypeScript SDK ships as an ES module. For a Node.js backend, use a `tsconfig.json` whose `module` and `moduleResolution` settings resolve ES modules, such as `NodeNext`:
+The Sui TypeScript SDK ships as an ES module, so your project's TypeScript configuration has to resolve ES modules. In a Node.js backend, that means `module` and `moduleResolution` settings such as `NodeNext`:
 
 ```json title='tsconfig.json'
 {
@@ -46,7 +45,7 @@ The Sui TypeScript SDK ships as an ES module. For a Node.js backend, use a `tsco
 }
 ```
 
-For a frontend app, scaffold a new project with the dApp Kit starter, which sets up the project structure and configuration for you:
+Frontend build tools such as Vite and Next.js handle this for you. If you do not have a frontend project yet, the dApp Kit starter scaffolds one with the configuration already in place:
 
 ```bash
 $ npm create @mysten/dapp
@@ -105,7 +104,7 @@ Install dApp Kit alongside the core SDK:
 $ npm install @mysten/dapp-kit-react @mysten/sui
 ```
 
-This example assumes a `DAppKitProvider` wraps your app, configured with `createDAppKit`. The dApp Kit starter from [Set up your project](#set-up-your-project) sets this up for you. For the provider setup, see [Getting started with dApp Kit for React](https://sdk.mystenlabs.com/dapp-kit/getting-started/react).
+This example assumes a `DAppKitProvider` wraps your app, configured with `createDAppKit`. For the provider setup, see [Getting started with dApp Kit for React](https://sdk.mystenlabs.com/dapp-kit/getting-started/react).
 
 The following component builds the transaction in the click handler and asks the connected wallet to sign and execute it:
 

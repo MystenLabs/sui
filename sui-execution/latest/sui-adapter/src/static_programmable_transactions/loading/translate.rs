@@ -11,7 +11,7 @@ use crate::{
         metering::{self, translation_meter::TranslationMeter},
     },
 };
-use move_core_types::{account_address::AccountAddress, language_storage::StructTag, u256::U256};
+use move_core_types::{language_storage::StructTag, u256::U256};
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
     base_types::TxContext,
@@ -30,6 +30,13 @@ pub fn transaction<Mode: ExecutionMode>(
     gas_payment: Option<GasPayment>,
     pt: P::ProgrammableTransaction,
 ) -> Result<L::Transaction, Mode::Error> {
+    if env.protocol_config.validate_ptb_argument_indices()
+        && let Err(err) = pt.validate_argument_indices()
+    {
+        invariant_violation!(
+            "PTB argument indices are checked at signing -- this should be impossible: {err}"
+        );
+    }
     metering::pre_translation::meter::<Mode::Error>(meter, &pt)?;
     let P::ProgrammableTransaction { inputs, commands } = pt;
     // withdrawal_compatibility_inputs specified ==> the protocol config flag is set
@@ -199,25 +206,35 @@ fn input<Mode: ExecutionMode>(
                     env.balance_type(inner)?
                 }
             };
-            let ty = env.withdrawal_type(funds_ty.clone())?;
-            let owner: AccountAddress = match withdraw_from {
-                P::WithdrawFrom::Sender => tx_context.sender().into(),
-                P::WithdrawFrom::Sponsor => tx_context
-                    .sponsor()
-                    .ok_or_else(|| {
-                        make_invariant_violation!(
-                            "A sponsor withdrawal requires a sponsor and should have been \
-                            checked at signing"
-                        )
-                    })?
-                    .into(),
+            let source = match withdraw_from {
+                P::WithdrawFrom::Sender => L::WithdrawalSource::Direct {
+                    owner: tx_context.sender().into(),
+                },
+                P::WithdrawFrom::Sponsor => L::WithdrawalSource::Direct {
+                    owner: tx_context
+                        .sponsor()
+                        .ok_or_else(|| {
+                            make_invariant_violation!(
+                                "A sponsor withdrawal requires a sponsor and should have been \
+                                checked at signing"
+                            )
+                        })?
+                        .into(),
+                },
+                P::WithdrawFrom::SenderAllowance { funder, allowance } => {
+                    L::WithdrawalSource::Allowance {
+                        funder: funder.into(),
+                        id: allowance,
+                    }
+                }
             };
+            let ty = env.withdrawal_type_for_source(&source, funds_ty)?;
             (
                 L::InputArg::FundsWithdrawal(L::FundsWithdrawalArg {
                     from_compatibility_object: is_withdrawal_compatibility_input,
                     amount,
                     ty: ty.clone(),
-                    owner,
+                    source,
                 }),
                 L::InputType::Fixed(ty),
             )

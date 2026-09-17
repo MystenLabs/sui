@@ -76,11 +76,13 @@ mod checked {
             deprecate_global_storage_ops_during_deserialization: protocol_config
                 .deprecate_global_storage_ops_during_deserialization(),
             normalize_depth_formula: protocol_config.normalize_depth_formula(),
+            charge_ld_const_abstract_size: protocol_config.charge_ld_const_abstract_size(),
         }
     }
 
     pub fn new_native_extensions<'r>(
         child_resolver: &'r dyn RuntimeObjectResolver,
+        object_funds_resolver: &'r dyn sui_types::storage::ObjectFundsResolver,
         input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
         is_metered: bool,
         protocol_config: &'r ProtocolConfig,
@@ -96,6 +98,7 @@ mod checked {
         })?;
         exts.add(ObjectRuntime::new(
             child_resolver,
+            object_funds_resolver,
             input_objects,
             is_metered,
             protocol_config,

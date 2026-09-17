@@ -363,7 +363,7 @@ async fn test_congestion_control_execution_cancellation() {
 
     // Tests consensus object versions in effects are set correctly.
     assert_eq!(
-        effects.input_consensus_objects(),
+        effects.accessed_consensus_objects(),
         vec![
             InputConsensusObject::Cancelled(shared_object_1.0, SequenceNumber::CONGESTED),
             InputConsensusObject::Cancelled(shared_object_2.0, SequenceNumber::CANCELLED_READ)

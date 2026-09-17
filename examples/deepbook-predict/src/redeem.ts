@@ -2,58 +2,64 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // docs::#redeem
-import { Transaction } from '@mysten/sui/transactions';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import type {
+	CloseOptions,
+	DecodableTransactionResult,
+	MarketDescriptor,
+	OpenPosition,
+	RedeemQuote,
+	RedeemReceipt,
+} from '@mysten/deepbook-v3/predict';
+import type { Transaction } from '@mysten/sui/transactions';
 import { client } from './client.js';
-import { PREDICT, type ActiveOracle } from './config.js';
+import { UNDERLYING } from './config.js';
 
-export async function redeemBinaryUp(params: {
-	signer: Ed25519Keypair;
-	managerId: string;
-	oracle: ActiveOracle;
-	quantity: bigint;
-	permissionless?: boolean; // for settled positions redeemed by anyone
-}) {
-	const { signer, managerId, oracle, quantity, permissionless } = params;
-	const tx = new Transaction();
+// Close part or all of a live position. Reuse the descriptor the position was
+// minted with: the close needs it only to resolve the market object, and the
+// order ID identifies the position itself.
+//
+// The quote is the only protection available on a live close. `tx.redeem` sends
+// `minProbability: 0` and `minProceeds: 0` unconditionally, and the facade
+// exposes no option to raise either floor, so the proceeds are not capped
+// against a price move between the quote and execution. Quote immediately before
+// closing and treat the figure as an estimate.
+export async function closeLive(
+	owner: string,
+	descriptor: MarketDescriptor,
+	opts: CloseOptions,
+): Promise<{ tx: Transaction; quote: RedeemQuote }> {
+	const quote = await client.predict.read.quoteRedeem(owner, descriptor, opts);
+	const tx = await client.predict.tx.redeem(owner, descriptor, opts);
+	return { tx, quote };
+}
 
-	const key = tx.moveCall({
-		target: `${PREDICT.packageId}::market_key::up`,
-		arguments: [
-			tx.pure.id(oracle.oracleId),
-			tx.pure.u64(oracle.expiry),
-			tx.pure.u64(oracle.strike),
-		],
-	});
+// A partial close retires the old order ID and issues a new one, reported as
+// `replacementOrderId`. It is null when the position closed in full. Store the
+// replacement, or the next close targets an order that no longer exists.
+export function decodeClose(result: DecodableTransactionResult): RedeemReceipt {
+	return client.predict.decode.redeem(result);
+}
 
-	tx.moveCall({
-		target: `${PREDICT.packageId}::predict::${permissionless ? 'redeem_permissionless' : 'redeem'}`,
-		typeArguments: [PREDICT.quoteType],
-		arguments: [
-			tx.object(PREDICT.predictObjectId),
-			tx.object(managerId),
-			tx.object(oracle.oracleId),
-			key,
-			tx.pure.u64(quantity),
-			tx.object.clock(),
-		],
-	});
+// Claim a position whose market has settled. The claim closes the order in full,
+// so it takes no quantity, and it needs only the market coordinates rather than
+// a side or a strike.
+export async function claimSettled(params: {
+	owner: string;
+	expiryMs: bigint;
+	marketId: string;
+	orderId: bigint;
+}): Promise<Transaction> {
+	const { owner, expiryMs, marketId, orderId } = params;
+	return client.predict.tx.claimSettled(
+		owner,
+		{ underlying: UNDERLYING, expiryMs, marketId },
+		{ orderId },
+	);
+}
 
-	const result = await client.signAndExecuteTransaction({
-		transaction: tx,
-		signer,
-		include: { effects: true },
-	});
-	// Wait for finality before acting on the result, so later reads reflect it.
-	await client.waitForTransaction({ result });
-
-	if (result.$kind === 'FailedTransaction') {
-		// The transaction is onchain and the sender paid gas. Do not retry it.
-		const { status } = result.FailedTransaction;
-		throw new Error(
-			`redeem aborted: ${status.success ? 'unknown' : JSON.stringify(status.error)}`,
-		);
-	}
-	return result.Transaction;
+// Every open position for an owner, read straight from the account's on-chain
+// position table. Use it to recover order IDs from a cold start.
+export async function openPositions(owner: string): Promise<OpenPosition[]> {
+	return client.predict.read.positions(owner);
 }
 // docs::/#redeem

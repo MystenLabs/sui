@@ -35,6 +35,9 @@ pub struct VMConfig {
     pub deprecate_global_storage_ops_during_deserialization: bool,
     /// Normalize all formula to have a consistent structure.
     pub normalize_depth_formula: bool,
+    /// When true, `LdConst` charges for the abstract value size of the constant instead of its
+    /// serialized byte length.
+    pub charge_ld_const_abstract_size: bool,
 }
 
 impl VMConfig {
@@ -71,6 +74,7 @@ impl VMConfig {
             variant_nodes: true,
             deprecate_global_storage_ops_during_deserialization: false,
             normalize_depth_formula: true,
+            charge_ld_const_abstract_size: true,
         }
     }
 }

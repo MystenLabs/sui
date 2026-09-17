@@ -3,7 +3,7 @@
 # Copy in all crates, Cargo.toml and Cargo.lock unmodified,
 # and build the application.
 ARG PROFILE=release-unwind
-FROM rust:1.96.1-bullseye AS builder
+FROM rust:1.96.1-bookworm AS builder
 ARG PROFILE
 WORKDIR "$WORKDIR/sui"
 
@@ -27,7 +27,7 @@ ENV GIT_REVISION=$GIT_REVISION
 RUN cargo build --locked --profile ${PROFILE} --bin sui-indexer-alt-consistent-store
 
 # Production Image
-FROM debian:bullseye-slim AS runtime
+FROM debian:bookworm-slim AS runtime
 ARG PROFILE
 # Use jemalloc as memory allocator
 RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates curl

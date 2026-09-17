@@ -1,0 +1,23 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+// Without `allow_references_in_ptbs`, a Move call may not return a reference, so the `Read`
+// argument is never reached.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-18:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3754400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 20-22:
+//# programmable --sender A --inputs 112u64
+//> 0: test::m::id_ref(Input(0));
+//> 1: test::m::check(Result(0), Input(0));
+Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }

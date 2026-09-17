@@ -25,6 +25,7 @@ use tracing::info;
 use super::adversarial::{AdversarialPayloadCfg, AdversarialWorkloadBuilder};
 use super::composite::{CompositeWorkloadBuilder, CompositeWorkloadConfig};
 use super::expected_failure::{ExpectedFailurePayloadCfg, ExpectedFailureWorkloadBuilder};
+use super::large_transaction::LargeTransactionWorkloadBuilder;
 use super::randomized_transaction::RandomizedTransactionWorkloadBuilder;
 use super::randomness::RandomnessWorkloadBuilder;
 use super::shared_object_deletion::SharedCounterDeletionWorkloadBuilder;
@@ -37,6 +38,7 @@ pub struct WorkloadWeights {
     pub batch_payment: u32,
     pub shared_deletion: u32,
     pub adversarial: u32,
+    pub large_transaction: u32,
     pub expected_failure: u32,
     pub randomness: u32,
     pub randomized_transaction: u32,
@@ -52,11 +54,13 @@ pub struct WorkloadConfig {
     pub num_transfer_accounts: u64,
     pub weights: WorkloadWeights,
     pub adversarial_cfg: AdversarialPayloadCfg,
+    pub large_transaction_size_bytes: u64,
     pub expected_failure_cfg: ExpectedFailurePayloadCfg,
     pub batch_payment_size: u32,
     pub shared_counter_hotness_factor: u32,
     pub num_shared_counters: Option<u64>,
     pub shared_counter_max_tip: u64,
+    pub shared_counter_gas_price_multiplier: f64,
     pub num_contested_objects: u64,
     pub randomized_transaction_concurrency: u64,
     pub target_qps: u64,
@@ -87,6 +91,8 @@ impl WorkloadConfiguration {
                 delegation,
                 batch_payment,
                 adversarial,
+                large_transaction,
+                large_transaction_size_bytes,
                 expected_failure,
                 randomness,
                 randomized_transaction,
@@ -97,6 +103,7 @@ impl WorkloadConfiguration {
                 shared_counter_hotness_factor,
                 num_shared_counters,
                 shared_counter_max_tip,
+                shared_counter_gas_price_multiplier,
                 num_contested_objects,
                 batch_payment_size,
                 adversarial_cfg,
@@ -156,6 +163,7 @@ impl WorkloadConfiguration {
                             batch_payment: batch_payment[i],
                             shared_deletion: shared_deletion[i],
                             adversarial: adversarial[i],
+                            large_transaction: large_transaction[i],
                             expected_failure: expected_failure[i],
                             randomness: randomness[i],
                             randomized_transaction: randomized_transaction[i],
@@ -164,6 +172,7 @@ impl WorkloadConfiguration {
                             conflicting_transfer: conflicting_transfer[i],
                             composite: composite[i],
                         },
+                        large_transaction_size_bytes: large_transaction_size_bytes[i],
                         adversarial_cfg: AdversarialPayloadCfg::from_str(&adversarial_cfg[i])
                             .unwrap(),
                         expected_failure_cfg: ExpectedFailurePayloadCfg {
@@ -174,6 +183,7 @@ impl WorkloadConfiguration {
                         shared_counter_hotness_factor: shared_counter_hotness_factor[i],
                         num_shared_counters: num_shared_counters.as_ref().map(|n| n[i]),
                         shared_counter_max_tip: shared_counter_max_tip[i],
+                        shared_counter_gas_price_multiplier: shared_counter_gas_price_multiplier[i],
                         num_contested_objects: num_contested_objects[i],
                         randomized_transaction_concurrency: 4,
                         target_qps: target_qps[i],
@@ -275,11 +285,13 @@ impl WorkloadConfiguration {
             num_transfer_accounts,
             weights,
             adversarial_cfg,
+            large_transaction_size_bytes,
             expected_failure_cfg,
             batch_payment_size,
             shared_counter_hotness_factor,
             num_shared_counters,
             shared_counter_max_tip,
+            shared_counter_gas_price_multiplier,
             num_contested_objects: _,
             randomized_transaction_concurrency,
             target_qps,
@@ -327,6 +339,7 @@ impl WorkloadConfiguration {
             + weights.delegation
             + weights.batch_payment
             + weights.adversarial
+            + weights.large_transaction
             + weights.randomness
             + weights.expected_failure
             + weights.randomized_transaction
@@ -343,6 +356,7 @@ impl WorkloadConfiguration {
             shared_counter_hotness_factor,
             num_shared_counters,
             shared_counter_max_tip,
+            shared_counter_gas_price_multiplier,
             reference_gas_price,
             duration,
             group,
@@ -399,6 +413,16 @@ impl WorkloadConfiguration {
             group,
         );
         workload_builders.push(adversarial_workload);
+        let large_transaction_workload = LargeTransactionWorkloadBuilder::from(
+            weights.large_transaction as f32 / total_weight as f32,
+            target_qps,
+            num_workers,
+            in_flight_ratio,
+            large_transaction_size_bytes,
+            duration,
+            group,
+        );
+        workload_builders.push(large_transaction_workload);
         let randomness_workload = RandomnessWorkloadBuilder::from(
             weights.randomness as f32 / total_weight as f32,
             target_qps,

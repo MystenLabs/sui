@@ -311,7 +311,8 @@ fn next_checkpoint_chunk(
             {
                 cp_range.apply_serving_floor(floor, floor, &options);
             }
-            let interval_empty = cp_range.is_empty();
+            let range = cp_range.range();
+            let interval_empty = range.is_empty();
             let mut end_checkpoint = cp_range.end_checkpoint;
             let mut end_position = cp_range.end_position;
             let mut terminal = ScanTerminal::from_range_exhaustion(
@@ -322,11 +323,10 @@ fn next_checkpoint_chunk(
                 interval_empty,
             );
             let mut entry_checkpoint = if options.is_ascending() {
-                cp_range.range().start
+                range.start
             } else {
-                cp_range.range().end.saturating_sub(1)
+                range.end.saturating_sub(1)
             };
-            let range = cp_range.range();
             if range.is_empty() {
                 return Ok(CheckpointChunkDone {
                     items: Vec::new(),

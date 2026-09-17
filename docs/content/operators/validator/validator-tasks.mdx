@@ -174,7 +174,7 @@ Inter-validator state sync is always permitted, but you can use controls to limi
 
 The default and recommended `max-concurrent-connections: 0` configuration does not affect inter-validator state sync, but restricts all full nodes from syncing. The [`sui-node` configuration](/operators/validator/validator-config) can be modified to allow a known full node to sync from a validator:
 
-```sh
+```yaml
 p2p-config:
   anemo-config:
     max-concurrent-connections: 0

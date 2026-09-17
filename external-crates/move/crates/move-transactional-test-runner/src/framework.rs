@@ -1028,9 +1028,6 @@ async fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     let result_string = match result {
         Ok(None) => {
             write_unattached_comments(output, &trailing_comments);
-            if !trailing_comments.is_empty() {
-                writeln!(output).unwrap();
-            }
             return;
         }
         Ok(Some(s)) => s,
@@ -1050,7 +1047,4 @@ async fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     )
     .unwrap();
     write_unattached_comments(output, &trailing_comments);
-    if !trailing_comments.is_empty() {
-        writeln!(output).unwrap();
-    }
 }

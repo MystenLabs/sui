@@ -13,7 +13,7 @@ use sui_config::{
 use sui_execution::Executor;
 use sui_transaction_checks::{check_dev_inspect_input, check_transaction_input};
 use sui_types::{
-    base_types::{EpochId, ObjectID, ObjectRef},
+    base_types::{EpochId, ObjectID, ObjectRef, SystemObjectVersions},
     coin_reservation::{CoinReservationResolverTrait, ParsedDigest},
     digests::{ChainIdentifier, TransactionDigest},
     effects::TransactionEffectsAPI,
@@ -207,6 +207,7 @@ pub fn simulate_transaction(
     let cloned_gas = gas_data.clone();
     let cloned_kind = kind.clone();
     let tx_digest = transaction_digest;
+    let system_object_versions = SystemObjectVersions::from_latest_in_store(backing_store);
     let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
         &tracking_store,
         protocol_config,
@@ -216,6 +217,7 @@ pub fn simulate_transaction(
         &execution_epoch_id,
         epoch_timestamp_ms,
         checked_input_objects,
+        system_object_versions,
         gas_data,
         gas_status,
         kind,
@@ -226,7 +228,12 @@ pub fn simulate_transaction(
     );
 
     // Post-execution: check object funds (non-address withdrawals discovered during execution).
-    let (inner_temp_store, effects, execution_result) = if execution_result.is_ok() {
+    // TODO: Remove this code once check_object_funds_withdraw_in_execution is enabled on all
+    // production networks.
+    let (inner_temp_store, effects, execution_result) = if !protocol_config
+        .check_object_funds_withdraw_in_execution()
+        && execution_result.is_ok()
+    {
         let has_insufficient_object_funds = inner_temp_store
             .accumulator_running_max_withdraws
             .iter()
@@ -255,6 +262,7 @@ pub fn simulate_transaction(
                 &execution_epoch_id,
                 epoch_timestamp_ms,
                 cloned_input_objects,
+                system_object_versions,
                 cloned_gas,
                 retry_gas_status,
                 cloned_kind,

@@ -44,7 +44,7 @@ Both [validators](/operators/validator) and [full nodes](/operators/full-node/su
 
 ## Verifying checkpoints
 
-Full nodes and validators verify a checkpoint to trust it. This verification confirms that the Sui [validator committee](/operators/validator/validator-rewards) created it and that it is authentic. Checkpoint verification requires 2 interdependent steps:
+Full nodes and validators verify a checkpoint to trust it. This verification confirms that the Sui [validator committee](/develop/sui-architecture/epochs) created it and that it is authentic. Checkpoint verification requires 2 interdependent steps:
 
 1. A client that has the public keys of the validator committee can check the signatures on the checkpoint. Checkpoints are signed by the aggregated BLS signatures of a quorum of the committee. If the signatures are valid, the client knows the checkpoint was created by the validator committee and not another party.
 

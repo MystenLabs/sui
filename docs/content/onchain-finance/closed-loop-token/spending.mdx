@@ -79,7 +79,7 @@ Normally, the `spend` action should have at least one rule assigned to it to pre
 
 ```move
 /// Rule-like witness to stamp the ActionRequest
-struct GiftShop has drop {}
+public struct GiftShop has drop {}
 
 /// Spend the token and return a Gift + ActionRequest
 public fun buy_gift(

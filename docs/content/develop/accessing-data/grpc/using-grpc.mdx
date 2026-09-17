@@ -388,34 +388,35 @@ To paginate, take the `cursor` from the latest `watermark` in the stream and pas
 
 For operator-level configuration of these APIs (timeouts, item limits, scan budgets), see [Ledger history configuration](/operators/full-node/sui-full-node#ledger-history-configuration).
 
-## Build gRPC clients
+## Add a gRPC client to your project
 
 :::info
 
-Use one of the [supported SDKs](/develop/accessing-data/data-serving#supported-sdks) for building gRPC clients. If those SDKs do not satisfy your use case, refer to the examples below.
+Reach for one of the [supported SDKs](/develop/accessing-data/data-serving#supported-sdks) before hand-rolling a gRPC client. The examples below cover the cases those SDKs do not serve.
 :::
+
+Each example adds a Sui gRPC client to a project you already have. All 3 need the `sui/rpc/v2` proto files, so download them from [the sui-apis repo](https://github.com/MystenLabs/sui-apis/tree/main/proto) into a `protos/` directory at your project root before you start.
 
 <Tabs groupId="language">
 
 <TabItem value="typescript" label="TypeScript">
 
-This example shows how to build a TypeScript client for the Sui gRPC API. 
+#### Install dependencies
 
-#### Step 1: Install dependencies
+Add the gRPC runtime and proto loader to your existing project:
 
 ```shell
-npm init -y
 npm install @grpc/grpc-js @grpc/proto-loader
 npm i -D tsx
 ```
 
-The default project has this structure:
+The client resolves protos relative to its own directory, so your tree should look like this:
 
 ```shell
 .
 ├── protos/
 │   └── sui/
-│       └── node/
+│       └── rpc/
 │           └── v2/
 │               ├── ledger_service.proto
 │               └── *.proto
@@ -423,9 +424,9 @@ The default project has this structure:
 ├── package.json
 ```
 
-Download all of the `sui/rpc/v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto) in the same folder.
+#### Query events and effects for a transaction
 
-#### Step 2: Edit `client.ts` to get events and effects details of a particular transaction
+Point a client at a fullnode and read the `events` and `effects` fields of a transaction:
 
 ```ts
 import * as grpc from '@grpc/grpc-js';
@@ -474,10 +475,10 @@ client.GetTransaction(request, (err: any, response: any) => {
 });
 ```
 
-#### Step 3: Run the sample client
+#### Run the client
 
 ```shell
-npx tsx c
+npx tsx client.ts
 ```
 
 - `proto-loader` handles any nested `.proto` files. Just make sure paths and imports are correct.
@@ -490,20 +491,18 @@ npx tsx c
 
 <TabItem value="golang" label="Golang">
 
-This example shows how to build a Go client for the Sui gRPC API. 
+#### Install dependencies
 
-#### Step 1: Install dependencies
-
-First make sure you have `go` and `protoc` installed in your environment, and then install:
+Make sure your environment has `go` and `protoc`, then install the code generators:
 
 ```shell
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 ```
 
-#### Step 2: Edit `go.mod` 
+#### Update `go.mod`
 
-Add the following content, making sure to update the version numbers to the latest versions:
+Add the following requirements to your existing `go.mod`, using the latest versions:
 
 ```go
 require (
@@ -512,15 +511,15 @@ require (
 )
 ```
 
-#### Step 3: Generate Go code from proto files
+#### Generate Go code from the proto files
 
-Assuming you have the `v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), run:
+With the `v2` protos in `protos/`, run:
 
 ```shell
 protoc --proto_path=./protos --go_out=. --go-grpc_out=. protos/sui/rpc/v2/ledger_service.proto
 ```
 
-#### Step 4: Edit `main.go` to get events and effects details of a particular transaction
+#### Query events and effects for a transaction
 
 ```go
 package main
@@ -574,9 +573,9 @@ func main() {
 }
 ```
 
-#### Step 5: Run the sample client
+#### Run the client
 
-If your `go.mod` is properly set up, and you've already generated the gRPC code (`*.pb.go`, `*_grpc.pb.go`), run:
+Once `go.mod` is set up and you have generated the gRPC code (`*.pb.go`, `*_grpc.pb.go`), run:
 
 ```shell
 go run main.go
@@ -597,25 +596,25 @@ The example assumes that gRPC is available on port `443` which requires SSL. The
 
 <TabItem value="python" label="Python">
 
-This example shows how to build a Python client for the Sui gRPC API. Optionally, refer to [`pysui`](https://github.com/FrankC01/pysui/), a community contributed SDK.
+For Python, consider [`pysui`](https://github.com/FrankC01/pysui/), a community contributed SDK, before wiring up gRPC directly.
 
-#### Step 1: Install dependencies
+#### Install dependencies
 
-First make sure you have `python` and `protoc` installed in your environment, and then install:
+Make sure your environment has `python` and `protoc`, then install:
 
 ```shell
 pip install grpcio grpcio-tools protobuf
 ```
 
-#### Step 2: Generate Python code from proto files
+#### Generate Python code from the proto files
 
-Assuming you have the `v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), run:
+With the `v2` protos in `protos/`, run:
 
 ```shell
 python -m grpc_tools.protoc -I./protos --python_out=. --grpc_python_out=. ./protos/sui/rpc/v2/ledger_service.proto
 ```
 
-#### Step 3: Edit `client.py` to get events and effects details of a particular transaction
+#### Query events and effects for a transaction
 
 ```python
 import grpc
@@ -645,7 +644,7 @@ if __name__ == "__main__":
     main()
 ```
 
-#### Step 4: Run the sample client
+#### Run the client
 
 ```shell
 python client.py

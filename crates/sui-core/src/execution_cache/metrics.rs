@@ -3,8 +3,10 @@
 
 use tracing::trace;
 
+use mysten_metrics::LATENCY_SEC_BUCKETS;
 use prometheus::{
-    IntCounter, IntCounterVec, IntGauge, Registry, register_int_counter_vec_with_registry,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, Registry,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, register_int_gauge_with_registry,
 };
 
@@ -18,6 +20,8 @@ pub struct ExecutionCacheMetrics {
     pub(crate) expired_tickets: IntCounter,
     pub(crate) backpressure_status: IntGauge,
     pub(crate) backpressure_toggles: IntCounter,
+    pub(crate) implicit_system_object_read_waits: IntCounterVec,
+    pub(crate) implicit_system_object_read_wait_latency: HistogramVec,
 }
 
 impl ExecutionCacheMetrics {
@@ -84,6 +88,23 @@ impl ExecutionCacheMetrics {
             backpressure_toggles: register_int_counter_with_registry!(
                 "execution_cache_backpressure_toggles",
                 "Number of times backpressure was turned on or off",
+                registry,
+            )
+            .unwrap(),
+            implicit_system_object_read_waits: register_int_counter_vec_with_registry!(
+                "implicit_system_object_read_waits",
+                "Number of times execution blocked because a system object read during \
+                 execution had not yet caught up locally to the required version",
+                &["object_id"],
+                registry,
+            )
+            .unwrap(),
+            implicit_system_object_read_wait_latency: register_histogram_vec_with_registry!(
+                "implicit_system_object_read_wait_latency",
+                "Seconds execution blocked waiting for a system object to catch up locally \
+                 to the required version",
+                &["object_id"],
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

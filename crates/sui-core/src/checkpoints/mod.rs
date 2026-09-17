@@ -2319,8 +2319,9 @@ async fn wait_for_effects_with_retry(
     tx_key: TransactionKey,
 ) -> Vec<TransactionEffects> {
     let delay = if in_antithesis() {
-        // antithesis has aggressive thread pausing, 5 seconds causes false positives
-        15
+        // antithesis pauses containers and threads for tens of seconds, so shorter
+        // timeouts produce false positives
+        60
     } else {
         5
     };

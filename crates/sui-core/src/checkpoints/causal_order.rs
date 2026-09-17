@@ -148,7 +148,7 @@ impl RWLockDependencyBuilder {
         let mut read_version: HashMap<ObjectKey, Vec<TransactionDigest>> = Default::default();
         let mut overwrite_versions: HashMap<TransactionDigest, Vec<ObjectKey>> = Default::default();
         for effect in effects {
-            for kind in effect.input_consensus_objects() {
+            for kind in effect.accessed_consensus_objects() {
                 match kind {
                     InputConsensusObject::ReadOnly(obj_ref) => {
                         let obj_key = obj_ref.into();

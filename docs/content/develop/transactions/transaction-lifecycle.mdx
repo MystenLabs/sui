@@ -136,11 +136,13 @@ Approximately every 24 hours, the Sui [Testnet](/develop/sui-architecture/networ
 
 It is best practice to store signed transactions locally before sending them to a full node, and to only remove them after receiving confirmation of finality or invalidity from a full node. When the app restarts, it can resend all pending transactions to full nodes. This is safe because Sui transactions are idempotent: Sui executes a given transaction at most once. Resending an executed transaction returns either its original effects or an indication that the transaction has become invalid.
 
-To verify whether a pending transaction has been finalized, an app can query a trusted full node with the `getTransactionBlock` method:
+To verify whether a pending transaction has been finalized, an app can look the digest up on a trusted full node with gRPC `LedgerService.GetTransaction` (`client.getTransaction` in the TypeScript SDK) or the GraphQL `Query.transaction` field:
 
-- If the response contains transaction details, Sui has finalized and executed the transaction.
+- If the lookup returns transaction details, Sui has finalized and executed the transaction.
 
-- If the response is `None`, either Sui never finalized the transaction or this full node does not yet know about it. In this case, the safer option is to resubmit the transaction; as noted above, Sui transactions are idempotent.
+- If the lookup finds nothing, either Sui never finalized the transaction or this full node does not yet know about it. In this case, the safer option is to resubmit the transaction; as noted above, Sui transactions are idempotent.
+
+A transaction that executed but aborted onchain still counts as finalized. It returns as a failed transaction rather than as a missing one, so check the execution status rather than treating any response as success.
 
 The full node must wait for the transaction to be checkpointed and state-synced, which normally takes a few seconds. It then executes the transaction and applies the resulting state changes locally.
 

@@ -169,7 +169,6 @@ members = [
     "crates/sui-protocol-config",
     "crates/sui-protocol-config-macros",
     "crates/sui-proxy",
-    "crates/sui-replay",
     "crates/sui-replay-2",
     "crates/sui-rosetta",
     "crates/sui-rpc-api",
@@ -229,7 +228,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.80.0"
+version = "1.81.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -385,6 +384,7 @@ futures-core = "0.3.21"
 git-version = "0.3.5"
 governor = "0.6.0"
 gcp_auth = "0.12.6"
+h2 = "0.4.19"
 hdrhistogram = "7.5.1"
 headers = "0.4.0"
 hex = "0.4.3"
@@ -652,9 +652,9 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d4e
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d4ea1f4573f08c2c75317fcb205b823de" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d71f9d6f788afc6b30baef85a342e0e7867c0019", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d71f9d6f788afc6b30baef85a342e0e7867c0019", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d71f9d6f788afc6b30baef85a342e0e7867c0019", features = [ "unstable" ] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "618b6c8484a2394f73d9b5e21cce0ac228b2cf31", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "618b6c8484a2394f73d9b5e21cce0ac228b2cf31", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "618b6c8484a2394f73d9b5e21cce0ac228b2cf31", features = [ "unstable" ] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -734,7 +734,6 @@ sui-prompt = { path = "crates/sui-prompt" }
 sui-protocol-config = { path = "crates/sui-protocol-config" }
 sui-protocol-config-macros = { path = "crates/sui-protocol-config-macros" }
 sui-proxy = { path = "crates/sui-proxy" }
-sui-replay = { path = "crates/sui-replay" }
 sui-replay-2 = { path = "crates/sui-replay-2" }
 sui-rosetta = { path = "crates/sui-rosetta" }
 sui-rpc-loadgen = { path = "crates/sui-rpc-loadgen" }

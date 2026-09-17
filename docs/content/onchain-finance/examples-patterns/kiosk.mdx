@@ -87,7 +87,7 @@ Assume you want to allow users to also burn assets, not only admins. This still 
 Create a ticket that has only the `key` ability so that the receiver cannot trade it:
 
 ```rust
-struct BurnTicket<phantom T> has key {
+public struct BurnTicket<phantom T> has key {
 	id: UID,
 	tokenized_asset_id: ID // the tokenized asset that this ticket gives access to burn
 }
@@ -96,7 +96,7 @@ struct BurnTicket<phantom T> has key {
 The struct that now holds only treasury-related information (resulting from splitting the `AssetCap`, which is no longer part of this design) is created as a shared object. Change functions like `mint` to also take as input both the `Treasury` object and the `AdminCap` object:
 
 ```rust
-struct Treasury<phantom T> has key, store {
+public struct Treasury<phantom T> has key, store {
 	id: UID,
 	supply: Supply<T>,
   total_supply: u64,
@@ -106,7 +106,7 @@ struct Treasury<phantom T> has key, store {
 The other half of the `AssetCap` functionality retains the admin capability and the configuration of burnability. It is an owned object sent to the creator of type `<T>`:
 
 ```rust
-struct AdminCap<phantom T> has key, store {
+public struct AdminCap<phantom T> has key, store {
 	id: UID,
 	burnable: bool
 }

@@ -908,6 +908,10 @@ impl AuthorityPerEpochStore {
         protocol_config
             .apply_seeded_test_overrides(epoch_start_configuration.epoch_digest().inner());
 
+        // Tell antithesis which flag-gated reachability assertions are live under the config
+        // this epoch actually runs with. See sui_protocol_config::reachability.
+        sui_protocol_config::reachability::register_reachability_for_config(&protocol_config);
+
         let execution_component = ExecutionComponents::new(
             &protocol_config,
             backing_package_store,

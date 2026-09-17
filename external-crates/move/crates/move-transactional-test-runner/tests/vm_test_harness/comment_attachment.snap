@@ -1,11 +1,19 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 5 tasks
+processed 7 tasks
 
 // This standalone comment is before init.
 
-task 3, lines 32-33:
+// This comment after the published module is preserved in snapshot output.
+
+// This comment after the published module is preserved in snapshot output.
+
+// This comment after a semicolon-header function module is preserved in snapshot output.
+
+// This comment after a semicolon-header constant module is preserved in snapshot output.
+
+task 5, lines 44-45:
 // This comment belongs to the first run task.
 //# run A::M::answer
 return values: 42
@@ -16,7 +24,7 @@ return values: 42
 
 // This is a separate standalone block.
 
-task 4, lines 42-43:
+task 6, lines 54-55:
 // This comment belongs to the second run task.
 //# run A::M::answer
 return values: 42

@@ -1,10 +1,9 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
-assertion_line: 72
 ---
 module temperature {
     public fun c () {
-        return         E::V .. fields .. args
+        return E::V .. fields .. args
     }
 
     public fun dtor () {
@@ -20,17 +19,18 @@ module temperature {
     }
 
     public fun f () {
-        return         E::V .. fields .. args
+        return E::V .. fields .. args
     }
 
     public fun is_temperature_fahrenheit () {
-        return         match(l0: Temperature) {
+        return match(l0: Temperature) {
             Temperature::Fahrenheit { pos0: reg_3 } => {
-true            },
+                true
+            },
             Temperature::Celcius => {
-false            },
+                false
+            },
         }
-
     }
 
 }

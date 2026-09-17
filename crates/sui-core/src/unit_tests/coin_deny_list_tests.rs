@@ -113,7 +113,7 @@ async fn test_regulated_coin_v2_types() {
         ],
     )
     .build_and_sign(&env.keypair);
-    let (_, effects) = submit_and_execute_with_options(&env.authority, None, tx, true)
+    let (_, effects) = submit_and_execute_with_options(&env.authority, None, tx)
         .await
         .unwrap();
     if effects.status().is_err() {
@@ -186,7 +186,7 @@ async fn test_regulated_coin_v2_types() {
         ],
     )
     .build_and_sign(&env.keypair);
-    let (_, effects) = submit_and_execute_with_options(&env.authority, None, tx, true)
+    let (_, effects) = submit_and_execute_with_options(&env.authority, None, tx)
         .await
         .unwrap();
     if effects.status().is_err() {
@@ -243,7 +243,7 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
             regulated_coin_type.clone(),
         )
         .build_and_sign(&env.keypair);
-        let effects = submit_and_execute_with_options(&env.authority, None, tx, true)
+        let effects = submit_and_execute_with_options(&env.authority, None, tx)
             .await
             .unwrap()
             .1;
@@ -277,7 +277,7 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
         ],
     )
     .build_and_sign(&env.keypair);
-    submit_and_execute_with_options(&env.authority, None, add_tx, true)
+    submit_and_execute_with_options(&env.authority, None, add_tx)
         .await
         .unwrap();
 

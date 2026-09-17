@@ -3,6 +3,8 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 38 tasks
 
+// check: "Keep(EXECUTED)"
+
 task 6, lines 192-202:
 // Casting to u8, overflowing.
 //# run

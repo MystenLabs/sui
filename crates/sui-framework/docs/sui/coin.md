@@ -709,6 +709,7 @@ Put a <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;</code> to t
 ## Function `redeem_funds`
 
 Redeem a <code>Withdrawal&lt;Balance&lt;T&gt;&gt;</code> and create a <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;</code> from the withdrawn Balance<T>.
+Aborts if an object withdrawal exceeds the funds currently available to the object.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_redeem_funds">redeem_funds</a>&lt;T&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;T&gt;&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;

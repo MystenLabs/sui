@@ -24,6 +24,7 @@ use move_vm_runtime::runtime::MoveRuntime;
 use mysten_common::debug_fatal;
 
 use sui_types::TypeTag;
+use sui_types::allowance::parse_allowance_object;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::effects::{AccumulatorOperation, AccumulatorValue};
 use sui_types::error::{ExecutionError, SuiResult};
@@ -731,6 +732,18 @@ impl InvariantChecker {
                     PaymentLocation::Coin(_) => None,
                     PaymentLocation::AddressBalance(address) => Some(address),
                 });
+        // A Split at a non-signer key requires every allowance id declared for it as a loaded,
+        // matching input.
+        let is_allowance_backed = |key: &(SuiAddress, TypeTag)| {
+            let Some(allowance_ids) = store.post_execution_check_inputs.allowance_ids.get(key)
+            else {
+                return false;
+            };
+            allowance_ids.iter().all(|id| {
+                let resolved = store.input_objects.get(id).map(parse_allowance_object);
+                matches!(resolved, Some(Ok(a)) if a.funder == key.0 && a.funds_type == key.1)
+            })
+        };
         let mut funds_net_changes: BTreeMap<(SuiAddress, TypeTag), i128> = BTreeMap::new();
         for event in store.execution_results.accumulator_events.iter() {
             let amount = match event.write.value {
@@ -754,13 +767,17 @@ impl InvariantChecker {
             // Authorized if it is:
             // - A merge/deposit (anyone can deposit)
             // - A withdrawal
-            //   - with a corresponding input reservation
+            //   - with a corresponding input reservation (the signer's or allowance-backed)
             //   - from an object authenticated for mutation
             //   - for the gas payment (potentially from a GasCoin send_funds transfer)
             let authorized = match event.write.operation {
                 AccumulatorOperation::Merge => true,
                 AccumulatorOperation::Split => {
-                    input_reservations.contains_key(&key)
+                    let is_authorized_input_reservation = input_reservations.contains_key(&key)
+                        && (address == *sender
+                            || address == *gas_owner
+                            || is_allowance_backed(&key));
+                    is_authorized_input_reservation
                         || objects_authenticated_for_mutation.contains(&address)
                         || (*type_tag == sui_balance_type
                             && gas_payment_address_balance
@@ -770,8 +787,8 @@ impl InvariantChecker {
             assert!(
                 authorized,
                 "Unauthenticated funds-accumulator Split at address {address} for type \
-                 {type_tag}: no input reservation, address is not an authenticated object, and \
-                 it is not the final gas payment address balance"
+                 {type_tag}: no signer or allowance-backed input reservation, address is not an \
+                 authenticated object, and it is not the final gas payment address balance"
             );
         }
 

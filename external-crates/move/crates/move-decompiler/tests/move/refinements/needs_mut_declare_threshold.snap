@@ -1,0 +1,32 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module needs_mut_declare_threshold {
+    public fun double_assign () {
+        let l1, l2;
+        l2 = if (l0) {
+            l1 = 1u64;
+            2u64
+        } else {
+            l1 = 3u64;
+            4u64
+        };
+        if (l0) {
+            l1 = 5u64;
+        }
+        return l1 + l2
+    }
+
+    public fun single_assign_per_path () {
+        let l1, l2;
+        l2 = if (l0) {
+            l1 = 1u64;
+            2u64
+        } else {
+            l1 = 3u64;
+            4u64
+        };
+        return l1 + l2
+    }
+
+}

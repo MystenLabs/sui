@@ -57,7 +57,7 @@ answer: >-
   purposes on the Sui network:.
 ---
 
-The native token of Sui is SUI. The Sui tokenomics structure is designed to support the long-term financial needs of Web3. The SUI token serves four purposes on the Sui network:
+The native token of Sui is SUI. The Sui tokenomics structure is designed to support the long-term financial needs of Web3. The SUI token serves 4 purposes on the Sui network:
 
 1. Provides the opportunity to stake SUI to participate in the proof-of-stake mechanism.
 
@@ -69,7 +69,7 @@ The native token of Sui is SUI. The Sui tokenomics structure is designed to supp
 
 ## Stakeholders
 
-Stakeholders in a blockchain's tokenomics have a vested interest in the viability of the blockchain economy. The Sui economy has three main groups of stakeholders:
+Stakeholders in a blockchain's tokenomics have a vested interest in the viability of the blockchain economy. The Sui economy has 3 main groups of stakeholders:
 
 - **Users**, who submit transactions to the network to create, mutate, and transfer digital assets or interact with smart contracts.
 
@@ -91,19 +91,19 @@ There is a finite supply of SUI. The total supply of SUI tokens on Mainnet is ca
 
 ## Token distribution
 
-At the beginning of each [epoch], three important events happen:
+At the beginning of each [epoch](/develop/sui-architecture/epochs), 3 important events happen:
 
 1. SUI holders stake their tokens to validators and a new [committee](/develop/sui-architecture/consensus) is formed.
 
-- The reference gas prices are set as described in [Sui Gas Fees](/develop/transaction-payment/gas-in-sui).
+1. The reference gas prices are set as described in [Sui Gas Fees](/develop/transaction-payment/gas-in-sui).
 
-- The [storage fund](#storage-fund) size is adjusted using the net inflow of the previous epoch.
+1. The [storage fund](#storage-fund) size is adjusted using the net inflow of the previous epoch.
 
 Following these actions, the protocol computes the total amount of stake as the sum of staked SUI plus the storage fund.
 
 During each epoch, users submit transactions to the Sui platform and validators process them. For each transaction, users pay the associated computation and storage gas fees. In cases where users delete previous transaction data, users obtain a partial [rebate of their storage fees](#storage-fund-rewards). Validators observe the behavior of other validators and evaluate each other's performance.
 
-At the end of each epoch, the protocol distributes stake rewards to participants. This occurs through two main steps:
+At the end of each epoch, the protocol distributes stake rewards to participants. This occurs through 2 main steps:
 
 1. The total amount of stake rewards is calculated as the sum of computation fees accrued throughout the epoch plus the epoch's stake reward subsidies. The latter component is temporary in that it only exists in the network's first years and disappears in the long run as the amount of SUI in circulation reaches its total supply.
 
@@ -139,7 +139,7 @@ Sui addresses this problem with the storage fund, a cache of SUI that never full
 
 Total stake is calculated as the sum of user stake plus the SUI tokens deposited in the storage fund. The storage fund receives a proportional share of the overall stake rewards depending on its size relative to total stake. The largest share of these stake rewards are paid out to current validators to compensate for storage costs. The rewards that remain are reinvested into the fund. When onchain storage requirements are high, validators receive substantial additional rewards to compensate for their storage costs.
 
-The storage fund includes three key features:
+The storage fund includes 3 key features:
 
 1. Past transactions contribute to the storage fund, which functions as a tool for shifting gas fees across different epochs. This ensures that future validators are compensated for their storage costs by the past users who created those storage requirements in the first place.
 

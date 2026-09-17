@@ -2084,26 +2084,26 @@ impl KeyValueStoreReader for BigTableClient {
         original_id: ObjectID,
         cp_bound: u64,
     ) -> Result<Option<PackageData>> {
-        // Over-fetch up to 50 versions in reverse order, then filter by cp_bound.
-        // Packages rarely have 50+ upgrades.
         let start_key = Bytes::from(tables::packages::encode_key(original_id.as_ref(), 0));
         let end_key = Bytes::from(tables::packages::encode_key_upper_bound(
             original_id.as_ref(),
         ));
 
         let rows = self
-            .range_scan(
+            .range_scan_stream(
                 tables::packages::NAME,
                 Some(start_key),
                 Some(end_key),
-                50,
+                0,
                 true,
                 None,
             )
             .await?;
 
-        for (key, row) in rows {
-            let pkg = tables::packages::decode(key.as_ref(), &row)?;
+        futures::pin_mut!(rows);
+        while let Some(row) = rows.next().await {
+            let (key, cells) = row?;
+            let pkg = tables::packages::decode(key.as_ref(), &cells)?;
             if pkg.cp_sequence_number <= cp_bound {
                 return Ok(Some(pkg));
             }
@@ -2120,8 +2120,19 @@ impl KeyValueStoreReader for BigTableClient {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<PackageData>> {
-        let start_version = after_version.map(|v| v + 1).unwrap_or(0);
-        let end_version = before_version.map(|v| v - 1).unwrap_or(u64::MAX);
+        let start_version = match after_version {
+            Some(u64::MAX) => return Ok(vec![]),
+            Some(v) => v + 1,
+            None => 0,
+        };
+        let end_version = match before_version {
+            Some(0) => return Ok(vec![]),
+            Some(v) => v - 1,
+            None => u64::MAX,
+        };
+        if start_version > end_version || limit == 0 {
+            return Ok(vec![]);
+        }
 
         let start_key = Bytes::from(tables::packages::encode_key(
             original_id.as_ref(),
@@ -2132,27 +2143,34 @@ impl KeyValueStoreReader for BigTableClient {
             end_version,
         ));
 
-        // Over-fetch to account for versions beyond cp_bound that need filtering out.
-        let fetch_limit = (limit as i64).saturating_mul(2).min(200);
+        // Every row passes the checkpoint filter when it is unbounded, so the server can stop at
+        // `limit`; otherwise the scan must run past rows above `cp_bound` client-side.
+        let rows_limit = if cp_bound == u64::MAX {
+            limit as i64
+        } else {
+            0
+        };
         let rows = self
-            .range_scan(
+            .range_scan_stream(
                 tables::packages::NAME,
                 Some(start_key),
                 Some(end_key),
-                fetch_limit,
+                rows_limit,
                 descending,
                 None,
             )
             .await?;
 
-        let mut results = Vec::with_capacity(limit);
-        for (key, row) in rows {
-            if results.len() >= limit {
-                break;
-            }
-            let pkg = tables::packages::decode(key.as_ref(), &row)?;
+        futures::pin_mut!(rows);
+        let mut results = Vec::with_capacity(limit.min(1000));
+        while let Some(row) = rows.next().await {
+            let (key, cells) = row?;
+            let pkg = tables::packages::decode(key.as_ref(), &cells)?;
             if pkg.cp_sequence_number <= cp_bound {
                 results.push(pkg);
+                if results.len() >= limit {
+                    break;
+                }
             }
         }
         Ok(results)
@@ -2165,8 +2183,19 @@ impl KeyValueStoreReader for BigTableClient {
         limit: usize,
         descending: bool,
     ) -> Result<Vec<PackageData>> {
-        let start_cp = cp_after.map(|c| c + 1).unwrap_or(0);
-        let end_cp = cp_before.map(|c| c - 1).unwrap_or(u64::MAX);
+        let start_cp = match cp_after {
+            Some(u64::MAX) => return Ok(vec![]),
+            Some(c) => c + 1,
+            None => 0,
+        };
+        let end_cp = match cp_before {
+            Some(0) => return Ok(vec![]),
+            Some(c) => c - 1,
+            None => u64::MAX,
+        };
+        if start_cp > end_cp || limit == 0 {
+            return Ok(vec![]);
+        }
 
         let start_key = Bytes::from(tables::packages_by_checkpoint::encode_key(
             start_cp, &[0u8; 32], 0,
@@ -2198,7 +2227,20 @@ impl KeyValueStoreReader for BigTableClient {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        self.get_packages_by_version(&lookup_keys).await
+        let packages = self.get_packages_by_version(&lookup_keys).await?;
+        let mut package_map: HashMap<(ObjectID, u64), PackageData> = packages
+            .into_iter()
+            .filter_map(|p| {
+                let orig_id = ObjectID::from_bytes(&p.original_id).ok()?;
+                Some(((orig_id, p.package_version), p))
+            })
+            .collect();
+
+        let results = lookup_keys
+            .into_iter()
+            .filter_map(|key| package_map.remove(&key))
+            .collect();
+        Ok(results)
     }
 
     async fn get_system_packages(
@@ -2207,36 +2249,42 @@ impl KeyValueStoreReader for BigTableClient {
         after_original_id: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<PackageData>> {
+        if limit == 0 {
+            return Ok(vec![]);
+        }
+
         let start_key = after_original_id.map(|id| {
             // Start just after the given original_id by appending a byte.
             let mut key = tables::system_packages::encode_key(id.as_ref());
             key.push(0);
             Bytes::from(key)
         });
-        let end_key = Some(Bytes::from(tables::system_packages::encode_key(
-            &[0xff; 32],
-        )));
 
         let rows = self
-            .range_scan(
+            .range_scan_stream(
                 tables::system_packages::NAME,
                 start_key,
-                end_key,
-                limit as i64,
+                None,
+                0,
                 false,
                 None,
             )
             .await?;
 
-        let mut results = Vec::with_capacity(rows.len());
-        for (key, row) in &rows {
-            let first_cp = tables::system_packages::decode(row)?;
+        futures::pin_mut!(rows);
+        let mut results = Vec::with_capacity(limit.min(100));
+        while let Some(row) = rows.next().await {
+            let (key, cells) = row?;
+            let first_cp = tables::system_packages::decode(&cells)?;
             if first_cp > cp_bound {
                 continue;
             }
             let original_id = ObjectID::from_bytes(key.as_ref())?;
             if let Some(pkg) = self.get_package_latest(original_id, cp_bound).await? {
                 results.push(pkg);
+                if results.len() >= limit {
+                    break;
+                }
             }
         }
         Ok(results)
@@ -2821,5 +2869,228 @@ mod tests {
             tx_read_calls(&mock).await.is_empty(),
             "empty digest list must not issue a transactions ReadRows"
         );
+    }
+
+    #[tokio::test]
+    async fn get_package_versions_past_200_versions() {
+        let mock = crate::bigtable::mock_server::MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let mut client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
+
+        let original_id = sui_types::base_types::ObjectID::random();
+        let total_versions = 250u64;
+
+        for v in 1..=total_versions {
+            let row_key = tables::packages::encode_key(original_id.as_ref(), v);
+            let cells = tables::packages::encode(100, original_id.as_ref(), false);
+            mock.insert_row(tables::packages::NAME, row_key, cells.into_iter())
+                .await;
+        }
+
+        let versions = client
+            .get_package_versions(original_id, u64::MAX, None, None, 250, false)
+            .await
+            .unwrap();
+        assert_eq!(versions.len(), 250);
+        let version_numbers: Vec<u64> = versions.iter().map(|p| p.package_version).collect();
+        assert_eq!(version_numbers, (1..=250).collect::<Vec<_>>());
+
+        // Resuming after version 150 with a limit of 100 returns versions 151..=250.
+        // With an unbounded checkpoint filter every row qualifies, so the server-side cap makes
+        // the scan stop at exactly `limit` rows; a bounded filter can reject rows, so the scan
+        // runs unbounded and the client-side break enforces the limit.
+        let rows = client
+            .get_package_versions(original_id, u64::MAX, None, None, 100, false)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 100);
+        let packages_calls = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|c| c.table == tables::packages::NAME)
+            .collect::<Vec<_>>();
+        assert_eq!(packages_calls.last().unwrap().row_keys.len(), 100);
+
+        // With a bounded filter every row still qualifies (cp 100 <= 100), so the recorded scan
+        // is not truncated by a server-side cap.
+        let rows = client
+            .get_package_versions(original_id, 100, None, None, 100, false)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 100);
+        let packages_calls = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|c| c.table == tables::packages::NAME)
+            .collect::<Vec<_>>();
+        assert_eq!(packages_calls.last().unwrap().row_keys.len(), 250);
+        let next_page = client
+            .get_package_versions(original_id, u64::MAX, Some(150), None, 100, false)
+            .await
+            .unwrap();
+        assert_eq!(next_page.len(), 100);
+        let next_version_numbers: Vec<u64> = next_page.iter().map(|p| p.package_version).collect();
+        assert_eq!(next_version_numbers, (151..=250).collect::<Vec<_>>());
+    }
+
+    #[tokio::test]
+    async fn get_package_latest_past_50_versions() {
+        let mock = crate::bigtable::mock_server::MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let mut client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
+
+        let original_id = sui_types::base_types::ObjectID::random();
+        // Insert 70 versions: versions 1..=10 at cp 10, versions 11..=70 at cp 20..=79
+        for v in 1..=70u64 {
+            let cp = if v <= 10 { 10 } else { 10 + v };
+            let row_key = tables::packages::encode_key(original_id.as_ref(), v);
+            let cells = tables::packages::encode(cp, original_id.as_ref(), false);
+            mock.insert_row(tables::packages::NAME, row_key, cells)
+                .await;
+        }
+
+        // With cp_bound = 10 the newest 60 versions are all above the bound; the reversed scan
+        // streams past them and returns version 10.
+        let pkg = client
+            .get_package_latest(original_id, 10)
+            .await
+            .unwrap()
+            .expect("should find version 10");
+        assert_eq!(pkg.package_version, 10);
+        assert_eq!(pkg.cp_sequence_number, 10);
+
+        // With cp_bound = u64::MAX, finds latest version 70.
+        let latest = client
+            .get_package_latest(original_id, u64::MAX)
+            .await
+            .unwrap()
+            .expect("should find version 70");
+        assert_eq!(latest.package_version, 70);
+    }
+
+    #[tokio::test]
+    async fn get_packages_by_checkpoint_range_preserves_order() {
+        let mock = crate::bigtable::mock_server::MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        // The mock emits row_keys lookups in reverse request order, so this test fails unless
+        // get_packages_by_checkpoint_range restores checkpoint order itself.
+        mock.set_read_rows_response_order(
+            crate::bigtable::mock_server::ReadRowsResponseOrder::ReverseRequestOrder,
+        )
+        .await;
+        let mut client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
+
+        // Create 3 packages whose lexicographical original_id order is different
+        // from their checkpoint publication order.
+        let id_a = sui_types::base_types::ObjectID::from_bytes([0x10; 32]).unwrap();
+        let id_b = sui_types::base_types::ObjectID::from_bytes([0x20; 32]).unwrap();
+        let id_c = sui_types::base_types::ObjectID::from_bytes([0x30; 32]).unwrap();
+
+        // Publish order: cp 5 -> id_b, cp 6 -> id_a, cp 7 -> id_c
+        let pubs = [(5u64, id_b, 1u64), (6u64, id_a, 1u64), (7u64, id_c, 1u64)];
+        for (cp, orig_id, v) in pubs {
+            let cp_key = tables::packages_by_checkpoint::encode_key(cp, orig_id.as_ref(), v);
+            let cp_cells = tables::packages_by_checkpoint::encode();
+            mock.insert_row(tables::packages_by_checkpoint::NAME, cp_key, cp_cells)
+                .await;
+
+            let pkg_key = tables::packages::encode_key(orig_id.as_ref(), v);
+            let pkg_cells = tables::packages::encode(cp, orig_id.as_ref(), false);
+            mock.insert_row(tables::packages::NAME, pkg_key, pkg_cells)
+                .await;
+        }
+
+        // Ascending scan across cp 5..=7: should be id_b, id_a, id_c (checkpoint order)
+        let asc = client
+            .get_packages_by_checkpoint_range(Some(4), Some(8), 10, false)
+            .await
+            .unwrap();
+        assert_eq!(asc.len(), 3);
+        assert_eq!(asc[0].original_id, id_b.to_vec());
+        assert_eq!(asc[1].original_id, id_a.to_vec());
+        assert_eq!(asc[2].original_id, id_c.to_vec());
+
+        // Descending scan across cp 5..=7: should be id_c, id_a, id_b
+        let desc = client
+            .get_packages_by_checkpoint_range(Some(4), Some(8), 10, true)
+            .await
+            .unwrap();
+        assert_eq!(desc.len(), 3);
+        assert_eq!(desc[0].original_id, id_c.to_vec());
+        assert_eq!(desc[1].original_id, id_a.to_vec());
+        assert_eq!(desc[2].original_id, id_b.to_vec());
+
+        // Boundary tests: cp_before = Some(0), cp_after = Some(u64::MAX), start > end
+        assert!(
+            client
+                .get_packages_by_checkpoint_range(None, Some(0), 10, false)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            client
+                .get_packages_by_checkpoint_range(Some(u64::MAX), None, 10, false)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            client
+                .get_packages_by_checkpoint_range(Some(10), Some(5), 10, false)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn get_system_packages_streams_past_filtered_rows() {
+        let mock = crate::bigtable::mock_server::MockBigtableServer::new();
+        let (addr, _handle) = mock.start().await.unwrap();
+        let mut client =
+            BigTableClient::new_for_host(addr.to_string(), "test".to_string(), "test", false)
+                .await
+                .unwrap();
+
+        // Insert 4 system packages:
+        // pkg1 (0x01) at cp 10
+        // pkg2 (0x02) at cp 50
+        // pkg3 (0x03) at cp 60
+        // pkg4 (0x04) at cp 20
+        let ids = [(1u8, 10u64), (2u8, 50u64), (3u8, 60u64), (4u8, 20u64)];
+        for (byte, first_cp) in ids {
+            let mut id_bytes = [0u8; 32];
+            id_bytes[31] = byte;
+            let orig_id = sui_types::base_types::ObjectID::from_bytes(id_bytes).unwrap();
+
+            let sys_key = tables::system_packages::encode_key(orig_id.as_ref());
+            let sys_cells = tables::system_packages::encode(first_cp);
+            mock.insert_row(tables::system_packages::NAME, sys_key, sys_cells)
+                .await;
+
+            let pkg_key = tables::packages::encode_key(orig_id.as_ref(), 1);
+            let pkg_cells = tables::packages::encode(first_cp, orig_id.as_ref(), true);
+            mock.insert_row(tables::packages::NAME, pkg_key, pkg_cells)
+                .await;
+        }
+
+        // With cp_bound = 30 and limit = 2, packages 0x02 and 0x03 (first_cp > 30) are filtered
+        // out; the scan continues past them to 0x04 and fills the limit.
+        let pkgs = client.get_system_packages(30, None, 2).await.unwrap();
+        assert_eq!(pkgs.len(), 2);
+        assert_eq!(pkgs[0].original_id[31], 1);
+        assert_eq!(pkgs[1].original_id[31], 4);
     }
 }

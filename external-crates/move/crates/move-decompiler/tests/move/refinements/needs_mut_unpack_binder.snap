@@ -1,0 +1,16 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module needs_mut_unpack_binder {
+    public fun add_one () {
+        *l0 = *l0 + 1u64
+    }
+
+    public fun unpack_binding () {
+        let S { v: reg_1, w: reg_2 } = l0;
+        let l1 = reg_1;
+        needs_mut_unpack_binder::add_one(&mut l1)
+        return l1 + reg_2
+    }
+
+}

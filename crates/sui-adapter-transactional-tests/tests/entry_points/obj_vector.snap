@@ -8,11 +8,13 @@ processed 19 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-111:
+task 1, lines 8-109:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 12722400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// create an object and pass it as a single element of a vector (success)
 
 task 2, line 113:
 //# run Test::M::prim_vec_len --sender A --args vector[7,42]

@@ -8,11 +8,13 @@ processed 10 tasks
 init:
 A: object(0,0)
 
-task 1, lines 8-52:
+task 1, lines 8-50:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6498000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// single mut child
 
 task 2, lines 54-59:
 //# programmable

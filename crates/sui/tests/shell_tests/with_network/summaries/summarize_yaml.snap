@@ -27,6 +27,7 @@ accumulator_metadata.yaml
 accumulator_settlement.yaml
 address.yaml
 address_alias.yaml
+allowance.yaml
 authenticator_state.yaml
 bag.yaml
 balance.yaml
@@ -235,6 +236,45 @@ type_origins:
     - module_name: address_alias
       datatype_name: AliasKey
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: funds_accumulator
+      datatype_name: Withdrawal
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: clock
+      datatype_name: Clock
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: balance
+      datatype_name: Supply
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: balance
+      datatype_name: Balance
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: allowance
+      datatype_name: AllowanceWithdrawal
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: allowance
+      datatype_name: Allowance
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: allowance
+      datatype_name: Settings
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: allowance
+      datatype_name: AllowanceCap
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: allowance
+      datatype_name: AllowanceProposal
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: allowance
+      datatype_name: SpendPermit
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: allowance
+      datatype_name: SettingsPermit
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: allowance
+      datatype_name: RateLimit
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: allowance
+      datatype_name: Window
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
     - module_name: authenticator_state
       datatype_name: AuthenticatorState
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
@@ -249,15 +289,6 @@ type_origins:
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
     - module_name: authenticator_state
       datatype_name: ActiveJwk
-      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
-    - module_name: funds_accumulator
-      datatype_name: Withdrawal
-      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
-    - module_name: balance
-      datatype_name: Supply
-      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
-    - module_name: balance
-      datatype_name: Balance
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
     - module_name: group_ops
       datatype_name: Element
@@ -282,9 +313,6 @@ type_origins:
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
     - module_name: borrow
       datatype_name: Borrow
-      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
-    - module_name: clock
-      datatype_name: Clock
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
     - module_name: url
       datatype_name: Url

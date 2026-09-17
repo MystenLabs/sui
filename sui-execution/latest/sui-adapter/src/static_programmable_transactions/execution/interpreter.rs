@@ -46,8 +46,7 @@ where
     'pc: 'state,
     'env: 'state,
 {
-    let original_command_len = ast.original_command_len;
-    let mut indexed_timings = IndexedExecutionTimings::new(original_command_len);
+    let mut indexed_timings = IndexedExecutionTimings::new(ast.original_command_len);
     let result = execute_inner::<Mode>(
         &mut indexed_timings,
         env,
@@ -58,12 +57,6 @@ where
         trace_builder_opt,
     );
     let timings = indexed_timings.into_coalesced();
-    debug_assert!(
-        timings.len() <= original_command_len,
-        "coalesced timings length {} exceeds original command length {}",
-        timings.len(),
-        original_command_len
-    );
 
     match result {
         Ok(result) => Ok((result, timings)),
@@ -432,9 +425,8 @@ fn execute_command<Mode: ExecutionMode>(
 
 /// Struct to track execution timings, coalesced into the annotated command indices.
 struct IndexedExecutionTimings {
-    /// The maximum index in the original command vector. All annotated indices will be capped at
-    /// this value.
-    max_allowed_index: usize,
+    /// The number of commands in the original command vector.
+    original_command_len: usize,
     /// Mapping from the command's annotated index to its duration. Multiple commands may share
     /// the same annotated index, in which case their durations will be added together.
     executed_commands: BTreeMap<usize, Duration>,
@@ -445,12 +437,16 @@ struct IndexedExecutionTimings {
 
 impl IndexedExecutionTimings {
     fn new(original_command_len: usize) -> Self {
-        let max_allowed_index = original_command_len.saturating_sub(1);
         Self {
-            max_allowed_index,
+            original_command_len,
             executed_commands: BTreeMap::new(),
             error_command: None,
         }
+    }
+
+    /// The largest index an annotated index may be capped to.
+    fn max_allowed_index(&self) -> usize {
+        self.original_command_len.saturating_sub(1)
     }
 
     /// Records the execution of a successful command.
@@ -459,7 +455,7 @@ impl IndexedExecutionTimings {
             self.error_command.is_none(),
             "command executed after an error occurred"
         );
-        let index = annotated_index.min(self.max_allowed_index);
+        let index = annotated_index.min(self.max_allowed_index());
         let existing = self
             .executed_commands
             .entry(index)
@@ -470,7 +466,7 @@ impl IndexedExecutionTimings {
     /// Record the execution of a failed command that errored and stopped the execution of the PTB.
     fn error(&mut self, annotated_index: usize, duration: Duration) {
         debug_assert!(self.error_command.is_none(), "multiple errors recorded");
-        let index = annotated_index.min(self.max_allowed_index);
+        let index = annotated_index.min(self.max_allowed_index());
         debug_assert!(
             self.executed_commands
                 .last_key_value()
@@ -494,11 +490,18 @@ impl IndexedExecutionTimings {
     /// Timings sharing an `annotated_index` have their durations summed. An error, if present,
     /// is always last.
     fn into_coalesced(self) -> Vec<ExecutionTiming> {
+        let max_allowed_index = self.max_allowed_index();
         let Self {
-            max_allowed_index,
+            original_command_len,
             executed_commands,
             error_command,
         } = self;
+
+        // Injected commands are annotated with the original command they belong to, so with no
+        // original commands there is nothing to attribute their timings to.
+        if original_command_len == 0 {
+            return vec![];
+        }
 
         let max_executed_index = executed_commands.keys().last().copied();
         let error_index = error_command.as_ref().map(|(idx, _)| *idx);
@@ -514,6 +517,12 @@ impl IndexedExecutionTimings {
             max_allowed_index
         );
         let size = max_used_index.saturating_add(1);
+        debug_assert!(
+            size <= original_command_len,
+            "coalesced timings length {} exceeds original command length {}",
+            size,
+            original_command_len
+        );
 
         // We initialize a vector of `Success` timings with zero duration, since we have no
         // guarantee at this point that there are no gaps in the annotated indices. Presently,

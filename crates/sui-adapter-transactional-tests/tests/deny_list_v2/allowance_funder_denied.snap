@@ -1,0 +1,67 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+// A spend through an allowance debits the funder rather than the sender, so a
+// denied funder is rejected at signing even though the sender is clear.
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 9-33:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 18399600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 35-38:
+//# programmable --sender A --inputs object(1,5) 1000 @B
+// Fund B's (the funder) address balance.
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: sui::coin::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
+mutated: object(0,0), object(1,5)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(2,0), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 1000)
+gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
+
+task 3, line 40:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 42-45:
+//# programmable --sender B --inputs b"" @C vector[1000u256] vector[] vector[99999999999999]
+// B issues an allowance to C.
+//> 0: std::option::none<sui::allowance::RateLimit>();
+//> 1: sui::allowance::new<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
+created: object(4,0), object(4,1)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6733600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 5, lines 47-51:
+//# programmable --sender C --inputs allowance_withdraw<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(100,@B,object(4,0)) mutshared(4,0) immshared(6) @C
+// C spends while nobody is denied.
+//> 0: sui::allowance::balance_spend<test::regulated_coin::REGULATED_COIN>(Input(1), Input(0), Input(2));
+//> 1: sui::coin::from_balance<test::regulated_coin::REGULATED_COIN>(Result(0));
+//> 2: TransferObjects([Result(1)], Input(3));
+created: object(5,0)
+mutated: object(0,2), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006, 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(2,0), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Split, 100)
+gas summary: computation_cost: 1000000, storage_cost: 5745600,  storage_rebate: 3250368, non_refundable_storage_fee: 32832
+
+task 6, line 53:
+//# run sui::coin::deny_list_v2_add --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 54, 102, 53, 97, 97, 102, 102, 97, 102, 55, 52, 53, 52, 54, 100, 97, 53, 56, 97, 56, 97, 98, 57, 49, 97, 102, 52, 54, 99, 57, 50, 54, 50, 51, 51, 52, 98, 52, 102, 101, 97, 99, 51, 97, 99, 52, 49, 56, 49, 53, 100, 55, 101, 102, 48, 51, 102, 100, 49, 100, 55, 100, 101, 48, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 75, 243, 94, 250, 17, 3, 205, 234, 251, 249, 127, 16, 70, 248, 46, 223, 124, 9, 223, 170, 187, 115, 122, 48, 168, 153, 26, 116, 128, 68, 124, 65] }
+created: object(6,0), object(6,1), object(6,2)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 12190400,  storage_rebate: 2746260, non_refundable_storage_fee: 27740
+
+task 7, lines 55-59:
+//# programmable --sender C --inputs allowance_withdraw<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(100,@B,object(4,0)) mutshared(4,0) immshared(6) @C
+// The same spend is rejected at signing, naming the funder.
+//> 0: sui::allowance::balance_spend<test::regulated_coin::REGULATED_COIN>(Input(1), Input(0), Input(2));
+//> 1: sui::coin::from_balance<test::regulated_coin::REGULATED_COIN>(Result(0));
+//> 2: TransferObjects([Result(1)], Input(3));
+Error: Error checking transaction input objects: Address @B is denied for coin object(1,0)::regulated_coin::REGULATED_COIN

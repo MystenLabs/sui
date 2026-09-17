@@ -29,14 +29,8 @@ use crate::task::streaming::StreamedObjectStore;
 use crate::task::streaming::StreamedTransactionStore;
 use crate::task::watermark::Watermarks;
 
-#[cfg(feature = "staging")]
-mod staging {
-    pub(super) use crate::task::streaming::ProcessedCheckpoint;
-    pub(super) use crate::task::streaming::StreamedCaches;
-}
-
-#[cfg(feature = "staging")]
-use staging::*;
+use crate::task::streaming::ProcessedCheckpoint;
+use crate::task::streaming::StreamedCaches;
 
 /// A map of objects from an executed transaction, keyed by (ObjectID, SequenceNumber).
 /// None values indicate tombstones for deleted/wrapped objects.
@@ -59,7 +53,6 @@ pub(crate) enum DataSource {
     /// A streamed checkpoint with all per-tx contents and a checkpoint-wide execution-objects
     /// map. If the scope is anchored to a particular transaction in the checkpoint, its digest
     /// is in [`Scope::effects_viewed_at_digest`].
-    #[cfg(feature = "staging")]
     Streamed {
         checkpoint: Arc<ProcessedCheckpoint>,
         /// The in-memory caches this streamed checkpoint reads ahead of the durable index.
@@ -159,7 +152,6 @@ impl Scope {
 
     /// Create a scope for streamed checkpoint data. Sets `checkpoint_viewed_at` to `None`
     /// because streamed data is resolved from memory, not bounded by an indexed checkpoint.
-    #[cfg(feature = "staging")]
     pub(crate) fn for_streamed_checkpoint(
         caches: Arc<StreamedCaches>,
         resolver_limits: sui_package_resolver::Limits,
@@ -183,7 +175,6 @@ impl Scope {
     /// catch-up phase. `checkpoint_viewed_at` is `None`: a subscription does not resolve as of a
     /// single consistent checkpoint, so checkpoint-anchored fields (balances, latest object
     /// versions) stay null and contents hydrate on demand.
-    #[cfg(feature = "staging")]
     pub(crate) fn for_indexed(
         caches: Arc<StreamedCaches>,
         resolver_limits: sui_package_resolver::Limits,
@@ -388,7 +379,6 @@ impl Scope {
         match &self.data_source {
             DataSource::Indexed => None,
             DataSource::Executed { execution_objects } => Some(execution_objects),
-            #[cfg(feature = "staging")]
             DataSource::Streamed { checkpoint, .. } => Some(&checkpoint.execution_objects),
         }
     }
@@ -397,7 +387,6 @@ impl Scope {
     /// A just-streamed transaction runs ahead of the durable index, so this serves its contents by
     /// digest until the index catches up.
     pub(crate) fn streamed_transaction_store(&self) -> Option<&Arc<StreamedTransactionStore>> {
-        #[cfg(feature = "staging")]
         if let DataSource::Streamed { caches, .. } = &self.data_source {
             return Some(&caches.transaction_store);
         }
@@ -408,7 +397,6 @@ impl Scope {
     /// earlier streamed checkpoint (e.g. reached via `Object.previousTransaction`) runs ahead of the
     /// durable index, so this serves its contents by `(id, version)` until the index catches up.
     pub(crate) fn streamed_object_store(&self) -> Option<&Arc<StreamedObjectStore>> {
-        #[cfg(feature = "staging")]
         if let DataSource::Streamed { caches, .. } = &self.data_source {
             return Some(&caches.object_store);
         }

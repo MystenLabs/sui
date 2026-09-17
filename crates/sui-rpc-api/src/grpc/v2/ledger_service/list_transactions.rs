@@ -295,15 +295,15 @@ fn next_transaction_chunk(
                 let tx_range =
                     resolve_tx_range(&service, start_checkpoint, checkpoint_range, &options)?;
                 let entry_checkpoint = tx_range.entry_checkpoint;
+                let range = tx_range.range();
                 let terminal = ScanTerminal::from_range_exhaustion(
                     tx_range.exhaustion,
                     Position::Transactions {
                         checkpoint: tx_range.end_checkpoint,
                         tx_seq: tx_range.end_position,
                     },
-                    tx_range.is_empty(),
+                    range.is_empty(),
                 );
-                let range = tx_range.range();
                 if range.is_empty() {
                     return Ok(TransactionChunkDone {
                         items: Vec::new(),

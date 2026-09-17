@@ -7,11 +7,13 @@ processed 8 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-24:
+task 1, lines 6-22:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6011600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// string of ASCII characters as byte string
 
 task 2, line 26:
 //# run Test::M::utf8_arg --sender A --args b"SomeStringPlusSomeString"
