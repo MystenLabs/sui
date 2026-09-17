@@ -45,7 +45,7 @@ If Kiosk is not a requirement, you can exclude the unlock module and the proxy m
 
 Instead of implementing the unlock functionality in multiple steps inside a PTB, you could create a method that performs the purchase, borrowing, unlocking, and joining of an asset all in one function. The following example shows how that would look for the joining operation:
 
-```rust
+```move
 public fun kiosk_join<T>(
 	kiosk: &mut Kiosk,
   kiosk_cap: &KioskOwnerCap,
@@ -86,7 +86,7 @@ Assume you want to allow users to also burn assets, not only admins. This still 
 
 Create a ticket that has only the `key` ability so that the receiver cannot trade it:
 
-```rust
+```move
 public struct BurnTicket<phantom T> has key {
 	id: UID,
 	tokenized_asset_id: ID // the tokenized asset that this ticket gives access to burn
@@ -95,7 +95,7 @@ public struct BurnTicket<phantom T> has key {
 
 The struct that now holds only treasury-related information (resulting from splitting the `AssetCap`, which is no longer part of this design) is created as a shared object. Change functions like `mint` to also take as input both the `Treasury` object and the `AdminCap` object:
 
-```rust
+```move
 public struct Treasury<phantom T> has key, store {
 	id: UID,
 	supply: Supply<T>,
@@ -105,7 +105,7 @@ public struct Treasury<phantom T> has key, store {
 
 The other half of the `AssetCap` functionality retains the admin capability and the configuration of burnability. It is an owned object sent to the creator of type `<T>`:
 
-```rust
+```move
 public struct AdminCap<phantom T> has key, store {
 	id: UID,
 	burnable: bool
@@ -116,7 +116,7 @@ public struct AdminCap<phantom T> has key, store {
 
 The `AdminCap` here acts both as an admin capability and a type insurance, encoding the information of both the asset type that is allowed to be deleted with this ticket. This function should assert that the asset `T` is burnable and return a `BurnTicket<T>`:
 
-```rust
+```move
 public fun mint_burn_ticket<T>(
 	cap: &AdminCap<T>,
 	tokenized_asset_id: ID,
@@ -126,7 +126,7 @@ public fun mint_burn_ticket<T>(
 
 Burning on the user side requires accessing the shared `Treasury` object. This function burns the tokenized asset and decreases the supply:
 
-```rust
+```move
 public fun burn_with_ticket<T>(
 	treasury: &mut Treasury<T>,
 	self: TokenizedAsset<T>,

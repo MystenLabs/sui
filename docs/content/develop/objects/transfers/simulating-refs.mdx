@@ -64,7 +64,7 @@ The Sui framework includes a [borrow](https://github.com/MystenLabs/sui/blob/mai
 
 As an example, consider the following module stub that exposes an object (`Asset`) and a function (`use_asset`) to use that object.
 
-```rust
+```move
 module a_module {
     public struct Asset has key, store {
         … // some data
@@ -80,7 +80,7 @@ The function `use_asset` takes an immutable reference to the asset (`&Asset`), w
 
 Now consider another module that uses this asset.
 
-```rust
+```move
 module another_module {
     public struct AssetManager has key {
         asset: Asset,
@@ -96,7 +96,7 @@ This module creates an object (`AssetManager`) that references the object (`Asse
 
 You could then write a Move function that retrieves an object by reference and passes it to the `use_asset` function.
 
-```rust
+```move
 fun do_something(manager: &AssetManager) {
     let asset = another_module::get_asset(manager);
     a_module::use_asset(asset);
@@ -107,7 +107,7 @@ The 2 functions in `do_something` are not valid within a PTB, however, because P
 
 To make this operation valid within a PTB, you need to include functionality from the borrow module. Consequently, you could change the `another_module` code to the following:
 
-```rust
+```move
 module another_module {
     public struct AssetManager has key {
         asset: Referent<Asset>,
@@ -157,7 +157,7 @@ Finally, the `Referent` model forces the usage of a mutable reference and return
 
 Extending the previous example, a PTB that calls `use_asset` is written as follows:
 
-```rust
+```typescript
 // initialize the PTB
 const txb = new TransactionBlock();
 // load the assetManager
