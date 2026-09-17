@@ -408,6 +408,7 @@ const MAINNET_USDB: &str =
 //              Validate PTB indices at signing time.
 //              Enable memory_safety_invariant_check_v2.
 // Version 138: Enable BumpOnly
+//              Sort committed sub-dag blocks by full `BlockRef` (total order under equivocation).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1291,6 +1292,11 @@ struct FeatureFlags {
     // If true, use the bitset implementation for PTB memory safety invariant check.
     #[serde(skip_serializing_if = "is_false")]
     memory_safety_invariant_check_v2: bool,
+
+    // If true, sort the blocks of each committed sub-dag by full `BlockRef` (round, author,
+    // digest) instead of (round, author), so the order is total under equivocation.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_sort_sub_dag_by_block_ref: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4774,6 +4780,8 @@ impl ProtocolConfig {
                 }
                 138 => {
                     cfg.gas_model_version = Some(15);
+
+                    cfg.feature_flags.consensus_sort_sub_dag_by_block_ref = true;
                 }
                 // Use this template when making changes:
                 //

@@ -81,7 +81,8 @@ impl Linearizer {
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
 
         // Now linearize the sub-dag starting from the leader block
-        let to_commit = Self::linearize_sub_dag(leader_block.clone(), &mut dag_state);
+        let to_commit =
+            Self::linearize_sub_dag(&self.context, leader_block.clone(), &mut dag_state);
 
         let timestamp_ms = Self::calculate_commit_timestamp(
             &self.context,
@@ -156,6 +157,7 @@ impl Linearizer {
     }
 
     pub(crate) fn linearize_sub_dag(
+        context: &Context,
         leader_block: VerifiedBlock,
         dag_state: &mut impl BlockStoreAPI,
     ) -> Vec<VerifiedBlock> {
@@ -214,7 +216,7 @@ impl Linearizer {
         );
 
         // Sort the blocks of the sub-dag blocks
-        sort_sub_dag_blocks(&mut to_commit);
+        sort_sub_dag_blocks(context, &mut to_commit);
 
         to_commit
     }

@@ -213,7 +213,8 @@ impl DagBuilder {
 
             let leader_block_ref = leader_block.reference();
 
-            let to_commit = Linearizer::linearize_sub_dag(leader_block.clone(), &mut storage);
+            let to_commit =
+                Linearizer::linearize_sub_dag(&self.context, leader_block.clone(), &mut storage);
 
             last_timestamp_ms = Linearizer::calculate_commit_timestamp(
                 &self.context.clone(),
