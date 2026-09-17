@@ -346,6 +346,8 @@ async fn test_transaction_subscription_field_coverage() {
     settings.add_redaction(".**.lamportVersion", "[lamportVersion]");
     settings.add_redaction(".**.gasSummary", "[gasSummary]");
     settings.add_redaction(".**.json", "[json]");
+    // Dependencies are empty when disable_effects_tx_dependencies is on, which differs by chain.
+    settings.add_redaction(".**.dependencies", "[dependencies]");
     settings.bind(|| {
         insta::assert_json_snapshot!("transaction_subscription_field_coverage", item);
     });

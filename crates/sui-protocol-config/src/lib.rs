@@ -408,6 +408,7 @@ const MAINNET_USDB: &str =
 //              Validate PTB indices at signing time.
 //              Enable memory_safety_invariant_check_v2.
 // Version 138: Enable BumpOnly
+//              Disable effects transaction dependencies on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1291,6 +1292,10 @@ struct FeatureFlags {
     // If true, use the bitset implementation for PTB memory safety invariant check.
     #[serde(skip_serializing_if = "is_false")]
     memory_safety_invariant_check_v2: bool,
+
+    // Keep the effects wire representation, but stop collecting transaction dependencies.
+    #[serde(skip_serializing_if = "is_false")]
+    disable_effects_tx_dependencies: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4774,6 +4779,9 @@ impl ProtocolConfig {
                 }
                 138 => {
                     cfg.gas_model_version = Some(15);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.disable_effects_tx_dependencies = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
