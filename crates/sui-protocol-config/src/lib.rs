@@ -390,7 +390,7 @@ const MAINNET_USDB: &str =
 //              Add package_arena_size_in_bytes.
 // Version 137: Lower the per-bit cost of bulletproofs range proof verification, and raise the
 //              bound on batch size * range bits from 512 to 1024.
-//              Enable allowances.
+//              Enable allowances on devnet and testnet.
 //              Enable fix_ptb_generated_reads.
 //              Charge `LdConst` for the abstract value size of the constant instead of its
 //              serialized byte length.
@@ -4744,7 +4744,9 @@ impl ProtocolConfig {
                     cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(621);
                     cfg.max_bulletproofs_total_bits = Some(1024);
 
-                    cfg.feature_flags.enable_allowances = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_allowances = true;
+                    }
                     cfg.feature_flags.fix_ptb_generated_reads = true;
                     cfg.feature_flags.charge_ld_const_abstract_size = true;
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
