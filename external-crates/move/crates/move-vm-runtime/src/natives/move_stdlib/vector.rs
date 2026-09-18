@@ -27,6 +27,19 @@ use move_core_types::{
 };
 use std::{collections::VecDeque, sync::Arc};
 
+/// Reads the length for gas accounting. A malformed vector argument surrenders the gas
+/// charged so far, so the error has to travel back as a `NativeResult`, not a `?`.
+macro_rules! vector_len_or_return {
+    ($context:expr, $v:expr, $ty:expr, $ret:ident) => {
+        match $v.elem_len($ty) {
+            Ok(len) => checked_as!(len, u64)?,
+            Err(error) => {
+                return NativeResult::$ret($context.gas_used(), Err(native_error_to_abort(error)));
+            }
+        }
+    };
+}
+
 /***************************************************************************************************
  * native fun empty
  *
@@ -336,15 +349,7 @@ pub fn native_reverse(
 
     let v = pop_arg!(args, VectorRef);
     let ty = ty_args.safe_get(0)?;
-    let len = match vector_len(&v, ty) {
-        Ok(len) => len,
-        Err(error) => {
-            return NativeResult::map_partial_vm_result_empty(
-                context.gas_used(),
-                Err(native_error_to_abort(error)),
-            );
-        }
-    };
+    let len = vector_len_or_return!(context, v, ty, map_partial_vm_result_empty);
     native_charge_gas_early_exit!(context, gas_params.per_elem * NumArgs::new(len));
 
     NativeResult::map_partial_vm_result_empty(
@@ -375,8 +380,13 @@ pub struct KeepGasParameters {
     pub per_moved_elem: InternalGasPerArg,
 }
 
-pub(crate) fn keep_work(len: u64, start: u64, end: u64) -> (u64, u64) {
-    if start > end || end > len {
+/// The natives charge no per-element work for a range the VM is going to reject.
+fn valid_range(len: u64, i: u64, j: u64) -> bool {
+    i <= j && j <= len
+}
+
+pub(crate) fn keep_gas_count(len: u64, start: u64, end: u64) -> (u64, u64) {
+    if !valid_range(len, start, end) {
         return (0, 0);
     }
 
@@ -404,18 +414,10 @@ pub fn native_keep(
     let v = pop_arg!(args, VectorRef);
     let ty = ty_args.safe_get(0)?;
 
-    let len = match vector_len(&v, ty) {
-        Ok(len) => len,
-        Err(error) => {
-            return NativeResult::map_partial_vm_result_empty(
-                context.gas_used(),
-                Err(native_error_to_abort(error)),
-            );
-        }
-    };
+    let len = vector_len_or_return!(context, v, ty, map_partial_vm_result_empty);
     // `VectorRef::keep` performs the actual validation. Do not charge per-element work for a
     // range which it will reject.
-    let (dropped, moved) = keep_work(len, start_arg, end_arg);
+    let (dropped, moved) = keep_gas_count(len, start_arg, end_arg);
     native_charge_gas_early_exit!(context, gas_params.per_dropped_elem * NumArgs::new(dropped));
     native_charge_gas_early_exit!(context, gas_params.per_moved_elem * NumArgs::new(moved));
 
@@ -463,7 +465,6 @@ pub fn native_slice(
     NativeResult::map_partial_vm_result_one(
         context.gas_used(),
         v.slice(i, j, ty_args.safe_get(0)?)
-            .map(Vector::into_value)
             .map_err(native_error_to_abort),
     )
 }
@@ -489,8 +490,8 @@ pub struct SpliceGasParameters {
     pub per_elem: InternalGasPerArg,
 }
 
-pub(crate) fn splice_work(len: u64, i: u64, j: u64, n_in: u64) -> u64 {
-    if i > j || j > len {
+pub(crate) fn splice_gas_count(len: u64, i: u64, j: u64, n_in: u64) -> u64 {
+    if !valid_range(len, i, j) {
         return 0;
     }
 
@@ -519,20 +520,12 @@ pub fn native_splice(
     let v = pop_arg!(args, VectorRef);
 
     // charge according to the moved elements (relocation)
-    let n_in = other.elem_len()? as u64;
+    let n_in = checked_as!(other.elem_len()?, u64)?;
     let ty = ty_args.safe_get(0)?;
-    let len = match vector_len(&v, ty) {
-        Ok(len) => len,
-        Err(error) => {
-            return NativeResult::map_partial_vm_result_one(
-                context.gas_used(),
-                Err(native_error_to_abort(error)),
-            );
-        }
-    };
+    let len = vector_len_or_return!(context, v, ty, map_partial_vm_result_one);
     native_charge_gas_early_exit!(
         context,
-        gas_params.per_elem * NumArgs::new(splice_work(len, i_arg, j_arg, n_in))
+        gas_params.per_elem * NumArgs::new(splice_gas_count(len, i_arg, j_arg, n_in))
     );
 
     NativeResult::map_partial_vm_result_one(
@@ -544,7 +537,6 @@ pub fn native_splice(
             ty,
             context.runtime_limits_config().vector_len_max,
         )
-        .map(Vector::into_value)
         .map_err(native_error_to_abort),
     )
 }
@@ -555,16 +547,6 @@ pub fn make_native_splice(gas_params: SpliceGasParameters) -> NativeFunction {
             native_splice(&gas_params, context, ty_args, args)
         },
     )
-}
-
-fn vector_len(v: &VectorRef, ty: &Type) -> PartialVMResult<u64> {
-    match v.len(ty)? {
-        Value::U64(len) => Ok(len),
-        _ => Err(partial_vm_error!(
-            UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            "vector::length must return a u64"
-        )),
-    }
 }
 
 fn native_error_to_abort(err: PartialVMError) -> PartialVMError {

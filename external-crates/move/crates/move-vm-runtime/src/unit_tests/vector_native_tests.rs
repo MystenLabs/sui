@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::natives::move_stdlib::vector::{
-    KeepGasParameters, ReverseGasParameters, SliceGasParameters, SpliceGasParameters, keep_work,
-    native_keep, native_reverse, native_slice, native_splice, splice_work,
+    KeepGasParameters, ReverseGasParameters, SliceGasParameters, SpliceGasParameters,
+    keep_gas_count, native_keep, native_reverse, native_slice, native_splice, splice_gas_count,
 };
 use crate::{
     cache::identifier_interner::IdentifierInterner,
@@ -66,44 +66,44 @@ fn assert_abort_cost(result: &NativeResult, cost: u64, abort_code: u64) {
 }
 
 #[test]
-fn keep_work_counts_dropped_and_compacted_elements() {
+fn keep_gas_count_counts_dropped_and_compacted_elements() {
     // Keeping a prefix drops only the suffix; no retained element is moved.
-    assert_eq!(keep_work(5, 0, 3), (2, 0));
+    assert_eq!(keep_gas_count(5, 0, 3), (2, 0));
     // Keeping a middle range drops both sides and compacts the retained elements.
-    assert_eq!(keep_work(5, 1, 4), (2, 3));
+    assert_eq!(keep_gas_count(5, 1, 4), (2, 3));
     // Keeping a suffix compacts the retained elements to the front.
-    assert_eq!(keep_work(5, 2, 5), (2, 3));
-    assert_eq!(keep_work(5, 0, 5), (0, 0));
-    assert_eq!(keep_work(5, 2, 2), (5, 0));
+    assert_eq!(keep_gas_count(5, 2, 5), (2, 3));
+    assert_eq!(keep_gas_count(5, 0, 5), (0, 0));
+    assert_eq!(keep_gas_count(5, 2, 2), (5, 0));
 }
 
 #[test]
-fn keep_work_is_zero_for_invalid_ranges() {
-    assert_eq!(keep_work(5, 4, 3), (0, 0));
-    assert_eq!(keep_work(5, 0, 6), (0, 0));
-    assert_eq!(keep_work(5, u64::MAX, u64::MAX), (0, 0));
+fn keep_gas_count_is_zero_for_invalid_ranges() {
+    assert_eq!(keep_gas_count(5, 4, 3), (0, 0));
+    assert_eq!(keep_gas_count(5, 0, 6), (0, 0));
+    assert_eq!(keep_gas_count(5, u64::MAX, u64::MAX), (0, 0));
 }
 
 #[test]
-fn splice_work_covers_valid_shapes() {
+fn splice_gas_count_covers_valid_shapes() {
     // Equal-size replacement does not move the tail.
-    assert_eq!(splice_work(8, 2, 5, 3), 3);
+    assert_eq!(splice_gas_count(8, 2, 5, 3), 3);
     // Growing and shrinking both move the tail when the sizes differ.
-    assert_eq!(splice_work(8, 2, 4, 5), 9);
-    assert_eq!(splice_work(8, 2, 6, 1), 3);
+    assert_eq!(splice_gas_count(8, 2, 4, 5), 9);
+    assert_eq!(splice_gas_count(8, 2, 6, 1), 3);
     // Appending has no tail to move. A suffix drain has no native relocation work; the VM gas
     // meter separately charges its returned vector by deep abstract size.
-    assert_eq!(splice_work(8, 8, 8, 3), 3);
-    assert_eq!(splice_work(8, 3, 8, 0), 0);
+    assert_eq!(splice_gas_count(8, 8, 8, 3), 3);
+    assert_eq!(splice_gas_count(8, 3, 8, 0), 0);
     // Draining from the middle moves only the tail. The returned value is charged separately.
-    assert_eq!(splice_work(8, 2, 5, 0), 3);
+    assert_eq!(splice_gas_count(8, 2, 5, 0), 3);
 }
 
 #[test]
-fn splice_work_is_zero_for_invalid_ranges() {
-    assert_eq!(splice_work(8, 5, 4, 3), 0);
-    assert_eq!(splice_work(8, 0, 9, 3), 0);
-    assert_eq!(splice_work(8, u64::MAX, u64::MAX, 3), 0);
+fn splice_gas_count_is_zero_for_invalid_ranges() {
+    assert_eq!(splice_gas_count(8, 5, 4, 3), 0);
+    assert_eq!(splice_gas_count(8, 0, 9, 3), 0);
+    assert_eq!(splice_gas_count(8, u64::MAX, u64::MAX, 3), 0);
 }
 
 #[test]

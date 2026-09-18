@@ -701,7 +701,7 @@ fn vector_slice_prim_and_original_untouched() -> PartialVMResult<()> {
     let v = MemBox::new(Value::vector_u8([1, 2, 3, 4, 5]));
     let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
 
-    let out = vr.slice(1, 4, &Type::U8)?;
+    let out: Vector = VMValueCast::cast(vr.slice(1, 4, &Type::U8)?)?;
     assert_eq!(out.to_vec_u8()?, vec![2, 3, 4]);
     assert_eq!(*vr.as_bytes_ref()?, vec![1, 2, 3, 4, 5]);
     Ok(())
@@ -712,8 +712,10 @@ fn vector_slice_empty_and_whole_ranges() -> PartialVMResult<()> {
     let v = MemBox::new(Value::vector_u8([1, 2, 3]));
     let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
 
-    assert_eq!(vr.slice(1, 1, &Type::U8)?.to_vec_u8()?, Vec::<u8>::new());
-    assert_eq!(vr.slice(0, 3, &Type::U8)?.to_vec_u8()?, vec![1, 2, 3]);
+    let empty: Vector = VMValueCast::cast(vr.slice(1, 1, &Type::U8)?)?;
+    let whole: Vector = VMValueCast::cast(vr.slice(0, 3, &Type::U8)?)?;
+    assert_eq!(empty.to_vec_u8()?, Vec::<u8>::new());
+    assert_eq!(whole.to_vec_u8()?, vec![1, 2, 3]);
     assert_eq!(*vr.as_bytes_ref()?, vec![1, 2, 3]);
     Ok(())
 }
@@ -726,7 +728,7 @@ fn vector_slice_primitive_specializations() -> PartialVMResult<()> {
             let vector: VectorRef = VMValueCast::cast(value.as_ref_value())?;
             let ty = $ty;
 
-            let out = vector.slice(1, 2, &ty)?;
+            let out: Vector = VMValueCast::cast(vector.slice(1, 2, &ty)?)?;
             assert!(vector.len(&ty)?.equals(&Value::u64(3))?);
             let copied = out.unpack(&ty, 1)?;
             assert!(copied[0].equals(&$copied)?);
@@ -773,7 +775,7 @@ fn vector_slice_container_deep_copies() -> PartialVMResult<()> {
     let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
     let ty = Type::Vector(Box::new(Type::U8));
 
-    let out = vr.slice(0, 2, &ty)?;
+    let out: Vector = VMValueCast::cast(vr.slice(0, 2, &ty)?)?;
 
     // mutate the original's first inner vector through a borrowed reference
     let inner: VectorRef = VMValueCast::cast(vr.borrow_elem(0, &ty)?)?;
@@ -835,7 +837,7 @@ fn vector_splice_exhaustive_u8_matches_reference() -> PartialVMResult<()> {
                     let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
                     let other: Vector = VMValueCast::cast(Value::vector_u8(other_elems))?;
 
-                    let out = vr.splice(i, j, other, &Type::U8, 100)?;
+                    let out: Vector = VMValueCast::cast(vr.splice(i, j, other, &Type::U8, 100)?)?;
                     assert_eq!(
                         *vr.as_bytes_ref()?,
                         expected_v,
@@ -880,7 +882,7 @@ fn vector_splice_exhaustive_container_matches_reference() -> PartialVMResult<()>
                         other_tags.iter().map(|t| Value::vector_u8([*t])),
                     )?)?;
 
-                    let out = vr.splice(i, j, other, &ty, 100)?;
+                    let out: Vector = VMValueCast::cast(vr.splice(i, j, other, &ty, 100)?)?;
 
                     assert!(vr.len(&ty)?.equals(&Value::u64(expected_v.len() as u64))?);
                     for (ndx, tag) in expected_v.iter().enumerate() {
@@ -914,7 +916,7 @@ fn vector_splice_primitive_specializations() -> PartialVMResult<()> {
             let ty = $ty;
 
             // replace the middle element
-            let out = vector.splice(1, 2, rhs, &ty, 100)?;
+            let out: Vector = VMValueCast::cast(vector.splice(1, 2, rhs, &ty, 100)?)?;
             assert!(vector.len(&ty)?.equals(&Value::u64(3))?);
             let first: Reference = VMValueCast::cast(vector.borrow_elem(0, &ty)?)?;
             assert!(first.read_ref()?.equals(&$first)?);
@@ -1019,7 +1021,7 @@ fn vector_splice_at_exactly_capacity_ok() -> PartialVMResult<()> {
     let other: Vector = VMValueCast::cast(Value::vector_u8([4, 5]))?;
 
     // 3 - 1 + 2 = 4 == 4
-    let out = vr.splice(1, 2, other, &Type::U8, 4)?;
+    let out: Vector = VMValueCast::cast(vr.splice(1, 2, other, &Type::U8, 4)?)?;
     assert_eq!(*vr.as_bytes_ref()?, vec![1, 4, 5, 3]);
     assert_eq!(out.to_vec_u8()?, vec![2]);
     Ok(())
@@ -1032,7 +1034,7 @@ fn vector_splice_shrinking_over_capacity_ok() -> PartialVMResult<()> {
     let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
     let other: Vector = VMValueCast::cast(Value::vector_u8([]))?;
 
-    let out = vr.splice(1, 4, other, &Type::U8, 3)?;
+    let out: Vector = VMValueCast::cast(vr.splice(1, 4, other, &Type::U8, 3)?)?;
     assert_eq!(*vr.as_bytes_ref()?, vec![1, 5]);
     assert_eq!(out.to_vec_u8()?, vec![2, 3, 4]);
     Ok(())
