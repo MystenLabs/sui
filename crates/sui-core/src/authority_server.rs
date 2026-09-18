@@ -887,7 +887,9 @@ impl ValidatorService {
             // which are not relevant when block contents are pulled by consensus.
             if matches!(submit_mode, UserSubmissionMode::Direct)
                 && !matches!(&self.user_submission_path, UserSubmissionPath::Pool(_))
-                && let Err(error) = self.consensus_adapter.check_consensus_overload()
+                && let Err(error) = self
+                    .consensus_adapter
+                    .check_consensus_overload(&epoch_store, &[&transaction])
             {
                 state.update_overload_metrics("consensus");
                 metrics

@@ -36,6 +36,7 @@ use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
+use sui_types::transaction::Transaction;
 use tokio::sync::{Notify, Semaphore, SemaphorePermit, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
@@ -49,6 +50,7 @@ use crate::authority::consensus_tx_status_cache::{
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_handler::{SequencedConsensusTransactionKey, classify, tx_type_label};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
+use crate::staggered_submission::{StaggerQuota, StaggeredSlot, proposers_metric_label};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -69,6 +71,8 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_in_flight_semaphore_wait: IntGauge,
     pub sequencing_in_flight_submissions: IntGauge,
     pub sequencing_best_effort_timeout: IntCounterVec,
+    pub sequencing_staggered_delay: Histogram,
+    pub sequencing_staggered_held: IntGauge,
     pub consensus_latency: Histogram,
     pub num_rejected_cert_in_epoch_boundary: IntCounter,
 }
@@ -128,7 +132,7 @@ impl ConsensusAdapterMetrics {
             sequencing_certificate_latency: register_histogram_vec_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
-                &["submitted", "tx_type", "processed_method"],
+                &["submitted", "tx_type", "processed_method", "proposers"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
@@ -156,6 +160,17 @@ impl ConsensusAdapterMetrics {
                 &["tx_type"],
                 registry,
             ).unwrap(),
+            sequencing_staggered_delay: register_histogram_with_registry!(
+                "sequencing_staggered_delay",
+                "The staggered-submission delay applied before submitting a transaction without allowed proposers to consensus.",
+                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            sequencing_staggered_held: register_int_gauge_with_registry!(
+                "sequencing_staggered_held",
+                "Number of staggered submissions currently occupying the stagger quota, from their staggered-submission hold through submission.",
+                registry,
+            ).unwrap(),
             // These two metrics originally lived in ValidatorServiceMetrics (authority_server.rs)
             // and keep their legacy names for dashboard compatibility.
             consensus_latency: register_histogram_with_registry!(
@@ -179,7 +194,13 @@ impl ConsensusAdapterMetrics {
 
 /// An object that can be used to check if the consensus is overloaded.
 pub trait ConsensusOverloadChecker: Sync + Send + 'static {
-    fn check_consensus_overload(&self) -> SuiResult;
+    /// Weakly consistent pre-admission overload check for the given user
+    /// transactions; the authoritative limits are enforced at submission.
+    fn check_consensus_overload(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        txs: &[&Transaction],
+    ) -> SuiResult;
 }
 
 pub type BlockStatusReceiver = oneshot::Receiver<BlockStatus>;
@@ -218,6 +239,11 @@ pub trait ConsensusClient: Sync + Send + 'static {
     ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)>;
 }
 
+/// Staggered submissions draw from a permit pool of
+/// `max_pending_local_submissions / this`, capping the share of submission
+/// concurrency the staggered class can occupy once holds elapse.
+const STAGGERED_SUBMIT_PERMITS_DIVISOR: usize = 4;
+
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
@@ -234,6 +260,16 @@ pub struct ConsensusAdapter {
     metrics: ConsensusAdapterMetrics,
     /// Semaphore limiting parallel submissions to consensus
     submit_semaphore: Arc<Semaphore>,
+    /// Smaller permit pool for staggered submissions
+    /// (`max_pending_local_submissions / STAGGERED_SUBMIT_PERMITS_DIVISOR`): the
+    /// stagger quota admits far more held transactions than there are submit permits,
+    /// so a wave of elapsed holds sharing `submit_semaphore` could queue ahead of
+    /// restricted traffic. A dedicated pool makes the wave queue behind itself.
+    staggered_submit_semaphore: Arc<Semaphore>,
+    /// Admission gate bounding the staggered class's total local footprint: the slot
+    /// spans the hold, the permit wait and the submission, so at most the quota's
+    /// worth of staggered submissions occupy this node at any moment.
+    stagger_quota: StaggerQuota,
     /// Notified when an inflight slot is freed (`InflightDropGuard` dropped).
     /// Used by the admission queue drainer to wake up and submit more
     /// transactions.
@@ -252,6 +288,10 @@ impl ConsensusAdapter {
         inflight_slot_freed_notify: Arc<Notify>,
     ) -> Self {
         let num_inflight_transactions = Default::default();
+        let stagger_quota = StaggerQuota::new(
+            max_pending_transactions,
+            metrics.sequencing_staggered_held.clone(),
+        );
         Self {
             consensus_client,
             checkpoint_store,
@@ -260,6 +300,10 @@ impl ConsensusAdapter {
             num_inflight_transactions,
             metrics,
             submit_semaphore: Arc::new(Semaphore::new(max_pending_local_submissions)),
+            staggered_submit_semaphore: Arc::new(Semaphore::new(
+                (max_pending_local_submissions / STAGGERED_SUBMIT_PERMITS_DIVISOR).max(1),
+            )),
+            stagger_quota,
             inflight_slot_freed_notify,
         }
     }
@@ -320,7 +364,7 @@ impl ConsensusAdapter {
         if epoch_store.should_send_end_of_publish() {
             let transaction = ConsensusTransaction::new_end_of_publish(self.authority);
             info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
-            self.submit_unchecked(&[transaction], epoch_store, None, None);
+            self.submit_unchecked(&[transaction], epoch_store, None, None, None);
         }
     }
 
@@ -368,9 +412,23 @@ impl ConsensusAdapter {
             }
         }
 
+        // Staggered submission of transactions without allowed proposers. Soft bundles
+        // are external fan-out too, and are held whenever any member could have named
+        // its proposers and did not. Acquired here, synchronously, so the quota is an
+        // admission check like the overload checks: at the quota the submitter gets a
+        // retriable error, and a spawned submission task always runs to completion.
+        let user_transactions: Vec<_> = transactions
+            .iter()
+            .filter_map(|transaction| transaction.kind.as_user_transaction())
+            .collect();
+        let staggered_slot = self
+            .stagger_quota
+            .submission_slot(&user_transactions, epoch_store)?;
+
         Ok(self.submit_unchecked(
             transactions,
             epoch_store,
+            staggered_slot,
             tx_consensus_position,
             submitter_client_addr,
         ))
@@ -393,6 +451,7 @@ impl ConsensusAdapter {
         self: &Arc<Self>,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        staggered_slot: Option<StaggeredSlot>,
         tx_consensus_position: Option<oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>>,
         submitter_client_addr: Option<IpAddr>,
     ) -> JoinHandle<()> {
@@ -402,6 +461,7 @@ impl ConsensusAdapter {
             .submit_and_wait(
                 transactions.to_vec(),
                 epoch_store.clone(),
+                staggered_slot,
                 tx_consensus_position,
                 submitter_client_addr,
             )
@@ -416,6 +476,7 @@ impl ConsensusAdapter {
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
         epoch_store: Arc<AuthorityPerEpochStore>,
+        staggered_slot: Option<StaggeredSlot>,
         tx_consensus_position: Option<oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>>,
         submitter_client_addr: Option<IpAddr>,
     ) {
@@ -436,6 +497,7 @@ impl ConsensusAdapter {
             .within_alive_epoch(self.submit_and_wait_inner(
                 transactions,
                 &epoch_store,
+                staggered_slot,
                 tx_consensus_position,
                 submitter_client_addr,
             ))
@@ -449,6 +511,7 @@ impl ConsensusAdapter {
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        staggered_slot: Option<StaggeredSlot>,
         mut tx_consensus_positions: Option<oneshot::Sender<SuiResult<Vec<ConsensusPosition>>>>,
         submitter_client_addr: Option<IpAddr>,
     ) {
@@ -496,7 +559,12 @@ impl ConsensusAdapter {
         tracing::Span::current().record("tx_type", tx_type);
         tracing::Span::current().record("tx_keys", tracing::field::debug(&transaction_keys));
 
-        let mut guard = InflightDropGuard::acquire(&self, tx_type, transactions.len() as u64);
+        let mut guard = InflightDropGuard::acquire(
+            &self,
+            tx_type,
+            proposers_metric_label(&transactions, epoch_store),
+            transactions.len() as u64,
+        );
 
         let make_processing_error =
             |method: ProcessedMethod| -> SuiError { processing_error(&transaction_keys, method) };
@@ -549,8 +617,13 @@ impl ConsensusAdapter {
 
             // System messages (checkpoint signatures, EndOfPublish, capability
             // notifications, randomness DKG, etc.) are not buffered behind user
-            // tx; they are excluded from the semaphore.
-            let _permit: Option<SemaphorePermit> = if is_system_message {
+            // tx; they are excluded from the semaphore. Staggered submissions must
+            // not occupy a scarce permit while sleeping out their hold, so only they
+            // defer acquisition into the raced future below; everything else takes
+            // its permit here, before the race, as it always has.
+            let pre_acquired_permit: Option<SemaphorePermit> = if is_system_message
+                || staggered_slot.is_some()
+            {
                 None
             } else {
                 Some(
@@ -561,12 +634,44 @@ impl ConsensusAdapter {
                         .expect("Consensus adapter does not close semaphore"),
                 )
             };
-            let _in_flight_submission_guard =
-                GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
 
-            // Submit the transaction to consensus, racing against the processed waiter in
-            // case another validator sequences the transaction first.
+            // Submit the transaction to consensus, racing against the processed waiter
+            // in case another validator sequences the transaction first. The staggered
+            // delay and the staggered permit wait live inside the raced future, so a
+            // held transaction that commits elsewhere while sleeping or queued is
+            // cancelled without ever being submitted.
             let submit_fut = async {
+                // The slot spans the hold, the permit wait and the submission, so the
+                // stagger quota bounds the staggered class's total local footprint;
+                // it is released when the future completes, or when the processed
+                // race cancels the submission at any of those stages.
+                let _staggered_slot = staggered_slot;
+                if let Some(slot) = &_staggered_slot {
+                    self.metrics
+                        .sequencing_staggered_delay
+                        .observe(slot.delay().as_secs_f64());
+                    time::sleep(slot.delay()).await;
+                }
+
+                let _permit: Option<SemaphorePermit> = match pre_acquired_permit {
+                    Some(permit) => Some(permit),
+                    None if is_system_message => None,
+                    // Staggered: the hold is over, take a permit from the class's own
+                    // smaller pool, so a wave of elapsed holds queues behind itself
+                    // instead of ahead of restricted traffic.
+                    None => Some(
+                        self.staggered_submit_semaphore
+                            .acquire()
+                            .count_in_flight(
+                                self.metrics.sequencing_in_flight_semaphore_wait.clone(),
+                            )
+                            .await
+                            .expect("Consensus adapter does not close semaphore"),
+                    ),
+                };
+                let _in_flight_submission_guard =
+                    GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
+
                 const RETRY_DELAY_STEP: Duration = Duration::from_secs(1);
 
                 loop {
@@ -956,11 +1061,30 @@ impl ConsensusAdapter {
 }
 
 impl ConsensusOverloadChecker for ConsensusAdapter {
-    fn check_consensus_overload(&self) -> SuiResult {
+    fn check_consensus_overload(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        txs: &[&Transaction],
+    ) -> SuiResult {
         fp_ensure!(
             self.check_limits(),
             SuiErrorKind::TooManyTransactionsPendingConsensus.into()
         );
+        // Reject transactions that would be held while the stagger quota is full, so
+        // batch requests degrade at per-transaction granularity instead of failing
+        // wholesale at submission. Weakly consistent, like check_limits: the
+        // authoritative slot acquisition happens in submit_batch.
+        if !self.stagger_quota.has_capacity()
+            && epoch_store
+                .staggered_submission()
+                .submission_delay(txs, epoch_store)
+                .is_some()
+        {
+            return Err(SuiErrorKind::ValidatorOverloadedRetryAfter {
+                retry_after_secs: 1,
+            }
+            .into());
+        }
         Ok(())
     }
 }
@@ -968,7 +1092,11 @@ impl ConsensusOverloadChecker for ConsensusAdapter {
 pub struct NoopConsensusOverloadChecker {}
 
 impl ConsensusOverloadChecker for NoopConsensusOverloadChecker {
-    fn check_consensus_overload(&self) -> SuiResult {
+    fn check_consensus_overload(
+        &self,
+        _epoch_store: &AuthorityPerEpochStore,
+        _txs: &[&Transaction],
+    ) -> SuiResult {
         Ok(())
     }
 }
@@ -1084,6 +1212,8 @@ struct InflightDropGuard<'a> {
     start: Instant,
     submitted: bool,
     tx_type: &'static str,
+    /// See `proposers_metric_label`.
+    proposers: &'static str,
     processed_method: ProcessedMethod,
     /// Number of transactions this guard accounts for.
     /// > 1 for soft bundles.
@@ -1094,6 +1224,7 @@ impl<'a> InflightDropGuard<'a> {
     pub fn acquire(
         adapter: &'a ConsensusAdapter,
         tx_type: &'static str,
+        proposers: &'static str,
         inflight_count: u64,
     ) -> Self {
         adapter
@@ -1114,6 +1245,7 @@ impl<'a> InflightDropGuard<'a> {
             start: Instant::now(),
             submitted: false,
             tx_type,
+            proposers,
             processed_method: ProcessedMethod::ConsensusMessageProcessed,
             inflight_count,
         }
@@ -1147,6 +1279,7 @@ impl Drop for InflightDropGuard<'_> {
                 submitted,
                 self.tx_type,
                 self.processed_method.metric_label(),
+                self.proposers,
             ])
             .observe(latency.as_secs_f64());
     }
