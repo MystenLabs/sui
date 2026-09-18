@@ -17197,7 +17197,6 @@ dependencies = [
  "move-transactional-test-runner",
  "move-vm-runtime",
  "msim",
- "once_cell",
  "rand 0.8.5",
  "regex",
  "serde",

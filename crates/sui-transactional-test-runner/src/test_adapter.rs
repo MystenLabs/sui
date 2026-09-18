@@ -35,11 +35,10 @@ use move_symbol_pool::Symbol;
 use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
 use move_transactional_test_runner::tasks::TaskCommand;
 use move_transactional_test_runner::{
-    framework::{CompiledState, MoveTestAdapter, compile_any, store_modules},
+    framework::{CompiledState, MoveTestAdapter, PreCompiledDeps, compile_any, store_modules},
     tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
 };
 use move_vm_runtime::dev_utils::vm_arguments::ValueFrame;
-use once_cell::sync::Lazy;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde::Deserialize;
 use serde_json::Value;
@@ -52,12 +51,12 @@ use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 use sui_core::authority::AuthorityState;
 use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
-use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_framework::{BuiltInFramework, DEFAULT_FRAMEWORK_PATH};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionBlockResponse, SuiAccumulatorOperation,
@@ -418,7 +417,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
+        pre_compiled_deps: Option<PreCompiledDeps>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -428,10 +427,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         _path: &Path,
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
-        assert!(
-            pre_compiled_deps.is_some(),
-            "Must populate 'pre_compiled_deps' with Sui framework"
-        );
+        let pre_compiled_deps =
+            pre_compiled_deps.expect("Must populate 'pre_compiled_deps' with Sui framework");
+        // Overlap framework compilation with executor setup.
+        std::thread::spawn(move || LazyLock::force(pre_compiled_deps));
 
         // Unpack the init arguments
         let AdapterInitConfig {
@@ -488,6 +487,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
 
+        let pre_compiled_deps = LazyLock::force(pre_compiled_deps).clone();
+
         sui_types::transaction::clear_gasless_tokens_for_testing();
 
         let mut test_adapter = Self {
@@ -499,7 +500,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             read_replica,
             compiled_state: CompiledState::new(
                 named_address_mapping,
-                pre_compiled_deps,
+                Some(pre_compiled_deps),
+                BuiltInFramework::iter_system_packages().flat_map(|package| package.modules()),
                 Some(NumericalAddress::new(
                     AccountAddress::ZERO.into_bytes(),
                     NumberFormat::Hex,
@@ -2728,7 +2730,7 @@ impl Default for AdapterInitConfig {
     }
 }
 
-static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| {
+static NAMED_ADDRESSES: LazyLock<BTreeMap<String, NumericalAddress>> = LazyLock::new(|| {
     let mut map = move_stdlib::named_addresses();
     assert!(map.get("std").unwrap().into_inner() == MOVE_STDLIB_ADDRESS);
     // TODO fix Sui framework constants
@@ -2763,7 +2765,9 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
     map
 });
 
-pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
+/// Compiler metadata for the system packages, including macro definitions.
+/// Bytecode is loaded separately from `BuiltInFramework`.
+pub static PRE_COMPILED: LazyLock<Arc<PreCompiledProgramInfo>> = LazyLock::new(|| {
     // TODO invoke package system? Or otherwise pull the versions for these packages as per their
     // actual Move.toml files. They way they are treated here is odd, too, though.
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
@@ -2811,7 +2815,6 @@ pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
         }],
         None,
         None,
-        false,
         Flags::empty(),
         None,
     )
@@ -2821,7 +2824,7 @@ pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
             eprintln!("!!!Sui framework failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, diags)
         }
-        Ok(res) => res,
+        Ok(res) => Arc::new(res),
     }
 });
 
@@ -2836,30 +2839,34 @@ async fn create_validator_fullnode(
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
                 .with_reference_gas_price(reference_gas_price.unwrap_or(500));
         builder = builder.with_protocol_version(protocol_config.version);
-        builder.build()
+        Arc::new(builder.build())
     };
 
-    let validator = TestAuthorityBuilder::new()
-        .with_protocol_config(protocol_config.clone())
-        .with_starting_objects(objects)
-        .with_shared_network_config(&network_config)
-        .insert_genesis_checkpoint()
-        .skip_genesis_owner_index()
-        .build()
-        .await;
-
-    let fullnode_key_pair = get_authority_key_pair().1;
-    let fullnode = TestAuthorityBuilder::new()
-        .with_protocol_config(protocol_config.clone())
-        .with_starting_objects(objects)
-        .with_shared_network_config(&network_config)
-        .with_keypair(&fullnode_key_pair)
-        .insert_genesis_checkpoint()
-        .skip_genesis_owner_index()
-        .build()
-        .await;
-
-    (validator, fullnode)
+    // Both builds need the same process-wide protocol config override.
+    // Install it here because separate overrides in each build would conflict.
+    let _guard = {
+        let protocol_config = protocol_config.clone();
+        ProtocolConfig::apply_overrides_for_testing(move |_, _| protocol_config.clone())
+    };
+    let build_node = |keypair: Option<AuthorityKeyPair>| {
+        let network_config = network_config.clone();
+        let objects = objects.to_vec();
+        tokio::spawn(async move {
+            let mut builder = TestAuthorityBuilder::new()
+                .with_starting_objects(&objects)
+                .with_shared_network_config(&network_config)
+                .insert_genesis_checkpoint()
+                .skip_genesis_owner_index();
+            if let Some(keypair) = &keypair {
+                builder = builder.with_keypair(keypair);
+            }
+            builder.build().await
+        })
+    };
+    let validator = build_node(None);
+    let fullnode = build_node(Some(get_authority_key_pair().1));
+    let (validator, fullnode) = tokio::join!(validator, fullnode);
+    (validator.unwrap(), fullnode.unwrap())
 }
 
 async fn create_val_fullnode_executor(
