@@ -94,8 +94,20 @@ impl Mutation {
         ]);
 
         // Execute transaction via gRPC
+        let session: &crate::extensions::logging::Session = ctx.data_unchecked();
+        let client_headers = sui_indexer_alt_reader::fullnode_client::ClientVersionHeaders {
+            sdk_type: session.client.sdk_type.clone(),
+            sdk_version: session.client.sdk_version.clone(),
+            rpc_schema_date: session.client.rpc_schema_date.clone(),
+        };
+
         match fullnode_client
-            .execute_transaction(tx_data.clone(), parsed_signatures.clone(), read_mask)
+            .execute_transaction_with_client_headers(
+                tx_data.clone(),
+                parsed_signatures.clone(),
+                read_mask,
+                &client_headers,
+            )
             .await
         {
             Ok(response) => {

@@ -24,6 +24,25 @@ use tap::Pipe;
 
 mod simulate;
 
+const VALIDITY_SCHEMA_DATE: &str = "2026-08-19";
+
+fn supports_validity(metadata: &tonic::metadata::MetadataMap) -> bool {
+    metadata
+        .get("client-rpc-schema-date")
+        .and_then(|value| value.to_str().ok())
+        .filter(|date| {
+            let bytes = date.as_bytes();
+            bytes.len() == 10
+                && bytes[4] == b'-'
+                && bytes[7] == b'-'
+                && bytes
+                    .iter()
+                    .enumerate()
+                    .all(|(i, byte)| matches!(i, 4 | 7) || byte.is_ascii_digit())
+        })
+        .is_some_and(|date| date >= VALIDITY_SCHEMA_DATE)
+}
+
 #[tonic::async_trait]
 impl TransactionExecutionService for RpcService {
     async fn execute_transaction(
@@ -46,12 +65,38 @@ impl TransactionExecutionService for RpcService {
         request: tonic::Request<SimulateTransactionRequest>,
     ) -> Result<tonic::Response<SimulateTransactionResponse>, tonic::Status> {
         let service = self.clone();
+        let supports_validity = supports_validity(request.metadata());
         let request = request.into_inner();
-        tokio::task::spawn_blocking(move || simulate::simulate_transaction(&service, request))
-            .await
-            .map_err(|e| tonic::Status::internal(format!("simulate_transaction task failed: {e}")))?
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        tokio::task::spawn_blocking(move || {
+            simulate::simulate_transaction(&service, request, supports_validity)
+        })
+        .await
+        .map_err(|e| tonic::Status::internal(format!("simulate_transaction task failed: {e}")))?
+        .map(tonic::Response::new)
+        .map_err(Into::into)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validity_support_is_gated_by_schema_date() {
+        let mut metadata = tonic::metadata::MetadataMap::new();
+        assert!(!supports_validity(&metadata));
+
+        metadata.insert("client-rpc-schema-date", "2026-08-18".parse().unwrap());
+        assert!(!supports_validity(&metadata));
+
+        metadata.insert(
+            "client-rpc-schema-date",
+            VALIDITY_SCHEMA_DATE.parse().unwrap(),
+        );
+        assert!(supports_validity(&metadata));
+
+        metadata.insert("client-rpc-schema-date", "not-a-date".parse().unwrap());
+        assert!(!supports_validity(&metadata));
     }
 }
 

@@ -37,6 +37,57 @@ pub struct FullnodeClient {
     client: Client,
 }
 
+#[derive(Clone, Default)]
+pub struct ClientVersionHeaders {
+    pub sdk_type: Option<String>,
+    pub sdk_version: Option<String>,
+    pub rpc_schema_date: Option<String>,
+}
+
+impl ClientVersionHeaders {
+    fn apply<T>(&self, request: &mut tonic::Request<T>) {
+        for (name, value) in [
+            ("client-sdk-type", self.sdk_type.as_deref()),
+            ("client-sdk-version", self.sdk_version.as_deref()),
+            ("client-rpc-schema-date", self.rpc_schema_date.as_deref()),
+        ] {
+            if let Some(value) = value.and_then(|v| v.parse().ok()) {
+                request.metadata_mut().insert(name, value);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod client_version_headers_tests {
+    use super::*;
+
+    #[test]
+    fn applies_present_client_headers() {
+        let headers = ClientVersionHeaders {
+            sdk_type: Some("typescript".to_owned()),
+            sdk_version: Some("2.31.2".to_owned()),
+            rpc_schema_date: Some("2026-09-04".to_owned()),
+        };
+        let mut request = tonic::Request::new(());
+
+        headers.apply(&mut request);
+
+        assert_eq!(
+            request.metadata().get("client-sdk-type").unwrap(),
+            "typescript"
+        );
+        assert_eq!(
+            request.metadata().get("client-sdk-version").unwrap(),
+            "2.31.2"
+        );
+        assert_eq!(
+            request.metadata().get("client-rpc-schema-date").unwrap(),
+            "2026-09-04"
+        );
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -86,6 +137,22 @@ impl FullnodeClient {
         signatures: Vec<GenericSignature>,
         read_mask: FieldMask,
     ) -> Result<proto::ExecuteTransactionResponse, Error> {
+        self.execute_transaction_with_client_headers(
+            transaction_data,
+            signatures,
+            read_mask,
+            &ClientVersionHeaders::default(),
+        )
+        .await
+    }
+
+    pub async fn execute_transaction_with_client_headers(
+        &self,
+        transaction_data: TransactionData,
+        signatures: Vec<GenericSignature>,
+        read_mask: FieldMask,
+        client_headers: &ClientVersionHeaders,
+    ) -> Result<proto::ExecuteTransactionResponse, Error> {
         let transaction = Transaction::from_generic_sig_data(transaction_data, signatures);
 
         let signatures = transaction
@@ -110,6 +177,9 @@ impl FullnodeClient {
         .with_signatures(signatures)
         .with_read_mask(read_mask);
 
+        let mut request = tonic::Request::new(request);
+        client_headers.apply(&mut request);
+
         self.client
             .clone()
             .execution_client()
@@ -132,6 +202,24 @@ impl FullnodeClient {
         do_gas_selection: bool,
         read_mask: FieldMask,
     ) -> Result<proto::SimulateTransactionResponse, Error> {
+        self.simulate_transaction_with_client_headers(
+            transaction,
+            checks_enabled,
+            do_gas_selection,
+            read_mask,
+            &ClientVersionHeaders::default(),
+        )
+        .await
+    }
+
+    pub async fn simulate_transaction_with_client_headers(
+        &self,
+        transaction: proto::Transaction,
+        checks_enabled: bool,
+        do_gas_selection: bool,
+        read_mask: FieldMask,
+        client_headers: &ClientVersionHeaders,
+    ) -> Result<proto::SimulateTransactionResponse, Error> {
         use proto::simulate_transaction_request::TransactionChecks;
 
         let checks = if checks_enabled {
@@ -144,6 +232,9 @@ impl FullnodeClient {
             .with_read_mask(read_mask)
             .with_checks(checks)
             .with_do_gas_selection(do_gas_selection);
+
+        let mut request = tonic::Request::new(request);
+        client_headers.apply(&mut request);
 
         self.client
             .clone()
