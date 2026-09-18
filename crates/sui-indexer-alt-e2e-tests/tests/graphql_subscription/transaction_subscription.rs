@@ -310,7 +310,7 @@ async fn test_transaction_subscription_field_coverage() {
                             status
                             lamportVersion
                             epoch { epochId }
-                            checkpoint { sequenceNumber }
+                            checkpoint { sequenceNumber digest }
                             gasEffects {
                                 gasObject { address }
                                 gasSummary {
@@ -566,9 +566,9 @@ async fn test_transaction_subscription_live_backfill_parity() {
         .await;
     let backfill_nodes = collect_nodes(&mut backfill, &expected).await;
 
-    // 5. The two phases resolve the same transactions identically. Both run with no
-    // `checkpoint_viewed_at` (backfill matches live), so even checkpoint-anchored fields like
-    // `effects.checkpoint` are null on both and compare equal without any normalization.
+    // 5. The two phases resolve the same transactions identically, including `effects.checkpoint`:
+    // live resolves it from the streamed checkpoint held in memory, backfill from the durable index,
+    // and both land on the same sequence number, so the nodes compare equal without normalization.
     assert_eq!(
         live_nodes, backfill_nodes,
         "live and backfill resolved the same transactions differently",
