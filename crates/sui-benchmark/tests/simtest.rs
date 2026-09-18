@@ -2121,7 +2121,8 @@ mod test {
         .with_probability(AccumulatorBalanceRead::NAME, 0.3)
         .with_probability(AuthenticatedEventEmit::NAME, 0.1)
         .with_probability(CoinReservationWithdraw::NAME, 0.3)
-        .with_probability(AllowanceWithdraw::NAME, 0.3);
+        .with_probability(AllowanceWithdraw::NAME, 0.2)
+        .with_probability(AllowanceSelfWithdraw::NAME, 0.2);
 
         let test_cluster_for_scan = test_cluster.clone();
         test_simulated_load_with_test_config(
@@ -2230,46 +2231,27 @@ mod test {
         }
 
         if allowances_enabled {
-            let successes_containing = |name: &str| -> u64 {
+            // Sums a counter over every op set that includes `name`.
+            let sum_containing = |name: &str, counter: fn(&OperationSetStats) -> u64| -> u64 {
                 metrics
                     .iter_stats()
                     .filter(|(op_set, _)| op_set.contains(name))
-                    .map(|(_, stats)| stats.success_count)
-                    .sum()
-            };
-            let insufficient_funds_containing = |name: &str| -> u64 {
-                metrics
-                    .iter_stats()
-                    .filter(|(op_set, _)| op_set.contains(name))
-                    .map(|(_, stats)| stats.insufficient_funds_count)
-                    .sum()
-            };
-            let permanent_failures_containing = |name: &str| -> u64 {
-                metrics
-                    .iter_stats()
-                    .filter(|(op_set, _)| op_set.contains(name))
-                    .map(|(_, stats)| stats.permanent_failure_count)
+                    .map(|(_, stats)| counter(stats))
                     .sum()
             };
 
-            let allowance_withdraw_success_count = successes_containing(AllowanceWithdraw::NAME);
-            info!(
-                "allowance metrics: withdraw_success={}",
-                allowance_withdraw_success_count
-            );
-            assert!(
-                allowance_withdraw_success_count > 0,
-                "expected at least one allowance withdrawal"
-            );
-
-            // The failure mix is seed-dependent: logged, not asserted.
-            let withdraw_insufficient_count =
-                insufficient_funds_containing(AllowanceWithdraw::NAME);
-            let withdraw_rejected_count = permanent_failures_containing(AllowanceWithdraw::NAME);
-            info!(
-                "allowance withdraw failures: insufficient_funds={}, rejected={}",
-                withdraw_insufficient_count, withdraw_rejected_count
-            );
+            // Cross-sender spends (ring) and self-spends are tracked separately.
+            for name in [AllowanceWithdraw::NAME, AllowanceSelfWithdraw::NAME] {
+                let success_count = sum_containing(name, |s| s.success_count);
+                // The failure mix is seed-dependent: logged, not asserted.
+                info!(
+                    "{name} metrics: success={}, insufficient_funds={}, rejected={}",
+                    success_count,
+                    sum_containing(name, |s| s.insufficient_funds_count),
+                    sum_containing(name, |s| s.permanent_failure_count),
+                );
+                assert!(success_count > 0, "expected at least one {name} success");
+            }
         }
     }
 

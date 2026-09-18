@@ -38,6 +38,15 @@ pub enum InitRequirement {
 /// (allowance id, initial shared version, funder) of an init-issued allowance.
 pub type AllowanceInfo = (ObjectID, SequenceNumber, SuiAddress);
 
+/// The init-issued allowances a payload's sender spends from.
+#[derive(Debug, Clone, Copy)]
+pub struct PayloadAllowances {
+    /// Funded by the previous payload, so sender and funder differ.
+    pub neighbor: AllowanceInfo,
+    /// Funded by the sender itself.
+    pub own: AllowanceInfo,
+}
+
 pub const ALIAS_TX: &str = "alias_tx";
 pub const ALIAS_REMOVE: &str = "alias_remove";
 pub const ALIAS_ADD: &str = "alias_add";
@@ -67,6 +76,7 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     ImmutableObjectRead::DESCRIPTOR,
     CoinReservationWithdraw::DESCRIPTOR,
     AllowanceWithdraw::DESCRIPTOR,
+    AllowanceSelfWithdraw::DESCRIPTOR,
 ];
 
 #[derive(Debug, Clone)]
@@ -79,7 +89,7 @@ pub enum ResourceRequest {
     AccumulatorRoot,
     ImmutableObject,
     CoinReservation,
-    Allowance,
+    Allowances,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -99,7 +109,7 @@ pub struct OperationResources {
     pub immutable_object: Option<ObjectRef>,
     pub chain_identifier: Option<ChainIdentifier>,
     pub current_epoch: Option<EpochId>,
-    pub allowance: Option<AllowanceInfo>,
+    pub allowances: Option<PayloadAllowances>,
 }
 
 pub trait Operation: Send + Sync {
@@ -1184,10 +1194,6 @@ impl Operation for ImmutableObjectRead {
     }
 }
 
-fn rate_limit_type() -> TypeTag {
-    "0x2::allowance::RateLimit".parse().unwrap()
-}
-
 /// Spends `amount` through the allowance and returns it to the funder, keeping its balance level.
 fn add_allowance_spend_commands(
     builder: &mut ProgrammableTransactionBuilder,
@@ -1237,6 +1243,14 @@ fn add_allowance_spend_commands(
     );
 }
 
+fn allowance_spend_amount(address_balance_amount: u64) -> u64 {
+    if address_balance_amount > 0 {
+        address_balance_amount
+    } else {
+        get_rng().gen_range(100..1000)
+    }
+}
+
 /// Issues an `Allowance<Balance<SUI>>` funded by the tx sender for `spender`.
 /// The cap and expiration are effectively unlimited so spends never trip them.
 pub fn add_allowance_issue_commands(
@@ -1247,7 +1261,7 @@ pub fn add_allowance_issue_commands(
         MOVE_STDLIB_PACKAGE_ID,
         Identifier::new("option").unwrap(),
         Identifier::new("none").unwrap(),
-        vec![rate_limit_type()],
+        vec!["0x2::allowance::RateLimit".parse().unwrap()],
         vec![],
     );
     let args = vec![
@@ -1267,6 +1281,7 @@ pub fn add_allowance_issue_commands(
     );
 }
 
+/// Spends from the neighbor's balance: sender and funder differ.
 pub struct AllowanceWithdraw;
 
 impl AllowanceWithdraw {
@@ -1283,7 +1298,54 @@ impl Operation for AllowanceWithdraw {
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {
-        vec![ResourceRequest::Allowance]
+        vec![ResourceRequest::Allowances]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![
+            InitRequirement::SeedAddressBalance,
+            InitRequirement::IssueAllowances,
+        ]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        _account_state: &AccountState,
+    ) {
+        let (allowance_id, initial_shared_version, funder) = resources
+            .allowances
+            .expect("Allowances not resolved")
+            .neighbor;
+        add_allowance_spend_commands(
+            builder,
+            allowance_id,
+            initial_shared_version,
+            funder,
+            allowance_spend_amount(resources.address_balance_amount),
+        );
+    }
+}
+
+/// Spends from the sender's own balance through a self-issued allowance.
+pub struct AllowanceSelfWithdraw;
+
+impl AllowanceSelfWithdraw {
+    pub const NAME: &'static str = "allowance_self_withdraw";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(AllowanceSelfWithdraw),
+    };
+}
+
+impl Operation for AllowanceSelfWithdraw {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::Allowances]
     }
 
     fn init_requirements(&self) -> Vec<InitRequirement> {
@@ -1300,25 +1362,13 @@ impl Operation for AllowanceWithdraw {
         _account_state: &AccountState,
     ) {
         let (allowance_id, initial_shared_version, funder) =
-            resources.allowance.expect("Allowance not resolved");
-
-        let mut amount = if resources.address_balance_amount > 0 {
-            resources.address_balance_amount
-        } else {
-            get_rng().gen_range(100..1000)
-        };
-        // Sometimes reserve around the funder's seeded balance, so the spend can fail admission.
-        if get_rng().gen_bool(0.2) {
-            let seed = amount * 100;
-            amount = get_rng().gen_range(seed / 2..=seed * 3 / 2);
-        }
-
+            resources.allowances.expect("Allowances not resolved").own;
         add_allowance_spend_commands(
             builder,
             allowance_id,
             initial_shared_version,
             funder,
-            amount,
+            allowance_spend_amount(resources.address_balance_amount),
         );
     }
 }

@@ -8,11 +8,11 @@ use mysten_common::random::get_rng;
 use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 pub use operations::{
     ALIAS_ADD, ALIAS_REMOVE, ALIAS_TX, ALL_OPERATIONS, AccumulatorBalanceRead,
-    AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AllowanceWithdraw,
-    AuthenticatedEventEmit, CoinReservationWithdraw, INVALID_ALIAS_TX, ImmutableObjectRead,
-    ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw, OperationDescriptor,
-    RandomnessRead, SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit,
-    TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
+    AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AllowanceSelfWithdraw,
+    AllowanceWithdraw, AuthenticatedEventEmit, CoinReservationWithdraw, INVALID_ALIAS_TX,
+    ImmutableObjectRead, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
+    OperationDescriptor, RandomnessRead, SharedCounterIncrement, SharedCounterRead,
+    TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -28,8 +28,8 @@ use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use futures::future::join_all;
 use operations::{
-    AllowanceInfo, InitRequirement, Operation, OperationResources, ResourceRequest,
-    add_allowance_issue_commands,
+    AllowanceInfo, InitRequirement, Operation, OperationResources, PayloadAllowances,
+    ResourceRequest, add_allowance_issue_commands,
 };
 use rand::Rng;
 use std::collections::HashMap;
@@ -329,6 +329,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(ImmutableObjectRead::NAME, 0.2);
         probabilities.insert(CoinReservationWithdraw::NAME, 0.1);
         probabilities.insert(AllowanceWithdraw::NAME, 0.2);
+        probabilities.insert(AllowanceSelfWithdraw::NAME, 0.1);
         Self {
             probabilities,
             alias_tx_probability: 0.3,
@@ -447,8 +448,7 @@ pub struct CompositePayload {
     nonce_counter: AtomicU32,
     alias_state: Option<AliasState>,
     partner_address: SuiAddress,
-    /// The init-issued allowance this payload's sender is the spender of.
-    allowance: Option<AllowanceInfo>,
+    allowances: Option<PayloadAllowances>,
 }
 
 /// Tracks the lifecycle of an alias revoke-and-re-add cycle for a single payload.
@@ -537,7 +537,7 @@ impl CompositePayload {
         pool: &OperationPool,
         config: &CompositeWorkloadConfig,
         current_epoch: u64,
-        payload_allowance: Option<AllowanceInfo>,
+        payload_allowances: Option<PayloadAllowances>,
     ) -> OperationResources {
         let mut counter = None;
         let mut randomness = None;
@@ -546,7 +546,7 @@ impl CompositePayload {
         let mut test_coin_cap = None;
         let mut chain_identifier = None;
         let mut epoch = None;
-        let mut allowance = None;
+        let mut allowances = None;
 
         for req in op.resource_requests() {
             match req {
@@ -572,8 +572,8 @@ impl CompositePayload {
                     epoch = Some(current_epoch);
                     accumulator_root = Some(pool.accumulator_root_initial_shared_version);
                 }
-                ResourceRequest::Allowance => {
-                    allowance = payload_allowance;
+                ResourceRequest::Allowances => {
+                    allowances = payload_allowances;
                 }
             }
         }
@@ -590,7 +590,7 @@ impl CompositePayload {
             immutable_object: pool.immutable_object,
             chain_identifier,
             current_epoch: epoch,
-            allowance,
+            allowances,
         }
     }
 
@@ -603,7 +603,6 @@ impl CompositePayload {
             .clone();
         let filter_address_balance = address_balance_disabled(protocol_config.as_ref());
         let filter_authenticated_events = authenticated_events_disabled(protocol_config.as_ref());
-        let filter_allowances = allowances_disabled(protocol_config.as_ref());
 
         loop {
             let mut ops = self.config.sample_operations();
@@ -623,9 +622,11 @@ impl CompositePayload {
             if filter_authenticated_events {
                 ops.retain(|op| op.name() != AuthenticatedEventEmit::NAME);
             }
-            // Spends need the init-issued ring allowance.
-            if filter_allowances || self.allowance.is_none() {
-                ops.retain(|op| op.name() != AllowanceWithdraw::NAME);
+            // Spends need the init-issued allowances, which are skipped when the feature is off.
+            if self.allowances.is_none() {
+                ops.retain(|op| {
+                    op.name() != AllowanceWithdraw::NAME && op.name() != AllowanceSelfWithdraw::NAME
+                });
             }
             if !ops.is_empty() {
                 return ops;
@@ -666,7 +667,7 @@ impl CompositePayload {
                     &self.pool,
                     &self.config,
                     current_epoch,
-                    self.allowance,
+                    self.allowances,
                 );
                 op.apply(builder, &resources, account_state);
             }
@@ -1392,7 +1393,7 @@ impl WorkloadBuilder<dyn Payload> for CompositeWorkloadBuilder {
             metrics: self.metrics.clone(),
             chain_identifier: None,
             alias_infos: vec![],
-            allowance_infos: vec![],
+            allowances: vec![],
         }))
     }
 }
@@ -1413,13 +1414,58 @@ pub struct CompositeWorkload {
     metrics: Arc<Mutex<CompositionMetrics>>,
     chain_identifier: Option<sui_types::digests::ChainIdentifier>,
     alias_infos: Vec<Option<AliasInitInfo>>,
-    /// Indexed by the issuing payload; payload `i + 1` is the spender.
-    allowance_infos: Vec<Option<AllowanceInfo>>,
+    /// Indexed by the spending payload; empty when allowances are off.
+    allowances: Vec<PayloadAllowances>,
 }
 
 impl CompositeWorkload {
     pub fn metrics(&self) -> Arc<Mutex<CompositionMetrics>> {
         self.metrics.clone()
+    }
+
+    /// Each payload funds one allowance for the spender at its position; returns them in
+    /// payload order.
+    async fn issue_allowances(
+        &mut self,
+        execution_proxy: &Arc<dyn ValidatorProxy + Sync + Send>,
+        gas_price: u64,
+        spenders: &[SuiAddress],
+    ) -> Vec<AllowanceInfo> {
+        let futures = itertools::zip_eq(&self.payload_gas, spenders).map(
+            |((gas_coins, sender, keypair), spender)| {
+                assert_eq!(gas_coins.len(), 1);
+                let mut tx_builder = TestTransactionBuilder::new(*sender, gas_coins[0], gas_price);
+                add_allowance_issue_commands(tx_builder.ptb_builder_mut(), *spender);
+                let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
+
+                let proxy_ref = execution_proxy.clone();
+                async move {
+                    let execution_result = proxy_ref.execute_transaction_block(tx).await;
+                    execution_result.expect("Allowance issuance should succeed")
+                }
+            },
+        );
+        let results = join_all(futures).await;
+
+        // join_all preserves order, so results line up with the funding payloads.
+        let mut allowances = vec![];
+        for ((gas_coins, sender, _), effects) in itertools::zip_eq(&mut self.payload_gas, results) {
+            gas_coins[0] = effects
+                .updated_gas(gas_coins[0].0)
+                .expect("the issuance tx mutates its gas coin");
+            let (allowance_ref, initial_shared_version) = effects
+                .created()
+                .iter()
+                .find_map(|(obj_ref, owner)| match owner {
+                    Owner::Shared {
+                        initial_shared_version,
+                    } => Some((*obj_ref, *initial_shared_version)),
+                    _ => None,
+                })
+                .expect("the allowance is created as a shared object");
+            allowances.push((allowance_ref.0, initial_shared_version, *sender));
+        }
+        allowances
     }
 }
 
@@ -1606,43 +1652,21 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 .collect();
             let n = senders.len();
 
-            let mut futures = vec![];
-            for (idx, (gas_coins, sender, keypair)) in self.payload_gas.iter().enumerate() {
-                assert_eq!(gas_coins.len(), 1);
-                let gas = gas_coins[0];
-                // Payload `idx` funds the allowance that payload `idx + 1` spends.
-                let spender = senders[(idx + 1) % n];
-
-                let mut tx_builder = TestTransactionBuilder::new(*sender, gas, gas_price);
-                add_allowance_issue_commands(tx_builder.ptb_builder_mut(), spender);
-                let tx = tx_builder.ensure_unique().build_and_sign(keypair.as_ref());
-
-                let proxy_ref = execution_proxy.clone();
-                futures.push(async move {
-                    let execution_result = proxy_ref.execute_transaction_block(tx).await;
-                    let effects = execution_result.expect("Allowance issuance should succeed");
-                    (idx, effects)
-                });
-            }
-
-            let results = join_all(futures).await;
-            self.allowance_infos = vec![None; n];
-            for (idx, effects) in results {
-                update_gas!(&mut self.payload_gas[idx].0[0], effects);
-                let (allowance_ref, initial_shared_version) = effects
-                    .created()
-                    .iter()
-                    .find_map(|(obj_ref, owner)| match owner {
-                        Owner::Shared {
-                            initial_shared_version,
-                        } => Some((*obj_ref, *initial_shared_version)),
-                        _ => None,
-                    })
-                    .expect("the allowance is created as a shared object");
-                self.allowance_infos[idx] =
-                    Some((allowance_ref.0, initial_shared_version, senders[idx]));
-            }
-            info!("Issued {} allowances", self.allowance_infos.len());
+            // Two rounds (one tx creating both allowances can't tell them apart in the effects),
+            // in sequence because each payload pays with its single gas coin.
+            let neighbors: Vec<_> = senders.iter().cycle().skip(1).take(n).copied().collect();
+            let mut neighbor = self
+                .issue_allowances(&execution_proxy, gas_price, &neighbors)
+                .await;
+            // Payload `i` spends what payload `i - 1` funded.
+            neighbor.rotate_right(1);
+            let own = self
+                .issue_allowances(&execution_proxy, gas_price, &senders)
+                .await;
+            self.allowances = itertools::zip_eq(neighbor, own)
+                .map(|(neighbor, own)| PayloadAllowances { neighbor, own })
+                .collect();
+            info!("Issued a neighbor and a self allowance for {n} payloads");
         }
 
         if init_requirements.contains(&InitRequirement::CreateBalancePool) {
@@ -2055,13 +2079,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     },
                 );
             let partner_address = get_partner_address(i as usize);
-            // Payload `i` spends the allowance issued by payload `i - 1`.
-            let allowance = if self.allowance_infos.is_empty() {
-                None
-            } else {
-                let n = self.allowance_infos.len();
-                self.allowance_infos[(i as usize + n - 1) % n]
-            };
+            let allowances = self.allowances.get(i as usize).copied();
             payloads.push(Box::new(CompositePayload {
                 config: config.clone(),
                 fullnode_proxies: fullnode_proxies.clone(),
@@ -2074,7 +2092,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 nonce_counter: AtomicU32::new(0),
                 alias_state,
                 partner_address,
-                allowance,
+                allowances,
             }));
         }
 
