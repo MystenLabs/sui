@@ -585,10 +585,28 @@ mod test {
     // Tests cluster liveness when shared object congestion control is on.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_shared_object_congestion_control() {
+        // Consensus commits land roughly this often in these simtests, which is how a deferral
+        // round budget is converted into elapsed time below.
+        const ASSUMED_COMMIT_PERIOD_MS: u64 = 200;
+        const DEFAULT_LOAD_DURATION_SECS: u64 = 60;
+
+        // How long the load phase actually runs. test_simulated_load_with_test_config applies the
+        // same SIM_STRESS_TEST_DURATION_SECS override internally, but the deferral horizon picked
+        // below has to be sized against the run, so it is needed here too. The nightly stress job
+        // (scripts/simtest/simtest-run.sh) sets this to 300.
+        let load_duration_secs =
+            get_var("SIM_STRESS_TEST_DURATION_SECS", DEFAULT_LOAD_DURATION_SECS);
+
         let mode;
         let max_deferral_rounds;
         {
             let mut rng = thread_rng();
+            // These knobs are drawn far wider than any production value on purpose: the point is to
+            // put the scheduler under congestion regimes it would never meet on a real network and
+            // check it stays live. The low end of target_utilization is the aggressive one - at a
+            // few percent, each shared object's per-commit budget is a small fraction of a commit
+            // period while a single transaction can cost hundreds of milliseconds of (synthetic)
+            // execution time, so a hot object builds a deep queue of deferred transactions.
             mode = PerObjectCongestionControlMode::ExecutionTimeEstimate(
                 ExecutionTimeEstimateParams {
                     target_utilization: rng.gen_range(1..=100),
@@ -603,9 +621,33 @@ mod test {
                 },
             );
             max_deferral_rounds = if rng.gen_bool(0.5) {
-                rng.gen_range(0..20) // Short deferral round (testing cancellation)
+                // Short horizon: congested transactions exhaust their deferral budget quickly and
+                // are cancelled. Covers the cancellation path.
+                rng.gen_range(0..20)
             } else {
-                rng.gen_range(500..1000) // Large deferral round (testing liveness)
+                // Long horizon: congested transactions stay deferred across many commits and have
+                // to eventually execute rather than be cancelled. Covers the liveness path.
+                //
+                // The horizon has to fit inside the run rather than being a fixed range. A
+                // transaction deferred for N rounds occupies about N * ASSUMED_COMMIT_PERIOD_MS
+                // before it resolves. The cluster's epoch is 30s (see build_test_cluster below) and
+                // this test disables the epoch close deadline, so epoch close waits for the entire
+                // deferred backlog to drain. If the horizon outlives the run, the first epoch
+                // boundary never completes: every validator moves to RejectAllCerts and rejects all
+                // user transactions for the remainder of the test, so nothing past the 30s mark is
+                // exercised at all.
+                //
+                // A fixed 500..1000 (100-200s of deferral) did exactly that under the default 60s
+                // duration - it was sized for the 300s nightly profile. Cap the horizon at a
+                // quarter of the run so the backlog drains, the epoch closes, and load keeps
+                // flowing for the rest of the test. A duration of 0 means "run unbounded", in which
+                // case there is no run length to fit inside.
+                let max_rounds = if load_duration_secs == 0 {
+                    1000
+                } else {
+                    (load_duration_secs * 1000 / 4 / ASSUMED_COMMIT_PERIOD_MS).clamp(20, 1000)
+                };
+                rng.gen_range(max_rounds / 2..=max_rounds)
             };
         }
 
@@ -618,11 +660,18 @@ mod test {
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
             config.set_per_object_congestion_control_mode_for_testing(mode);
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
-            // With large max_deferral_rounds and low congestion budgets, transactions can be
-            // legitimately re-deferred for longer than the epoch close deadline, which would
-            // abandon them and fire debug_fatal. Disable the deadline so epoch close blocks
-            // until all deferrals resolve, which is the liveness property this test verifies.
-            // The deadline failsafe has its own dedicated tests.
+            // Production runs max_deferral_rounds = 10 and epoch_close_deadline_ms = Some(120_000):
+            // deferrals resolve in seconds, so reaching the deadline means something is genuinely
+            // stuck, and the failsafe abandons the deferred transactions and fires debug_fatal.
+            // This test's long-horizon branch defers transactions for far longer than production
+            // ever would, and those deferrals are still making progress - each round moves the
+            // transaction closer to its round limit. The failsafe cannot tell the two apart, so it
+            // would abandon them and panic the simtest (#27315). Disable it here so epoch close
+            // instead waits for the deferrals to resolve, which is the liveness property this test
+            // is about. The failsafe keeps its own unit tests and e2e simtest.
+            //
+            // Disabling it means epoch close has no upper bound in this test, which is why the
+            // deferral horizon above is capped against the run length.
             config.disable_epoch_close_deadline_ms_for_testing();
             config
         });
@@ -652,7 +701,7 @@ mod test {
 
         test_simulated_load_with_test_config(
             test_cluster,
-            60,
+            load_duration_secs,
             simulated_load_config,
             None,
             None,
