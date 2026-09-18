@@ -25,7 +25,7 @@ use std::{sync::Arc, time::Instant};
 use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::RandomnessRound;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
-use sui_types::transaction::{TransactionDataAPI, TransactionKind};
+use sui_types::transaction::{TransactionDataAPI, TransactionKey, TransactionKind};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     node_role::{FullNodeSyncMode, NodeRole},
@@ -983,6 +983,18 @@ impl CheckpointExecutor {
                 },
             ),
         );
+
+        // When a randomness update arrives via checkpoint rather than being constructed
+        // locally from the round's signature, nothing else resolves its transaction key,
+        // and the keyed placeholder enqueued by consensus would wait forever.
+        for (txn, _) in &unexecuted_txns {
+            let key = txn.key();
+            if !matches!(key, TransactionKey::Digest(_))
+                && self.epoch_store.insert_tx_key(key, *txn.digest()).is_err()
+            {
+                debug!("epoch ended while resolving transaction key");
+            }
+        }
 
         // Enqueue unexecuted transactions with their expected effects digests
         self.execution_scheduler

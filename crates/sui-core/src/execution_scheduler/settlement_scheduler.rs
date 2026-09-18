@@ -100,10 +100,15 @@ impl SettlementScheduler {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         self.execution_scheduler.enqueue(certs, epoch_store);
+        // Settlement transactions carry no causal index: the execution driver admits
+        // them unconditionally (they never block, and running them is what unblocks
+        // transactions waiting on the accumulator versions they write), so there is
+        // nothing to admit against or retire.
+        let env = ExecutionEnv::new().with_assigned_versions(settlement.assigned_versions.clone());
         let queue = self.get_or_start_queue(epoch_store);
         queue.send(SettlementWorkItem {
             settlement_key: settlement.settlement_key,
-            env: ExecutionEnv::new().with_assigned_versions(settlement.assigned_versions.clone()),
+            env,
             batch_info: settlement,
         });
     }
@@ -256,7 +261,7 @@ impl SettlementScheduler {
             .collect::<Vec<_>>();
 
         self.execution_scheduler
-            .enqueue_transactions(txns, epoch_store);
+            .spawn_transaction_scheduling(txns, epoch_store);
 
         let settlement_effects = self
             .transaction_cache_read
@@ -281,7 +286,7 @@ impl SettlementScheduler {
         let deps = barrier_deps.process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
         let env = env.with_barrier_dependencies(deps);
         self.execution_scheduler
-            .enqueue_transactions(vec![(barrier_tx, env)], epoch_store);
+            .spawn_transaction_scheduling(vec![(barrier_tx, env)], epoch_store);
 
         let barrier_effects = self
             .transaction_cache_read
