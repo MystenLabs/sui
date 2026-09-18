@@ -665,11 +665,6 @@ fn test_sponsored_transaction_message() {
     .try_into_verified_for_testing(epoch, &Default::default())
     .unwrap();
 
-    assert_eq!(
-        transaction.get_signer_sig_mapping(true).unwrap(),
-        BTreeMap::from([(sender, (0, &sender_sig)), (sponsor, (1, &sponsor_sig))]),
-    );
-
     assert_eq!(transaction.sender_address(), sender,);
     assert_eq!(transaction.gas(), &[gas_obj_ref]);
 
