@@ -144,7 +144,7 @@ impl<'module, 'index, 'dependency> Context<'module, 'index, 'dependency> {
     fn new(
         module: &'module CompiledModule,
         dependency_index: &'index DependencyIndex<'dependency>,
-    ) -> Self {
+    ) -> PartialVMResult<Self> {
         let self_module_idx = module.self_handle_idx();
         let script_functions = if module.version() < VERSION_5 {
             Some(BTreeSet::new())
@@ -177,7 +177,7 @@ impl<'module, 'index, 'dependency> Context<'module, 'index, 'dependency> {
                 .module
                 .module_id_for_handle(context.module.module_handle_at(function_handle.module));
             let function_name = context.module.identifier_at(function_handle.name);
-            let dependency = context.dependency_index.get_module(&dep_module_id).unwrap();
+            let dependency = safe_unwrap!(context.dependency_index.get_module(&dep_module_id));
             let info = match dependency.function_info_map.get(function_name) {
                 // The visibility does not need to be set here. If the function does not link, it
                 // will be reported by verify_imported_functions.
@@ -196,7 +196,7 @@ impl<'module, 'index, 'dependency> Context<'module, 'index, 'dependency> {
             }
         }
 
-        context
+        Ok(context)
     }
 }
 
@@ -204,19 +204,19 @@ impl<'module, 'index, 'dependency> Context<'module, 'index, 'dependency> {
 ///
 /// `dependency_index` must contain all and only the concrete dependency modules selected for
 /// `module.immediate_dependencies()`.
-pub fn verify_module_with_dependency_index(
-    module: &CompiledModule,
+pub fn verify_module(
     dependency_index: &DependencyIndex<'_>,
+    module: &CompiledModule,
 ) -> VMResult<()> {
-    verify_module_with_dependency_index_impl(module, dependency_index)
+    verify_module_with_dependency_index_impl(dependency_index, module)
         .map_err(|e| e.finish(Location::Module(module.self_id())))
 }
 
 fn verify_module_with_dependency_index_impl(
-    module: &CompiledModule,
     dependency_index: &DependencyIndex<'_>,
+    module: &CompiledModule,
 ) -> PartialVMResult<()> {
-    let context = &Context::new(module, dependency_index);
+    let context = &Context::new(module, dependency_index)?;
 
     verify_imported_modules(context)?;
     verify_imported_structs(context)?;

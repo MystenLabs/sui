@@ -8,9 +8,7 @@ use move_binary_format::{
         IdentifierIndex, ModuleHandle, ModuleHandleIndex, SignatureIndex, Visibility, empty_module,
     },
 };
-use move_bytecode_verifier::dependencies::{
-    DependencyIndex, IndexedModule, verify_module_with_dependency_index,
-};
+use move_bytecode_verifier::dependencies::{DependencyIndex, IndexedModule, verify_module};
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
@@ -64,13 +62,12 @@ fn assert_verification_result(
     indexed_dependency_index: &DependencyIndex<'_>,
     expected_status: Option<StatusCode>,
 ) {
-    let wrapper_result = verify_module_with_dependency_index(
-        &calling_module,
+    let wrapper_result = verify_module(
         &DependencyIndex::new(dependencies.iter().copied()),
+        &calling_module,
     );
-    let indexed_result = verify_module_with_dependency_index(&calling_module, dependency_index);
-    let indexed_modules_result =
-        verify_module_with_dependency_index(&calling_module, indexed_dependency_index);
+    let indexed_result = verify_module(dependency_index, &calling_module);
+    let indexed_modules_result = verify_module(indexed_dependency_index, &calling_module);
     assert_eq!(wrapper_result, indexed_result);
     assert_eq!(wrapper_result, indexed_modules_result);
 
