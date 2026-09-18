@@ -4205,7 +4205,18 @@ impl SenderSignedData {
                         .into());
                     }
                 }
-                GenericSignature::Signature(_) | GenericSignature::MultiSigLegacy(_) => (),
+                GenericSignature::Signature(_) => {
+                    // Only ML-DSA-65 is gated; the classical schemes predate feature flags.
+                    if sig.is_mldsa65() && !config.mldsa65_auth() {
+                        return Err(SuiErrorKind::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "ML-DSA-65 signatures are not enabled on this network".to_string(),
+                            ),
+                        }
+                        .into());
+                    }
+                }
+                GenericSignature::MultiSigLegacy(_) => (),
             }
         }
 
