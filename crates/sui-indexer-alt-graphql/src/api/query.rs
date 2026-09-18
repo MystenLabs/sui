@@ -867,12 +867,20 @@ impl Query {
         ]);
 
         // Simulate transaction via gRPC
+        let session: &crate::extensions::logging::Session = ctx.data_unchecked();
+        let client_headers = sui_indexer_alt_reader::fullnode_client::ClientVersionHeaders {
+            sdk_type: session.client.sdk_type.clone(),
+            sdk_version: session.client.sdk_version.clone(),
+            rpc_schema_date: session.client.rpc_schema_date.clone(),
+        };
+
         match fullnode_client
-            .simulate_transaction(
+            .simulate_transaction_with_client_headers(
                 proto_tx,
                 checks_enabled.unwrap_or(true),
                 do_gas_selection.unwrap_or(false),
                 read_mask,
+                &client_headers,
             )
             .await
         {

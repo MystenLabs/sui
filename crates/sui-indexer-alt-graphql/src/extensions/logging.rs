@@ -63,6 +63,7 @@ const CLIENT_SDK_TYPE_HEADER: HeaderName = HeaderName::from_static("client-sdk-t
 /// Prometheus label or recorded in request log lines; versions outside the allowlist appear
 /// as `CLIENT_LABEL_OTHER`.
 const CLIENT_SDK_VERSION_HEADER: HeaderName = HeaderName::from_static("client-sdk-version");
+const CLIENT_RPC_SCHEMA_DATE_HEADER: HeaderName = HeaderName::from_static("client-rpc-schema-date");
 
 /// SDKs we accept verbatim as the `client_sdk_type` Prometheus label.
 const SDK_TYPE_WHITELIST: &[&str] = &["rust", "typescript", "python"];
@@ -87,6 +88,7 @@ pub(crate) struct Session {
 pub(crate) struct ClientInfo {
     pub sdk_type: Option<String>,
     pub sdk_version: Option<String>,
+    pub rpc_schema_date: Option<String>,
 }
 
 /// This extension is responsible for tracing and recording metrics for various GraphQL queries.
@@ -141,9 +143,24 @@ impl ClientInfo {
             .get(&CLIENT_SDK_VERSION_HEADER)
             .and_then(|v| v.to_str().ok())
             .map(|v| sanitize_sdk_version(sdk_type.as_deref().unwrap_or(""), v, config));
+        let rpc_schema_date = headers
+            .get(&CLIENT_RPC_SCHEMA_DATE_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .filter(|v| {
+                let bytes = v.as_bytes();
+                bytes.len() == 10
+                    && bytes[4] == b'-'
+                    && bytes[7] == b'-'
+                    && bytes
+                        .iter()
+                        .enumerate()
+                        .all(|(i, byte)| matches!(i, 4 | 7) || byte.is_ascii_digit())
+            })
+            .map(str::to_owned);
         Self {
             sdk_type,
             sdk_version,
+            rpc_schema_date,
         }
     }
 }
@@ -542,6 +559,26 @@ mod tests {
 
         assert!(info.sdk_type.is_none());
         assert!(info.sdk_version.is_none());
+        assert!(info.rpc_schema_date.is_none());
+    }
+
+    #[test]
+    fn client_info_accepts_only_iso_schema_dates() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            CLIENT_RPC_SCHEMA_DATE_HEADER,
+            HeaderValue::from_static("2026-09-04"),
+        );
+
+        let info = ClientInfo::from_headers(&headers, &LoggingConfig::default());
+        assert_eq!(info.rpc_schema_date.as_deref(), Some("2026-09-04"));
+
+        headers.insert(
+            CLIENT_RPC_SCHEMA_DATE_HEADER,
+            HeaderValue::from_static("20260904--"),
+        );
+        let info = ClientInfo::from_headers(&headers, &LoggingConfig::default());
+        assert!(info.rpc_schema_date.is_none());
     }
 
     #[test]

@@ -43,6 +43,7 @@ const GAS_COIN_SIZE_BYTES: u64 = 40;
 pub fn simulate_transaction(
     service: &RpcService,
     request: SimulateTransactionRequest,
+    client_supports_validity: bool,
 ) -> Result<SimulateTransactionResponse> {
     let executor = service
         .executor
@@ -134,7 +135,12 @@ pub fn simulate_transaction(
                 gasless_tx.gas_data_mut().budget = 0;
                 // All gasless txns must carry an epoch-scoped validity window for replay
                 // protection.
-                configure_transaction_validity(service, &protocol_config, &mut gasless_tx)?;
+                configure_transaction_validity(
+                    service,
+                    &protocol_config,
+                    &mut gasless_tx,
+                    client_supports_validity,
+                )?;
 
                 let simulation_result = executor
                     .simulate_transaction(gasless_tx.clone(), checks, false)
@@ -211,13 +217,19 @@ pub fn simulate_transaction(
                     // taken as-is.
                     budget_was_estimated.then_some(reference_gas_price),
                     &protocol_config,
+                    client_supports_validity,
                 )?;
             }
 
             // Coin-paid transactions get a proposer restriction too, so that nobody else can
             // amplify them into consensus. A no-op on the address-balance paths, which already
             // set their expiration above.
-            restrict_transaction_proposers(service, &protocol_config, &mut transaction)?;
+            restrict_transaction_proposers(
+                service,
+                &protocol_config,
+                &mut transaction,
+                client_supports_validity,
+            )?;
         }
 
         executor
@@ -490,6 +502,7 @@ fn configure_transaction_validity(
     service: &RpcService,
     protocol_config: &ProtocolConfig,
     transaction: &mut sui_types::transaction::TransactionData,
+    client_supports_validity: bool,
 ) -> Result<()> {
     // Early return if the caller already chose an expiration with a validity window.
     if matches!(
@@ -505,26 +518,30 @@ fn configure_transaction_validity(
     let chain = service.chain_id;
     let nonce = rand::random();
 
-    *transaction.expiration_mut() =
-        match select_allowed_proposers(service, protocol_config, current_epoch) {
-            Some(allowed_proposers) => TransactionExpiration::Validity {
-                min_epoch,
-                max_epoch,
-                min_timestamp: None,
-                max_timestamp: None,
-                chain,
-                nonce,
-                allowed_proposers: Some(allowed_proposers),
-            },
-            None => TransactionExpiration::ValidDuring {
-                min_epoch,
-                max_epoch,
-                min_timestamp: None,
-                max_timestamp: None,
-                chain,
-                nonce,
-            },
-        };
+    *transaction.expiration_mut() = match select_allowed_proposers(
+        service,
+        protocol_config,
+        current_epoch,
+        client_supports_validity,
+    ) {
+        Some(allowed_proposers) => TransactionExpiration::Validity {
+            min_epoch,
+            max_epoch,
+            min_timestamp: None,
+            max_timestamp: None,
+            chain,
+            nonce,
+            allowed_proposers: Some(allowed_proposers),
+        },
+        None => TransactionExpiration::ValidDuring {
+            min_epoch,
+            max_epoch,
+            min_timestamp: None,
+            max_timestamp: None,
+            chain,
+            nonce,
+        },
+    };
     Ok(())
 }
 
@@ -538,14 +555,19 @@ fn restrict_transaction_proposers(
     service: &RpcService,
     protocol_config: &ProtocolConfig,
     transaction: &mut sui_types::transaction::TransactionData,
+    client_supports_validity: bool,
 ) -> Result<()> {
     if !matches!(transaction.expiration(), TransactionExpiration::None) {
         return Ok(());
     }
 
     let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
-    let Some(allowed_proposers) = select_allowed_proposers(service, protocol_config, current_epoch)
-    else {
+    let Some(allowed_proposers) = select_allowed_proposers(
+        service,
+        protocol_config,
+        current_epoch,
+        client_supports_validity,
+    ) else {
         return Ok(());
     };
 
@@ -574,8 +596,9 @@ fn select_allowed_proposers(
     service: &RpcService,
     protocol_config: &ProtocolConfig,
     current_epoch: u64,
+    client_supports_validity: bool,
 ) -> Option<AllowedProposers> {
-    if !protocol_config.allowed_proposers() {
+    if !client_supports_validity || !protocol_config.allowed_proposers() {
         return None;
     }
     service
@@ -590,6 +613,7 @@ fn select_gas(
     transaction: &mut sui_types::transaction::TransactionData,
     incremental_loading_rgp: Option<u64>,
     protocol_config: &ProtocolConfig,
+    client_supports_validity: bool,
 ) -> Result<()> {
     use sui_types::accumulator_root::AccumulatorValue;
     use sui_types::balance::Balance;
@@ -647,7 +671,12 @@ fn select_gas(
         transaction.gas_data_mut().payment.clear();
 
         if matches!(transaction.expiration(), TransactionExpiration::None) {
-            configure_transaction_validity(service, protocol_config, transaction)?;
+            configure_transaction_validity(
+                service,
+                protocol_config,
+                transaction,
+                client_supports_validity,
+            )?;
         }
 
         budget
@@ -721,7 +750,12 @@ fn select_gas(
             selected_gas_value += ab_value;
 
             if matches!(transaction.expiration(), TransactionExpiration::None) {
-                configure_transaction_validity(service, protocol_config, transaction)?;
+                configure_transaction_validity(
+                    service,
+                    protocol_config,
+                    transaction,
+                    client_supports_validity,
+                )?;
             }
         }
 

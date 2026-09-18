@@ -16,6 +16,22 @@ use sui_types::{
     base_types::*,
     digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
 };
+const RPC_SCHEMA_DATE: &str = "2026-09-04";
+
+fn client_version_headers() -> HeadersInterceptor {
+    let mut headers = HeadersInterceptor::new();
+    headers
+        .headers_mut()
+        .insert("client-sdk-type", "sui-cli".parse().unwrap());
+    headers.headers_mut().insert(
+        "client-sdk-version",
+        env!("CARGO_PKG_VERSION").parse().unwrap(),
+    );
+    headers
+        .headers_mut()
+        .insert("client-rpc-schema-date", RPC_SCHEMA_DATE.parse().unwrap());
+    headers
+}
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
@@ -101,6 +117,7 @@ pub struct SuiEnv {
 impl SuiEnv {
     pub fn create_grpc_client(&self) -> Result<Client, anyhow::Error> {
         let mut client = Client::new(&self.rpc)?;
+        let mut headers = client_version_headers();
 
         if let Some(basic_auth) = &self.basic_auth {
             let fields: Vec<_> = basic_auth.split(':').collect();
@@ -109,10 +126,10 @@ impl SuiEnv {
                     "Basic auth should be in the format `username:password`"
                 ));
             }
-            let mut headers = HeadersInterceptor::new();
             headers.basic_auth(fields[0], Some(fields[1]));
-            client = client.with_headers(headers);
         }
+
+        client = client.with_headers(headers);
 
         Ok(client)
     }
@@ -199,5 +216,24 @@ impl Display for SuiClientConfig {
             write!(writer, "{}", env)?;
         }
         write!(f, "{}", writer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn grpc_client_headers_include_identity_and_schema_date() {
+        let headers = client_version_headers();
+        assert_eq!(headers.headers().get("client-sdk-type").unwrap(), "sui-cli");
+        assert_eq!(
+            headers.headers().get("client-sdk-version").unwrap(),
+            env!("CARGO_PKG_VERSION")
+        );
+        assert_eq!(
+            headers.headers().get("client-rpc-schema-date").unwrap(),
+            RPC_SCHEMA_DATE
+        );
     }
 }
