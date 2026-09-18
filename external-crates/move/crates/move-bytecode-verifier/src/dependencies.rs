@@ -14,46 +14,138 @@ use move_binary_format::{
     file_format_common::VERSION_5,
     partial_vm_error_with_debug_message, safe_unwrap,
 };
-use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
-use std::collections::{BTreeMap, BTreeSet};
+use move_core_types::{
+    identifier::{IdentStr, Identifier},
+    language_storage::ModuleId,
+    vm_status::StatusCode,
+};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+};
 
-struct Context<'a, 'b> {
+/// A `CompiledModule` module along with its declaration indices for efficient cross-module
+/// verification.
+pub struct IndexedModule<'a> {
     module: &'a CompiledModule,
-    // (Module -> CompiledModule) for (at least) all immediate dependencies
-    dependency_map: BTreeMap<ModuleId, &'b CompiledModule>,
-    // (Module::DatatypeName -> handle) for all types of all dependencies
-    datatype_id_to_handle_map: BTreeMap<(ModuleId, Identifier), DatatypeHandleIndex>,
-    // (Module::FunctionName -> handle) for all functions that can ever be called by this
-    // module/script in all dependencies
-    func_id_to_handle_map: BTreeMap<(ModuleId, Identifier), FunctionHandleIndex>,
-    // (handle -> visibility) for all function handles found in the module being checked
+    datatype_name_to_handle_map: BTreeMap<Identifier, DatatypeHandleIndex>,
+    function_info_map: BTreeMap<Identifier, FunctionInfo>,
+    friend_module_ids: BTreeSet<ModuleId>,
+}
+
+#[derive(Clone, Copy)]
+struct FunctionInfo {
+    handle: FunctionHandleIndex,
+    visibility: Visibility,
+    is_entry: bool,
+}
+
+/// A collection of `IndexedModule`s for a module's immediate dependencies.
+///
+/// The index owns `Rc`s to its per-module indexes. The `Rc` permits VM linkage validation to
+/// share those indexes with its bounded module cache; the lifetime ensures they cannot outlive
+/// their borrowed compiled modules.
+pub struct DependencyIndex<'a> {
+    dependency_map: BTreeMap<ModuleId, Rc<IndexedModule<'a>>>,
+}
+
+impl<'a> IndexedModule<'a> {
+    pub fn new(module: &'a CompiledModule) -> Self {
+        let mut datatype_name_to_handle_map = BTreeMap::new();
+        let mut function_info_map = BTreeMap::new();
+
+        for struct_def in module.struct_defs() {
+            let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
+            let struct_name = module.identifier_at(struct_handle.name);
+            datatype_name_to_handle_map.insert(struct_name.to_owned(), struct_def.struct_handle);
+        }
+        for enum_def in module.enum_defs() {
+            let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
+            let enum_name = module.identifier_at(enum_handle.name);
+            datatype_name_to_handle_map.insert(enum_name.to_owned(), enum_def.enum_handle);
+        }
+        for func_def in module.function_defs() {
+            let func_handle = module.function_handle_at(func_def.function);
+            let func_name = module.identifier_at(func_handle.name);
+            function_info_map.insert(
+                func_name.to_owned(),
+                FunctionInfo {
+                    handle: func_def.function,
+                    visibility: func_def.visibility,
+                    is_entry: func_def.is_entry,
+                },
+            );
+        }
+
+        Self {
+            module,
+            datatype_name_to_handle_map,
+            function_info_map,
+            friend_module_ids: module.immediate_friends().into_iter().collect(),
+        }
+    }
+
+    /// Returns information for a function defined by this module when it is callable from
+    /// `calling_module`.
+    ///
+    /// If the function is not defined by this module or is not callable from `calling_module`, returns `None`.
+    fn callable_function_info(
+        &self,
+        calling_module: &ModuleId,
+        function_name: &IdentStr,
+    ) -> Option<FunctionInfo> {
+        self.function_info_map
+            .get(function_name)
+            .copied()
+            .filter(|called_info| match called_info.visibility {
+                Visibility::Public => true,
+                Visibility::Friend => self.friend_module_ids.contains(calling_module),
+                Visibility::Private => false,
+            })
+    }
+}
+
+impl<'a> DependencyIndex<'a> {
+    pub fn new(dependencies: impl IntoIterator<Item = &'a CompiledModule>) -> Self {
+        Self::from_indexed_modules(
+            dependencies
+                .into_iter()
+                .map(|dependency| Rc::new(IndexedModule::new(dependency))),
+        )
+    }
+
+    /// Constructs an index from reusable per-module declaration indexes.
+    pub fn from_indexed_modules(
+        dependencies: impl IntoIterator<Item = Rc<IndexedModule<'a>>>,
+    ) -> Self {
+        let dependency_map = dependencies
+            .into_iter()
+            .map(|dependency| (dependency.module.self_id(), dependency))
+            .collect();
+        Self { dependency_map }
+    }
+
+    fn get_module(&self, module_id: &ModuleId) -> Option<&IndexedModule<'a>> {
+        self.dependency_map.get(module_id).map(Rc::as_ref)
+    }
+}
+
+struct Context<'module, 'index, 'dependency> {
+    module: &'module CompiledModule,
+    dependency_index: &'index DependencyIndex<'dependency>,
+    // (handle -> visibility) for all function handles found in the module being checked.
     function_visibilities: BTreeMap<FunctionHandleIndex, Visibility>,
-    // all function handles found in the module being checked that are script functions in <V5
-    // None if the current module/script >= V5
+    // All function handles found in the module being checked that are script functions in <V5.
+    // None if the current module/script >= V5.
     script_functions: Option<BTreeSet<FunctionHandleIndex>>,
 }
 
-impl<'a, 'b> Context<'a, 'b> {
-    fn module(
-        module: &'a CompiledModule,
-        dependencies: impl IntoIterator<Item = &'b CompiledModule>,
-    ) -> Self {
-        Self::new(module, dependencies)
-    }
-
+impl<'module, 'index, 'dependency> Context<'module, 'index, 'dependency> {
     fn new(
-        module: &'a CompiledModule,
-        dependencies: impl IntoIterator<Item = &'b CompiledModule>,
+        module: &'module CompiledModule,
+        dependency_index: &'index DependencyIndex<'dependency>,
     ) -> Self {
-        let self_module = module.self_id();
         let self_module_idx = module.self_handle_idx();
-        let self_function_defs = module.function_defs();
-        let dependency_map = dependencies
-            .into_iter()
-            .filter(|d| d.self_id() != self_module)
-            .map(|d| (d.self_id(), d))
-            .collect();
-
         let script_functions = if module.version() < VERSION_5 {
             Some(BTreeSet::new())
         } else {
@@ -61,56 +153,12 @@ impl<'a, 'b> Context<'a, 'b> {
         };
         let mut context = Self {
             module,
-            dependency_map,
-            datatype_id_to_handle_map: BTreeMap::new(),
-            func_id_to_handle_map: BTreeMap::new(),
+            dependency_index,
             function_visibilities: BTreeMap::new(),
             script_functions,
         };
 
-        let mut dependency_visibilities = BTreeMap::new();
-        for (module_id, module) in &context.dependency_map {
-            let friend_module_ids: BTreeSet<_> = module.immediate_friends().into_iter().collect();
-
-            // Module::DatatypeName -> def handle idx
-            for struct_def in module.struct_defs() {
-                let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
-                let struct_name = module.identifier_at(struct_handle.name);
-                context.datatype_id_to_handle_map.insert(
-                    (module_id.clone(), struct_name.to_owned()),
-                    struct_def.struct_handle,
-                );
-            }
-            for enum_def in module.enum_defs() {
-                let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
-                let enum_name = module.identifier_at(enum_handle.name);
-                context.datatype_id_to_handle_map.insert(
-                    (module_id.clone(), enum_name.to_owned()),
-                    enum_def.enum_handle,
-                );
-            }
-            // Module::FuncName -> def handle idx
-            for func_def in module.function_defs() {
-                let func_handle = module.function_handle_at(func_def.function);
-                let func_name = module.identifier_at(func_handle.name);
-                dependency_visibilities.insert(
-                    (module_id.clone(), func_name.to_owned()),
-                    (func_def.visibility, func_def.is_entry),
-                );
-                let may_be_called = match func_def.visibility {
-                    Visibility::Public => true,
-                    Visibility::Friend => friend_module_ids.contains(&self_module),
-                    Visibility::Private => false,
-                };
-                if may_be_called {
-                    context
-                        .func_id_to_handle_map
-                        .insert((module_id.clone(), func_name.to_owned()), func_def.function);
-                }
-            }
-        }
-
-        for function_def in self_function_defs {
+        for function_def in module.function_defs() {
             context
                 .function_visibilities
                 .insert(function_def.function, function_def.visibility);
@@ -129,20 +177,18 @@ impl<'a, 'b> Context<'a, 'b> {
                 .module
                 .module_id_for_handle(context.module.module_handle_at(function_handle.module));
             let function_name = context.module.identifier_at(function_handle.name);
-            let dep_file_format_version =
-                context.dependency_map.get(&dep_module_id).unwrap().version;
-            let dep_function = (dep_module_id, function_name.to_owned());
-            let (visibility, is_entry) = match dependency_visibilities.get(&dep_function) {
-                // The visibility does not need to be set here. If the function does not
-                // link, it will be reported by verify_imported_functions
+            let dependency = context.dependency_index.get_module(&dep_module_id).unwrap();
+            let info = match dependency.function_info_map.get(function_name) {
+                // The visibility does not need to be set here. If the function does not link, it
+                // will be reported by verify_imported_functions.
                 None => continue,
-                Some(vis_entry) => *vis_entry,
+                Some(info) => *info,
             };
             let fhandle_idx = FunctionHandleIndex(idx as TableIndex);
             context
                 .function_visibilities
-                .insert(fhandle_idx, visibility);
-            if dep_file_format_version < VERSION_5 && is_entry {
+                .insert(fhandle_idx, info.visibility);
+            if dependency.module.version < VERSION_5 && info.is_entry {
                 context
                     .script_functions
                     .as_mut()
@@ -154,19 +200,23 @@ impl<'a, 'b> Context<'a, 'b> {
     }
 }
 
-pub fn verify_module<'a>(
+/// Verifies `module` against a reusable index of its resolved immediate dependencies.
+///
+/// `dependency_index` must contain all and only the concrete dependency modules selected for
+/// `module.immediate_dependencies()`.
+pub fn verify_module_with_dependency_index(
     module: &CompiledModule,
-    dependencies: impl IntoIterator<Item = &'a CompiledModule>,
+    dependency_index: &DependencyIndex<'_>,
 ) -> VMResult<()> {
-    verify_module_impl(module, dependencies)
+    verify_module_with_dependency_index_impl(module, dependency_index)
         .map_err(|e| e.finish(Location::Module(module.self_id())))
 }
 
-fn verify_module_impl<'a>(
+fn verify_module_with_dependency_index_impl(
     module: &CompiledModule,
-    dependencies: impl IntoIterator<Item = &'a CompiledModule>,
+    dependency_index: &DependencyIndex<'_>,
 ) -> PartialVMResult<()> {
-    let context = &Context::module(module, dependencies);
+    let context = &Context::new(module, dependency_index);
 
     verify_imported_modules(context)?;
     verify_imported_structs(context)?;
@@ -179,7 +229,7 @@ fn verify_imported_modules(context: &Context) -> PartialVMResult<()> {
     for (idx, module_handle) in context.module.module_handles().iter().enumerate() {
         let module_id = context.module.module_id_for_handle(module_handle);
         if ModuleHandleIndex(idx as u16) != self_module
-            && !context.dependency_map.contains_key(&module_id)
+            && context.dependency_index.get_module(&module_id).is_none()
         {
             return Err(verification_error(
                 StatusCode::MISSING_DEPENDENCY,
@@ -200,15 +250,11 @@ fn verify_imported_structs(context: &Context) -> PartialVMResult<()> {
         let owner_module_id = context
             .module
             .module_id_for_handle(context.module.module_handle_at(struct_handle.module));
-        // TODO: remove unwrap
-        let owner_module = safe_unwrap!(context.dependency_map.get(&owner_module_id));
+        let owner_module = safe_unwrap!(context.dependency_index.get_module(&owner_module_id));
         let struct_name = context.module.identifier_at(struct_handle.name);
-        match context
-            .datatype_id_to_handle_map
-            .get(&(owner_module_id, struct_name.to_owned()))
-        {
+        match owner_module.datatype_name_to_handle_map.get(struct_name) {
             Some(def_idx) => {
-                let def_handle = owner_module.datatype_handle_at(*def_idx);
+                let def_handle = owner_module.module.datatype_handle_at(*def_idx);
                 if !compatible_struct_abilities(struct_handle.abilities, def_handle.abilities)
                     || !compatible_struct_type_parameters(
                         &struct_handle.type_parameters,
@@ -244,13 +290,10 @@ fn verify_imported_functions(context: &Context) -> PartialVMResult<()> {
             .module
             .module_id_for_handle(context.module.module_handle_at(function_handle.module));
         let function_name = context.module.identifier_at(function_handle.name);
-        let owner_module = safe_unwrap!(context.dependency_map.get(&owner_module_id));
-        match context
-            .func_id_to_handle_map
-            .get(&(owner_module_id.clone(), function_name.to_owned()))
-        {
-            Some(def_idx) => {
-                let def_handle = owner_module.function_handle_at(*def_idx);
+        let owner_module = safe_unwrap!(context.dependency_index.get_module(&owner_module_id));
+        match owner_module.callable_function_info(&context.module.self_id(), function_name) {
+            Some(info) => {
+                let def_handle = owner_module.module.function_handle_at(info.handle);
                 // compatible type parameter constraints
                 if !compatible_fun_type_parameters(
                     &function_handle.type_parameters,
@@ -264,43 +307,25 @@ fn verify_imported_functions(context: &Context) -> PartialVMResult<()> {
                 }
                 // same parameters
                 let handle_params = context.module.signature_at(function_handle.parameters);
-                let def_params = match context.dependency_map.get(&owner_module_id) {
-                    Some(module) => module.signature_at(def_handle.parameters),
-                    None => {
-                        return Err(verification_error(
-                            StatusCode::LOOKUP_FAILED,
-                            IndexKind::FunctionHandle,
-                            idx as TableIndex,
-                        ));
-                    }
-                };
+                let def_params = owner_module.module.signature_at(def_handle.parameters);
 
                 compare_cross_module_signatures(
                     context,
                     &handle_params.0,
                     &def_params.0,
-                    owner_module,
+                    owner_module.module,
                 )
                 .map_err(|e| e.at_index(IndexKind::FunctionHandle, idx as TableIndex))?;
 
                 // same return_
                 let handle_return = context.module.signature_at(function_handle.return_);
-                let def_return = match context.dependency_map.get(&owner_module_id) {
-                    Some(module) => module.signature_at(def_handle.return_),
-                    None => {
-                        return Err(verification_error(
-                            StatusCode::LOOKUP_FAILED,
-                            IndexKind::FunctionHandle,
-                            idx as TableIndex,
-                        ));
-                    }
-                };
+                let def_return = owner_module.module.signature_at(def_handle.return_);
 
                 compare_cross_module_signatures(
                     context,
                     &handle_return.0,
                     &def_return.0,
-                    owner_module,
+                    owner_module.module,
                 )
                 .map_err(|e| e.at_index(IndexKind::FunctionHandle, idx as TableIndex))?;
             }
