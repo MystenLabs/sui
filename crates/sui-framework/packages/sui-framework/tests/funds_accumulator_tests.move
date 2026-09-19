@@ -5,7 +5,9 @@
 module sui::funds_accumulator_tests;
 
 use std::unit_test::assert_eq;
+use sui::balance;
 use sui::funds_accumulator::create_withdrawal;
+use sui::test_scenario;
 
 public struct TestToken has store {}
 
@@ -126,4 +128,54 @@ fun test_withdrawal_split_join(owner: address, l1: u128, l2: u128, l3: u128) {
 
 public struct TestObject has key {
     id: UID,
+}
+
+fun withdraw(obj: &mut TestObject, value: u64): u64 {
+    balance::redeem_funds(
+        balance::withdraw_funds_from_object<TestToken>(&mut obj.id, value),
+    ).destroy_for_testing()
+}
+
+#[test]
+fun test_object_funds_withdraw() {
+    let mut scenario = test_scenario::begin(@0x0);
+    let mut obj = TestObject { id: scenario.new_object() };
+    balance::create_for_testing<TestToken>(1000).send_funds(obj.id.to_address());
+
+    scenario.next_tx(@0x0);
+    assert_eq!(withdraw(&mut obj, 400), 400);
+
+    scenario.next_tx(@0x0);
+    assert_eq!(withdraw(&mut obj, 600), 600);
+
+    let TestObject { id } = obj;
+    id.delete();
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 5, location = sui::funds_accumulator)]
+fun test_object_funds_withdraw_insufficient() {
+    let mut scenario = test_scenario::begin(@0x0);
+    let mut obj = TestObject { id: scenario.new_object() };
+    balance::create_for_testing<TestToken>(1000).send_funds(obj.id.to_address());
+
+    scenario.next_tx(@0x0);
+    withdraw(&mut obj, 1001);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = 5, location = sui::funds_accumulator)]
+fun test_object_funds_withdraw_after_earlier_withdraw() {
+    let mut scenario = test_scenario::begin(@0x0);
+    let mut obj = TestObject { id: scenario.new_object() };
+    balance::create_for_testing<TestToken>(1000).send_funds(obj.id.to_address());
+
+    scenario.next_tx(@0x0);
+    withdraw(&mut obj, 400);
+
+    scenario.next_tx(@0x0);
+    withdraw(&mut obj, 601);
+    abort
 }
