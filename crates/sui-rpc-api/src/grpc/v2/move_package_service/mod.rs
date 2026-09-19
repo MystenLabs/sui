@@ -8,7 +8,7 @@ use sui_rpc::proto::sui::rpc::v2::{
     GetDatatypeRequest, GetDatatypeResponse, GetFunctionRequest, GetFunctionResponse,
     GetPackageRequest, GetPackageResponse, ListPackageVersionsRequest, ListPackageVersionsResponse,
 };
-use sui_types::{base_types::ObjectID, move_package::MovePackage};
+use sui_types::{base_types::ObjectID, move_package::MovePackage, object::Object};
 
 pub mod conversions;
 mod get_datatype;
@@ -60,22 +60,39 @@ impl MovePackageService for RpcService {
     }
 }
 
+/// Parse and validate the package ID, then fetch the package.
 pub(crate) fn load_package(service: &RpcService, package_id_str: &str) -> Result<MovePackage> {
-    let package_id = package_id_str.parse::<ObjectID>().map_err(|e| {
-        FieldViolation::new("package_id")
-            .with_description(format!("invalid package_id: {}", e))
-            .with_reason(ErrorReason::FieldInvalid)
-    })?;
+    load_package_by_id(service, parse_package_id(package_id_str)?)
+}
 
+/// Parse and validate a package ID string.
+fn parse_package_id(package_id_str: &str) -> Result<ObjectID> {
+    package_id_str.parse::<ObjectID>().map_err(|e| {
+        FieldViolation::new("package_id")
+            .with_description(format!("invalid package_id: {e}"))
+            .with_reason(ErrorReason::FieldInvalid)
+            .into()
+    })
+}
+
+/// Fetch an object by ID and convert it into a package.
+pub(crate) fn load_package_by_id(
+    service: &RpcService,
+    package_id: ObjectID,
+) -> Result<MovePackage> {
     let object = service
         .reader
         .inner()
         .get_object(&package_id)
         .ok_or_else(RpcError::not_found)?;
+    object_as_package(object)
+}
 
-    let inner = object.into_inner();
-    inner
+fn object_as_package(object: Object) -> Result<MovePackage> {
+    object
+        .into_inner()
         .data
         .try_into_package()
         .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "object is not a package"))
 }
+
