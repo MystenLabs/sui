@@ -49,10 +49,7 @@ fn print_error_and_exit(verification_error: &VMError) -> ! {
 
 fn do_verify_module(module: &CompiledModule, dependencies: &[CompiledModule]) {
     verify_module_unmetered(module).unwrap_or_else(|err| print_error_and_exit(&err));
-    if let Err(err) = dependencies::verify_module_with_dependency_index(
-        module,
-        &DependencyIndex::new(dependencies),
-    ) {
+    if let Err(err) = dependencies::verify_module(&DependencyIndex::new(dependencies), module) {
         print_error_and_exit(&err);
     }
 }
