@@ -1,0 +1,149 @@
+/-
+Copyright (c) Mysten Labs, Inc.
+SPDX-License-Identifier: Apache-2.0
+-/
+
+import Lean.Elab.Tactic.Omega
+
+namespace Mysticeti
+
+/-! The network and round-change assumptions used by the liveness proof. -/
+
+abbrev Time := Nat
+
+/-- One authenticated protocol message between correct processes. -/
+structure Packet where
+  sentAt : Time
+  deliveredAt : Time
+  deriving DecidableEq, Repr
+
+/-- Standard partial synchrony: GST is unknown, and post-GST delay is at most
+`delta`. This is the environmental assumption `ASM-LIVE-PARTIAL-SYNCHRONY`. -/
+structure PartialSynchrony (protocolPacket : Packet → Prop) where
+  gst : Time
+  delta : Nat
+  deltaPositive : 0 < delta
+  postGstDelivery : ∀ packet,
+    protocolPacket packet →
+    gst ≤ packet.sentAt →
+    packet.sentAt ≤ packet.deliveredAt ∧
+      packet.deliveredAt ≤ packet.sentAt + delta
+
+/-- One local consensus action at a correct validator. The action becomes enabled
+when its required input is available. A covered action stays enabled until it
+completes. Its result then becomes visible to later local consensus actions. -/
+structure LocalConsensusAction where
+  enabledAt : Time
+  completedAt : Time
+  deriving DecidableEq, Repr
+
+/-- Bounded post-GST local processing for actions that stay enabled. `epsilon` is
+a finite local-work bound. It can be zero in the ideal model. A theorem that needs
+local work to be faster than message delivery must take that extra inequality.
+
+This is the environmental assumption `ASM-LIVE-LOCAL-RESPONSE`. -/
+structure BoundedLocalProcessing
+    {protocolPacket : Packet → Prop}
+  (network : PartialSynchrony protocolPacket)
+  (protocolAction : LocalConsensusAction → Prop) where
+  epsilon : Nat
+  postGstCompletion : ∀ action,
+    protocolAction action →
+    network.gst ≤ action.enabledAt →
+    action.enabledAt ≤ action.completedAt ∧
+      action.completedAt ≤ action.enabledAt + epsilon
+
+namespace BoundedLocalProcessing
+
+/-- A post-GST message becomes visible to later local consensus actions within the
+combined delivery and processing bound. -/
+theorem protocol_packet_becomes_locally_visible
+    {protocolPacket : Packet → Prop}
+    {network : PartialSynchrony protocolPacket}
+    {protocolAction : LocalConsensusAction → Prop}
+    (processing : BoundedLocalProcessing network protocolAction)
+    (packet : Packet) (validPacket : protocolPacket packet)
+    (action : LocalConsensusAction) (validAction : protocolAction action)
+    (actionStartsAtDelivery : action.enabledAt = packet.deliveredAt)
+    (afterGst : network.gst ≤ packet.sentAt) :
+    action.completedAt ≤
+      packet.sentAt + network.delta + processing.epsilon := by
+  rcases network.postGstDelivery packet validPacket afterGst with
+    ⟨sentBeforeDelivery, deliveryBound⟩
+  have actionAfterGst : network.gst ≤ action.enabledAt := by
+    rw [actionStartsAtDelivery]
+    exact Nat.le_trans afterGst sentBeforeDelivery
+  rcases processing.postGstCompletion action validAction actionAfterGst with
+    ⟨_, completionBound⟩
+  rw [actionStartsAtDelivery] at completionBound
+  have deliveryWithProcessing :
+      packet.deliveredAt + processing.epsilon ≤
+        packet.sentAt + network.delta + processing.epsilon :=
+    Nat.add_le_add_right deliveryBound processing.epsilon
+  exact Nat.le_trans completionBound deliveryWithProcessing
+
+/-- When local processing is faster than the network-delay bound, a post-GST
+message becomes visible before two network-delay bounds have passed. -/
+theorem protocol_packet_becomes_locally_visible_before_two_delays
+    {protocolPacket : Packet → Prop}
+    {network : PartialSynchrony protocolPacket}
+    {protocolAction : LocalConsensusAction → Prop}
+    (processing : BoundedLocalProcessing network protocolAction)
+    (packet : Packet) (validPacket : protocolPacket packet)
+    (action : LocalConsensusAction) (validAction : protocolAction action)
+    (actionStartsAtDelivery : action.enabledAt = packet.deliveredAt)
+    (localFaster : processing.epsilon < network.delta)
+    (afterGst : network.gst ≤ packet.sentAt) :
+    action.completedAt <
+      packet.sentAt + network.delta + network.delta := by
+  have visible := protocol_packet_becomes_locally_visible processing packet
+    validPacket action validAction actionStartsAtDelivery afterGst
+  have combinedBound :
+      packet.sentAt + network.delta + processing.epsilon <
+        packet.sentAt + network.delta + network.delta :=
+    Nat.add_lt_add_left localFaster
+      (packet.sentAt + network.delta)
+  exact Nat.lt_of_le_of_lt visible combinedBound
+
+end BoundedLocalProcessing
+
+/-- The local data relevant to a catch-up operation. -/
+structure RoundState where
+  currentRound : Nat
+  proposed : Nat → Bool
+  decided : Nat → Bool
+
+/-- The required part of the modified Mysticeti catch-up rule. The Rust refinement
+obligation is `ASM-LIVE-ROUND-CATCHUP`. -/
+def SafeIntermediateProposals
+    (before after : RoundState) (observedRound : Nat) : Prop :=
+  ∀ intermediate,
+    before.currentRound < intermediate →
+    intermediate < observedRound →
+    3 ≤ intermediate →
+    before.decided (intermediate - 2) = false →
+    after.proposed intermediate = true
+
+/-- Catch up directly to one observed round and propose only in that round. -/
+def jumpWithoutIntermediate (before : RoundState) (observedRound : Nat) : RoundState :=
+  { currentRound := observedRound
+    proposed := fun round =>
+      if round = observedRound then true else before.proposed round
+    decided := before.decided }
+
+/-- A direct jump does not establish the safe catch-up rule when one required round is missing. -/
+theorem direct_jump_can_violate_safe_catchup
+    (before : RoundState) (observedRound : Nat)
+    (gap : before.currentRound + 1 < observedRound)
+    (roundInRule : 3 ≤ before.currentRound + 1)
+    (undecided : before.decided (before.currentRound + 1 - 2) = false)
+    (notProposed : before.proposed (before.currentRound + 1) = false) :
+    ¬SafeIntermediateProposals before
+      (jumpWithoutIntermediate before observedRound) observedRound := by
+  intro safe
+  have required := safe (before.currentRound + 1)
+    (by omega) gap roundInRule undecided
+  have differentRound : before.currentRound + 1 ≠ observedRound := by omega
+  simp [jumpWithoutIntermediate, differentRound, notProposed] at required
+
+end Mysticeti
