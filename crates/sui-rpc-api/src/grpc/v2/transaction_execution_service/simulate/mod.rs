@@ -585,6 +585,37 @@ fn select_allowed_proposers(
         .filter(|allowed| allowed.epoch == current_epoch)
 }
 
+fn gas_coin_limit(
+    transaction: &sui_types::transaction::TransactionData,
+    protocol_config: &ProtocolConfig,
+    reserve_address_balance: bool,
+) -> Result<usize> {
+    let gas_payment_limit = protocol_config
+        .max_gas_payment_objects()
+        .saturating_sub(u32::from(
+            !protocol_config.correct_gas_payment_limit_check(),
+        )) as usize;
+    if reserve_address_balance && gas_payment_limit == 0 {
+        return Err(RpcError::new(
+            tonic::Code::InvalidArgument,
+            "Unable to perform gas selection: no gas-payment slots available.",
+        ));
+    }
+    let input_count = transaction
+        .kind()
+        .input_objects()
+        .map_err(anyhow::Error::from)?
+        .len()
+        .saturating_add(transaction.receiving_objects().len());
+
+    // Conservatively share the input-object capacity with non-gas inputs. The PTB
+    // validity check applies this limit to the kind alone, without gas payment.
+    // Reservations occupy a gas-payment slot, but do not load a real input object.
+    Ok(gas_payment_limit
+        .saturating_sub(usize::from(reserve_address_balance))
+        .min((protocol_config.max_input_objects() as usize).saturating_sub(input_count)))
+}
+
 fn select_gas(
     service: &RpcService,
     transaction: &mut sui_types::transaction::TransactionData,
@@ -652,6 +683,14 @@ fn select_gas(
 
         budget
     } else {
+        let reserved_address_balance = address_balance.filter(|balance| {
+            protocol_config.enable_coin_reservation_obj_refs() && gas_coin_used && *balance > 0
+        });
+        let coin_limit = gas_coin_limit(
+            transaction,
+            protocol_config,
+            reserved_address_balance.is_some(),
+        )?;
         let input_objects = transaction
             .input_objects()
             .map_err(anyhow::Error::from)?
@@ -662,6 +701,7 @@ fn select_gas(
                 }
                 _ => None,
             })
+            .chain(transaction.receiving_objects().iter().map(|(id, _, _)| *id))
             .collect_vec();
 
         let gas_coins = reader
@@ -679,7 +719,7 @@ fn select_gas(
                     .ok()
                     .map(|coin| (object.compute_object_reference(), coin.value()))
             })
-            .take(protocol_config.max_gas_payment_objects() as usize);
+            .take(coin_limit);
 
         let mut selected_gas = vec![];
         let mut selected_gas_value = 0;
@@ -693,11 +733,7 @@ fn select_gas(
 
         // When GasCoin is used and there's address balance, prepend a coin reservation
         // to make all SUI in the account available (coins + address balance)
-        if protocol_config.enable_coin_reservation_obj_refs()
-            && gas_coin_used
-            && let Some(ab_value) = address_balance
-            && ab_value > 0
-        {
+        if let Some(ab_value) = reserved_address_balance {
             let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
 
             let accumulator_obj_id =
@@ -856,8 +892,115 @@ fn is_gasless_post_execution_failure(status: &ExecutionStatus) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sui_types::base_types::ObjectID;
+    use sui_protocol_config::ProtocolVersion;
+    use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+    use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
+    use sui_types::digests::{ChainIdentifier, ObjectDigest};
     use sui_types::error::UserInputError;
+    use sui_types::gas_coin::GAS;
+    use sui_types::transaction::{
+        CallArg, Command, FundsWithdrawalArg, ObjectArg, ProgrammableMoveCall,
+        ProgrammableTransaction, TransactionData,
+    };
+
+    fn gas_selection_config(max_gas: u32, max_inputs: u64, corrected: bool) -> ProtocolConfig {
+        let mut config = ProtocolConfig::get_for_version(
+            ProtocolVersion::MAX,
+            sui_protocol_config::Chain::Unknown,
+        );
+        config.set_max_gas_payment_objects_for_testing(max_gas);
+        config.set_max_input_objects_for_testing(max_inputs);
+        config.set_correct_gas_payment_limit_check_for_testing(corrected);
+        config
+    }
+
+    fn transaction_with_inputs(inputs: Vec<CallArg>, commands: Vec<Command>) -> TransactionData {
+        TransactionData::new_programmable(
+            SuiAddress::ZERO,
+            vec![],
+            ProgrammableTransaction { inputs, commands },
+            1_000_000,
+            1_000,
+        )
+    }
+
+    #[tokio::test]
+    async fn gas_coin_limit_counts_real_inputs_and_deduplicated_packages() {
+        let object_ref = (
+            ObjectID::from_single_byte(10),
+            SequenceNumber::new(),
+            ObjectDigest::MIN,
+        );
+        let receiving = (
+            ObjectID::from_single_byte(11),
+            SequenceNumber::new(),
+            ObjectDigest::MIN,
+        );
+        let reservation = ParsedObjectRefWithdrawal::new(ObjectID::from_single_byte(12), 0, 1)
+            .encode(SequenceNumber::new(), ChainIdentifier::default());
+        let inputs = vec![
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
+            CallArg::CLOCK_IMM,
+            CallArg::Object(ObjectArg::Receiving(receiving)),
+            CallArg::Pure(vec![0; 32]),
+            CallArg::FundsWithdrawal(FundsWithdrawalArg::balance_from_sender(1, GAS::type_tag())),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(reservation)),
+        ];
+        let call = Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package: ObjectID::from_single_byte(20),
+            module: "m".to_owned(),
+            function: "f".to_owned(),
+            type_arguments: vec![GAS::type_tag().into()],
+            arguments: vec![],
+        }));
+        let commands = vec![
+            call.clone(),
+            call,
+            Command::Publish(vec![], vec![ObjectID::from_single_byte(21)]),
+            Command::Upgrade(
+                vec![],
+                vec![ObjectID::from_single_byte(21)],
+                ObjectID::from_single_byte(22),
+                sui_types::transaction::Argument::Input(0),
+            ),
+        ];
+        let transaction = transaction_with_inputs(inputs, commands);
+        // Owned + clock + receiving + called/type-argument packages + publish/upgrade packages.
+        let config = gas_selection_config(10, 10, true);
+        assert_eq!(gas_coin_limit(&transaction, &config, false).unwrap(), 3);
+        assert_eq!(gas_coin_limit(&transaction, &config, true).unwrap(), 3);
+        for max_inputs in [0, 6, 7] {
+            let config = gas_selection_config(10, max_inputs, true);
+            assert_eq!(gas_coin_limit(&transaction, &config, false).unwrap(), 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn gas_coin_limit_respects_current_and_legacy_payment_limits() {
+        let transaction = transaction_with_inputs(vec![CallArg::Pure(vec![0; 32]); 20], vec![]);
+        for (corrected, coins, reserved_coins) in [(true, 4, 3), (false, 3, 2)] {
+            let config = gas_selection_config(4, 10, corrected);
+            assert_eq!(gas_coin_limit(&transaction, &config, false).unwrap(), coins);
+            assert_eq!(
+                gas_coin_limit(&transaction, &config, true).unwrap(),
+                reserved_coins
+            );
+        }
+        for (max_gas, corrected) in [(0, true), (0, false), (1, false)] {
+            let config = gas_selection_config(max_gas, 10, corrected);
+            assert_eq!(gas_coin_limit(&transaction, &config, false).unwrap(), 0);
+            assert!(gas_coin_limit(&transaction, &config, true).is_err());
+        }
+        // A reservation can occupy the only payment slot without loading an object.
+        let config = gas_selection_config(1, 0, true);
+        assert_eq!(gas_coin_limit(&transaction, &config, true).unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn gas_coin_limit_rejects_duplicate_object_inputs() {
+        let transaction = transaction_with_inputs(vec![CallArg::CLOCK_IMM; 2], vec![]);
+        assert!(gas_coin_limit(&transaction, &gas_selection_config(4, 10, true), false).is_err());
+    }
 
     #[test]
     fn maps_simulation_user_input_errors_to_invalid_argument() {
