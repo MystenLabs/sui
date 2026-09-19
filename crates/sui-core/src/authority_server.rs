@@ -904,25 +904,6 @@ impl ValidatorService {
                 continue;
             }
 
-            if is_gasless
-                && !self
-                    .gasless_limiter
-                    .try_acquire(epoch_store.protocol_config())
-            {
-                metrics.gasless_rate_limited_count.inc();
-                metrics
-                    .gasless_submission_outcomes
-                    .with_label_values(&["rejected_rate_limited"])
-                    .inc();
-                results[idx] = Some(SubmitTxResult::Rejected {
-                    error: SuiErrorKind::ValidatorOverloadedRetryAfter {
-                        retry_after_secs: 1,
-                    }
-                    .into(),
-                });
-                continue;
-            }
-
             // Ok to fail the request when any signature is invalid.
             let verified_transaction = {
                 let _metrics_guard = metrics.tx_verification_latency.start_timer();
@@ -1241,6 +1222,27 @@ impl ValidatorService {
             }
 
             let tx_with_claims = TransactionWithClaims::new(tx.into(), claims);
+
+            // Only transactions that are actually admitted to consensus count toward the
+            // gasless quota.
+            if is_gasless
+                && !self
+                    .gasless_limiter
+                    .try_acquire(epoch_store.protocol_config())
+            {
+                metrics.gasless_rate_limited_count.inc();
+                metrics
+                    .gasless_submission_outcomes
+                    .with_label_values(&["rejected_rate_limited"])
+                    .inc();
+                results[idx] = Some(SubmitTxResult::Rejected {
+                    error: SuiErrorKind::ValidatorOverloadedRetryAfter {
+                        retry_after_secs: 1,
+                    }
+                    .into(),
+                });
+                continue;
+            }
 
             consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
                 &state.name,
