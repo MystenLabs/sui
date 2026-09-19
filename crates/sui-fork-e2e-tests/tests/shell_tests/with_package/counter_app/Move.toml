@@ -1,0 +1,6 @@
+[package]
+name = "counter_app"
+edition = "2024"
+
+[dependencies]
+counter = { local = "../counter" }
