@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DataSourceConfig","DownloadFeedConfigs","OracleNodeConfig","UploadFeedConfig","UploadParameters"]};

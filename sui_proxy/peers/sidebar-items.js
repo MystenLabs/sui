@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AllowedPeer","SuiNodeProvider"],"type":["AllowedPeers"]};

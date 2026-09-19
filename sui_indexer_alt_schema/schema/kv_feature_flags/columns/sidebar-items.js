@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["flag_name","flag_value","protocol_version","star"]};
