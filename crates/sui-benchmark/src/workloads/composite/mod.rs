@@ -622,7 +622,6 @@ impl CompositePayload {
             if filter_authenticated_events {
                 ops.retain(|op| op.name() != AuthenticatedEventEmit::NAME);
             }
-            // Spends need the init-issued allowances, which are skipped when the feature is off.
             if self.allowances.is_none() {
                 ops.retain(|op| {
                     op.name() != AllowanceWithdraw::NAME && op.name() != AllowanceSelfWithdraw::NAME
@@ -1414,7 +1413,7 @@ pub struct CompositeWorkload {
     metrics: Arc<Mutex<CompositionMetrics>>,
     chain_identifier: Option<sui_types::digests::ChainIdentifier>,
     alias_infos: Vec<Option<AliasInitInfo>>,
-    /// Indexed by the spending payload; empty when allowances are off.
+    /// Indexed by the spending payload.
     allowances: Vec<PayloadAllowances>,
 }
 

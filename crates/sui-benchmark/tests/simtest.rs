@@ -2231,7 +2231,6 @@ mod test {
         }
 
         if allowances_enabled {
-            // Sums a counter over every op set that includes `name`.
             let sum_containing = |name: &str, counter: fn(&OperationSetStats) -> u64| -> u64 {
                 metrics
                     .iter_stats()
@@ -2240,7 +2239,6 @@ mod test {
                     .sum()
             };
 
-            // Cross-sender spends (ring) and self-spends are tracked separately.
             for name in [AllowanceWithdraw::NAME, AllowanceSelfWithdraw::NAME] {
                 let success_count = sum_containing(name, |s| s.success_count);
                 // The failure mix is seed-dependent: logged, not asserted.
