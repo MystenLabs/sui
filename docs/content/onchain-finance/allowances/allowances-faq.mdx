@@ -1,0 +1,107 @@
+---
+title: Allowances FAQ
+sidebar_label: FAQ
+description: >-
+  Answers to common questions about Sui allowances, including how rate-limit
+  windows and UTC timestamps behave, what happens on revocation, who pays gas,
+  and what the sign-time checks cover.
+keywords:
+  - allowances
+  - FAQ
+  - rate limit
+  - calendar month
+  - UTC
+  - revocation
+  - expiration
+  - gas
+  - address balances
+goal:
+  description: >-
+    Reader can resolve common questions about allowance windows, timestamps,
+    revocation, gas, and limits without reading the module source
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - question_headings: 8
+      label: Uses question headings
+    - pattern: '\]\(/[^)]+\)'
+      min: 2
+      label: Links to related documentation
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - Are allowance timestamps in UTC?
+  - How do monthly allowance rate limits handle short months?
+  - Can a spender exceed an allowance rate limit across a window boundary?
+  - What happens to in-flight spends when I revoke an allowance?
+  - Who pays gas for an allowance spend?
+  - Can I change the limits of an existing allowance?
+answer: >-
+  Allowance timestamps are Unix milliseconds, so they are UTC by definition.
+  Rate-limit windows are fixed and start at the first spend. A calendar
+  window renews on the anchor's day of month at midnight UTC, clamped to the
+  last day of shorter months. Revocation deletes the allowance, so later
+  spends are rejected before execution, and the spender pays gas for their
+  own spending transactions.
+---
+
+Common questions about [allowances](/onchain-finance/allowances/allowances-overview) on Sui. For the API and code samples, see [Using Allowances](/onchain-finance/allowances/using-allowances).
+
+## Are allowance timestamps in UTC?
+
+Yes. Start and expiration times are Unix timestamps in milliseconds, the same format as the onchain `Clock`. Calendar rate limits use UTC dates, so a monthly window renews at 00:00 UTC on its renewal day, not at local midnight.
+
+## When does a rate-limit window start?
+
+At the first successful spend. Issuing an allowance does not start a window. The first spend anchors the schedule, and every later window is counted from that anchor. A monthly limit first used on March 10 at 15:00 UTC renews on April 10 at 00:00 UTC, then May 10 at 00:00 UTC, and so on. A periodic limit counts exact milliseconds from the first spend instead, so a 30-day limit first used on March 10 at 15:00 UTC renews on April 9 at 15:00 UTC.
+
+## How do monthly limits handle short months?
+
+A calendar window renews on the anchor's day of the month at 00:00 UTC. When a month has fewer days than the anchor day, the renewal moves to the last day of that month, and later months go back to the anchor day. A monthly limit first used on January 31 renews on February 28 (or February 29 in a leap year), then on March 31, then on April 30. Quarterly and yearly limits apply the same rule every 3 or 12 months.
+
+## Are windows sliding or fixed?
+
+Fixed. The spent amount resets when a spend lands in a later window. As with any fixed window, a spender can use the full limit at the end of one window and again at the start of the next. Size the limit with that in mind.
+
+## Does unused allowance carry over?
+
+No. Each window starts with the full limit and anything unused at the end of the window is not added to the next one. The lifetime cap is separate and always counts total spend across all windows.
+
+## What happens to a spend that is in flight when I revoke?
+
+Revocation deletes the allowance. Any spend that reaches the network after that is rejected, and a spend that was already in flight fails when it executes. Either way, no funds move after the revoke takes effect.
+
+## What is the difference between expiration and revocation?
+
+An expired allowance still exists. A spend against it fails during execution, so the spender pays gas, and the object stays onchain until the funder revokes it. Revocation deletes the object, so later spends are rejected up front and the funder gets the storage rebate back. Set an expiration as a safety net, and revoke when you want the allowance gone.
+
+## Who pays gas for a spend?
+
+The spender. A spending transaction is a normal transaction sent and signed by the spender, and gas comes from the spender's gas coin or SUI address balance. The funder's balance is only debited by the amount spent. A [sponsor](/develop/transaction-payment/sponsor-txn) can pay the gas, as for any other transaction.
+
+## Can the spender take more than the declared amount?
+
+No. The spending transaction declares an amount up front, and that is the most it can take. The `sui::allowance` module checks every limit against the live allowance during execution, so a client cannot build a transaction that gets around them.
+
+## What if the funder's balance is lower than the declared amount?
+
+The spend fails and nothing is charged, neither the funder's balance nor the allowance's counters. An allowance never guarantees that funds are available, only that the spender might take them if they are.
+
+## Can I change the limits of an existing allowance?
+
+No. There is no update function. Revoke the allowance and issue a new one with the new terms. The new allowance has a new object ID and a fresh spend counter, so share the new ID with the spender.
+
+## Can the spender be changed?
+
+Only for app-bound allowances, and only by the app. The module that defines the app type can call `rotate_spender` with a `SettingsPermit`. Direct allowances have a fixed spender. To hand a direct allowance to a different address, revoke and reissue.
+
+## Can I issue an allowance to a contract instead of an address?
+
+Use an app-bound allowance. Your module decides whether each pull is allowed, and it can rotate the spender key at any time. The spender itself must still be an account address, not an object, because it has to sign and send every spending transaction.
