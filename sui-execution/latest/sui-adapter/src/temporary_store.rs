@@ -3,6 +3,7 @@
 
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::GasCharger;
+use crate::gas_payment::PaymentKind;
 use move_vm_runtime::runtime::MoveRuntime;
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
@@ -17,7 +18,6 @@ use sui_types::accumulator_root::{
     UnsettledObjectFundsRead,
 };
 use sui_types::base_types::{SystemObjectVersions, VersionDigest};
-use sui_types::coin_reservation::ParsedDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
 use sui_types::effects::{
@@ -33,7 +33,7 @@ use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
 use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsResolver, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
-use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
+use sui_types::transaction::{Command, GasData, TransactionKind};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
@@ -73,13 +73,16 @@ struct PostExecutionCheckInputs {
 }
 
 impl PostExecutionCheckInputs {
-    fn new(transaction: (&TransactionKind, &GasData, SuiAddress), enable_gasless: bool) -> Self {
+    fn new(
+        transaction: (&TransactionKind, &GasData, SuiAddress),
+        payment_kind: &PaymentKind,
+    ) -> Self {
         let (transaction_kind, gas_data, transaction_signer) = transaction;
         let (input_reservations, allowance_ids) = compute_input_reservations(
             transaction_kind,
             gas_data,
             transaction_signer,
-            enable_gasless,
+            payment_kind,
         );
         Self {
             input_reservations,
@@ -162,10 +165,10 @@ impl<'backing> TemporaryStore<'backing> {
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
         transaction: (&TransactionKind, &GasData, SuiAddress),
+        payment_kind: &PaymentKind,
         unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
-        let post_execution_check_inputs =
-            PostExecutionCheckInputs::new(transaction, protocol_config.enable_gasless());
+        let post_execution_check_inputs = PostExecutionCheckInputs::new(transaction, payment_kind);
         Self::new_with_input_objects(
             store,
             input_objects,
@@ -1233,19 +1236,19 @@ impl ObjectFundsResolver for TemporaryStore<'_> {
 /// types are added. Budget sources:
 /// - PTB `FundsWithdrawalArg`s for any supported accumulator type (sender, sponsor, or
 ///   allowance funder as owner).
-/// - Gas paid entirely from address balance (credits `(gas_owner, Balance<SUI>)`).
-/// - Gas-data entries with coin-reservation digests (also credit `(gas_owner, Balance<SUI>)`).
+/// - Address-balance gas sources: the whole budget when gas is paid entirely from address
+///   balance, and each coin-reservation entry of the gas payment (both credit
+///   `(gas_owner, Balance<SUI>)`). Gasless transactions charge no gas, so they grant none.
 fn compute_input_reservations(
     transaction_kind: &TransactionKind,
     gas_data: &GasData,
     transaction_signer: SuiAddress,
-    enable_gasless: bool,
+    payment_kind: &PaymentKind,
 ) -> (BTreeMap<(SuiAddress, TypeTag), u64>, AllowanceIds) {
     use sui_types::balance::Balance;
     use sui_types::gas_coin::GAS;
-    use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
+    use sui_types::transaction::{Reservation, WithdrawFrom};
 
-    let is_gasless = enable_gasless && is_gasless_transaction(gas_data, transaction_kind);
     let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
     let mut allowance_ids = AllowanceIds::new();
     let sui_balance_type = Balance::type_tag(GAS::type_tag());
@@ -1270,22 +1273,11 @@ fn compute_input_reservations(
         *entry = entry.saturating_add(reservation);
     }
 
-    // Gasless transactions charge no gas, so gas sources grant no reservation (their budget is
-    // validated to be 0 anyway; skipping keeps the map free of a phantom zero entry).
-    if !is_gasless && is_gas_paid_from_address_balance(gas_data, transaction_kind) {
+    for (owner, reservation) in payment_kind.address_balance_reservations() {
         let entry = reservations
-            .entry((gas_data.owner, sui_balance_type.clone()))
+            .entry((owner, sui_balance_type.clone()))
             .or_insert(0);
-        *entry = entry.saturating_add(gas_data.budget);
-    }
-
-    for entry in &gas_data.payment {
-        if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
-            let entry = reservations
-                .entry((gas_data.owner, sui_balance_type.clone()))
-                .or_insert(0);
-            *entry = entry.saturating_add(parsed.reservation_amount());
-        }
+        *entry = entry.saturating_add(reservation);
     }
 
     (reservations, allowance_ids)
