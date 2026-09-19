@@ -1,0 +1,11 @@
+[package]
+name = "Root"
+
+[addresses]
+A = "0x1"
+
+[dependencies]
+OtherDep = { local = "./deps_only/other_dep", addr_subst = { "A" = "B" } }
+
+[dev-dependencies]
+OtherDep = { local = "./deps_only/other_dep_duplicate", addr_subst = { "A" = "B" } }
