@@ -1798,6 +1798,7 @@ mod test {
             .layers(1..=3)
             .authorities(vec![fixture.core.context.own_index])
             .skip_block()
+            .num_transactions(1)
             .build();
         let blocks = builder.blocks.values().cloned().collect::<Vec<_>>();
         fixture
