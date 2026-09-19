@@ -2121,8 +2121,8 @@ mod test {
         .with_probability(AccumulatorBalanceRead::NAME, 0.3)
         .with_probability(AuthenticatedEventEmit::NAME, 0.1)
         .with_probability(CoinReservationWithdraw::NAME, 0.3)
-        .with_probability(AllowanceWithdraw::NAME, 0.2)
-        .with_probability(AllowanceSelfWithdraw::NAME, 0.2);
+        .with_probability(AllowanceWithdraw::NAME, 0.1)
+        .with_probability(AllowanceSelfWithdraw::NAME, 0.1);
 
         let test_cluster_for_scan = test_cluster.clone();
         test_simulated_load_with_test_config(

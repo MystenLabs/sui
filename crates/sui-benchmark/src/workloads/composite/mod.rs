@@ -328,7 +328,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(AuthenticatedEventEmit::NAME, 0.1);
         probabilities.insert(ImmutableObjectRead::NAME, 0.2);
         probabilities.insert(CoinReservationWithdraw::NAME, 0.1);
-        probabilities.insert(AllowanceWithdraw::NAME, 0.2);
+        probabilities.insert(AllowanceWithdraw::NAME, 0.1);
         probabilities.insert(AllowanceSelfWithdraw::NAME, 0.1);
         Self {
             probabilities,
