@@ -3,7 +3,10 @@
 
 use crate::{
     get_extension, get_extension_mut, get_nth_struct_field, get_tag_and_layouts, legacy_test_cost,
-    object_runtime::{ObjectRuntime, RuntimeResults, object_store::ChildObjectEffects},
+    object_runtime::{
+        MoveAccumulatorAction, MoveAccumulatorEvent, MoveAccumulatorValue, ObjectRuntime,
+        RuntimeResults, object_store::ChildObjectEffects,
+    },
     scratch::ScratchRuntime,
 };
 use better_any::{Tid, TidAble};
@@ -47,7 +50,7 @@ use sui_types::{
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
-    storage::{BackingPackageStore, PackageObject, RuntimeObjectResolver},
+    storage::{BackingPackageStore, ObjectFundsResolver, PackageObject, RuntimeObjectResolver},
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -59,19 +62,61 @@ const E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET: u64 = 7;
 
 type Set<K> = IndexSet<K>;
 
-/// An in-memory test store is a thin wrapper around the in-memory storage in a mutex. The mutex
-/// allows this to be used by both the object runtime (for reading) and the test scenario (for
-/// writing) while hiding mutability.
-#[derive(Tid)]
-pub struct InMemoryTestStore(pub RefCell<InMemoryStorage>);
+/// An in-memory test store is a thin wrapper around the in-memory storage and funds in a mutex.
+/// The mutex allows this to be used by both the object runtime (for reading) and the test
+/// scenario (for writing) while hiding mutability.
+#[derive(Tid, Default)]
+pub struct InMemoryTestStore {
+    /// Objects and packages visible to the object runtime.
+    storage: RefCell<InMemoryStorage>,
+    /// Settled funds balance per owner address (address or object) and funds type (e.g.
+    /// `Balance<T>`). Updated from each transaction's accumulator events when the transaction
+    /// ends; within a transaction, the object runtime tracks its own deposits and withdrawals.
+    funds: RefCell<BTreeMap<(SuiAddress, TypeTag), u128>>,
+}
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
+
+impl InMemoryTestStore {
+    fn settle_funds(&self, accumulator_events: Vec<MoveAccumulatorEvent>) {
+        let mut funds = self.funds.borrow_mut();
+        for event in accumulator_events {
+            let MoveAccumulatorValue::U64(amount) = event.value else {
+                continue;
+            };
+            let balance = funds
+                .entry((event.target_addr.into(), event.target_ty))
+                .or_default();
+            match event.action {
+                MoveAccumulatorAction::Merge => *balance += amount as u128,
+                // Object withdrawals are reserved against this balance and cannot underflow, but
+                // address withdrawals from test-only helpers are never checked against it.
+                MoveAccumulatorAction::Split => *balance = balance.saturating_sub(amount as u128),
+            }
+        }
+    }
+}
 
 impl BackingPackageStore for InMemoryTestStore {
     fn get_package_object(
         &self,
         package_id: &ObjectID,
     ) -> sui_types::error::SuiResult<Option<PackageObject>> {
-        self.0.borrow().get_package_object(package_id)
+        self.storage.borrow().get_package_object(package_id)
+    }
+}
+
+impl ObjectFundsResolver for InMemoryTestStore {
+    fn object_available_balance(
+        &self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+    ) -> sui_types::error::SuiResult<u128> {
+        Ok(self
+            .funds
+            .borrow()
+            .get(&(owner, type_.clone()))
+            .copied()
+            .unwrap_or(0))
     }
 }
 
@@ -82,7 +127,7 @@ impl RuntimeObjectResolver for InMemoryTestStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        self.0
+        self.storage
             .borrow()
             .read_child_object(parent, child, child_version_upper_bound)
     }
@@ -94,7 +139,7 @@ impl RuntimeObjectResolver for InMemoryTestStore {
         receive_object_at_version: SequenceNumber,
         epoch_id: sui_types::committee::EpochId,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        self.0.borrow().get_object_received_at_version(
+        self.storage.borrow().get_object_received_at_version(
             owner,
             receiving_object_id,
             receive_object_at_version,
@@ -166,7 +211,7 @@ pub fn end_transaction(
         loaded_child_objects: _,
         created_object_ids,
         deleted_object_ids,
-        accumulator_events: _,
+        accumulator_events,
         settlement_input_sui: _,
         settlement_output_sui: _,
     } = match results {
@@ -272,13 +317,14 @@ pub fn end_transaction(
     // For any unused allocated tickets, remove them from the store.
     let store: &&InMemoryTestStore = get_extension!(context)?;
     for id in unreceived {
-        if store.0.borrow_mut().remove_object(id).is_none() {
+        if store.storage.borrow_mut().remove_object(id).is_none() {
             return Ok(NativeResult::err(
                 context.gas_used(),
                 E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,
             ));
         }
     }
+    store.settle_funds(accumulator_events);
 
     // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
@@ -732,7 +778,7 @@ pub fn allocate_receiving_ticket_for_object(
 
     // NB: Must be a `&&` reference since the extension stores a static ref to the object storage.
     let store: &&InMemoryTestStore = get_extension!(context)?;
-    store.0.borrow_mut().insert_object(object);
+    store.storage.borrow_mut().insert_object(object);
 
     Ok(NativeResult::ok(
         legacy_test_cost(),
@@ -763,7 +809,7 @@ pub fn deallocate_receiving_ticket_for_object(
 
     // Remove the object from storage. We should never hit this scenario either.
     let store: &&InMemoryTestStore = get_extension!(context)?;
-    if store.0.borrow_mut().remove_object(id).is_none() {
+    if store.storage.borrow_mut().remove_object(id).is_none() {
         return Ok(NativeResult::err(
             context.gas_used(),
             E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,
