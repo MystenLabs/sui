@@ -57,7 +57,7 @@ impl<'a> LinkageValidationEnvironment<'a> {
     fn new(
         cached_packages: &'a BTreeMap<VersionId, &'a Package>,
         relocation_map: &'a HashMap<OriginalId, VersionId>,
-    ) -> Self {
+    ) -> VMResult<Self> {
         let mut environment = Self {
             relocation_map,
             resolved_modules: BTreeMap::new(),
@@ -65,18 +65,23 @@ impl<'a> LinkageValidationEnvironment<'a> {
         };
         for (version_id, package) in cached_packages {
             debug_assert!(version_id == &package.version_id);
-            environment.extend_with_package(package);
+            environment.extend_with_package(package)?;
         }
-        environment
+        Ok(environment)
     }
 
     /// Adds a package to the environment for cached or publish-inclusive validation.
-    fn extend_with_package(&mut self, package: &'a Package) {
+    fn extend_with_package(&mut self, package: &'a Package) -> VMResult<()> {
+        // Both callers populate the relocation map for every package added to this environment, so
+        // valid linkage-validation has all entries and a missing entry is an invariant violation
+        // in environment construction.
         let version_id = self
             .relocation_map
             .get(&package.original_id)
             .copied()
-            .unwrap_or(package.version_id);
+            .ok_or_else(|| {
+                partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR).finish(Location::Undefined)
+            })?;
         for module in package.as_modules() {
             let key = (version_id, module.value.self_id());
             let previous = self.resolved_modules.insert(key.clone(), &module.value);
@@ -90,6 +95,7 @@ impl<'a> LinkageValidationEnvironment<'a> {
                 self.module_index_cache.remove(&key);
             }
         }
+        Ok(())
     }
 
     fn resolve_module(
@@ -127,7 +133,7 @@ impl<'a> LinkageValidationEnvironment<'a> {
                 }
             }),
         );
-        dependencies::verify_module_with_dependency_index(module, &dependency_index)?;
+        dependencies::verify_module(&dependency_index, module)?;
         Ok(())
     }
 }
@@ -150,7 +156,7 @@ pub fn verify_linkage_and_cyclic_checks(
         "verifying linkage and cyclic checks for packages",
     );
     let mut validation_environment =
-        LinkageValidationEnvironment::new(cached_packages, &relocation_map);
+        LinkageValidationEnvironment::new(cached_packages, &relocation_map)?;
 
     for package in cached_packages.values() {
         let package_modules = package.as_modules().into_iter().collect::<Vec<_>>();
@@ -191,7 +197,7 @@ pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
     // Verify the dependencies of the package to publish against the cached-only set without the
     // to-be-published package first.
     let mut validation_environment =
-        LinkageValidationEnvironment::new(cached_packages, &relocation_map);
+        LinkageValidationEnvironment::new(cached_packages, &relocation_map)?;
     for package in cached_packages.values() {
         let package_modules = package.as_modules().into_iter().collect::<Vec<_>>();
         verify_package_valid_linkage(&package_modules, &mut validation_environment)?;
@@ -199,7 +205,7 @@ pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
     }
 
     // Extend the validation environment with the package to publish before validating it.
-    validation_environment.extend_with_package(package_to_publish);
+    validation_environment.extend_with_package(package_to_publish)?;
     let package_modules = package_to_publish
         .as_modules()
         .into_iter()
