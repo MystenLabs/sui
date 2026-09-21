@@ -14,7 +14,7 @@ keywords:
   - plp
   - deepbook
   - sui
-last_verified: 2026-09-14
+last_verified: 2026-09-21
 verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 goal:
   description: >-
@@ -53,17 +53,17 @@ answer: >-
 
 DeepBook Predict is an expiry-based prediction market protocol on Sui. Each market covers one underlying and one expiry timestamp, and every position is a range contract: it pays a fixed amount when the settlement price lands inside a chosen strike range, and nothing otherwise. Liquidity providers supply USDC to a shared pool, receive `PLP` shares, and take the other side of every trade.
 
-Predict runs on Sui Mainnet as `deepbook-predict-mainnet` and on Sui Testnet as `deepbook-predict-testnet`, with identical package sources: the Mainnet publish comes from DeepBookV3 source commit [`7b169bde`](https://github.com/MystenLabs/deepbookv3/tree/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict), and the Testnet publish from source commit `4d752fb8`. Version 2.5.0 or later of the [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) package ships a `/predict` subpath that carries both deployments, builds every transaction, and answers every read, so trading needs no indexer. The examples on these pages select a network with one constant and default to Testnet.
+Predict runs on Sui Mainnet as `deepbook-predict-mainnet` and on Sui Testnet as `deepbook-predict-testnet`. The Mainnet publish comes from DeepBookV3 source commit [`7b169bde`](https://github.com/MystenLabs/deepbookv3/tree/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict) and is still at package version 1. Testnet deployed from source commit `4d752fb8` and has since been upgraded to package version 2, which adds the `mint_exact_cost` all-in budget mint. Everything on these pages works the same on both networks except that one entrypoint and its session wrapper. Version 2.6.0 or later of the [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) package ships a `/predict` subpath that carries both deployments, builds every transaction, and answers every read, so trading needs no indexer. The examples on these pages select a network with one constant and default to Testnet.
 
 :::caution
 
-These pages describe the 2 current deployments, which went live on 2026-09-12. As of 2026-09-14 the 4 markets each network created at deployment have expired unsettled, no market has opened since, and no oracle update has landed since deployment, so a quote or a mint aborts on either network. The Mainnet pool holds only the bootstrap minimum. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state, and treat the package IDs and object IDs on these pages as pinned to those 2 deployments.
+These pages describe the 2 current deployments, which went live on 2026-09-12; Testnet moved to package version 2 on 2026-09-17. As of the last recorded chain read the 4 markets each network created at deployment have expired unsettled, no market has opened since, and no oracle update has landed since deployment, so a quote or a mint aborts on either network. The Mainnet pool holds only the bootstrap minimum. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object on the network you target rather than assuming its state, and treat the package IDs and object IDs on these pages as pinned to those 2 deployments.
 
 :::
 
 ## Quickstart: mint a position
 
-The following 7 steps install the DeepBook TypeScript SDK, prepare a funded Predict account, and quote and mint a position on a live market under a cost cap and a fill price cap. They run on Testnet, where the quote coin is a mintable test coin. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`) against `@mysten/deepbook-v3` version 2.5.0 or later and `@mysten/sui` version 2.30.0 or later. They pass compile checks but do not run against Testnet during the documentation build, so work through [Verify on Testnet](#verify-on-testnet) before you rely on them.
+The following 7 steps install the DeepBook TypeScript SDK, prepare a funded Predict account, and quote and mint a position on a live market under a cost cap and a fill price cap. They run on Testnet, where the quote coin is a mintable test coin. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`) against `@mysten/deepbook-v3` version 2.6.0 or later and `@mysten/sui` version 2.30.0 or later. They pass compile checks but do not run against Testnet during the documentation build, so work through [Verify on Testnet](#verify-on-testnet) before you rely on them.
 
 ### 1. Install the SDK
 
@@ -149,7 +149,7 @@ Both are optional. The following sample passes both.
 
 :::caution
 
-Omitting `maxCost` and `maxProbability` sends `U64_MAX` for each, which leaves the mint genuinely uncapped against a price move between the quote and execution. `tx.mint` mints an exact payout quantity, so the premium alone cannot exceed `quantity`, but the protocol charges fees on top of it and only `maxCost` bounds the total debit. `tx.mintAmount` is the riskier default: there the protocol charges fees on top of `spend`, and `maxCost` is the only bound on the whole withdrawal. Quote first, then pass both caps.
+Omitting `maxCost` and `maxProbability` sends `U64_MAX` for each, which leaves the mint genuinely uncapped against a price move between the quote and execution. `tx.mint` mints an exact payout quantity, so the premium alone cannot exceed `quantity`, but the protocol charges fees on top of it and only `maxCost` bounds the total debit. `tx.mintAmount` is the riskier default: there the protocol charges fees on top of `spend`, and `maxCost` is the only bound on the whole withdrawal. Quote first, then pass both caps. On Testnet there is a third shape with no cap to forget: `tx.mintCost` takes `spend` as the whole withdrawal and sizes the fill inside it, so the debit cannot exceed the budget. See [Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint-cost).
 
 :::
 

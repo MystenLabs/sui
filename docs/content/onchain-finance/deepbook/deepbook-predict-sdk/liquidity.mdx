@@ -47,8 +47,8 @@ answer: >-
   mark for the whole request. To cancel a pending request, read its queue index
   with `client.predict.decode.plpRequest(result).index` and pass it to
   `tx.cancelSupplyPlp` or `tx.cancelWithdrawPlp`.
-last_verified: 2026-09-14
-verified_against: '@mysten/deepbook-v3 2.5.0 (ts-sdks 5eda7bd1); Mainnet deployment 7b169bde; Testnet deployment 4d752fb8'
+last_verified: 2026-09-21
+verified_against: '@mysten/deepbook-v3 2.6.0 (ts-sdks df494cdb); Mainnet deployment 7b169bde (predict/sessions v1); Testnet deployment 4d752fb8, predict/sessions v2 at deepbookv3 8d7d42a0'
 ---
 
 The liquidity functions move USDC into the Predict pool for PLP shares and move PLP shares back out for USDC, through requests that wait for the next pool flush. [Vault](/onchain-finance/deepbook/deepbook-predict/contract-information/vault) explains the pool, its request queues, and the flush that fills them.
@@ -90,13 +90,13 @@ It takes these parameters:
 
 The SDK throws `PredictInputError` when `amountUsdc` is negative, is not a plain decimal, or has more than 6 decimal places.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="685-689" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="755-759" />
 
 `PlpSupplyOptions` has a single field:
 
 - `minPlpOut`: The fewest PLP, in raw 6-decimal shares as a `bigint`, that the flush's quote for the whole request must reach. It defaults to `0n`, which sets no floor.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="138-148" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="152-162" />
 
 ### `tx.withdrawPlp` {#withdraw}
 
@@ -112,13 +112,13 @@ It takes these parameters:
 
 The SDK throws `PredictInputError` when `minUsdcOut` is negative, is not a plain decimal, or has more than 6 decimal places.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="710-710" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="780-780" />
 
 `PlpWithdrawOptions` has a single field:
 
 - `minUsdcOut`: The least USDC, as a USD decimal `number` or `string`, that the flush's quote for the whole request must reach after the withdraw fee. When you omit it, the SDK sends `0`, which sets no floor.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="151-158" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="165-172" />
 
 ### `tx.cancelSupplyPlp` and `tx.cancelWithdrawPlp` {#cancel}
 
@@ -133,9 +133,9 @@ It takes these parameters:
 
 A cancel works only while its request is still pending. The contract aborts with `ERequestNotFound` when no pending entry carries the index, with `ENotRequestOwner` when your account is not the request's recorded recipient, and with `EValuationInProgress` while a flush is in flight, so the current flush still fills a request inside its cutoff at that flush's mark.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="724-724" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="794-794" />
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="734-734" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="804-804" />
 
 The receipt's `kind` tells you which builder cancels the request:
 
@@ -163,7 +163,7 @@ Use `read.pool` to read the pool's PLP supply, idle USDC, and queue lengths in a
 
 It takes no parameters.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="932-932" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="985-985" />
 
 `PoolSummary` has these fields:
 
@@ -172,7 +172,7 @@ It takes no parameters.
 - `supplyRequestsPending`: The number of queued supply requests, not their total amount.
 - `withdrawRequestsPending`: The number of queued withdraw requests, not their total amount.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="197-204" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="211-218" />
 
 `idleUsdc` is a display value that passes through a JavaScript `number`, while `plpTotalSupply` stays exact. See [Units](/onchain-finance/deepbook/deepbook-predict-sdk#units) for how the SDK converts amounts. `PoolSummary` carries no pool net asset value (NAV) or share price, because only a flush computes the mark. Each flush's `FlushExecuted` event records that mark as `pool_value` divided by `total_supply`, and the SDK does not decode it. See the [pool events](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#events) for its fields.
 
@@ -184,7 +184,7 @@ It takes this parameter:
 
 - `owner`: The address that owns the account.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="929-929" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="982-982" />
 
 It reads the account balance accessor for the deployment's PLP coin type, `client.predict.cfg.coinTypes.plp`. That accessor counts stored balance plus funds that reach the account before it settles them, so shares from a filled supply appear without a separate settle. For the account's USDC, use [`read.balance`](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#balance). The read loads the owner's wrapper, so call it for an account that exists.
 
@@ -200,7 +200,7 @@ It takes this parameter:
 
 - `r`: The executed transaction result, a `DecodableTransactionResult` that includes its events.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="964-964" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="1017-1017" />
 
 `PlpRequestReceipt` has these fields:
 
@@ -212,7 +212,7 @@ It takes this parameter:
 - `amount`: The escrowed amount as a display decimal, in USDC for a supply and in PLP for a withdrawal.
 - `raw`: The exact escrowed amount as `raw.amount`, a `bigint` in 6-decimal units.
 
-<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="213-223" />
+<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="213-223" />
 
 ### `decode.plpCancel` {#plp-cancel}
 
@@ -222,7 +222,7 @@ It takes this parameter:
 
 - `r`: The executed transaction result, a `DecodableTransactionResult` that includes its events.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="966-966" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="1019-1019" />
 
 `PlpCancelReceipt` has these fields:
 
@@ -231,7 +231,7 @@ It takes this parameter:
 - `amount`: The refund as a display decimal, in USDC for a supply and in PLP for a withdrawal.
 - `raw`: The exact refund as `raw.amount`, a `bigint` in 6-decimal units.
 
-<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="225-234" />
+<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="225-234" />
 
 A flush that refunds your request emits the same event inside the flush transaction, with a `reason` that separates your own cancel (`0`) from a mark or quote the flush found not executable (`1`) and a missed floor (`2`). `PlpCancelReceipt` does not carry `reason`, and the [pool events](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#events) list its values.
 

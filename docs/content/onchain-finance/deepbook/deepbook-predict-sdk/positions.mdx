@@ -10,6 +10,8 @@ keywords:
   - typescript SDK
   - quoteMint
   - mintAmount
+  - mintCost
+  - quoteMintCost
   - slippage cap
   - redeem position
   - claim settled position
@@ -40,17 +42,20 @@ questions:
   - How do I mint a DeepBook Predict position with the TypeScript SDK?
   - Does the DeepBook Predict SDK cap slippage on a mint or a close by default?
   - How do I close or claim a DeepBook Predict position with the SDK?
+  - How do I spend an exact total on a DeepBook Predict mint?
 answer: >-
   Call `read.quoteMint` to dry-run the mint against your account, then build it
   with `tx.mint` and pass a `maxCost` and a `maxProbability` derived from the
   quote, because the SDK sends `U64_MAX` for any cap you omit. `tx.mintAmount`
   sizes a mint by premium budget, and its optional `maxCost` is the only bound
-  on the whole withdrawal. `tx.redeem` closes a live position with no
+  on the whole withdrawal. `tx.mintCost` sizes a mint inside an all-in budget
+  that already includes fees, with `read.quoteMintCost` as its dry run; it needs
+  Predict package version 2, which is live on Testnet only. `tx.redeem` closes a live position with no
   close-side floors, `tx.claimSettled` claims a settled position in full, and
   the decoded receipts carry the order ID you persist to close a position
   later.
-last_verified: 2026-09-14
-verified_against: '@mysten/deepbook-v3 2.5.0 (ts-sdks 5eda7bd1); Mainnet deployment 7b169bde; Testnet deployment 4d752fb8'
+last_verified: 2026-09-21
+verified_against: '@mysten/deepbook-v3 2.6.0 (ts-sdks df494cdb); Mainnet deployment 7b169bde (predict/sessions v1); Testnet deployment 4d752fb8, predict/sessions v2 at deepbookv3 8d7d42a0'
 ---
 
 The position functions in the DeepBook Predict SDK quote, open, close, and claim range positions, list the positions an account holds, and decode the receipt of each trade. [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict) explains the mint and redeem mechanics that these builders wrap.
@@ -61,13 +66,15 @@ Every function is a member of `client.predict`, which [DeepBook Predict SDK](/on
 
 The position builders default to uncapped slippage. `tx.mint` sends `U64_MAX` for `maxCost` or `maxProbability` when you omit it, `tx.mintAmount` sends `U64_MAX` when you omit `maxCost`, and `tx.redeem` always sends `0` for both close-side floors. Quote immediately before each trade, derive every mint cap from the quote, and use a builder that takes floors when a close needs them.
 
+`tx.mintCost` is the exception: its `spend` is the sizing input, so the debit cannot exceed it and there is no cap to forget. Its `minQuantity` is still yours to set, because a `0` floor accepts however few contracts the budget buys after an adverse move.
+
 :::
 
 ## Mint functions {#mint-functions}
 
-Minting opens a position at the live price. Both mint builders check each numeric strike against the market's tick and admission grids, then build 3 commands: load a fresh pricer from the oracle feeds, generate the account authorization from the sender, and call the Move mint function. Every mint is also subject to 3 limits:
+Minting opens a position at the live price, and the SDK offers 3 sizing shapes: `tx.mint` fixes the payout quantity, `tx.mintAmount` fixes the premium budget, and `tx.mintCost` fixes the all-in budget. Every mint builder checks each numeric strike against the market's tick and admission grids, then builds 3 commands: load a fresh pricer from the oracle feeds, generate the account authorization from the sender, and call the Move mint function. Every mint is also subject to 3 limits:
 
-- **Lot size:** A payout quantity moves in whole lots of 0.01 USDC. `tx.mint` and `read.quoteMint` throw `PredictInputError` for a `quantity` that is not a whole lot, before they build anything.
+- **Lot size:** A payout quantity moves in whole lots of 0.01 USDC. `tx.mint` and `read.quoteMint` throw `PredictInputError` for a `quantity` that is not a whole lot, before they build anything. The budget builders round the fill down to a lot themselves.
 - **Premium floor:** The contract rejects a mint whose premium, `quantity` multiplied by the quoted entry probability, falls below 1 USDC, with `EPremiumBelowMinimum`. The lot is the granularity, not the minimum: no strike clears the floor below about 1.02 contracts, and a strike quoting near a 50 percent chance needs roughly 2. See [mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors).
 - **No-trade window:** Inside the [no-trade window](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#no-trade-window), the last 2 seconds before expiry on both deployments, a mint aborts with `ETradeWindowClosed`. The SDK quote runs the same gate, but a quote taken just before the window opens can succeed while the mint that follows aborts.
 
@@ -83,7 +90,7 @@ It takes these parameters:
 - `m`: The market and strike, as a binary or range market descriptor.
 - `opts`: An object with the payout `quantity` to price, as a whole lot of 0.01 USDC.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="842-846" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="912-916" />
 
 `MintQuote` carries these fields:
 
@@ -108,7 +115,7 @@ It takes these parameters:
 
 `cost` is `premium + (trading - subsidy) + builder + penalty + inventoryImpact`, the same total the contract withdraws, so pass `cost` plus a buffer as `maxCost`, never `premium`. [Design](/onchain-finance/deepbook/deepbook-predict/design#fee-components) explains each fee component. `raw` carries no fee amounts, so read exact fees from `decode.mint(result).raw` after execution.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="207-236" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="221-250" />
 
 ### `tx.mint` {#mint}
 
@@ -125,9 +132,9 @@ It takes these parameters:
   - `maxCost`: The optional ceiling on the all-in account debit, in USDC. Derive it from the quote's `cost`, and round it to at most 6 decimals, because a finer value throws `PredictInputError`.
   - `maxProbability`: The optional ceiling on the quoted per-contract probability before fees, between 0 and 1. Derive it from the quote's `entryProbability` and round it to at most 9 decimals, because the SDK throws `PredictInputError` for more.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="626-626" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="692-692" />
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="115-119" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="121-125" />
 
 ### `tx.mintAmount` {#mint-amount}
 
@@ -142,9 +149,9 @@ It takes these parameters:
   - `minQuantity`: The smallest payout quantity you accept. The contract aborts when the budget buys less. It need not be a whole lot, because the contract compares it against a quantity it has already rounded down to a lot.
   - `maxCost`: The optional ceiling on the whole withdrawal, premium plus fees, in USDC. The SDK throws `PredictInputError` for a value at or below 0.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="629-633" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="699-703" />
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="122-128" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="128-134" />
 
 `tx.mintAmount` takes no `maxProbability`, because `minQuantity` against a fixed budget already bounds the price per contract. `read.quoteMint` prices an exact quantity only, so no SDK quote dry-runs this builder, and `decode.mint(result).quantity` reports the quantity the contract actually minted. The following snippet spends at most 5 USDC of premium, accepts no fewer than 8 contracts, and caps the whole withdrawal at 5.25 USDC. It assumes `client`, `owner`, and `descriptor` from the samples under [Examples](#examples):
 
@@ -154,6 +161,65 @@ import type { MintAmountOptions } from '@mysten/deepbook-v3/predict';
 const opts: MintAmountOptions = { spend: 5, minQuantity: 8, maxCost: 5.25 };
 const tx = await client.predict.tx.mintAmount(owner, descriptor, opts);
 ```
+
+### `read.quoteMintCost` {#quote-mint-cost}
+
+Use `read.quoteMintCost` to see what an all-in budget buys before you spend it. It returns a `Promise<MintQuote>`. It simulates the same transaction `tx.mintCost` builds, with the owner as sender, against the owner's real account and the real fee path, so it runs the chain's own budget search and reports the fill that search selects. Read `quantity` from it to set the `minQuantity` floor on the mint that follows, and `cost` to see how much of the budget the fill actually spends.
+
+It takes the same 3 arguments as `tx.mintCost`, described in the next section.
+
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="922-926" />
+
+The quote does not preflight the expiry's cash backing or its exposure-index capacity, so a mint can still abort where its quote succeeded. Like the mint, it needs Predict package version 2.
+
+### `tx.mintCost` {#mint-cost}
+
+Use `tx.mintCost` to mint inside an all-in budget, the SDK form of `mint_exact_cost`. It returns a `Promise<Transaction>`.
+
+:::info
+
+`tx.mintCost` and `read.quoteMintCost` call an entrypoint that arrived in Predict package version 2. That version is live on Testnet only, so both calls abort on Mainnet, which is still at version 1. See [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#two-ids).
+
+:::
+
+The difference from `tx.mintAmount` is what the budget covers. `spend` on `tx.mintAmount` is a *premium* budget, and the trading fee, builder add-on, congestion surcharge, and inventory-impact charge land on top of it, which is why that builder needs a separate `maxCost`. `spend` on `tx.mintCost` is the *whole withdrawal*. The contract caps it at the account's available USDC, then sizes the largest lot-rounded fill whose complete debit fits, probing the same cost computation it charges against fee and book state at execution. The debit therefore cannot exceed `spend`, and you need no fee estimate and no padding against fee state moving between the quote and execution.
+
+It takes these parameters:
+
+- `owner`: The address that owns the account and signs the transaction.
+- `m`: The market and strike, as a binary or range market descriptor.
+- `opts`: A `MintCostOptions` object with 2 fields:
+  - `spend`: The all-in budget in USDC, fees included. The contract caps it at the account's available balance.
+  - `minQuantity`: The smallest payout quantity you accept, in USDC. This is the builder's slippage guard, and `0` disables it.
+
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="696-696" />
+
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="136-142" />
+
+`minQuantity` replaces both caps the other builders take. The spend is fixed, so an adverse move in price, congestion surcharge, sponsor subsidy, or inventory impact between building the transaction and executing it arrives as fewer contracts rather than a larger debit, and one floor on the fill catches all of them: a fill below it aborts with `EMintQuantityBelowMin`. It bounds the all-in price per contract at `spend / minQuantity`, which is why this builder takes no `maxProbability` and no `maxCost`.
+
+Three limits qualify the fill:
+
+- **The one-lot remainder holds only when the budget binds.** Where the budget is what limits the fill, less than the incremental all-in cost of one more lot goes unspent. A fill limited by something else can leave much more.
+- **The maximum-payout bound can step the fill down.** The marginal inventory-impact rate rises with liability, so the largest fill a budget could pay for is sometimes one that would cost more than its own maximum payout. Sizing then falls back to a smaller fill, and that fallback is conservative: it can miss a larger admissible fill, or abort on `minQuantity` or the minimum premium where another size would have succeeded. A market where no size clears the bound aborts with `EMintCostAboveMaxPayout`.
+- **Backing is not a sizing input.** Insufficient expiry cash backing aborts the mint rather than shrinking it.
+
+Read the quantity the contract actually minted from `decode.mint(result).quantity`. The following snippet spends at most 25 USDC in total, fees included, and rejects a fill under 30 contracts. It assumes `client`, `owner`, and `descriptor` from the samples under [Examples](#examples):
+
+```ts
+import type { MintCostOptions } from '@mysten/deepbook-v3/predict';
+
+const preview = await client.predict.read.quoteMintCost(owner, descriptor, {
+	spend: 25,
+	minQuantity: 0,
+});
+
+// Take the floor from the quote, then leave a little room for the price to move.
+const opts: MintCostOptions = { spend: 25, minQuantity: preview.quantity * 0.99 };
+const tx = await client.predict.tx.mintCost(owner, descriptor, opts);
+```
+
+For a preview that costs no chain call at all, [Predict Cost SDK](/onchain-finance/deepbook/deepbook-predict-sdk/cost#mint-cost-for-budget) runs the same budget search locally from a pricer snapshot.
 
 ## Close functions {#close-functions}
 
@@ -169,7 +235,7 @@ It takes these parameters:
 - `m`: The market descriptor you minted the position with.
 - `opts`: A `CloseOptions` object with the position's `orderId` and the `quantity` to close.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="878-882" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="931-935" />
 
 `RedeemQuote` carries these fields:
 
@@ -185,7 +251,7 @@ It takes these parameters:
 
 `proceeds` is `gross + inventoryImpactRebate - trading - builder - penalty`, the same net amount the contract checks `min_proceeds` against.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="239-251" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="253-265" />
 
 ### `tx.redeem` {#redeem}
 
@@ -203,9 +269,9 @@ It takes these parameters:
   - `orderId`: The position's current order ID, as a `bigint`.
   - `quantity`: The payout quantity to close, as a whole lot of 0.01 USDC. The SDK throws `PredictInputError` for a quantity that is not a whole lot.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="659-659" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="729-729" />
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="132-135" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="146-149" />
 
 ### `tx.claimSettled` {#claim-settled}
 
@@ -219,7 +285,7 @@ It takes these parameters:
 - `m`: The market's `underlying`, `expiryMs`, and optional `marketId`.
 - `opts`: An object with the position's `orderId`.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="662-666" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="732-736" />
 
 ## Position reads {#position-reads}
 
@@ -235,9 +301,9 @@ It takes this parameter:
 
 - `owner`: The address that owns the account.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="793-793" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="863-863" />
 
-<ImportContent source="packages/deepbook-v3/src/predict/reads/positions.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="41-44" />
+<ImportContent source="packages/deepbook-v3/src/predict/reads/positions.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="41-44" />
 
 ### `read.hasPosition` {#has-position}
 
@@ -249,7 +315,7 @@ It takes these parameters:
 - `marketId`: The object ID of the market's `ExpiryMarket`.
 - `orderId`: The order ID to check, as a `bigint`.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="787-787" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="857-857" />
 
 ## Receipt decoders {#decode}
 
@@ -263,9 +329,9 @@ It takes this parameter:
 
 - `r`: The executed transaction result, including its events.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="950-951" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="1003-1004" />
 
-<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="106-147" />
+<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="106-147" />
 
 ### `decode.redeem` and `decode.redeems` {#decode-redeem}
 
@@ -275,9 +341,9 @@ It takes this parameter:
 
 - `r`: The executed transaction result, including its events.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="952-954" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="1005-1007" />
 
-<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="149-184" />
+<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="149-184" />
 
 ### `decode.claim` and `decode.claims` {#decode-claim}
 
@@ -287,13 +353,13 @@ It takes this parameter:
 
 - `r`: The executed transaction result, including its events.
 
-<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="955-957" />
+<ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="1008-1010" />
 
-<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="5eda7bd1c6b58cc553e6d4e6aa2e39ea3a7ac061" lines="186-195" />
+<ImportContent source="packages/deepbook-v3/src/predict/decode.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="df494cdb472588152286b32f437e32abe104e14b" lines="186-195" />
 
 ## Examples {#examples}
 
-The following samples live in the `examples/deepbook-predict` package, which type-checks against version 2.5.0 of `@mysten/deepbook-v3`. None of them signs a transaction: every builder returns an unsigned `Transaction`, and the SDK never holds keys.
+The following samples live in the `examples/deepbook-predict` package, which type-checks against version 2.6.0 of `@mysten/deepbook-v3`. None of them signs a transaction: every builder returns an unsigned `Transaction`, and the SDK never holds keys.
 
 ### Quote and mint a directional position {#example-mint}
 
