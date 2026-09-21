@@ -98,7 +98,7 @@ The type argument `T` is the balance type, for example `Balance<0x2::sui::SUI>`,
 - `expiration_timestamp_ms`: Optional expiration in milliseconds. Spends at or after it abort.
 - `rate_limit`: Optional recurring cap, built with one of the rate limit constructors below.
 
-Set at least one of `lifetime_cap` and `rate_limit`, and at least one of `expiration_timestamp_ms` and `rate_limit`. The call creates the allowance as a shared object and sends an `AllowanceCap` to the funder. The cap is the revocation key. It has only the `key` ability, so it cannot be transferred or wrapped.
+Set at least one of `lifetime_cap` and `rate_limit`, and at least one of `expiration_timestamp_ms` and `rate_limit`. The call creates the allowance as a shared object and sends an `AllowanceCap` to the funder. The cap can be used for revocation. It has only the `key` ability, so it cannot be transferred or wrapped.
 
 ### Rate limits
 
