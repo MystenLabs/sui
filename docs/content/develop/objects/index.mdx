@@ -41,6 +41,40 @@ answer: >-
 
 Learn about the Sui object model, how to use objects, and different object ownership methods.
 
+## What is the Sui object model?
+
+Sui uses an object-centric data model. Everything stored on Sui is represented as an object — a typed piece of data with a unique ID, an owner, and a version number. Unlike account-based blockchains that store state in a global key-value store, Sui organizes state around objects, enabling fine-grained access control and parallel transaction execution.
+
+Every object on Sui has the following core properties:
+
+- **Unique ID**: A globally unique identifier (UID) assigned at creation time.
+- **Type**: The Move type that defines the object's structure and behavior.
+- **Owner**: Determines who can use or modify the object (an address, another object, or the shared/immutable pool).
+- **Version**: Incremented each time the object is modified by a transaction.
+- **Digest**: A cryptographic hash of the object's contents for integrity verification.
+
+## What topics does Objects cover?
+
+This section covers the full range of topics related to Sui objects, including:
+
+- **Object basics** — how objects are defined in Move, their structure, and lifecycle.
+- **Object ownership** — the different ownership models (address-owned, object-owned, shared, and immutable).
+- **Referring to objects** — how transactions reference objects by ID and version.
+- **Object metadata** — fields like UID, version, and digest that describe every object.
+- **Relating objects and transactions** — how transactions consume, mutate, and create objects.
+- **Packages** — the special object type that stores published Move bytecode.
+
+## How do objects work on Sui?
+
+When a transaction executes on Sui, it takes a set of input objects, applies Move logic, and produces a set of output objects. Objects that are mutated get a new version number. Objects that are deleted are removed from the store. Newly created objects are added with version 1.
+
+Object ownership determines how an object can be used in a transaction:
+
+- **Address-owned**: Only the owning address can use the object as a transaction input.
+- **Object-owned (dynamic fields)**: The object is owned by another object and accessed through its parent.
+- **Shared**: Any address can use the object, but access requires consensus.
+- **Immutable**: No one can mutate the object; it can be read freely by any transaction.
+
 import DocCardList from '@theme/DocCardList';
 
 <DocCardList />
