@@ -2971,6 +2971,16 @@
       "permanent": true
     },
     {
+      "source": "/onchain-finance/sagat",
+      "destination": "/sui-stack/sagat",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/sagat/",
+      "destination": "/sui-stack/sagat",
+      "permanent": true
+    },
+    {
       "source": "/tooling",
       "destination": "/getting-started/tooling",
       "permanent": true
