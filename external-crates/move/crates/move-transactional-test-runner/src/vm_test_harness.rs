@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    framework::{CompiledState, MaybeNamedCompiledModule, MoveTestAdapter, run_test_impl},
+    framework::{
+        CompiledState, MaybeNamedCompiledModule, MoveTestAdapter, PreCompiledDeps, run_test_impl,
+    },
     tasks::{InitCommand, SyntaxChoice, TaskInput, parse_qualified_module_access},
 };
 
@@ -17,7 +19,7 @@ use move_binary_format::{
         CodeOffset, EnumDefinitionIndex, FieldHandleIndex, LocalIndex, MemberCount, VariantTag,
     },
 };
-use move_bytecode_source_map::source_map::{FunctionSourceMap, SourceMap};
+use move_bytecode_source_map::source_map::FunctionSourceMap;
 use move_bytecode_verifier::{absint::FunctionContext, regex_reference_safety};
 use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_command_line_common::{
@@ -34,7 +36,6 @@ use move_core_types::{
 };
 use move_regex_borrow_graph::references::Ref;
 use move_stdlib::named_addresses as move_stdlib_named_addresses;
-use move_symbol_pool::Symbol;
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
 use move_vm_runtime::{
     dev_utils::{
@@ -189,11 +190,12 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
+        pre_compiled_deps: Option<PreCompiledDeps>,
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
         println!("---- INITIALIZING -------------------------------------------------------------");
+        let pre_compiled_deps = pre_compiled_deps.map(|deps| Arc::clone(LazyLock::force(deps)));
         println!("grabbing init arguments");
         let (additional_mapping, compiler_edition) = match task_opt.map(|t| t.command) {
             Some((InitCommand { named_addresses }, AdapterInitArgs { edition })) => {
@@ -229,6 +231,7 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
+                MOVE_STDLIB_COMPILED.iter().cloned(),
                 None,
                 Some(compiler_edition),
                 None,
@@ -240,10 +243,7 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
         println!("doing initial publish");
         adapter
             .perform_action(None, |inner_adapter, _gas_status| {
-                let move_stdlib = MOVE_STDLIB_COMPILED
-                    .iter()
-                    .map(|(module, _)| module.clone())
-                    .collect::<Vec<_>>();
+                let move_stdlib = MOVE_STDLIB_COMPILED.clone();
                 let sender = *move_stdlib.first().unwrap().self_id().address();
                 println!("generating stdlib linkage");
                 let linkage_context = LinkageContext::new(BTreeMap::from([(sender, sender)]))?;
@@ -259,20 +259,6 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
                 Ok(())
             })
             .unwrap();
-        let mut addr_to_name_mapping = BTreeMap::new();
-        for (name, addr) in move_stdlib_named_addresses() {
-            let prev = addr_to_name_mapping.insert(addr, Symbol::from(name));
-            assert!(prev.is_none());
-        }
-        for (module, source_map) in MOVE_STDLIB_COMPILED
-            .iter()
-            .filter(|(module, _)| !adapter.compiled_state.is_precompiled_dep(&module.self_id()))
-            .collect::<Vec<_>>()
-        {
-            adapter
-                .compiled_state
-                .add_and_generate_interface_file(module.clone(), Some(source_map.clone()));
-        }
         (adapter, None)
     }
 
@@ -687,7 +673,7 @@ fn call_vm_function(
     result
 }
 
-pub static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock::new(|| {
+pub static MOVE_STDLIB_PROGRAM_INFO: LazyLock<Arc<PreCompiledProgramInfo>> = LazyLock::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
@@ -696,13 +682,12 @@ pub static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock:
         }],
         None,
         None,
-        false,
         move_compiler::Flags::empty(),
         None,
     )
     .unwrap();
     match program_res {
-        Ok(modules_info) => modules_info,
+        Ok(modules_info) => Arc::new(modules_info),
         Err((files, errors)) => {
             eprintln!("!!!Standard library failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, errors)
@@ -710,7 +695,7 @@ pub static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock:
     }
 });
 
-static MOVE_STDLIB_COMPILED: LazyLock<Vec<(CompiledModule, SourceMap)>> = LazyLock::new(|| {
+static MOVE_STDLIB_COMPILED: LazyLock<Vec<CompiledModule>> = LazyLock::new(|| {
     let (files, units_res) = move_compiler::Compiler::from_files(
         None,
         move_stdlib::source_files(),
@@ -730,12 +715,7 @@ static MOVE_STDLIB_COMPILED: LazyLock<Vec<(CompiledModule, SourceMap)>> = LazyLo
         }
         Ok((units, _warnings)) => units
             .into_iter()
-            .map(|annot_module| {
-                (
-                    annot_module.named_module.module,
-                    annot_module.named_module.source_map,
-                )
-            })
+            .map(|annot_module| annot_module.named_module.module)
             .collect(),
     }
 });
@@ -743,12 +723,7 @@ static MOVE_STDLIB_COMPILED: LazyLock<Vec<(CompiledModule, SourceMap)>> = LazyLo
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     SWITCH_TO_REGEX_REFERENCE_SAFETY.set(false).unwrap();
-    run_test_impl::<SimpleRuntimeTestAdapter>(
-        path,
-        Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
-        None,
-    )
-    .await
+    run_test_impl::<SimpleRuntimeTestAdapter>(path, Some(&MOVE_STDLIB_PROGRAM_INFO), None).await
 }
 
 #[tokio::main]
@@ -763,12 +738,8 @@ pub async fn run_test_with_regex_reference_safety(
     {
         options.suffix("regex");
     }
-    run_test_impl::<SimpleRuntimeTestAdapter>(
-        path,
-        Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
-        Some(options),
-    )
-    .await
+    run_test_impl::<SimpleRuntimeTestAdapter>(path, Some(&MOVE_STDLIB_PROGRAM_INFO), Some(options))
+        .await
 }
 
 //**************************************************************************************************
