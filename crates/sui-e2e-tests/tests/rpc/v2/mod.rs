@@ -51,7 +51,7 @@ async fn execute_transaction(
     request.read_mask = Some(FieldMask::from_paths(["*"]));
 
     let transaction = client
-        .execute_transaction_and_wait_for_checkpoint(request, Duration::from_secs(10))
+        .execute_transaction_and_wait_for_checkpoint(request, Duration::from_secs(30))
         .await
         .unwrap()
         .into_inner()
