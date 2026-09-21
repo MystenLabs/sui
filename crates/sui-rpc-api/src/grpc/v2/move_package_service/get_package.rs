@@ -42,13 +42,15 @@ pub fn get_package(service: &RpcService, request: GetPackageRequest) -> Result<G
 
 /// Load the package in `package_id_str`'s upgrade lineage with exactly
 /// `version`.
+///
+/// Package-version index rows are keyed by the lineage's original package id,
+/// so a member's storage id is mapped to that original id before the lookup.
 fn load_package_at_version(
     service: &RpcService,
     package_id_str: &str,
     version: u64,
 ) -> Result<MovePackage> {
     let package = load_package(service, package_id_str)?;
-    // Normalize the lineage member's storage id
     let original_id = package.original_package_id();
     if package.version().value() == version {
         return Ok(package);
@@ -58,7 +60,7 @@ fn load_package_at_version(
         .reader
         .inner()
         .indexes()
-        .ok_or_else(RpcError::not_found)?;
+        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
 
     let storage_id = indexes
         .get_package_version_storage_id(original_id, version)
@@ -70,16 +72,24 @@ fn load_package_at_version(
 
 /// Load the latest package in `package_id_str`'s upgrade lineage that
 /// existed at or before `at_checkpoint`.
+///
+/// The bound is checked against the highest checkpoint every rpc-store
+/// pipeline has committed before any package read: a bound above it is
+/// rejected rather than served from a partially indexed index, so a
+/// successful answer is exact as of `at_checkpoint`.
 fn load_package_at_checkpoint(
     service: &RpcService,
     package_id_str: &str,
     at_checkpoint: u64,
 ) -> Result<MovePackage> {
-    let latest_checkpoint = service
+    let original_id = load_package(service, package_id_str)?.original_package_id();
+
+    let indexes = service
         .reader
         .inner()
-        .get_latest_checkpoint()?
-        .sequence_number;
+        .indexes()
+        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
+
     let lowest_available = service.reader.get_lowest_available_checkpoint()?;
     if at_checkpoint < lowest_available {
         return Err(RpcError::new(
@@ -90,23 +100,20 @@ fn load_package_at_checkpoint(
             ),
         ));
     }
-    if at_checkpoint > latest_checkpoint {
+
+    let highest_indexed = indexes
+        .get_highest_indexed_checkpoint_seq_number()
+        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc index is empty"))?;
+    if at_checkpoint > highest_indexed {
         return Err(RpcError::new(
             tonic::Code::NotFound,
             format!(
-                "requested checkpoint {at_checkpoint} exceeds latest checkpoint \
-                 {latest_checkpoint}",
+                "requested checkpoint {at_checkpoint} is not yet indexed; highest indexed \
+                 checkpoint is {highest_indexed}",
             ),
         ));
     }
-
-    let original_id = load_package(service, package_id_str)?.original_package_id();
-
-    let indexes = service
-        .reader
-        .inner()
-        .indexes()
-        .ok_or_else(RpcError::not_found)?;
 
     let (_, storage_id) = indexes
         .get_package_at_checkpoint(original_id, at_checkpoint)

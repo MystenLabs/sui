@@ -1228,5 +1228,33 @@ mod tests {
             None,
         );
         assert_eq!(reader.get_package_at_checkpoint(unknown, 5).unwrap(), None);
+
+        // A restore-floor row (no recorded publish checkpoint) counts
+        // as always existed: before any real publish it is the only
+        // version, and it is superseded by the first real publish.
+        let floor_original = ObjectID::from_single_byte(0xEE);
+        let floor_storage = ObjectID::from_single_byte(0x03);
+        let mut batch = db.batch();
+        let (k, v) =
+            crate::schema::package_versions::store_restored(floor_original, 1, floor_storage);
+        batch
+            .put(&reader.schema().package_versions, &k, &v)
+            .unwrap();
+        let (k, v) = crate::schema::package_versions::store(floor_original, 2, s2, 10);
+        batch
+            .put(&reader.schema().package_versions, &k, &v)
+            .unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(
+            reader.get_package_at_checkpoint(floor_original, 0).unwrap(),
+            Some((1, floor_storage)),
+        );
+        assert_eq!(
+            reader
+                .get_package_at_checkpoint(floor_original, 10)
+                .unwrap(),
+            Some((2, s2)),
+        );
     }
 }

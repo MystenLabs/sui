@@ -34,10 +34,14 @@ impl MovePackageService for KvRpcServer {
         &self,
         request: tonic::Request<GetPackageRequest>,
     ) -> Result<tonic::Response<GetPackageResponse>, tonic::Status> {
-        get_package(self.client.clone(), request.into_inner())
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        get_package(
+            self.client.clone(),
+            &self.service_info_watermark_pipelines,
+            request.into_inner(),
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_datatype(
@@ -73,6 +77,7 @@ impl MovePackageService for KvRpcServer {
 
 async fn get_package(
     mut client: BigTableClient,
+    service_info_watermark_pipelines: &[&str],
     request: GetPackageRequest,
 ) -> Result<GetPackageResponse, RpcError> {
     let package_id_str = request.package_id.as_ref().ok_or_else(|| {
@@ -90,18 +95,41 @@ async fn get_package(
         Some(selector) => selector,
     };
 
-    let original_id = resolve_original_package_id(client.clone(), package_id).await?;
-
     let data = match selector {
-        Selector::Version(version) => client
-            .get_packages_by_version(&[(original_id, version)])
-            .await
-            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-            .pop(),
-        Selector::AtCheckpoint(at_checkpoint) => client
-            .get_package_latest(original_id, at_checkpoint)
-            .await
-            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?,
+        Selector::Version(version) => {
+            let original_id = resolve_original_package_id(client.clone(), package_id).await?;
+            client
+                .get_packages_by_version(&[(original_id, version)])
+                .await
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+                .pop()
+        }
+        Selector::AtCheckpoint(at_checkpoint) => {
+            // The response does not echo the checkpoint it resolved at, so a bound above
+            // what this replica has indexed would let a caller persist a wrong answer;
+            // fail closed instead. `Version` and the bare-id path are exact lookups and
+            // need no bound.
+            let highest_indexed = client
+                .get_watermark_for_pipelines(service_info_watermark_pipelines)
+                .await
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+                .and_then(|watermark| watermark.checkpoint_hi_inclusive)
+                .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc index is empty"))?;
+            if at_checkpoint > highest_indexed {
+                return Err(RpcError::new(
+                    tonic::Code::NotFound,
+                    format!(
+                        "requested checkpoint {at_checkpoint} is not yet indexed; highest \
+                         indexed checkpoint is {highest_indexed}",
+                    ),
+                ));
+            }
+            let original_id = resolve_original_package_id(client.clone(), package_id).await?;
+            client
+                .get_package_latest(original_id, at_checkpoint)
+                .await
+                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+        }
         _ => {
             return Err(FieldViolation::new("selector")
                 .with_description("unknown selector variant")
@@ -438,9 +466,16 @@ mod tests {
         _server: tokio::task::JoinHandle<()>,
     }
 
+    /// Pipelines whose watermark bounds `AtCheckpoint` lookups in tests, matching the
+    /// production `DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES` membership.
+    const TEST_WATERMARK_PIPELINES: &[&str] = &[
+        sui_kvstore::PACKAGES_PIPELINE,
+        sui_kvstore::PACKAGES_BY_ID_PIPELINE,
+    ];
+
     /// Seed the mock with a two-version package lineage (v1 at `original_id`
     /// published at checkpoint 5, v2 at `upgraded_id` published at checkpoint
-    /// 20) plus one non-package object.
+    /// 20, watermark at checkpoint 25) plus one non-package object.
     async fn setup_lineage_fixture() -> LineageFixture {
         use bytes::Bytes;
         use move_binary_format::file_format::empty_module;
@@ -450,7 +485,7 @@ mod tests {
 
         let mock = MockBigtableServer::new();
         let (addr, server) = mock.start().await.expect("start mock BigTable");
-        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+        let mut client = BigTableClient::new_local(addr.to_string(), "test".to_string())
             .await
             .expect("connect to mock BigTable");
 
@@ -508,6 +543,25 @@ mod tests {
             .await;
         }
 
+        for pipeline in TEST_WATERMARK_PIPELINES {
+            client
+                .create_pipeline_watermark_if_absent(
+                    pipeline,
+                    &sui_kvstore::WatermarkV1 {
+                        epoch_hi_inclusive: 0,
+                        checkpoint_hi_inclusive: Some(25),
+                        tx_hi: 0,
+                        timestamp_ms_hi_inclusive: 0,
+                        reader_lo: 0,
+                        pruner_hi: 0,
+                        pruner_timestamp_ms: 0,
+                        bucket_start_cp: None,
+                    },
+                )
+                .await
+                .expect("seed watermark");
+        }
+
         LineageFixture {
             client,
             original_id,
@@ -527,7 +581,7 @@ mod tests {
         fixture: &LineageFixture,
         request: GetPackageRequest,
     ) -> sui_rpc::proto::sui::rpc::v2::Package {
-        get_package(fixture.client.clone(), request)
+        get_package(fixture.client.clone(), TEST_WATERMARK_PIPELINES, request)
             .await
             .expect("get_package succeeds")
             .package
@@ -535,7 +589,7 @@ mod tests {
     }
 
     async fn fetch_pkg_err(fixture: &LineageFixture, request: GetPackageRequest) -> tonic::Status {
-        get_package(fixture.client.clone(), request)
+        get_package(fixture.client.clone(), TEST_WATERMARK_PIPELINES, request)
             .await
             .expect_err("get_package fails")
             .into()
@@ -602,15 +656,76 @@ mod tests {
         );
         assert_eq!(package.version, Some(1));
 
-        // A bound above the tip resolves the latest version.
+        // A checkpoint bound equal to the watermark resolves the latest version.
         let mut req = get_package_req(fixture.original_id);
-        req.selector = Some(Selector::AtCheckpoint(u64::MAX));
+        req.selector = Some(Selector::AtCheckpoint(25));
         let package = fetch_pkg(&fixture, req).await;
         assert_eq!(
             package.storage_id,
             Some(fixture.upgraded_id.to_canonical_string(true)),
         );
         assert_eq!(package.version, Some(2));
+    }
+
+    #[tokio::test]
+    async fn at_checkpoint_above_indexed_watermark_is_rejected() {
+        let fixture = setup_lineage_fixture().await;
+
+        for at_checkpoint in [26u64, u64::MAX] {
+            let mut req = get_package_req(fixture.original_id);
+            req.selector = Some(Selector::AtCheckpoint(at_checkpoint));
+            let status = fetch_pkg_err(&fixture, req).await;
+            assert_eq!(status.code(), tonic::Code::NotFound, "{at_checkpoint}");
+            assert!(
+                status
+                    .message()
+                    .contains("is not yet indexed; highest indexed checkpoint is 25"),
+                "unexpected message for {at_checkpoint}: {}",
+                status.message()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn at_checkpoint_with_empty_index_is_unavailable() {
+        let mock = MockBigtableServer::new();
+        let (addr, _server) = mock.start().await.expect("start mock BigTable");
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+            .await
+            .expect("connect to mock BigTable");
+
+        // A bare-id request is still served without any watermark rows.
+        let mut bare = GetPackageRequest::default();
+        bare.package_id = Some(ObjectID::ZERO.to_canonical_string(true));
+        let bare_status: tonic::Status =
+            get_package(client.clone(), TEST_WATERMARK_PIPELINES, bare)
+                .await
+                .expect_err("bare lookup fails on empty store")
+                .into();
+        assert_eq!(bare_status.code(), tonic::Code::NotFound);
+
+        // The checkpoint selector fails closed instead of clamping to a checkpoint
+        // this replica has not indexed.
+        let mut req = GetPackageRequest::default();
+        req.package_id = Some(ObjectID::ZERO.to_canonical_string(true));
+        req.selector = Some(Selector::AtCheckpoint(5));
+        let status: tonic::Status = get_package(client.clone(), TEST_WATERMARK_PIPELINES, req)
+            .await
+            .expect_err("checkpoint lookup fails on empty index")
+            .into();
+        assert_eq!(status.code(), tonic::Code::Unavailable);
+        assert_eq!(status.message(), "rpc index is empty");
+
+        // The version selector is not bounded, so it reaches the underlying lookup
+        // (not found here, not rejected as unavailable).
+        let mut req = GetPackageRequest::default();
+        req.package_id = Some(ObjectID::ZERO.to_canonical_string(true));
+        req.selector = Some(Selector::Version(1));
+        let version_status: tonic::Status = get_package(client, TEST_WATERMARK_PIPELINES, req)
+            .await
+            .expect_err("version lookup reaches the store")
+            .into();
+        assert_eq!(version_status.code(), tonic::Code::NotFound);
     }
 
     #[tokio::test]
@@ -633,14 +748,14 @@ mod tests {
             req.selector = Some(Selector::AtCheckpoint(4));
             req
         };
-        for req in [
-            get_package_req(unknown),
-            unknown_versioned,
-            missing_version,
-            before_first_publish,
+        for (label, req) in [
+            ("unknown bare id", get_package_req(unknown)),
+            ("unknown versioned package", unknown_versioned),
+            ("missing version", missing_version),
+            ("checkpoint before first publish", before_first_publish),
         ] {
             let status = fetch_pkg_err(&fixture, req).await;
-            assert_eq!(status.code(), tonic::Code::NotFound);
+            assert_eq!(status.code(), tonic::Code::NotFound, "{label}");
         }
     }
 
