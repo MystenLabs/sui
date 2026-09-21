@@ -1904,6 +1904,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         "Successfully deferred transaction attempting to double spend owned object.",
                         |pc| pc.defer_owned_object_double_spend()
                     );
+                    if transaction.tx().transaction_data().uses_randomness()
+                        && state.randomness_round.is_none()
+                    {
+                        // Precondition for the deferral-key collision flagged in
+                        // collect_transactions_to_schedule: at the next commit without
+                        // randomness this transaction re-defers to Randomness{original
+                        // round}, the key that round's fresh randomness deferrals are
+                        // stored under.
+                        assert_reachable_gated!(
+                            "Double-spend deferred a randomness-using transaction at a round without randomness.",
+                            |pc| pc.defer_owned_object_double_spend()
+                        );
+                    }
                     deferred_txns
                         .entry(deferral_key)
                         .or_default()
@@ -3673,6 +3686,10 @@ mod tests {
         },
     };
 
+    use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::{ObjectArg, SharedObjectMutability};
+
     use super::*;
     use crate::{
         authority::{
@@ -4875,6 +4892,78 @@ mod tests {
             !snapshot.contains_key(&AuthorityName::ZERO),
             "spoofed authority claim should be dropped"
         );
+    }
+
+    /// A transaction whose shared inputs include the randomness state object, so
+    /// `uses_randomness()` is true. Gas is random, so every call yields a new digest.
+    fn randomness_user_txn() -> VerifiedExecutableTransactionWithAliases {
+        let (committee, keypairs) = Committee::new_simple_test_committee();
+        let (sender, sender_keypair) = deterministic_random_account_key();
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .obj(ObjectArg::SharedObject {
+                id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                initial_shared_version: 1.into(),
+                mutability: SharedObjectMutability::Immutable,
+            })
+            .unwrap();
+        let tx = sui_types::transaction::Transaction::from_data_and_signer(
+            TransactionData::new_programmable(
+                sender,
+                vec![random_object_ref()],
+                builder.finish(),
+                1_000_000,
+                1_000,
+            ),
+            vec![&sender_keypair],
+        );
+        let tx = VerifiedExecutableTransaction::new_from_certificate(
+            VerifiedCertificate::new_unchecked(
+                CertifiedTransaction::new_from_keypairs_for_testing(
+                    tx.into_data(),
+                    &keypairs,
+                    &committee,
+                ),
+            ),
+        );
+        VerifiedExecutableTransactionWithAliases::no_aliases(tx)
+    }
+
+    /// Reproduces the deferral-key collision on unmodified deferral logic: a
+    /// randomness-using transaction deferred at round 1 by a check that precedes the
+    /// randomness check (owned-object double spend) carries ConsensusRound{2, 1}. The
+    /// test authority's DKG never completes, so no commit generates randomness: reloaded
+    /// at round 2, the transaction re-defers to Randomness{1} - the key still holding
+    /// round 1's fresh randomness deferrals - and the insert displaces them, which the
+    /// collision sensor turns into a panic.
+    #[tokio::test(flavor = "current_thread")]
+    #[should_panic(expected = "Deferral key collision displaced finalized transactions")]
+    async fn test_deferral_key_collision_displaces_randomness_deferrals() {
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch_store = state.epoch_store_for_testing();
+
+        // Round 1, no randomness generated: fresh randomness-using transactions were
+        // deferred under Randomness{1}...
+        epoch_store.insert_deferred_transactions_for_test(
+            DeferralKey::new_for_randomness(1),
+            vec![randomness_user_txn()],
+        );
+        // ...while another randomness-using transaction won a contested owned-object
+        // lock in that commit and was double-spend-deferred under ConsensusRound{2, 1}.
+        epoch_store.insert_deferred_transactions_for_test(
+            DeferralKey::new_for_consensus_round(2, 1),
+            vec![randomness_user_txn()],
+        );
+
+        let mid_epoch = epoch_store
+            .next_reconfiguration_timestamp_ms()
+            .saturating_sub(10_000);
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::empty(2, mid_epoch, 1))
+            .await;
     }
 
     fn user_txn(gas_price: u64) -> VerifiedExecutableTransactionWithAliases {
