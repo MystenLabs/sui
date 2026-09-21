@@ -35,6 +35,88 @@ answer: >-
 
 Learn the developer essentials for building on Sui, including its architecture, how to write Move packages, and how to build transactions.
 
+## What does developing on Sui involve?
+
+Sui development centers on three areas: understanding the Sui architecture, writing Move packages, and building transactions. Each area builds on the previous one. You write Move packages to define onchain logic, then construct transactions to call that logic, and the Sui architecture determines how those transactions execute and reach finality.
+
+Move is a safe, resource-oriented language purpose-built for onchain assets. A Move package contains one or more modules. Each module defines types, functions, and the rules that govern how objects are created, transferred, and destroyed. Sui uses an object model where assets are explicit objects with defined ownership, rather than entries in a shared ledger.
+
+Transactions on Sui are programmable transaction blocks (PTBs). A single PTB can call multiple Move functions, transfer objects, and split or merge coins — all in one atomic operation. This composability reduces the number of round trips between your app and the network.
+
+## What is the Sui architecture?
+
+Sui is a layer 1 blockchain that uses a delegated proof-of-stake consensus mechanism. Validators process transactions and reach agreement through the Mysticeti consensus protocol. For transactions that involve only objects owned by a single address, Sui can bypass global consensus and achieve near-instant finality. Shared objects require full consensus ordering.
+
+Key architectural concepts include:
+
+- **Objects:** The fundamental unit of storage on Sui. Every asset, package, and piece of state is an object with a unique ID.
+- **Epochs:** Fixed time windows during which the validator set and staking parameters remain stable.
+- **Gas:** The unit of computation cost. Every transaction requires a gas budget paid in SUI.
+- **Validators:** Nodes that process transactions, vote on consensus, and store chain state.
+
+## How do you write a Move package?
+
+A Move package is a directory with a `Move.toml` manifest and a `sources/` folder containing `.move` files. The following example defines a minimal Move module that creates a simple onchain counter object:
+
+```move
+module counter::counter {
+    use sui::object::{Self, UID};
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
+
+    public struct Counter has key {
+        id: UID,
+        value: u64,
+    }
+
+    public fun create(ctx: &mut TxContext) {
+        let counter = Counter {
+            id: object::new(ctx),
+            value: 0,
+        };
+        transfer::transfer(counter, tx_context::sender(ctx));
+    }
+
+    public fun increment(counter: &mut Counter) {
+        counter.value = counter.value + 1;
+    }
+}
+```
+
+In this example, `Counter` is a Sui object because it has the `key` ability and contains a `UID` field. The `create` function constructs a new `Counter` and transfers it to the transaction sender. The `increment` function updates the counter's value in place.
+
+You publish a package to Sui using the Sui CLI:
+
+```bash
+sui client publish --gas-budget 50000000
+```
+
+## How do you build transactions?
+
+After publishing a package, you call its functions through transactions. Using the Sui TypeScript SDK, you construct a PTB that calls `increment` on an existing counter:
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+const tx = new Transaction();
+
+tx.moveCall({
+  target: `${PACKAGE_ID}::counter::increment`,
+  arguments: [tx.object(COUNTER_OBJECT_ID)],
+});
+
+const result = await client.signAndExecuteTransaction({
+  signer: keypair,
+  transaction: tx,
+});
+```
+
+Replace `PACKAGE_ID` with the published package address and `COUNTER_OBJECT_ID` with the object ID of the counter you want to increment.
+
+## Where do you start?
+
+If you are new to Sui development, start with the architecture overview to understand how Sui processes transactions and manages state. Then move to writing your first Move package, and finally explore PTBs to learn how to compose complex onchain operations from your app.
+
 import DocCardList from '@theme/DocCardList';
 
 <DocCardList />
