@@ -54,6 +54,67 @@ Off-ramp coverage is evolving. Provider asset support and regional availability 
 
 See [Fiat On-Ramps](/onchain-finance/asset-custody/fiat-on-ramps) for the full on-ramp provider list.
 
+## What fiat off-ramp providers support Sui?
+
+Several providers support Sui-native assets for off-ramp flows. The table above lists all known providers with live Sui integration. Key providers include:
+
+- **Banxa** — supports SUI sell flows via hosted checkout.
+- **Coinbase CDP** — supports SUI, USDC, WAL, and DEEP through the Coinbase Developer Platform off-ramp API.
+- **Meld** — supports SUI, USDC, CETUS, and NAVI with a widget-based integration.
+- **Onramper** — supports SUI through their aggregated off-ramp network.
+- **Alchemy Pay** — supports AUSD, SUI, and USD with API-based integration.
+
+## How do I integrate a fiat off-ramp into a Sui app?
+
+Integration patterns differ by provider, but most offer either a hosted redirect flow or an embeddable widget. The following example demonstrates launching a Coinbase CDP off-ramp session for a Sui user. The Coinbase CDP off-ramp API generates a URL that you redirect your user to, pre-filled with their wallet address and the asset they want to sell.
+
+```typescript
+// Generate a Coinbase CDP off-ramp URL for a Sui user
+// See: https://docs.cdp.coinbase.com/onramp/offramp/offramp-overview
+
+const COINBASE_APP_ID = "your-coinbase-app-id";
+
+interface OfframpParams {
+  userAddress: string;
+  asset?: string;
+  amount?: string;
+  redirectUrl?: string;
+}
+
+function buildCoinbaseOfframpUrl(params: OfframpParams): string {
+  const { userAddress, asset = "SUI", amount, redirectUrl } = params;
+
+  const baseUrl = "https://pay.coinbase.com/v3/buy/select-asset";
+
+  const query = new URLSearchParams({
+    appId: COINBASE_APP_ID,
+    // Pre-select the Sui network and asset
+    defaultNetwork: "sui",
+    defaultAsset: asset,
+    // Pass the user's Sui wallet address
+    addresses: JSON.stringify({ sui: [userAddress] }),
+    ...(amount && { presetCryptoAmount: amount }),
+    ...(redirectUrl && { redirectUrl }),
+  });
+
+  return `${baseUrl}?${query.toString()}`;
+}
+
+// Example usage: open the off-ramp flow for the connected user
+async function handleOfframp(userWalletAddress: string) {
+  const offrampUrl = buildCoinbaseOfframpUrl({
+    userAddress: userWalletAddress,
+    asset: "SUI",
+    redirectUrl: "https://your-app.com/offramp-complete",
+  });
+
+  // Redirect the user to the Coinbase-hosted off-ramp flow
+  window.open(offrampUrl, "_blank");
+}
+```
+
+For providers that offer an embeddable widget (such as Meld or Onramper), you typically load the widget script and mount it to a DOM element, passing the user's wallet address and preferred asset as configuration options. Refer to each provider's documentation for widget-specific setup.
+
 ## Asset limitations
 
 When you choose off-ramp providers, be aware of the following limitations:
