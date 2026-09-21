@@ -107,6 +107,97 @@ fn neg_rejects_non_signed_operands() {
         verify(&module),
         Err(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR)
     );
+
+    let module = module_with_locals(
+        vec![SignatureToken::I64],
+        vec![
+            Bytecode::LdI64(1),
+            Bytecode::StLoc(0),
+            Bytecode::ImmBorrowLoc(0),
+            Bytecode::Neg,
+            Bytecode::Pop,
+            Bytecode::Ret,
+        ],
+    );
+    assert_eq!(
+        verify(&module),
+        Err(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR)
+    );
+}
+
+#[test]
+fn binary_ops_on_signed_operands() {
+    let module = module_with_locals(
+        vec![SignatureToken::I8],
+        vec![
+            Bytecode::LdI8(1),
+            Bytecode::LdI8(2),
+            Bytecode::Add,
+            Bytecode::StLoc(0),
+            Bytecode::Ret,
+        ],
+    );
+    assert!(verify(&module).is_ok());
+
+    let module = dummy_procedure_module(vec![
+        Bytecode::LdI8(1),
+        Bytecode::LdU8(2),
+        Bytecode::Add,
+        Bytecode::Pop,
+        Bytecode::Ret,
+    ]);
+    assert_eq!(
+        verify(&module),
+        Err(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR)
+    );
+
+    let module = dummy_procedure_module(vec![
+        Bytecode::LdI8(1),
+        Bytecode::LdI16(2),
+        Bytecode::Lt,
+        Bytecode::Pop,
+        Bytecode::Ret,
+    ]);
+    assert_eq!(
+        verify(&module),
+        Err(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR)
+    );
+
+    let module = module_with_locals(
+        vec![SignatureToken::Bool],
+        vec![
+            Bytecode::LdI32(1),
+            Bytecode::LdI32(2),
+            Bytecode::Lt,
+            Bytecode::StLoc(0),
+            Bytecode::Ret,
+        ],
+    );
+    assert!(verify(&module).is_ok());
+
+    let module = module_with_locals(
+        vec![SignatureToken::I64],
+        vec![
+            Bytecode::LdI64(1),
+            Bytecode::LdU8(2),
+            Bytecode::Shl,
+            Bytecode::StLoc(0),
+            Bytecode::Ret,
+        ],
+    );
+    assert!(verify(&module).is_ok());
+
+    let module = dummy_procedure_module(vec![
+        Bytecode::LdI64(1),
+        Bytecode::LdI8(2),
+        Bytecode::Shl,
+        Bytecode::Pop,
+        Bytecode::Ret,
+    ]);
+    assert_eq!(
+        verify(&module),
+        Err(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR)
+    );
 }
 
 #[test]
@@ -136,7 +227,7 @@ fn cast_signed_accepts_any_integer_operand() {
             );
         }
     }
-    // Unsigned casts accept signed operands too; the range check happens at runtime.
+    // Verifier does not do range-check casts; that is the runtime's job.
     let module = dummy_procedure_module(vec![
         Bytecode::LdI64(1),
         Bytecode::CastU8,

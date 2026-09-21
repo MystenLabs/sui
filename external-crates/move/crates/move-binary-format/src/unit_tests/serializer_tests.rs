@@ -233,14 +233,13 @@ fn serialize_v7_has_flavor() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Signed integer usage detection + serializer version gates
+// Signed integer serializer version gates
 // ---------------------------------------------------------------------------------------------
 
 mod signed_integers {
     use super::*;
     use crate::file_format::{
         Constant, FieldDefinition, IdentifierIndex, Signature, SignatureToken, TypeSignature,
-        module_uses_signed_integers,
     };
 
     fn with_signed_signature() -> CompiledModule {
@@ -287,32 +286,6 @@ mod signed_integers {
         m
     }
 
-    #[test]
-    fn module_uses_signed_integers_detects_all_positions() {
-        assert!(!module_uses_signed_integers(&basic_test_module()));
-        assert!(!module_uses_signed_integers(&basic_test_module_with_enum()));
-
-        assert!(module_uses_signed_integers(&with_signed_signature()));
-        assert!(module_uses_signed_integers(&with_signed_constant()));
-        // Field definitions serialize their tokens directly (not via the signature pool), so
-        // the traversal must cover them explicitly.
-        assert!(module_uses_signed_integers(&with_signed_struct_field()));
-        assert!(module_uses_signed_integers(&with_signed_enum_field()));
-
-        for instruction in [
-            Bytecode::LdI8(-1),
-            Bytecode::LdI256(Box::new(move_core_types::i256::I256::from(-1i8))),
-            Bytecode::CastI32,
-            Bytecode::Neg,
-        ] {
-            assert!(module_uses_signed_integers(&with_signed_bytecode(
-                instruction
-            )));
-        }
-    }
-
-    // The serializer's version gate lives at the signature-token peel-off, so every position
-    // `module_uses_signed_integers` covers must also refuse to serialize below SIGNED_INT_VERSION.
     #[test]
     fn serializer_gates_every_signed_position_below_version_8() {
         let cases: Vec<(CompiledModule, &str)> = vec![

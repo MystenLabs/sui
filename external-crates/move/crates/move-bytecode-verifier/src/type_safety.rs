@@ -217,8 +217,7 @@ fn variant_switch(
     Ok(())
 }
 
-// helper for the integer cast instructions (`CastU*` / `CastI*`): pop the operand, check that
-// it is an integer, and push the target type
+// Pops an integer operand and pushes `target`, for every CastU* and CastI* instruction.
 fn check_cast(
     verifier: &mut TypeSafetyChecker,
     meter: &mut (impl Meter + ?Sized),
@@ -856,15 +855,7 @@ fn verify_instr(
             }
         }
 
-        Bytecode::CastU8 => check_cast(verifier, meter, offset, ST::U8)?,
-        Bytecode::CastU64 => check_cast(verifier, meter, offset, ST::U64)?,
-        Bytecode::CastU128 => check_cast(verifier, meter, offset, ST::U128)?,
-
-        // TODO (signed-ints): `is_integer` includes I8..I256, so these arms (and Shl/Shr,
-        // Lt/Gt/Le/Ge, and `check_cast` in both directions) accept signed operands. We need
-        // to ensure the runtime implements each of Add/Sub/Mul/Mod/Div, BitOr/BitAnd/Xor,
-        // Shl/Shr, Lt/Gt/Le/Ge, and cross-signedness casts for signed integers before
-        // enabling SIGNED_INT_VERSION.
+        // TODO (signed-ints): implement runtime support before enabling signed operands here.
         Bytecode::Add
         | Bytecode::Sub
         | Bytecode::Mul
@@ -1082,8 +1073,11 @@ fn verify_instr(
                 _ => return Err(verifier.error(StatusCode::TYPE_MISMATCH, offset)),
             };
         }
+        Bytecode::CastU8 => check_cast(verifier, meter, offset, ST::U8)?,
         Bytecode::CastU16 => check_cast(verifier, meter, offset, ST::U16)?,
         Bytecode::CastU32 => check_cast(verifier, meter, offset, ST::U32)?,
+        Bytecode::CastU64 => check_cast(verifier, meter, offset, ST::U64)?,
+        Bytecode::CastU128 => check_cast(verifier, meter, offset, ST::U128)?,
         Bytecode::CastU256 => check_cast(verifier, meter, offset, ST::U256)?,
         Bytecode::CastI8 => check_cast(verifier, meter, offset, ST::I8)?,
         Bytecode::CastI16 => check_cast(verifier, meter, offset, ST::I16)?,
@@ -1093,9 +1087,6 @@ fn verify_instr(
         Bytecode::CastI256 => check_cast(verifier, meter, offset, ST::I256)?,
         Bytecode::Neg => {
             let operand = safe_unwrap!(verifier.stack.pop());
-            // Neg is restricted to signed integer types only. Unsigned integers use
-            // wrapping subtraction from zero instead. The operand type is preserved
-            // (negating an i32 produces an i32, etc.).
             if !operand.is_signed_integer() {
                 return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
             }

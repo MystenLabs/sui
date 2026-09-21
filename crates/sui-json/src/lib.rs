@@ -616,6 +616,7 @@ pub fn primitive_type(
 
         SignatureToken::Signer => return None,
 
+        // TODO (signed-ints): add primitive layouts for signed integer types.
         SignatureToken::I8
         | SignatureToken::I16
         | SignatureToken::I32

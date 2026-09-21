@@ -214,7 +214,10 @@ fn bytecode(code: &FF::Bytecode) -> PartialVMResult<ast::Bytecode> {
         | FF::Bytecode::CastI128
         | FF::Bytecode::CastI256
         | FF::Bytecode::Neg => {
-            todo!("(signed-ints) signed integer bytecodes in the VM runtime")
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "(signed-ints) signed integer bytecodes not yet supported in the VM runtime"
+            ));
         }
 
         // Deprecated bytecodes -- bail

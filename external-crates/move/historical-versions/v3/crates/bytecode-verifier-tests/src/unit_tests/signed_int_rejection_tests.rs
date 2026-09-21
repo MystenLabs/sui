@@ -5,12 +5,29 @@
 //! opcode must fail verification.
 
 use crate::support::dummy_procedure_module;
-use move_binary_format::file_format::{Bytecode, Signature, SignatureToken, basic_test_module};
+use move_binary_format::{
+    errors::VMResult,
+    file_format::{Bytecode, Signature, SignatureIndex, SignatureToken, basic_test_module},
+};
 use move_bytecode_verifier::{
     SignatureChecker, ability_cache::AbilityCache, verify_module_unmetered,
 };
 use move_bytecode_verifier_meter::dummy::DummyMeter;
-use move_core_types::i256::I256;
+use move_core_types::{i256::I256, vm_status::StatusCode};
+
+fn assert_rejected(result: VMResult<()>, what: &str) {
+    let err = result.expect_err("signed integer content must be rejected");
+    assert_eq!(
+        err.major_status(),
+        StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        "unexpected status for {what}"
+    );
+    let message = format!("{err:?}");
+    assert!(
+        message.contains("signed int"),
+        "unexpected message for {what}: {message}"
+    );
+}
 
 #[test]
 fn signed_signature_token_rejected() {
@@ -23,15 +40,17 @@ fn signed_signature_token_rejected() {
         SignatureToken::I256,
     ] {
         let mut m = basic_test_module();
-        m.signatures[0] = Signature(vec![ty.clone()]);
+        let signature_idx = SignatureIndex(m.signatures.len() as u16);
+        m.signatures.push(Signature(vec![ty.clone()]));
+        m.function_defs[0].code.as_mut().unwrap().locals = signature_idx;
         let ability_cache = &mut AbilityCache::new(&m);
-        assert!(
-            SignatureChecker::verify_module(&m, ability_cache, &mut DummyMeter).is_err(),
-            "signature checker must reject {ty:?}"
+        assert_rejected(
+            SignatureChecker::verify_module(&m, ability_cache, &mut DummyMeter),
+            &format!("signature checker {ty:?}"),
         );
-        assert!(
-            verify_module_unmetered(&m).is_err(),
-            "full verification must reject {ty:?}"
+        assert_rejected(
+            verify_module_unmetered(&m),
+            &format!("full verification {ty:?}"),
         );
     }
 }
@@ -94,10 +113,12 @@ fn signed_opcode_rejected() {
     ];
     for code in programs {
         let module = dummy_procedure_module(code.clone());
-        assert!(
-            verify_module_unmetered(&module).is_err(),
-            "verification must reject {:?}",
-            code[..code.len() - 2].iter().collect::<Vec<_>>()
+        assert_rejected(
+            verify_module_unmetered(&module),
+            &format!(
+                "opcode {:?}",
+                code[..code.len() - 2].iter().collect::<Vec<_>>()
+            ),
         );
     }
 }

@@ -1449,7 +1449,7 @@ impl Frame {
             | Bytecode::Neg => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Signed integer operations not supported in v3".to_string()),
+                        .with_message("Unexpected signed int opcode in version 3".to_string()),
                 );
             }
         }

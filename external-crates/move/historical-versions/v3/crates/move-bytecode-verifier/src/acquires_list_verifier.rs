@@ -197,12 +197,10 @@ impl<'a> AcquiresVerifier<'a> {
             | Bytecode::CastI64
             | Bytecode::CastI128
             | Bytecode::CastI256
-            | Bytecode::Neg => {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Unexpected signed int opcode in version 3".to_string()),
-                );
-            }
+            | Bytecode::Neg => Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message("Unexpected signed int opcode in version 3".to_string())),
         }
     }
 

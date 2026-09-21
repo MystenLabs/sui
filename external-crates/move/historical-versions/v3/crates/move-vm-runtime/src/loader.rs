@@ -505,7 +505,9 @@ impl ModuleCache {
             | SignatureToken::I256 => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Signed integer types not supported in v3".to_string()),
+                        .with_message(
+                            "Unexpected signed int signature token in version 3".to_string(),
+                        ),
                 );
             }
         };

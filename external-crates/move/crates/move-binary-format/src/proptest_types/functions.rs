@@ -15,8 +15,8 @@ use crate::{
         VariantInstantiationHandleIndex, VariantJumpTable, VariantJumpTableIndex, Visibility,
     },
     file_format_common::{
-        SIGNED_INT_VERSION, VARIANT_HANDLE_INDEX_MAX, VARIANT_INSTANTIATION_HANDLE_INDEX_MAX,
-        VARIANT_TAG_MAX_VALUE, VERSION_MAX,
+        SIGNED_INTS_SERIALIZABLE, VARIANT_HANDLE_INDEX_MAX, VARIANT_INSTANTIATION_HANDLE_INDEX_MAX,
+        VARIANT_TAG_MAX_VALUE,
     },
     internals::ModuleIndex,
     proptest_types::{
@@ -1126,7 +1126,7 @@ impl BytecodeGen {
         1 => any::<u32>().prop_map(Bytecode::LdU32),
         1 => any::<Box<U256>>().prop_map(Bytecode::LdU256),
         ];
-        if VERSION_MAX >= SIGNED_INT_VERSION {
+        if SIGNED_INTS_SERIALIZABLE {
             // Weight 15 matches the total weight of `unsigned`, so every load instruction is
             // equally likely and `just_bytecode_strategy` keeps its 9-to-1 edge over loads.
             prop_oneof![
@@ -1158,7 +1158,7 @@ impl BytecodeGen {
             CastU16, CastU32, CastU256, CastI8, CastI16, CastI32, CastI64, CastI128, CastI256, Neg,
             Not, Nop, Shl, Shr,
         ];
-        if VERSION_MAX >= SIGNED_INT_VERSION {
+        if SIGNED_INTS_SERIALIZABLE {
             select(JUST_BYTECODES_SIGNED)
         } else {
             select(JUST_BYTECODES)

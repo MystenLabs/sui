@@ -677,17 +677,25 @@ fn serialize_signature_token_single_node_impl(
         SignatureToken::U64 => binary.push(SerializedType::U64 as u8)?,
         SignatureToken::U128 => binary.push(SerializedType::U128 as u8)?,
         SignatureToken::U256 => binary.push(SerializedType::U256 as u8)?,
-        // TODO (signed-ints): emit `SerializedType::I8..I256` once `VERSION_MAX` reaches
-        // `SIGNED_INT_VERSION`. Until then no serializable version can carry signed types.
         SignatureToken::I8
         | SignatureToken::I16
         | SignatureToken::I32
         | SignatureToken::I64
         | SignatureToken::I128
-        | SignatureToken::I256 => bail!(
-            "Signed integer types (i8..i256) not supported in bytecode version {}",
-            VERSION_MAX
-        ),
+        | SignatureToken::I256
+            if !SIGNED_INTS_SERIALIZABLE =>
+        {
+            bail!(
+                "Signed integer types (i8..i256) not supported in bytecode version {}",
+                VERSION_MAX
+            )
+        }
+        SignatureToken::I8 => binary.push(SerializedType::I8 as u8)?,
+        SignatureToken::I16 => binary.push(SerializedType::I16 as u8)?,
+        SignatureToken::I32 => binary.push(SerializedType::I32 as u8)?,
+        SignatureToken::I64 => binary.push(SerializedType::I64 as u8)?,
+        SignatureToken::I128 => binary.push(SerializedType::I128 as u8)?,
+        SignatureToken::I256 => binary.push(SerializedType::I256 as u8)?,
         SignatureToken::Address => binary.push(SerializedType::ADDRESS as u8)?,
         SignatureToken::Signer => binary.push(SerializedType::SIGNER as u8)?,
         SignatureToken::Vector(_) => {

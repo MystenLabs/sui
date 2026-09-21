@@ -109,15 +109,15 @@ impl<'a> StructDefGraphBuilder<'a> {
             | T::U64
             | T::U128
             | T::U256
-            | T::Address
-            | T::Signer
-            | T::TypeParameter(_)
             | T::I8
             | T::I16
             | T::I32
             | T::I64
             | T::I128
-            | T::I256 => (),
+            | T::I256
+            | T::Address
+            | T::Signer
+            | T::TypeParameter(_) => (),
             T::Reference(_) | T::MutableReference(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)

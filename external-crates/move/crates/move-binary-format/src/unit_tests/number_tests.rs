@@ -163,61 +163,29 @@ fn signed_le_roundtrip_interesting_values() {
     signed_roundtrip!(write_i256, read_i256, I256::max_value());
 }
 
-proptest! {
-    #[test]
-    fn i8_roundtrip(input in any::<i8>()) {
-        let mut serialized = BinaryData::new();
-        write_i8(&mut serialized, input).expect("serialization should work");
-        let output = signed_read::read_i8(&serialized.into_inner()[..])
-            .expect("deserialization should work");
-        prop_assert_eq!(input, output);
-    }
+macro_rules! proptest_signed_roundtrip {
+    ($($name:ident, $input:ty, $writer:ident, $reader:ident $(, $map:expr)?;)*) => {
+        proptest! {
+            $(
+                #[test]
+                fn $name(input in any::<$input>()) {
+                    $(let input = $map(input);)?
+                    let mut serialized = BinaryData::new();
+                    $writer(&mut serialized, input).expect("serialization should work");
+                    let output = signed_read::$reader(&serialized.into_inner()[..])
+                        .expect("deserialization should work");
+                    prop_assert_eq!(input, output);
+                }
+            )*
+        }
+    };
+}
 
-    #[test]
-    fn i16_roundtrip(input in any::<i16>()) {
-        let mut serialized = BinaryData::new();
-        write_i16(&mut serialized, input).expect("serialization should work");
-        let output = signed_read::read_i16(&serialized.into_inner()[..])
-            .expect("deserialization should work");
-        prop_assert_eq!(input, output);
-    }
-
-    #[test]
-    fn i32_roundtrip(input in any::<i32>()) {
-        let mut serialized = BinaryData::new();
-        write_i32(&mut serialized, input).expect("serialization should work");
-        let output = signed_read::read_i32(&serialized.into_inner()[..])
-            .expect("deserialization should work");
-        prop_assert_eq!(input, output);
-    }
-
-    #[test]
-    fn i64_roundtrip(input in any::<i64>()) {
-        let mut serialized = BinaryData::new();
-        write_i64(&mut serialized, input).expect("serialization should work");
-        let output = signed_read::read_i64(&serialized.into_inner()[..])
-            .expect("deserialization should work");
-        prop_assert_eq!(input, output);
-    }
-
-    #[test]
-    fn i128_roundtrip(input in any::<i128>()) {
-        let mut serialized = BinaryData::new();
-        write_i128(&mut serialized, input).expect("serialization should work");
-        let output = signed_read::read_i128(&serialized.into_inner()[..])
-            .expect("deserialization should work");
-        prop_assert_eq!(input, output);
-    }
-
-    #[test]
-    fn i256_roundtrip(input in any::<i128>()) {
-        // I256 has no `Arbitrary` impl; widen an arbitrary i128 (covers both signs and
-        // the low-128 bit patterns; MIN/MAX are pinned in the explicit test above).
-        let input = I256::from(input);
-        let mut serialized = BinaryData::new();
-        write_i256(&mut serialized, input).expect("serialization should work");
-        let output = signed_read::read_i256(&serialized.into_inner()[..])
-            .expect("deserialization should work");
-        prop_assert_eq!(input, output);
-    }
+proptest_signed_roundtrip! {
+    i8_roundtrip, i8, write_i8, read_i8;
+    i16_roundtrip, i16, write_i16, read_i16;
+    i32_roundtrip, i32, write_i32, read_i32;
+    i64_roundtrip, i64, write_i64, read_i64;
+    i128_roundtrip, i128, write_i128, read_i128;
+    i256_roundtrip, i128, write_i256, read_i256, I256::from;
 }

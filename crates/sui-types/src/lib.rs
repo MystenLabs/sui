@@ -357,11 +357,8 @@ mod tests {
     use super::*;
     use expect_test::expect;
 
-    // `is_primitive` must reject signed integers so the entry-points verifier does not treat
-    // them as pure-arg-eligible before the signed value/BCS layer lands.
-    // TODO (signed-ints): the protocol still rejects VERSION_8 modules, so this pins the
-    // predicate on hand-built signature tokens. Replace with an e2e publish once `VERSION_MAX`
-    // reaches `SIGNED_INT_VERSION`.
+    // Signed integers and vectors of them are not pure-arg-eligible entry parameters.
+    // TODO (signed-ints): replace with an e2e publish once signed modules are enabled.
     #[test]
     fn test_signed_integers_are_not_primitive() {
         use move_binary_format::file_format::{SignatureToken as S, empty_module};

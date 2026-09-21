@@ -424,7 +424,9 @@ impl ModuleCache {
             | SignatureToken::I256 => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Unexpected signed int type in version 1".to_string()),
+                        .with_message(
+                            "Unexpected signed int signature token in version 1".to_string(),
+                        ),
                 );
             }
         };

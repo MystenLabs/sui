@@ -323,7 +323,9 @@ impl<'a> SignatureChecker<'a> {
             | SignatureToken::I256 => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Unexpected signed int type in version 1".to_string()),
+                        .with_message(
+                            "Unexpected signed int signature token in version 1".to_string(),
+                        ),
                 );
             }
         }
@@ -374,7 +376,7 @@ impl<'a> SignatureChecker<'a> {
             I8 | I16 | I32 | I64 | I128 | I256 => Err(PartialVMError::new(
                 StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
             )
-            .with_message("Unexpected signed int type in version 1".to_string())),
+            .with_message("Unexpected signed int signature token in version 1".to_string())),
         }
     }
 
@@ -446,7 +448,7 @@ impl<'a> SignatureChecker<'a> {
             | SignatureToken::I256 => Err(PartialVMError::new(
                 StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
             )
-            .with_message("Unexpected signed int type in version 1".to_string())),
+            .with_message("Unexpected signed int signature token in version 1".to_string())),
         }
     }
 

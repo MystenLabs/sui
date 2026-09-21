@@ -6,7 +6,8 @@ use crate::{
     deserializer::{load_signature_token_test_entry, load_signature_token_test_entry_with_version},
     file_format::{DatatypeHandleIndex, SignatureToken},
     file_format_common::{
-        BinaryData, SIGNATURE_TOKEN_DEPTH_MAX, SIGNED_INT_VERSION, SerializedType, VERSION_7,
+        BinaryData, SIGNATURE_TOKEN_DEPTH_MAX, SIGNED_INT_VERSION, SIGNED_INTS_SERIALIZABLE,
+        SerializedType, VERSION_7,
     },
     serializer::{serialize_signature_token, serialize_signature_token_unchecked},
 };
@@ -100,22 +101,25 @@ const SIGNED_TOKENS: [(SignatureToken, SerializedType); 6] = [
     (SignatureToken::I256, SerializedType::I256),
 ];
 
-// TODO (signed-ints): flip this to a serialize/deserialize round trip once `VERSION_MAX` reaches
-// `SIGNED_INT_VERSION`.
 #[test]
-fn serialize_signed_token_rejected() {
-    for (ty, _) in SIGNED_TOKENS {
+fn serialize_signed_token() {
+    for (ty, tag) in SIGNED_TOKENS {
         let mut binary = BinaryData::new();
-        let err = serialize_signature_token(&mut binary, &ty)
-            .expect_err("signed tokens must not serialize below SIGNED_INT_VERSION");
-        assert!(
-            err.to_string().contains("Signed integer types"),
-            "unexpected error for {ty:?}: {err}"
-        );
-        // Nested occurrences are caught too (the gate is at the token peel-off).
-        let mut binary = BinaryData::new();
-        serialize_signature_token(&mut binary, &SignatureToken::Vector(Box::new(ty.clone())))
-            .expect_err("nested signed tokens must not serialize below SIGNED_INT_VERSION");
+        if SIGNED_INTS_SERIALIZABLE {
+            serialize_signature_token(&mut binary, &ty)
+                .expect("signed tokens must serialize at SIGNED_INT_VERSION");
+            assert_eq!(binary.into_inner(), vec![tag as u8]);
+        } else {
+            let err = serialize_signature_token(&mut binary, &ty)
+                .expect_err("signed tokens must not serialize below SIGNED_INT_VERSION");
+            assert!(
+                err.to_string().contains("Signed integer types"),
+                "unexpected error for {ty:?}: {err}"
+            );
+            let mut binary = BinaryData::new();
+            serialize_signature_token(&mut binary, &SignatureToken::Vector(Box::new(ty.clone())))
+                .expect_err("nested signed tokens must not serialize below SIGNED_INT_VERSION");
+        }
     }
 }
 

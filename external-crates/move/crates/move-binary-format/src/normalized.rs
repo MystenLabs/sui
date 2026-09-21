@@ -437,8 +437,16 @@ impl<S> Type<S> {
             T::I8 | T::I16 | T::I32 | T::I64 | T::I128 | T::I256 => return None,
             T::Address => TypeTag::Address,
             T::Signer => TypeTag::Signer,
-            T::Vector(t) => TypeTag::Vector(Box::new(t.to_type_tag(pool)?)),
-            T::Datatype(dt) => TypeTag::Struct(Box::new(dt.to_struct_tag(pool)?)),
+            T::Vector(t) => match t.to_type_tag(pool) {
+                Some(tag) => TypeTag::Vector(Box::new(tag)),
+                None if t.contains_signed_integer() => return None,
+                None => panic!("Invariant violation: vector type argument contains reference"),
+            },
+            T::Datatype(dt) => match dt.to_struct_tag(pool) {
+                Some(tag) => TypeTag::Struct(Box::new(tag)),
+                None if dt.contains_signed_integer() => return None,
+                None => panic!("Invariant violation: datatype type argument contains reference"),
+            },
             T::TypeParameter(_) => unreachable!(),
         })
     }
@@ -473,6 +481,25 @@ impl<S> Type<S> {
 
     pub fn from_datatype(datatype: Datatype<S>) -> Self {
         Type::Datatype(Box::new(datatype))
+    }
+
+    fn contains_signed_integer(&self) -> bool {
+        use Type as T;
+        match self {
+            T::I8 | T::I16 | T::I32 | T::I64 | T::I128 | T::I256 => true,
+            T::Vector(t) | T::Reference(_, t) => t.contains_signed_integer(),
+            T::Datatype(dt) => dt.contains_signed_integer(),
+            T::Bool
+            | T::U8
+            | T::U16
+            | T::U32
+            | T::U64
+            | T::U128
+            | T::U256
+            | T::Address
+            | T::Signer
+            | T::TypeParameter(_) => false,
+        }
     }
 
     /// Return true if `self` is a closed type with no free type variables
@@ -559,9 +586,8 @@ impl<S> Datatype<S> {
         }
     }
 
-    /// Returns `None` when a type argument has no `TypeTag`, such as a reference or a signed
-    /// integer.
-    // TODO (signed-ints): the signed case goes away once `TypeTag` has signed variants.
+    /// Returns `None` when a type argument contains a signed integer.
+    // TODO (signed-ints): this goes away once `TypeTag` has signed variants.
     pub fn to_struct_tag<Pool: StringPool<String = S>>(&self, pool: &Pool) -> Option<StructTag> {
         let Datatype {
             module,
@@ -574,9 +600,19 @@ impl<S> Datatype<S> {
             name: pool.as_ident_str(name).to_owned(),
             type_params: type_arguments
                 .iter()
-                .map(|t| t.to_type_tag(pool))
+                .map(|t| match t.to_type_tag(pool) {
+                    Some(tag) => Some(tag),
+                    None if t.contains_signed_integer() => None,
+                    None => panic!("Invariant violation: struct type argument contains reference"),
+                })
                 .collect::<Option<Vec<_>>>()?,
         })
+    }
+
+    fn contains_signed_integer(&self) -> bool {
+        self.type_arguments
+            .iter()
+            .any(Type::contains_signed_integer)
     }
 
     pub fn from_struct_tag<Pool: StringPool<String = S>>(pool: &mut Pool, tag: &StructTag) -> Self {

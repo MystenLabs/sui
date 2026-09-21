@@ -338,6 +338,7 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
             NormalizedType::Reference(true, mr) => SuiMoveNormalizedType::MutableReference(
                 Box::new(SuiMoveNormalizedType::from(&**mr)),
             ),
+            // TODO (signed-ints): add normalized RPC variants for signed integer types.
             NormalizedType::I8
             | NormalizedType::I16
             | NormalizedType::I32

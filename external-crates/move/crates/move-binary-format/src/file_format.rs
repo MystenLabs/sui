@@ -1140,42 +1140,26 @@ impl Arbitrary for SignatureToken {
     fn arbitrary_with(_params: Self::Parameters) -> Self::Strategy {
         use SignatureToken::*;
 
-        // TODO (signed-ints): signed tokens join the default strategy once `VERSION_MAX`
-        // reaches `SIGNED_INT_VERSION`.
-        let leaf = if file_format_common::VERSION_MAX >= file_format_common::SIGNED_INT_VERSION {
+        let unsigned = prop_oneof![
+            Just(Bool),
+            Just(U8),
+            Just(U16),
+            Just(U32),
+            Just(U64),
+            Just(U128),
+            Just(U256),
+            Just(Address),
+            any::<DatatypeHandleIndex>().prop_map(Datatype),
+            any::<TypeParameterIndex>().prop_map(TypeParameter),
+        ];
+        let leaf = if file_format_common::SIGNED_INTS_SERIALIZABLE {
             prop_oneof![
-                Just(Bool),
-                Just(U8),
-                Just(U16),
-                Just(U32),
-                Just(U64),
-                Just(U128),
-                Just(U256),
-                Just(I8),
-                Just(I16),
-                Just(I32),
-                Just(I64),
-                Just(I128),
-                Just(I256),
-                Just(Address),
-                any::<DatatypeHandleIndex>().prop_map(Datatype),
-                any::<TypeParameterIndex>().prop_map(TypeParameter),
+                10 => unsigned,
+                6 => prop_oneof![Just(I8), Just(I16), Just(I32), Just(I64), Just(I128), Just(I256)],
             ]
             .boxed()
         } else {
-            prop_oneof![
-                Just(Bool),
-                Just(U8),
-                Just(U16),
-                Just(U32),
-                Just(U64),
-                Just(U128),
-                Just(U256),
-                Just(Address),
-                any::<DatatypeHandleIndex>().prop_map(Datatype),
-                any::<TypeParameterIndex>().prop_map(TypeParameter),
-            ]
-            .boxed()
+            unsigned.boxed()
         };
         leaf.prop_recursive(
             8,  // levels deep
@@ -1334,8 +1318,7 @@ pub struct Constant {
 #[cfg(any(test, feature = "fuzzing"))]
 fn version_max_bytecode_strategy() -> impl Strategy<Value = Bytecode> {
     any::<Bytecode>().prop_filter("signed bytecodes need SIGNED_INT_VERSION", |op| {
-        file_format_common::VERSION_MAX >= file_format_common::SIGNED_INT_VERSION
-            || !op.is_signed_integer_instruction()
+        file_format_common::SIGNED_INTS_SERIALIZABLE || !op.is_signed_integer_instruction()
     })
 }
 
@@ -1924,7 +1907,7 @@ pub enum Bytecode {
     ///
     /// ```..., integer_value -> ..., i256_value```
     CastI256,
-    /// Negate the signed integer on top of the stack, aborting when the operand is `MIN`.
+    /// Negate the signed integer on top of the stack.
     /// The result has the same type as the operand.
     ///
     /// Stack transition:
@@ -3002,49 +2985,6 @@ impl CompiledModule {
     pub fn self_id(&self) -> ModuleId {
         self.module_id_for_handle(self.self_handle())
     }
-}
-
-/// Indicates whether the module uses signed integer types or instructions anywhere they can
-/// occur (signature pool, constant types, field definitions, or code-unit bytecodes).
-pub fn module_uses_signed_integers(module: &CompiledModule) -> bool {
-    fn token_uses_signed_integers(token: &SignatureToken) -> bool {
-        token
-            .preorder_traversal()
-            .any(SignatureToken::is_signed_integer)
-    }
-
-    module
-        .signatures
-        .iter()
-        .any(|sig| sig.0.iter().any(token_uses_signed_integers))
-        || module
-            .constant_pool
-            .iter()
-            .any(|constant| token_uses_signed_integers(&constant.type_))
-        || module
-            .struct_defs
-            .iter()
-            .any(|struct_def| match &struct_def.field_information {
-                StructFieldInformation::Native => false,
-                StructFieldInformation::Declared(fields) => fields
-                    .iter()
-                    .any(|field| token_uses_signed_integers(&field.signature.0)),
-            })
-        || module.enum_defs.iter().any(|enum_def| {
-            enum_def.variants.iter().any(|variant| {
-                variant
-                    .fields
-                    .iter()
-                    .any(|field| token_uses_signed_integers(&field.signature.0))
-            })
-        })
-        || module.function_defs.iter().any(|function_def| {
-            function_def.code.as_ref().is_some_and(|code| {
-                code.code
-                    .iter()
-                    .any(Bytecode::is_signed_integer_instruction)
-            })
-        })
 }
 
 /// Return the simplest module that will pass the bounds checker

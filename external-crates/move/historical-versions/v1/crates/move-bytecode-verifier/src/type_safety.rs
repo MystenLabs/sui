@@ -1024,12 +1024,12 @@ fn instantiate(token: &SignatureToken, subst: &Signature) -> SignatureToken {
             debug_assert!((*idx as usize) < subst.len());
             subst.0[*idx as usize].clone()
         }
-        I8 => token.clone(),
-        I16 => token.clone(),
-        I32 => token.clone(),
-        I64 => token.clone(),
-        I128 => token.clone(),
-        I256 => token.clone(),
+        I8 => I8,
+        I16 => I16,
+        I32 => I32,
+        I64 => I64,
+        I128 => I128,
+        I256 => I256,
     }
 }
 

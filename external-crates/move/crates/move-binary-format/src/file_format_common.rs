@@ -279,7 +279,7 @@ pub enum SerializedJumpTableFlag {
 #[rustfmt::skip]
 #[allow(non_camel_case_types)]
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub enum Opcodes {
     POP                            = 0x01,
     RET                            = 0x02,
@@ -504,38 +504,20 @@ pub(crate) fn write_u256(
     binary.extend(&value.to_le_bytes())
 }
 
-/// Write an `i8` in Little Endian format.
-pub(crate) fn write_i8(binary: &mut BinaryData, value: i8) -> Result<()> {
-    binary.extend(&value.to_le_bytes())
+macro_rules! write_le_int {
+    ($name:ident, $ty:ty) => {
+        pub(crate) fn $name(binary: &mut BinaryData, value: $ty) -> Result<()> {
+            binary.extend(&value.to_le_bytes())
+        }
+    };
 }
 
-/// Write an `i16` in Little Endian format.
-pub(crate) fn write_i16(binary: &mut BinaryData, value: i16) -> Result<()> {
-    binary.extend(&value.to_le_bytes())
-}
-
-/// Write an `i32` in Little Endian format.
-pub(crate) fn write_i32(binary: &mut BinaryData, value: i32) -> Result<()> {
-    binary.extend(&value.to_le_bytes())
-}
-
-/// Write an `i64` in Little Endian format.
-pub(crate) fn write_i64(binary: &mut BinaryData, value: i64) -> Result<()> {
-    binary.extend(&value.to_le_bytes())
-}
-
-/// Write an `i128` in Little Endian format.
-pub(crate) fn write_i128(binary: &mut BinaryData, value: i128) -> Result<()> {
-    binary.extend(&value.to_le_bytes())
-}
-
-/// Write an `i256` in Little Endian format.
-pub(crate) fn write_i256(
-    binary: &mut BinaryData,
-    value: move_core_types::i256::I256,
-) -> Result<()> {
-    binary.extend(&value.to_le_bytes())
-}
+write_le_int!(write_i8, i8);
+write_le_int!(write_i16, i16);
+write_le_int!(write_i32, i32);
+write_le_int!(write_i64, i64);
+write_le_int!(write_i128, i128);
+write_le_int!(write_i256, move_core_types::i256::I256);
 
 pub fn read_u8(cursor: &mut Cursor<&[u8]>) -> Result<u8> {
     let mut buf = [0; 1];
@@ -610,7 +592,7 @@ pub const VERSION_6: u32 = 6;
 pub const VERSION_7: u32 = 7;
 
 /// Version 8: changes compared with version 7
-///  + signed integer bytecodes (i8–i256): LdI8–LdI256, CastI8–CastI256, Neg
+///  + signed integer types i8..i256 (SerializedType::I8..I256) and bytecodes LdI*, CastI*, Neg
 pub const VERSION_8: u32 = 8;
 
 /// The bytecode version that introduces signed integers. The serializer and deserializer
@@ -619,6 +601,10 @@ pub const SIGNED_INT_VERSION: u32 = VERSION_8;
 
 // Mark which version is the latest version
 pub const VERSION_MAX: u32 = VERSION_7;
+
+/// Signed integer tokens and bytecodes may be emitted only once `VERSION_MAX` reaches
+/// `SIGNED_INT_VERSION`.
+pub const SIGNED_INTS_SERIALIZABLE: bool = VERSION_MAX >= SIGNED_INT_VERSION;
 
 // Mark which oldest version is supported.
 // TODO(#145): finish v4 compatibility; as of now, only metadata is implemented
@@ -735,4 +721,25 @@ pub fn instruction_opcode(instruction: &Bytecode) -> Opcodes {
 /// serialization of the instruction's argument(s).
 pub fn instruction_key(instruction: &Bytecode) -> u8 {
     instruction_opcode(instruction) as u8
+}
+
+impl Opcodes {
+    pub fn is_signed_integer_instruction(self) -> bool {
+        matches!(
+            self,
+            Opcodes::LD_I8
+                | Opcodes::LD_I16
+                | Opcodes::LD_I32
+                | Opcodes::LD_I64
+                | Opcodes::LD_I128
+                | Opcodes::LD_I256
+                | Opcodes::CAST_I8
+                | Opcodes::CAST_I16
+                | Opcodes::CAST_I32
+                | Opcodes::CAST_I64
+                | Opcodes::CAST_I128
+                | Opcodes::CAST_I256
+                | Opcodes::NEG
+        )
+    }
 }

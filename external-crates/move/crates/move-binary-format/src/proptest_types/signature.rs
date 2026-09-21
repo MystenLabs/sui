@@ -7,7 +7,7 @@ use crate::{
         Ability, AbilitySet, DatatypeHandle, DatatypeHandleIndex, Signature, SignatureToken,
         TableIndex, TypeParameterIndex,
     },
-    file_format_common::{SIGNED_INT_VERSION, VERSION_MAX},
+    file_format_common::SIGNED_INTS_SERIALIZABLE,
 };
 use proptest::{
     collection::{SizeRange, vec},
@@ -142,7 +142,7 @@ impl SignatureTokenGen {
             Bool, U8, U16, U32, U64, U128, U256, I8, I16, I32, I64, I128, I256, Address, Signer,
         ];
 
-        if VERSION_MAX >= SIGNED_INT_VERSION {
+        if SIGNED_INTS_SERIALIZABLE {
             select(OWNED_NON_STRUCTS_SIGNED)
         } else {
             select(OWNED_NON_STRUCTS)

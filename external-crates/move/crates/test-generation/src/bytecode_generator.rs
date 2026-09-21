@@ -18,7 +18,7 @@ use move_binary_format::{
         FunctionInstantiationIndex, LocalIndex, SignatureToken, StructDefInstantiation,
         StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
     },
-    file_format_common::{SIGNED_INT_VERSION, VERSION_MAX},
+    file_format_common::SIGNED_INTS_SERIALIZABLE,
 };
 use move_core_types::{i256::I256, u256::U256};
 use rand::{Rng, rngs::StdRng};
@@ -323,7 +323,7 @@ impl<'a> BytecodeGenerator<'a> {
         // Generated modules must serialize at `VERSION_MAX` and execute on the current VM,
         // so signed instructions join the pool once `VERSION_MAX` reaches
         // `SIGNED_INT_VERSION`.
-        if VERSION_MAX >= SIGNED_INT_VERSION {
+        if SIGNED_INTS_SERIALIZABLE {
             instructions.extend([
                 (StackEffect::Add, BytecodeType::I8(Bytecode::LdI8)),
                 (StackEffect::Add, BytecodeType::I16(Bytecode::LdI16)),
