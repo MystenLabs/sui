@@ -40,6 +40,54 @@ answer: >-
 
 Sui provides built-in tools for testing and debugging Move smart contracts at every stage of development.
 
+## What tools can I use to test and debug Move contracts on Sui?
+
+Sui includes a native test framework for Move. You write unit tests directly in your Move source files using the `#[test]` attribute, then run them with `sui move test`. For more complex scenarios, the `test_scenario` module lets you simulate sequences of transactions and inspect object state between steps.
+
+To step through execution traces interactively, the Move Trace Debugger integrates with VS Code. When something goes wrong at runtime, the error reference documents common abort codes and their causes.
+
+The main tools available are:
+
+- **Unit tests:** Write test functions annotated with `#[test]` inside your Move modules. Run all tests with `sui move test`.
+- **test_scenario:** Simulate multi-transaction flows and model different user interactions in a controlled environment.
+- **Move Trace Debugger:** Step through Move execution traces in VS Code to inspect variable state and identify logic errors.
+- **Error reference:** Look up abort codes and error messages to diagnose failures quickly.
+
+## How do I run Move unit tests?
+
+Annotate a function with `#[test]` to mark it as a test. Use `#[test_only]` to restrict imports or helper functions to the test environment. Run all tests in a package from the package root:
+
+```bash
+sui move test
+```
+
+A basic unit test in Move looks like this:
+
+```move
+#[test_only]
+module example::my_module_tests {
+    use example::my_module;
+
+    #[test]
+    fun test_value_is_correct() {
+        let result = my_module::compute(10);
+        assert!(result == 20, 0);
+    }
+}
+```
+
+The `assert!` macro takes a boolean condition and an abort code. If the condition is false, the test fails with the given code.
+
+To run a single named test instead of the full suite, pass the test name as a filter:
+
+```bash
+sui move test test_value_is_correct
+```
+
+## What topics does Testing and Debugging cover?
+
+The subtopics in this section walk through each tool and technique in detail.
+
 import DocCardList from '@theme/DocCardList';
 
 <DocCardList />
