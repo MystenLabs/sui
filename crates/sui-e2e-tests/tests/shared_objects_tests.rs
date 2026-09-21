@@ -510,10 +510,11 @@ async fn shared_checkpoint_order_without_effects_dependencies() {
         sleep(Duration::from_millis(delay)).await;
     });
 
-    // Mainnet/testnet simulation runs retain the flag-off protocol configuration.
-    let devnet = sui_types::digests::ChainIdentifier::default().chain()
-        == sui_protocol_config::Chain::Unknown;
-    assert_checkpoint_order_with_effects_dependencies(ProtocolVersion::new(138), devnet).await;
+    // Mainnet simulation runs retain the flag-off protocol configuration.
+    let flag_enabled = sui_types::digests::ChainIdentifier::default().chain()
+        != sui_protocol_config::Chain::Mainnet;
+    assert_checkpoint_order_with_effects_dependencies(ProtocolVersion::new(138), flag_enabled)
+        .await;
 }
 
 /// End-to-end shared transaction test for a Sui validator. It does not test the client or wallet,

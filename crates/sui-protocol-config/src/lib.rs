@@ -409,7 +409,7 @@ const MAINNET_USDB: &str =
 //              Enable memory_safety_invariant_check_v2.
 // Version 138: Enable BumpOnly
 //              Enable check_object_funds_withdraw_in_execution on testnet.
-//              Disable effects transaction dependencies on devnet.
+//              Disable effects transaction dependencies on testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4782,8 +4782,6 @@ impl ProtocolConfig {
                     cfg.gas_model_version = Some(15);
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
-                    }
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.disable_effects_tx_dependencies = true;
                     }
                 }
