@@ -312,7 +312,7 @@ impl ValidatorConfigBuilder {
             validator_client_monitor_config: None,
             fork_recovery: None,
             transaction_driver_config: Some(TransactionDriverConfig::default()),
-            consensus_transaction_pool: self.consensus_transaction_pool_config,
+            consensus_transaction_pool: self.consensus_transaction_pool_config.unwrap_or_default(),
             congestion_log: None,
         }
     }
@@ -772,7 +772,7 @@ impl FullnodeConfigBuilder {
             transaction_driver_config: self
                 .transaction_driver_config
                 .or(Some(TransactionDriverConfig::default())),
-            consensus_transaction_pool: None,
+            consensus_transaction_pool: ConsensusTransactionPoolConfig::default(),
             congestion_log: None,
         }
     }

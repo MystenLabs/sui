@@ -39,6 +39,7 @@ async fn make_transfer_tx(cluster: &test_cluster::TestCluster, gas_price: u64) -
 fn pool_config(capacity: usize) -> ConsensusTransactionPoolConfig {
     ConsensusTransactionPoolConfig {
         max_pending_transactions: Some(capacity),
+        ..Default::default()
     }
 }
 

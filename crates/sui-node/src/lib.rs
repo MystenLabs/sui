@@ -943,7 +943,7 @@ impl SuiNode {
             .set(config.supported_protocol_versions.unwrap().max.as_u64() as i64);
 
         let consensus_adapter_metrics = OnceLock::new();
-        let transaction_pool_context = config.consensus_transaction_pool.as_ref().map(|_| {
+        let transaction_pool_context = config.consensus_transaction_pool.enabled.then(|| {
             Arc::new(TransactionPoolContext::new(
                 Arc::new(AdmissionQueueMetrics::new(
                     &registry_service.default_registry(),
