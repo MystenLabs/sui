@@ -48,6 +48,8 @@ answer: >-
 
 Every object stored onchain is referenced by an ID and version. When a transaction modifies an object, it writes the new contents to an onchain reference with the same ID but a new version. Despite appearing multiple times in the store, only the latest version of an object is available to transactions. Only one transaction can modify an object at a given version, guaranteeing a linear history.
 
+Sui versions objects using two distinct paths: the **fastpath** (for address-owned and immutable objects) and **consensus** (for shared, party, and address-owned objects requiring coordination). Understanding which path your objects use helps you design for the right trade-offs between latency, flexibility, and gas cost.
+
 ```
 (I, v0) => ...
 (I, v1) => ...  # v0 < v1
@@ -61,6 +63,65 @@ Versions are strictly increasing and (`ID`, `version`) pairs are never re-used. 
 Objects on Sui are versioned either through the [fastpath](#fastpath-objects) or through [consensus](/develop/sui-architecture/consensus). The choice affects object ownership options and has performance trade-offs.
 
 Sui uses [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) in its versioning algorithm. This guarantees versions are never re-used: a transaction sets the new version for all objects it touches to `1 + max(version of all input objects)`. For example, a transaction transferring object `O` at version 5 using gas object `G` at version 3 updates both to version `1 + max(5, 3) = 6`.
+
+## How does object versioning work on Sui?
+
+When you submit a transaction, Sui's runtime inspects every input object involved — owned objects, gas objects, shared objects, and dynamic fields — and computes the new version as `1 + max(versions of all input objects)`. This single computation applies to all output objects written by that transaction. Because every input already carries a version greater than any of its own inputs, the resulting version is always strictly greater than all prior versions, and the (`ID`, `version`) pair is guaranteed to be unique.
+
+The following pseudocode illustrates the versioning step performed inside the Sui Move runtime after execution:
+
+```
+// Pseudocode: version assignment at end of a transaction
+let input_versions = [obj.version for obj in tx.inputs]  // e.g. [5, 3, 7]
+let new_version    = 1 + max(input_versions)              // 1 + 7 = 8
+
+for obj in tx.outputs:
+    obj.version = new_version   // every output object gets version 8
+    store.write((obj.id, new_version), obj)
+```
+
+A concrete Move example showing how object versioning interacts with owned-object transfer:
+
+```move
+module example::versioning_demo {
+    use sui::object::{Self, UID};
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
+
+    /// A simple counter object. Its version is managed automatically by Sui.
+    public struct Counter has key {
+        id: UID,
+        value: u64,
+    }
+
+    /// Create a new Counter. The resulting object starts at the version
+    /// determined by the Lamport timestamp of this transaction.
+    public fun create(ctx: &mut TxContext): Counter {
+        Counter {
+            id: object::new(ctx),
+            value: 0,
+        }
+    }
+
+    /// Increment the counter. Sui bumps the object's version after this
+    /// transaction because the object is mutably used as input.
+    public fun increment(counter: &mut Counter) {
+        counter.value = counter.value + 1;
+    }
+
+    /// Transfer ownership. Both the counter and the gas object are inputs,
+    /// so the new version = 1 + max(counter.version, gas.version).
+    public fun transfer_counter(counter: Counter, recipient: address) {
+        transfer::transfer(counter, recipient);
+    }
+}
+```
+
+After `increment` runs, the `Counter` object's version is automatically advanced by the Sui runtime — you never set it manually.
+
+## What is Object Versioning in Sui?
+
+Object versioning is Sui's mechanism for tracking every mutation to every onchain object. Each object has a globally unique (`ID`, `version`) pair. Versions advance monotonically using Lamport timestamps, so the history of an object is a linear sequence of (`ID`, `v0`), (`ID`, `v1`), … where each version is strictly greater than the previous one. This design enables validators to detect double-spend attempts (two transactions claiming the same mutable version) and allows full nodes and archives to reconstruct the complete mutation history of any object.
 
 ## Fastpath objects
 
@@ -87,6 +148,15 @@ Transactions accessing multiple consensus objects or particularly popular object
 You reference [shared](/develop/objects/object-ownership/shared) transaction inputs by ID, the version the object was shared at, and a flag indicating whether it is accessed mutably. You don't specify the precise access version because consensus determines that during scheduling, one transaction's output version becomes the next transaction's input version. Immutably referenced shared objects participate in scheduling but don't increment the object's version.
 
 Consensus is a good fit for applications that require coordination between multiple parties.
+
+## Why should I use object versioning?
+
+Object versioning is not something you opt into — it is automatic and mandatory for all Sui objects. However, understanding versioning helps you make better design decisions:
+
+- **Choose the right ownership model.** If your object is accessed by a single address sequentially, fastpath ownership gives you lower latency because no consensus round-trip is required. If multiple parties need concurrent access, shared (consensus) ownership handles version assignment for you.
+- **Avoid version conflicts.** For fastpath objects you must always supply the current version. Reading the latest version with the Sui SDK before submitting a transaction prevents your transaction from being rejected by validators that have already advanced the object's version.
+- **Plan for pruning.** Because old versions are prunable, do not rely on historical versions being available in production full nodes unless you operate an archive node or use an archival RPC provider.
+- **Dynamic field and wrapped object versioning.** Both are invisible to you as transaction inputs, but their versions still advance according to Lamport timestamp rules, so the uniqueness guarantee holds throughout the object lifecycle.
 
 ## Wrapped and dynamic field objects
 
