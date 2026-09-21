@@ -542,15 +542,27 @@ impl CompiledState {
                 let id = module.self_id();
                 assert!(
                     pre_compiled_ids.contains(&(*id.address(), id.name().to_string())),
-                    "dependency module {id} was not pre-compiled"
+                    "dependency module {id} has bytecode but was not pre-compiled; \
+                     add its source to the pre-compiled dependencies"
                 );
                 (id, module)
             })
             .collect::<BTreeMap<_, _>>();
-        assert_eq!(
-            modules.len(),
-            pre_compiled_ids.len(),
-            "every pre-compiled module needs bytecode"
+        let missing_bytecode = pre_compiled_ids
+            .iter()
+            .filter(|(addr, name)| {
+                !modules.contains_key(&ModuleId::new(
+                    *addr,
+                    Identifier::new(name.as_str()).unwrap(),
+                ))
+            })
+            .map(|(addr, name)| format!("{addr}::{name}"))
+            .collect::<Vec<_>>();
+        assert!(
+            missing_bytecode.is_empty(),
+            "pre-compiled modules have no bytecode: {}; \
+             add their compiled modules to the dependency bytecode",
+            missing_bytecode.join(", ")
         );
         Self {
             pre_compiled_program_info_opt: pre_compiled_deps,

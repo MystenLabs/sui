@@ -430,7 +430,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         let pre_compiled_deps =
             pre_compiled_deps.expect("Must populate 'pre_compiled_deps' with Sui framework");
         // Overlap framework compilation with executor setup.
-        std::thread::spawn(move || LazyLock::force(pre_compiled_deps));
+        let framework_compile =
+            tokio::task::spawn_blocking(move || Arc::clone(LazyLock::force(pre_compiled_deps)));
 
         // Unpack the init arguments
         let AdapterInitConfig {
@@ -487,7 +488,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
 
-        let pre_compiled_deps = LazyLock::force(pre_compiled_deps).clone();
+        let pre_compiled_deps = framework_compile
+            .await
+            .expect("framework compilation panicked");
 
         sui_types::transaction::clear_gasless_tokens_for_testing();
 
@@ -2865,8 +2868,7 @@ async fn create_validator_fullnode(
     };
     let validator = build_node(None);
     let fullnode = build_node(Some(get_authority_key_pair().1));
-    let (validator, fullnode) = tokio::join!(validator, fullnode);
-    (validator.unwrap(), fullnode.unwrap())
+    tokio::try_join!(validator, fullnode).expect("authority setup task panicked")
 }
 
 async fn create_val_fullnode_executor(

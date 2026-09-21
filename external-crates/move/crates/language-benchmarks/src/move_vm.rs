@@ -171,7 +171,7 @@ pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
         move_core_types::parsing::address::NumericalAddress::parse_str(BENCH_ADDR_STR).unwrap(),
     );
     let (_files, compiled_units) = Compiler::from_files(None, src_files, vec![], named_addresses)
-        .set_pre_compiled_program_opt(Some(MOVE_STDLIB_PROGRAM_INFO.clone()))
+        .set_pre_compiled_program_opt(Some(Arc::clone(&MOVE_STDLIB_PROGRAM_INFO)))
         .set_default_config(pkg_config)
         .build_and_report()
         .expect("Error compiling...");

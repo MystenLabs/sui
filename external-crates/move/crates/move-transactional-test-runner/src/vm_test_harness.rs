@@ -195,7 +195,7 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
         _path: &Path,
     ) -> (Self, Option<String>) {
         println!("---- INITIALIZING -------------------------------------------------------------");
-        let pre_compiled_deps = pre_compiled_deps.map(|deps| LazyLock::force(deps).clone());
+        let pre_compiled_deps = pre_compiled_deps.map(|deps| Arc::clone(LazyLock::force(deps)));
         println!("grabbing init arguments");
         let (additional_mapping, compiler_edition) = match task_opt.map(|t| t.command) {
             Some((InitCommand { named_addresses }, AdapterInitArgs { edition })) => {
