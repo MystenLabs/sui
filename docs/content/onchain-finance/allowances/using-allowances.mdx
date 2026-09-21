@@ -61,7 +61,17 @@ answer: >-
   sui::allowance::revoke and the AllowanceCap.
 ---
 
-An allowance is a shared object of type `sui::allowance::Allowance<Balance<T>>` that authorizes one spender to withdraw coin type `T` from the funder's [address balance](/onchain-finance/asset-custody/address-balances). The funder issues it, the spender uses it in their own transactions, and the funder revokes it. For the concepts and use cases, see [What Are Allowances?](/onchain-finance/allowances/allowances-overview). For the full module reference, see [`sui::allowance`](/references/framework/sui_sui/allowance). Allowances are available from Sui 1.80.
+An allowance is a shared object of type `sui::allowance::Allowance<Balance<T>>` that authorizes one spender to withdraw coin type `T` from the funder's [address balance](/onchain-finance/asset-custody/address-balances). The funder issues it, the spender uses it in their own transactions, and the funder revokes it. For the concepts and use cases, see [What Are Allowances?](/onchain-finance/allowances/allowances-overview). For the full module reference, see [`sui::allowance`](/references/framework/sui_sui/allowance).
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] [Install Sui](/getting-started/onboarding/sui-install) v1.81 or later, the first release with allowances on Mainnet.
+- [x] A funded [address balance](/onchain-finance/asset-custody/address-balances) on the funder's address.
+- [x] For the TypeScript examples, `@mysten/sui` 2.31 or later: `npm install @mysten/sui`.
+
+</TabItem>
+</Tabs>
 
 ## Issue an allowance
 
@@ -88,7 +98,7 @@ The type argument `T` is the balance type, for example `Balance<0x2::sui::SUI>`,
 - `expiration_timestamp_ms`: Optional expiration in milliseconds. Spends at or after it abort.
 - `rate_limit`: Optional recurring cap, built with one of the rate limit constructors below.
 
-At least one of `lifetime_cap` and `rate_limit` must be set, and at least one of `expiration_timestamp_ms` and `rate_limit` must be set. The call creates the allowance as a shared object and sends an `AllowanceCap` to the funder. The cap is the revocation key. It has only the `key` ability, so it cannot be transferred or wrapped.
+Set at least one of `lifetime_cap` and `rate_limit`, and at least one of `expiration_timestamp_ms` and `rate_limit`. The call creates the allowance as a shared object and sends an `AllowanceCap` to the funder. The cap is the revocation key. It has only the `key` ability, so it cannot be transferred or wrapped.
 
 ### Rate limits
 
@@ -110,12 +120,32 @@ Windows are fixed, not sliding, and unused amounts do not carry over. See the [A
 
 ### TypeScript SDK
 
-The following transaction issues an allowance of 1 SUI in total, with no rate limit and no start time, that expires at `expirationMs`. Because `Option<RateLimit>` is not a pure value, the `none` comes from a Move call:
+The TypeScript examples on this page share the following setup:
+
+```typescript title='setup.ts'
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+
+export const client = new SuiGrpcClient({
+	network: 'testnet',
+	baseUrl: 'https://fullnode.testnet.sui.io:443',
+});
+
+// Load secret keys from the environment, never hardcode them.
+export const funderKeypair = Ed25519Keypair.fromSecretKey(process.env.FUNDER_SECRET_KEY!);
+export const spenderKeypair = Ed25519Keypair.fromSecretKey(process.env.SPENDER_SECRET_KEY!);
+export const funderAddress = funderKeypair.toSuiAddress();
+export const spenderAddress = spenderKeypair.toSuiAddress();
+```
+
+The following transaction issues an allowance of 1 SUI in total, with no rate limit and no start time, that expires in 30 days. Because `Option<RateLimit>` is not a pure value, the `none` comes from a Move call:
 
 ```typescript title='issue-allowance.ts'
 import { Transaction } from '@mysten/sui/transactions';
+import { client, funderAddress, funderKeypair, spenderAddress } from './setup';
 
 const ALLOWANCE_TYPE = '0x2::balance::Balance<0x2::sui::SUI>';
+const expirationMs = Date.now() + 30 * 24 * 60 * 60 * 1000;
 
 const tx = new Transaction();
 tx.setSender(funderAddress);
@@ -144,10 +174,18 @@ const result = await client.signAndExecuteTransaction({
 	include: { effects: true },
 });
 
+if (result.$kind === 'FailedTransaction') {
+	throw new Error(`Issuing the allowance failed: ${result.FailedTransaction.status.error?.message}`);
+}
+
+// Wait until the full node has indexed the new objects before reading them.
+await client.waitForTransaction({ result });
+
 // The allowance is the created shared object. The AllowanceCap is the created object owned by the funder.
 const allowance = result.Transaction.effects.changedObjects.find(
 	(change) => change.idOperation === 'Created' && change.outputOwner?.$kind === 'Shared',
 );
+if (!allowance) throw new Error('No shared object created');
 const allowanceId = allowance.objectId;
 ```
 
@@ -195,13 +233,13 @@ let pt = builder.finish();
 // Sign and execute as the funder.
 ```
 
-The transaction effects list two created objects: the shared `Allowance` and the funder-owned `AllowanceCap`. Record the allowance's object ID. The spender needs it, along with the funder's address.
+The transaction effects list 2 created objects: the shared `Allowance` and the funder-owned `AllowanceCap`. Record the allowance's object ID. The spender needs it, along with the funder's address.
 
 ## Spend from an allowance
 
-A spending transaction is a normal PTB sent by the spender. It has 3 parts:
+The spender sends a spending transaction as a normal PTB. It has 3 parts:
 
-1. A funds withdrawal input whose source is `SenderAllowance { funder, allowance }`. This declares the amount, the funder whose balance is debited, and the allowance that authorizes it.
+1. A funds withdrawal input whose source is `SenderAllowance { funder, allowance }`. This declares the amount, the funder whose balance Sui debits, and the allowance that authorizes it.
 2. The allowance as a mutable shared object input.
 3. A call to `sui::allowance::balance_spend`, which checks the limits, charges them, and returns a `Balance<T>` for the rest of the transaction to use.
 
@@ -214,7 +252,7 @@ public fun balance_spend<C>(
 ): Balance<C>
 ```
 
-Before the transaction executes, Sui verifies that the allowance is an input of the transaction, that its funder matches the declared funder, that the transaction sender is its spender, and that the coin type matches. A transaction that fails these checks is rejected before execution and costs no gas. The amount is reserved against the funder's balance, exactly like a withdrawal from the sender's own balance.
+Before the transaction executes, Sui verifies that the allowance is an input of the transaction, that its funder matches the declared funder, that the transaction sender is its spender, and that the coin type matches. Sui rejects a transaction that fails these checks before execution, so it costs no gas. Sui reserves the amount against the funder's balance, exactly like a withdrawal from the sender's own balance.
 
 ### TypeScript SDK
 
@@ -222,6 +260,9 @@ Before the transaction executes, Sui verifies that the allowance is an input of 
 
 ```typescript title='spend-allowance.ts'
 import { Transaction } from '@mysten/sui/transactions';
+import { client, spenderAddress, spenderKeypair } from './setup';
+
+const allowanceId = 'ALLOWANCE_ID'; // from the issuing transaction
 
 const tx = new Transaction();
 tx.setSender(spenderAddress);
@@ -234,14 +275,20 @@ tx.moveCall({
 	arguments: [balance, tx.pure.address(spenderAddress)],
 });
 
-await client.signAndExecuteTransaction({ transaction: tx, signer: spenderKeypair });
+const result = await client.signAndExecuteTransaction({ transaction: tx, signer: spenderKeypair });
+
+if (result.$kind === 'FailedTransaction') {
+	throw new Error(`Spend failed: ${result.FailedTransaction.status.error?.message}`);
+}
 ```
 
 Pass `type` for a coin other than SUI. The returned `Balance<T>` works in any Move call. To skip the allowance lookup when you already know the funder, pass `{ objectId, funder }` as the `allowance`. For an app-bound allowance, pass `{ objectId, app: { type, permit } }`, where `permit` is a `SpendPermit` your module returned earlier in the same transaction.
 
-For full control over the transaction, build the withdrawal input yourself with `from: 'allowance'` and call `balance_spend` directly:
+For full control over the transaction, replace the `tx.balance()` call above with a withdrawal input built with `from: 'allowance'` and a direct call to `balance_spend`:
 
-```typescript title='spend-allowance-manual.ts'
+```typescript
+import { funderAddress } from './setup';
+
 const SUI = '0x2::sui::SUI';
 
 const withdrawal = tx.withdrawal({
@@ -259,7 +306,7 @@ const balance = tx.moveCall({
 });
 ```
 
-Both forms take the coin type, while the allowance was issued with the balance type `Balance<0x2::sui::SUI>`. The spender pays gas.
+Both forms take the coin type, while the funder issued the allowance with the balance type `Balance<0x2::sui::SUI>`. The spender pays gas.
 
 ### Rust SDK
 
@@ -393,6 +440,12 @@ public fun revoke<T>(self: AllowanceCap<T>, allowance: Allowance<T>)
 From the TypeScript SDK:
 
 ```typescript title='revoke-allowance.ts'
+import { Transaction } from '@mysten/sui/transactions';
+import { client, funderAddress, funderKeypair } from './setup';
+
+const allowanceId = 'ALLOWANCE_ID';
+const allowanceCapId = 'ALLOWANCE_CAP_ID';
+
 const tx = new Transaction();
 tx.setSender(funderAddress);
 

@@ -52,7 +52,7 @@ answer: >-
   own spending transactions.
 ---
 
-Common questions about [allowances](/onchain-finance/allowances/allowances-overview) on Sui. For the API and code samples, see [Using Allowances](/onchain-finance/allowances/using-allowances).
+These answers cover the [allowance](/onchain-finance/allowances/allowances-overview) behavior that the module reference does not spell out: windows, timestamps, revocation, and gas. For the API and code samples, see [Using Allowances](/onchain-finance/allowances/using-allowances).
 
 ## Are allowance timestamps in UTC?
 
@@ -68,40 +68,40 @@ A calendar window renews on the anchor's day of the month at 00:00 UTC. When a m
 
 ## Are windows sliding or fixed?
 
-Fixed. The spent amount resets when a spend lands in a later window. As with any fixed window, a spender can use the full limit at the end of one window and again at the start of the next. Size the limit with that in mind.
+Fixed. The spent amount resets when a spend lands in a later window. As with any fixed window, a spender can use the full limit at the end of one window and again at the start of the next. Size the limit to allow for that.
 
 ## Does unused allowance carry over?
 
-No. Each window starts with the full limit and anything unused at the end of the window is not added to the next one. The lifetime cap is separate and always counts total spend across all windows.
+No. Each window starts with the full limit and anything unused at the end of the window does not carry into the next one. The lifetime cap is separate and always counts total spend across all windows.
 
-## What happens to a spend that is in flight when I revoke?
+## What happens to an in-flight spend during revocation?
 
-Revocation deletes the allowance. Any spend that reaches the network after that is rejected, and a spend that was already in flight fails when it executes. Either way, no funds move after the revoke takes effect.
+Revocation deletes the allowance. Sui rejects any spend that reaches the network after that, and a spend that was already in flight fails when it executes. Either way, no funds move after the revoke takes effect.
 
 ## What is the difference between expiration and revocation?
 
-An expired allowance still exists. A spend against it fails during execution, so the spender pays gas, and the object stays onchain until the funder revokes it. Revocation deletes the object, so later spends are rejected up front and the funder gets the storage rebate back. Set an expiration as a safety net, and revoke when you want the allowance gone.
+An expired allowance still exists. A spend against it fails during execution, so the spender pays gas, and the object stays onchain until the funder revokes it. Revocation deletes the object, so Sui rejects later spends before execution and returns the storage rebate to the funder. Set an expiration as a backstop, and revoke when you want the allowance gone.
 
 ## Who pays gas for a spend?
 
-The spender. A spending transaction is a normal transaction sent and signed by the spender, and gas comes from the spender's gas coin or SUI address balance. The funder's balance is only debited by the amount spent. A [sponsor](/develop/transaction-payment/sponsor-txn) can pay the gas, as for any other transaction.
+The spender. A spending transaction is a normal transaction sent and signed by the spender, and gas comes from the spender's gas coin or SUI address balance. Sui debits the funder's balance only by the amount spent. A [sponsor](/develop/transaction-payment/sponsor-txn) can pay the gas, as for any other transaction.
 
 ## Can the spender take more than the declared amount?
 
-No. The spending transaction declares an amount up front, and that is the most it can take. The `sui::allowance` module checks every limit against the live allowance during execution, so a client cannot build a transaction that gets around them.
+No. The spending transaction declares an amount up front, and that is the most it can take. The `sui::allowance` module checks every limit against the live allowance during execution, so a client cannot build a transaction that bypasses them.
 
 ## What if the funder's balance is lower than the declared amount?
 
-The spend fails and nothing is charged, neither the funder's balance nor the allowance's counters. An allowance never guarantees that funds are available, only that the spender might take them if they are.
+The spend fails and Sui charges nothing, neither the funder's balance nor the allowance's counters. An allowance never guarantees that funds are available, only that the spender might take them if they are.
 
-## Can I change the limits of an existing allowance?
+## Can you change the limits of an existing allowance?
 
 No. There is no update function. Revoke the allowance and issue a new one with the new terms. The new allowance has a new object ID and a fresh spend counter, so share the new ID with the spender.
 
-## Can the spender be changed?
+## Can you change the spender?
 
 Only for app-bound allowances, and only by the app. The module that defines the app type can call `rotate_spender` with a `SettingsPermit`. Direct allowances have a fixed spender. To hand a direct allowance to a different address, revoke and reissue.
 
-## Can I issue an allowance to a contract instead of an address?
+## Can you issue an allowance to a contract instead of an address?
 
-Use an app-bound allowance. Your module decides whether each pull is allowed, and it can rotate the spender key at any time. The spender itself must still be an account address, not an object, because it has to sign and send every spending transaction.
+Use an app-bound allowance. Your module decides whether each pull is allowed, and it can rotate the spender key at any time. The spender itself must still be an account address, not an object, because it must sign and send every spending transaction.

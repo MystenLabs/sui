@@ -54,27 +54,40 @@ answer: >-
   succeeds, and the funder can revoke the allowance at any time.
 ---
 
-An allowance lets one address authorize another to spend from its [address balance](/onchain-finance/asset-custody/address-balances), within limits it sets, and take that permission back at any time. Nothing is locked or set aside. The balance stays fully usable by its owner, and a spend can only take what is in it at that moment.
+An allowance lets one address authorize another to spend from its [address balance](/onchain-finance/asset-custody/address-balances), within limits it sets, and take that permission back at any time. An allowance locks nothing and sets nothing aside. The balance stays fully usable by its owner, and a spend can only take what is in it at that moment.
 
-## The idea
+## How an allowance is structured
 
-Every payment from an address needs that address's signature. That rules out a whole class of products: anything where someone else needs to pull funds on a schedule, within a budget, without the owner being present.
+Every payment from an address needs that address's signature. That prevents a whole class of products: anything where someone else needs to pull funds on a schedule, within a budget, without the owner being present.
 
-An allowance has four parts:
+An allowance has 4 parts:
 
-- **Funder:** The address whose balance is used.
+- **Funder:** The address that funds the spend.
 - **Spender:** The address allowed to pull from it.
 - **Limits:** How much, how often, and for how long.
 - **Revocation:** The funder can cancel at any time.
 
-Think of it as the standing authorization you give a card network: it records who is allowed to charge you, and up to what, until you say otherwise. Funds stay in the funder's balance and are only debited at the moment of a successful spend. No escrow, no pre-funding, and no separate wallet to top up.
+Think of it as the standing authorization you give a card network: it records who can charge you, and up to what, until you say otherwise. Funds stay in the funder's balance, and Sui debits them only at the moment of a successful spend. There is no escrow, no pre-funding, and no separate wallet to fund.
 
 ## What allowances enable
 
-- **Subscriptions:** A service pulls its monthly fee without asking the user to sign each cycle. The user sets a monthly cap and an end date. The service cannot take more or continue past it.
-- **AI agents and automation:** Give an agent a budget it can spend on your behalf, and cut it off the moment it misbehaves. You do not need to move funds into a wallet the agent controls.
-- **Virtual cards and team spend:** A treasury grants a contractor or employee a capped budget, for example 5,000 USDC per quarter until year end.
-- **App-mediated spending:** A protocol such as a payments app, a marketplace, or a trading bot becomes the gatekeeper of every pull, adding its own rules on top of the allowance's limits.
+- **Subscriptions:** Recurring pulls (SaaS, media, memberships) without the user having to sign or pay each cycle. The Web2 experience of putting in a card and getting charged monthly while there are funds in the account, with the option to cancel at any time.
+- **Virtual budgets:** Issue a spender a capped budget with per-period and per-merchant limits, for example for family allowances or enterprise procurement.
+- **Agentic wallets:** Allow ephemeral wallets to spend from your main wallet's budget, so they can pay through x402 or MPP without needing a top-up.
+- **Remittances and checks:** Issue revocable, bounded payment authorizations that function like personal checks or remittance orders. Unlike escrow or deposit-based approaches, the funds never leave the owner's wallet until the recipient redeems the authorization, so there is no need to lock capital or transfer assets in advance.
+- **Burner wallets:** Authorize ephemeral, potentially in-memory, wallets to trade or play games within predefined spending limits, eliminating repeated wallet pop-ups while keeping the primary wallet balance secure.
+- **Merchant pre-authorizations:** Reserve the right to charge up to a maximum amount (hotels, rentals, gas stations) while only pulling the final amount used.
+
+Generally, applications fall into four categories:
+
+| **Category** | **Use cases** |
+| --- | --- |
+| Consumer | Subscriptions, checks, remittances, family allowances |
+| Business | Virtual budgets, procurement, payroll, merchant pre-authorizations |
+| Automation | AI agents, trading bots, IoT devices, API billing |
+| Security and UX | Burner wallets, session keys, ephemeral wallets |
+
+Per-merchant limits come from an app-bound allowance, where your own Move module approves each pull.
 
 ## How allowances work
 
@@ -89,7 +102,7 @@ For the API and code samples, see [Using Allowances](/onchain-finance/allowances
 
 | **Limit** | **What it means** | **Example** |
 | --- | --- | --- |
-| Lifetime cap | Total that can ever be spent | At most 1,000 USDC, ever |
+| Lifetime cap | Total the spender can ever take | At most 1,000 USDC, ever |
 | Rate limit | A recurring cap per window | At most 20 USDC per 30 days, or per calendar month |
 | Start time | Not spendable before this moment | Starts on the first of next month |
 | Expiration | Not spendable from this moment on | Ends December 31 |
@@ -100,15 +113,15 @@ An allowance must always be bounded in amount (a lifetime cap or a rate limit) a
 
 Rate-limit windows are fixed. A 30-day limit renews every 30 days from the first spend. A monthly limit renews on the same day each month at midnight UTC, moved earlier in shorter months (a limit first used on January 31 renews on February 28, then March 31). Unused amounts do not carry over. See the [Allowances FAQ](/onchain-finance/allowances/allowances-faq) for details on windows and timestamps.
 
-## Two kinds of allowance
+## 2 kinds of allowance
 
 **Direct:** The funder names a spender. The spender's signature is enough to spend, within the limits. This covers subscriptions, agents, and virtual cards.
 
-**App-bound:** The funder proposes an allowance tied to a specific application, and that application must accept it. From then on, every spend goes through the application's own Move logic, and the application can change the spender without involving the funder. This is for products that want their contract, not just a key, to control each pull. The funder can still revoke at any time.
+**App-bound:** The funder proposes an allowance tied to a specific app, and that app must accept it. From then on, every spend goes through the app's own Move logic, and the app can change the spender without involving the funder. This is for products that want their contract, not just a key, to control each pull. The funder can still revoke at any time.
 
 ## What the funder can rely on
 
-- Only the named spender, and for app-bound allowances only through the named app, can pull funds. Every spending transaction names the funder, so wallets can show whose balance is debited.
+- Only the named spender, and for app-bound allowances only through the named app, can pull funds. Every spending transaction names the funder, so wallets can show which balance Sui debits.
 - Nothing can exceed the caps or run outside the time window.
 - Revocation is immediate and final.
 - Funds never leave the balance until a spend succeeds. An unused allowance costs nothing and locks nothing.
