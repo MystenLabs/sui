@@ -95,4 +95,3 @@ fn object_as_package(object: Object) -> Result<MovePackage> {
         .try_into_package()
         .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "object is not a package"))
 }
-

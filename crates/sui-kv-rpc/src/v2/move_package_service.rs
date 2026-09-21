@@ -8,12 +8,12 @@ use sui_rpc::proto::sui::rpc::v2::GetDatatypeRequest;
 use sui_rpc::proto::sui::rpc::v2::GetDatatypeResponse;
 use sui_rpc::proto::sui::rpc::v2::GetFunctionRequest;
 use sui_rpc::proto::sui::rpc::v2::GetFunctionResponse;
-use sui_rpc::proto::sui::rpc::v2::get_package_request::Selector;
 use sui_rpc::proto::sui::rpc::v2::GetPackageRequest;
 use sui_rpc::proto::sui::rpc::v2::GetPackageResponse;
 use sui_rpc::proto::sui::rpc::v2::ListPackageVersionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListPackageVersionsResponse;
 use sui_rpc::proto::sui::rpc::v2::PackageVersion;
+use sui_rpc::proto::sui::rpc::v2::get_package_request::Selector;
 use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
@@ -93,19 +93,15 @@ async fn get_package(
     let original_id = resolve_original_package_id(client.clone(), package_id).await?;
 
     let data = match selector {
-        Selector::Version(version) => {
-            client
-                .get_packages_by_version(&[(original_id, version)])
-                .await
-                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-                .pop()
-        }
-        Selector::AtCheckpoint(at_checkpoint) => {
-            client
-                .get_package_latest(original_id, at_checkpoint)
-                .await
-                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-        }
+        Selector::Version(version) => client
+            .get_packages_by_version(&[(original_id, version)])
+            .await
+            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
+            .pop(),
+        Selector::AtCheckpoint(at_checkpoint) => client
+            .get_package_latest(original_id, at_checkpoint)
+            .await
+            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?,
         _ => {
             return Err(FieldViolation::new("selector")
                 .with_description("unknown selector variant")

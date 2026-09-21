@@ -213,10 +213,24 @@ async fn test_get_package_lineage_lookups() {
     let error = service.get_package(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::NotFound);
 
-    // A checkpoint upper-bound above the tip resolves to the latest version.
+    let current_checkpoint = cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_latest_checkpoint_sequence_number()
+            .unwrap()
+    });
+
+    // A checkpoint bound exceeding the latest checkpoint is rejected.
     let mut request = GetPackageRequest::default();
     request.package_id = Some(original_id.to_string());
-    request.selector = Some(Selector::AtCheckpoint(u64::MAX));
+    request.selector = Some(Selector::AtCheckpoint(current_checkpoint + 1));
+    let error = service.get_package(request).await.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::NotFound);
+    assert!(error.message().contains("exceeds latest checkpoint"));
+
+    // A checkpoint bound at current tip resolves to the latest version.
+    let mut request = GetPackageRequest::default();
+    request.package_id = Some(original_id.to_string());
+    request.selector = Some(Selector::AtCheckpoint(current_checkpoint));
     let package = service
         .get_package(request)
         .await
@@ -234,7 +248,7 @@ async fn test_get_package_lineage_lookups() {
     // that lineage as of the checkpoint.
     let mut request = GetPackageRequest::default();
     request.package_id = Some(upgraded_id.to_string());
-    request.selector = Some(Selector::AtCheckpoint(u64::MAX));
+    request.selector = Some(Selector::AtCheckpoint(current_checkpoint));
     let package = service
         .get_package(request)
         .await
@@ -270,7 +284,6 @@ async fn test_get_package_lineage_lookups() {
         Some(original_id.to_canonical_string(true))
     );
     assert_eq!(package.version, Some(1));
-
 }
 
 #[sim_test]
@@ -344,10 +357,28 @@ async fn test_get_package_at_checkpoint_below_available_floor() {
     assert_eq!(error.code(), tonic::Code::NotFound);
     assert!(error.message().contains("has been pruned"));
 
-    // Bounds at or above the floor still resolve.
+    // Bounds at or above the floor still resolve once the node advances.
+    let mut ledger_client =
+        sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient::connect(
+            cluster.rpc_url().to_owned(),
+        )
+        .await
+        .unwrap();
+    let latest_cp = loop {
+        if let Ok(resp) = ledger_client
+            .get_service_info(sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest::default())
+            .await
+        {
+            let height = resp.into_inner().checkpoint_height.unwrap_or(0);
+            if height > pruned_to {
+                break height;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    };
     let mut request = GetPackageRequest::default();
     request.package_id = Some("0x3".to_string());
-    request.selector = Some(Selector::AtCheckpoint(u64::MAX));
+    request.selector = Some(Selector::AtCheckpoint(latest_cp));
     let package = service
         .get_package(request)
         .await

@@ -75,6 +75,11 @@ fn load_package_at_checkpoint(
     package_id_str: &str,
     at_checkpoint: u64,
 ) -> Result<MovePackage> {
+    let latest_checkpoint = service
+        .reader
+        .inner()
+        .get_latest_checkpoint()?
+        .sequence_number;
     let lowest_available = service.reader.get_lowest_available_checkpoint()?;
     if at_checkpoint < lowest_available {
         return Err(RpcError::new(
@@ -82,6 +87,15 @@ fn load_package_at_checkpoint(
             format!(
                 "requested checkpoint {at_checkpoint} has been pruned; lowest available \
                  checkpoint is {lowest_available}",
+            ),
+        ));
+    }
+    if at_checkpoint > latest_checkpoint {
+        return Err(RpcError::new(
+            tonic::Code::NotFound,
+            format!(
+                "requested checkpoint {at_checkpoint} exceeds latest checkpoint \
+                 {latest_checkpoint}",
             ),
         ));
     }
