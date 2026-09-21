@@ -94,7 +94,7 @@ The spender. A spending transaction is a normal transaction sent and signed by t
 
 #### Can the spender take more than the declared amount?
 
-No. The spending transaction declares an amount up front, and that is the most it can take. The `sui::allowance` module checks every limit against the live allowance during execution, so a client cannot build a transaction that bypasses them.
+No. The spending transaction declares an amount in advance, and that is the most it can take. The `sui::allowance` module checks every limit against the live allowance during execution, so a client cannot build a transaction that bypasses them.
 
 #### What if the funder's balance is lower than the declared amount?
 
