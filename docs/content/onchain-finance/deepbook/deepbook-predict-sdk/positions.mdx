@@ -50,7 +50,8 @@ answer: >-
   sizes a mint by premium budget, and its optional `maxCost` is the only bound
   on the whole withdrawal. `tx.mintCost` sizes a mint inside an all-in budget
   that already includes fees, with `read.quoteMintCost` as its dry run; it needs
-  Predict package version 2, which is live on Testnet only. `tx.redeem` closes a live position with no
+  Predict package version 2, which SDK 2.6.0 addresses on Testnet only.
+  `tx.redeem` closes a live position with no
   close-side floors, `tx.claimSettled` claims a settled position in full, and
   the decoded receipts carry the order ID you persist to close a position
   later.
@@ -178,7 +179,7 @@ Use `tx.mintCost` to mint inside an all-in budget, the SDK form of `mint_exact_c
 
 :::info
 
-`tx.mintCost` and `read.quoteMintCost` call an entrypoint that arrived in Predict package version 2. That version is live on Testnet only, so both calls abort on Mainnet, which is still at version 1. See [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#two-ids).
+`tx.mintCost` and `read.quoteMintCost` call an entrypoint that arrived in `predict` package version 2. Both networks now run that version onchain, but `@mysten/deepbook-v3` 2.6.0 predates the Mainnet upgrade and still addresses Mainnet `predict` at its version 1 address, so both calls fail there until a release ships the new call target. They work on Testnet today. The snippet below still carries the SDK's own comment saying Testnet only, which the Mainnet upgrade has since overtaken. See [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#two-ids).
 
 :::
 

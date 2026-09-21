@@ -91,7 +91,7 @@ flowchart LR
 |---|---|---|
 | Create | `account_registry::new` then `account::share` | Claims both derived IDs for the sender and shares a new `AccountWrapper`. |
 | Deposit | `account::deposit_funds<T>` | Settles pending accumulator funds, then adds a whole `Coin<T>` to stored balance. |
-| Mint | `expiry_market::mint_exact_quantity`, `expiry_market::mint_exact_amount`, `expiry_market::mint_exact_cost` (Testnet only) | Debits the all-in cost and records a position in Predict's account slot. |
+| Mint | `expiry_market::mint_exact_quantity`, `expiry_market::mint_exact_amount`, `expiry_market::mint_exact_cost` | Debits the all-in cost and records a position in Predict's account slot. |
 | Redeem | `expiry_market::redeem_live`, `expiry_market::redeem_settled`, `expiry_market::redeem_settled_permissionless` | Removes or replaces the position and credits the payout. |
 | Withdraw | `account::withdraw_funds<T>` | Settles pending funds, debits stored balance, and returns a `Coin<T>`. |
 

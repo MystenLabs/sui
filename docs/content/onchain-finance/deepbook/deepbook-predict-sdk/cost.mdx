@@ -150,7 +150,7 @@ The same 3 sizing limits that qualify the onchain entrypoint qualify this one, b
 - **The maximum-payout step-down is best effort.** It preserves the contract's own fallback, rounding included, so it can miss a larger admissible fill or reject a `minQuantity` that another fill would have met.
 - **Backing is not a sizing input.** Neither this function nor the chain quote preflights the expiry's cash backing or its exposure-index capacity.
 
-Submit the result through [`tx.mintCost`](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint-cost) on a deployment that carries `mint_exact_cost`, which today means Testnet.
+Submit the result through [`tx.mintCost`](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint-cost). Both networks carry `mint_exact_cost` onchain, but SDK 2.6.0 can only address it on Testnet, as that section explains. This preview itself is pure arithmetic and works for either network.
 
 ## Close previews {#close-previews}
 
