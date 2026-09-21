@@ -35,6 +35,47 @@ answer: >-
 
 Learn the developer essentials for building on Sui, including its architecture, how to write Move packages, and how to build transactions.
 
+## What is Develop in Sui?
+
+Sui development centers on three core areas: understanding Sui's architecture, writing Move packages (smart contracts), and building transactions that interact with the network. Whether you are creating a new dApp, writing on-chain logic, or integrating with Sui from a client application, these essentials give you the foundation to get started.
+
+## What topics does Develop cover?
+
+The Develop section covers:
+
+- **Sui architecture** — How the Sui network is structured, including objects, ownership, and the consensus model that enables high throughput and low latency.
+- **Move packages** — How to write, test, and publish smart contracts using the Move programming language on Sui.
+- **Building transactions** — How to construct, sign, and submit transactions from client applications using the Sui SDKs or the CLI.
+
+## How does develop work on Sui?
+
+Development on Sui follows a typical flow: you write Move packages that define on-chain objects and logic, publish those packages to the network, and then build client-side transactions that call into your published package. The following example shows a minimal Move module that creates a simple on-chain object:
+
+```move
+module example::hello {
+    use sui::object::{Self, UID};
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
+
+    /// A simple on-chain object owned by an address.
+    struct HelloObject has key {
+        id: UID,
+        message: vector<u8>,
+    }
+
+    /// Create a new HelloObject and transfer it to the sender.
+    public entry fun create(ctx: &mut TxContext) {
+        let obj = HelloObject {
+            id: object::new(ctx),
+            message: b"Hello, Sui!",
+        };
+        transfer::transfer(obj, tx_context::sender(ctx));
+    }
+}
+```
+
+In this example, `create` is a public entry function that can be called directly from a transaction. It allocates a new `HelloObject` with a unique ID and transfers ownership to the transaction sender. Once published, any client can invoke this function by building a transaction that targets the package address and function name.
+
 import DocCardList from '@theme/DocCardList';
 
 <DocCardList />
