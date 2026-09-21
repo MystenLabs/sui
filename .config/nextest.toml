@@ -35,6 +35,13 @@ retries = 3
 # Timeout tests after 4 minutes
 slow-timeout = { period = "60s", terminate-after = 5 }
 
+[[profile.ci.overrides]]
+filter = 'package(sui-fork-e2e-tests)'
+# Every shell test spawns `sui start` (validator, fullnode, temporary PostgreSQL, indexer,
+# consistent store, GraphQL, faucet) and then a fork, and the first test of a run may also link
+# the sui and sui-fork binaries, so allow ten minutes rather than five.
+slow-timeout = { period = "120s", terminate-after = 5 }
+
 [profile.simtestnightly]
 # Print out output for failing tests as soon as they fail, and also at the end
 # of the run (for easy scrollability).
