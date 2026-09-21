@@ -46,6 +46,10 @@ answer: >-
   against accidental deletion when non-empty.
 ---
 
+Sui tracks every onchain object by a unique (ID, version) pair. Each time a transaction modifies an object, Sui writes the updated contents to the same ID at a new, strictly higher version. Versions are assigned using Lamport timestamps, meaning no (ID, version) pair is ever reused. Objects follow one of two versioning paths: fastpath (for address-owned and immutable objects) or consensus (for shared and party objects). The path determines how versions are assigned and what ownership models are available.
+
+## What is object versioning in Sui?
+
 Every object stored onchain is referenced by an ID and version. When a transaction modifies an object, it writes the new contents to an onchain reference with the same ID but a new version. Despite appearing multiple times in the store, only the latest version of an object is available to transactions. Only one transaction can modify an object at a given version, guaranteeing a linear history.
 
 ```
@@ -56,11 +60,39 @@ Every object stored onchain is referenced by an ID and version. When a transacti
 
 Versions are strictly increasing and (`ID`, `version`) pairs are never re-used. This allows [node operators](/operators) to prune old object versions from their stores, though they might also retain them to serve historical requests or help other nodes catch up.
 
+## How does object versioning work on Sui?
+
+Sui uses [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) in its versioning algorithm. This guarantees versions are never re-used: a transaction sets the new version for all objects it touches to `1 + max(version of all input objects)`. For example, a transaction transferring object `O` at version 5 using gas object `G` at version 3 updates both to version `1 + max(5, 3) = 6`.
+
+The following Move example shows how you can read an object's current version at runtime using the `sui::object` module:
+
+```move
+module example::versioning {
+    use sui::object::{Self, UID};
+    use sui::tx_context::TxContext;
+
+    public struct MyObject has key {
+        id: UID,
+        value: u64,
+    }
+
+    /// Returns the current version of the object as a u64.
+    public fun current_version(obj: &MyObject): u64 {
+        object::version(&obj.id)
+    }
+
+    /// Mutates the object, causing its version to increment after the transaction.
+    public fun increment_value(obj: &mut MyObject, amount: u64) {
+        obj.value = obj.value + amount;
+    }
+}
+```
+
+After `increment_value` runs in a transaction, Sui increments the object's version according to the Lamport timestamp rule. The new version is always `1 + max(version of all input objects in that transaction)`.
+
 ## Object versioning paths
 
 Objects on Sui are versioned either through the [fastpath](#fastpath-objects) or through [consensus](/develop/sui-architecture/consensus). The choice affects object ownership options and has performance trade-offs.
-
-Sui uses [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) in its versioning algorithm. This guarantees versions are never re-used: a transaction sets the new version for all objects it touches to `1 + max(version of all input objects)`. For example, a transaction transferring object `O` at version 5 using gas object `G` at version 3 updates both to version `1 + max(5, 3) = 6`.
 
 ## Fastpath objects
 
@@ -95,3 +127,12 @@ Consensus is a good fit for applications that require coordination between multi
 Wrapped objects can be unwrapped, after which they are accessible by their ID again. An object retains its ID across all wrap and unwrap events. Lamport timestamp versioning ensures the version at unwrap is always greater than the version at wrap.
 
 [Dynamic fields](/develop/objects/dynamic-fields) behave similarly: they are only accessible through their parent object and do not need to be supplied as transaction inputs. However, unlike wrapped objects, if a transaction modifies a dynamic object field, its version is incremented in that transaction. Lamport versioning also ensures that when a field is removed and re-added with the same name, the new `Field` object's version is strictly greater than the deleted one's, so (`ID`, `version`) pairs are never reused.
+
+## Why does object versioning matter?
+
+Understanding object versioning helps you design applications correctly and avoid common mistakes:
+
+- **Avoid stale version references.** If your client code caches an object version and another transaction modifies that object before yours executes, validators reject your transaction. Always fetch the latest version before submitting.
+- **Choose the right versioning path.** Fastpath reduces latency for single-owner workflows. Consensus handles multi-party coordination without requiring offchain locking.
+- **Prune safely.** Because (ID, version) pairs are never reused, node operators can safely prune old versions without risking collision with future writes.
+- **Reason about history.** The strictly increasing version sequence gives every object a linear, auditable history. Archival nodes can serve any historical version to clients that need it.
