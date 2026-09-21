@@ -40,6 +40,52 @@ answer: >-
 
 Sui provides built-in tools for testing and debugging Move smart contracts at every stage of development.
 
+## What tools can I use to test and debug Move contracts on Sui?
+
+Sui offers a complete testing and debugging workflow for Move developers:
+
+- **Unit tests** — Write test functions directly in your Move modules using the `#[test]` attribute and run them with `sui move test`.
+- **`test_scenario`** — Simulate multi-transaction flows and object ownership changes across multiple senders in a controlled test environment.
+- **Move Trace Debugger** — Step through execution traces visually inside VS Code to inspect variables, object state, and control flow.
+- **Error reference** — Look up common Move and Sui runtime errors to quickly identify and resolve issues.
+
+## How do I run Move unit tests?
+
+Use the `sui move test` command from your package directory to compile and run all test functions:
+
+```bash
+sui move test
+```
+
+To run a specific test by name:
+
+```bash
+sui move test my_test_function
+```
+
+A basic unit test in Move looks like this:
+
+```move
+#[cfg(test)]
+module my_package::my_module_tests {
+    use my_package::my_module;
+
+    #[test]
+    fun test_add() {
+        let result = my_module::add(2, 3);
+        assert!(result == 5, 0);
+    }
+}
+```
+
+The `#[test]` attribute marks a function as a test case. Tests must have no parameters and no return value. Use `assert!` to verify expected behavior — the second argument is the abort code emitted if the assertion fails.
+
+## How do I debug Move code on Sui?
+
+The Move Trace Debugger integrates with VS Code and lets you step through a recorded execution trace of your Move transaction. You can inspect local variables, see how objects change ownership, and identify the exact line where an abort occurs.
+
+For simpler debugging during testing, use `test_scenario` to sequence transactions and inspect object state between steps.
+
 import DocCardList from '@theme/DocCardList';
 
 <DocCardList />
