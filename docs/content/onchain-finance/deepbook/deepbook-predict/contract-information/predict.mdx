@@ -53,13 +53,13 @@ answer: >-
   redeem_live, or redeem_settled with an account Auth. Live trades close in the
   last no_trade_window_ms before expiry, and settlement is the permissionless
   try_settle.
-last_verified: 2026-09-10
-verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
+last_verified: 2026-09-14
+verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 ---
 
 Trading on DeepBook Predict runs through the `deepbook_predict::expiry_market` module. One shared `ExpiryMarket` object exists per underlying and expiry, and it owns that expiry's USDC custody, strike exposure index, congestion estimator, mint pause flag, and flush stamp. Every call on this page is a `public fun` that you invoke from a programmable transaction block with a `moveCall`. Several of them take values only another command in the same block can produce, a transaction-local `Pricer` and a single-use account `Auth`, so plan the whole flow as one block.
 
-The module lives at [`packages/predict/sources/expiry_market.move`](https://github.com/MystenLabs/deepbookv3/blob/deepbook-predict-mainnet/packages/predict/sources/expiry_market.move) on the `deepbook-predict-mainnet` branch. The Move snippets on this page pin the Mainnet source commit, which serves both deployments. For the package and object IDs of each network, see [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).
+The module lives at [`packages/predict/sources/expiry_market.move`](https://github.com/MystenLabs/deepbookv3/blob/76b11922f3144be5bdaacb66c38c7c3524a02ff3/packages/predict/sources/expiry_market.move) on DeepBookV3 `main`. The Move snippets on this page pin DeepBookV3 `main` at `76b11922`, whose sources match both deployments. For the package and object IDs of each network, see [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).
 
 :::info
 
@@ -93,7 +93,7 @@ The field order in the table is declaration order, which is also the Binary Cano
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="ExpiryMarket,ValuationStamp"
 />
 
@@ -134,7 +134,7 @@ See [Oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/ora
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="load_live_pricer"
 	noComments
 />
@@ -179,9 +179,11 @@ The difference is whose terms the quote reflects. `quote_mint` prices an anonymo
 
 Set `exact_quantity` to `true` to price a fixed size, in which case `min_quantity` carries the requested quantity. Set it to `false` to size a lot-rounded fill under the `max_premium` budget. The congestion surcharge each quote reports uses the pre-update congestion estimate, which is the same estimate a mint in the same state charges.
 
+Both quotes run the entry-probability band before they size anything. For a two-sided range the band applies 3 times: to the range probability, to the probability that settlement ends above the lower strike, and to the probability that it ends at or below the higher strike. An open end contributes no check, and the finite end of a directional position has the same probability as the position itself. The quoted `trading_fee` sums one fee for each finite boundary, as [Fee components](/onchain-finance/deepbook/deepbook-predict/design#fee-components) describes.
+
 Both Move functions price and stop there. Neither checks the `max_cost` or `max_probability` slippage caps, because neither takes them, and neither checks whether the expiry has the cash to back the resulting payout liability. `quote_mint` in particular knows nothing about an account: it has no `AccountWrapper` argument, so it cannot see a balance, a builder code, or a referrer. One bound both quotes do enforce is that the all-in cost can never exceed the position's maximum payout: a quote whose `all_in_cost` would exceed `quantity` aborts with `EMintCostAboveMaxPayout`.
 
-The SDK's `client.predict.read.quoteMint` is a different thing at a different layer. It dry-runs the identical transaction `client.predict.tx.mint` builds, against the real account and the real fee path, so it does double as preflight and raises the same typed errors the mint would, insufficient balance included. When a page says a quote is a preflight, it means that dry run, not the Move functions above.
+The SDK's `client.predict.read.quoteMint` is a different thing at a different layer. It dry-runs the transaction `client.predict.tx.mint` builds for the options you pass, against the real account and the real fee path, so it does double as preflight and raises the same typed errors the mint would, including insufficient balance. Called with only `quantity`, it carries no slippage cap. When a page says a quote is a preflight, it means that dry run, not the Move functions above.
 
 <details>
 <summary>Quote source</summary>
@@ -191,7 +193,7 @@ The SDK's `client.predict.read.quoteMint` is a different thing at a different la
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="quote_mint,quote_mint_for_account"
 	noComments
 />
@@ -207,7 +209,7 @@ The SDK's `client.predict.read.quoteMint` is a different thing at a different la
 | `quantity` | Sized position quantity, which is also the maximum payout. |
 | `entry_probability` | Quoted per-contract range probability before fees, scaled by 1e9. |
 | `premium` | Net premium, the contract's entry value. |
-| `trading_fee` | Trading fee before the sponsor subsidy. |
+| `trading_fee` | Trading fee before the sponsor subsidy, summed over the range's finite boundaries. |
 | `fee_incentive_subsidy` | Sponsor-funded portion of the trading fee the trader does not pay. The SDK calls the same amount `subsidy`. |
 | `builder_fee` | Builder add-on, zero when the account carries no builder code. |
 | `penalty_fee` | Congestion surcharge. The SDK calls the same amount `penalty`, in both the quote and the decoded receipt. |
@@ -226,7 +228,7 @@ The congestion surcharge is one mechanism with 2 names, `penalty_fee` onchain an
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="MintQuote"
 />
 
@@ -235,7 +237,7 @@ The congestion surcharge is one mechanism with 2 names, `penalty_fee` onchain an
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="quantity,entry_probability,premium,trading_fee,fee_incentive_subsidy,builder_fee,penalty_fee,inventory_impact_charge,all_in_cost"
 	noComments
 />
@@ -318,7 +320,7 @@ You address positions by absolute integer ticks, with `0` as the open lower end 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="mint_exact_quantity,mint_exact_amount"
 	noComments
 />
@@ -405,7 +407,7 @@ public fun redeem_settled_permissionless(
 )
 ```
 
-`redeem_live` closes an unsettled position at the current range probability, in full or in part. A partial close removes the closed slice and returns a replacement order ID in the `Option<u256>`, and a full close returns `none`. `Option<u256>` has `drop`, so the transaction can ignore the return value; the replacement ID is also on the `LiveOrderRedeemed` event as `replacement_order_id`. `min_probability` floors the quoted per-contract probability and `min_proceeds` floors the net USDC credited after the trading fee, the builder fee, and the congestion surcharge, with inventory-impact rebate included. Pass `0` to disable either floor. A live redeem in the same `clock.timestamp_ms()` as the mint aborts with `EMintRedeemSameTimestamp`, which blocks an atomic mint, oracle update, and redeem inside one transaction. A live redeem inside the no-trade window aborts with `ETradeWindowClosed`.
+`redeem_live` closes an unsettled position at the current range probability, in full or in part. A partial close removes the closed slice and returns a replacement order ID in the `Option<u256>`, and a full close returns `none`. `Option<u256>` has `drop`, so the transaction can ignore the return value; the replacement ID is also on the `LiveOrderRedeemed` event as `replacement_order_id`. `min_probability` floors the quoted per-contract probability and `min_proceeds` floors the net USDC credited after the trading fee, the builder fee, and the congestion surcharge, with inventory-impact rebate included. Pass `0` to disable either floor. The close charges the trading fee once for each finite boundary, the same way a mint does, and caps it at the gross close value. It applies no entry-probability band, so a position whose probability has left the band stays closable. A live redeem in the same `clock.timestamp_ms()` as the mint aborts with `EMintRedeemSameTimestamp`, which blocks an atomic mint, oracle update, and redeem inside one transaction. A live redeem inside the no-trade window aborts with `ETradeWindowClosed`.
 
 `redeem_settled` closes a settled position for its terminal payout. A settled close is always full, so the function takes no quantity, and it runs no live pricing, so it takes no pricer. Payout is the full quantity when the settlement price lies inside `(lower_tick, higher_tick]` and zero otherwise.
 
@@ -421,7 +423,7 @@ Both settled paths run the version gate and refuse to run inside a pool flush's 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="redeem_live,redeem_settled,redeem_settled_permissionless"
 	noComments
 />
@@ -474,7 +476,7 @@ Settled redeems, pool rebalancing, and the flush's snapshot stage only read the 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="try_settle"
 	noComments
 />
@@ -502,7 +504,7 @@ The call always returns the resolved tick as a `u64`, but it emits `ReferenceTic
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="set_reference_tick,set_mint_paused"
 	noComments
 />
@@ -545,7 +547,7 @@ public fun settled_order_payout(market: &ExpiryMarket, order_id: u256): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="id,expiry,is_settled,try_settlement_price,cash_balance,required_cash,payout_liability,tick_size,admission_tick_size,reference_tick,mint_paused,is_pending_valuation"
 	noComments
 />
@@ -555,7 +557,7 @@ public fun settled_order_payout(market: &ExpiryMarket, order_id: u256): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="current_nav,live_order_value,settled_order_payout"
 	noComments
 />
@@ -595,11 +597,11 @@ An account borrow can abort inside `account` with `EInvalidOwner` or `EBalanceTo
 
 ### Mint admission errors {#mint-admission-errors}
 
-The 2 ordinary failure modes of a first mint are not in the table above. Both live in `deepbook_predict::strike_exposure_config`, the module that holds each market's snapshot of entry-probability and fee policy and runs `assert_mint_admission` before any state moves:
+The 2 ordinary failure modes of a first mint are not in the table above. Both live in `deepbook_predict::strike_exposure_config`, the module that holds each market's snapshot of entry-probability and fee policy and runs `assert_range_mint_probability_policy` and `assert_mint_admission` before any state moves:
 
 | **Code** | **Constant** | **Cause** |
 |---|---|---|
-| `0` | `EEntryProbabilityOutOfBounds` | The quoted entry probability falls outside the market's band, from `min_entry_probability` to `max_entry_probability` inclusive. |
+| `0` | `EEntryProbabilityOutOfBounds` | The quoted range probability, or the probability at one of its finite boundaries, falls outside the market's band, from `min_entry_probability` to `max_entry_probability` inclusive. |
 | `1` | `EInvalidEntryProbabilityBound` | An admin update would leave the minimum at or above the maximum. Traders do not reach this. |
 | `2` | `EInvalidFeeProbability` | A probability above `1.0` reached the Bernoulli fee curve. |
 | `3` | `EPremiumBelowMinimum` | The premium is below the `min_premium` floor of `1_000_000` base units, which is 1 USDC. |
@@ -607,6 +609,8 @@ The 2 ordinary failure modes of a first mint are not in the table above. Both li
 `EPremiumBelowMinimum` is the size floor, and it is the one an integrator meets first. Premium is `quantity * entry_probability`, and `max_entry_probability` is `0.99` on both deployments, so the smallest admissible quantity never falls below about `1.02` USDC of payout, and it rises as the strike moves away from the money. At an entry probability of `0.08`, for example, the smallest admissible quantity is `12.5` USDC of payout, rounded up to the lot size.
 
 `EEntryProbabilityOutOfBounds` is the band. A strike far enough out of the money prices below `min_entry_probability`, which is `0.01` on both deployments, and the admission check rejects it before computing the premium.
+
+A two-sided range meets the band at each finite boundary as well: the probability that settlement ends above the lower strike and the probability that it ends at or below the higher strike must each sit inside the band. A range with a 0.995 probability of settling above its lower strike and a 0.5 probability of settling above its higher strike has a range probability of 0.495, inside the band, yet the mint aborts with `EEntryProbabilityOutOfBounds`, because 0.995 exceeds the `0.99` maximum.
 
 Because error numbers repeat across modules, the number alone identifies nothing. Read the module out of the abort location before you look the number up. Code `3` is `EPremiumBelowMinimum` in `strike_exposure_config`, `EMintProbabilityAboveMax` in `expiry_market`, `EReferenceTickAlreadySet` in `strike_exposure`, and `EInvalidQuantity` in `order`. See [Strikes and Ticks](/onchain-finance/deepbook/deepbook-predict/contract-information/market-keys#error-codes) for the `order` and `strike_exposure` tables.
 
@@ -698,7 +702,7 @@ The event carries the payout but not the settlement price. Read that from the `M
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="OrderMinted,LiveOrderRedeemed,SettledOrderRedeemed"
 />
 

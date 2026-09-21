@@ -43,8 +43,8 @@ answer: >-
   half-open region (lower, higher]. Tick 0 is the negative-infinity sentinel and
   tick 1073741823 is the positive-infinity sentinel. A minted position is a
   packed u256 order ID that is unique only within one expiry market.
-last_verified: 2026-09-10
-verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
+last_verified: 2026-09-14
+verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 ---
 
 Every strike in DeepBook Predict is an absolute integer tick counted from zero. One expiry market fixes one `tick_size`, and the raw strike is the product:
@@ -78,7 +78,7 @@ public fun reference_tick_source_timestamp_ms(market: &ExpiryMarket): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="tick_size,admission_tick_size,reference_tick,reference_tick_source_timestamp_ms"
 	noComments
 />
@@ -92,7 +92,7 @@ The only conversion in the other direction is `range_codec::strike_from_tick`, w
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="strike_from_tick"
 	noComments
 />
@@ -104,7 +104,7 @@ Both the Mainnet and the Testnet deployment run one underlying, BTC, with 2 enab
 | 1m | `10_000_000` | 0.01 USD | `1_000_000_000` | 1 USD |
 | 5m | `10_000_000` | 0.01 USD | `1_000_000_000` | 1 USD |
 
-The registry also holds the 1h, 1d, 1w, and 1mo cadences in a disabled state, and a disabled cadence reads back as an all-zero configuration. Verification on 2026-09-10 confirmed those values on both networks. Read the live values with `registry::cadence_config` or `registry::cadence_configs`, or as `tickSize` and `admissionTickSize` from `read.markets()`, rather than hardcoding them, because an admin can change a cadence and each market keeps the terms it received at creation.
+The registry also holds the 1h, 1d, 1w, and 1mo cadences in a disabled state, and a disabled cadence reads back as an all-zero configuration. A chain read on 2026-09-14 confirmed those values on both networks. Read the live values with `registry::cadence_config` or `registry::cadence_configs`, or as `tickSize` and `admissionTickSize` from `read.markets()`, rather than hardcoding them, because an admin can change a cadence and each market keeps the terms it received at creation.
 
 ## A position is a tick pair {#range-key}
 
@@ -152,7 +152,7 @@ A directional view is a one-sided range, and the protocol prices it through exac
 | Ends at or below one level | Directional down | `(0, K]` | `settlement <= K` |
 | Lands between 2 levels | Two-sided range | `(L, H]` | `L < settlement <= H` |
 
-A one-sided range wins on an unbounded outcome, so it costs more per contract and wins more often. A two-sided range wins on a bounded outcome, so it costs less per contract and wins less often. Ranges suit a view on where a price settles rather than on which direction it moves.
+A one-sided range wins on an unbounded outcome, so it costs more per contract and wins more often. A two-sided range wins on a bounded outcome, so it costs less per contract and wins less often. Ranges suit a view on where a price settles rather than on which direction it moves. A two-sided range also carries 2 finite boundaries, so the protocol charges a trading fee at each and applies the entry-probability band at each, in addition to the band on the range itself.
 
 The `order` module rejects 2 shapes outright:
 
@@ -177,7 +177,7 @@ The `reference_tick` is the one finite strike a market admits off the admission 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="set_reference_tick"
 	noComments
 />
@@ -194,7 +194,7 @@ Grid state lives in the market's `StrikeExposure`, which has no public functions
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="StrikeExposure"
 />
 
@@ -211,7 +211,7 @@ Follow these steps before you submit a mint:
 1. Confirm `lower_tick < higher_tick` and that the pair is not `(0, 1073741823]`.
 1. Round the quantity to a whole lot of `10_000` base units, which is 0.01 USD of payout, then check the premium against the minimum below.
 
-The lot is the granularity, not a tradable minimum. Every mint must also produce a premium of at least `1_000_000` base units, which is 1 USDC, or it aborts with `strike_exposure_config::EPremiumBelowMinimum`. Premium is `quantity * entry_probability` and the contract caps entry probability at `0.99`, so the smallest admissible quantity never falls below about `1.02` USDC of payout, and it rises steeply as the strike moves away from the money. A far out-of-the-money strike fails earlier still, on the entry-probability band. See [Mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors) for both codes and the measured floors.
+The lot is the granularity, not a tradable minimum. Every mint must also produce a premium of at least `1_000_000` base units, which is 1 USDC, or it aborts with `strike_exposure_config::EPremiumBelowMinimum`. Premium is `quantity * entry_probability` and the contract caps entry probability at `0.99`, so the smallest admissible quantity never falls below about `1.02` USDC of payout, and it rises steeply as the strike moves away from the money. A far out-of-the-money strike fails earlier still, on the entry-probability band, and so does a two-sided range when the probability at either of its finite boundaries falls outside that band. See [Mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors) for both codes and the measured floors.
 
 A valid range can still fail on timing. Live mints and live redeems abort with `protocol_config::ETradeWindowClosed` inside the last `no_trade_window_ms` before expiry, deployed at 2,000 ms on both networks, so check the market's remaining time before you submit; see [Predict](/onchain-finance/deepbook/deepbook-predict/contract-information/predict) for the window.
 
@@ -252,7 +252,7 @@ The `sequence` counter is expiry-local, so an order ID is unique only within one
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="Order"
 />
 
@@ -290,7 +290,7 @@ public fun expiry_market_id(
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	fun="expiry_market_id"
 	noComments
 />
@@ -307,7 +307,7 @@ The registry stores those IDs in a `Table` keyed by `market_manager::MarketKey`,
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="14a7e8f822e0397df2d61fbfbce3ef21086891c2"
+	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
 	struct="MarketKey"
 />
 
@@ -315,40 +315,7 @@ The registry stores those IDs in a `Table` keyed by `market_manager::MarketKey`,
 
 ## Ticks in the TypeScript SDK {#sdk}
 
-`@mysten/deepbook-v3` version 2.3.0 or later ships a `/predict` subpath that does the tick arithmetic for you on either network. Describe a position with a `MarketDescriptor` in USD, and the SDK resolves the market, converts each strike, and admission-checks each finite boundary before it builds the transaction.
-
-The descriptor has 2 arms:
-
-- **Binary arm:** `{ side: 'up' | 'down', strike: number | 'reference' }`, where `'reference'` resolves to the market's `referencePrice`.
-- **Range arm:** `{ side: 'range', lower: number, upper: number }`, where both bounds are finite USD prices and `lower` must be below `upper`.
-
-Each arm maps onto the same tick pair the chain takes:
-
-| **Descriptor** | **`lowerTick`** | **`higherTick`** |
-|---|---|---|
-| `{ side: 'up', strike: K }` | `K / tickSize` | `POS_INF_TICK` |
-| `{ side: 'down', strike: K }` | `0` | `K / tickSize` |
-| `{ side: 'range', lower: L, upper: H }` | `L / tickSize` | `H / tickSize` |
-
-The SDK exports `POS_INF_TICK` as a `bigint` equal to `1073741823n`. `strike: 'reference'` is available on the binary arm only, and it throws while the market has no reference tick recorded. Recording one is permissionless, so a caller blocked this way can unblock themselves by calling `set_reference_tick` rather than waiting for someone else.
-
-`read.markets()` returns `tickSize`, `admissionTickSize`, and `referencePrice` as USD decimals, so snap a target price with plain arithmetic:
-
-```ts
-const markets = await client.predict.read.markets();
-const m = markets[0];
-const strike = Math.round(target / m.admissionTickSize) * m.admissionTickSize;
-```
-
-The SDK raises a typed `PredictInputError` before it builds a transaction when a strike is off the fine grid, off the admission grid and not the reference price, outside the finite tick domain, or when `lower` is not below `upper`.
-
-The following example mints a directional position, quoting first and capping the all-in cost; `NETWORK` in the examples package selects Testnet or Mainnet:
-
-<ImportContent source="examples/deepbook-predict/src/mint.ts" mode="code" tag="mint-binary" />
-
-This one mints a two-sided range through the same builder, with both bounds snapped to the admission grid:
-
-<ImportContent source="examples/deepbook-predict/src/mint-range.ts" mode="code" tag="mint-range" />
+The `@mysten/deepbook-v3/predict` subpath converts USD strikes to these ticks, admission-checks each finite boundary before it builds a transaction, and exports `POS_INF_TICK` and `binaryRangeTicks`, as [Predict Markets and Pricing SDK](/onchain-finance/deepbook/deepbook-predict-sdk/markets#ticks) describes. For directional and range mints that start from a market descriptor, see [Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#examples).
 
 ## Error codes {#error-codes}
 
@@ -386,7 +353,7 @@ The payout index behind `strike_exposure` is `strike_payout_tree`, and one of it
 
 Each distinct finite boundary tick in a market costs one node, and a range with 2 new finite boundaries costs 2. The 960 cap is the valuation budget for a single market, so on a busy market a mint at a fresh strike can abort with `EMaxPayoutTreeNodes` while a mint at a strike some other position already uses succeeds. Codes `3` and `4` belong to the pool flush, and a mint or redeem cannot reach them.
 
-A third module gates a mint on strike and size policy rather than on shape. `strike_exposure_config` holds the entry-probability band and the `min_premium` floor, and its 2 trader-facing codes, `EEntryProbabilityOutOfBounds` and `EPremiumBelowMinimum`, are the ordinary failure modes of a first mint. That table lives with the mint call, in [Mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors). The list of ways a well-formed mint aborts ends with 2 `expiry_market` codes: `EMintCostAboveMaxPayout`, code `11`, when the all-in cost of the quote exceeds the quantity it would pay, which a deep in-the-money strike plus fees can reach; and `protocol_config::ETradeWindowClosed`, code `7`, inside the no-trade window before expiry.
+A third module gates a mint on strike and size policy rather than on shape. `strike_exposure_config` holds the entry-probability band, which it applies to the range and to each finite boundary, and the `min_premium` floor, and its 2 trader-facing codes, `EEntryProbabilityOutOfBounds` and `EPremiumBelowMinimum`, are the ordinary failure modes of a first mint. That table lives with the mint call, in [Mint admission errors](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-admission-errors). The list of ways a well-formed mint aborts ends with 2 `expiry_market` codes: `EMintCostAboveMaxPayout`, code `11`, when the all-in cost of the quote exceeds the quantity it would pay, which a deep in-the-money strike plus fees can reach; and `protocol_config::ETradeWindowClosed`, code `7`, inside the no-trade window before expiry.
 
 Error numbers repeat across modules, so the number alone identifies nothing: resolve an abort against the module named in the abort location. Code `3` is `EInvalidQuantity` in `order`, `EReferenceTickAlreadySet` in `strike_exposure`, `EPremiumBelowMinimum` in `strike_exposure_config`, `EStaleValuationSnapshot` in `strike_payout_tree`, and `EMintProbabilityAboveMax` in `expiry_market`. A reader who looks up `3` in the wrong table gets a plausible and wrong answer every time.
 

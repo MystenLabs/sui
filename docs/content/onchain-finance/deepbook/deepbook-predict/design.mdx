@@ -15,8 +15,8 @@ keywords:
   - pool valuation
   - tick grid
   - prediction market
-last_verified: 2026-09-10
-verified_against: deepbook-predict-mainnet 14a7e8f8; deepbook-predict-testnet a928bd2d
+last_verified: 2026-09-14
+verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 goal:
   description: >-
     Reader can explain how DeepBook Predict splits state across the Registry,
@@ -101,7 +101,7 @@ Reading a balance settles nothing. `account::balance<T>` takes an immutable `&Ac
 Oracle data is not Predict state. It lives in 3 shared objects in the separate `propbook` package, and Predict reads them without ever writing to them:
 
 - `PythFeed`: One source-native Pyth Lazer spot payload per feed ID, plus exact timestamp history. Predict reads the normalized spot and the timestamp of the observation behind it.
-- `BlockScholesValueStore`: The latest Block Scholes spot and the per-expiry forward, plus exact minute-boundary spot history.
+- `BlockScholesValueStore`: The 10 most recent Block Scholes spots and the latest per-expiry forward, plus exact minute-boundary spot history.
 - `BlockScholesSVIStore`: The latest per-expiry stochastic volatility inspired (SVI) parameter set, which describes the shape of the implied distribution.
 
 Updates to all 3 are permissionless, because a verified Pyth Lazer payload, or a signed Block Scholes batch, is its own proof of origin. The relayer that lands one needs no capability.
@@ -128,7 +128,7 @@ Minting returns one packed `u256` order ID that encodes the quantity in lots, bo
 
 Pricing is transaction-local. `expiry_market::load_live_pricer` takes the protocol configuration, the propbook registry, and the 3 oracle objects, then returns a pricer bound to that one market. The pricer has no `store` ability, so every transaction that quotes, mints, or redeems live builds a fresh one. The pool flush is the one place a pricer outlives its transaction, and it does so as a `FrozenPricer` that only the `plp` module can create or read.
 
-The pricer resolves a forward, then reads each range's probability off the SVI curve as the difference between its 2 strike boundaries. While `use_pyth_spot_for_forward` is on, which is the shipped default, a fresh usable Pyth spot anchors the forward and the Block Scholes basis scales it. A missing, stale, or unusable Pyth spot falls back to the Block Scholes forward for that expiry. A position's live value is its quantity multiplied by its range probability, and a winning position settles at its full quantity. Mint admission holds the quoted entry probability inside a per-market band and requires a minimum premium, so a quote at the extreme edge of the distribution fails rather than rounding. A mint whose all-in cost would exceed its own maximum payout aborts with `EMintCostAboveMaxPayout`.
+The pricer resolves a forward, then reads each range's probability off the SVI curve as the difference between its 2 strike boundaries. While `use_pyth_spot_for_forward` is on, which is the shipped default, a fresh usable Pyth spot anchors the forward and the Block Scholes basis scales it. The basis is the latest Block Scholes forward for that expiry divided by the Block Scholes spot that carries the same source timestamp, which the pricer looks up among the 10 most recent spots the value store retains. When no retained spot matches, live pricing aborts with `EBlockScholesPriceUnavailable`, whichever forward source is active. A missing, stale, or unusable Pyth spot falls back to the Block Scholes forward for that expiry. A position's live value is its quantity multiplied by its range probability, and a winning position settles at its full quantity. Mint admission holds the quoted range probability inside a per-market band, and for a two-sided range it also holds the probability that settlement ends above the lower strike and the probability that it ends at or below the higher strike inside that band. It also requires a minimum premium, so a quote at the extreme edge of the distribution fails rather than rounding. A mint whose all-in cost would exceed its own maximum payout aborts with `EMintCostAboveMaxPayout`.
 
 Live trading has a hard stop before expiry. `no_trade_window_ms` sets a window, 2 seconds on both deployments, inside which every quote, mint, and live redeem aborts with `ETradeWindowClosed`, and live pricing aborts once the expiry itself has passed. Settled redemption, settlement, and reference tick recording ignore the window. In a market's final seconds the entry probability converges hard, so the window removes trades that would fill at a converged price.
 
@@ -142,11 +142,13 @@ Predict enforces solvency per expiry rather than through a protocol-wide exposur
 
 A quote reports every charge separately, and a mint debits the premium plus the trading fee net of any subsidy, plus the builder fee, the congestion surcharge, and the inventory-impact charge. A live close withholds the same charges from the payout, and a settled winner collects its full quantity. The components are:
 
-- **Trading fee:** A rate proportional to the standard deviation of the contract's Bernoulli outcome, so it peaks where the quoted probability is nearest to 50 percent and falls toward the tails, with a per-unit floor underneath it. A linear ramp lifts that rate inside a configured window before expiry.
+- **Trading fee:** The protocol charges it once at each finite boundary of the range, so a directional position pays 1 boundary fee and a two-sided range pays 2. Each boundary's per-unit rate is proportional to the standard deviation of the Bernoulli outcome at that strike, so it peaks where the probability of settling above the strike is nearest to 50 percent and falls toward the tails, with a per-unit floor underneath it. A linear ramp lifts that rate inside a configured window before expiry, and the protocol rounds each boundary's fee down separately.
 - **Fee incentive subsidy:** A reduction in the trading fee, funded from the market's sponsored incentive balance. Anyone can top that balance up. It is `fee_incentive_subsidy` onchain and `subsidy` in the SDK quote and receipt.
 - **Builder fee:** An optional add-on for accounts that carry a builder code, computed from the trading fee and capped by a per-quantity rate. It routes to the builder code's address rather than into the pool.
 - **Congestion surcharge:** A flat per-unit charge that fires only when the transaction's gas price is a high outlier against the market's own smoothed estimate. It is `penalty_fee` onchain and `penalty` in the SDK quote and receipt, so a `penalty` line in a quote is this charge. Admin can disable it, and it ships disabled on both deployments.
 - **Inventory-impact charge:** A charge sized by the change a trade makes to the book's payout profile, held in the market's isolated escrow and rebated when a trade closes that exposure. Its rate ships at zero, which makes the mechanism inert.
+
+For example, take a two-sided range with a 0.8 probability of settling above its lower strike and a 0.2 probability of settling above its higher strike. Its range probability is 0.6, so the premium is 0.6 USDC per contract. At a 10 percent base fee and outside the expiry ramp, each boundary's rate is `0.1 * sqrt(0.8 * 0.2) = 0.04`, so the range pays 0.08 USDC per contract in trading fee. Each boundary pays at least the per-unit floor, so a two-sided range always pays at least twice the floor.
 
 A referral share is not another charge. Its basis is the trading fee net of the incentive subsidy, plus the congestion surcharge, and the protocol computes it only after `all_in_cost` is final, then splits it out of the payment the trader has already made. It comes out of fees the trader paid anyway, it never adds a debit, and it never changes `cost`. The SDK reports it as `fees.referral`. The Move `MintQuote` carries no referral field, because the split happens after the quote.
 
@@ -202,11 +204,11 @@ Split reads by freshness and purpose:
 
 1. Build quotes, balances, positions, pool state, and market state with the Predict client in [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3). Every read runs against the Sui node core API through simulation and object reads, and the event decoders parse a transaction result with no network call at all, so these reads need no indexer on either network.
 1. Subscribe to Sui checkpoints or protocol events over gRPC when an interface needs a live tape of oracle updates and trades, and back it with a `ListEvents` backfill for history.
-1. Render history, portfolios, and oracle observation series from an indexed read service where one exists for the deployment you target. As of 2026-09-10 the public read services index only the previous-generation `predict-8-21` Testnet deployment, and none exists for the current Mainnet or Testnet deployments; [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#public-read-apis-for-the-previous-testnet-deployment) scopes them. Any such service keys account-scoped paths on the canonical account ID, and a wrapper ID there returns `200` with an empty array rather than an error.
+1. Render history, portfolios, and oracle observation series from an indexed read service where one exists for the deployment you target. As of 2026-09-14 the public read services index only `predict-8-21`, an earlier Testnet deployment, and none exists for the current Mainnet or Testnet deployments; [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#public-read-apis-for-the-predict-8-21-testnet-deployment) scopes them. Any such service keys account-scoped paths on the canonical account ID, and a wrapper ID there returns `200` with an empty array rather than an error.
 
 Preflight is a property of the SDK layer, not of the Move layer, and the 2 quote surfaces differ:
 
-- **In the SDK:** `read.quoteMint` and `read.quoteRedeem` each dry-run the identical transaction their matching builder produces, against the real account and the real fee path, so they raise the same typed errors the write would, insufficient balance included. A successful SDK quote is a preflight.
+- **In the SDK:** `read.quoteMint` and `read.quoteRedeem` each dry-run the transaction their matching builder produces for the options you pass, against the real account and the real fee path, so they raise the same typed errors the write would, including insufficient balance. A mint quote called with only `quantity` carries no slippage cap. A successful SDK quote is a preflight.
 - **Onchain:** `expiry_market::quote_mint` prices only. It applies the live-mint and admission gates, including the no-trade window, and it checks no account, no slippage cap, and no exposure capacity, so a successful Move quote says nothing about whether the mint would land.
 
 For package IDs, object IDs, and deployed configuration, see [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).

@@ -73,6 +73,11 @@ ignore = [
     # (which Sui and fastcrypto have both migrated away from). Unmaintained-only
     # advisory, no unsoundness. Revisit if imbl drops its bitmaps dependency.
     "RUSTSEC-2026-0247",
+    # `clear_on_drop` is unmaintained, and no safe upgrade is available. It is
+    # transitive through bulletproofs 5.0.0 in fastcrypto. Review by 2027-03-14
+    # or if bulletproofs releases a zeroize-based replacement. Upstream proposal:
+    # https://github.com/zkcrypto/bulletproofs/pull/17
+    "RUSTSEC-2026-0283",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories

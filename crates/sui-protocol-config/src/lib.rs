@@ -27,9 +27,18 @@ use sui_protocol_config_macros::{
 };
 use tracing::{info, warn};
 
+pub mod reachability;
+
+// Re-exported so that `assert_reachable_gated!` expands without requiring callers to depend on
+// the antithesis sdk or mysten-common directly.
+#[doc(hidden)]
+pub use antithesis_sdk::linkme;
+#[doc(hidden)]
+pub use mysten_common::assert_reachable_simtest;
+
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 137;
+const MAX_PROTOCOL_VERSION: u64 = 138;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -390,7 +399,7 @@ const MAINNET_USDB: &str =
 //              Add package_arena_size_in_bytes.
 // Version 137: Lower the per-bit cost of bulletproofs range proof verification, and raise the
 //              bound on batch size * range bits from 512 to 1024.
-//              Enable allowances.
+//              Enable allowances on devnet and testnet.
 //              Enable fix_ptb_generated_reads.
 //              Charge `LdConst` for the abstract value size of the constant instead of its
 //              serialized byte length.
@@ -398,6 +407,9 @@ const MAINNET_USDB: &str =
 //              Enable allowed_proposers on testnet and mainnet.
 //              Validate PTB indices at signing time.
 //              Enable memory_safety_invariant_check_v2.
+// Version 138: Enable BumpOnly
+//              Enable check_object_funds_withdraw_in_execution on testnet.
+//              Disable effects transaction dependencies on testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1281,6 +1293,10 @@ struct FeatureFlags {
     // If true, use the bitset implementation for PTB memory safety invariant check.
     #[serde(skip_serializing_if = "is_false")]
     memory_safety_invariant_check_v2: bool,
+
+    // Keep the effects wire representation, but stop collecting transaction dependencies.
+    #[serde(skip_serializing_if = "is_false")]
+    disable_effects_tx_dependencies: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4744,7 +4760,9 @@ impl ProtocolConfig {
                     cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(621);
                     cfg.max_bulletproofs_total_bits = Some(1024);
 
-                    cfg.feature_flags.enable_allowances = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_allowances = true;
+                    }
                     cfg.feature_flags.fix_ptb_generated_reads = true;
                     cfg.feature_flags.charge_ld_const_abstract_size = true;
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
@@ -4759,6 +4777,13 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.validate_ptb_argument_indices = true;
                     cfg.feature_flags.memory_safety_invariant_check_v2 = true;
+                }
+                138 => {
+                    cfg.gas_model_version = Some(15);
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
+                        cfg.feature_flags.disable_effects_tx_dependencies = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

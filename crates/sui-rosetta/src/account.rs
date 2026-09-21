@@ -10,9 +10,7 @@ use prost_types::FieldMask;
 use std::str::FromStr;
 use sui_rpc::client::Client;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2::{
-    GetBalanceRequest, GetCheckpointRequest, GetEpochRequest, ListOwnedObjectsRequest,
-};
+use sui_rpc::proto::sui::rpc::v2::{GetBalanceRequest, GetEpochRequest, ListOwnedObjectsRequest};
 use sui_sdk_types::{Address, StructTag};
 use sui_types::base_types::SuiAddress;
 
@@ -23,7 +21,6 @@ use crate::types::{
 };
 use crate::{OnlineServerContext, SuiEnv};
 use sui_types::base_types::{ObjectID, SequenceNumber};
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 /// BCS layout for `0x3::staking_pool::FungibleStakedSui`.
 /// Field order must match the Move struct definition exactly (BCS is positional).
@@ -47,27 +44,13 @@ pub async fn balance(
     let address = request.account_identifier.address;
     let currencies = &request.currencies;
 
-    let checkpoint = get_checkpoint(&mut ctx).await?;
+    let block_identifier = ctx.blocks().current_block_identifier().await?;
     let balances = get_balances(&mut ctx, &request, address, currencies.clone()).await?;
 
     Ok(AccountBalanceResponse {
-        block_identifier: ctx.blocks().create_block_identifier(checkpoint).await?,
+        block_identifier,
         balances,
     })
-}
-
-async fn get_checkpoint(ctx: &mut OnlineServerContext) -> Result<CheckpointSequenceNumber, Error> {
-    let request =
-        GetCheckpointRequest::latest().with_read_mask(FieldMask::from_paths(["sequence_number"]));
-
-    Ok(ctx
-        .client
-        .ledger_client()
-        .get_checkpoint(request)
-        .await?
-        .into_inner()
-        .checkpoint()
-        .sequence_number())
 }
 
 async fn get_balances(

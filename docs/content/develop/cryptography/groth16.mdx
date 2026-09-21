@@ -163,7 +163,7 @@ To verify a proof, you also need two more inputs, `public_inputs_bytes` and `pro
 
 The following example smart contract uses the output from the program above. It first prepares a verification key and verifies the corresponding proof. This example uses the BN254 elliptic curve construction, which is given as the first parameter to the `prepare_verifying_key` and `verify_groth16_proof` functions. You can use the `bls12381` function instead for BLS12-381 construction.
 
-```rust
+```move
 use sui::groth16;
 
 public fun groth16_bn254_test() {

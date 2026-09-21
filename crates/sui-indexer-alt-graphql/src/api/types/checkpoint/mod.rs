@@ -45,6 +45,7 @@ use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::pagination::StreamConnection;
 use crate::scope::Scope;
+use crate::scope::StreamedCheckpoint;
 use crate::task::streaming::ProcessedCheckpoint;
 use crate::task::watermark::Watermarks;
 
@@ -278,21 +279,41 @@ impl CheckpointContents {
 }
 
 impl Checkpoint {
-    /// Construct a checkpoint that is represented by just its identifier (its sequence number).
-    ///
-    /// If no sequence_number is provided, defaults to the scope's checkpoint.
-    /// Returns `None` if the checkpoint is set in the future relative to the current scope's
-    /// checkpoint, or when no checkpoint is set in scope (e.g. execution scope, where checkpoint
-    /// queries return None to prevent temporal inconsistency).
+    /// Construct a checkpoint by sequence number, according to the scope's checkpoint context. Live
+    /// and backfill delivery each resolve their delivered checkpoint when it is the one asked for. A
+    /// query resolves any checkpoint at or below its `checkpoint_viewed_at` (defaulting to it). A
+    /// scope with no checkpoint context, e.g. execution, returns `None`.
     pub(crate) fn with_sequence_number(scope: Scope, sequence_number: Option<u64>) -> Option<Self> {
-        let scope_checkpoint = scope.checkpoint_viewed_at()?;
-        let sequence_number = sequence_number.unwrap_or(scope_checkpoint);
+        match scope.streamed_checkpoint() {
+            // Live: the streamed checkpoint is held in memory (the index may not have reached it yet).
+            Some(StreamedCheckpoint::Live(processed)) => {
+                (sequence_number == Some(processed.summary.sequence_number)).then(|| Self {
+                    sequence_number: processed.summary.sequence_number,
+                    scope,
+                    streamed_data: Some(processed),
+                })
+            }
 
-        (sequence_number <= scope_checkpoint).then_some(Self {
-            scope,
-            sequence_number,
-            streamed_data: None,
-        })
+            // Backfill: the delivered checkpoint is indexed; contents load lazily.
+            Some(StreamedCheckpoint::Backfill(checkpoint)) => (sequence_number == Some(checkpoint))
+                .then_some(Self {
+                    sequence_number: checkpoint,
+                    scope,
+                    streamed_data: None,
+                }),
+
+            // Query: bounded by `checkpoint_viewed_at`; execution has none and returns `None`.
+            None => {
+                let scope_checkpoint = scope.checkpoint_viewed_at()?;
+                let sequence_number = sequence_number.unwrap_or(scope_checkpoint);
+
+                (sequence_number <= scope_checkpoint).then_some(Self {
+                    scope,
+                    sequence_number,
+                    streamed_data: None,
+                })
+            }
+        }
     }
 
     /// Resolve a checkpoint by its digest. Translates the digest to a sequence number via the

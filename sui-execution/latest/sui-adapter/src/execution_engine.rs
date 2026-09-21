@@ -242,7 +242,11 @@ pub(crate) mod checked {
         let input_objects = input_objects.into_inner();
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
-        let mut transaction_dependencies = input_objects.transaction_dependencies();
+        let mut transaction_dependencies = if protocol_config.disable_effects_tx_dependencies() {
+            BTreeSet::new()
+        } else {
+            input_objects.transaction_dependencies()
+        };
 
         // Apply the legacy gas-payment recovery before constructing the store so the gas charger
         // and transaction-derived reservation inputs see the same final payment list.

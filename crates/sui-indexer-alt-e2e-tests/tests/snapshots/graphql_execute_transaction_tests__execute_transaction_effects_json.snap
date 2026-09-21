@@ -38,9 +38,6 @@ expression: "result.pointer(\"/data/executeTransaction\")"
         },
         "idOperation": "NONE"
       },
-      "dependencies": [
-        "[digest]"
-      ],
       "lamportVersion": "2",
       "changedObjects": [
         {

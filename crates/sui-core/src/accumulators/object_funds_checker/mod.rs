@@ -6,7 +6,8 @@ use std::{
     sync::Arc,
 };
 
-use mysten_common::{assert_reachable, debug_fatal};
+use mysten_common::debug_fatal;
+use sui_protocol_config::assert_reachable_gated;
 use sui_types::{
     accumulator_root::AccumulatorObjId,
     base_types::SequenceNumber,
@@ -183,7 +184,8 @@ impl ObjectFundsCheckerDEPRECATED {
         ) {
             // Sufficient funds, we can go ahead and commit the execution results as it is.
             ObjectFundsWithdrawStatus::SufficientFunds => {
-                assert_reachable!("object funds sufficient");
+                assert_reachable_gated!("object funds sufficient", |pc| !pc
+                    .check_object_funds_withdraw_in_execution());
                 debug!("Object funds sufficient, committing effects");
                 self.metrics
                     .check_result
@@ -213,7 +215,10 @@ impl ObjectFundsCheckerDEPRECATED {
                             let tx_digest = cert.digest();
                             match receiver.await {
                                 Ok(FundsWithdrawStatus::MaybeSufficient) => {
-                                    assert_reachable!("object funds maybe sufficient");
+                                    assert_reachable_gated!(
+                                        "object funds maybe sufficient",
+                                        |pc| !pc.check_object_funds_withdraw_in_execution()
+                                    );
                                     // The withdraw state is now deterministically known,
                                     // so we can enqueue the transaction again and it will check again
                                     // whether it is sufficient or not in the next execution.
@@ -221,7 +226,8 @@ impl ObjectFundsCheckerDEPRECATED {
                                     debug!(?tx_digest, "Object funds possibly sufficient");
                                 }
                                 Ok(FundsWithdrawStatus::Insufficient) => {
-                                    assert_reachable!("object funds insufficient");
+                                    assert_reachable_gated!("object funds insufficient", |pc| !pc
+                                        .check_object_funds_withdraw_in_execution());
                                     // Re-enqueue with insufficient funds status, so it will be executed
                                     // in the next execution and fail through early error.
                                     // FIXME: We need to also track the amount of gas that was used,
