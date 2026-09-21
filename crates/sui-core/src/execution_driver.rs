@@ -46,6 +46,7 @@ use std::sync::{Arc, Weak};
 use mysten_common::{debug_fatal, fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
+use sui_macros::fail_point_async;
 use sui_types::execution::ExecutionOutput;
 use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
@@ -224,6 +225,12 @@ pub async fn execution_process(
             // Held until execution finishes: it backs the executing-certificates gauge
             // that overload control counts as in-flight load.
             let _executing_guard = executing_guard;
+
+            // Delays execution to explore orderings that differ from the consensus
+            // schedule. Placed after admission so `slot` is held: if the epoch ends
+            // during the delay, dropping the slot retires the causal index and
+            // quiescence still holds at the boundary.
+            fail_point_async!("transaction_execution_delay");
 
             // Hold the epoch-alive guard across execution so that `epoch_terminated()` waits
             // for in-flight execution to finish. Skip if the epoch has already ended; the
