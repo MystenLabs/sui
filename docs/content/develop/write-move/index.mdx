@@ -35,6 +35,69 @@ Learn how to write Move smart contract packages for the Sui blockchain, includin
 
 Learn how to write Move smart contract packages for Sui, including syntax fundamentals, best practices, and package structure.
 
+## What is Writing Move Packages in Sui?
+
+Move is the smart contract programming language used on the Sui blockchain. A Move package is the deployable unit of code on Sui — it contains one or more modules, each of which can define types, functions, and resources that can be called on-chain. Writing Move packages for Sui involves structuring your code using the Move language, defining objects and capabilities, and publishing your package to the Sui network.
+
+A Move package is organized with a `Move.toml` manifest file and a `sources/` directory containing `.move` source files. The manifest declares the package name, version, and dependencies, while the source files contain the actual module definitions.
+
+## What topics does Writing Move Packages cover?
+
+This section covers the full range of topics needed to write production-quality Move packages on Sui, including:
+
+- **Package structure** — how to organize your modules, files, and manifest
+- **Syntax fundamentals** — Move language syntax, types, functions, and control flow
+- **Objects and ownership** — defining Sui objects and working with the ownership model
+- **Capabilities and access control** — using capability patterns to control access
+- **Best practices** — patterns and conventions for writing safe, maintainable Move code
+
+## How does writing Move packages work on Sui?
+
+Writing a Move package for Sui starts with creating a project using the Sui CLI, then defining modules with structs and functions. Objects on Sui are Move structs with the `key` ability and a unique `id: UID` field. Functions can be called as transactions by users or other contracts.
+
+Here is a minimal example of a Move module defining a simple on-chain object:
+
+```move
+module my_package::counter {
+    use sui::object::{Self, UID};
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
+
+    /// A simple counter object stored on-chain.
+    public struct Counter has key {
+        id: UID,
+        value: u64,
+    }
+
+    /// Create a new Counter and transfer it to the transaction sender.
+    public fun create(ctx: &mut TxContext) {
+        let counter = Counter {
+            id: object::new(ctx),
+            value: 0,
+        };
+        transfer::transfer(counter, tx_context::sender(ctx));
+    }
+
+    /// Increment the counter value by one.
+    public fun increment(counter: &mut Counter) {
+        counter.value = counter.value + 1;
+    }
+
+    /// Read the current value of the counter.
+    public fun value(counter: &Counter): u64 {
+        counter.value
+    }
+}
+```
+
+In this example:
+- `Counter` is a Sui object (it has the `key` ability and an `id: UID` field).
+- `create` is a function that initializes a new `Counter` and transfers ownership to the caller.
+- `increment` mutably borrows the counter to update its value.
+- `value` returns the current count without modifying the object.
+
+This pattern — defining objects, creating them, and exposing functions to interact with them — is the foundation of most Move packages on Sui.
+
 import DocCardList from '@theme/DocCardList';
 
 <DocCardList />
