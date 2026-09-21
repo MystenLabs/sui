@@ -39,7 +39,48 @@ answer: >-
   ownership methods.
 ---
 
-Learn about the Sui object model, how to use objects, and different object ownership methods.
+The Sui object model is the foundation of how Sui stores and manages on-chain state. Every piece of data on Sui exists as an object. Objects have unique IDs, owners, and types. Transactions consume and produce objects, and every object change is recorded on-chain.
+
+## What is a Sui object?
+
+On Sui, the base unit of storage is an object. Unlike account-based blockchains where state lives in a single global store keyed by address, Sui organizes state around individual objects. Each object has:
+
+- A globally unique ID
+- An owner (an address, another object, or the network itself)
+- A type defined by a Move package
+- A version that increments with each mutation
+
+Move packages are also objects. When you publish a Move package to Sui, the package becomes an immutable object stored on-chain. The functions and types defined in that package are then available to other transactions.
+
+## What is the Sui object model?
+
+The Sui object model describes the rules for how objects are created, owned, transferred, and destroyed on Sui. Key properties of the model include:
+
+- **Single ownership:** Most objects are owned by exactly one address or object at a time.
+- **Immutability:** Objects can be made permanently immutable. Immutable objects are shared and readable by all transactions but cannot be changed.
+- **Shared objects:** Objects can be shared so that any transaction can access them, with ordering handled by Sui's consensus mechanism.
+- **Dynamic fields:** Objects can have fields added or removed at runtime, enabling flexible and composable data structures.
+
+## How do objects work on Sui?
+
+Transactions on Sui take objects as inputs and produce objects as outputs. When a transaction runs, it can read, mutate, transfer, or delete its input objects. The resulting objects become available for future transactions.
+
+Object ownership determines how a transaction can use an object. An address-owned object can only be used by transactions signed by the owner. A shared object can be used by any transaction, but requires consensus to order concurrent access.
+
+The following example shows a simple Move struct that defines a custom object type:
+
+```move
+public struct TodoList has key {
+    id: UID,
+    items: vector<String>,
+}
+```
+
+The `key` ability marks this struct as a Sui object. The `id` field of type `UID` gives each instance a unique on-chain identifier. When you create a value of this type and transfer it to an address, it becomes an owned object on Sui.
+
+## What topics does the objects section cover?
+
+The pages in this section cover the full lifecycle of objects on Sui, including how to create and use them in Move, the different ownership models, and how objects relate to transactions.
 
 import DocCardList from '@theme/DocCardList';
 
