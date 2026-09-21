@@ -55,3 +55,105 @@ On-ramp coverage is evolving. Provider asset support and regional availability c
 | [Meld](https://www.meld.io) | SUI, USDC, CETUS, NAVI | [Meld docs](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) |
 
 See [Fiat Off-Ramps](/onchain-finance/asset-custody/fiat-off-ramps) for the full off-ramp provider list.
+
+## How do I choose a fiat on-ramp provider for my Sui app?
+
+When selecting a provider, consider the following criteria:
+
+- **Asset coverage** — Confirm the provider supports the specific Sui asset your users need (SUI, USDC, WAL, DEEP, and so on).
+- **Regional availability** — Providers have different geographic restrictions based on licensing and compliance. Check that your target markets are supported.
+- **Integration model** — Some providers offer a hosted widget or iframe (Stripe, Onramper), while others expose a REST API or SDK for deeper customization (Coinbase CDP, Alchemy Pay).
+- **KYC requirements** — Most providers require identity verification for regulatory compliance. Understand how KYC friction affects your user experience.
+- **Fee structure** — Providers charge different spreads and transaction fees. Review pricing for your expected transaction volumes.
+- **Wallet address passthrough** — Confirm the provider accepts a pre-filled destination wallet address so funds are delivered directly to the user's Sui wallet without manual steps.
+
+## How do I integrate a fiat on-ramp into a Sui app?
+
+The most common integration pattern is a hosted widget or URL redirect. You construct a provider URL with query parameters that pre-populate the asset, destination wallet address, and optional amount. When the user completes the purchase, the provider sends the purchased tokens directly to the specified Sui address.
+
+The following example shows how to open the Onramper widget in a browser tab, pre-configured for SUI and a specific wallet address:
+
+```typescript
+// onramp.ts
+// Opens the Onramper hosted widget pre-configured for SUI on Sui mainnet.
+// Replace API_KEY with your Onramper publishable key.
+
+const ONRAMPER_API_KEY = "YOUR_ONRAMPER_API_KEY";
+
+interface OnramperParams {
+  walletAddress: string;
+  fiatCurrency?: string;
+  fiatAmount?: number;
+}
+
+function buildOnramperUrl({
+  walletAddress,
+  fiatCurrency = "USD",
+  fiatAmount = 50,
+}: OnramperParams): string {
+  const params = new URLSearchParams({
+    apiKey: ONRAMPER_API_KEY,
+    defaultCrypto: "SUI_SUI",        // asset_network format
+    wallets: `SUI:${walletAddress}`, // pre-fill destination address
+    defaultFiat: fiatCurrency,
+    defaultAmount: String(fiatAmount),
+    isAddressEditable: "false",      // prevent users from changing the address
+  });
+
+  return `https://buy.onramper.com?${params.toString()}`;
+}
+
+function openOnramp(walletAddress: string): void {
+  const url = buildOnramperUrl({ walletAddress });
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+// Usage: call this when the user clicks "Buy SUI"
+// openOnramp("0xYOUR_SUI_WALLET_ADDRESS");
+```
+
+The same pattern applies to other providers that support URL-based widget integration. Replace the base URL and query parameter names with the values from your chosen provider's documentation.
+
+### Listening for on-ramp completion
+
+Some providers emit a postMessage event or webhook callback when a transaction is confirmed. Use these signals to refresh the user's on-chain balance rather than polling on a timer:
+
+```typescript
+// Listen for a completion message from the Onramper widget iframe.
+window.addEventListener("message", (event: MessageEvent) => {
+  // Always verify the origin before acting on the message.
+  if (event.origin !== "https://buy.onramper.com") return;
+
+  const { type, payload } = event.data ?? {};
+
+  if (type === "ONRAMPER_WIDGET_TX_CONFIRMED") {
+    const { txHash, cryptoAmount, cryptoCurrency } = payload;
+    console.log(`On-ramp complete: ${cryptoAmount} ${cryptoCurrency}`);
+    console.log(`Transaction hash: ${txHash}`);
+
+    // Trigger a wallet balance refresh in your UI here.
+    refreshWalletBalance();
+  }
+});
+
+function refreshWalletBalance(): void {
+  // Re-query the Sui RPC for the latest coin balances.
+  // Implementation depends on your wallet integration.
+}
+```
+
+Check your provider's documentation to confirm the exact event names and payload shape, as these differ between providers.
+
+## What Sui assets can users purchase through fiat on-ramps?
+
+Asset availability varies by provider. The table above lists supported assets per provider. Commonly available assets across providers include:
+
+- **SUI** — The native gas token, supported by most providers.
+- **USDC** — A USD-pegged stablecoin on Sui, available through Banxa, Coinbase, OnRamp.money, and Meld.
+- **WAL** — Available through Coinbase and OnRamp.money.
+- **DEEP** — Available through Coinbase.
+- **CETUS / NAVI** — Available through Meld.
+- **USDSui** — Available through Bridge.xyz and Stripe.
+- **Sui Dollar / AUSD** — Available through CoinVoyage and Alchemy Pay respectively.
+
+Always verify asset support directly with your chosen provider before building your integration, as coverage changes as providers add new listings.
