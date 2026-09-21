@@ -43,6 +43,39 @@ An upgradeable package's `UpgradeCap` controls all of its future behavior, so tr
 
 :::
 
+## What is Managing Packages in Sui?
+
+Managing packages on Sui encompasses the full lifecycle of a Move package after it is first written: publishing it to the network, upgrading it over time, and managing its dependencies. Because packages on Sui are on-chain objects, managing them requires careful attention to addresses, upgrade capabilities, and dependency integrity.
+
+## What topics does Managing Packages cover?
+
+This section covers three main areas:
+
+- **Publishing packages** — how to publish a Move package to Sui Mainnet, Testnet, or Devnet, including automated address management so the same source code can be deployed to multiple networks without manual edits.
+- **Upgrading packages** — how to use `UpgradeCap` to authorize upgrades, how to apply upgrade policies that restrict what kinds of changes are allowed, and how to write custom upgrade policies for more complex governance requirements.
+- **Dependency management** — how to declare and resolve dependencies in `Move.toml`, pin dependencies to specific on-chain addresses, and verify that deployed dependency packages match their expected source code.
+
+## How does managing packages work on Sui?
+
+When you publish a Move package, Sui assigns it an immutable on-chain address and optionally creates an `UpgradeCap` object that grants upgrade authority. The `UpgradeCap` is a regular Sui object, so whoever holds it controls all future upgrades to that package. You can transfer it, wrap it in a multisig, or lock it behind a custom policy contract.
+
+Automated address management in the Sui CLI tracks package addresses across networks in your `Move.toml` and a generated `Move.lock` file, so you can build and test against Testnet addresses while keeping separate Mainnet addresses in the same repository.
+
+The following example shows a typical `Move.toml` with automated address management placeholders. The CLI fills in the `_` values after the first publish and records them in `Move.lock`:
+
+```toml
+[package]
+name = "my_project"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+
+[addresses]
+my_project = "_"
+```
+
+After publishing, the CLI updates your `Move.lock` with the assigned address for each network, enabling reproducible builds and source verification.
 
 import DocCardList from '@theme/DocCardList';
 
