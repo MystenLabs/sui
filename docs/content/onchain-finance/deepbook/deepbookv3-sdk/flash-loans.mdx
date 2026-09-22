@@ -50,11 +50,25 @@ answer: >-
   loans.
 ---
 
-A flash loan is one where you borrow and return loans from pools within a single programmable transaction block. The SDK exposes functions that allow you to implement this functionality. See [Flash Loans](/onchain-finance/deepbook/deepbookv3/contract-information/flash-loans) for more details on the API.
+The DeepBookV3 SDK provides flash loan functions that let you borrow and return pool assets within a single programmable transaction block (PTB). Because the borrow and repayment happen atomically in the same transaction, you never hold an uncollateralized position across transactions. See [Flash Loans](/onchain-finance/deepbook/deepbookv3/contract-information/flash-loans) for more details on the underlying contract API.
+
+## What is a flash loan?
+
+A flash loan lets you borrow an asset from a DeepBook pool without upfront collateral, as long as you return the asset (plus any fees) within the same PTB. If the repayment step fails, the entire transaction reverts and no funds leave the pool. This makes flash loans safe for the protocol and useful for arbitrage, liquidations, and other multi-step trading strategies.
+
+## Setup
+
+Import the DeepBook client and initialize it before calling any flash loan functions.
+
+```tsx
+import { DeepBookClient } from '@mysten/deepbook-v3';
+```
+
+The flash loan functions are accessible through the `flashLoans` namespace on your `DeepBookMarketMaker` instance. Each function returns a callback that accepts a `Transaction` object, making it compatible with PTB composition.
 
 ## Flash loan functions
 
-The DeepBookV3 SDK provides the following flash loan related functions. 
+The DeepBookV3 SDK provides the following flash loan related functions.
 
 ### borrowBaseAsset
 
@@ -124,6 +138,17 @@ returnQuoteAsset(
 );
 ```
 
+## How flash loan transactions work
+
+Every flash loan follows the same pattern inside a single PTB:
+
+1. Call `borrowBaseAsset` or `borrowQuoteAsset` to receive a coin and a loan receipt object.
+2. Use the borrowed coin in one or more trading steps within the same transaction.
+3. Call `returnBaseAsset` or `returnQuoteAsset`, passing the loan receipt and a coin that covers the original borrow amount plus any applicable fees.
+4. Transfer any remaining assets to your address.
+
+The transaction reverts automatically if step 3 does not satisfy the repayment requirement. You never need to write explicit error handling for underpayment.
+
 ## Flash loan example
 
 The following example demonstrates flash loan usage in `DeepBookMarketMaker` class.
@@ -172,3 +197,17 @@ flashLoanExample = async (tx: Transaction) => {
   tx.transferObjects([loanRemain], this.getActiveAddress());
 };
 ```
+
+## Frequently asked questions
+
+### What happens if I do not repay the flash loan?
+
+The entire PTB reverts. Because borrow and repayment are steps in the same atomic transaction, a failed repayment means no assets leave the pool and no state changes are committed onchain.
+
+### Can I use both base and quote flash loans in the same transaction?
+
+Yes. You can compose multiple borrow and return calls within a single PTB as long as each loan receipt is settled before the transaction ends.
+
+### Do flash loans incur fees?
+
+Flash loans may incur pool fees depending on the pool configuration. Check the pool parameters for the specific pool key you are using before building your transaction.
