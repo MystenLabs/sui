@@ -411,6 +411,8 @@ const MAINNET_USDB: &str =
 //              Enable check_object_funds_withdraw_in_execution on testnet.
 //              Disable effects transaction dependencies on testnet.
 //              Enable allowances on mainnet.
+//              Merge colliding deferred-transaction entries in the consensus handler
+//              instead of overwriting (which stranded the displaced transactions).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1298,6 +1300,12 @@ struct FeatureFlags {
     // Keep the effects wire representation, but stop collecting transaction dependencies.
     #[serde(skip_serializing_if = "is_false")]
     disable_effects_tx_dependencies: bool,
+
+    // If true, a deferred-transaction key collision in the consensus commit handler
+    // merges the colliding entries instead of overwriting the existing one, which
+    // silently dropped the displaced (finalized) transactions.
+    #[serde(skip_serializing_if = "is_false")]
+    merge_colliding_deferrals: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4786,6 +4794,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                         cfg.feature_flags.disable_effects_tx_dependencies = true;
                     }
+                    cfg.feature_flags.merge_colliding_deferrals = true;
                 }
                 // Use this template when making changes:
                 //
