@@ -941,6 +941,10 @@ struct CommitHandlerState {
     // Transactions involved in same commit owned object lock contention (double-spend),
     // mapped to conflict info (gas vs non-gas breakdown).
     contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo>,
+    // Deferral-key collisions that displaced finalized transactions (only populated
+    // when merge_colliding_deferrals is off); reported after the commit output is
+    // pushed, like abandoned deferred transactions below.
+    deferral_key_collisions: Vec<(DeferralKey, Vec<TransactionDigest>)>,
 }
 
 impl CommitHandlerState {
@@ -953,6 +957,7 @@ impl CommitHandlerState {
             initial_reconfig_state: epoch_store.get_reconfig_state_read_lock_guard().clone(),
             occurrence_counts: HashMap::new(),
             contested_transaction_digests: HashMap::new(),
+            deferral_key_collisions: Vec::new(),
         }
     }
 
@@ -1292,6 +1297,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             );
         }
 
+        // Same rationale: only reached with merge_colliding_deferrals off, where the
+        // last-writer-wins insert displaced finalized transactions.
+        for (key, displaced) in std::mem::take(&mut state.deferral_key_collisions) {
+            debug_fatal!(
+                "Deferral key collision displaced finalized transactions: key {:?}, displaced {:?}",
+                key,
+                displaced
+            );
+        }
+
         // update the calculated throughput
         self.throughput_calculator
             .add_transactions(timestamp, num_schedulables as u64);
@@ -1472,7 +1487,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .lock();
             for (key, txns) in deferred_txns.into_iter() {
                 total_deferred_txns += txns.len();
-                // Keys reloaded by this commit cannot already be present: reloads cover
+                // Keys reloaded by this commit are still present in the map here
+                // (record_deferral_deletion runs after this function), but no key
+                // inserted here can equal one of them: reloads cover
                 // future_round <= round while re-deferrals use round + 1, and a
                 // randomness reload and a randomness re-deferral are mutually exclusive
                 // per commit. A re-deferral does keep its original deferred_from_round,
@@ -1484,22 +1501,43 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // (in memory and in the write batch below) strands the displaced
                 // transactions: finalized but never reloaded or executed this epoch,
                 // with their owned inputs locked until epoch end.
-                let txns = match deferred_transactions.get(&key) {
-                    Some(prev) if protocol_config.merge_colliding_deferrals() => {
-                        assert_reachable_gated!(
-                            "Merged colliding deferral entries instead of displacing finalized transactions.",
-                            |pc| pc.merge_colliding_deferrals()
-                                && pc.defer_owned_object_double_spend()
-                        );
-                        // Deterministic merge: previously deferred transactions keep
-                        // their position ahead of this commit's.
-                        let mut merged = prev.clone();
-                        merged.extend(txns);
-                        merged
+                debug_assert!(
+                    !state
+                        .output
+                        .get_deleted_deferred_txn_keys()
+                        .any(|deleted| deleted == key),
+                    "deferral key {key:?} was reloaded by this commit and must not be re-inserted"
+                );
+                let txns = if protocol_config.merge_colliding_deferrals() {
+                    match deferred_transactions.remove(&key) {
+                        Some(mut merged) => {
+                            assert_reachable_gated!(
+                                "Merged colliding deferral entries instead of displacing finalized transactions.",
+                                |pc| pc.merge_colliding_deferrals()
+                                    && (pc.defer_owned_object_double_spend()
+                                        || pc.defer_unpaid_amplification())
+                            );
+                            debug_assert!(
+                                {
+                                    let prev_digests: HashSet<_> =
+                                        merged.iter().map(|t| *t.tx().digest()).collect();
+                                    txns.iter().all(|t| !prev_digests.contains(t.tx().digest()))
+                                },
+                                "colliding deferral entries must not share transactions"
+                            );
+                            // Deterministic merge: previously deferred transactions keep
+                            // their position ahead of this commit's.
+                            merged.extend(txns);
+                            merged
+                        }
+                        None => txns,
                     }
-                    Some(prev) => {
+                } else {
+                    if let Some(prev) = deferred_transactions.get(&key) {
                         // Last-writer-wins semantics must be preserved bit for bit for
-                        // protocol versions without the fix; flag the stranding.
+                        // protocol versions without the fix; record the stranding and
+                        // report it after the commit output is pushed, so a panicking
+                        // debug_fatal cannot abort processing of this commit.
                         let new_digests: HashSet<_> =
                             txns.iter().map(|t| *t.tx().digest()).collect();
                         let displaced: Vec<_> = prev
@@ -1508,15 +1546,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             .filter(|d| !new_digests.contains(d))
                             .collect();
                         if !displaced.is_empty() {
-                            debug_fatal!(
-                                "Deferral key collision displaced finalized transactions: key {:?}, displaced {:?}",
-                                key,
-                                displaced
-                            );
+                            state.deferral_key_collisions.push((key, displaced));
                         }
-                        txns
                     }
-                    None => txns,
+                    txns
                 };
                 deferred_transactions.insert(key, txns.clone());
                 state.output.defer_transactions(key, txns);
