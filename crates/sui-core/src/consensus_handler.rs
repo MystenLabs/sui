@@ -941,10 +941,6 @@ struct CommitHandlerState {
     // Transactions involved in same commit owned object lock contention (double-spend),
     // mapped to conflict info (gas vs non-gas breakdown).
     contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo>,
-    // Deferral-key collisions that displaced finalized transactions (only populated
-    // when merge_colliding_deferrals is off); reported after the commit output is
-    // pushed, like abandoned deferred transactions below.
-    deferral_key_collisions: Vec<(DeferralKey, Vec<TransactionDigest>)>,
 }
 
 impl CommitHandlerState {
@@ -957,7 +953,6 @@ impl CommitHandlerState {
             initial_reconfig_state: epoch_store.get_reconfig_state_read_lock_guard().clone(),
             occurrence_counts: HashMap::new(),
             contested_transaction_digests: HashMap::new(),
-            deferral_key_collisions: Vec::new(),
         }
     }
 
@@ -1297,16 +1292,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             );
         }
 
-        // Same rationale: only reached with merge_colliding_deferrals off, where the
-        // last-writer-wins insert displaced finalized transactions.
-        for (key, displaced) in std::mem::take(&mut state.deferral_key_collisions) {
-            debug_fatal!(
-                "Deferral key collision displaced finalized transactions: key {:?}, displaced {:?}",
-                key,
-                displaced
-            );
-        }
-
         // update the calculated throughput
         self.throughput_calculator
             .add_transactions(timestamp, num_schedulables as u64);
@@ -1535,9 +1520,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 } else {
                     if let Some(prev) = deferred_transactions.get(&key) {
                         // Last-writer-wins semantics must be preserved bit for bit for
-                        // protocol versions without the fix; record the stranding and
-                        // report it after the commit output is pushed, so a panicking
-                        // debug_fatal cannot abort processing of this commit.
+                        // protocol versions without the fix; flag the stranding.
                         let new_digests: HashSet<_> =
                             txns.iter().map(|t| *t.tx().digest()).collect();
                         let displaced: Vec<_> = prev
@@ -1546,7 +1529,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             .filter(|d| !new_digests.contains(d))
                             .collect();
                         if !displaced.is_empty() {
-                            state.deferral_key_collisions.push((key, displaced));
+                            debug_fatal!(
+                                "Deferral key collision displaced finalized transactions: key {:?}, displaced {:?}",
+                                key,
+                                displaced
+                            );
                         }
                     }
                     txns
