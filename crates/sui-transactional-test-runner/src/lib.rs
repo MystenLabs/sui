@@ -80,7 +80,8 @@ pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "testing")]
 pub struct ValidatorWithFullnode {
     pub validator: Arc<AuthorityState>,
-    pub fullnode: Arc<AuthorityState>,
+    /// Only present when the test uses dev-inspect or dry-run.
+    pub fullnode: Option<Arc<AuthorityState>>,
     pending_effects: Vec<TransactionEffects>,
     next_checkpoint_seq: u64,
 }
@@ -153,7 +154,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let (_, effects, execution_error) =
-            submit_and_execute_with_error(&self.validator, Some(&self.fullnode), transaction)
+            submit_and_execute_with_error(&self.validator, self.fullnode.as_deref(), transaction)
                 .await?;
         let effects = effects.into_data();
         self.pending_effects.push(effects.clone());
@@ -204,7 +205,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         &self,
         transaction_block: TransactionData,
     ) -> SuiResult<SimulateTransactionResult> {
-        self.fullnode.simulate_transaction(
+        self.fullnode()?.simulate_transaction(
             transaction_block,
             TransactionChecks::Enabled,
             /* allow_mock_gas_coin */ true,
@@ -218,7 +219,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         gas_price: Option<u64>,
     ) -> SuiResult<SimulateTransactionResult> {
         dev_inspect_for_testing(
-            &self.fullnode,
+            self.fullnode()?,
             sender,
             transaction_kind,
             gas_price,
@@ -253,9 +254,9 @@ impl TransactionalAdapter for ValidatorWithFullnode {
                 .validator
                 .settle_accumulator_for_testing(&effects, Some(checkpoint_seq))
                 .await;
-            self.fullnode
-                .replay_settlement_for_testing(&replay_txns)
-                .await;
+            if let Some(fullnode) = &self.fullnode {
+                fullnode.replay_settlement_for_testing(&replay_txns).await;
+            }
         }
         self.get_checkpoint_by_sequence_number(0)
             .ok_or_else(|| anyhow::anyhow!("No genesis checkpoint found"))
@@ -270,7 +271,9 @@ impl TransactionalAdapter for ValidatorWithFullnode {
 
     async fn advance_epoch(&mut self, _config: AdvanceEpochConfig) -> anyhow::Result<()> {
         self.validator.reconfigure_for_testing().await;
-        self.fullnode.reconfigure_for_testing().await;
+        if let Some(fullnode) = &self.fullnode {
+            fullnode.reconfigure_for_testing().await;
+        }
         Ok(())
     }
 
@@ -284,11 +287,11 @@ impl TransactionalAdapter for ValidatorWithFullnode {
 
     async fn get_active_validator_addresses(&self) -> SuiResult<Vec<SuiAddress>> {
         Ok(self
-            .fullnode
+            .validator
             .get_sui_system_state_object_for_testing()
             .map_err(|e| {
                 SuiErrorKind::SuiSystemStateReadError(format!(
-                    "Failed to get system state from fullnode: {}",
+                    "Failed to get system state from validator: {}",
                     e
                 ))
             })?
@@ -530,5 +533,19 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
 
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         ObjectStore::get_object(&self.store(), object_id)
+    }
+}
+
+#[cfg(feature = "testing")]
+impl ValidatorWithFullnode {
+    fn fullnode(&self) -> SuiResult<&AuthorityState> {
+        self.fullnode.as_deref().ok_or_else(|| {
+            SuiErrorKind::UnsupportedFeatureError {
+                error: "test was initialized without a fullnode; dev-inspect and dry-run are \
+                        unavailable"
+                    .to_string(),
+            }
+            .into()
+        })
     }
 }
