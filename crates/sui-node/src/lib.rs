@@ -14,6 +14,7 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::future::BoxFuture;
+use mysten_common::debug_fatal;
 use mysten_common::in_test_configuration;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -254,6 +255,11 @@ use sui_core::{
 
 const DEFAULT_GRPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
 const VALIDATOR_GRPC_SERVER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How long after reconfiguration every reference to the previous epoch's store must be gone.
+/// The longest legitimate holder is an RPC handler on a fullnode waiting up to the local
+/// execution timeout (10s) for a transaction to be checkpointed.
+const EPOCH_STORE_RELEASE_GRACE_PERIOD: Duration = Duration::from_secs(60);
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -2300,8 +2306,34 @@ impl SuiNode {
                     .await?;
             }
 
+            let prev_epoch = epoch_store.epoch();
+            let prev_epoch_store = Arc::downgrade(&epoch_store);
+            drop(cur_epoch_store);
             epoch_store = new_epoch_store;
+            spawn_monitored_task!(Self::check_epoch_store_released(
+                prev_epoch_store,
+                prev_epoch
+            ));
             info!("Reconfiguration finished");
+        }
+    }
+
+    /// Verifies that nothing holds on to the previous epoch's `AuthorityPerEpochStore` once
+    /// reconfiguration is complete. A lingering reference keeps that epoch's DB handles and
+    /// caches alive for the rest of the process lifetime.
+    async fn check_epoch_store_released(
+        prev_epoch_store: Weak<AuthorityPerEpochStore>,
+        prev_epoch: EpochId,
+    ) {
+        tokio::time::sleep(EPOCH_STORE_RELEASE_GRACE_PERIOD).await;
+        let strong_count = prev_epoch_store.strong_count();
+        if strong_count > 0 {
+            debug_fatal!(
+                "AuthorityPerEpochStore for epoch {prev_epoch} still has {strong_count} strong \
+                 references {EPOCH_STORE_RELEASE_GRACE_PERIOD:?} after reconfiguration"
+            );
+        } else {
+            info!(prev_epoch, "Previous epoch store released");
         }
     }
 
