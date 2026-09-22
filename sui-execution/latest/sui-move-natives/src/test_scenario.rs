@@ -61,6 +61,7 @@ const E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET: u64 = 5;
 const E_RECEIVING_TICKET_ALREADY_ALLOCATED: u64 = 6;
 const E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET: u64 = 7;
 const E_INSUFFICIENT_FUNDS: u64 = 8;
+const E_UNBACKED_WITHDRAWAL: u64 = 11;
 
 type Set<K> = IndexSet<K>;
 
@@ -114,8 +115,10 @@ impl InMemoryTestStore {
     }
 
     /// Applies the ending transaction's accumulator events to the settled balances, and drops
-    /// the reservations it took, which only cover that transaction.
-    fn settle_funds(&self, accumulator_events: Vec<MoveAccumulatorEvent>) {
+    /// the reservations it took, which only cover that transaction. Returns false if the
+    /// transaction withdrew more from an owner than it had, which only a withdrawal that was not
+    /// reserved against these balances (e.g. one kept from an earlier transaction) can do.
+    fn settle_funds(&self, accumulator_events: Vec<MoveAccumulatorEvent>) -> bool {
         self.address_reservations.borrow_mut().clear();
         let mut changes: BTreeMap<(SuiAddress, TypeTag), (u128, u128)> = BTreeMap::new();
         for event in accumulator_events {
@@ -136,13 +139,12 @@ impl InMemoryTestStore {
         // them in test_scenario. Today it always returns zero there.
         for (key, (merged, split)) in changes {
             let balance = funds.entry(key).or_default();
-            // Reserved withdrawals cannot underflow, but withdrawals created without a
-            // reservation (e.g. `allowance::new_withdrawal_for_testing`) are never checked
-            // against this balance.
-            // TODO: abort instead of clamping once test-only withdrawals such as
-            // `allowance::new_withdrawal_for_testing` are reserved against the settled balance.
-            *balance = (*balance + merged).saturating_sub(split);
+            let Some(settled) = (*balance + merged).checked_sub(split) else {
+                return false;
+            };
+            *balance = settled;
         }
+        true
     }
 }
 
@@ -369,7 +371,9 @@ pub fn end_transaction(
             ));
         }
     }
-    store.settle_funds(accumulator_events);
+    if !store.settle_funds(accumulator_events) {
+        return Ok(NativeResult::err(legacy_test_cost(), E_UNBACKED_WITHDRAWAL));
+    }
 
     // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
