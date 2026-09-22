@@ -1045,6 +1045,11 @@ impl CheckpointExecutor {
                 self.object_cache_reader.as_ref(),
             );
 
+        // Every transaction enqueued in this epoch must have been processed by now: the
+        // execution scheduler no longer cancels its scheduling tasks at epoch end, so
+        // anything still pending would hold a causal index past the boundary.
+        self.execution_scheduler.check_empty_before_change_epoch();
+
         info!(
             "scheduling change epoch txn with digest: {:?}, expected effects digest: {:?}, assigned versions: {:?}",
             change_epoch_tx.digest(),
