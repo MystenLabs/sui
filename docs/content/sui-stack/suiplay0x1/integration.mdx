@@ -39,7 +39,14 @@ answer: >-
 
 <ImportContent source="suiplay" mode="snippet" />
 
-Your integration options depend on the environments you expect your users to interact with your game. 
+Your integration options depend on the environments you expect your users to interact with your game. The Playtron GameOS SDK handles on-device integration, including wallet access, OS-level features, and environment detection. The Sui dApp Kit handles off-device integration for web, desktop, and mobile contexts. Use one or both depending on where your game runs.
+
+## What SDKs are available for SuiPlay0X1 integration?
+
+Two SDKs support SuiPlay0X1 integration:
+
+- **Playtron GameOS SDK:** For games running directly on the SuiPlay0X1 device. Provides OS-level features and automatic Playtron wallet access.
+- **Sui dApp Kit:** For games running on web, desktop, or mobile. Enables Playtron zkLogin wallet as a connection option in off-device contexts.
 
 ## On device integration
 
@@ -53,6 +60,34 @@ The Playtron GameOS SDK provides automatic wallet access with the following bene
 - No additional wallet setup required on-device.
 - Games can immediately access wallet functions through the SDK.
 
+### On-device example: detect environment and access wallet (Node.js)
+
+The following Node.js example demonstrates how to detect the Playtron environment and retrieve the connected wallet address using the Playtron GameOS SDK.
+
+```js
+import { PlaytronSDK } from '@playtron/gameOS-sdk';
+
+const sdk = new PlaytronSDK();
+
+async function main() {
+  // Check if running on the SuiPlay0X1 device
+  const isOnDevice = await sdk.environment.isPlaytron();
+
+  if (isOnDevice) {
+    // Access the Playtron wallet automatically
+    const wallet = await sdk.wallet.getWallet();
+    const address = await wallet.getAddress();
+    console.log('Playtron wallet address:', address);
+  } else {
+    console.log('Not running on a Playtron device.');
+  }
+}
+
+main();
+```
+
+In this example, `sdk.environment.isPlaytron()` returns `true` when the game runs on the SuiPlay0X1 device. When on-device, `sdk.wallet.getWallet()` returns the user's Playtron wallet without any additional setup. Refer to the [Playtron GameOS SDK repository](https://github.com/playtron-os/playtron-sdk) for full API reference and additional examples in C++ and C#.
+
 ## Off-device integration
 
 For off-device integration, use the [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit). By integrating the Sui dApp Kit, your game can continue to use the Playtron zkLogin wallet when not running directly on the SuiPlay0X1 device. This is useful if your game is available on the web, desktop, or mobile devices.
@@ -63,7 +98,51 @@ The dApp Kit runs in TypeScript, meaning your game needs TypeScript processing t
 
 If you're unable to run TypeScript, you can always support sending assets from your wallet to the Playtron wallet. Users can also access their Playtron wallet address through the [companion web application](https://wallet.playtron.one). Finally, you can support sending assets from your game on a different platform. For example, the user can use your PC client to transfer assets to their Playtron wallet, then continue playing on-device.
 
+### Off-device example: connect Playtron zkLogin wallet with Sui dApp Kit
+
+The following example shows how to configure the Sui dApp Kit to include the Playtron zkLogin wallet as a connection option in a React-based web game.
+
+```tsx
+import { SuiClientProvider, WalletProvider, ConnectButton } from '@mysten/dapp-kit';
+import { getFullnodeUrl } from '@mysten/sui/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
+
+const networks = {
+  mainnet: { url: getFullnodeUrl('mainnet') },
+};
+
+export function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <SuiClientProvider networks={networks} defaultNetwork="mainnet">
+        <WalletProvider>
+          {/* ConnectButton surfaces all available wallets, including Playtron zkLogin */}
+          <ConnectButton />
+        </WalletProvider>
+      </SuiClientProvider>
+    </QueryClientProvider>
+  );
+}
+```
+
+`WalletProvider` automatically surfaces all wallets available in the user's browser environment, including the Playtron zkLogin wallet. Users connecting from a non-Playtron device can select any supported wallet through the `ConnectButton`. Refer to the [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit) for full setup instructions and wallet connection patterns.
+
 ### Supported wallet types
 
 * **Playtron wallet:** Seamless continuation from on-device sessions.  
 * **Self-custody options:** Support for any wallet available through the Sui dApp Kit (such as [Slush wallet](https://slush.app/), [Backpack](https://backpack.app/)) to include future wallet integrations.
+
+## How do I choose between on-device and off-device integration?
+
+Your choice depends on where your game runs and what wallet experience you want to provide users.
+
+| Scenario | Recommended integration |
+|---|---|
+| Game runs only on SuiPlay0X1 | Playtron GameOS SDK |
+| Game runs on web, desktop, or mobile | Sui dApp Kit |
+| Game runs on SuiPlay0X1 and other platforms | Both SDKs |
+| No TypeScript support in your game engine | Playtron GameOS SDK on-device; manual asset transfer off-device |
+
+If your game targets multiple platforms, integrate both SDKs and use environment detection to switch between them at runtime.
