@@ -425,6 +425,43 @@ async fn test_reconfig_with_committee_change_basic() {
     });
 }
 
+/// A validator that leaves the committee must release the store of its last epoch as a
+/// validator, even though it keeps running as a non-validator.
+#[sim_test]
+async fn test_epoch_store_released_after_leaving_committee() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(5)
+        .build()
+        .await;
+
+    let handle = test_cluster
+        .swarm
+        .validator_nodes()
+        .next()
+        .unwrap()
+        .get_node_handle()
+        .unwrap();
+    let epoch_store = handle.with(|node| Arc::downgrade(&*node.state().epoch_store_for_testing()));
+
+    execute_remove_validator_tx(&test_cluster, &handle).await;
+    test_cluster.trigger_reconfiguration().await;
+    handle.with(|node| {
+        assert!(
+            !node
+                .state()
+                .is_validator(&node.state().epoch_store_for_testing())
+        )
+    });
+
+    // Leave enough time for any bounded holder (e.g. in-flight RPCs) to finish.
+    tokio::time::sleep(Duration::from_secs(120)).await;
+    assert_eq!(
+        epoch_store.strong_count(),
+        0,
+        "epoch store of the removed validator's last validator epoch was not released"
+    );
+}
+
 #[sim_test]
 async fn test_reconfig_with_voting_power_decrease() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.

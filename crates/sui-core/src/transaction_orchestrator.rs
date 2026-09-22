@@ -520,6 +520,9 @@ where
                 }
             }
         }
+        // Nothing below needs the epoch store; release it so that a reconfiguration during the
+        // finality wait does not keep the previous epoch's store alive.
+        drop(epoch_store);
 
         // Add transaction to WAL log.
         let guard =

@@ -60,7 +60,6 @@ use sui_types::digests::{
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
-use tokio::sync::oneshot;
 use tokio::sync::{Mutex, broadcast, mpsc};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -167,7 +166,7 @@ mod handle;
 pub mod metrics;
 
 pub struct ValidatorComponents {
-    validator_server_handle: Option<SpawnOnce>,
+    validator_server_handle: Option<ValidatorGrpcServer>,
     validator_overload_monitor_handle: Option<JoinHandle<()>>,
     consensus_manager: Arc<ConsensusManager>,
     consensus_store_pruner: ConsensusStorePruner,
@@ -254,6 +253,7 @@ use sui_core::{
 };
 
 const DEFAULT_GRPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
+const VALIDATOR_GRPC_SERVER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -1556,7 +1556,7 @@ impl SuiNode {
         consensus_store_pruner: ConsensusStorePruner,
         state_hasher: Weak<GlobalStateHasher>,
         backpressure_manager: Arc<BackpressureManager>,
-        validator_server_handle: Option<SpawnOnce>,
+        validator_server_handle: Option<ValidatorGrpcServer>,
         validator_overload_monitor_handle: Option<JoinHandle<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_node_metrics: Arc<SuiNodeMetrics>,
@@ -1756,7 +1756,7 @@ impl SuiNode {
         prometheus_registry: &Registry,
         inflight_slot_freed_notify: Arc<tokio::sync::Notify>,
         transaction_pool_context: Option<Arc<TransactionPoolContext>>,
-    ) -> Result<(SpawnOnce, Option<AdmissionQueueContext>)> {
+    ) -> Result<(ValidatorGrpcServer, Option<AdmissionQueueContext>)> {
         let overload_config = &config.authority_overload_config;
         let admission_queue =
             if transaction_pool_context.is_none() && overload_config.admission_queue_enabled {
@@ -1804,22 +1804,15 @@ impl SuiNode {
 
         let network_address = config.network_address().clone();
 
-        let (ready_tx, ready_rx) = oneshot::channel();
-
-        let spawn_once = SpawnOnce::new(ready_rx, async move {
+        let server = ValidatorGrpcServer::new(async move {
             let server = server_builder
                 .bind(&network_address, Some(tls_config))
                 .await
                 .unwrap_or_else(|err| panic!("Failed to bind to {network_address}: {err}"));
-            let local_addr = server.local_addr();
-            info!("Listening to traffic on {local_addr}");
-            ready_tx.send(()).unwrap();
-            if let Err(err) = server.serve().await {
-                info!("Server stopped: {err}");
-            }
-            info!("Server stopped");
+            info!("Listening to traffic on {}", server.local_addr());
+            server.into_handle()
         });
-        Ok((spawn_once, admission_queue))
+        Ok((server, admission_queue))
     }
 
     pub fn state(&self) -> Arc<AuthorityState> {
@@ -2157,6 +2150,18 @@ impl SuiNode {
                 fail_point_async!("consensus_transaction_pool_reconfig_before_shutdown");
                 consensus_manager.shutdown().await;
                 info!("Consensus has shut down.");
+
+                // A node that left the committee must stop serving validator RPCs. The server
+                // owns per-epoch state (e.g. the admission queue), so leaving it running would
+                // also keep the previous epoch's store alive for the rest of the process.
+                let validator_server_handle = match validator_server_handle {
+                    Some(server) if !new_role.is_validator() => {
+                        info!("Node is no longer a validator, shutting down validator gRPC server");
+                        server.shutdown().await;
+                        None
+                    }
+                    other => other,
+                };
 
                 if let Some(handle) = &self.address_prober {
                     handle.leave_committee();
@@ -2785,30 +2790,43 @@ impl SuiNode {
     }
 }
 
-enum SpawnOnce {
-    // Mutex is only needed to make SpawnOnce Send
-    Unstarted(oneshot::Receiver<()>, Mutex<BoxFuture<'static, ()>>),
-    #[allow(unused)]
-    Started(JoinHandle<()>),
+/// The validator gRPC server. Binding is deferred until `start()` so that the rest of the node
+/// can finish initializing first; once started, the server runs until `shutdown()` is called.
+enum ValidatorGrpcServer {
+    // Mutex is only needed to make the future Send
+    Unstarted(Mutex<BoxFuture<'static, sui_http::ServerHandle>>),
+    Started(sui_http::ServerHandle),
 }
 
-impl SpawnOnce {
-    pub fn new(
-        ready_rx: oneshot::Receiver<()>,
-        future: impl Future<Output = ()> + Send + 'static,
-    ) -> Self {
-        Self::Unstarted(ready_rx, Mutex::new(Box::pin(future)))
+impl ValidatorGrpcServer {
+    pub fn new(bind: impl Future<Output = sui_http::ServerHandle> + Send + 'static) -> Self {
+        Self::Unstarted(Mutex::new(Box::pin(bind)))
     }
 
     pub async fn start(self) -> Self {
         match self {
-            Self::Unstarted(ready_rx, future) => {
-                let future = future.into_inner();
-                let handle = tokio::spawn(future);
-                ready_rx.await.unwrap();
-                Self::Started(handle)
-            }
+            Self::Unstarted(bind) => Self::Started(bind.into_inner().await),
             Self::Started(_) => self,
+        }
+    }
+
+    /// Stops accepting requests and waits for in-flight ones to drain. The serving task is
+    /// owned by sui_http, so merely dropping this value leaves the server running.
+    pub async fn shutdown(self) {
+        if let Self::Started(handle) = self {
+            handle.trigger_shutdown();
+            match tokio::time::timeout(
+                VALIDATOR_GRPC_SERVER_SHUTDOWN_TIMEOUT,
+                handle.wait_for_shutdown(),
+            )
+            .await
+            {
+                Ok(()) => info!("Validator gRPC server stopped"),
+                // Shutdown was triggered, so the server still winds down in the background.
+                Err(_) => warn!(
+                    "Validator gRPC server did not stop within {VALIDATOR_GRPC_SERVER_SHUTDOWN_TIMEOUT:?}"
+                ),
+            }
         }
     }
 }
