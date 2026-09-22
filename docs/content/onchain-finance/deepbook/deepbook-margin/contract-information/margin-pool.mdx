@@ -38,6 +38,38 @@ The `MarginPool` is a shared object that manages liquidity for a specific asset,
 
 Margin pools use a shares-based accounting system where suppliers receive shares representing their proportion of the total supply. Interest accrues continuously, increasing the value of these shares over time. Borrowers can only borrow from pools that have enabled their specific DeepBook trading pool.
 
+## What is a margin pool?
+
+A margin pool is a shared, asset-specific liquidity contract on Sui. Lenders deposit assets into the pool and receive supply shares in return. Those shares increase in value as borrowers pay interest. Margin traders draw from the pool to fund leveraged positions on DeepBook.
+
+Each pool enforces a set of risk parameters:
+
+- **Supply cap:** The maximum total amount of assets the pool accepts.
+- **Max utilization rate:** The maximum fraction of supplied assets that borrowers can use at one time. Keeping some assets liquid protects lenders who want to withdraw.
+- **Min borrow:** The smallest borrow amount the pool permits, preventing dust positions.
+- **Protocol spread:** The portion of interest income that goes to the protocol rather than suppliers.
+
+## How does interest accrual work?
+
+Interest accrues based on the pool's utilization rate, which is the ratio of total borrowed assets to total supplied assets. As utilization rises, the interest rate increases. This incentivizes lenders to supply more capital and discourages over-borrowing.
+
+Suppliers do not receive interest as direct token transfers. Instead, the value of each supply share increases over time. When you withdraw, you receive more tokens than you originally deposited because your shares are worth more.
+
+The protocol captures a portion of the interest income as fees. These fees accumulate separately and are withdrawn by authorized maintainers and the protocol.
+
+## How do borrowers access a margin pool?
+
+A margin pool must explicitly allow a DeepBook trading pool before traders can borrow from it. The `deepbook_pool_allowed` field tracks which pools have permission. This design lets pool administrators control which markets can access the liquidity, limiting exposure to specific trading pairs.
+
+## Common workflow
+
+The typical workflow for a lender interacting with a margin pool:
+
+1. Mint a `SupplierCap` using `mint_supplier_cap`. One cap works across multiple pools.
+2. Call `supply` with your `SupplierCap` and the assets you want to deposit. The pool records your shares.
+3. Monitor the pool's interest rate and utilization rate using the read endpoints.
+4. Call `withdraw` when you want to reclaim your assets plus accrued interest. Specify an exact token amount or pass all your shares to withdraw everything.
+
 ## API
 
 Following are the different public functions that the `MarginPool` exposes.
