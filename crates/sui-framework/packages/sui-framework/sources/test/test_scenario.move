@@ -612,6 +612,7 @@ public fun return_receiving_ticket<T: key>(ticket: sui::transfer::Receiving<T>) 
 
 /// Returns the value of the `Balance<T>` owned by `owner` (an address or an object) as of the
 /// end of the previous transaction.
+/// Aborts with `EBalanceOverflow` if that value exceeds `u64::MAX`.
 public fun settled_balance<T>(owner: address): u64 {
     let value = settled_funds<Balance<T>>(owner);
     assert!(value <= std::u64::max_value!() as u128, EBalanceOverflow);
@@ -619,11 +620,12 @@ public fun settled_balance<T>(owner: address): u64 {
 }
 
 /// Create a `Withdrawal<Balance<T>>` from `owner`'s funds, standing in for a transaction's funds
-/// withdrawal input, which is reserved before the transaction executes.
+/// withdrawal input, which is normally reserved as a PTB argument before the transaction executes.
 /// The balance available to reserve is the `Balance<T>` settled to `owner` as of the end of the
 /// previous transaction; funds sent to `owner` in this transaction are not available.
-/// Aborts with `EZeroWithdrawal` if `value` is zero, and with `EInsufficientFunds` if the
-/// withdrawals reserved from `owner` in this transaction exceed that balance.
+/// Aborts with `EZeroWithdrawal` if `value` is zero.
+/// Aborts with `EInsufficientFunds` if the withdrawals reserved from `owner` in this transaction
+/// exceed that balance.
 public fun withdraw_balance_from_address<T>(owner: address, value: u64): Withdrawal<Balance<T>> {
     assert!(value > 0, EZeroWithdrawal);
     let limit = value as u256;
@@ -635,10 +637,8 @@ public fun withdraw_balance_from_address<T>(owner: address, value: u64): Withdra
 native fun settled_funds<T: store>(owner: address): u128;
 
 /// Records a reservation of `limit` of `T` against `owner`'s settled funds for the current
-/// transaction, and aborts with `EInsufficientFunds` if this transaction's reservations exceed
-/// them. A real transaction declares its address withdrawals as inputs and reserves them before
-/// execution; a scenario transaction has no inputs to reserve from, so the reservation is taken
-/// here, as each withdrawal is created.
+/// transaction.
+/// Aborts with `EInsufficientFunds` if this transaction's reservations exceed those funds.
 native fun reserve_funds_from_address<T: store>(owner: address, limit: u256);
 
 // == macros ==

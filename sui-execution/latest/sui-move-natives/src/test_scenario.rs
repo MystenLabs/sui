@@ -131,11 +131,16 @@ impl InMemoryTestStore {
             }
         }
         let mut funds = self.funds.borrow_mut();
+        // TODO: also write these balances into the accumulator root's fields, and refresh the
+        // object runtime's cached copies of them, so that `balance::settled_funds_value` reads
+        // them in test_scenario. Today it always returns zero there.
         for (key, (merged, split)) in changes {
             let balance = funds.entry(key).or_default();
             // Reserved withdrawals cannot underflow, but withdrawals created without a
             // reservation (e.g. `allowance::new_withdrawal_for_testing`) are never checked
             // against this balance.
+            // TODO: abort instead of clamping once test-only withdrawals such as
+            // `allowance::new_withdrawal_for_testing` are reserved against the settled balance.
             *balance = (*balance + merged).saturating_sub(split);
         }
     }
