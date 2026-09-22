@@ -43,7 +43,7 @@ answer: >-
   return a queue index, and a flush started by a PoolValuationCap holder freezes
   every market's pricer in one snapshot transaction, values each market in later
   transactions, and then fills both queues at that single frozen pool NAV.
-last_verified: 2026-09-21
+last_verified: 2026-09-22
 verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 ---
 
@@ -81,7 +81,7 @@ The struct declares those fields in this order:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="PoolVault"
 />
 
@@ -99,7 +99,7 @@ A queue is a paged list. Each `RequestPage` holds up to 64 entries, and each `Re
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="LpBook,RequestQueue,RequestEntry"
 />
 
@@ -117,7 +117,7 @@ A queue is a paged list. Each `RequestPage` holds up to 64 entries, and each `Re
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="Ledger,ActiveExpiry,RegisteredExpiry"
 />
 
@@ -159,7 +159,7 @@ Whether a flush is in flight is a `ProtocolConfig` read, `protocol_config::valua
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="idle_balance,protocol_reserve_balance,fee_incentive_reserve,plp_total_supply,supply_requests_pending,withdraw_requests_pending,active_expiry_markets,active_live_expiry_count,profit_basis_debits,profit_basis_credits,pending_protocol_profit"
 	noComments
 />
@@ -224,7 +224,7 @@ Minimum sizes apply per request:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="request_supply,request_withdraw,cancel_supply_request,cancel_withdraw_request"
 	noComments
 />
@@ -343,7 +343,7 @@ A market created mid-flush is not in the frozen expected set and joins the next 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="PoolValuationProof,SnapshotStage,PoolValuation"
 />
 
@@ -357,7 +357,7 @@ A market created mid-flush is not in the frozen expected set and joins the next 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="start_pool_valuation,snapshot_expiry_pricer,seal_valuation_snapshot,value_expiry,finish_flush"
 	noComments
 />
@@ -500,7 +500,7 @@ Call `expiry_market::try_settle` first in the same transaction when settlement m
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="rebalance_expiry_cash"
 	noComments
 />
@@ -552,7 +552,7 @@ public fun fee_incentive_balance(market: &ExpiryMarket): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="ExpiryCash"
 />
 
@@ -570,7 +570,7 @@ PLP is the Predict pool share token, registered as a 6-decimal currency to match
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="PLP"
 />
 
@@ -602,7 +602,7 @@ The vault bounds capacity when a market registers, not when it trades. Registeri
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="lock_capital,sponsor_fee_incentives"
 	noComments
 />
@@ -649,7 +649,7 @@ One `FlushExecuted` per flush carries the priced mark and its breakdown, so `poo
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="FlushExecuted,FlushRestarted"
 />
 

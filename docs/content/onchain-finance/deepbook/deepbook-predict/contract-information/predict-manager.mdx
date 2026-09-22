@@ -49,7 +49,7 @@ answer: >-
   same transaction, or with AccountContract from the deepbook-v3 account
   subpath. A single-use Auth hot potato gates access, and Predict keeps
   positions in a PredictData slot attached to the Account.
-last_verified: 2026-09-21
+last_verified: 2026-09-22
 verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 ---
 
@@ -141,7 +141,7 @@ Creating an account twice for the same owner aborts with `EAccountAlreadyExists`
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="new,new_with_referrer"
 	noComments
 />
@@ -171,7 +171,7 @@ That determinism removes the 2-transaction sequence the old manager required. Yo
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="derived_address,derived_wrapper_address,derived_exists,derived_wrapper_exists"
 	noComments
 />
@@ -217,7 +217,7 @@ Field order in the table is declaration order. Creation writes the 2 referrer fi
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="AccountWrapper,Account"
 />
 
@@ -254,7 +254,7 @@ Owner authority comes from 2 constructors, and app authority from 1 package-issu
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="Auth"
 />
 
@@ -263,7 +263,7 @@ Owner authority comes from 2 constructors, and app authority from 1 package-issu
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="generate_auth,generate_auth_as_object,share,load_account_mut"
 	noComments
 />
@@ -313,7 +313,7 @@ Predict's own trading functions settle USDC through the wrapper before they pric
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="deposit_funds,withdraw_funds,settle"
 	noComments
 />
@@ -354,7 +354,7 @@ Because it includes unsettled funds, it does not go stale between a payout and t
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="owner,receive_address,account_id,balance,referrer_account_id,referrer_receive_address"
 	noComments
 />
@@ -386,7 +386,7 @@ An order ID alone does not identify a position. It carries the quantity and the 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="PositionKey,Position,PredictData"
 />
 
@@ -432,7 +432,7 @@ Both consume an `Auth` and both emit `BuilderCodeSet` from `deepbook_predict::bu
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="has_position,builder_code_id,set_builder_code,unset_builder_code"
 	noComments
 />
@@ -568,7 +568,7 @@ The module declares 2 further events, `AppAuthorized` and `AppDeauthorized`, whi
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="AccountCreated,Deposited,Withdrawn,FundsSettled"
 />
 

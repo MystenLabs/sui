@@ -16,8 +16,8 @@ keywords:
   - sessions app
   - account app
   - deauthorize app
-last_verified: 2026-09-21
-verified_against: deepbookv3 4e9bfe90; '@mysten/deepbook-v3' 2.6.0 (ts-sdks df494cdb); deepbook-predict-mainnet sessions v1; deepbook-predict-testnet sessions v2
+last_verified: 2026-09-22
+verified_against: deepbookv3 2378336b; '@mysten/deepbook-v3' 2.6.0 plus the Mainnet id bump at ts-sdks b0422900; sessions v2 on both networks
 goal:
   description: >-
     Reader understands how much authority a DeepBook Predict session key holds,
@@ -55,18 +55,18 @@ Sessions is an account app. It stores grants in the account's app-local data slo
 
 The surface spans 2 modules:
 
-- `deepbook_sessions::sessions`: Grant storage, the lifecycle calls, and every trading wrapper ([source](https://github.com/MystenLabs/deepbookv3/blob/4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950/packages/sessions/sources/sessions.move)).
-- `deepbook_sessions::session_config`: The shared `SessionsConfig` object and the package version floor ([source](https://github.com/MystenLabs/deepbookv3/blob/4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950/packages/sessions/sources/session_config.move)).
+- `deepbook_sessions::sessions`: Grant storage, the lifecycle calls, and every trading wrapper ([source](https://github.com/MystenLabs/deepbookv3/blob/2378336bbe49d9de5cc55d6208ab38fd78f444f0/packages/sessions/sources/sessions.move)).
+- `deepbook_sessions::session_config`: The shared `SessionsConfig` object and the package version floor ([source](https://github.com/MystenLabs/deepbookv3/blob/2378336bbe49d9de5cc55d6208ab38fd78f444f0/packages/sessions/sources/session_config.move)).
 
-Sui Mainnet and Sui Testnet each run a separate deployment of the package, and the Move snippets on this page pin DeepBookV3 `main` at `4e9bfe90`. The 2 deployments are no longer at the same version: Testnet was upgraded to `sessions` version 2, which adds the `mint_exact_cost` wrapper, while Mainnet is still at version 1 and does not carry it. Mainnet's `predict` package *has* been upgraded to version 2, so the owner-signed `expiry_market::mint_exact_cost` works there; it is only the session wrapper that Mainnet lacks. Everything else on this page behaves identically on both. In TypeScript, `getSessionsConfig(network)` from `@mysten/deepbook-v3/sessions` resolves the current Mainnet and Testnet deployments from version 2.6.0 and returns the package call target and its original ID, the shared config, the account registry that authorizes the app, the Predict protocol config, and the 2 extra IDs the DeepBook spot wrappers take. The full tables are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#packages):
+Sui Mainnet and Sui Testnet each run a separate deployment of the package, and the Move snippets on this page pin DeepBookV3 `main` at `2378336b`. Both deployments are at `sessions` version 2, which adds the `mint_exact_cost` wrapper, so every wrapper on this page is callable on either network. Because the package has been upgraded, it carries a call target and an original ID that differ; the table below gives both. In TypeScript, `getSessionsConfig(network)` from `@mysten/deepbook-v3/sessions` returns the package call target and its original ID, the shared config, the account registry that authorizes the app, the Predict protocol config, and the 2 extra IDs the DeepBook spot wrappers take. Version 2.6.0 predates the Mainnet upgrade and still returns the version 1 Mainnet call target, so take Mainnet's from the table below until a later release ships it. The full tables are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#packages):
 
 | **Object** | **Mainnet** | **Testnet** |
 |---|---|---|
-| `sessions` package, call target | `0x9a068beffa019ae756f4a6d2611e9899d3c6dd888812dd9eca87535d2ac55e2a` | `0xe9daa1e3f98659f45f0e589c0367c7c13877af9a6a1bf1eda40e33e944816b40` |
+| `sessions` package, call target | `0xec678aee98cd161bdce62ff3dcf4893574df29d927dc8b573f6b4563ec960a1a` | `0xe9daa1e3f98659f45f0e589c0367c7c13877af9a6a1bf1eda40e33e944816b40` |
 | `sessions` package, original ID | `0x9a068beffa019ae756f4a6d2611e9899d3c6dd888812dd9eca87535d2ac55e2a` | `0x1908eee49d7a08d74a537d7f23766b363a145517fe0d3e0d85635d1682831ffd` |
 | `SessionsConfig` | `0xb2fba483748aac7508676020d4e691d68239b66f8bf7c5e7634dd1a76a329317` | `0xc096b97289821b27badfdf758d614bbbfa386f93d3faa409ecc1fcc6075d1186` |
 
-Call the call target; build `SessionGrant` and every dynamic-field key from the original ID. The 2 coincide on Mainnet, where `sessions` is still at version 1. [Upgraded packages carry 2 IDs](/onchain-finance/deepbook/deepbook-predict/contract-information#two-ids) explains the rule.
+Call the call target; build `SessionGrant` and every dynamic-field key, including `DataKey<…::sessions::SessionsApp>`, from the original ID. The 2 differ on both networks now. [Upgraded packages carry 2 IDs](/onchain-finance/deepbook/deepbook-predict/contract-information#two-ids) explains the rule.
 
 A grant lives on one network's account. Sessions authorized on an earlier deployment are not visible on either current deployment.
 
@@ -107,7 +107,7 @@ Each trading wrapper resolves authority through one private helper before it tou
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="generate_auth_as_session"
 />
 
@@ -128,7 +128,7 @@ The registry administrator must authorize `SessionsApp` on the account registry 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="deauthorize_app,generate_auth_as_app"
 />
 
@@ -143,7 +143,7 @@ The whole lifecycle takes 3 calls. Owner authority derives from the transaction 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="session_expiration_ms,authorize_session,revoke_session"
 	noComments
 />
@@ -185,7 +185,7 @@ There is no bulk onchain read. `session_expiration_ms` answers one address at a 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="SessionsApp,SessionsData"
 />
 
@@ -195,13 +195,13 @@ Nothing prunes expired grants. Time passing executes no Move code, so a dead gra
 
 ## Predict wrappers {#predict-wrappers}
 
-An active session can call 5 Predict wrappers on Testnet, and 4 on Mainnet:
+An active session can call 5 Predict wrappers:
 
 | **Wrapper** | **Predict call** | **Returns** | **Available** |
 |---|---|---|---|
 | `mint_exact_quantity` | `expiry_market::mint_exact_quantity` | The new order ID, as `u256`. | Both networks |
 | `mint_exact_amount` | `expiry_market::mint_exact_amount` | The new order ID, as `u256`. | Both networks |
-| `mint_exact_cost` | `expiry_market::mint_exact_cost` | The new order ID, as `u256`. | Testnet, `sessions` v2 |
+| `mint_exact_cost` | `expiry_market::mint_exact_cost` | The new order ID, as `u256`. | Both networks, `sessions` v2 |
 | `redeem_live` | `expiry_market::redeem_live` | `Option<u256>`, the replacement order ID when a partial close leaves quantity open. | Both networks |
 | `redeem_settled` | `expiry_market::redeem_settled` | Nothing. | Both networks |
 
@@ -221,7 +221,7 @@ The `@mysten/deepbook-v3/sessions` mint builders require the slippage caps that 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="mint_exact_quantity,mint_exact_amount,mint_exact_cost,redeem_live,redeem_settled"
 	noComments
 />
@@ -248,7 +248,7 @@ The TypeScript SDK does not wrap these calls on `SessionsContract`, and [Predict
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="place_limit_order,place_market_order,cancel_live_order,cancel_live_orders,withdraw_settled_amounts"
 	signatureOnly
 />
@@ -264,7 +264,7 @@ Publishing the package creates a shared `SessionsConfig` at the package's compil
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="SessionsConfig"
 />
 
@@ -275,7 +275,7 @@ Each package upgrade increments a compiled-in version constant. After clients mo
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="version_watermark,bump_version_watermark"
 	noComments
 />
@@ -291,7 +291,7 @@ The lifecycle emits 2 events. Predict and DeepBook core keep emitting their own 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="SessionAuthorized,SessionRevoked"
 />
 

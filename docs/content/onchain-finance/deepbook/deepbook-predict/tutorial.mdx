@@ -18,7 +18,7 @@ keywords:
   - pool vault
   - liquidity provider
   - no-trade window
-last_verified: 2026-09-21
+last_verified: 2026-09-22
 verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 goal:
   description: >-
@@ -330,7 +330,7 @@ const tx = await client.predict.tx.mintCost(owner, descriptor, {
 
 `minQuantity` is this shape's only slippage guard: the spend is fixed, so an adverse move arrives as fewer contracts, and the floor is what rejects a fill that moved too far. `0` accepts whatever the budget buys.
 
-This entrypoint arrived in `predict` package version 2. Both networks run that version onchain, but `@mysten/deepbook-v3` 2.6.0 still addresses Mainnet `predict` at its version 1 address, so these 2 calls work on Testnet and fail on Mainnet until a release ships the new call target. [Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint-cost) covers the sizing limits, and [Predict Cost SDK](/onchain-finance/deepbook/deepbook-predict-sdk/cost#mint-cost-for-budget) runs the same search locally with no chain call.
+This entrypoint arrived in `predict` package version 2, which both networks run onchain. The published `@mysten/deepbook-v3` 2.6.0 predates the Mainnet upgrade and still addresses Mainnet `predict` at its version 1 address, so on that release these 2 calls work on Testnet and fail on Mainnet until the next patch ships. [Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint-cost) covers the sizing limits, and [Predict Cost SDK](/onchain-finance/deepbook/deepbook-predict-sdk/cost#mint-cost-for-budget) runs the same search locally with no chain call.
 
 ## Mint a two-sided range position
 

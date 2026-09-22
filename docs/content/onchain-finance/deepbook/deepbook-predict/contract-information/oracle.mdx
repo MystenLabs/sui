@@ -14,7 +14,7 @@ keywords:
   - oracle read
   - pricer
   - oracle freshness
-last_verified: 2026-09-21
+last_verified: 2026-09-22
 verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 goal:
   description: >-
@@ -81,7 +81,7 @@ There is one `OracleRegistry` per deployment, one `PythFeed` per Pyth source, an
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="OracleRegistry,BlockScholesStorePair,OracleMetadata"
 />
 
@@ -96,7 +96,7 @@ Resolve an underlying to its 3 feed objects before building a transaction:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="propbook_pyth_id_for_underlying,propbook_block_scholes_store_pair_for_underlying,block_scholes_value_store_id,block_scholes_svi_store_id"
 	noComments
 />
@@ -110,7 +110,7 @@ Richer metadata is available when you need the source ID behind a binding rather
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="pyth_metadata_for_underlying,propbook_underlying_id,oracle_kind,source_id,propbook_oracle_id,value_kind"
 	noComments
 />
@@ -126,7 +126,7 @@ Creating a Pyth feed object is permissionless, but binding one to an underlying 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="create_and_share_pyth_feed,create_and_share_block_scholes_stores,bind_pyth_to_underlying,replace_pyth_binding_for_underlying"
 	noComments
 />
@@ -157,7 +157,7 @@ Binding changes emit `OracleSourceRegistered`, `OracleBound`, `BlockScholesStore
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="PythFeed,RawSpot"
 />
 
@@ -172,7 +172,7 @@ The feed has 4 accessors that cover the latest observation and an exact historic
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="raw_spot,normalized_spot,raw_spot_at,normalized_spot_at"
 	noComments
 />
@@ -190,7 +190,7 @@ Writes are permissionless because possession of a verified Pyth Lazer update is 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="update,insert_at,migrate"
 	noComments
 />
@@ -222,7 +222,7 @@ The vendor surface lives in 2 shared objects. `BlockScholesValueStore` holds spo
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="BlockScholesValueStore,BlockScholesSVIStore"
 />
 
@@ -245,7 +245,7 @@ Every observation comes back wrapped in a `BsRead`, and SVI values carry an `SVI
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="BsRead,SVIParams"
 />
 
@@ -258,7 +258,7 @@ Read the observations themselves:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="spot,spot_at,forward,svi"
 	noComments
 />
@@ -272,7 +272,7 @@ Live pricing finds its spot in the recent history by source timestamp:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="recent_spot_at"
 	noComments
 />
@@ -286,7 +286,7 @@ Compute a series identifier when you need to address a series directly:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="spot_sid,forward_sid,svi_sid"
 	noComments
 />
@@ -298,7 +298,7 @@ Unpack a `BsRead` with the read accessors:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="read_source_timestamp_ms,read_onchain_timestamp_ms,read_writer_digest,read_value"
 	noComments
 />
@@ -316,7 +316,7 @@ Writes are permissionless because the signed vendor batch is the authority:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="apply_spot_batch,apply_forward_batch,apply_svi_batch"
 	noComments
 />
@@ -341,7 +341,7 @@ Store creation is internal to the package and reachable only through `registry::
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="OracleRead"
 />
 
@@ -352,7 +352,7 @@ Store creation is internal to the package and reachable only through `registry::
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="read_source_timestamp_ms,read_onchain_timestamp_ms,read_writer_digest,read_value"
 	noComments
 />
@@ -385,7 +385,7 @@ Live pricing runs through a `Pricer`, which you build once per transaction from 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="load_live_pricer"
 	noComments
 />
@@ -395,7 +395,7 @@ Live pricing runs through a `Pricer`, which you build once per transaction from 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="Pricer"
 />
 
@@ -412,7 +412,7 @@ A pricer feeds 2 read functions:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="up_price,range_price"
 	noComments
 />
@@ -424,7 +424,7 @@ Both take `range_codec::Strike` values, which you build from a tick with `range_
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="RangePrice"
 />
 
@@ -433,7 +433,7 @@ Both take `range_codec::Strike` values, which you build from a tick with `range_
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="lower_up,higher_up,probability"
 	noComments
 />
@@ -558,7 +558,7 @@ Outside of live pricing, 2 market functions read oracles, and both are permissio
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	fun="set_reference_tick,try_settle"
 	noComments
 />
@@ -579,7 +579,7 @@ Settlement emits `MarketSettled`, which carries the settlement price and the sou
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="4e9bfe905fa1f4ba1ce666f70d9eb3e50eb4f950"
+	branch="2378336bbe49d9de5cc55d6208ab38fd78f444f0"
 	struct="ReferenceTickSet,MarketSettled"
 />
 
