@@ -880,6 +880,79 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_forwarding_registry_declared_by_cancelled_transaction() {
+        let authority = TestAuthorityBuilder::new().build().await;
+        let epoch_store = authority.epoch_store_for_testing();
+        let registry_initial_version = epoch_store
+            .epoch_start_config()
+            .forwarding_address_registry_obj_initial_shared_version()
+            .unwrap();
+        let registry_key = (
+            SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+            registry_initial_version,
+        );
+        let certs = [
+            generate_shared_objs_tx_with_gas_version(
+                &[(
+                    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                    registry_initial_version,
+                    true,
+                )],
+                5,
+            ),
+            generate_shared_objs_tx_with_gas_version(&[], 3),
+        ];
+        let cancelled_txns = BTreeMap::from([(
+            *certs[0].digest(),
+            CancelConsensusCertificateReason::CongestionOnObjects(vec![
+                SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+            ]),
+        )]);
+        let assignables = certs
+            .iter()
+            .map(Schedulable::Transaction)
+            .collect::<Vec<_>>();
+        let ConsensusSharedObjVerAssignment {
+            shared_input_next_versions,
+            assigned_versions,
+        } = SharedObjVerManager::assign_versions_from_consensus(
+            &epoch_store,
+            authority.get_object_cache_reader().as_ref(),
+            assignables.iter(),
+            &cancelled_txns,
+        )
+        .unwrap();
+        // The cancelled declaration carries the sentinel, while the implicit pin keeps the real
+        // version and the registry does not advance for the transaction after it.
+        let expected_version = SequenceNumber::from_u64(1);
+        assert_eq!(
+            assigned_versions.0,
+            vec![
+                (
+                    certs[0].key(),
+                    assigned_versions_for_testing(
+                        vec![(registry_key, SequenceNumber::CONGESTED)],
+                        Some(expected_version),
+                        Some(expected_version)
+                    )
+                ),
+                (
+                    certs[1].key(),
+                    assigned_versions_for_testing(
+                        vec![],
+                        Some(expected_version),
+                        Some(expected_version)
+                    )
+                ),
+            ]
+        );
+        assert_eq!(
+            shared_input_next_versions.get(&registry_key),
+            Some(&registry_initial_version)
+        );
+    }
+
+    #[tokio::test]
     async fn test_forwarding_registry_version_from_effects() {
         let authority = TestAuthorityBuilder::new().build().await;
         let epoch_store = authority.epoch_store_for_testing();
