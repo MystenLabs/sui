@@ -37,6 +37,39 @@ answer: >-
 
 Build onchain finance applications on Sui. Learn about digital assets, wallet integration, tokenomics, and the DeepBook decentralized exchange.
 
+## What is onchain finance on Sui?
+
+Sui supports a broad set of onchain finance primitives. You can create and manage fungible tokens, build trading infrastructure with DeepBook, enforce asset policies through Kiosk, and define tokenomics for your protocol. These tools work together to support applications ranging from decentralized exchanges to regulated payment systems.
+
+## What topics does onchain finance cover?
+
+Onchain finance on Sui includes the following areas:
+
+- **Digital assets:** Create fungible tokens using the Sui Coin standard, or define regulated assets using Sui Closed-Loop Token. The Coin standard provides a flexible, composable primitive for representing value onchain.
+- **Asset custody:** Control how assets move between accounts using transfer policies and Kiosk. Kiosk enforces rules at the protocol level so you can restrict transfers, require royalties, or implement allow-list logic without relying on offchain enforcement.
+- **Tokenomics:** Design supply schedules, staking incentives, and reward distribution for your protocol. SUI is the native token of the Sui network and is used to pay gas and participate in proof-of-stake consensus.
+- **DeepBook:** Use Sui's native decentralized exchange infrastructure. DeepBook provides a central limit order book onchain, enabling trading applications to share liquidity without building their own matching engines.
+
+## How does onchain finance work on Sui?
+
+Sui's object model gives financial primitives concrete ownership semantics. Every Coin, order, or policy is a Sui object with a defined owner. Ownership is enforced at the consensus layer, so transfers and trades settle with the same finality as any other Sui transaction.
+
+Programmable transaction blocks (PTBs) let you compose multiple financial operations into a single atomic transaction. For example, you can split a Coin, place an order on DeepBook, and transfer the result to a recipient — all in one transaction, with no intermediate state that could be exploited.
+
+## Common questions
+
+### What is DeepBook?
+
+DeepBook is Sui's native onchain order book. It provides shared liquidity infrastructure that any application can tap into. Trading apps built on DeepBook benefit from a common pool of orders rather than isolated per-app liquidity.
+
+### What is the Sui Closed-Loop Token standard?
+
+Sui Closed-Loop Token is a regulated token standard that gives issuers control over how a token is transferred, spent, or converted. Unlike a standard Coin, a Closed-Loop Token enforces issuer-defined rules at the protocol level on every action. This makes it suitable for payment tokens, loyalty points, and other assets that require policy enforcement.
+
+### What is Kiosk?
+
+Kiosk is a Sui standard for asset custody and trading policy. A kiosk instance holds objects and enforces transfer policies defined by the creator. Creators set the rules; buyers and sellers interact through those rules without needing to trust each other or a centralized intermediary.
+
 import DocCardList from '@theme/DocCardList';
 
 <DocCardList />
