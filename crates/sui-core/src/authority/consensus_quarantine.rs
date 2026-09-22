@@ -278,7 +278,7 @@ impl ConsensusCommitOutput {
         epoch_store: &AuthorityPerEpochStore,
         batch: &mut DBBatch,
     ) -> SuiResult {
-        let tables = epoch_store.tables()?;
+        let tables = epoch_store.tables();
         batch.insert_batch(
             &tables.consensus_message_processed,
             self.consensus_messages_processed
@@ -603,7 +603,7 @@ impl ConsensusOutputQuarantine {
         //    checkpoint.
         // 3. Commit all consensus output at that height or below.
 
-        let tables = epoch_store.tables()?;
+        let tables = epoch_store.tables();
 
         let mut highest_committed_height = None;
 
@@ -898,7 +898,7 @@ impl ConsensusOutputQuarantine {
         let end = (round + 1, (empty_jwk_id, empty_jwk));
 
         Ok(epoch_store
-            .tables()?
+            .tables()
             .active_jwks
             .safe_iter_with_bounds(Some(start), Some(end))
             .map_ok(|((r, (jwk_id, jwk)), _)| {
@@ -924,7 +924,7 @@ impl ConsensusOutputQuarantine {
         transactions: &[VerifiedExecutableTransactionWithAliases],
     ) -> SuiResult<impl IntoIterator<Item = (ObjectID, u64)>> {
         let protocol_config = epoch_store.protocol_config();
-        let tables = epoch_store.tables()?;
+        let tables = epoch_store.tables();
         let default_per_commit_budget = protocol_config
             .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
             .unwrap_or(0);

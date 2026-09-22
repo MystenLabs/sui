@@ -2286,10 +2286,6 @@ impl SuiNode {
             };
             *validator_components_lock_guard = new_validator_components;
 
-            // Force releasing current epoch store DB handle, because the
-            // Arc<AuthorityPerEpochStore> may linger.
-            cur_epoch_store.release_db_handles();
-
             if cfg!(msim)
                 && !matches!(
                     self.config
