@@ -2,9 +2,9 @@
 title: Object Versioning
 sidebar_label: Versioning
 description: >-
-  Sui provides `Table` and `Bag` collections built using dynamic fields, but
-  with additional support to count the number of entries they contain to protect
-  against accidental deletion when non-empty.
+  Sui versions every onchain object by (ID, version) pair using Lamport
+  timestamps, with objects versioned either through the fastpath or through
+  consensus depending on their ownership type.
 keywords:
   - object versioning
   - Lamport timestamps
