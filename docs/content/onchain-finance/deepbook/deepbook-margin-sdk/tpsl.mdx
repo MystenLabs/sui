@@ -49,7 +49,23 @@ answer: >-
   are met.
 ---
 
-The TPSL (Take Profit Stop Loss) SDK provides functions for managing conditional orders that automatically execute when certain price conditions are met.
+The TPSL (Take Profit Stop Loss) SDK provides functions for managing conditional orders that automatically execute when certain price conditions are met. A conditional order pairs a trigger condition with a pending order. When the market price crosses the trigger price, the pending order executes automatically. Use take profit orders to lock in gains when price rises above a target, and stop loss orders to limit losses when price falls below a threshold.
+
+## SDK setup
+
+Import the DeepBook Margin SDK client and initialize it before calling any TPSL functions.
+
+```tsx
+import { DeepBookMarginClient } from '@mysten/deepbook-v3';
+import { Transaction } from '@mysten/sui/transactions';
+
+const traderClient = new DeepBookMarginClient({
+  network: 'mainnet',
+  // additional configuration
+});
+```
+
+All TPSL functions return a callback that accepts a `Transaction` object. Pass the returned function directly to your transaction builder or call it with an existing `Transaction` instance.
 
 ## TPSL functions
 
@@ -92,7 +108,7 @@ Use `cancelAllConditionalOrders` to cancel all conditional orders for a margin m
 
 ### `executeConditionalOrders`
 
-Use `executeConditionalOrders` to execute conditional orders that have been triggered. This is a permissionless function that can be called by anyone. The call returns a function that takes a `Transaction` object.
+Use `executeConditionalOrders` to execute conditional orders that have been triggered. This is a permissionless function that anyone can call. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -228,3 +244,37 @@ const executeOrders = (tx: Transaction) => {
 	traderClient.marginTPSL.executeConditionalOrders(managerAddress, 'SUI_USDC', 10)(tx);
 };
 ```
+
+### Query and cancel orders
+
+```tsx
+// Example: Query all conditional order IDs, then cancel a specific order
+const manageOrders = async () => {
+  const tx = new Transaction();
+  const managerKey = 'MARGIN_MANAGER_1';
+
+  // Query existing conditional order IDs
+  const orderIds = await traderClient.marginTPSL.conditionalOrderIds(managerKey);
+
+  // Cancel a specific order by ID
+  if (orderIds.length > 0) {
+    traderClient.marginTPSL.cancelConditionalOrder({
+      marginManagerKey: managerKey,
+      conditionalOrderId: String(orderIds[0]),
+    })(tx);
+  }
+
+  // Or cancel all conditional orders at once
+  traderClient.marginTPSL.cancelAllConditionalOrders({
+    marginManagerKey: managerKey,
+  })(tx);
+};
+```
+
+## How conditional orders work
+
+A conditional order consists of two parts: a trigger condition and a pending order. When you call `addConditionalOrder`, the order is stored onchain and monitored against the current market price. When price crosses the trigger threshold, the pending order becomes eligible for execution.
+
+Execution is permissionless. Any caller can invoke `executeConditionalOrders` for a given margin manager address. Keeper bots typically monitor trigger prices using `lowestTriggerAbovePrice` and `highestTriggerBelowPrice`, then call `executeConditionalOrders` when the current market price crosses those thresholds.
+
+Set `triggerBelowPrice` to `true` for stop loss orders (trigger when price falls) and `false` for take profit orders (trigger when price rises). Pair the trigger condition with either a limit order (`newPendingLimitOrder`) for price-controlled execution or a market order (`newPendingMarketOrder`) for guaranteed fill at the prevailing price.
