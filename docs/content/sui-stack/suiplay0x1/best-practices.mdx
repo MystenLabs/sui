@@ -44,31 +44,7 @@ Many onchain actions do not require explicit user approval. For example, droppin
 
 ### How do I batch transactions to reduce interruptions?
 
-Use programmable transaction blocks (PTBs) to group multiple operations into a single transaction. This reduces the number of times a player must approve an action and lowers the total gas cost.
-
-```typescript
-import { Transaction } from "@mysten/sui/transactions";
-
-const tx = new Transaction();
-
-// Batch multiple game actions into one transaction
-// For example: grant a reward and update player level in a single approval
-tx.moveCall({
-  target: `${PACKAGE_ID}::rewards::grant_reward`,
-  arguments: [tx.object(PLAYER_OBJECT_ID), tx.pure.u64(REWARD_AMOUNT)],
-});
-
-tx.moveCall({
-  target: `${PACKAGE_ID}::player::increment_level`,
-  arguments: [tx.object(PLAYER_OBJECT_ID)],
-});
-
-const result = await client.signAndExecuteTransaction({
-  signer: keypair,
-  transaction: tx,
-});
-```
-
+Use [programmable transaction blocks (PTBs)](/develop/transactions/ptbs/building-ptb) to group multiple operations into a single transaction. This reduces the number of times a player must approve an action and lowers the total gas cost.
 Grouping related state changes into a single PTB means players approve one transaction instead of several, and the game submits less work to the network overall.
 
 ## Managing gas
@@ -77,7 +53,7 @@ If using a third-party wallet service ([Beamable](https://beamable.com/), [Shina
 
 ### How does gas sponsorship work for SuiPlay0X1 games?
 
-Gas sponsorship lets your game pay transaction fees on behalf of players. The player signs the transaction but a sponsor address covers the gas. Services like Shinami provide sponsorship APIs that integrate directly into your transaction flow. When you enable sponsorship, players interact with onchain features without needing to hold SUI in their wallets.
+[Gas sponsorship](/develop/transaction-payment/sponsor-txn) lets your game pay transaction fees on behalf of players. The player signs the transaction but a sponsor address covers the gas. Services like Shinami provide sponsorship APIs that integrate directly into your transaction flow. When you enable sponsorship, players interact with onchain features without needing to hold SUI in their wallets.
 
 Batch transactions whenever possible regardless of whether you use sponsorship. Fewer transactions mean lower cumulative gas costs and a faster experience for players.
 
@@ -98,7 +74,7 @@ While you can store any information onchain, consider whether it's important to 
 
 Store onchain only what needs to be player-owned, tradeable, or independently verifiable. Storing unnecessary data onchain increases gas costs and adds complexity to reads and writes.
 
-| Data type | Recommended storage |
+| **Data type** | **Recommended storage** |
 |---|---|
 | In-game currency (tradeable) | Onchain |
 | NFT items and cosmetics | Onchain |
