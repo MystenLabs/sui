@@ -97,3 +97,148 @@ Run the full suite with `sui move test` in `examples/oracle-adapter/move`.
 The `Price` type and the guards name no provider, so a Switchboard reader is an additive `price_from_switchboard` that returns the same `Price` and reuses the same guards. Consumers never change. The one difference to absorb in the reader: Switchboard's `current_result` does not gate on age, so a Switchboard reader applies `assert_fresh` itself where the Pyth reader relies on `get_price_no_older_than`.
 
 With the read behind a safe interface, the remaining work is deciding what each consumer additionally requires, and how to keep push feeds fresh: [Oracle safety for high-stakes consumers](/onchain-finance/oracles/oracle-safety).
+
+## Complete adapter module
+
+The following example shows the full structure of a minimal Move price adapter. It combines the normalized `Price` type, the staleness-gated reader, the confidence guard, and the non-aborting fallback into one module. Use this as a starting point and extend it with your own guards.
+
+```move
+module oracle_adapter::price_adapter {
+    use pyth::price_info::{Self, PriceInfoObject};
+    use pyth::price_feed;
+    use pyth::price::{Self, Price as PythPrice};
+    use pyth::i64;
+    use sui::clock::Clock;
+
+    // Error codes
+    const EConfidenceTooWide: u64 = 1;
+    const EDeviationTooLarge: u64 = 2;
+    const ENegativeOrZeroPrice: u64 = 3;
+
+    /// Provider-neutral price. All consumers use this type.
+    public struct Price has copy, drop {
+        /// Price in the feed's native decimal scale.
+        value: u64,
+        /// Confidence interval (same scale as value).
+        conf: u64,
+        /// Unix timestamp of the price update.
+        timestamp_s: u64,
+    }
+
+    /// Read the Pyth feed and abort if the price is older than max_age_s seconds.
+    public fun price_from_pyth(
+        price_info_obj: &PriceInfoObject,
+        clock: &Clock,
+        max_age_s: u64,
+    ): Price {
+        let pyth_price = price_info::get_price_no_older_than(
+            price_info_obj,
+            clock,
+            max_age_s,
+        );
+        normalize(pyth_price)
+    }
+
+    /// Abort if the confidence interval exceeds max_conf_bps basis points
+    /// of the price value.
+    public fun assert_confidence(p: &Price, max_conf_bps: u64) {
+        // conf / value > max_conf_bps / 10_000  →  abort
+        assert!(
+            p.conf * 10_000 <= p.value * max_conf_bps,
+            EConfidenceTooWide,
+        );
+    }
+
+    /// Abort if the price deviates from reference_value by more than
+    /// max_deviation_bps basis points.
+    public fun assert_within_deviation(
+        p: &Price,
+        reference_value: u64,
+        max_deviation_bps: u64,
+    ) {
+        let diff = if (p.value >= reference_value) {
+            p.value - reference_value
+        } else {
+            reference_value - p.value
+        };
+        assert!(
+            diff * 10_000 <= reference_value * max_deviation_bps,
+            EDeviationTooLarge,
+        );
+    }
+
+    /// Return a fresh price from primary, or fall back to secondary if
+    /// primary is stale. Never silently returns a stale price.
+    public fun price_or_fallback(
+        primary: &PriceInfoObject,
+        secondary: &PriceInfoObject,
+        clock: &Clock,
+        max_age_s: u64,
+    ): Price {
+        let raw = price_info::get_price_unsafe(primary);
+        let ts = price::get_timestamp(&raw);
+        let now = sui::clock::timestamp_ms(clock) / 1000;
+        if (now - ts <= max_age_s) {
+            normalize(raw)
+        } else {
+            // Primary is stale; the checked read on secondary aborts
+            // if secondary is also stale.
+            price_from_pyth(secondary, clock, max_age_s)
+        }
+    }
+
+    // Internal: convert a Pyth price to the adapter's Price type.
+    fun normalize(pyth_price: PythPrice): Price {
+        let value_i64 = price::get_price(&pyth_price);
+        let value = (i64::get_magnitude_if_positive(&value_i64) as u64);
+        assert!(value > 0, ENegativeOrZeroPrice);
+        Price {
+            value,
+            conf: (price::get_conf(&pyth_price) as u64),
+            timestamp_s: price::get_timestamp(&pyth_price),
+        }
+    }
+}
+```
+
+### What each section does
+
+**`Price` struct** — the single output type. Every consumer depends on this struct, not on any provider type. Adding a Switchboard reader later returns the same `Price` without touching any consumer.
+
+**`price_from_pyth`** — delegates the staleness check to Pyth's own `get_price_no_older_than`. The function aborts on a stale feed before normalization runs.
+
+**`assert_confidence`** — compares the confidence interval to the price using basis points. A threshold of 100 bps means the spread must be 1% of the price or tighter. Set this threshold based on how sensitive the consumer is to spread: tighter for liquidation, wider for display.
+
+**`assert_within_deviation`** — compares the adapter price against a reference (a second feed or a time-average). A single-feed spike that passes the confidence check still fails here if it moves too far from the reference.
+
+**`price_or_fallback`** — reads the primary with `get_price_unsafe` (no abort), checks the timestamp directly, and only calls `price_from_pyth` on the secondary if the primary is stale. The secondary's checked read aborts if both feeds are stale.
+
+**`normalize`** — converts a `PythPrice` to the adapter's `Price`. It rejects non-positive values before constructing the struct.
+
+## How to structure unit tests
+
+Move unit tests cannot construct a `PriceInfoObject`, so test the guard functions directly on hand-built `Price` values. Cover one branch per test: fresh price passes, stale price aborts, confidence within bound passes, confidence over bound aborts, deviation within bound passes, deviation over bound aborts, zero price rejected, negative price rejected.
+
+```move
+#[test]
+fun confidence_within_bound_passes() {
+    // 100 bps threshold; conf is exactly 1% of value → passes
+    let p = Price { value: 10_000, conf: 100, timestamp_s: 0 };
+    oracle_adapter::price_adapter::assert_confidence(&p, 100);
+}
+
+#[test]
+#[expected_failure(abort_code = oracle_adapter::price_adapter::EConfidenceTooWide)]
+fun confidence_blowout_aborts() {
+    // conf is 2% of value but threshold is 1% → aborts
+    let p = Price { value: 10_000, conf: 200, timestamp_s: 0 };
+    oracle_adapter::price_adapter::assert_confidence(&p, 100);
+}
+```
+
+Run the full suite with `sui move test` from the package root. For tests that require a live `PriceInfoObject`, run the transaction against Testnet and inspect the result.
+
+## Related concepts
+
+- [Consuming price feeds](/onchain-finance/oracles/consuming-price-feeds) covers how to pass a `PriceInfoObject` into a transaction and keep the feed current.
+- [Oracle safety for high-stakes consumers](/onchain-finance/oracles/oracle-safety) covers additional guards for liquidation and settlement consumers.
