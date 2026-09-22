@@ -410,6 +410,7 @@ const MAINNET_USDB: &str =
 // Version 138: Enable BumpOnly
 //              Enable check_object_funds_withdraw_in_execution on testnet.
 //              Disable effects transaction dependencies on testnet.
+//              Enable allowances on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4780,6 +4781,7 @@ impl ProtocolConfig {
                 }
                 138 => {
                     cfg.gas_model_version = Some(15);
+                    cfg.feature_flags.enable_allowances = true;
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                         cfg.feature_flags.disable_effects_tx_dependencies = true;
