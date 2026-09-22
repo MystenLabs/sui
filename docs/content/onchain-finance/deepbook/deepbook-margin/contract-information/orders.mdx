@@ -38,6 +38,58 @@ answer: Learn how to place and manage orders using margin managers.
 
 The `pool_proxy` module provides wrapper functions for trading with margin managers. These functions enable placing orders, modifying and canceling them, and managing staking and governance participation through a margin manager. All trading operations require the margin manager to be associated with the correct DeepBook pool.
 
+## What are margin orders in DeepBook?
+
+Margin orders in DeepBook are trading instructions placed through a margin manager rather than a standard balance manager. The margin manager holds your collateral and debt positions, and the `pool_proxy` module routes your orders through it to the underlying DeepBook pool. Before placing any order, the pool must have margin trading enabled.
+
+There are two primary order types:
+
+- **Limit orders** execute at a specified price or better. The order rests in the order book until it fills or you cancel it.
+- **Market orders** execute immediately at the best available price. They do not rest in the order book.
+
+In addition, **reduce-only orders** are a special variant of both types. A reduce-only order can only decrease your existing debt position. It cannot open or increase a position. These are useful when margin trading is disabled for a pool but you still need to close open positions.
+
+## How do I place an order using a margin manager?
+
+Call `place_limit_order` or `place_market_order` through the `pool_proxy` module, passing your margin manager as an argument. The pool checks that margin trading is enabled before accepting the order.
+
+The following example shows how to call `place_limit_order` in a Move transaction:
+
+```move
+use deepbook_margin::pool_proxy;
+
+// Place a limit order through a margin manager
+pool_proxy::place_limit_order(
+    pool,
+    margin_manager,
+    margin_manager_cap,
+    client_order_id,
+    order_type,
+    self_matching_option,
+    price,
+    quantity,
+    is_bid,
+    pay_with_deep,
+    expire_timestamp,
+    clock,
+    ctx,
+);
+```
+
+To place a reduce-only order, call `place_reduce_only_limit_order` or `place_reduce_only_market_order` instead. These functions accept the same parameters but enforce that the order can only reduce an existing debt position.
+
+## How do I modify or cancel an order?
+
+Use `modify_order` to change the quantity of an existing resting limit order. You must provide the order ID returned when the order was placed.
+
+To cancel orders, use one of three functions depending on scope:
+
+- `cancel_order` cancels a single order by ID.
+- `cancel_orders` cancels a list of orders by ID.
+- `cancel_all_orders` cancels every open order for the margin manager in the pool.
+
+After trades fill, call `withdraw_settled_amounts` to move settled funds back to the margin manager's balance manager.
+
 ## API
 
 Following are the different public functions for managing orders with margin managers.
