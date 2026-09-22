@@ -38,6 +38,75 @@ answer: Learn how to place and manage orders using margin managers.
 
 The `pool_proxy` module provides wrapper functions for trading with margin managers. These functions enable placing orders, modifying and canceling them, and managing staking and governance participation through a margin manager. All trading operations require the margin manager to be associated with the correct DeepBook pool.
 
+## How orders work with margin managers
+
+A margin manager acts as the on-behalf-of account for all order operations in a DeepBook margin pool. When you place an order, the margin manager supplies the required collateral from its balance manager. The pool records the order against that margin manager's account.
+
+Orders fall into two categories based on when margin trading is enabled:
+
+- **Standard orders** (limit and market): Available when margin trading is enabled for the pool. These orders can open new positions or increase existing debt.
+- **Reduce-only orders**: Available at any time, including when margin trading is disabled. These orders can only decrease an existing debt position. Use reduce-only orders to close positions without increasing exposure.
+
+After an order fills, the settled amounts stay in the pool until you explicitly withdraw them back to the margin manager's balance manager.
+
+## What types of orders can you place?
+
+You can place limit orders, market orders, and reduce-only variants of each. Limit orders specify a price and quantity. Market orders fill immediately at the best available price. Reduce-only orders enforce that the resulting position is smaller than the current debt, preventing accidental position increases.
+
+## How do you modify or cancel an order?
+
+You can modify an existing open order to change its quantity. To cancel, you can target a single order by ID, provide a list of order IDs, or cancel all open orders for the margin manager in a single call.
+
+## How do you withdraw funds after a trade?
+
+After an order fills, call `withdraw_settled_amounts` to move the proceeds from the pool back to the margin manager's balance manager. Settled amounts are not automatically returned.
+
+## Code example
+
+The following example shows the sequence of calls to place a limit order and withdraw the settled amounts after it fills. This uses the Sui TypeScript SDK to construct a programmable transaction block (PTB).
+
+```typescript
+import { Transaction } from "@mysten/sui/transactions";
+
+const tx = new Transaction();
+
+// Place a limit order through the margin manager
+tx.moveCall({
+  target: `${DEEPBOOK_MARGIN_PACKAGE_ID}::pool_proxy::place_limit_order`,
+  arguments: [
+    tx.object(POOL_ID),
+    tx.object(MARGIN_MANAGER_ID),
+    tx.pure.u64(CLIENT_ORDER_ID),
+    tx.pure.u8(ORDER_TYPE),       // 0 = no restriction, 1 = immediate-or-cancel, 2 = fill-or-kill, 3 = post-only
+    tx.pure.u8(SELF_MATCHING),    // 0 = allow, 1 = cancel taker, 2 = cancel maker
+    tx.pure.u64(PRICE),           // price in base asset units
+    tx.pure.u64(QUANTITY),        // quantity in base asset units
+    tx.pure.bool(IS_BID),         // true = buy, false = sell
+    tx.pure.u64(EXPIRE_TIMESTAMP),
+    tx.object(DEEP_COIN),
+    tx.object(SUI_CLOCK_ID),
+  ],
+  typeArguments: [BASE_TYPE, QUOTE_TYPE],
+});
+
+// Withdraw settled amounts back to the balance manager after the order fills
+tx.moveCall({
+  target: `${DEEPBOOK_MARGIN_PACKAGE_ID}::pool_proxy::withdraw_settled_amounts`,
+  arguments: [
+    tx.object(POOL_ID),
+    tx.object(MARGIN_MANAGER_ID),
+  ],
+  typeArguments: [BASE_TYPE, QUOTE_TYPE],
+});
+
+const result = await client.signAndExecuteTransaction({
+  signer: keypair,
+  transaction: tx,
+});
+```
+
+Replace `DEEPBOOK_MARGIN_PACKAGE_ID`, `POOL_ID`, `MARGIN_MANAGER_ID`, and the type arguments with values for your target pool.
+
 ## API
 
 Following are the different public functions for managing orders with margin managers.
