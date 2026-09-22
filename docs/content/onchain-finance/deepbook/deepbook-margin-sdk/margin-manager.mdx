@@ -54,6 +54,29 @@ Managing margin accounts is essential for leveraged trading on DeepBook. The Mar
 
 For an end-to-end walkthrough that creates a manager, reads a pool's risk parameters, deposits collateral, borrows, opens and closes a leveraged position, and withdraws on Testnet, see the [Leveraged Position Workflow](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow).
 
+## How do I set up the Margin Manager SDK?
+
+Install the DeepBook Margin SDK and import the margin manager functions before calling any of the methods described on this page.
+
+```ts
+import { DeepBookMarginClient } from '@mysten/deepbook-v3';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { Transaction } from '@mysten/sui/transactions';
+
+const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+
+const marginClient = new DeepBookMarginClient({
+  suiClient,
+  // Additional config options: poolKeys, managerKeys, etc.
+});
+```
+
+After you create the client, you can call any of the margin manager functions by passing a `Transaction` object to the returned function.
+
+## What methods does the Margin Manager SDK provide?
+
+The SDK exposes transaction-building functions and read-only query functions. Transaction functions return a callback that accepts a `Transaction` object. You add that callback to the transaction using `tx.add(...)`. Read-only functions query onchain state without modifying it.
+
 ## Margin manager functions
 
 The DeepBook Margin SDK provides the following functions for managing margin accounts.
@@ -92,7 +115,7 @@ Use `shareMarginManager` to share a margin manager created with `newMarginManage
 
 ### `depositDuringInitialization`
 
-Use `depositDuringInitialization` to deposit funds into a margin manager during its creation, before it is shared. This must be called in the same transaction as `newMarginManagerWithInitializer` and before `shareMarginManager`. The call returns a function that takes a `Transaction` object.
+Use `depositDuringInitialization` to deposit funds into a margin manager during its creation, before it is shared. Call this in the same transaction as `newMarginManagerWithInitializer` and before `shareMarginManager`. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -139,7 +162,7 @@ Use these functions to borrow assets from margin pools. Borrowing is subject to 
 
 ### `repayBase`, `repayQuote`
 
-Use these functions to repay borrowed assets. If no amount is specified, it repays the maximum available balance up to the total debt. The call returns a function that takes a `Transaction` object.
+Use these functions to repay borrowed assets. If no amount is specified, the function repays the maximum available balance up to the total debt. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -282,3 +305,51 @@ liquidatePosition = (tx: Transaction) => {
 	tx.add(this.marginContract.liquidate(managerAddress, poolKey, debtIsBase, repayCoin));
 };
 ```
+
+### Create a manager with an initial deposit
+
+Use `newMarginManagerWithInitializer` when you want to deposit collateral in the same transaction that creates the manager. Call `depositDuringInitialization` before `shareMarginManager` to fund the account before it becomes publicly accessible.
+
+```tsx
+import { Transaction } from '@mysten/sui/transactions';
+
+createManagerWithDeposit = async (tx: Transaction) => {
+	const poolKey = 'SUI_DBUSDC';
+
+	// Step 1: Create the manager and get the initializer
+	const { manager, initializer } =
+		this.marginContract.newMarginManagerWithInitializer(poolKey)(tx);
+
+	// Step 2: Deposit SUI collateral before sharing
+	tx.add(
+		this.marginContract.depositDuringInitialization({
+			manager,
+			poolKey,
+			coinType: 'SUI',
+			amount: 50,
+		}),
+	);
+
+	// Step 3: Share the manager so it becomes accessible onchain
+	tx.add(this.marginContract.shareMarginManager({ poolKey, manager, initializer }));
+};
+```
+
+### Query manager state
+
+Use `managerState` to read the current risk ratio, balances, and debt information for a margin manager before executing a trade or withdrawal.
+
+```tsx
+import { Transaction } from '@mysten/sui/transactions';
+
+queryManagerState = async (managerAddress: string, poolKey: string) => {
+	const tx = new Transaction();
+	tx.add(this.marginContract.managerState(managerAddress, poolKey));
+
+	const result = await suiClient.devInspectTransactionBlock({
+		transactionBlock: tx,
+		sender: managerAddress,
+	});
+
+	return result;
+};
