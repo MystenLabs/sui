@@ -28,15 +28,19 @@ answer: >-
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
+MVR names let you register Move packages under human-readable names in the Move Registry (MVR). Each name maps to a SuiNS name and a package name. You manage names by creating applications, attaching packages, and setting metadata. On Mainnet, package attachment is permanent. On other networks, you attach a pointer you can update later.
+
 :::caution
 
 The TypeScript examples assume that you use the [MVR plugin](./tooling/typescript-sdk) for the Sui TypeScript SDK. The Sui CLI examples do not use the MVR plugin.
 
 :::
 
-## Create a new application
+## How do I create a new MVR application?
 
 To create a new application, you must provide a SuiNS name and a package name, as long as it is not already registered.
+
+The `register` call returns an `AppCap` object. You can use the `AppCap` immediately to attach packages, or transfer it to a safe address and register packages later.
 
 <Tabs groupId='packageobject'>
   <TabItem label="Packages" value='packages'>
@@ -68,9 +72,11 @@ To create a new application, you must provide a SuiNS name and a package name, a
   </TabItem>
 </Tabs>
 
-## Set application metadata
+## How do I set metadata on an MVR application?
 
 Metadata is strongly recommended for any application. Provide the `appCap` along with a key-value pair. Key can be `description`, `icon_url`, `documentation_url`, `homepage_url`, or `contact`.
+
+You can call `set_metadata` multiple times with different keys to configure all fields. Each call updates a single key-value pair.
 
 <Tabs groupId='language'>
   <TabItem label="TypeScript" value='typescript'>
@@ -98,7 +104,7 @@ sui client ptb --move-call @mvr/core::move_registry::set_metadata \
   </TabItem>
 </Tabs>
 
-## Attach a Mainnet package to an application
+## How do I attach a Mainnet package to an application?
 
 When attaching a Mainnet package to an application, you must provide the `PackageInfo` object. This call is permanent, so after you attach a `PackageInfo` object to an application, you cannot detach it in the future. Consequently, an app is always linked to a specific package.
 
@@ -130,7 +136,7 @@ sui client ptb --move-call @mvr/core::move_registry::assign_package \
   </TabItem>
 </Tabs>
 
-## Attach a non-Mainnet package to an application
+## How do I attach a non-Mainnet package to an application?
 
 For non-Mainnet networks, you only attach a pointer to the package, instead of strict binding (which would not be possible).
 
@@ -139,6 +145,8 @@ For non-Mainnet networks, you only attach a pointer to the package, instead of s
 You can always update an external network by first calling `@mvr/core::move_registry::unset_network`, and then calling `@mvr/core::move_registry::set_network` again.
 
 :::
+
+The `set_network` call requires a chain ID string. Use `4c78adac` for Testnet. The `app_info::new` call accepts three optional fields: the `PackageInfo` object ID on the external network, the package address on the external network, and a third optional field you can set to `null`.
 
 <Tabs groupId='packageobject'>
   <TabItem label="TypeScript" value='typescript'>
@@ -183,3 +191,13 @@ sui client ptb \
 ```
   </TabItem>
 </Tabs>
+
+## Key concepts
+
+**AppCap:** The capability object returned when you register an application. You must present the `AppCap` to attach packages or set metadata. Store it in a safe address or a shared object your team controls.
+
+**PackageInfo:** An object created alongside a published package on Mainnet. Attaching it to an application creates a permanent, verifiable link between the MVR name and that package.
+
+**Network pointer:** For non-Mainnet networks, MVR stores a pointer (chain ID plus package address) instead of a strict binding. You can update this pointer at any time using `unset_network` followed by `set_network`.
+
+**Registry object:** The shared Move Registry object at `0x0e5d473a055b6b7d014af557a13ad9075157fdc19b6d51562a18511afd397727`. All calls pass this object as the first argument. You can also resolve it as `registry-obj@mvr` from Mainnet SuiNS.
