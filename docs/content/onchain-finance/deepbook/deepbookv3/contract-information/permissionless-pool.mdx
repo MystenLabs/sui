@@ -37,7 +37,41 @@ questions:
 answer: Learn how to create a pool permissionlessly.
 ---
 
+Permissionless pool creation in DeepBookV3 lets anyone create a trading market for any asset pair without requiring approval from a central authority. You define the tick size, lot size, and minimum size parameters, pay a 500 DEEP token creation fee, and the pool becomes available to all traders immediately. Once created, a pool is permanent and unique to its asset pair.
+
 The `Pool` shared object represents a market, such as a SUI/USDC market. That `Pool` is the only one representing that unique pairing (SUI/USDC) and the pairing is the only member of that particular `Pool`. See [DeepBookV3 Design](/onchain-finance/deepbook/deepbookv3/design#pool) to learn more about the structure of pools.
+
+## What parameters does permissionless pool creation require?
+
+To create a pool, you need to specify three sizing parameters: tick size, lot size, and minimum order size. Each parameter controls how orders are placed and matched in the pool.
+
+**Tick size** determines the minimum price increment for orders. Calculate tick size using this formula:
+
+`10^(9 - base_decimals + quote_decimals - decimal_desired)`
+
+For a SUI (9 decimals) / USDC (6 decimals) pool with a desired decimal of 3 (0.001):
+
+`10^(9 - 9 + 6 - 3) = 10^3 = 1000`
+
+The decimal desired must be at most 1 basis point (0.01%) of the price between the base and quote asset. For a target of 3 decimals, `0.001 / price` must be less than or equal to `0.0001`. For pools where both assets are stablecoins, use a lower tick size.
+
+**Lot size** sets the minimum quantity increment for orders. Express lot size in MIST of the base asset. Lot size must:
+- Represent approximately $0.01 to $0.10 nominal value of the base asset
+- Be a power of 10
+- Be less than or equal to minimum size
+- Be greater than or equal to 1,000
+
+**Min size** sets the minimum order quantity. Express minimum size in MIST of the base asset. Minimum size must:
+- Represent approximately $0.10 to $1.00 nominal value of the base asset
+- Be a power of 10
+- Be greater than or equal to lot size
+
+## How does fee payment work in a permissionless pool?
+
+All pools support input token fees by default. To enable DEEP token fee payment, which provides a 20% discount compared to input token fees, 2 conditions must be met:
+
+1. Either the base or quote asset must be `USDC` or `SUI`.
+2. You must run a cron job that calls `add_deep_price_point()` on the pool every 1 to 10 minutes to keep the DEEP price reference current.
 
 ## API
 
@@ -93,3 +127,55 @@ This is very important after contract upgrades to ensure the newest contract can
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="update_pool_allowed_versions" noComments />
 
 </details>
+
+## Example: create a SUI/USDC pool
+
+The following example shows how to create a SUI/USDC pool using the DeepBook TypeScript SDK. This assumes you have a `DeepBookClient` instance configured and a wallet with at least 500 DEEP tokens to cover the creation fee.
+
+```typescript
+import { DeepBookClient } from "@mysten/deepbook-v3";
+import { SuiClient } from "@mysten/sui/client";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+
+const keypair = Ed25519Keypair.fromSecretKey(YOUR_SECRET_KEY);
+const suiClient = new SuiClient({ url: "https://fullnode.mainnet.sui.io" });
+
+const dbClient = new DeepBookClient({
+  address: keypair.getPublicKey().toSuiAddress(),
+  env: "mainnet",
+  client: suiClient,
+  keypair,
+});
+
+// SUI has 9 decimals, USDC has 6 decimals.
+// Desired tick decimal = 3, so tick_size = 10^(9 - 9 + 6 - 3) = 1000
+// lot_size = 1_000_000 MIST (~$0.001 of SUI at $1 SUI price)
+// min_size = 100_000_000 MIST (~$0.10 of SUI at $1 SUI price)
+
+const txb = await dbClient.pools.createPermissionlessPool({
+  baseCoinType: "0x2::sui::SUI",
+  quoteCoinType: "USDC_COIN_TYPE",
+  tickSize: 1000n,
+  lotSize: 1_000_000n,
+  minSize: 100_000_000n,
+});
+
+const result = await suiClient.signAndExecuteTransaction({
+  signer: keypair,
+  transaction: txb,
+});
+
+console.log("Pool created:", result.digest);
+```
+
+After the transaction executes, the new pool appears in the DeepBook registry and is available for trading immediately.
+
+## Frequently asked questions
+
+**Can anyone create a pool?** Yes. Pool creation is open to any address that holds at least 500 DEEP tokens to pay the creation fee. No administrative approval is required.
+
+**What happens if the pool already exists?** The transaction fails. Each asset pair maps to exactly one pool. Check the DeepBook registry before calling `create_permissionless_pool()` to confirm the pair is not already listed.
+
+**Do I need to run a price oracle for my pool?** Only if you want traders to pay fees in DEEP. Without calling `add_deep_price_point()` regularly, the pool cannot calculate the DEEP equivalent fee, and all trades settle fees in the input token instead.
+
+**What reference pool address should I use for DEEP price points?** Use the `DEEP/USDC` pool at `0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce` for pools that include USDC. Use the `DEEP/SUI` pool at `0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22` for pools that include SUI.
