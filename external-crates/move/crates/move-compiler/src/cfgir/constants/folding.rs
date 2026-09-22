@@ -15,10 +15,13 @@ use crate::{
         constants::{
             ConstantEntry, ConstantId, ConstantValues, Constants, unfoldable_constant_use_error,
         },
-        translate::{Context as CfgirContext, lower_body_to_cfg, move_value_from_value},
+        translate::{
+            Context as CfgirContext, lower_body_to_cfg, move_value_from_value, value_is_signed,
+        },
     },
-    diag,
+    dev_feature, diag,
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
+    editions::FeatureGate,
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::{ast as H, translate::precompiled_constants},
     ice, ice_assert,
@@ -277,6 +280,21 @@ fn fold_constant(
         block,
     );
     let (entry, value) = match final_value {
+        Some(H::Exp {
+            exp: sp!(_, H::UnannotatedExp_::Value(value)),
+            ..
+        }) if value_is_signed(&value.value) => {
+            debug_assert!(
+                ctxt.inner_context.env.supports_feature(
+                    ctxt.inner_context.current_package,
+                    FeatureGate::SignedIntegers
+                ),
+                "ICE: signed integer constant reached bytecode generation with feature not supported"
+            );
+            ctxt.reporter()
+                .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
+            (ConstantEntry::Failed, None)
+        }
         Some(H::Exp {
             exp: sp!(_, H::UnannotatedExp_::Value(value)),
             ..

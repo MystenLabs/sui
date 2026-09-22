@@ -5,10 +5,11 @@
 use super::{canonicalize_handles, context::*, optimize};
 use crate::{
     PreCompiledProgramInfo,
-    cfgir::{ast as G, translate::move_value_from_value_},
+    cfgir::ast as G,
     compiled_unit::*,
-    diag,
+    dev_feature, diag,
     diagnostics::{DiagnosticReporter, Diagnostics, filter::FilterStack},
+    editions::FeatureGate,
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
     hlir::{
         ast::{self as H, Value_, Var, Visibility},
@@ -1006,6 +1007,20 @@ fn datatype_type_parameters(tps: Vec<DatatypeTypeParameter>) -> Vec<IR::Datatype
         .collect()
 }
 
+fn check_signed_int_dev_feature(context: &mut Context, loc: &Loc, kind: &'static str) {
+    debug_assert!(
+        context
+            .env
+            .supports_feature(context.current_package(), FeatureGate::SignedIntegers),
+        "ICE: signed integer {} reached bytecode generation with feature not supported",
+        kind
+    );
+    context
+        .env
+        .diagnostic_reporter_at_top_level()
+        .add_diag(dev_feature!(FeatureGate::SignedIntegers, *loc));
+}
+
 fn base_types(context: &mut Context, bs: Vec<H::BaseType>) -> Vec<IR::Type> {
     bs.into_iter().map(|b| base_type(context, b)).collect()
 }
@@ -1030,6 +1045,16 @@ fn base_type(context: &mut Context, sp!(bt_loc, bt_): H::BaseType) -> IR::Type {
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U64))), _) => IRT::U64,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U128))), _) => IRT::U128,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U256))), _) => IRT::U256,
+
+        B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I8))), _)
+        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I16))), _)
+        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I32))), _)
+        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I64))), _)
+        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I128))), _)
+        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I256))), _) => {
+            check_signed_int_dev_feature(context, &bt_loc, "type");
+            IRT::U64
+        }
 
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Bool))), _) => IRT::Bool,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Vector))), mut args) => {
@@ -1251,12 +1276,20 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 V::U64(u) => B::LdU64(u),
                 V::U128(u) => B::LdU128(u),
                 V::U256(u) => B::LdU256(u),
+                V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) | V::I256(_) => {
+                    check_signed_int_dev_feature(context, &loc, "value");
+                    B::LdU64(0)
+                }
                 V::Bool(b) => {
                     if b {
                         B::LdTrue
                     } else {
                         B::LdFalse
                     }
+                }
+                v_ @ V::Vector(_, _) if crate::cfgir::translate::value_is_signed(&v_) => {
+                    check_signed_int_dev_feature(context, &loc, "value");
+                    B::LdU64(0)
                 }
                 v_ @ V::Address(_) | v_ @ V::Vector(_, _) => {
                     let tys: Result<[IR::Type; 1], _> = types(context, e.ty).try_into();
@@ -1269,7 +1302,8 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                             sp(loc, IR::Type_::Bool) // placeholder while bailing after ICE
                         }
                     };
-                    B::LdConst(ty, move_value_from_value_(v_))
+                    let mv = crate::cfgir::translate::move_value_from_value(sp(loc, v_));
+                    B::LdConst(ty, mv)
                 }
             };
             code.push(sp(loc, ld_value));
@@ -1340,7 +1374,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
 
         E::UnaryExp(op, er) => {
             exp(context, code, *er);
-            unary_op(code, op);
+            unary_op(context, code, op);
         }
 
         E::BinopExp(el, op, er) => {
@@ -1428,6 +1462,10 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 BT::U64 => B::CastU64,
                 BT::U128 => B::CastU128,
                 BT::U256 => B::CastU256,
+                BT::I8 | BT::I16 | BT::I32 | BT::I64 | BT::I128 | BT::I256 => {
+                    check_signed_int_dev_feature(context, &loc, "cast");
+                    B::CastU64
+                }
                 BT::Address | BT::Signer | BT::Vector | BT::Bool => {
                     context
                         .reporter
@@ -1458,13 +1496,17 @@ fn module_call(
     }
 }
 
-fn unary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
+fn unary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
     use IR::Bytecode_ as B;
     use UnaryOp_ as O;
     code.push(sp(
         loc,
         match op_ {
             O::Not => B::Not,
+            O::Neg => {
+                check_signed_int_dev_feature(context, &loc, "opcode");
+                B::Not
+            }
         },
     ));
 }

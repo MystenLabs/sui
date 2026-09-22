@@ -1,0 +1,27 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[EC04007]: incompatible types
+  ┌─ tests/development/signed_ints/invalid/signed_int_not_invalid.move:4:19
+  │
+4 │         let _x = !1i8;
+  │                   ^^^
+  │                   │
+  │                   Invalid argument to '!'
+  │                   Expected: 'bool'
+  │                   Given: 'i8'
+
+error[EC04007]: incompatible types
+  ┌─ tests/development/signed_ints/invalid/signed_int_not_invalid.move:9:19
+  │
+8 │         let x: i64 = 5i64;
+  │                --- Given: 'i64'
+9 │         let _y = !x;
+  │                   ^
+  │                   │
+  │                   Invalid argument to '!'
+  │                   Expected: 'bool'
