@@ -313,16 +313,6 @@ async fn party_object_transfer_multiple_times() {
 async fn party_object_transfer_multi_certs() {
     telemetry_subscribers::init_for_testing();
 
-    // cause random delay just before tx is executed (to explore all orders)
-    sui_macros::register_fail_point_async("transaction_execution_delay", move || async move {
-        let delay = {
-            let dist = rand::distributions::Uniform::new(0, 1000);
-            let mut rng = rand::thread_rng();
-            dist.sample(&mut rng)
-        };
-        tokio::time::sleep(Duration::from_millis(delay)).await;
-    });
-
     let mut test_cluster = TestClusterBuilder::new().build().await;
 
     let (package, object) =
@@ -341,6 +331,16 @@ async fn party_object_transfer_multi_certs() {
     let gas1 = accounts_and_gas[0].1[0];
     let gas2 = accounts_and_gas[0].1[1];
     let gas3 = accounts_and_gas[0].1[2];
+
+    // cause random delay just before tx is executed (to explore all orders)
+    sui_macros::register_fail_point_async("transaction_execution_delay", move || async move {
+        let delay = {
+            let dist = rand::distributions::Uniform::new(0, 1000);
+            let mut rng = rand::thread_rng();
+            dist.sample(&mut rng)
+        };
+        tokio::time::sleep(Duration::from_millis(delay)).await;
+    });
 
     let xfer_tx = test_cluster
         .test_transaction_builder_with_gas_object(sender, gas1)
