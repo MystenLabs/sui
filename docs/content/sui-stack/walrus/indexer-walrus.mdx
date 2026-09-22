@@ -54,11 +54,11 @@ answer: >-
   file path or location.
 ---
 
-A custom Sui indexer paired with Walrus lets you build rich, queryable applications on top of decentralized content-addressable storage. By tracking `Metadata` dynamic fields onchain, your indexer maintains a local database of blob attributes — publisher addresses, view counts, titles, and more — without requiring users to query the Sui full node directly for every read. This page shows how to apply the [custom indexer framework](/develop/accessing-data/custom-indexer/custom-indexers) to a blog platform backed by Walrus blobs.
+A custom Sui indexer paired with Walrus lets you build rich, queryable applications on top of decentralized content-addressable storage. By tracking `Metadata` dynamic fields onchain, your indexer maintains a local database of blob attributes, such as publisher addresses, view counts, titles, and more, without requiring users to query the Sui full node directly for every read. 
 
 [Walrus](https://walrus.xyz) is a decentralized storage and data availability protocol designed specifically for large binary files. It is a content-addressable storage protocol, meaning data is identified and retrieved using a unique identifier called a blob. The protocol derives blobs from the content itself rather than from a file path or location. Consequently, if different users upload the same content, Walrus reuses the existing blob rather than creating a new one.
 
-For uniqueness, each blob uploaded to Walrus also creates a corresponding [`Blob` NFT object on Sui](https://docs.wal.app/dev-guide/sui-struct#blob-and-storage-objects) with a unique ID. Furthermore, the associated `Blob` object can optionally have a `Metadata` [dynamic field](/develop/objects/dynamic-fields).
+For uniqueness, each blob uploaded to Walrus also creates a corresponding [`Blob` object on Sui](https://docs.wal.app/dev-guide/sui-struct#blob-and-storage-objects) with a unique ID. Furthermore, the associated `Blob` object can optionally have a `Metadata` [dynamic field](/develop/objects/dynamic-fields).
 
 `Metadata` dynamic fields extend an onchain object's data at runtime. If set, this dynamic field acts as [a mapping of key-value attribute pairs](https://docs.wal.app/usage/client-cli.html?highlight=attribute#blob-attributes).
 
