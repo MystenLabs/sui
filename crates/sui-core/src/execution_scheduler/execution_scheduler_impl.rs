@@ -405,7 +405,7 @@ impl ExecutionScheduler {
         }
         let scheduler = self.clone();
         let epoch_store = epoch_store.clone();
-        spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+        spawn_monitored_task!(async move {
             let mut cert_map = HashMap::new();
             for (cert, env) in certs {
                 cert_map.insert(*cert.digest(), (cert, env));
@@ -445,7 +445,7 @@ impl ExecutionScheduler {
                     }
                 }
             }
-        }));
+        });
     }
 
     fn schedule_tx_keys(
@@ -459,7 +459,7 @@ impl ExecutionScheduler {
 
         let scheduler = self.clone();
         let epoch_store = epoch_store.clone();
-        spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+        spawn_monitored_task!(async move {
             let tx_keys: Vec<_> = tx_with_keys.iter().map(|(key, _)| key).cloned().collect();
             let digests = epoch_store
                 .notify_read_tx_key_to_digest(&tx_keys)
@@ -476,7 +476,7 @@ impl ExecutionScheduler {
                 .zip_debug_eq(tx_with_keys.into_iter().map(|(_, env)| env))
                 .collect::<Vec<_>>();
             scheduler.spawn_transaction_scheduling(transactions, &epoch_store);
-        }));
+        });
     }
 
     /// When we schedule a certificate, it should be impossible for it to have been executed in a
@@ -641,13 +641,11 @@ impl ExecutionScheduler {
         for (cert, execution_env) in certs {
             let scheduler = self.clone();
             let epoch_store = epoch_store.clone();
-            spawn_monitored_task!(
-                epoch_store.within_alive_epoch(scheduler.schedule_transaction(
-                    cert,
-                    execution_env,
-                    &epoch_store,
-                ))
-            );
+            spawn_monitored_task!(async move {
+                scheduler
+                    .schedule_transaction(cert, execution_env, &epoch_store)
+                    .await;
+            });
         }
     }
 
@@ -657,6 +655,18 @@ impl ExecutionScheduler {
             .as_ref()
             .expect("Funds withdraw scheduler must be enabled if there are settlements")
             .settle_funds(settlement);
+    }
+
+    /// Checks that nothing is left in the scheduler just before the change epoch
+    /// transaction is enqueued. Scheduling tasks are not cancelled at epoch end, so a
+    /// transaction still pending here would carry its causal index across the boundary
+    /// and stall the causal-next lane for the rest of the process.
+    ///
+    /// Quiescence is the precise measure: the executing-certificates gauge lags, since
+    /// the driver drops the in-flight slot when execution ends but the executing guard
+    /// only when its task does.
+    pub fn check_empty_before_change_epoch(&self) {
+        self.causal_admission.check_quiescent_at_epoch_boundary();
     }
 
     /// Reconfigure internal state at epoch start. This resets the funds withdraw scheduler
