@@ -3,7 +3,7 @@
 
 use rand::rngs::OsRng;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolConfig};
@@ -430,7 +430,7 @@ async fn test_reconfig_with_committee_change_basic() {
 #[sim_test]
 async fn test_epoch_store_released_after_leaving_committee() {
     let test_cluster = TestClusterBuilder::new()
-        .with_num_validators(5)
+        .with_num_validators(2)
         .build()
         .await;
 
@@ -453,13 +453,15 @@ async fn test_epoch_store_released_after_leaving_committee() {
         )
     });
 
-    // Leave enough time for any bounded holder (e.g. in-flight RPCs) to finish.
-    tokio::time::sleep(Duration::from_secs(120)).await;
-    assert_eq!(
-        epoch_store.strong_count(),
-        0,
-        "epoch store of the removed validator's last validator epoch was not released"
-    );
+    // Bounded holders (e.g. in-flight RPCs) may take a little while to finish.
+    let deadline = Instant::now() + Duration::from_secs(120);
+    while epoch_store.strong_count() > 0 {
+        assert!(
+            Instant::now() < deadline,
+            "epoch store of the removed validator's last validator epoch was not released"
+        );
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
 }
 
 #[sim_test]
