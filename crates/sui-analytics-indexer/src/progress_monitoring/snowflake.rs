@@ -23,18 +23,18 @@ impl SnowflakeMaxCheckpointReader {
         schema: &str,
         user: &str,
         role: &str,
-        passwd: &str,
+        private_key_pem: &str,
         table_id: &str,
         col_id: &str,
     ) -> Result<Self> {
-        let api = snowflake_api::SnowflakeApi::with_password_auth(
+        let api = snowflake_api::SnowflakeApi::with_certificate_auth(
             account_identifier,
             Some(warehouse),
             Some(database),
             Some(schema),
             user,
             Some(role),
-            passwd,
+            private_key_pem,
         )
         .expect("Failed to build sf api client");
         Ok(SnowflakeMaxCheckpointReader {
