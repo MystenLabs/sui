@@ -444,6 +444,10 @@ impl SharedObjVerManager {
             // Note that for accumulator version, we cannot rely on the one from effects yet, since it won't
             // be produced until implicitly read system objects are fully shipped. But the old object funds withdraw
             // still need it. Hence we always use the one provided from the caller (i.e. checkpoint executor).
+            // TODO: Once check_object_funds_withdraw_in_execution is enabled everywhere and the
+            // post-execution ObjectFundsChecker is removed, drop this override (and the
+            // accumulator version threaded from the checkpoint executor) so the accumulator root
+            // is reconstructed from effects exactly like the forwarding address registry.
             if let Some(version) = *accumulator_version {
                 let initial_shared_version = epoch_store
                     .epoch_start_config()
