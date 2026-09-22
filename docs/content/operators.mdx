@@ -36,6 +36,48 @@ answer: >-
   integration.
 ---
 
+Node operators run and maintain the infrastructure that keeps Sui working. These guides cover the full range of operator responsibilities: setting up full nodes, becoming a validator, running bridge nodes, managing data and snapshots, and integrating with exchanges.
+
+## What kind of node do you need?
+
+Sui has several node types, each with a different role:
+
+- **Full node** — Stores the full chain state and serves read requests. Required for most infrastructure setups.
+- **Validator** — Participates in consensus and produces certified transaction effects. Validators must meet staking and hardware requirements.
+- **Bridge node** — Supports cross-chain asset transfers between Sui and other networks.
+
+Choose the guide that matches your infrastructure goal.
+
+## What does a node operator do?
+
+Running Sui infrastructure involves more than launching a binary. Operators are responsible for:
+
+- Configuring and starting nodes on supported hardware
+- Keeping software up to date across network upgrades
+- Managing chain data, snapshots, and archival storage
+- Monitoring node health and setting up observability tooling
+- Handling key management and operational security
+
+The guides in this section walk through each of these responsibilities in detail.
+
+## Who should use these guides?
+
+These guides are written for engineers and DevOps teams responsible for running production Sui infrastructure. You should be comfortable with Linux system administration, networking, and running long-lived server processes. Familiarity with Sui concepts like epochs, validators, and gas is helpful but not required to get started.
+
+## Common questions
+
+### What is the difference between a full node and a validator?
+
+A full node stores chain state and answers queries. A validator participates in consensus to finalize transactions. Validators earn staking rewards and must meet additional operational and hardware requirements.
+
+### How do I keep my node in sync after a restart?
+
+Sui supports snapshots and archival data to help nodes catch up after downtime. The data management guides explain how to configure snapshot sources and restore from them.
+
+### What monitoring should I set up for my node?
+
+The observability guide covers metrics endpoints, log configuration, and recommended alerting for production nodes.
+
 Find guides for running and managing Sui network infrastructure, including full nodes, validators, bridge nodes, data management, and exchange integration.
 
 import DocCardList from '@theme/DocCardList';
