@@ -37,9 +37,17 @@ answer: >-
   existing contracts in a web environment.
 ---
 
-This feature was developed to enable Move bytecode serialization and deserialization on the web. In essence, this feature allows you to edit existing contracts in a web environment.
+The WebAssembly (WASM) and template pattern enables Move bytecode serialization and deserialization on the web. It allows you to edit existing Move contracts directly in a web environment, without a local Move compiler. In asset tokenization use cases, these edits let you create and publish new types that represent physical or digital assets you want to tokenize.
 
-In the case of asset tokenization, these edits allow you to create and publish new types that represent physical or digital assets that you want to tokenize.
+## What is the WASM template pattern?
+
+The WASM template pattern works in three steps:
+
+1. A Move module defines constants as placeholder values (for example, `SYMBOL`, `NAME`, `TOTAL_SUPPLY`).
+2. A WASM library deserializes the compiled bytecode into a structured format you can edit in TypeScript.
+3. The library re-serializes the edited bytecode so you can publish it directly to Sui.
+
+This approach removes the need to compile Move on the client. You ship pre-compiled bytecode and update only the values that change per deployment.
 
 ## Bytecode manipulation {#bytecode-manipulation}
 
@@ -173,3 +181,33 @@ const tx = new Transaction();
 ```
 
 As mentioned in the [Bytecode manipulation](#bytecode-manipulation) section, the modules that you need to publish are the template and the genesis, which is why the `modules` array has 2 elements. It is also important to include any dependencies defined in the `Move.toml` file of the involved packages. The `packageId` used is the address the `asset_tokenization` package has been deployed to.
+
+## Why use the WASM template pattern?
+
+The WASM template pattern is useful when you need to deploy multiple instances of a Move module with different configuration values, without recompiling Move for each instance. Common use cases include:
+
+- **Asset tokenization platforms** where each asset type needs its own module with a unique name, symbol, and supply.
+- **Web-based deployment tools** where users configure and deploy contracts through a browser interface.
+- **Automated pipelines** that generate many contract variants from a single template.
+
+Because you modify bytecode rather than source code, the deployment flow stays entirely in TypeScript and requires no Move toolchain on the client.
+
+## How does constant indexing work?
+
+The `updateConstant` method relies on the order in which constants appear in the compiled constant pool. The index (`idx`) maps directly to the declaration order in your Move source file, starting at 0. If you reorder constants in the Move file, you must update the corresponding indices in your TypeScript code.
+
+For example, given the template constants:
+
+```move
+const TOTAL_SUPPLY: u64 = 100;   // idx 0
+const SYMBOL: vector<u8> = b"Symbol";  // idx 1
+const NAME: vector<u8> = b"Name";      // idx 2
+```
+
+The call `updateConstant(1, newSymbol, "Symbol", "string")` targets `SYMBOL` because it is declared second. Adding or removing a constant above `SYMBOL` shifts its index.
+
+Always verify constant indices after any modification to the template Move file.
+
+## Summary
+
+The WASM template pattern lets you deploy customized Move modules from a web environment by manipulating pre-compiled bytecode. You define placeholder constants in a Move template, extract the compiled bytecode as a hex string, and use the WASM library to deserialize, update, and re-serialize the bytecode before publishing. The `updateConstant` and `changeIdentifiers` methods give you precise control over constant values and module identifiers without recompiling Move source code.
