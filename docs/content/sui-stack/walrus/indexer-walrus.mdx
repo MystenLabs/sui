@@ -80,7 +80,7 @@ Sui derives the ID of a dynamic field from its type and parent object's ID. Each
 - Edit post titles.
 - Browse posts by other publishers.
 
-Assume a blog platform service already exists to handle uploads to Walrus. When the service creates a blob and its associated NFT object on Walrus, it also attaches a `Metadata` dynamic field containing key-value pairs for `publisher` (the Sui Address that uploaded the blob), `view_count`, and `title`. The service prevents users from modifying the `publisher` and `view_count` pairs, but allows the `publisher` to update the `title` value.
+Assume a blog platform service already exists to handle uploads to Walrus. When the service creates a blob and its associated `Blob` object on Sui, it also attaches a `Metadata` dynamic field containing key-value pairs for `publisher` (the Sui Address that uploaded the blob), `view_count`, and `title`. The service prevents users from modifying the `publisher` and `view_count` pairs, but allows the `publisher` to update the `title` value.
 
 When a user views a post, the service retrieves the relevant blog post `Metadata` from the indexed database. It then uses the `Owner` field to fetch the blob from the full node. The service uses the liveness of the `Blob` object on Sui to represent whether a blog post is available. If the `Blob` object is wrapped or deleted, the blog post is not accessible through the service, even if the underlying content on Walrus still exists.
 
@@ -150,7 +150,7 @@ The `main` function for the service
 
 To provide users with a list of posts written by a publisher, your service first queries the
 database on `publisher`, yielding a result like the following. The service then uses the `blob_obj_id` to fetch the
-`Blob` NFT contents. From there, you can retrieve the actual Walrus content.
+`Blob` object contents. From there, you can retrieve the actual Walrus content.
 
 ```
                           dynamic_field_id                          | df_version |                             publisher                              |                            blob_obj_id                             | view_count |      title
@@ -160,63 +160,34 @@ database on `publisher`, yielding a result like the following. The service then 
 
 ## How does the indexer connect Walrus blobs to onchain metadata?
 
-Each Walrus blob has a corresponding `Blob` NFT object on Sui. When your service uploads content to Walrus, it attaches a `Metadata` dynamic field to that `Blob` object. The dynamic field stores key-value pairs — `publisher`, `view_count`, `title` — that your indexer tracks across checkpoints.
+Each Walrus blob has a corresponding `Blob` object on Sui. When your service uploads content to Walrus, it attaches a `Metadata` dynamic field to that `Blob` object. The dynamic field stores key-value pairs, such as `publisher`, `view_count`, and `title`, that your indexer tracks across checkpoints.
 
 The indexer monitors object changes in each checkpoint. When a `Metadata` dynamic field appears in the checkpoint output objects but not in the input objects, the field was just created. When it appears in both, it was mutated. When it appears only in the input objects, it was deleted or wrapped. The sequential pipeline commits each checkpoint atomically, so your database always reflects a consistent state.
 
-Here is an example of how you might query the indexed data to retrieve a blob's content after looking up its metadata:
+Your indexed rows store `blob_obj_id`, the ID of the Sui `Blob` object. A Walrus aggregator reads blob content directly from that object ID, so you do not need to resolve the `blob_id` from the `Blob` object contents first:
 
-```rust
-// After querying the database for a publisher's posts,
-// use the blob_obj_id to fetch the Blob NFT from the full node,
-// then retrieve the actual content from Walrus using the blob_id field.
-async fn fetch_post_content(
-    sui_client: &SuiClient,
-    walrus_client: &WalrusClient,
-    blob_obj_id: ObjectID,
-) -> anyhow::Result<Vec<u8>> {
-    // Fetch the Blob object from Sui to get the blob_id
-    let blob_object = sui_client
-        .read_api()
-        .get_object_with_options(blob_obj_id, SuiObjectDataOptions::full_content())
-        .await?;
-
-    // Extract the blob_id from the Blob object fields
-    let blob_id = extract_blob_id(&blob_object)?;
-
-    // Retrieve the actual content from Walrus using the blob_id
-    let content = walrus_client.read_blob(blob_id).await?;
-
-    Ok(content)
-}
+```sh
+$ curl "$AGGREGATOR/v1/blobs/by-object-id/$BLOB_OBJ_ID" -o post.md
 ```
+
+Set `$AGGREGATOR` to an aggregator endpoint. The Mysten Labs reference endpoint on Mainnet is `https://aggregator.walrus-mainnet.walrus.space`, and on Testnet it is `https://aggregator.walrus-testnet.walrus.space`. Do not hardcode a single community endpoint in production. For the complete endpoint list and the rest of the HTTP API, see the [Walrus network reference](https://docs.wal.app/docs/network-reference) and [Reading Blobs with the HTTP API](https://docs.wal.app/docs/http-api/reading-blobs).
 
 ## Why use a custom indexer instead of querying the full node directly?
 
 Querying a Sui full node for every read operation does not scale well for a blog platform with many publishers and posts. A custom indexer solves this by maintaining a local, queryable database of the onchain state you care about.
 
-The indexer processes each checkpoint once and writes the results to a PostgreSQL database (or another store). Your service then runs fast SQL queries against that database rather than making repeated RPC calls. This separation also lets you add application-specific query patterns — sorting posts by title, filtering by publisher, paginating results — without constructing complex onchain queries.
+The indexer processes each checkpoint once and writes the results to a PostgreSQL database (or another store). Your service then runs fast SQL queries against that database rather than making repeated RPC calls. This separation also lets you add application-specific query patterns, such as sorting posts by title, filtering by publisher, and paginating results, without constructing complex onchain queries.
 
 The [sequential pipeline architecture](/develop/accessing-data/custom-indexer/pipeline-architecture#sequential-pipeline-architecture) is well suited to this use case because blog post state changes are low-frequency and order matters for consistency. If your platform grows to require higher throughput, you can migrate to the concurrent pipeline without changing your data model.
 
 ## Why does blob lifetime tracking require additional pipelines?
 
-A `Metadata` dynamic field is a child of the `Blob` object. When the blob's lifetime is extended or the blob expires, the change appears on the parent `Blob` object, not on the child `Metadata` dynamic field. Because the indexer only watches changes to the `Metadata` dynamic field, lifetime updates are not captured by the main pipeline.
+All Walrus blobs carry an associated lifetime, so you must track expiration changes. A `Metadata` dynamic field is a child of the `Blob` object, and you can read the blob's lifetime directly from the `Blob` object contents. Lifetime changes, however, usually occur on the `Blob` object itself, and updates to a parent object don't affect the child dynamic field unless you directly modify the child. Because the indexer only watches changes to the `Metadata` dynamic field, these lifetime changes remain hidden in the current indexing setup.
 
-To track blob expiration, add one of the following:
-
-- A second pipeline that watches all `Blob` object changes.
-- A second pipeline that watches `BlobCertified` events.
-- A write-side convention that modifies the `Metadata` dynamic field in the same transaction as any blob lifetime change, so both appear in the same checkpoint output.
-
-The third option requires coordinating your write path but keeps the indexer simpler. The first two options work without changes to the write path but require running 2 pipelines in parallel.
-
-## Additional considerations
-
-All Walrus blobs carry an associated lifetime, so you must track expiration changes. Whenever the `Metadata` dynamic field changes, the parent Sui `Blob` object should also appear in the output changes. You can read the blob's lifetime directly from the `Blob` object contents. However, lifetime changes usually occur on the `Blob` object itself. Because updates to the parent object don't affect the child dynamic field, unless you directly modify the child, these lifetime changes remain hidden in the current indexing setup. You can address this in several ways:
+You can address this in several ways:
 
 - Watch all `Blob` object changes.
 - Watch all `BlobCertified` events.
-- Construct PTBs that make calls to manage blob lifetime and ping the `Metadata` dynamic field in the same transaction.
+- Construct PTBs that make calls to manage blob lifetime and ping the `Metadata` dynamic field in the same transaction, so both appear in the same checkpoint output.
 
-If you don't want to perform additional work on the write side, then you are limited to the first two options. This requires 2 pipelines, one to do the work in the previous section of indexing metadata, and another to index `BlobCertified` events (or `Blob` object changes.)
+The third option requires coordinating your write path but keeps the indexer simpler. If you don't want to perform additional work on the write side, then you are limited to the first two options. This requires 2 pipelines running in parallel, one to index metadata as described in the previous sections, and another to index `BlobCertified` events (or `Blob` object changes).
