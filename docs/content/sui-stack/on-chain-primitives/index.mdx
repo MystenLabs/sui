@@ -33,3 +33,25 @@ answer: >-
 ---
 
 Sui provides native primitives for time and randomness that are accessible directly in Move contracts, without relying on external oracles.
+
+## What are onchain primitives?
+
+Onchain primitives are built-in Sui framework objects that smart contracts can read at runtime. Because these values come directly from the Sui protocol, contracts do not need to trust a third-party data feed or oracle to access time or random numbers.
+
+Sui currently offers two onchain primitives:
+
+- **Clock:** A shared object that exposes the current Unix timestamp in milliseconds. Validators update the clock value each epoch, making it suitable for time-based logic in Move contracts.
+- **Random:** A shared object that produces verifiable on-chain randomness. The randomness beacon advances each epoch and is safe to use for applications that require unpredictable values, such as games or lotteries.
+
+## What topics does On-Chain Primitives cover?
+
+The pages in this section cover each primitive in detail:
+
+- **Clock** — how to read the current time in a Move contract and the guarantees the Clock object provides.
+- **Randomness** — how to request and consume random values safely in Move, including best practices for avoiding manipulation.
+
+## How do onchain primitives work on Sui?
+
+Both primitives are implemented as shared Sui objects with well-known object IDs. A Move contract imports the relevant module from the Sui framework and accepts the shared object as a parameter. The contract reads the current value directly from the object at transaction execution time.
+
+Because the Sui protocol controls updates to these objects, the values are deterministic within a transaction and verifiable by any validator. This removes the need for external data providers while keeping contracts simple and auditable.
