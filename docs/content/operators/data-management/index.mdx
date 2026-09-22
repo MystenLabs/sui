@@ -33,9 +33,57 @@ answer: >-
   data stores for Sui network nodes.
 ---
 
+Sui full nodes generate significant data over time. Data management covers two primary concerns: indexing transaction and object data for fast querying, and archiving historical data for long-term retention or retrieval. You can configure nodes to prune old data, offload historical checkpoints to remote stores, or run a full indexer stack alongside your node.
+
 Learn how to set up and manage data indexing, archival storage, and remote data stores for Sui network nodes.
 
 Learn how to set up and manage data indexing, archival storage, and remote data stores for your Sui network nodes.
+
+## What data management options are available for Sui nodes?
+
+Sui nodes support several data management strategies depending on your storage and query requirements:
+
+- **Pruning:** Remove old transaction and object data from local disk to reduce storage costs. Pruning is suitable for nodes that do not need full historical access.
+- **Archival storage:** Export checkpoint data to a remote store such as an S3-compatible bucket or Google Cloud Storage. Archived data remains available for historical queries even after local pruning.
+- **Indexing:** Run an indexer alongside your full node to ingest onchain data into a queryable database. The indexer supports advanced queries over transactions, objects, and events.
+
+## How do I manage disk usage on a Sui full node?
+
+Disk usage grows as the node processes checkpoints and stores object versions. You manage disk usage by enabling pruning in your node configuration. Pruning removes object and transaction data older than a configurable retention window while keeping the data available through archival stores if you configure one.
+
+The following example shows the relevant sections of a full node configuration file that enable both pruning and archival export:
+
+```yaml
+authority-store-pruning-config:
+  num-latest-epoch-dbs-to-retain: 3
+  epoch-db-pruning-period-secs: 3600
+  num-epochs-to-retain: 0
+  max-checkpoints-in-batch: 10
+  max-transactions-in-batch: 1000
+
+checkpoint-executor-config:
+  checkpoint-execution-max-concurrency: 200
+  local-execution-timeout-sec: 30
+
+state-archive-write-config:
+  object-store-config:
+    object-store: "S3"
+    bucket: "YOUR_BUCKET_NAME"
+    aws-region: "YOUR_AWS_REGION"
+    object-store-connection-limit: 20
+  concurrency: 5
+  use-for-pruning-watermark: true
+```
+
+Replace `YOUR_BUCKET_NAME` and `YOUR_AWS_REGION` with your actual bucket name and region.
+
+## What is the difference between archival and pruned data?
+
+**Pruned data** is permanently deleted from the local node database. Once pruned, the node no longer serves that data directly.
+
+**Archived data** is exported to a remote object store before pruning occurs. The archive retains a complete history of checkpoints and can be used to restore a node, seed a new node, or answer historical queries through an indexer that reads from the archive.
+
+Archival storage and pruning work together: you configure the archive as the pruning watermark so the node only prunes data that has already been safely exported.
 
 import DocCardList from '@theme/DocCardList';
 
