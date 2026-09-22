@@ -201,6 +201,7 @@ mod test {
         simulated_load_config.randomized_transaction_weight = 0;
         simulated_load_config.slow_weight = 0;
         simulated_load_config.composite_weight = 0;
+        simulated_load_config.gas_double_spend_weight = 0;
         info!("Simulated load config: {:?}", simulated_load_config);
 
         test_simulated_load_with_test_config(
@@ -225,17 +226,20 @@ mod test {
         let mut simulated_load_config = SimulatedLoadConfig::default();
         // Use LocalValidatorAggregatorProxy for soft bundle support
         simulated_load_config.remote_env = false;
-        // Enable conflicting transfer workload
-        simulated_load_config.conflicting_transfer_weight = 1;
+        // Enable conflicting transfer workload. Weight 2 keeps it on par with the
+        // inherited default weights (randomized transaction, composite).
+        simulated_load_config.conflicting_transfer_weight = 2;
         simulated_load_config.num_contested_objects = 5;
         // Disable other workloads to isolate testing
         simulated_load_config.shared_counter_weight = 0;
-        simulated_load_config.transfer_object_weight = 1;
+        simulated_load_config.transfer_object_weight = 2;
         simulated_load_config.delegation_weight = 0;
         simulated_load_config.batch_payment_weight = 0;
         simulated_load_config.shared_deletion_weight = 0;
         simulated_load_config.randomness_weight = 0;
         simulated_load_config.slow_weight = 0;
+        // Gas double-spend creates the same object-lock contention this test asserts on.
+        simulated_load_config.gas_double_spend_weight = 0;
         info!("Simulated load config: {:?}", simulated_load_config);
 
         test_simulated_load_with_test_config(
@@ -632,7 +636,7 @@ mod test {
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
             let mut rng = thread_rng();
-            simulated_load_config.shared_counter_weight = if rng.gen_bool(0.5) { 5 } else { 50 };
+            simulated_load_config.shared_counter_weight = if rng.gen_bool(0.5) { 10 } else { 100 };
             simulated_load_config.num_shared_counters = match rng.gen_range(0..=2) {
                 0 => None, // shared_counter_hotness_factor is in play in this case.
                 n => Some(n),
@@ -645,7 +649,7 @@ mod test {
             simulated_load_config.shared_counter_gas_price_multiplier = rng.gen_range(1.0..=10.0);
 
             // Always enable the randomized tx workload in this test.
-            simulated_load_config.randomized_transaction_weight = 1;
+            simulated_load_config.randomized_transaction_weight = 2;
             // Disable concurrent transactions in congestion control test to avoid lock conflicts
             simulated_load_config.randomized_transaction_concurrency = 1;
             info!("Simulated load config: {:?}", simulated_load_config);
@@ -704,7 +708,7 @@ mod test {
 
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
-            simulated_load_config.expected_failure_weight = 20;
+            simulated_load_config.expected_failure_weight = 40;
             simulated_load_config.expected_failure_config.failure_type =
                 ExpectedFailureType::try_from(0).unwrap();
             info!("Simulated load config: {:?}", simulated_load_config);
@@ -1208,18 +1212,20 @@ mod test {
         fn default() -> Self {
             Self {
                 remote_env: true,
-                shared_counter_weight: 1,
+                // The enabled workloads run at weight 2 so that gas_double_spend (weight 1)
+                // gets ~5% of the traffic; integer weights can't express 5% otherwise.
+                shared_counter_weight: 2,
                 large_transaction_weight: 0,
                 large_transaction_size_bytes: 100_000,
-                slow_weight: 1,
-                transfer_object_weight: 1,
+                slow_weight: 2,
+                transfer_object_weight: 2,
                 num_transfer_accounts: 2,
-                delegation_weight: 1,
-                batch_payment_weight: 1,
-                shared_deletion_weight: 1,
+                delegation_weight: 2,
+                batch_payment_weight: 2,
+                shared_deletion_weight: 2,
                 shared_counter_hotness_factor: 50,
-                randomness_weight: 1,
-                randomized_transaction_weight: 1,
+                randomness_weight: 2,
+                randomized_transaction_weight: 2,
                 randomized_transaction_concurrency: 4,
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
@@ -1233,9 +1239,11 @@ mod test {
                 party_weight: 0,
                 conflicting_transfer_weight: 0,
                 num_contested_objects: 2,
-                composite_weight: 1,
+                composite_weight: 2,
                 composite_config: Some(CompositeWorkloadConfig::balanced()),
-                gas_double_spend_weight: 0,
+                // Weight 1 out of a total of 19 across the default workloads, i.e. ~5% of
+                // transactions race duplicate copies over the same gas object.
+                gas_double_spend_weight: 1,
                 gas_double_spend_copies: 2,
                 gas_double_spend_submission: GasDoubleSpendSubmission::default(),
             }
@@ -1256,6 +1264,10 @@ mod test {
                 batch_payment_weight: 0,
                 shared_deletion_weight: 0,
                 slow_weight: 0,
+                gas_double_spend_weight: 0,
+                // Pinned so the composite/randomized mix stays 1:1 regardless of the
+                // default weights above.
+                randomized_transaction_weight: 1,
                 ..Default::default()
             }
         }
