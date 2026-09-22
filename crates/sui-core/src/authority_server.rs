@@ -1030,8 +1030,7 @@ impl ValidatorService {
                             _ => None,
                         })
                         .collect();
-                    let existing_locks =
-                        epoch_store.get_owned_object_locks_map(&owned_object_refs)?;
+                    let existing_locks = epoch_store.get_owned_object_locks_map(&owned_object_refs);
                     if let Err(error) = epoch_store.try_acquire_owned_object_locks_post_consensus(
                         &owned_object_refs,
                         tx_digest,

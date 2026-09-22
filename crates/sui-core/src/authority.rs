@@ -1253,7 +1253,7 @@ impl AuthorityState {
         // but the executed effects are pruned post consensus, leading to failures.
         let tx_digest = *transaction.digest();
         if epoch_store.is_recently_finalized(&tx_digest)
-            || epoch_store.transactions_executed_in_cur_epoch(&[tx_digest])?[0]
+            || epoch_store.transactions_executed_in_cur_epoch(&[tx_digest])[0]
         {
             assert_reachable!("transaction recently executed");
             return Ok(());

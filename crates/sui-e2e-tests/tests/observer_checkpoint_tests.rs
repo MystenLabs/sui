@@ -64,8 +64,7 @@ async fn test_observer_uses_verify_checkpoint_path() {
         let checkpoint_seqs = observer_state
             .epoch_store_for_testing()
             .transactions_executed_in_checkpoint_notify(tx_digests.clone())
-            .await
-            .expect("observer should finalize submitted transactions");
+            .await;
         let max_checkpoint_seq = checkpoint_seqs
             .iter()
             .copied()

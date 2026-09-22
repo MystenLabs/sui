@@ -949,8 +949,7 @@ impl TestCluster {
                     let checkpoint_seqs = state
                         .epoch_store_for_testing()
                         .transactions_executed_in_checkpoint_notify(digests.to_vec())
-                        .await
-                        .unwrap();
+                        .await;
 
                     // then wait until the highest of those checkpoints is executed on this node
                     let max_checkpoint_seq = checkpoint_seqs.into_iter().max().unwrap();

@@ -851,8 +851,7 @@ where
             let epoch_store = validator_state.load_epoch_store_one_call_per_task();
             epoch_store
                 .transactions_executed_in_checkpoint_notify(vec![tx_digest])
-                .await
-                .expect("db error waiting for transaction checkpointing");
+                .await;
         })
         .instrument(error_span!(
             "transaction_orchestrator::local_execution",
