@@ -54,6 +54,24 @@ Managing margin accounts is essential for leveraged trading on DeepBook. The Mar
 
 For an end-to-end walkthrough that creates a manager, reads a pool's risk parameters, deposits collateral, borrows, opens and closes a leveraged position, and withdraws on Testnet, see the [Leveraged Position Workflow](/onchain-finance/deepbook/deepbook-margin/leveraged-workflow).
 
+## Setup
+
+Import the DeepBook Margin SDK and initialize the client before calling any margin manager functions.
+
+```ts
+import { DeepBookMarginClient } from '@mysten/deepbook-v3';
+import { SuiClient } from '@mysten/sui/client';
+
+const suiClient = new SuiClient({ url: 'https://fullnode.testnet.sui.io' });
+
+const marginClient = new DeepBookMarginClient({
+  client: suiClient,
+  network: 'testnet',
+});
+```
+
+After initializing the client, use `marginClient.marginContract` to access margin manager functions and add them to a `Transaction` object.
+
 ## Margin manager functions
 
 The DeepBook Margin SDK provides the following functions for managing margin accounts.
@@ -282,3 +300,50 @@ liquidatePosition = (tx: Transaction) => {
 	tx.add(this.marginContract.liquidate(managerAddress, poolKey, debtIsBase, repayCoin));
 };
 ```
+
+### Create a manager with an initial deposit
+
+Use `newMarginManagerWithInitializer` when you want to deposit collateral in the same transaction that creates the manager. Call `depositDuringInitialization` between creating the manager and sharing it.
+
+```tsx
+import { Transaction } from '@mysten/sui/transactions';
+
+createManagerWithDeposit = async (tx: Transaction) => {
+	const poolKey = 'SUI_DBUSDC';
+
+	// Step 1: Create the manager and get the initializer
+	const { manager, initializer } =
+		this.marginContract.newMarginManagerWithInitializer(poolKey)(tx);
+
+	// Step 2: Deposit before sharing
+	tx.add(
+		this.marginContract.depositDuringInitialization({
+			manager,
+			poolKey,
+			coinType: 'SUI',
+			amount: 100,
+		}),
+	);
+
+	// Step 3: Share the manager so others can interact with it
+	tx.add(this.marginContract.shareMarginManager({ poolKey, manager, initializer }));
+};
+```
+
+### Read manager state
+
+Use `managerState` to check a manager's current risk ratio, balances, and debt before executing trades or withdrawals.
+
+```tsx
+import { Transaction } from '@mysten/sui/transactions';
+
+readManagerState = async (managerKey: string) => {
+	const tx = new Transaction();
+	const state = await marginClient.marginContract.managerState(managerKey)(tx);
+	console.log('Risk ratio:', state.riskRatio);
+	console.log('Base balance:', state.baseBalance);
+	console.log('Quote balance:', state.quoteBalance);
+	console.log('Borrowed base shares:', state.borrowedBaseShares);
+	console.log('Borrowed quote shares:', state.borrowedQuoteShares);
+	return state;
+};
