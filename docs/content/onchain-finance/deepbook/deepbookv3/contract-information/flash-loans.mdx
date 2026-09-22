@@ -44,9 +44,71 @@ answer: >-
   borrowed and repaid within the same programmable transaction block.
 ---
 
-Flash loans by definition are uncollateralized loans that you borrow and repay within the same programmable transaction block. Users can borrow flash loans in the base or quote asset from any DeepBookV3 pool. Flash loans return a `FlashLoan` hot potato (struct with no abilities), which must be returned back to the pool by the end of the call. The transaction is atomic, so the entire transaction fails if the loan is not returned.
+Flash loans are uncollateralized loans that you borrow and repay within the same programmable transaction block (PTB). Users can borrow flash loans in the base or quote asset from any DeepBookV3 pool. Flash loans return a `FlashLoan` hot potato (struct with no abilities), which must be returned back to the pool by the end of the call. The transaction is atomic, so the entire transaction fails if the loan is not returned.
 
 The quantity borrowed can be the maximum amount that the pool owns. Borrowing from a pool and trading in the same pool can result in failures because trading requires the movement of funds. If the funds are borrowed, then there are no funds to move.
+
+## How flash loans work on Sui
+
+DeepBookV3 flash loans use the Move [hot potato pattern](https://move-book.com/programmability/hot-potato-pattern.html) to enforce repayment. When you borrow a flash loan, the pool returns a `FlashLoan` struct with no abilities (no `copy`, `drop`, `store`, or `key`). Because you cannot drop or store the struct, you must pass it back to the pool's return function within the same PTB. The Move runtime enforces this constraint at the bytecode level, making it impossible to complete the transaction without repaying the loan.
+
+A complete flash loan sequence in a single PTB looks like this:
+
+1. Call `borrow_flashloan_base` or `borrow_flashloan_quote` to receive funds and a `FlashLoan` hot potato.
+2. Use the borrowed funds for your intended operation, for example arbitrage or liquidation.
+3. Call `return_flashloan_base` or `return_flashloan_quote`, passing back both the funds and the `FlashLoan` hot potato.
+
+If any step fails, or if the hot potato is not returned, the entire PTB reverts.
+
+## Why use flash loans
+
+Flash loans let you execute strategies that require temporary access to large amounts of capital without providing collateral. Common use cases include:
+
+- **Arbitrage:** Borrow an asset, trade it across pools or protocols to capture a price difference, and repay the loan within the same transaction.
+- **Liquidations:** Borrow funds to cover an undercollateralized position, receive the collateral reward, and repay the loan.
+- **Collateral swaps:** Replace one collateral asset with another in a single atomic transaction.
+
+Because the transaction is atomic, you never risk losing the borrowed funds to a failed repayment. Either the entire strategy succeeds, or the transaction reverts and no funds move.
+
+## Example
+
+The following TypeScript example demonstrates a flash loan flow using the DeepBook TypeScript SDK. It borrows base assets from a pool, then immediately returns them in the same PTB.
+
+```typescript
+import { DeepBookClient } from "@mysten/deepbook-v3";
+import { Transaction } from "@mysten/sui/transactions";
+
+// Initialize the DeepBook client
+const client = new DeepBookClient({
+  address: "<YOUR_ADDRESS>",
+  env: "mainnet",
+});
+
+const tx = new Transaction();
+const poolKey = "SUI_USDC"; // Replace with your target pool key
+
+// Step 1: Borrow base assets from the pool
+const [baseCoin, flashLoan] = tx.add(
+  client.flashLoans.borrowBase(poolKey, 1_000_000_000n)
+);
+
+// Step 2: Use baseCoin for your strategy here
+// For example, pass baseCoin to an arbitrage or liquidation function.
+// In this example, the coin is returned immediately to demonstrate structure.
+
+// Step 3: Return the base assets and settle the hot potato
+tx.add(client.flashLoans.returnBase(poolKey, baseCoin, flashLoan));
+
+// Execute the transaction
+const result = await client.client.signAndExecuteTransaction({
+  transaction: tx,
+  signer: "<YOUR_KEYPAIR>",
+});
+
+console.log("Flash loan transaction digest:", result.digest);
+```
+
+Replace `poolKey` with the key for the pool you want to borrow from, and insert your strategy logic between the borrow and return steps.
 
 ## API
 
