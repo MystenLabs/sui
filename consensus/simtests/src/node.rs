@@ -3,10 +3,7 @@
 
 use std::{
     net::{IpAddr, SocketAddr},
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::Arc,
     time::Duration,
 };
 
@@ -17,7 +14,8 @@ use consensus_config::{
 };
 use consensus_core::{
     Clock, CommitConsumerArgs, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority,
-    NetworkType, TransactionClient, TransactionVerifier, to_socket_addr,
+    NetworkType, TransactionClient, TransactionVerifier, storage::rocksdb_store::RocksDBStore,
+    to_socket_addr,
 };
 use consensus_types::block::BlockTimestampMs;
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
@@ -35,6 +33,7 @@ pub struct Config {
     pub db_dir: Arc<TempDir>,
     pub committee: Committee,
     pub keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
+    /// Boot counter for the simulator process. Each new process uses this value.
     pub boot_counter: u64,
     pub clock_drift: BlockTimestampMs,
     pub protocol_config: ConsensusProtocolConfig,
@@ -49,17 +48,14 @@ pub struct Config {
 pub struct AuthorityNode {
     inner: Mutex<Option<AuthorityNodeInner>>,
     config: Config,
-    boot_counter: AtomicU64,
     commit_consumer_receiver: Mutex<Option<UnboundedReceiver<CommittedSubDag>>>,
 }
 
 impl AuthorityNode {
     pub fn new(config: Config) -> Self {
-        let boot_counter = AtomicU64::new(config.boot_counter);
         Self {
             inner: Default::default(),
             config,
-            boot_counter,
             commit_consumer_receiver: Mutex::new(None),
         }
     }
@@ -71,14 +67,29 @@ impl AuthorityNode {
 
     /// Start this Node
     pub async fn start(&self) -> Result<()> {
-        let node_type = if self.config.observer_network_keypair.is_some() {
+        self.start_with_config(self.config.clone()).await
+    }
+
+    /// Start this Node with an empty store.
+    ///
+    /// The empty store applies only to the process that this call starts.
+    pub async fn start_with_empty_store(&self) -> Result<()> {
+        let db_dir = Arc::new(TempDir::new()?);
+        let mut config = self.config.clone();
+        config.parameters.db_path = db_dir.path().to_path_buf();
+        config.db_dir = db_dir;
+        self.start_with_config(config).await
+    }
+
+    async fn start_with_config(&self, config: Config) -> Result<()> {
+        let node_type = if config.observer_network_keypair.is_some() {
             "Observer"
         } else {
             "Validator"
         };
-        info!(index = %self.config.authority_index, node_type = node_type, "starting in-memory node");
-        let mut config = self.config.clone();
-        config.boot_counter = self.boot_counter.fetch_add(1, Ordering::Relaxed);
+        info!(index = %config.authority_index, node_type = node_type, "starting in-memory node");
+        // Each start creates a new simulator process. The boot counter is
+        // process-local, so use the configured value for each new process.
         *self.inner.lock() = Some(AuthorityNodeInner::spawn(config).await);
         Ok(())
     }
@@ -137,6 +148,15 @@ impl AuthorityNode {
         let inner = self.inner.lock();
         if let Some(inner) = inner.as_ref() {
             inner.transaction_client()
+        } else {
+            panic!("Node not initialised");
+        }
+    }
+
+    pub fn store(&self) -> Arc<RocksDBStore> {
+        let inner = self.inner.lock();
+        if let Some(inner) = inner.as_ref() {
+            inner.store()
         } else {
             panic!("Node not initialised");
         }
@@ -329,6 +349,13 @@ impl AuthorityNodeInner {
             .as_ref()
             .expect("Consensus authority missing")
             .transaction_client()
+    }
+
+    pub fn store(&self) -> Arc<RocksDBStore> {
+        self.consensus_authority
+            .as_ref()
+            .expect("Consensus authority missing")
+            .store()
     }
 }
 

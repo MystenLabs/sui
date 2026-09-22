@@ -19,7 +19,7 @@ mod consensus_tests {
     use consensus_core::NoopTransactionVerifier;
     use consensus_core::{
         BlockAPI, BlockStatus, CommitIndex, CommitRef, CommittedSubDag, Priority,
-        TransactionVerifier, ValidationError,
+        TransactionVerifier, ValidationError, storage::Store,
     };
     use consensus_simtests::node::{AuthorityNode, Config};
     use consensus_types::block::{BlockRef, BlockTimestampMs, TransactionIndex};
@@ -325,6 +325,73 @@ mod consensus_tests {
         }
 
         load_handle.abort();
+    }
+
+    // Restart one validator as a new process without its local store. The new process must
+    // recover its last own block from peers before it proposes another block.
+    #[sim_test(config = "test_config()")]
+    async fn test_consensus_amnesia_recovery() {
+        telemetry_subscribers::init_for_testing();
+        let db_registry = Registry::new();
+        DBMetrics::init(RegistryService::new(db_registry));
+        const NUM_OF_AUTHORITIES: usize = 4;
+        const RESTARTED_AUTHORITY: usize = 0;
+        let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_gc_depth_for_testing(3);
+
+        let authorities = start_committee(
+            &committee,
+            &keypairs,
+            &protocol_config,
+            &[0; NUM_OF_AUTHORITIES],
+            Arc::new(NoopTransactionVerifier {}),
+            |_, _| {},
+        )
+        .await;
+
+        sleep(Duration::from_secs(10)).await;
+        let authority = &authorities[RESTARTED_AUTHORITY];
+        let authority_index = authority.index();
+        let store_before_restart = authority.store();
+
+        authority.stop().await;
+        let own_round_before_restart = store_before_restart
+            .scan_last_blocks_by_author(authority_index, 1, None)
+            .unwrap()
+            .last()
+            .expect("Restarted authority did not propose a block before restart")
+            .round();
+        assert!(
+            own_round_before_restart > 0,
+            "Authority {RESTARTED_AUTHORITY} proposed no non-genesis block before restart"
+        );
+
+        authority.start_with_empty_store().await.unwrap();
+        authority.spawn_committed_subdag_consumer().unwrap();
+        let mut commit_receiver = authority.commit_consumer_receiver();
+
+        // The empty-store node first replays old commits. Wait for a committed own block above
+        // its highest pre-restart proposal to prove that recovery finished and proposing resumed.
+        let committed_own_round_after_restart = timeout(Duration::from_secs(120), async {
+            while let Some(subdag) = commit_receiver.recv().await {
+                if let Some(round) = subdag.blocks.iter().find_map(|block| {
+                    (block.author() == authority_index && block.round() > own_round_before_restart)
+                        .then_some(block.round())
+                }) {
+                    return Some(round);
+                }
+            }
+            None
+        })
+        .await
+        .ok()
+        .flatten();
+        assert!(
+            committed_own_round_after_restart.is_some(),
+            "Authority {RESTARTED_AUTHORITY} did not commit an own block above pre-restart round \
+             {own_round_before_restart} within 120s after an empty-store restart"
+        );
     }
 
     // Tests consensus transaction voting with randomized votes and random crashes. The test
