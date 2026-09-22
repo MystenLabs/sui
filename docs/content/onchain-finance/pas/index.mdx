@@ -35,6 +35,26 @@ answer: >-
 
 Learn how the Permissioned Asset Standard (PAS) enforces restricted asset movement on Sui through Accounts, Policies, and programmable approval logic.
 
+The Permissioned Asset Standard (PAS) is a framework for creating assets on Sui whose movement and use are subject to programmable approval rules. Unlike freely transferable assets, permissioned assets can only move between parties when a set of conditions defined in a Policy are met. This makes PAS well-suited for regulated financial instruments, compliance-bound tokens, and any use case where asset transfer must be controlled by business or legal rules rather than left open to any holder.
+
+## What is the Permissioned Asset Standard?
+
+PAS defines three core building blocks that work together to enforce restricted asset movement:
+
+- **Account:** Represents a participant in the permissioned system. Accounts hold permissioned assets and are subject to the rules defined by the associated Policy.
+- **Policy:** Contains the approval logic that governs how assets move. A Policy specifies what conditions a transfer request must satisfy before the system allows it to proceed.
+- **Request:** Represents a pending action, such as a transfer, that must pass through Policy approval before it completes.
+
+When a holder initiates a transfer, the system creates a Request. That Request moves through the Policy, which evaluates it against the defined approval logic. Only requests that satisfy all conditions are allowed to resolve. Requests that fail are rejected without modifying any asset balances.
+
+## How PAS differs from closed-loop tokens
+
+The Sui Closed-Loop Token standard also restricts asset movement, but PAS extends that model with explicit Account objects and composable Policy logic. PAS Policies can chain multiple approval steps, delegate authority to external modules, and enforce rules that go beyond simple allowlists or denylist checks. This makes PAS more flexible for complex financial workflows where approval logic must evolve independently of the asset type itself.
+
+## What this section covers
+
+The subtopics in this section explain each component of PAS in detail, including how to define Policies, create and manage Accounts, and handle the Request lifecycle in Move.
+
 import DocCardList from '@theme/DocCardList';
 
 <DocCardList />
