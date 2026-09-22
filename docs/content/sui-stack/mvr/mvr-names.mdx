@@ -194,9 +194,9 @@ sui client ptb \
 
 ## Key concepts
 
-**AppCap:** The capability object returned when you register an application. You must present the `AppCap` to attach packages or set metadata. Store it in a safe address or a shared object your team controls.
+**`AppCap`:** The capability object returned when you register an application. You must present the `AppCap` to attach packages or set metadata. Store it in a safe address or a shared object your team controls.
 
-**PackageInfo:** An object created alongside a published package on Mainnet. Attaching it to an application creates a permanent, verifiable link between the MVR name and that package.
+**`PackageInfo`:** An object created alongside a published package on Mainnet. Attaching it to an application creates a permanent, verifiable link between the MVR name and that package.
 
 **Network pointer:** For non-Mainnet networks, MVR stores a pointer (chain ID plus package address) instead of a strict binding. You can update this pointer at any time using `unset_network` followed by `set_network`.
 
