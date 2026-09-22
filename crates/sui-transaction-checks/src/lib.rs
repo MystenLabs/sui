@@ -606,6 +606,8 @@ mod checked {
 
                     match (object_id, mutability) {
                         // System objects that can be taken mutably
+                        (SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, _)
+                            if protocol_config.enable_forwarding_addresses() => (),
                         (SUI_SYSTEM_STATE_OBJECT_ID, _)
                         | (SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, _)
                         | (SUI_COIN_REGISTRY_OBJECT_ID, _)
@@ -617,9 +619,6 @@ mod checked {
                         | (SUI_CLOCK_OBJECT_ID, SharedObjectMutability::Immutable)
                         | (SUI_RANDOMNESS_STATE_OBJECT_ID, SharedObjectMutability::Immutable)
                         | (SUI_ACCUMULATOR_ROOT_OBJECT_ID, SharedObjectMutability::Immutable) => (),
-
-                        (SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, _)
-                            if protocol_config.enable_forwarding_addresses() => (),
 
                         // All other system objects: cannot be used as input at all
                         _ => {

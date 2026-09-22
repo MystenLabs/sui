@@ -430,6 +430,8 @@ impl SharedObjVerManager {
                     .into_iter()
                     .filter_map(|(id, initial_shared_version)| {
                         let version = *accessed_versions.get(&id)?;
+                        // A cancelled sentinel only appears when the object was also a declared
+                        // input of a cancelled transaction; it is not a version to pin.
                         (!version.is_cancelled()).then_some((
                             id,
                             ConsensusObjectVersion {
