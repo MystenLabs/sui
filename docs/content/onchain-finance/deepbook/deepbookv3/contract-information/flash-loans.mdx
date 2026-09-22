@@ -44,9 +44,66 @@ answer: >-
   borrowed and repaid within the same programmable transaction block.
 ---
 
-Flash loans by definition are uncollateralized loans that you borrow and repay within the same programmable transaction block. Users can borrow flash loans in the base or quote asset from any DeepBookV3 pool. Flash loans return a `FlashLoan` hot potato (struct with no abilities), which must be returned back to the pool by the end of the call. The transaction is atomic, so the entire transaction fails if the loan is not returned.
+Flash loans are uncollateralized loans that you borrow and repay within the same programmable transaction block (PTB). Users can borrow flash loans in the base or quote asset from any DeepBookV3 pool. Flash loans return a `FlashLoan` hot potato (struct with no abilities), which must be returned back to the pool by the end of the call. The transaction is atomic, so the entire transaction fails if the loan is not returned.
 
 The quantity borrowed can be the maximum amount that the pool owns. Borrowing from a pool and trading in the same pool can result in failures because trading requires the movement of funds. If the funds are borrowed, then there are no funds to move.
+
+## How flash loans work in DeepBookV3
+
+DeepBookV3 flash loans follow a borrow-use-return pattern enforced by Move's hot potato mechanism:
+
+1. **Borrow** — call `borrow_flashloan_base` or `borrow_flashloan_quote` on a pool. The function returns the requested assets and a `FlashLoan` hot potato object.
+2. **Use** — use the borrowed assets within the same PTB. Common use cases include arbitrage between pools, collateral swaps, and liquidations.
+3. **Return** — call `return_flashloan_base` or `return_flashloan_quote` before the PTB completes. The pool unwraps the `FlashLoan` hot potato only if you return at least the borrowed amount. If you do not return the assets, the entire transaction reverts.
+
+Because every step executes within a single PTB, flash loans carry no default risk. Either the full borrow-and-repay cycle completes, or nothing happens.
+
+## When to use flash loans
+
+Flash loans are useful in any scenario where you need temporary capital within a single transaction:
+
+- **Arbitrage** — borrow assets, trade across pools to capture a price difference, return the loan, and keep the profit.
+- **Collateral swaps** — replace one collateral type with another in a lending protocol without requiring upfront capital.
+- **Liquidations** — liquidate an undercollateralized position using borrowed funds, then repay from the liquidation proceeds.
+
+## Example: borrow and return base assets in a PTB
+
+The following TypeScript example shows how to structure a flash loan transaction using the Sui TypeScript SDK. It borrows base assets from a pool, performs an operation with the borrowed coin, then returns the assets before the PTB closes.
+
+```typescript
+import { Transaction } from "@mysten/sui/transactions";
+
+const tx = new Transaction();
+
+// 1. Borrow base assets from the pool
+const [baseCoin, flashLoan] = tx.moveCall({
+  target: `${DEEPBOOK_PACKAGE_ID}::pool::borrow_flashloan_base`,
+  arguments: [
+    tx.object(POOL_ID),
+    tx.pure.u64(BORROW_AMOUNT),
+  ],
+  typeArguments: [BASE_TYPE, QUOTE_TYPE],
+});
+
+// 2. Use baseCoin here — for example, pass it to an arbitrage function
+// ...
+
+// 3. Return the base assets and the FlashLoan hot potato
+tx.moveCall({
+  target: `${DEEPBOOK_PACKAGE_ID}::pool::return_flashloan_base`,
+  arguments: [
+    tx.object(POOL_ID),
+    tx.pure.u64(BORROW_AMOUNT),
+    baseCoin,
+    flashLoan,
+  ],
+  typeArguments: [BASE_TYPE, QUOTE_TYPE],
+});
+
+await client.signAndExecuteTransaction({ signer, transaction: tx });
+```
+
+Replace `DEEPBOOK_PACKAGE_ID`, `POOL_ID`, `BORROW_AMOUNT`, `BASE_TYPE`, and `QUOTE_TYPE` with values for your target pool. The same pattern applies to quote asset flash loans using `borrow_flashloan_quote` and `return_flashloan_quote`.
 
 ## API
 
