@@ -2350,9 +2350,9 @@ fn column_value_at_least_filter(column: &str, value: Bytes) -> RowFilter {
     }
 }
 
-/// Build a `RowFilter` matching rows whose `sui:<column>` value is at most `value`
-/// (big-endian lexicographic comparison). Used as a Condition predicate for
-/// upper-bounded reads.
+/// Build a `RowFilter` matching rows whose latest `sui:<column>` cell has a value of at most
+/// `value` (raw-byte comparison; callers pass the u64 BE encoding). Used as a Condition
+/// predicate for upper-bounded reads.
 fn column_value_at_most_filter(column: &str, value: Bytes) -> RowFilter {
     RowFilter {
         filter: Some(Filter::Chain(Chain {
@@ -2365,6 +2365,9 @@ fn column_value_at_most_filter(column: &str, value: Bytes) -> RowFilter {
                         "^{}$",
                         column
                     )))),
+                },
+                RowFilter {
+                    filter: Some(Filter::CellsPerColumnLimitFilter(1)),
                 },
                 RowFilter {
                     filter: Some(Filter::ValueRangeFilter(ValueRange {

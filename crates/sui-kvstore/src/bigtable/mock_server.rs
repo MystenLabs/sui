@@ -10,13 +10,15 @@
 //! - `ReadRows`: explicit row-key lookups with an optional row limit. Supports
 //!   the column filters this crate builds (`None`, `CellsPerColumnLimitFilter(1)`,
 //!   `ColumnQualifierRegexFilter`, and `Chain`s of those plus an optional
-//!   `FamilyNameRegexFilter`) plus `Condition` filters whose predicate is the
-//!   CAS helper shape (`Chain` of family regex, column qualifier regex, and
-//!   optional value range) with a `PassAllFilter(true)` true branch and no false
-//!   branch. Rows failing a `Condition` predicate are dropped before `rows_limit`
-//!   is applied, mirroring BigTable where the limit counts emitted rows. Records
-//!   each call for assertions, can emit rows in reverse request order, and serves
-//!   row-range scans in either direction (reversed scans are range-only).
+//!   `FamilyNameRegexFilter`). A `Chain` may also hold one `Condition` filter,
+//!   placed before any column qualifier filter, whose predicate is the CAS
+//!   helper shape (`Chain` of family regex, column qualifier regex, optional
+//!   cells-per-column limit, and optional value range) with a
+//!   `PassAllFilter(true)` true branch and no false branch. Rows failing a
+//!   `Condition` predicate are dropped before `rows_limit` is applied, mirroring
+//!   BigTable where the limit counts emitted rows. Records each call for
+//!   assertions, can emit rows in reverse request order, and serves row-range
+//!   scans in either direction (reversed scans are range-only).
 //! - `CheckAndMutateRow`: `PassAllFilter(true)` and the CAS helper shape used
 //!   by this crate (`Chain` of family regex, column qualifier regex, optional
 //!   value range, and optional cells-per-column limit).
@@ -423,9 +425,14 @@ struct ReadFilter {
 
 /// Parse a `ReadRows` row filter. Only the filter shapes this crate builds are
 /// supported: `None`, `CellsPerColumnLimitFilter(1)`,
-/// `ColumnQualifierRegexFilter`, a `Condition` (see [`parse_read_condition`]),
-/// and a `Chain` of those plus an optional `FamilyNameRegexFilter` matching
-/// [`crate::tables::FAMILY`].
+/// `ColumnQualifierRegexFilter`, and a `Chain` of those plus an optional
+/// `FamilyNameRegexFilter` matching [`crate::tables::FAMILY`] and at most one
+/// `Condition` (see [`parse_read_condition`]).
+///
+/// The mock evaluates a `Condition` predicate against the full stored row.
+/// BigTable feeds each `Chain` element the output of the previous one, so a
+/// `Condition` after a column qualifier filter would only see the surviving
+/// cells; that ordering is rejected rather than modeled.
 fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
     fn qualifiers_from_regex(pattern: &Bytes) -> Result<HashSet<Vec<u8>>, Status> {
         extract_qualifier_alternation(pattern.as_ref())
@@ -444,9 +451,6 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
         None | Some(Filter::CellsPerColumnLimitFilter(1)) => {}
         Some(Filter::ColumnQualifierRegexFilter(pattern)) => {
             parsed.allowed_qualifiers = Some(qualifiers_from_regex(&pattern)?);
-        }
-        Some(Filter::Condition(condition)) => {
-            parsed.condition = Some(parse_read_condition(*condition)?);
         }
         Some(Filter::Chain(chain)) => {
             for f in chain.filters {
@@ -469,6 +473,11 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
                                 "mock ReadRows supports at most one Condition per Chain",
                             ));
                         }
+                        if parsed.allowed_qualifiers.is_some() {
+                            return Err(Status::unimplemented(
+                                "mock ReadRows does not support a Condition after a column qualifier filter",
+                            ));
+                        }
                         parsed.condition = Some(parse_read_condition(*condition)?);
                     }
                     _ => {
@@ -481,7 +490,7 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
         }
         Some(_) => {
             return Err(Status::unimplemented(
-                "mock ReadRows only supports column-qualifier / cells-per-column / condition / chain filters",
+                "mock ReadRows only supports column-qualifier / cells-per-column / chain filters",
             ));
         }
     }
