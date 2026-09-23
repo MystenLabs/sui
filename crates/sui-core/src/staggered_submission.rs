@@ -30,6 +30,7 @@ use fastcrypto::hash::HashFunction;
 use mysten_common::debug_fatal;
 use parking_lot::{Mutex, RwLock};
 use prometheus::IntGauge;
+use rand::Rng as _;
 use rand::SeedableRng as _;
 use rand::rngs::StdRng;
 use sui_types::base_types::ObjectID;
@@ -45,7 +46,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 
 /// Default delay between consecutive slots beyond the free slots.
 const DEFAULT_STAGGER_STEP: Duration = Duration::from_millis(350);
-/// Default upper bound on any submission delay.
+/// Default cap on the nominal (pre-jitter) submission delay.
 const DEFAULT_STAGGER_MAX_DELAY: Duration = Duration::from_secs(5);
 /// Held (staggered) submissions may occupy at most `capacity / this` of the owner's
 /// pending-transaction capacity; see [`StaggerQuota`].
@@ -104,11 +105,12 @@ const SIGNAL_MIN_EXCESS_COPIES: u64 = 2 * SIGNAL_WINDOW_COMMITS as u64;
 /// Parameters of the staggering schedule.
 #[derive(Debug, Clone)]
 pub struct StaggerParams {
-    /// Delay between consecutive slots beyond the free slots.
+    /// Delay between consecutive slots beyond the free slots. Also bounds the
+    /// per-submission jitter added on top of the slot's nominal delay.
     pub step: Duration,
-    /// Upper bound on any submission delay: slots wrap around the `max_delay/step`
-    /// firing steps (see [`compute_delay`]), so a submitter never waits longer than
-    /// this regardless of committee size.
+    /// Upper bound on the nominal (pre-jitter) delay: slots wrap around the
+    /// `max_delay/step` firing steps (see [`compute_delay`]), so a submitter never
+    /// waits longer than this plus half a step of jitter regardless of committee size.
     pub max_delay: Duration,
     /// Number of leading slots that submit without delay.
     pub free_slots: u64,
@@ -138,8 +140,9 @@ pub struct StaggeredSubmission {
 }
 
 /// The duplication signal's own state machine, tracked independently of `active` so
-/// that transitions remain observable (logged and counted) even when the protocol flag
-/// keeps them from flipping staggering — a dry run ahead of enablement.
+/// that transitions remain observable (logged and counted) even when enablement (the
+/// protocol flag together with the node-config kill switch) keeps them from flipping
+/// staggering — a dry run ahead of enablement.
 struct SignalState {
     /// Per-commit `(excess duplicate copies, unique user transactions)` counts, newest
     /// last, trimmed to `SIGNAL_WINDOW_COMMITS`.
@@ -233,7 +236,7 @@ impl StaggeredSubmission {
                 if apply {
                     ""
                 } else {
-                    " — staggering not flipped, protocol flag disabled"
+                    " — staggering not flipped, disabled by protocol flag or node config"
                 },
             );
         }
@@ -296,7 +299,9 @@ impl StaggeredSubmission {
             .expect("unrestricted is non-empty")
             / epoch_store.reference_gas_price().max(1);
 
-        compute_delay(&self.params.read(), slot, paid_amplification)
+        let params = self.params.read();
+        let jitter = sample_jitter(params.step);
+        compute_delay(&params, slot, paid_amplification, jitter)
     }
 }
 
@@ -425,6 +430,14 @@ impl Drop for StaggeredSlot {
     }
 }
 
+/// Uniform jitter in `[0, step/2)`, sampled fresh per submission from local entropy.
+/// The slot schedule is deterministic by design (an observer can derive every
+/// validator's slot), so the exact submission instant is blurred locally; bounded well
+/// below one step, the jitter never reorders adjacent slots.
+fn sample_jitter(step: Duration) -> Duration {
+    step.mul_f64(rand::thread_rng().r#gen::<f64>() / 2.0)
+}
+
 /// The delay for `slot`, given that `paid_amplification` immediate slots were paid for
 /// beyond the default free slots. The first slot past the free slots waits one step.
 ///
@@ -438,7 +451,15 @@ impl Drop for StaggeredSlot {
 /// `committee_size × commit_latency / max_delay` copies against a fan-out aimed at one
 /// stretch of firing times — the best any schedule confined to `max_delay` can do, since
 /// copies firing within one commit latency of each other cannot dedup one another.
-fn compute_delay(params: &StaggerParams, slot: u64, paid_amplification: u64) -> Option<Duration> {
+///
+/// `jitter` is added on top of the wrapped nominal delay (never subtracted, so the
+/// nominal hold is a floor); free slots stay immediate and get none.
+fn compute_delay(
+    params: &StaggerParams,
+    slot: u64,
+    paid_amplification: u64,
+    jitter: Duration,
+) -> Option<Duration> {
     let free_slots = params.free_slots.max(paid_amplification);
     if slot < free_slots {
         return None;
@@ -452,7 +473,13 @@ fn compute_delay(params: &StaggerParams, slot: u64, paid_amplification: u64) -> 
         debug_fatal!("stagger step count {steps} overflows u32");
     }
     let steps = steps.min(u32::MAX as u128) as u32;
-    Some(params.step.saturating_mul(steps).min(params.max_delay))
+    Some(
+        params
+            .step
+            .saturating_mul(steps)
+            .min(params.max_delay)
+            .saturating_add(jitter),
+    )
 }
 
 impl Default for StaggeredSubmission {
@@ -592,35 +619,64 @@ mod tests {
             max_delay: Duration::from_secs(2),
             free_slots: 3,
         };
+        let no_jitter = Duration::ZERO;
         // Free slots submit immediately; the first held slot waits one step.
-        assert_eq!(compute_delay(&params, 0, 1), None);
-        assert_eq!(compute_delay(&params, 2, 1), None);
+        assert_eq!(compute_delay(&params, 0, 1, no_jitter), None);
+        assert_eq!(compute_delay(&params, 2, 1, no_jitter), None);
         assert_eq!(
-            compute_delay(&params, 3, 1),
+            compute_delay(&params, 3, 1, no_jitter),
             Some(Duration::from_millis(250))
         );
         assert_eq!(
-            compute_delay(&params, 4, 1),
+            compute_delay(&params, 4, 1, no_jitter),
             Some(Duration::from_millis(500))
         );
         // 2s / 250ms = 8 firing steps: the last one fires exactly at max_delay, then the
         // schedule wraps instead of piling further slots onto the cap.
-        assert_eq!(compute_delay(&params, 10, 1), Some(Duration::from_secs(2)));
         assert_eq!(
-            compute_delay(&params, 11, 1),
+            compute_delay(&params, 10, 1, no_jitter),
+            Some(Duration::from_secs(2))
+        );
+        assert_eq!(
+            compute_delay(&params, 11, 1, no_jitter),
             Some(Duration::from_millis(250))
         );
         assert_eq!(
-            compute_delay(&params, 120, 1),
+            compute_delay(&params, 120, 1, no_jitter),
             Some(Duration::from_millis(1500))
         );
         // Paid amplification widens the free slots, and never narrows them.
-        assert_eq!(compute_delay(&params, 4, 5), None);
+        assert_eq!(compute_delay(&params, 4, 5, no_jitter), None);
         assert_eq!(
-            compute_delay(&params, 5, 5),
+            compute_delay(&params, 5, 5, no_jitter),
             Some(Duration::from_millis(250))
         );
-        assert_eq!(compute_delay(&params, 2, 1), None);
+        assert_eq!(compute_delay(&params, 2, 1, no_jitter), None);
+
+        // Jitter is added on top of the wrapped nominal delay (blurring the exact
+        // submission instant an observer could otherwise derive) and never applies to
+        // free slots.
+        let jitter = Duration::from_millis(100);
+        assert_eq!(compute_delay(&params, 2, 1, jitter), None);
+        assert_eq!(
+            compute_delay(&params, 3, 1, jitter),
+            Some(Duration::from_millis(350))
+        );
+        assert_eq!(
+            compute_delay(&params, 120, 1, jitter),
+            Some(Duration::from_millis(1600))
+        );
+    }
+
+    #[test]
+    fn sampled_jitter_stays_under_half_a_step_and_varies() {
+        let step = Duration::from_millis(250);
+        let samples: Vec<Duration> = (0..64).map(|_| sample_jitter(step)).collect();
+        assert!(samples.iter().all(|jitter| *jitter < step / 2));
+        assert!(
+            samples.iter().any(|jitter| *jitter != samples[0]),
+            "jitter never varied"
+        );
     }
 
     mod signal {
@@ -775,14 +831,15 @@ mod tests {
         // Every held slot waits at least one step and at most max_delay, and the
         // schedule cycles with the firing-step period, so tail slots spread across all
         // firing times instead of sharing the cap.
+        let no_jitter = Duration::ZERO;
         let mut tail_delays = std::collections::HashSet::new();
         for slot in 3..200u64 {
-            let delay = compute_delay(&params, slot, 1).unwrap();
+            let delay = compute_delay(&params, slot, 1, no_jitter).unwrap();
             assert!(delay >= params.step, "slot {slot} waited {delay:?}");
             assert!(delay <= params.max_delay, "slot {slot} waited {delay:?}");
             assert_eq!(
                 delay,
-                compute_delay(&params, slot + firing_steps, 1).unwrap(),
+                compute_delay(&params, slot + firing_steps, 1, no_jitter).unwrap(),
                 "schedule does not cycle at slot {slot}"
             );
             if slot >= 3 + firing_steps {
@@ -792,7 +849,7 @@ mod tests {
         assert_eq!(tail_delays.len() as u64, firing_steps);
         // Paid amplification shifts the wrap origin with the free slots.
         assert_eq!(
-            compute_delay(&params, 5 + firing_steps, 5),
+            compute_delay(&params, 5 + firing_steps, 5, no_jitter),
             Some(Duration::from_millis(250))
         );
         // Degenerate params (one firing step) still respect the max_delay bound.
@@ -803,7 +860,7 @@ mod tests {
         };
         for slot in 1..10u64 {
             assert_eq!(
-                compute_delay(&degenerate, slot, 1),
+                compute_delay(&degenerate, slot, 1, no_jitter),
                 Some(Duration::from_secs(2))
             );
         }
@@ -1195,8 +1252,8 @@ mod pool_tests {
         drop(ack);
         assert_eq!(pool.queue_depth("user"), 1);
 
-        // Past the (bounded) delay the entry is proposed as usual.
-        tokio::time::sleep(Duration::from_millis(600)).await;
+        // Past the bounded delay plus half a step of jitter the entry is proposed as usual.
+        tokio::time::sleep(Duration::from_millis(900)).await;
         let (transactions, ack, _) = pool.take(10, usize::MAX);
         assert_eq!(transactions.len(), 1, "eligible entry was not proposed");
         // The dropped ack requeues the entry; close() resolves it before the pool drops.
@@ -1328,8 +1385,8 @@ mod pool_tests {
         );
         drop(ack);
 
-        // Past the (bounded) delay the bundle is proposed atomically.
-        tokio::time::sleep(Duration::from_millis(600)).await;
+        // Past the bounded delay plus half a step of jitter the bundle is proposed atomically.
+        tokio::time::sleep(Duration::from_millis(900)).await;
         let (transactions, ack, _) = pool.take(10, usize::MAX);
         assert_eq!(
             transactions.len(),
