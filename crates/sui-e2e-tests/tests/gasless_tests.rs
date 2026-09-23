@@ -12,16 +12,20 @@ use sui_core::transaction_driver::SubmitTransactionOptions;
 use sui_macros::*;
 use sui_test_transaction_builder::FundSource;
 use sui_types::{
+    MOVE_STDLIB_PACKAGE_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_PACKAGE_ID,
-    base_types::SuiAddress,
+    balance::Balance,
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     effects::TransactionEffectsAPI,
+    execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
     gas::GasCostSummary,
     gas_coin::GAS,
     messages_grpc::SubmitTxRequest,
+    object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        self, Command, FundsWithdrawalArg, GasData, ObjectArg, TransactionData, TransactionDataV1,
-        TransactionExpiration, TransactionKind,
+        self, Command, FundsWithdrawalArg, GasData, ObjectArg, SharedObjectMutability,
+        TransactionData, TransactionDataV1, TransactionExpiration, TransactionKind,
     },
 };
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
@@ -999,6 +1003,194 @@ async fn test_gasless_rate_limit_rejects() {
         err_str.contains("ValidatorOverloaded") || err_str.contains("retry"),
         "Expected validator overloaded error, got: {err_str}"
     );
+
+    test_env.trigger_reconfiguration().await;
+}
+
+/// Issues a rate-limited allowance of `coin_type` from `funder` to `spender`, returning the shared
+/// allowance's id and initial shared version.
+async fn issue_rate_limited_allowance(
+    test_env: &mut TestEnv,
+    funder: SuiAddress,
+    spender: SuiAddress,
+    coin_type: TypeTag,
+) -> (ObjectID, SequenceNumber) {
+    let funder_gas = test_env.get_gas_for_sender(funder)[0];
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let period_ms = builder.pure(86_400_000u64).unwrap();
+    let limit = builder.pure(U256::from(4_000u64)).unwrap();
+    let rate_limit = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("allowance").unwrap(),
+        Identifier::new("periodic_rate_limit").unwrap(),
+        vec![],
+        vec![period_ms, limit],
+    );
+    let rate_limit = builder.programmable_move_call(
+        MOVE_STDLIB_PACKAGE_ID,
+        Identifier::new("option").unwrap(),
+        Identifier::new("some").unwrap(),
+        vec!["0x2::allowance::RateLimit".parse().unwrap()],
+        vec![rate_limit],
+    );
+    let args = vec![
+        builder.pure("".to_string()).unwrap(),
+        builder.pure(spender).unwrap(),
+        builder.pure(None::<U256>).unwrap(),
+        builder.pure(None::<u64>).unwrap(),
+        builder.pure(None::<u64>).unwrap(),
+        rate_limit,
+    ];
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("allowance").unwrap(),
+        Identifier::new("new").unwrap(),
+        vec![Balance::type_tag(coin_type)],
+        args,
+    );
+    let tx = TransactionData::new_programmable(
+        funder,
+        vec![funder_gas],
+        builder.finish(),
+        10_000_000,
+        test_env.rgp,
+    );
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
+    test_env.update_all_gas().await;
+    effects
+        .created()
+        .into_iter()
+        .find_map(|(obj_ref, owner)| match owner {
+            Owner::Shared {
+                initial_shared_version,
+            } => Some((obj_ref.0, initial_shared_version)),
+            _ => None,
+        })
+        .expect("the allowance is created as a shared object")
+}
+
+fn build_allowance_spend_ptb(
+    amount: u64,
+    coin_type: TypeTag,
+    funder: SuiAddress,
+    allowance_id: ObjectID,
+    initial_shared_version: SequenceNumber,
+    recipient: SuiAddress,
+) -> TransactionKind {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let withdraw_arg = builder
+        .funds_withdrawal(FundsWithdrawalArg::balance_from_allowance(
+            amount,
+            coin_type.clone(),
+            funder,
+            allowance_id,
+        ))
+        .unwrap();
+    let allowance_arg = builder
+        .obj(ObjectArg::SharedObject {
+            id: allowance_id,
+            initial_shared_version,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+    let clock_arg = builder
+        .obj(ObjectArg::SharedObject {
+            id: SUI_CLOCK_OBJECT_ID,
+            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+            mutability: SharedObjectMutability::Immutable,
+        })
+        .unwrap();
+    let balance = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("allowance").unwrap(),
+        Identifier::new("balance_spend").unwrap(),
+        vec![coin_type.clone()],
+        vec![allowance_arg, withdraw_arg, clock_arg],
+    );
+    let recipient_arg = builder.pure(recipient).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec![coin_type],
+        vec![balance, recipient_arg],
+    );
+    TransactionKind::ProgrammableTransaction(builder.finish())
+}
+
+#[sim_test]
+async fn test_gasless_allowance_spend() {
+    let mut test_env = setup_gasless_env().await;
+    let funder = test_env.get_sender(0);
+    let spender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+
+    let coin_type = setup_custom_coin(&mut test_env, &[(10_000, funder)]).await;
+    let (allowance_id, initial_shared_version) =
+        issue_rate_limited_allowance(&mut test_env, funder, spender, coin_type.clone()).await;
+    let initial = test_env
+        .cluster
+        .get_object_from_fullnode_store(&allowance_id)
+        .await
+        .unwrap();
+
+    // The first spend anchors the rate-limit window (the allowance grows); the second does not.
+    for (nonce, amount) in [(0, 1_000), (1, 2_000)] {
+        let tx_kind = build_allowance_spend_ptb(
+            amount,
+            coin_type.clone(),
+            funder,
+            allowance_id,
+            initial_shared_version,
+            recipient,
+        );
+        let tx = test_env.gasless_transaction_data(tx_kind, spender, nonce, 0);
+        let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+        assert!(effects.status().is_ok(), "{:?}", effects.status());
+        assert_zero_gas(effects.gas_cost_summary());
+
+        let allowance = test_env
+            .cluster
+            .get_object_from_fullnode_store(&allowance_id)
+            .await
+            .unwrap();
+        assert!(allowance.version() > initial.version());
+        assert_eq!(allowance.storage_rebate, initial.storage_rebate);
+    }
+
+    assert_eq!(test_env.get_balance_ab(funder, coin_type.clone()), 7_000);
+    assert_eq!(test_env.get_balance_ab(recipient, coin_type.clone()), 3_000);
+
+    // Exceeding the rate limit aborts in Move and is still free.
+    let tx_kind = build_allowance_spend_ptb(
+        2_000,
+        coin_type.clone(),
+        funder,
+        allowance_id,
+        initial_shared_version,
+        recipient,
+    );
+    let tx = test_env.gasless_transaction_data(tx_kind, spender, 2, 0);
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        matches!(
+            effects.status(),
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::MoveAbort(..),
+                ..
+            })
+        ),
+        "{:?}",
+        effects.status()
+    );
+    assert_zero_gas(effects.gas_cost_summary());
+    let allowance = test_env
+        .cluster
+        .get_object_from_fullnode_store(&allowance_id)
+        .await
+        .unwrap();
+    assert_eq!(allowance.storage_rebate, initial.storage_rebate);
 
     test_env.trigger_reconfiguration().await;
 }
