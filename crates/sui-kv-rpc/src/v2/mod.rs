@@ -34,7 +34,7 @@ impl LedgerService for KvRpcServer {
         _: tonic::Request<GetServiceInfoRequest>,
     ) -> Result<tonic::Response<GetServiceInfoResponse>, tonic::Status> {
         {
-            let cache = self.cache.read().await;
+            let cache = self.cache.borrow();
             if let Some(cached_info) = cache.as_ref() {
                 return Ok(tonic::Response::new(cached_info.clone()));
             }
@@ -466,6 +466,7 @@ pub(crate) mod test_utils {
             bitmap_bucket_budget_event: Some(10),
             bitmap_drain_probe_rows: None,
             max_bitmap_filter_literals: Some(1),
+            consistent_read_wait_timeout_ms: None,
         };
         let stage = StageConfig {
             chunk_size: Some(2),
