@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use serde_json::Value;
 use std::time::Duration;
 
 pub struct TestResponse {
@@ -27,8 +26,4 @@ pub trait OffchainStateReader: Send + Sync + 'static {
         query: String,
         show_usage: bool,
     ) -> anyhow::Result<TestResponse>;
-
-    /// Executes a JSON-RPC query and returns the response. The query is given as a method name,
-    /// and a JSON value representing its parameters.
-    async fn execute_jsonrpc(&self, method: String, params: Value) -> anyhow::Result<TestResponse>;
 }
