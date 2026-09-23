@@ -56,29 +56,6 @@ Every object stored onchain is referenced by an ID and version. When a transacti
 
 Versions are strictly increasing and (`ID`, `version`) pairs are never re-used. This allows [node operators](/operators) to prune old object versions from their stores, though they might also retain them to serve historical requests or help other nodes catch up.
 
-## How does object versioning work on Sui?
-
-Sui uses [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) in its versioning algorithm. This guarantees versions are never re-used: a transaction sets the new version for all objects it touches to `1 + max(version of all input objects)`. For example, a transaction transferring object `O` at version 5 using gas object `G` at version 3 updates both to version `1 + max(5, 3) = 6`.
-
-Move code cannot read an object's version. The runtime assigns the new version after execution finishes, so no value exists to read while your function is running, and `sui::object` exposes no accessor for it. Your Move code sees an object's ID through `object::id` and its contents through its fields, and that is all.
-
-Read versions from a client instead. Every object the SDK returns carries its version:
-
-```ts
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-
-const client = new SuiGrpcClient({
-  network: 'mainnet',
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
-});
-
-const { object } = await client.getObject({ objectId: '0xOBJECT_ID' });
-
-console.log(object.version); // for example, "6"
-```
-
-The `version` field is a string, because versions are `u64` values that can exceed the range JavaScript numbers represent exactly.
-
 ## Object versioning paths
 
 Objects on Sui are versioned either through the [fastpath](#fastpath-objects) or through [consensus](/develop/sui-architecture/consensus). The choice affects object ownership options and has performance trade-offs.
