@@ -15044,7 +15044,6 @@ dependencies = [
  "sui-indexer-alt-consistent-store",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-graphql",
- "sui-indexer-alt-jsonrpc",
  "sui-indexer-alt-reader",
  "sui-indexer-alt-schema",
  "sui-kv-rpc",
