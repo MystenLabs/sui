@@ -93,6 +93,10 @@ impl CommitObserver {
         self.commit_finalizer_handle.stop().await;
     }
 
+    pub(crate) fn notify_new_blocks(&self) {
+        self.commit_finalizer_handle.notify_new_blocks();
+    }
+
     /// Creates and returns a list of committed subdags containing committed blocks, from a sequence
     /// of selected leader blocks, and whether they come from local committer or commit sync remotely.
     ///

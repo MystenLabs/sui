@@ -13,6 +13,7 @@ use mysten_metrics::{
     monitored_scope, spawn_logged_monitored_task,
 };
 use parking_lot::RwLock;
+use tokio::sync::watch;
 
 use crate::{
     BlockAPI, CommitIndex, CommittedSubDag, VerifiedBlock,
@@ -38,8 +39,9 @@ use crate::{
 ///   commit with leader round L, the first descendant on each authority chain votes through round
 ///   L + 1. A first vote whose cutoff covers the target rejects all its transactions. These votes
 ///   combine with explicit reject votes from [`TransactionVoteTracker`] toward a reject quorum.
-///   The finalizer retries this rule for pending commits when it receives a new commit. The local
-///   DAG only traverses targets above its current GC round, where descendant votes remain available.
+///   The finalizer retries this rule for pending commits when it receives a new commit or block
+///   evidence. The local DAG only traverses targets above its current GC round, where descendant
+///   votes remain available.
 /// - Indirect finalization checks pending transactions when later commits enter the queue. It uses
 ///   the same voting window, but it uses only committed descendants. It accepts a transaction when
 ///   the target is above L - gc_depth and the accept stake reaches the certification threshold.
@@ -91,21 +93,46 @@ impl CommitFinalizerV3 {
         transaction_vote_tracker: TransactionVoteTracker,
         commit_sender: UnboundedSender<CommittedSubDag>,
     ) -> CommitFinalizerHandle {
+        let (block_update_sender, block_updates) = watch::channel(());
         let processor = Self::new(context, dag_state, transaction_vote_tracker, commit_sender);
         let (sender, receiver) = unbounded_channel("consensus_commit_finalizer");
-        let task =
-            spawn_logged_monitored_task!(processor.run(receiver), "consensus_commit_finalizer");
-        CommitFinalizerHandle::new(sender, task)
+        let task = spawn_logged_monitored_task!(
+            processor.run(receiver, block_updates),
+            "consensus_commit_finalizer"
+        );
+        CommitFinalizerHandle::new(sender, Some(block_update_sender), task)
     }
 
-    async fn run(mut self, mut receiver: UnboundedReceiver<CommittedSubDag>) {
-        while let Some(committed_sub_dag) = receiver.recv().await {
-            let already_finalized = !self.context.protocol_config.transaction_voting_enabled()
-                || committed_sub_dag.recovered_rejected_transactions;
-            let finalized_commits = if already_finalized {
-                vec![committed_sub_dag]
-            } else {
-                self.process_commit(committed_sub_dag)
+    async fn run(
+        mut self,
+        mut receiver: UnboundedReceiver<CommittedSubDag>,
+        mut block_updates: watch::Receiver<()>,
+    ) {
+        loop {
+            let (committed_sub_dag, shutting_down) = tokio::select! {
+                biased;
+                commit = receiver.recv() => {
+                    let shutting_down = commit.is_none();
+                    (commit, shutting_down)
+                }
+                Ok(()) = block_updates.changed(), if !self.pending_commits.is_empty() => {
+                    (None, false)
+                }
+            };
+            // A commit also retries pending work, so consume all preceding block notifications
+            // before either kind of pass. Updates arriving during the pass remain unseen and
+            // trigger another pass, avoiding lost wakeups.
+            block_updates.borrow_and_update();
+            let (finalized_commits, already_finalized) = match committed_sub_dag {
+                Some(commit)
+                    if !self.context.protocol_config.transaction_voting_enabled()
+                        || commit.recovered_rejected_transactions =>
+                {
+                    (vec![commit], true)
+                }
+                Some(commit) => (self.process_commit(commit), false),
+                None if self.pending_commits.is_empty() => (vec![], false),
+                None => (self.try_finalize_commits(), false),
             };
             persist_finalized_commits(
                 &self.dag_state,
@@ -121,6 +148,9 @@ impl CommitFinalizerV3 {
                     return;
                 }
             }
+            if shutting_down {
+                return;
+            }
         }
     }
 
@@ -128,8 +158,6 @@ impl CommitFinalizerV3 {
         &mut self,
         committed_sub_dag: CommittedSubDag,
     ) -> Vec<CommittedSubDag> {
-        let _scope = monitored_scope("CommitFinalizer::process_commit");
-
         if let Some(last_processed_commit) = self.last_processed_commit {
             assert_eq!(
                 last_processed_commit + 1,
@@ -140,6 +168,19 @@ impl CommitFinalizerV3 {
         let commit_state = CommitStateV3::new(committed_sub_dag);
         self.report_gc_guarded_blocks(&commit_state);
         self.pending_commits.push_back(commit_state);
+
+        self.try_finalize_commits()
+    }
+
+    fn try_finalize_commits(&mut self) -> Vec<CommittedSubDag> {
+        let _scope = monitored_scope("CommitFinalizer::process_commit");
+        let _timer = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["CommitFinalizer::try_finalize_commits"])
+            .start_timer();
 
         // Direct finalization applies these steps to every pending block B in a commit whose
         // leader is at round L:
@@ -2343,6 +2384,138 @@ mod tests {
         fixture
             .finalizer
             .process_commit(make_commit(1, &target, vec![target.clone()]));
+    }
+
+    #[tokio::test]
+    async fn block_notifications_are_coalesced_and_rearmed() {
+        let fixture = Fixture::new();
+        let (target, _) = fixture.make_round_one(1);
+        let passes = fixture
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["CommitFinalizer::try_finalize_commits"]);
+        let (sender, receiver) = unbounded_channel("finalizer_v3_coalescing_test");
+        let (block_sender, block_updates) = watch::channel(());
+        let run = fixture.finalizer.run(receiver, block_updates);
+        tokio::pin!(run);
+
+        // Notifications while idle must neither run the finalizer nor leave an extra pass
+        // behind the next commit, which already checks all available evidence.
+        for _ in 0..10 {
+            block_sender.send_replace(());
+        }
+        assert!(futures::poll!(&mut run).is_pending());
+        assert_eq!(passes.get_sample_count(), 0);
+        sender
+            .send(make_commit(1, &target, vec![target.clone()]))
+            .unwrap();
+        assert!(futures::poll!(&mut run).is_pending());
+        assert_eq!(passes.get_sample_count(), 1);
+
+        for (batch, notifications) in [1, 10, 1].into_iter().enumerate() {
+            for _ in 0..notifications {
+                block_sender.send_replace(());
+            }
+            assert!(futures::poll!(&mut run).is_pending());
+            assert_eq!(passes.get_sample_count(), batch as u64 + 2);
+            assert!(futures::poll!(&mut run).is_pending());
+            assert_eq!(passes.get_sample_count(), batch as u64 + 2);
+        }
+
+        // Closing notifications alone must not terminate or spin the commit receiver.
+        drop(block_sender);
+        assert!(futures::poll!(&mut run).is_pending());
+        drop(sender);
+        assert!(futures::poll!(&mut run).is_ready());
+    }
+
+    #[tokio::test]
+    async fn block_notification_finalizes_pending_commits_in_order() {
+        let fixture = Fixture::new();
+        let (target, round_one_refs) = fixture.make_round_one(2);
+        let voters: Vec<_> = (0..5)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    true,
+                    vec![1],
+                    0,
+                    None,
+                )
+            })
+            .collect();
+        fixture.add_blocks(&voters[..4]);
+        let later_leader = fixture.make_voter(
+            5,
+            &round_one_refs,
+            target.reference(),
+            false,
+            vec![],
+            0,
+            None,
+        );
+        fixture.add_blocks(std::slice::from_ref(&later_leader));
+
+        let (commit_sender, mut commit_receiver) = unbounded_channel("finalizer_v3_notify_test");
+        let mut handle = CommitFinalizerHandle::start(
+            fixture.context.clone(),
+            fixture.dag_state.clone(),
+            fixture.transaction_vote_tracker.clone(),
+            commit_sender,
+        );
+        let first = make_commit(1, &target, vec![target.clone()]);
+        let second = make_commit(2, &later_leader, vec![later_leader.clone()]);
+        handle.send(first.clone()).unwrap();
+        handle.send(second.clone()).unwrap();
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while fixture
+                .context
+                .metrics
+                .node_metrics
+                .finalizer_buffered_commits
+                .get()
+                != 2
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("Both commits must be buffered before the final vote arrives");
+        assert!(commit_receiver.try_recv().is_err());
+
+        fixture.add_blocks(&voters[4..]);
+        handle.notify_new_blocks();
+        for expected in [&first, &second] {
+            let finalized = tokio::time::timeout(Duration::from_secs(1), commit_receiver.recv())
+                .await
+                .expect("New block evidence must finalize without another commit")
+                .unwrap();
+            assert_eq!(finalized.commit_ref, expected.commit_ref);
+            if finalized.commit_ref == first.commit_ref {
+                assert_eq!(
+                    finalized
+                        .rejected_transactions_by_block
+                        .get(&target.reference()),
+                    Some(&vec![1])
+                );
+            }
+            assert_eq!(
+                fixture
+                    .store
+                    .read_rejected_transactions(finalized.commit_ref)
+                    .unwrap(),
+                Some(finalized.rejected_transactions_by_block)
+            );
+        }
+        assert_eq!(
+            fixture.store.read_last_finalized_commit().unwrap(),
+            Some(second.commit_ref)
+        );
+        handle.stop().await;
     }
 
     #[tokio::test]

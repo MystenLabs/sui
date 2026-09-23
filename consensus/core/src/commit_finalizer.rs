@@ -14,6 +14,7 @@ use mysten_metrics::{
     monitored_scope, spawn_logged_monitored_task,
 };
 use parking_lot::RwLock;
+use tokio::sync::watch;
 
 use crate::{
     BlockAPI, CommitIndex, CommittedSubDag, VerifiedBlock,
@@ -35,16 +36,19 @@ pub(crate) const INDIRECT_REJECT_DEPTH: Round = 3;
 /// Handle to CommitFinalizer, for sending CommittedSubDag.
 pub(crate) struct CommitFinalizerHandle {
     sender: Option<UnboundedSender<CommittedSubDag>>,
+    block_updates: Option<watch::Sender<()>>,
     task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl CommitFinalizerHandle {
     pub(crate) fn new(
         sender: UnboundedSender<CommittedSubDag>,
+        block_updates: Option<watch::Sender<()>>,
         task: tokio::task::JoinHandle<()>,
     ) -> Self {
         Self {
             sender: Some(sender),
+            block_updates,
             task: Some(task),
         }
     }
@@ -74,6 +78,12 @@ impl CommitFinalizerHandle {
                 );
                 ConsensusError::Shutdown
             })
+    }
+
+    pub(crate) fn notify_new_blocks(&self) {
+        if let Some(block_updates) = &self.block_updates {
+            block_updates.send_replace(());
+        }
     }
 
     pub(crate) async fn stop(&mut self) {
@@ -148,7 +158,7 @@ impl CommitFinalizer {
         let (sender, receiver) = unbounded_channel("consensus_commit_finalizer");
         let task =
             spawn_logged_monitored_task!(processor.run(receiver), "consensus_commit_finalizer");
-        CommitFinalizerHandle::new(sender, task)
+        CommitFinalizerHandle::new(sender, None, task)
     }
 
     async fn run(mut self, mut receiver: UnboundedReceiver<CommittedSubDag>) {

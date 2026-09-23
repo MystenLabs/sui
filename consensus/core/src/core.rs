@@ -347,6 +347,7 @@ impl Core {
         &mut self,
         blocks: Vec<VerifiedBlock>,
     ) -> (Vec<VerifiedBlock>, BTreeSet<BlockRef>) {
+        let has_new_blocks = !blocks.is_empty();
         let (accepted_blocks, missing_block_refs) = self.block_manager.try_accept_blocks(blocks);
         for block in &accepted_blocks {
             tracing::trace!(
@@ -357,6 +358,10 @@ impl Core {
                 block.timestamp_ms()
             );
             self.signals.new_accepted_block(block.clone());
+        }
+        if has_new_blocks {
+            // Reject votes are available even when missing ancestors suspend all incoming blocks.
+            self.commit_observer.notify_new_blocks();
         }
         (accepted_blocks, missing_block_refs)
     }
@@ -599,6 +604,7 @@ impl Core {
             self.signals.new_block(extended_block.clone())?;
             self.signals
                 .new_accepted_block(extended_block.block.clone());
+            self.commit_observer.notify_new_blocks();
 
             fail_point!("consensus-after-propose");
 
@@ -3446,6 +3452,122 @@ mod test {
         for i in 6..=10 {
             let commit = &commits[i - 6];
             assert_eq!(commit.reference().index, i as u32);
+        }
+    }
+
+    #[tokio::test]
+    async fn new_blocks_notify_v3_finalizer_without_new_commit() {
+        for suspend_last_voter in [false, true] {
+            let (mut context, _) = Context::new_for_test(4);
+            context.protocol_config.set_enable_v3_for_testing(true);
+            let mut fixture =
+                CoreTestFixture::new(context, vec![1; 4], AuthorityIndex::new_for_test(0), true)
+                    .await;
+            fixture.core.proposer = None;
+            assert_eq!(fixture.core.context.committee.quorum_threshold(), 3);
+            assert_eq!(fixture.core.context.committee.certification_threshold(), 2);
+
+            let genesis_refs: Vec<_> = genesis_blocks(&fixture.core.context)
+                .iter()
+                .map(|block| block.reference())
+                .collect();
+            let transaction_count = if suspend_last_voter { 1 } else { 2 };
+            let blocks: Vec<_> = (0..4)
+                .map(|author| {
+                    let transactions = if author == 0 {
+                        vec![crate::Transaction::new(vec![1]); transaction_count]
+                    } else {
+                        vec![]
+                    };
+                    VerifiedBlock::new_for_test(
+                        TestBlock::new(1, author)
+                            .set_ancestors(genesis_refs.clone())
+                            .set_transactions(transactions)
+                            .build_v3(0),
+                    )
+                })
+                .collect();
+            fixture.add_blocks(blocks[..3].to_vec()).unwrap();
+            let target = &blocks[0];
+            let rejected_index = (transaction_count - 1) as u16;
+            let voters: Vec<_> = (0..3)
+                .map(|author| {
+                    let ancestors = if suspend_last_voter && author == 2 {
+                        &blocks[..]
+                    } else {
+                        &blocks[..3]
+                    };
+                    let mut ancestors: Vec<_> =
+                        ancestors.iter().map(|block| block.reference()).collect();
+                    ancestors.sort_by_key(|block_ref| block_ref.author.value() != author as usize);
+                    VerifiedBlock::new_for_test(
+                        TestBlock::new(2, author)
+                            .set_ancestors(ancestors)
+                            .set_transaction_votes(vec![crate::block::BlockTransactionVotes {
+                                block_ref: target.reference(),
+                                rejects: vec![rejected_index],
+                            }])
+                            .build_v3(0),
+                    )
+                })
+                .collect();
+            fixture.add_blocks(voters[..2].to_vec()).unwrap();
+
+            let commit = TrustedCommit::new_for_test(
+                1,
+                fixture.dag_state.read().last_commit_digest(),
+                0,
+                target.reference(),
+                vec![target.reference()],
+            );
+            fixture
+                .core
+                .add_certified_commits(CertifiedCommits::new(
+                    vec![CertifiedCommit::new_certified(
+                        commit.clone(),
+                        vec![target.clone()],
+                    )],
+                    vec![],
+                ))
+                .unwrap();
+            tokio::time::timeout(Duration::from_secs(1), async {
+                while fixture
+                    .core
+                    .context
+                    .metrics
+                    .node_metrics
+                    .finalizer_buffered_commits
+                    .get()
+                    != 1
+                {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .expect("The synced commit must wait for another vote");
+
+            let missing = fixture.add_blocks(voters[2..].to_vec()).unwrap();
+            assert_eq!(!missing.is_empty(), suspend_last_voter);
+            assert_eq!(fixture.dag_state.read().last_commit_index(), 1);
+            let finalized = tokio::time::timeout(
+                Duration::from_secs(1),
+                fixture._commit_output_receiver.recv(),
+            )
+            .await
+            .expect("Core must notify the finalizer even without a new commit")
+            .unwrap();
+            assert_eq!(finalized.commit_ref, commit.reference());
+            assert_eq!(
+                finalized
+                    .rejected_transactions_by_block
+                    .get(&target.reference()),
+                Some(&vec![rejected_index])
+            );
+            assert_eq!(
+                fixture.store.read_last_finalized_commit().unwrap(),
+                Some(commit.reference())
+            );
+            fixture.core.stop().await;
         }
     }
 
