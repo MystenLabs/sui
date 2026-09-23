@@ -45,7 +45,10 @@ questions:
   - What is Package Versioning in Sui?
   - How does package versioning work on Sui?
   - How do I upgrade package versioning?
-answer: Versioning provides the ability to upgrade packages on the Sui network.
+answer: >-
+  Understand how Sui assigns and increments package versions on publish and
+  upgrade, how framework packages preserve their IDs across upgrades, and what
+  package manifest version fields actually control.
 ---
 
 [Move packages](/develop/publish-upgrade-packages) are versioned and stored onchain, but follow a different scheme because they are immutable from inception. A transaction references a package input by ID alone, with no separate version number.
