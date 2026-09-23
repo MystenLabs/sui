@@ -646,7 +646,7 @@ impl AuthorityMetrics {
             .unwrap(),
             staggered_submission_signal_activated: register_int_gauge_with_registry!(
                 "staggered_submission_signal_activated",
-                "Whether the duplication signal is currently activated (1) or not (0); staggering itself only follows when the staggered_submission_signal protocol flag is enabled",
+                "Whether the duplication signal is currently activated (1) or not (0); staggering itself only follows when the staggered_submission_signal protocol flag and the node's enable_staggered_submission_signal config are both enabled",
                 registry,
             )
             .unwrap(),

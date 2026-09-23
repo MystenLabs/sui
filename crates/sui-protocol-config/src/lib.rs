@@ -1189,6 +1189,9 @@ struct FeatureFlags {
     // output: unpaid duplication of transactions without allowed proposers arms staggered
     // consensus submission in lockstep across honest validators. Requires
     // `allowed_proposers` (accessed through the hand-written getter that asserts it).
+    // Staggering is node-local policy, not consensus-critical, so each validator can
+    // additionally veto it via `NodeConfig::enable_staggered_submission_signal`
+    // (default enabled); it engages only when both are enabled.
     #[serde(skip_serializing_if = "is_false")]
     #[skip_protocol_config_accessor]
     staggered_submission_signal: bool,
