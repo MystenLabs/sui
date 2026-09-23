@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[EC04007]: incompatible types
+   ┌─ tests/move_2024/matching/match_type_param_struct_field.move:14:9
+   │
+12 │ fun bad_struct<T>(i: &Inner<T>): bool {
+   │                             - Expected: 'T'
+13 │     match (i) {
+14 │         Inner { asset: Wrap { n: _ }, state: _ } => true,
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │              │
+   │         │              Given: '0x42::m::Wrap'
+   │         Invalid pattern
+
+error[EC04007]: incompatible types
+   ┌─ tests/move_2024/matching/match_type_param_struct_field.move:21:9
+   │
+19 │ fun bad_literal<T>(i: &Inner<T>): bool {
+   │                              - Expected: 'T'
+20 │     match (i) {
+21 │         Inner { asset: 0u64, state: _ } => true,
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │              │
+   │         │              Given: 'u64'
+   │         Invalid pattern
+
+error[EC04007]: incompatible types
+   ┌─ tests/move_2024/matching/match_type_param_struct_field.move:28:9
+   │
+26 │ fun bad_variant<T>(i: &Inner<T>): bool {
+   │                              - Expected: 'T'
+27 │     match (i) {
+28 │         Inner { asset: State::On, state: _ } => true,
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │              │
+   │         │              Given: '0x42::m::State'
+   │         Invalid pattern

@@ -32,7 +32,6 @@ use sui_types::{
     digests::TransactionDigest,
     gas::{SuiGasStatus, SuiGasStatusAPI},
     gas_model::{tables::GasStatus, units_types::Gas},
-    in_memory_storage::InMemoryStorage,
     metrics::ExecutionMetrics,
 };
 
@@ -212,7 +211,7 @@ impl VMTestSetup for SuiVMTestSetup {
 
     fn new_extensions_builder(&self) -> SuiExtensionsBuilder<'_> {
         SuiExtensionsBuilder {
-            store: InMemoryTestStore(RefCell::new(InMemoryStorage::default())),
+            store: InMemoryTestStore::default(),
             protocol_config: &self.protocol_config,
         }
     }
@@ -228,6 +227,7 @@ impl VMTestSetup for SuiVMTestSetup {
 
         let protocol_config = builder.protocol_config;
         ext.add(ObjectRuntime::new(
+            &builder.store,
             &builder.store,
             BTreeMap::new(),
             false,

@@ -277,7 +277,8 @@ liquidatePosition = (tx: Transaction) => {
 	const managerAddress = '0x...'; // Address of margin manager to liquidate
 	const poolKey = 'SUI_DBUSDC';
 	const debtIsBase = false; // Debt is in USDC (quote)
-	const repayCoin = tx.splitCoins(tx.gas, [500 * 1_000_000]); // 500 USDC
+	const debtCoinType = '0x...'; // Type of the pool's quote asset
+	const repayCoin = tx.coin({ balance: 500 * 1_000_000, type: debtCoinType }); // 500 USDC
 	tx.add(this.marginContract.liquidate(managerAddress, poolKey, debtIsBase, repayCoin));
 };
 ```

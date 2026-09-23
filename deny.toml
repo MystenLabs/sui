@@ -56,9 +56,6 @@ ignore = [
     # `proc-macro-error2` is unmaintained, no safe upgrade — transitive via
     # alloy-sol-macro (sui-bridge ethereum stack); waiting for alloy to migrate
     "RUSTSEC-2026-0173",
-    # `http-types` ASCII invariant notice, no safe upgrade — dev-dependency only,
-    # via wiremock 0.5 test mocks; not used to construct auth headers
-    "RUSTSEC-2026-0174",
     # quick-xml 0.38: quadratic duplicate-attribute check (0194) and unbounded
     # namespace-declaration allocation DoS (0195). Fixed only in quick-xml >= 0.41,
     # but quick-xml is transitive via object_store, whose latest release (0.14.0)
@@ -68,11 +65,11 @@ ignore = [
     # releases with quick-xml >= 0.41.
     "RUSTSEC-2026-0194",
     "RUSTSEC-2026-0195",
-    # `bitmaps` is unmaintained (all versions). It is a transitive dependency of
-    # `imbl`, the RUSTSEC-recommended replacement for the unmaintained `im` crate
-    # (which Sui and fastcrypto have both migrated away from). Unmaintained-only
-    # advisory, no unsoundness. Revisit if imbl drops its bitmaps dependency.
-    "RUSTSEC-2026-0247",
+    # `clear_on_drop` is unmaintained, and no safe upgrade is available. It is
+    # transitive through bulletproofs 5.0.0 in fastcrypto. Review by 2027-03-14
+    # or if bulletproofs releases a zeroize-based replacement. Upstream proposal:
+    # https://github.com/zkcrypto/bulletproofs/pull/17
+    "RUSTSEC-2026-0283",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories

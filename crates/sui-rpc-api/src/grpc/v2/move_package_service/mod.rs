@@ -10,11 +10,16 @@ use sui_rpc::proto::sui::rpc::v2::{
 };
 use sui_types::{base_types::ObjectID, move_package::MovePackage};
 
-mod conversions;
+pub mod conversions;
 mod get_datatype;
 mod get_function;
 mod get_package;
 mod list_package_versions;
+
+pub use get_datatype::get_datatype_response;
+pub use get_function::get_function_response;
+pub use get_package::get_package_response;
+pub use list_package_versions::PageToken;
 
 #[tonic::async_trait]
 impl MovePackageService for RpcService {

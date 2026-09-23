@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::{FullObjectID, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
@@ -53,10 +54,24 @@ pub struct TestRunner {
 
 impl TestRunner {
     pub async fn new(base_package_name: &str) -> Self {
+        Self::new_with_disable_effects_tx_dependencies(base_package_name, false).await
+    }
+
+    pub async fn new_with_disable_effects_tx_dependencies(
+        base_package_name: &str,
+        disable_effects_tx_dependencies: bool,
+    ) -> Self {
         telemetry_subscribers::init_for_testing();
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
 
-        let authority_state = TestAuthorityBuilder::new().build().await;
+        let mut protocol_config =
+            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        protocol_config
+            .set_disable_effects_tx_dependencies_for_testing(disable_effects_tx_dependencies);
+        let authority_state = TestAuthorityBuilder::new()
+            .with_protocol_config(protocol_config)
+            .build()
+            .await;
 
         let mut gas_object_ids = vec![];
         for _ in 0..20 {
@@ -819,9 +834,12 @@ async fn test_delete_shared_object_immut_mut_immut_interleave() {
     assert!(effects.status().is_err());
 }
 
-#[tokio::test]
-async fn test_mutate_after_delete() {
-    let mut user_1 = TestRunner::new("shared_object_deletion").await;
+async fn assert_mutate_after_delete_effects_dependencies(disable_effects_tx_dependencies: bool) {
+    let mut user_1 = TestRunner::new_with_disable_effects_tx_dependencies(
+        "shared_object_deletion",
+        disable_effects_tx_dependencies,
+    )
+    .await;
     let effects = user_1.create_shared_object().await;
 
     assert_eq!(effects.created().len(), 1);
@@ -866,10 +884,36 @@ async fn test_mutate_after_delete() {
     assert!(effects.unwrapped_then_deleted().is_empty());
     assert!(effects.wrapped().is_empty());
 
-    // The gas coin gets mutated
+    // The gas coin gets mutated even though the shared input was deleted.
     assert_eq!(effects.mutated().len(), 1);
+    let (gas_ref, _) = effects.mutated().pop().unwrap();
+    let gas = user_1.authority_state.get_object(&gas_ref.0).unwrap();
+    assert_eq!(gas.version(), gas_ref.1);
+    assert_eq!(gas.previous_transaction, *effects.transaction_digest());
 
-    assert!(effects.dependencies().contains(digest));
+    if disable_effects_tx_dependencies {
+        assert!(effects.dependencies().is_empty());
+    } else {
+        let package_digest = user_1
+            .authority_state
+            .get_object(&user_1.package.0)
+            .unwrap()
+            .previous_transaction;
+        let mut expected = vec![*digest, package_digest];
+        expected.sort();
+        expected.dedup();
+        assert_eq!(effects.dependencies(), expected);
+    }
+}
+
+#[tokio::test]
+async fn test_mutate_after_delete() {
+    assert_mutate_after_delete_effects_dependencies(false).await;
+}
+
+#[tokio::test]
+async fn test_mutate_after_delete_without_effects_dependencies() {
+    assert_mutate_after_delete_effects_dependencies(true).await;
 }
 
 #[tokio::test]

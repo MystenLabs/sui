@@ -92,7 +92,6 @@ use tracing::info;
 use tracing::warn;
 
 use crate::config::SubscriptionConfig;
-#[cfg(any(feature = "staging", test))]
 use crate::error::RpcError;
 use crate::metrics::SubscriptionMetrics;
 use crate::task::watermark::Watermarks;
@@ -105,17 +104,11 @@ use super::gap_recovery::recover_gap;
 use super::processed_checkpoint::ProcessedCheckpoint;
 use super::processed_checkpoint::ProcessedTransaction;
 
-#[cfg(feature = "staging")]
-mod staging {
-    pub(super) use std::collections::BTreeMap;
+use std::collections::BTreeMap;
 
-    pub(super) use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
-    pub(super) use sui_types::base_types::ObjectID;
-    pub(super) use sui_types::base_types::SequenceNumber;
-}
-
-#[cfg(feature = "staging")]
-use staging::*;
+use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 
 // TODO: Make these configurable via SubscriptionConfig.
 const MAX_GRPC_MESSAGE_SIZE_BYTES: usize = 128 * 1024 * 1024;
@@ -169,7 +162,6 @@ pub(crate) fn checkpoint_field_mask() -> FieldMask {
 /// Handle on the checkpoint broadcast that subscription resolvers consume from. Registered in
 /// the GraphQL context as a nominal type so its members do not clash with other context entries
 /// that may be added later.
-#[cfg(any(feature = "staging", test))]
 pub(crate) struct SubscriptionBroadcast {
     /// Receiver created with the channel and never `.recv()`'d. Subscribers call `resubscribe()`
     /// on it to get their own receivers; we also read `broadcaster.len()` to count how many
@@ -184,7 +176,6 @@ pub(crate) struct SubscriptionBroadcast {
     metrics: Arc<SubscriptionMetrics>,
 }
 
-#[cfg(any(feature = "staging", test))]
 impl SubscriptionBroadcast {
     pub(crate) fn new(
         broadcaster: CheckpointBroadcaster,
@@ -199,14 +190,12 @@ impl SubscriptionBroadcast {
     }
 
     /// Per-subscriber metrics shared by every stream this broadcast spawns.
-    #[cfg(feature = "staging")]
     pub(crate) fn metrics(&self) -> &SubscriptionMetrics {
         &self.metrics
     }
 
     /// Direct access to the broadcast receiver template. Subscribers should call
     /// `.resubscribe()` to get their own receiver.
-    #[cfg(feature = "staging")]
     pub(crate) fn broadcaster(&self) -> &CheckpointBroadcaster {
         &self.broadcaster
     }
@@ -222,7 +211,6 @@ impl SubscriptionBroadcast {
 }
 
 /// Convert a broadcast `RecvError` into an `RpcError` to be yielded to the subscriber.
-#[cfg(any(feature = "staging", test))]
 pub(crate) fn broadcast_error(e: broadcast::error::RecvError) -> RpcError {
     match e {
         broadcast::error::RecvError::Lagged(missed_count) => {
@@ -242,7 +230,6 @@ pub(crate) fn broadcast_error(e: broadcast::error::RecvError) -> RpcError {
 
 /// General error for a subscription interrupted by a gap or catch-up overflow. The specific reason
 /// is logged at the call site; clients only see that they should reconnect and resume.
-#[cfg(any(feature = "staging", test))]
 pub(crate) fn reconnect_error() -> RpcError {
     anyhow::anyhow!(
         "Subscription interrupted. Please reconnect and resume from your last seen checkpoint."
@@ -257,8 +244,7 @@ pub(crate) struct CheckpointStreamTask {
     sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
     streaming_packages: Arc<StreamingPackageStore>,
     streaming_transactions: Arc<StreamedTransactionStore>,
-    // Populated only under the staging feature (from the checkpoint's `execution_objects`).
-    #[cfg_attr(not(feature = "staging"), allow(dead_code))]
+    // Populated from the checkpoint's `execution_objects`.
     streaming_objects: Arc<StreamedObjectStore>,
     readiness: Arc<SubscriptionReadiness>,
     /// kv-rpc reader used to fill upstream gaps. Required: streaming subscriptions need a
@@ -438,8 +424,7 @@ impl CheckpointStreamTask {
         })?;
         self.streaming_transactions
             .index_transactions(seq, &processed.transactions);
-        // `execution_objects` only exists under the staging feature (it's the streamed object source).
-        #[cfg(feature = "staging")]
+        // `execution_objects` is the streamed object source.
         self.streaming_objects
             .index_objects(seq, &processed.execution_objects);
 
@@ -524,13 +509,11 @@ pub(crate) fn process_checkpoint(
     let timestamp_ms = summary.timestamp_ms;
     let cp_sequence_number = sequence_number;
     let tx_lo = summary.network_total_transactions - checkpoint.transactions.len() as u64;
-    #[cfg(feature = "staging")]
     let checkpoint_objects = deserialize_checkpoint_objects(&checkpoint)?;
 
     // Seed the checkpoint-wide execution-objects map with every existing object version
     // carried by the proto. Tombstones for deleted/wrapped outputs are added below from each
     // transaction's effects because the proto doesn't carry deleted-object payloads.
-    #[cfg(feature = "staging")]
     let mut execution_objects: BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>> =
         checkpoint_objects
             .iter()
@@ -539,7 +522,6 @@ pub(crate) fn process_checkpoint(
 
     let mut transactions = Vec::with_capacity(checkpoint.transactions.len());
     for (i, proto) in checkpoint.transactions.iter().enumerate() {
-        #[cfg(feature = "staging")]
         add_tombstones(&mut execution_objects, proto)?;
         transactions.push(process_transaction(
             proto,
@@ -554,7 +536,6 @@ pub(crate) fn process_checkpoint(
         contents,
         signature,
         transactions,
-        #[cfg(feature = "staging")]
         execution_objects: Arc::new(execution_objects),
     })
 }
@@ -664,7 +645,6 @@ fn extract_packages(checkpoint: &ProtoCheckpoint) -> Vec<Arc<Package>> {
 }
 
 /// Deserialize all objects from the checkpoint-level ObjectSet.
-#[cfg(feature = "staging")]
 fn deserialize_checkpoint_objects(
     checkpoint: &ProtoCheckpoint,
 ) -> anyhow::Result<BTreeMap<(ObjectID, SequenceNumber), NativeObject>> {
@@ -687,7 +667,6 @@ fn deserialize_checkpoint_objects(
 /// carry payloads for deleted/wrapped objects, so tombstones must come from effects; without
 /// them, `execution_output_object_latest` would return the pre-deletion version of an object
 /// that no longer exists at end-of-checkpoint.
-#[cfg(feature = "staging")]
 fn add_tombstones(
     map: &mut BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>,
     proto_tx: &ProtoExecutedTransaction,

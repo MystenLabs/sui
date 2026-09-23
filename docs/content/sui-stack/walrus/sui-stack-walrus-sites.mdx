@@ -84,7 +84,7 @@ Walrus stores your site's static assets (HTML, CSS, JavaScript, images, fonts, a
 Each Walrus Site corresponds to a single [Sui object](/develop/sui-architecture/object-model) defined by the Walrus Sites Move contract. The object has a basic structure:
 
 ```move
-struct Site has key, store {
+public struct Site has key, store {
     id: UID,
     name: String,
 }
@@ -93,7 +93,7 @@ struct Site has key, store {
 Each resource in the site is attached as a [dynamic field](/develop/objects/dynamic-fields) of type `Resource`:
 
 ```move
-struct Resource has store, drop {
+public struct Resource has store, drop {
     path: String,
     blob_id: u256,
     // headers and other metadata

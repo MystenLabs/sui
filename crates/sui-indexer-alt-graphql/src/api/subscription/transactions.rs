@@ -9,6 +9,7 @@ use std::future::Future;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
+use anyhow::Context;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
@@ -54,7 +55,10 @@ impl Subscribable for Transaction {
         resolver_limits: &sui_package_resolver::Limits,
         payload: &v2::ExecutedTransaction,
     ) -> Result<Self, RpcError> {
-        let scope = Scope::for_indexed(caches.clone(), resolver_limits.clone());
+        let checkpoint = payload
+            .checkpoint
+            .context("ListTransactions item missing checkpoint")?;
+        let scope = Scope::for_backfill(caches.clone(), resolver_limits.clone(), checkpoint);
         transaction_from_stream_item(scope, payload)
     }
 

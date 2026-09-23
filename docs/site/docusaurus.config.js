@@ -442,6 +442,7 @@ const config = {
             to: "getting-started",
             items: [
               { to: "/skills", label: "Skills" },
+              { type: "doc", docId: "getting-started/sui-mcp-server", label: "Sui MCP Server" },
               { type: "doc", docId: "getting-started/onboarding/index", label: "Hello, World!" },
               { type: "doc", docId: "getting-started/examples/index", label: "Example Apps" },
               { type: "doc", docId: "getting-started/tooling", label: "Developer Tools" },

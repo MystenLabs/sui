@@ -88,10 +88,23 @@ sui client ptb \
     --move-call 0x2::coin::send_funds '<COIN_TYPE>' coin @<RECIPIENT_ADDRESS>
 ```
 
+The CLI also provides a dedicated `sui client send-funds` command that does this without building a PTB:
+
+```bash
+# Send 0.005 SUI to a recipient's address balance
+sui client send-funds --to <RECIPIENT_ADDRESS> --amount 5000000
+
+# Send another coin type, drawing from the sender's address balance
+sui client send-funds --to <RECIPIENT_ADDRESS> --amount 5000000 \
+    --coin-type <COIN_TYPE> --from-address-balance
+```
+
+The command takes the following flags:
+
 | **Flag** | **Description** |
 |----------|----------------|
 | `--to` | Recipient address. |
-| `--amount` | Amount to send in MIST. |
+| `--amount` | Amount to send in MIST. Required unless you pass `--all-coins`. |
 | `--coin-type` | Coin type to send. Defaults to `0x2::sui::SUI`. |
 | `--all-coins` | Send all coin balance of the specified type. Cannot combine with `--from-address-balance`. |
 | `--from-address-balance` | Draw the amount from the sender's address balance rather than their coins. |
@@ -112,7 +125,7 @@ public fun send_funds<T>(balance: Balance<T>, recipient: address)
 public fun send_funds<T>(coin: Coin<T>, recipient: address)
 ```
 
-Learn more at [sui-framework/sources/balance.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/balance.move#L102)) and [sui-framework/sources/coin.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move#L176).
+Learn more at [sui-framework/sources/balance.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/balance.move#L102) and [sui-framework/sources/coin.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move#L176).
 
 ## Withdrawing funds
 
@@ -165,7 +178,7 @@ tx.transferObjects([tx.coin({ balance: requiredAmount })], recipient);
 
 ### TypeScript SDK: Manual withdrawals
 
-For explicit control over address balance withdrawals, use [`tx.withdrawal()`](https://sui-typescript-docs-git-mh-address-balance-docs-mysten-labs.vercel.app/sui/transactions/reference#address-balance-withdrawals). The withdrawal must be redeemed through `redeem_funds` to produce a usable `Coin<T>` or `Balance<T>`:
+For explicit control over address balance withdrawals, use [`tx.withdrawal()`](https://sdk.mystenlabs.com/sui/transactions/reference#address-balance-withdrawals). The withdrawal must be redeemed through `redeem_funds` to produce a usable `Coin<T>` or `Balance<T>`:
 
 ```typescript
 import { Transaction } from '@mysten/sui/transactions';

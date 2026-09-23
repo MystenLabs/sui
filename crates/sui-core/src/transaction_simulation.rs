@@ -228,7 +228,12 @@ pub fn simulate_transaction(
     );
 
     // Post-execution: check object funds (non-address withdrawals discovered during execution).
-    let (inner_temp_store, effects, execution_result) = if execution_result.is_ok() {
+    // TODO: Remove this code once check_object_funds_withdraw_in_execution is enabled on all
+    // production networks.
+    let (inner_temp_store, effects, execution_result) = if !protocol_config
+        .check_object_funds_withdraw_in_execution()
+        && execution_result.is_ok()
+    {
         let has_insufficient_object_funds = inner_temp_store
             .accumulator_running_max_withdraws
             .iter()

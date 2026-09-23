@@ -12,7 +12,10 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::accumulator_root::AccumulatorObjId;
+use sui_types::accumulator_root::{
+    AccumulatorObjId, AccumulatorValue as AccumulatorRootValue, EmptyUnsettledObjectFunds,
+    UnsettledObjectFundsRead,
+};
 use sui_types::base_types::{SystemObjectVersions, VersionDigest};
 use sui_types::coin_reservation::ParsedDigest;
 use sui_types::committee::EpochId;
@@ -21,17 +24,18 @@ use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, TransactionEffects,
     TransactionEffectsV2, TransactionEvents,
 };
+use sui_types::error::SuiErrorKind;
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
-use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
+use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsResolver, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
-    SUI_DENY_LIST_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -141,6 +145,8 @@ pub struct TemporaryStore<'backing> {
     /// digest) at which they were read.
     /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
+
+    unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -156,6 +162,7 @@ impl<'backing> TemporaryStore<'backing> {
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
         transaction: (&TransactionKind, &GasData, SuiAddress),
+        unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
         let post_execution_check_inputs =
             PostExecutionCheckInputs::new(transaction, protocol_config.enable_gasless());
@@ -168,6 +175,7 @@ impl<'backing> TemporaryStore<'backing> {
             cur_epoch,
             system_object_versions,
             post_execution_check_inputs,
+            unsettled_object_funds,
         )
     }
 
@@ -188,6 +196,9 @@ impl<'backing> TemporaryStore<'backing> {
                 is_genesis: true,
                 ..Default::default()
             },
+            // The genesis transaction cannot withdraw object funds, so there are never
+            // unsettled withdrawals for it to account for.
+            &EmptyUnsettledObjectFunds,
         )
     }
 
@@ -200,6 +211,7 @@ impl<'backing> TemporaryStore<'backing> {
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
         post_execution_check_inputs: PostExecutionCheckInputs,
+        unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
         let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let non_exclusive_input_original_versions = input_objects.non_exclusive_input_objects();
@@ -243,6 +255,7 @@ impl<'backing> TemporaryStore<'backing> {
             invariants: InvariantChecker::default(),
             system_object_versions,
             loaded_system_objects: RefCell::new(BTreeMap::new()),
+            unsettled_object_funds,
         }
     }
 
@@ -273,6 +286,10 @@ impl<'backing> TemporaryStore<'backing> {
             .borrow_mut()
             .insert(*object_id, (object.version(), object.digest()));
         Some(object)
+    }
+
+    pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {
+        self.unsettled_object_funds
     }
 
     // Helpers to access private fields
@@ -528,21 +545,18 @@ impl<'backing> TemporaryStore<'backing> {
         let accumulator_running_max_withdraws = self.calculate_accumulator_running_max_withdraws();
         self.merge_accumulator_events();
 
-        // Regardless of execution status (including aborts), we insert the previous transaction
-        // for any successfully received objects during the transaction.
-        for (id, expected_version, expected_digest) in &self.receiving_objects {
-            // If the receiving object is in the loaded runtime objects, then that means that it
-            // was actually successfully loaded (so existed, and there was authenticated mutable
-            // access to it). So we insert the previous transaction as a dependency.
-            if let Some(obj_meta) = self.loaded_runtime_objects.get(id) {
-                // Check that the expected version, digest, and owner match the loaded version,
-                // digest, and owner. If they don't then don't register a dependency.
-                // This is because this could be "spoofed" by loading a dynamic object field.
-                let loaded_via_receive = obj_meta.version == *expected_version
-                    && obj_meta.digest == *expected_digest
-                    && obj_meta.owner.is_address_owned();
-                if loaded_via_receive {
-                    transaction_dependencies.insert(obj_meta.previous_transaction);
+        if !self.protocol_config.disable_effects_tx_dependencies() {
+            // Even on abort, successfully receiving an object creates a dependency.
+            for (id, expected_version, expected_digest) in &self.receiving_objects {
+                if let Some(obj_meta) = self.loaded_runtime_objects.get(id) {
+                    // A dynamic-field load can spoof a receiving input, so authenticate the
+                    // version, digest and owner before registering its dependency.
+                    let loaded_via_receive = obj_meta.version == *expected_version
+                        && obj_meta.digest == *expected_digest
+                        && obj_meta.owner.is_address_owned();
+                    if loaded_via_receive {
+                        transaction_dependencies.insert(obj_meta.previous_transaction);
+                    }
                 }
             }
         }
@@ -701,7 +715,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// Consume this (post-execution) store and return the store used by a `BumpOnly` exit: keep
     /// the input-derived state as well as information about the execution needed for replay,
     /// discard everything related to the execution results, then bump the mutable
-    /// inputs. Its effects record only those version bumps and the input dependencies.
+    /// inputs. Dependencies are retained only when enabled by the protocol.
     pub(crate) fn into_bump_only(self) -> Self {
         let Self {
             // Input-derived - reused verbatim.
@@ -722,6 +736,7 @@ impl<'backing> TemporaryStore<'backing> {
             runtime_packages_loaded_from_db,
             loaded_per_epoch_config_objects,
             loaded_system_objects,
+            unsettled_object_funds,
             // Execution outcomes can be discarded.
             execution_results: _,
             invariants: _,
@@ -743,6 +758,7 @@ impl<'backing> TemporaryStore<'backing> {
             post_execution_check_inputs,
             system_object_versions,
             loaded_system_objects,
+            unsettled_object_funds,
             execution_results: ExecutionResultsV2::default(),
             invariants: InvariantChecker::default(),
         };
@@ -1181,6 +1197,30 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
             receive_object_at_version,
             epoch_id,
         )
+    }
+}
+
+impl ObjectFundsResolver for TemporaryStore<'_> {
+    /// Loads the object balance at the required version and subtracts withdrawals from the same
+    /// checkpoint that have not settled yet.
+    /// This function is expected never to fail; an error indicates an invariant violation.
+    fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128> {
+        let required_version = self
+            .load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?
+            .version();
+
+        let settled = AccumulatorRootValue::load(self, Some(required_version), owner, type_)?
+            .and_then(|value| value.as_u128())
+            .unwrap_or(0);
+
+        let unsettled = self.unsettled_object_funds.get_unsettled_object_withdraw(
+            &AccumulatorRootValue::get_field_id(owner, type_)?,
+            required_version,
+        );
+        settled
+            .checked_sub(unsettled)
+            .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
     }
 }
 

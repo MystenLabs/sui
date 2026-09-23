@@ -29,14 +29,8 @@ use crate::task::streaming::StreamedObjectStore;
 use crate::task::streaming::StreamedTransactionStore;
 use crate::task::watermark::Watermarks;
 
-#[cfg(feature = "staging")]
-mod staging {
-    pub(super) use crate::task::streaming::ProcessedCheckpoint;
-    pub(super) use crate::task::streaming::StreamedCaches;
-}
-
-#[cfg(feature = "staging")]
-use staging::*;
+use crate::task::streaming::ProcessedCheckpoint;
+use crate::task::streaming::StreamedCaches;
 
 /// A map of objects from an executed transaction, keyed by (ObjectID, SequenceNumber).
 /// None values indicate tombstones for deleted/wrapped objects.
@@ -52,6 +46,9 @@ pub(crate) type ExecutionObjectMap =
 pub(crate) enum DataSource {
     /// Reads go through the indexed-checkpoint path (kv_loader / DB). No in-memory payload.
     Indexed,
+    /// A subscription backfilling a matched item found at `checkpoint` (known to be indexed).
+    /// Reads go through the kv_loader / DB.
+    Backfill { checkpoint: u64 },
     /// A freshly executed transaction's input/output objects.
     Executed {
         execution_objects: ExecutionObjectMap,
@@ -59,12 +56,19 @@ pub(crate) enum DataSource {
     /// A streamed checkpoint with all per-tx contents and a checkpoint-wide execution-objects
     /// map. If the scope is anchored to a particular transaction in the checkpoint, its digest
     /// is in [`Scope::effects_viewed_at_digest`].
-    #[cfg(feature = "staging")]
     Streamed {
         checkpoint: Arc<ProcessedCheckpoint>,
         /// The in-memory caches this streamed checkpoint reads ahead of the durable index.
         caches: Arc<StreamedCaches>,
     },
+}
+
+/// The checkpoint context a subscription scope resolves in, returned by [`Scope::streamed_checkpoint`].
+pub(crate) enum StreamedCheckpoint {
+    /// Live delivery: the checkpoint is held in memory (the index may not have reached it yet).
+    Live(Arc<ProcessedCheckpoint>),
+    /// Backfill delivery: the item was found at this checkpoint (known to be indexed).
+    Backfill(u64),
 }
 
 /// Identifies the transaction whose effects are currently in view. Descendant resolvers default
@@ -159,7 +163,6 @@ impl Scope {
 
     /// Create a scope for streamed checkpoint data. Sets `checkpoint_viewed_at` to `None`
     /// because streamed data is resolved from memory, not bounded by an indexed checkpoint.
-    #[cfg(feature = "staging")]
     pub(crate) fn for_streamed_checkpoint(
         caches: Arc<StreamedCaches>,
         resolver_limits: sui_package_resolver::Limits,
@@ -178,21 +181,19 @@ impl Scope {
         }
     }
 
-    /// Create a scope whose fields resolve lazily through the durable index (`KvLoader`), with no
-    /// in-memory payload. Used for individually-scanned items backfilled during a subscription's
-    /// catch-up phase. `checkpoint_viewed_at` is `None`: a subscription does not resolve as of a
-    /// single consistent checkpoint, so checkpoint-anchored fields (balances, latest object
-    /// versions) stay null and contents hydrate on demand.
-    #[cfg(feature = "staging")]
-    pub(crate) fn for_indexed(
+    /// Create a scope for an item a subscription is backfilling, found at `checkpoint`. Fields
+    /// resolve lazily through the index (`KvLoader`) with no in-memory payload. `checkpoint_viewed_at`
+    /// is `None`, so checkpoint-anchored fields (balances, latest object versions) stay null.
+    pub(crate) fn for_backfill(
         caches: Arc<StreamedCaches>,
         resolver_limits: sui_package_resolver::Limits,
+        checkpoint: u64,
     ) -> Self {
         Self {
             checkpoint_viewed_at: None,
             active_transaction: None,
             root_bound: None,
-            data_source: DataSource::Indexed,
+            data_source: DataSource::Backfill { checkpoint },
             package_store: caches.package_store.clone(),
             resolver_limits,
         }
@@ -386,10 +387,23 @@ impl Scope {
     /// through to the DB.
     fn execution_objects_in_view(&self) -> Option<&ExecutionObjectMap> {
         match &self.data_source {
-            DataSource::Indexed => None,
+            DataSource::Indexed | DataSource::Backfill { .. } => None,
             DataSource::Executed { execution_objects } => Some(execution_objects),
-            #[cfg(feature = "staging")]
             DataSource::Streamed { checkpoint, .. } => Some(&checkpoint.execution_objects),
+        }
+    }
+
+    /// The checkpoint context this scope resolves in, if any: a live subscription holds the streamed
+    /// checkpoint in memory, while a backfill resolves a checkpoint that is known to exist through
+    /// the durable index. A query (bounded by `checkpoint_viewed_at`) or an execution scope has no
+    /// such context and returns `None`, so a caller must not look a checkpoint up by sequence number.
+    pub(crate) fn streamed_checkpoint(&self) -> Option<StreamedCheckpoint> {
+        match &self.data_source {
+            DataSource::Streamed { checkpoint, .. } => {
+                Some(StreamedCheckpoint::Live(checkpoint.clone()))
+            }
+            DataSource::Backfill { checkpoint } => Some(StreamedCheckpoint::Backfill(*checkpoint)),
+            DataSource::Indexed | DataSource::Executed { .. } => None,
         }
     }
 
@@ -397,7 +411,6 @@ impl Scope {
     /// A just-streamed transaction runs ahead of the durable index, so this serves its contents by
     /// digest until the index catches up.
     pub(crate) fn streamed_transaction_store(&self) -> Option<&Arc<StreamedTransactionStore>> {
-        #[cfg(feature = "staging")]
         if let DataSource::Streamed { caches, .. } = &self.data_source {
             return Some(&caches.transaction_store);
         }
@@ -408,7 +421,6 @@ impl Scope {
     /// earlier streamed checkpoint (e.g. reached via `Object.previousTransaction`) runs ahead of the
     /// durable index, so this serves its contents by `(id, version)` until the index catches up.
     pub(crate) fn streamed_object_store(&self) -> Option<&Arc<StreamedObjectStore>> {
-        #[cfg(feature = "staging")]
         if let DataSource::Streamed { caches, .. } = &self.data_source {
             return Some(&caches.object_store);
         }

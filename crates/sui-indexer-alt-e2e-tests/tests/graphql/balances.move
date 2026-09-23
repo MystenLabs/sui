@@ -56,6 +56,9 @@ module T::test {
             totalBalance
             coinBalance
             addressBalance
+            coinMetadata {
+                decimals
+            }
         }
         balances {
             nodes {

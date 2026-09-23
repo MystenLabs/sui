@@ -21,6 +21,7 @@ mod test {
     use sui_benchmark::workloads::benchmark_move_base_dir;
     use sui_benchmark::workloads::composite::CompositeWorkloadConfig;
     use sui_benchmark::workloads::expected_failure::ExpectedFailurePayloadCfg;
+    use sui_benchmark::workloads::gas_double_spend::GasDoubleSpendSubmission;
     use sui_benchmark::workloads::workload::ExpectedFailureType;
     use sui_benchmark::workloads::workload_configuration::{
         WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
@@ -200,6 +201,7 @@ mod test {
         simulated_load_config.randomized_transaction_weight = 0;
         simulated_load_config.slow_weight = 0;
         simulated_load_config.composite_weight = 0;
+        simulated_load_config.gas_double_spend_weight = 0;
         info!("Simulated load config: {:?}", simulated_load_config);
 
         test_simulated_load_with_test_config(
@@ -224,17 +226,20 @@ mod test {
         let mut simulated_load_config = SimulatedLoadConfig::default();
         // Use LocalValidatorAggregatorProxy for soft bundle support
         simulated_load_config.remote_env = false;
-        // Enable conflicting transfer workload
-        simulated_load_config.conflicting_transfer_weight = 1;
+        // Enable conflicting transfer workload. Weight 2 keeps it on par with the
+        // inherited default weights (randomized transaction, composite).
+        simulated_load_config.conflicting_transfer_weight = 2;
         simulated_load_config.num_contested_objects = 5;
         // Disable other workloads to isolate testing
         simulated_load_config.shared_counter_weight = 0;
-        simulated_load_config.transfer_object_weight = 1;
+        simulated_load_config.transfer_object_weight = 2;
         simulated_load_config.delegation_weight = 0;
         simulated_load_config.batch_payment_weight = 0;
         simulated_load_config.shared_deletion_weight = 0;
         simulated_load_config.randomness_weight = 0;
         simulated_load_config.slow_weight = 0;
+        // Gas double-spend creates the same object-lock contention this test asserts on.
+        simulated_load_config.gas_double_spend_weight = 0;
         info!("Simulated load config: {:?}", simulated_load_config);
 
         test_simulated_load_with_test_config(
@@ -631,7 +636,7 @@ mod test {
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
             let mut rng = thread_rng();
-            simulated_load_config.shared_counter_weight = if rng.gen_bool(0.5) { 5 } else { 50 };
+            simulated_load_config.shared_counter_weight = if rng.gen_bool(0.5) { 10 } else { 100 };
             simulated_load_config.num_shared_counters = match rng.gen_range(0..=2) {
                 0 => None, // shared_counter_hotness_factor is in play in this case.
                 n => Some(n),
@@ -641,9 +646,10 @@ mod test {
             // Use shared_counter_max_tip to make transactions to have different gas prices.
             simulated_load_config.use_shared_counter_max_tip = rng.gen_bool(0.25);
             simulated_load_config.shared_counter_max_tip = rng.gen_range(1..=1000);
+            simulated_load_config.shared_counter_gas_price_multiplier = rng.gen_range(1.0..=10.0);
 
             // Always enable the randomized tx workload in this test.
-            simulated_load_config.randomized_transaction_weight = 1;
+            simulated_load_config.randomized_transaction_weight = 2;
             // Disable concurrent transactions in congestion control test to avoid lock conflicts
             simulated_load_config.randomized_transaction_concurrency = 1;
             info!("Simulated load config: {:?}", simulated_load_config);
@@ -702,7 +708,7 @@ mod test {
 
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
-            simulated_load_config.expected_failure_weight = 20;
+            simulated_load_config.expected_failure_weight = 40;
             simulated_load_config.expected_failure_config.failure_type =
                 ExpectedFailureType::try_from(0).unwrap();
             info!("Simulated load config: {:?}", simulated_load_config);
@@ -1189,6 +1195,7 @@ mod test {
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
+        shared_counter_gas_price_multiplier: f64,
         expected_failure_weight: u32,
         expected_failure_config: ExpectedFailurePayloadCfg,
         party_weight: u32,
@@ -1196,28 +1203,34 @@ mod test {
         num_contested_objects: u64,
         composite_weight: u32,
         composite_config: Option<CompositeWorkloadConfig>,
+        gas_double_spend_weight: u32,
+        gas_double_spend_copies: usize,
+        gas_double_spend_submission: GasDoubleSpendSubmission,
     }
 
     impl Default for SimulatedLoadConfig {
         fn default() -> Self {
             Self {
                 remote_env: true,
-                shared_counter_weight: 1,
+                // The enabled workloads run at weight 2 so that gas_double_spend (weight 1)
+                // gets ~5% of the traffic; integer weights can't express 5% otherwise.
+                shared_counter_weight: 2,
                 large_transaction_weight: 0,
                 large_transaction_size_bytes: 100_000,
-                slow_weight: 1,
-                transfer_object_weight: 1,
+                slow_weight: 2,
+                transfer_object_weight: 2,
                 num_transfer_accounts: 2,
-                delegation_weight: 1,
-                batch_payment_weight: 1,
-                shared_deletion_weight: 1,
+                delegation_weight: 2,
+                batch_payment_weight: 2,
+                shared_deletion_weight: 2,
                 shared_counter_hotness_factor: 50,
-                randomness_weight: 1,
-                randomized_transaction_weight: 1,
+                randomness_weight: 2,
+                randomized_transaction_weight: 2,
                 randomized_transaction_concurrency: 4,
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
+                shared_counter_gas_price_multiplier: 1.0,
                 expected_failure_weight: 0,
                 expected_failure_config: ExpectedFailurePayloadCfg {
                     failure_type: ExpectedFailureType::try_from(0).unwrap(),
@@ -1226,8 +1239,13 @@ mod test {
                 party_weight: 0,
                 conflicting_transfer_weight: 0,
                 num_contested_objects: 2,
-                composite_weight: 1,
+                composite_weight: 2,
                 composite_config: Some(CompositeWorkloadConfig::balanced()),
+                // Weight 1 out of a total of 19 across the default workloads, i.e. ~5% of
+                // transactions race duplicate copies over the same gas object.
+                gas_double_spend_weight: 1,
+                gas_double_spend_copies: 2,
+                gas_double_spend_submission: GasDoubleSpendSubmission::default(),
             }
         }
     }
@@ -1246,6 +1264,10 @@ mod test {
                 batch_payment_weight: 0,
                 shared_deletion_weight: 0,
                 slow_weight: 0,
+                gas_double_spend_weight: 0,
+                // Pinned so the composite/randomized mix stays 1:1 regardless of the
+                // default weights above.
+                randomized_transaction_weight: 1,
                 ..Default::default()
             }
         }
@@ -1441,6 +1463,7 @@ mod test {
             party: config.party_weight,
             conflicting_transfer: config.conflicting_transfer_weight,
             composite: config.composite_weight,
+            gas_double_spend: config.gas_double_spend_weight,
         };
 
         let workload_config = WorkloadConfig {
@@ -1455,8 +1478,11 @@ mod test {
             shared_counter_hotness_factor: config.shared_counter_hotness_factor,
             num_shared_counters: config.num_shared_counters,
             shared_counter_max_tip,
+            shared_counter_gas_price_multiplier: config.shared_counter_gas_price_multiplier,
             num_contested_objects: config.num_contested_objects,
             randomized_transaction_concurrency: config.randomized_transaction_concurrency,
+            gas_double_spend_copies: config.gas_double_spend_copies,
+            gas_double_spend_submission: config.gas_double_spend_submission,
             target_qps,
             in_flight_ratio,
             duration,
@@ -2082,6 +2108,7 @@ mod test {
         let address_balance_enabled = protocol_config.enable_address_balance_gas_payments();
         let address_aliases_enabled = protocol_config.address_aliases();
         let auth_events_enabled = protocol_config.enable_authenticated_event_streams();
+        let allowances_enabled = protocol_config.enable_allowances();
 
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::composite::CompositionMetrics::new(),
@@ -2115,7 +2142,9 @@ mod test {
         .with_probability(AddressBalanceOverdraw::NAME, 0.3)
         .with_probability(AccumulatorBalanceRead::NAME, 0.3)
         .with_probability(AuthenticatedEventEmit::NAME, 0.1)
-        .with_probability(CoinReservationWithdraw::NAME, 0.3);
+        .with_probability(CoinReservationWithdraw::NAME, 0.3)
+        .with_probability(AllowanceWithdraw::NAME, 0.1)
+        .with_probability(AllowanceSelfWithdraw::NAME, 0.1);
 
         let test_cluster_for_scan = test_cluster.clone();
         test_simulated_load_with_test_config(
@@ -2221,6 +2250,28 @@ mod test {
                 auth_event_success_count > 0,
                 "expected at least one authenticated event emit"
             );
+        }
+
+        if allowances_enabled {
+            let sum_containing = |name: &str, counter: fn(&OperationSetStats) -> u64| -> u64 {
+                metrics
+                    .iter_stats()
+                    .filter(|(op_set, _)| op_set.contains(name))
+                    .map(|(_, stats)| counter(stats))
+                    .sum()
+            };
+
+            for name in [AllowanceWithdraw::NAME, AllowanceSelfWithdraw::NAME] {
+                let success_count = sum_containing(name, |s| s.success_count);
+                // The failure mix is seed-dependent: logged, not asserted.
+                info!(
+                    "{name} metrics: success={}, insufficient_funds={}, rejected={}",
+                    success_count,
+                    sum_containing(name, |s| s.insufficient_funds_count),
+                    sum_containing(name, |s| s.permanent_failure_count),
+                );
+                assert!(success_count > 0, "expected at least one {name} success");
+            }
         }
     }
 

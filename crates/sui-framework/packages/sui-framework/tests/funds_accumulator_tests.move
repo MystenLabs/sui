@@ -5,7 +5,10 @@
 module sui::funds_accumulator_tests;
 
 use std::unit_test::assert_eq;
+use sui::balance::{Self, Balance};
 use sui::funds_accumulator::create_withdrawal;
+use sui::sui::SUI;
+use sui::test_scenario;
 
 public struct TestToken has store {}
 
@@ -126,4 +129,196 @@ fun test_withdrawal_split_join(owner: address, l1: u128, l2: u128, l3: u128) {
 
 public struct TestObject has key {
     id: UID,
+}
+
+fun withdraw_from_object<T>(obj: &mut TestObject, value: u64): u64 {
+    balance::redeem_funds(
+        balance::withdraw_funds_from_object<T>(&mut obj.id, value),
+    ).destroy_for_testing()
+}
+
+fun withdraw_from_address<T>(owner: address, value: u64): u64 {
+    balance::redeem_funds(
+        test_scenario::withdraw_balance_from_address<T>(owner, value),
+    ).destroy_for_testing()
+}
+
+#[test]
+fun test_object_funds_withdraw() {
+    let mut scenario = test_scenario::begin(@0x0);
+    let mut obj = TestObject { id: scenario.new_object() };
+    let owner = obj.id.to_address();
+    balance::create_for_testing<TestToken>(1000).send_funds(owner);
+    assert_eq!(test_scenario::settled_balance<TestToken>(owner), 0);
+
+    scenario.next_tx(@0x0);
+    assert_eq!(test_scenario::settled_balance<TestToken>(owner), 1000);
+    assert_eq!(withdraw_from_object<TestToken>(&mut obj, 400), 400);
+
+    scenario.next_tx(@0x0);
+    assert_eq!(test_scenario::settled_balance<TestToken>(owner), 600);
+    assert_eq!(withdraw_from_object<TestToken>(&mut obj, 600), 600);
+
+    scenario.next_tx(@0x0);
+    assert_eq!(test_scenario::settled_balance<TestToken>(owner), 0);
+
+    let TestObject { id } = obj;
+    id.delete();
+    scenario.end();
+}
+
+#[test]
+fun test_object_funds_withdraw_uses_deposit_in_same_tx() {
+    let mut scenario = test_scenario::begin(@0x0);
+    let mut obj = TestObject { id: scenario.new_object() };
+    let owner = obj.id.to_address();
+    balance::create_for_testing<TestToken>(1000).send_funds(owner);
+
+    scenario.next_tx(@0x0);
+    balance::create_for_testing<TestToken>(500).send_funds(owner);
+    assert_eq!(withdraw_from_object<TestToken>(&mut obj, 1500), 1500);
+
+    let TestObject { id } = obj;
+    id.delete();
+    scenario.end();
+}
+
+#[test]
+fun test_object_funds_withdraw_zero_without_deposit() {
+    let mut scenario = test_scenario::begin(@0x0);
+    let mut obj = TestObject { id: scenario.new_object() };
+    assert_eq!(withdraw_from_object<TestToken>(&mut obj, 0), 0);
+
+    let TestObject { id } = obj;
+    id.delete();
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 5, location = sui::funds_accumulator)]
+fun test_object_funds_withdraw_insufficient() {
+    let mut scenario = test_scenario::begin(@0x0);
+    let mut obj = TestObject { id: scenario.new_object() };
+    balance::create_for_testing<TestToken>(1000).send_funds(obj.id.to_address());
+
+    scenario.next_tx(@0x0);
+    withdraw_from_object<TestToken>(&mut obj, 1001);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = 5, location = sui::funds_accumulator)]
+fun test_object_funds_withdraw_after_earlier_withdraw() {
+    let mut scenario = test_scenario::begin(@0x0);
+    let mut obj = TestObject { id: scenario.new_object() };
+    balance::create_for_testing<TestToken>(1000).send_funds(obj.id.to_address());
+
+    scenario.next_tx(@0x0);
+    withdraw_from_object<TestToken>(&mut obj, 400);
+
+    scenario.next_tx(@0x0);
+    withdraw_from_object<TestToken>(&mut obj, 601);
+    abort
+}
+
+#[test]
+fun test_address_funds_withdraw() {
+    let mut scenario = test_scenario::begin(@0xA);
+    balance::create_for_testing<TestToken>(1000).send_funds(@0xA);
+    balance::create_for_testing<TestToken>(500).send_funds(@0xB);
+    balance::create_for_testing<SUI>(700).send_funds(@0xA);
+    assert_eq!(test_scenario::settled_balance<TestToken>(@0xA), 0);
+
+    scenario.next_tx(@0xA);
+    assert_eq!(test_scenario::settled_balance<TestToken>(@0xA), 1000);
+    assert_eq!(withdraw_from_address<TestToken>(@0xA, 300), 300);
+    assert_eq!(withdraw_from_address<TestToken>(@0xA, 100), 100);
+    assert_eq!(withdraw_from_address<TestToken>(@0xB, 500), 500);
+    assert_eq!(withdraw_from_address<SUI>(@0xA, 700), 700);
+
+    scenario.next_tx(@0xA);
+    assert_eq!(test_scenario::settled_balance<TestToken>(@0xA), 600);
+    assert_eq!(test_scenario::settled_balance<TestToken>(@0xB), 0);
+    assert_eq!(test_scenario::settled_balance<SUI>(@0xA), 0);
+    assert_eq!(withdraw_from_address<TestToken>(@0xA, 600), 600);
+
+    scenario.next_tx(@0xA);
+    assert_eq!(test_scenario::settled_balance<TestToken>(@0xA), 0);
+    scenario.end();
+}
+
+#[test]
+fun test_unreserved_withdrawal_nets_with_deposits() {
+    let mut scenario = test_scenario::begin(@0xA);
+    balance::redeem_funds(create_withdrawal<Balance<TestToken>>(@0xA, 100)).send_funds(@0xA);
+
+    scenario.next_tx(@0xA);
+    assert_eq!(test_scenario::settled_balance<TestToken>(@0xA), 0);
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = test_scenario::EZeroWithdrawal)]
+fun test_address_funds_withdraw_zero_without_deposit() {
+    let _scenario = test_scenario::begin(@0xA);
+    withdraw_from_address<TestToken>(@0xA, 0);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = test_scenario::EInsufficientFunds)]
+fun test_address_funds_withdraw_without_deposit() {
+    let _scenario = test_scenario::begin(@0xA);
+    withdraw_from_address<TestToken>(@0xA, 1);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = test_scenario::EBalanceOverflow)]
+fun test_settled_balance_overflow() {
+    let mut scenario = test_scenario::begin(@0xA);
+    balance::create_for_testing<TestToken>(std::u64::max_value!()).send_funds(@0xA);
+
+    scenario.next_tx(@0xA);
+    balance::create_for_testing<TestToken>(1).send_funds(@0xA);
+
+    scenario.next_tx(@0xA);
+    test_scenario::settled_balance<TestToken>(@0xA);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = test_scenario::EInsufficientFunds)]
+fun test_address_funds_withdraw_insufficient() {
+    let mut scenario = test_scenario::begin(@0xA);
+    balance::create_for_testing<TestToken>(1000).send_funds(@0xA);
+
+    scenario.next_tx(@0xA);
+    withdraw_from_address<TestToken>(@0xA, 600);
+    withdraw_from_address<TestToken>(@0xA, 401);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = test_scenario::EInsufficientFunds)]
+fun test_address_funds_withdraw_reserved_without_redeem() {
+    let mut scenario = test_scenario::begin(@0xA);
+    balance::create_for_testing<TestToken>(1000).send_funds(@0xA);
+
+    scenario.next_tx(@0xA);
+    let _reserved = test_scenario::withdraw_balance_from_address<TestToken>(@0xA, 600);
+    withdraw_from_address<TestToken>(@0xA, 401);
+    abort
+}
+
+#[test]
+#[expected_failure(abort_code = test_scenario::EInsufficientFunds)]
+fun test_address_funds_withdraw_ignores_deposit_in_same_tx() {
+    let mut scenario = test_scenario::begin(@0xA);
+    balance::create_for_testing<TestToken>(1000).send_funds(@0xA);
+
+    scenario.next_tx(@0xA);
+    balance::create_for_testing<TestToken>(500).send_funds(@0xA);
+    withdraw_from_address<TestToken>(@0xA, 1001);
+    abort
 }

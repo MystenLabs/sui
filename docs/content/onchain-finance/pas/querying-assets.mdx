@@ -82,15 +82,15 @@ import { pas } from '@mysten/pas';
 const client = new SuiGrpcClient({ network: 'mainnet' }).$extend(pas());
 const walletAddress = '0xAlice';
 // Regular balances — query the wallet address directly
-const regularBalances = await client.core.getAllBalances({
+const { balances: regularBalances } = await client.listBalances({
     owner: walletAddress,
 });
 // PAS-managed balances — derive the Account address, then query it
-const pasBalances = await client.core.getAllBalances({
+const { balances: pasBalances } = await client.listBalances({
     owner: client.pas.deriveAccountAddress(walletAddress),
 });
 // Single asset type
-const { balance } = await client.core.getBalance({
+const { balance } = await client.getBalance({
     owner: client.pas.deriveAccountAddress(walletAddress),
     coinType: '0xabc...::my_coin::MY_COIN',
 });
@@ -98,22 +98,25 @@ const { balance } = await client.core.getBalance({
 
 ### Check if a wallet has a PAS Account
 
-If `getObject` returns `null` for the derived address, the wallet has no PAS Account yet:
+`getObject` throws an `ObjectError` when the object does not exist, so it never returns a missing Account as a value to test. Use `getObjects`, which returns the error in place of the object instead of throwing:
 
 ```tsx
-const { object } = await client.core.getObject({ objectId: accountAddress });
-if (!object) {
-    // No PAS account
+const accountAddress = client.pas.deriveAccountAddress(walletAddress);
+const {
+    objects: [account],
+} = await client.getObjects({ objectIds: [accountAddress] });
+if (account instanceof Error) {
+    // No PAS Account for this wallet yet
 }
 ```
 
 ## Non-policy assets in Accounts
 
-An Account can hold asset types that a PAS policy does not govern. For example, `Balance<SUI>` might end up in an Account through a direct `balance::send_funds` call. When you call `getAllBalances`, these show up alongside policy-managed assets.
+An Account can hold asset types that a PAS policy does not govern. For example, `Balance<SUI>` might end up in an Account through a direct `balance::send_funds` call. When you call `listBalances`, these show up alongside policy-managed assets.
 
 ## Key points
 
 - **Wallet-centric:** PAS balances belong to the wallet address. The Account is an internal detail that the SDK handles.
 - **Deterministic:** The same wallet address always resolves to the same Account.
-- **Standard RPC:** `getBalance` and `getAllBalances` work on the derived address. No custom endpoints are needed.
+- **Standard RPC:** `getBalance` and `listBalances` work on the derived address. No custom endpoints are needed.
 - **No indexing needed:** Derivation is client-side. No event subscriptions or custom indexers are required.

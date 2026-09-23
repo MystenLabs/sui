@@ -1,0 +1,197 @@
+---
+title: Owned Compared With Shared Objects
+sidebar_label: Owned Compared With Shared
+description: >-
+  The same trustless swap service implemented 2 ways, once with address-owned
+  objects and a custodian and once with a shared object, to show the trade-offs
+  between the 2 ownership models.
+keywords:
+  - object ownership
+  - address-owned objects
+  - shared objects
+  - escrow
+  - trustless swap
+goal:
+  description: >-
+    Reader can weigh address-owned objects against shared objects by comparing
+    the same service built both ways.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - Should I use address-owned objects or a shared object?
+  - How do I build a trustless swap on Sui?
+  - What are the trade-offs between owned and shared objects?
+answer: >-
+  Address-owned objects avoid contention but need a third-party custodian to
+  match the 2 sides of a swap. A shared object removes the custodian, at the
+  cost of sequencing every access to it. This page implements the same escrow
+  swap both ways so you can compare them directly.
+---
+
+Choosing between [address-owned](/develop/objects/object-ownership/address-owned) and [shared](/develop/objects/object-ownership/shared) objects changes how a service is built, not just how it performs. This page implements the same trustless object swap 2 ways, once with address-owned objects and a custodian, and once with a shared object.
+
+Both implementations use a locking primitive:
+
+```move
+module escrow::lock {
+    public fun lock<T: store>(obj: T, ctx: &mut TxContext): (Locked<T>, Key);
+    public fun unlock<T: store>(locked: Locked<T>, key: Key): T
+}
+```
+
+Any `T: store` can be locked to get a `Locked<T>` and a corresponding `Key`. Unlocking consumes the key, so any tampering with the locked value is detectable by monitoring the key's ID.
+
+View the [complete code](https://github.com/MystenLabs/sui/blob/main/examples/trading/contracts/escrow/sources/lock.move) on GitHub.
+
+## Fastpath: address-owned objects
+
+<details>
+<summary>`owned.move`</summary>
+
+<ImportContent source="examples/trading/contracts/escrow/sources/owned.move" mode="code" />
+
+</details>
+
+Both parties begin by locking their objects. If either decides not to proceed, they unlock and exit.
+
+```mermaid
+flowchart TD
+    SR[Locked&ltfa:fa-wrench S&gt, fa:fa-key key_s]
+    BR[Locked&ltfa:fa-coins B&gt, fa:fa-key key_b]
+
+    subgraph Seller
+    a2(fa:fa-wrench S)--escrow::lock-->SR
+    end
+
+    subgraph Buyer
+    a1(fa:fa-coins B)--escrow::lock-->BR
+    end
+```
+
+Both parties then swap keys:
+
+```mermaid
+flowchart LR
+    Buyer--fa:fa-key key_b-->Seller
+    Seller--fa:fa-key key_s-->Buyer
+```
+
+A third-party custodian holds the objects and matches them when both arrive. The `create` function sends the `Escrow` request to the custodian, unlocking the offered object while recording the ID of the key it was locked with:
+
+<ImportContent source="examples/trading/contracts/escrow/sources/owned.move" mode="code" fun="create" noComments />
+
+```mermaid
+flowchart TB
+    S["fa:fa-key key_s,
+        Locked&ltfa:fa-wrench S&gt,
+        exchange_key: fa:fa-key key_b,
+        recipient: Buyer
+    "]
+    B["fa:fa-key key_b,
+        Locked&ltfa:fa-coins B&gt,
+        exchange_key: fa:fa-key key_s,
+        recipient: Seller
+    "]
+
+    id1(Escrow&ltfa:fa-coins B&gt)-->Third_Party
+    id2(Escrow&ltfa:fa-wrench S&gt)-->Third_Party
+    subgraph Buyer
+    direction TB
+    B--create-->id1
+    end
+
+    subgraph Seller
+    direction TB
+    S--create-->id2
+    end
+```
+
+Even though the custodian owns both objects, the only valid actions in Move are to match them correctly or return them. The `swap` function verifies that senders and recipients match and that each party wants what the other is offering by comparing key IDs:
+
+<ImportContent source="examples/trading/contracts/escrow/sources/owned.move" mode="code" fun="swap" />
+
+```mermaid
+flowchart TB
+
+    subgraph Third_Party
+    direction TB
+    id1(fa:fa-wrench S, fa:fa-coins B)
+    id2(Escrow&ltfa:fa-coins B&gt, Escrow&ltfa:fa-wrench S&gt)
+    id2--swap-->id1
+    end
+
+    Third_Party--fa:fa-wrench S-->Buyer
+    Third_Party--fa:fa-coins B-->Seller
+```
+
+## Consensus: shared object
+
+<details>
+<summary>`shared.move`</summary>
+
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" />
+
+</details>
+
+The first party locks the object they want to swap:
+
+```mermaid
+flowchart TB
+    B["Locked&ltfa:fa-coins B&gt, fa:fa-key key_b"]
+
+    subgraph Buyer
+    direction TB
+    a1(fa:fa-coins B)--escrow::lock-->B
+    end
+```
+
+The second party views the locked object and, if interested, creates a swap request that passes their object directly into a shared `Escrow` object. The request records the sender (who can reclaim if the swap doesn't complete) and the intended recipient:
+
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" fun="create" noComments />
+
+```mermaid
+flowchart TB
+    S["fa:fa-wrench S,
+        exchange_key: fa:fa-key key_b,
+        recipient: Buyer
+    "]
+
+    id1(Shared Object)-->id2(Escrow&ltfa:fa-wrench S&gt)
+
+    subgraph Seller
+    direction TB
+    S--create-->id2
+    end
+```
+
+The intended recipient completes the swap by providing their locked object:
+
+<ImportContent source="examples/trading/contracts/escrow/sources/shared.move" mode="code" fun="swap" />
+
+```mermaid
+flowchart TB
+
+    subgraph Buyer
+    direction TB
+    id1(Escrow&ltfa:fa-wrench S&gt,\n fa:fa-key key_b,\n Locked&ltfa:fa-coins B&gt)
+    id2(fa:fa-wrench S)
+    id1-->swap-->id2
+    end
+
+    swap--fa:fa-coins B-->Seller
+```
+
+Although the `Escrow` object is shared and accessible by anyone, Move ensures only the original sender and intended recipient can interact with it. `swap` verifies the locked object matches what was requested, extracts the escrowed object, deletes the wrapper, and delivers both objects to their new owners.

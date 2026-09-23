@@ -61,7 +61,7 @@ Party objects sit between [address-owned](/develop/objects/object-ownership/addr
 | **Property** | **Address-owned** | **Party** | **Shared** |
 |---|---|---|---|
 | Owner | A single address (account address or object ID). | A single address (account address or object ID). | No owner. Anyone can access the object. |
-| Versioned by | Owner-signed fast path, not sequenced by consensus. | Consensus. | Consensus. |
+| Versioned by | The sender's object reference names the version. | Consensus. | Consensus. |
 | Concurrent inflight transactions | One at a time, because the object takes a fast path lock. | Many, because consensus assigns versions. | Many, because consensus assigns versions. |
 | Access control | Only the owner can use the object. | Only addresses with the required permissions can use the object. | Anyone can use the object, so the module must enforce its own rules. |
 | Transfer and wrap | Supported. | Supported. You can move the object to and from other ownership types and wrap it. | Not supported. Sharing is permanent. |
@@ -92,10 +92,10 @@ The `sui::party` module also provides wrapper macros for the `transfer` function
 The following example creates an object and transfers it to a single-owner party in one function:
 
 <CodeWalkthrough source="examples/move/basics/sources/object_basics.move" language="move">
-  <Step lines="28-34" title="Create a party object">
+  <Step lines="31-37" title="Create a party object">
     The `create_party` function creates a new `Object` and transfers it using `public_party_transfer` with a `party::single_owner` party. This makes the object a party object owned by `recipient`, versioned by consensus but owned by a single address.
   </Step>
-  <Step lines="40-43" title="Transfer a party object">
+  <Step lines="43-46" title="Transfer a party object">
     To transfer a party object owned by an account address, use `public_party_transfer` with a new `party::single_owner`. The `party_transfer_single_owner` function transfers an existing party object to a new recipient while keeping it as a party object.
   </Step>
 </CodeWalkthrough>

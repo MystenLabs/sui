@@ -58,7 +58,7 @@ The preceding image shows how data flows through a full node:
    - Executes the transactions locally to verify that effects match the effects certified by the quorum of the validators.
    - Updates the local state with the latest object values accordingly.
 2. **RPCs:** A Sui full node exposes Sui RPC endpoints for querying the latest state of the system, including both the latest state metadata (such as `sui_getProtocolConfig`) and the latest state object data (`sui_getObject`).
-3. **Transaction submission:** Each Sui full node orchestrates transaction submission to the quorum of the Sui validators and, optionally if configured, locally executes the finalized transactions (called fast path execution), which circumvents the wait for checkpoint synchronization.
+3. **Transaction submission:** Each Sui full node orchestrates transaction submission to the quorum of the Sui validators and, optionally if configured, locally executes the finalized transactions (called local execution), which circumvents the wait for checkpoint synchronization.
 
 ## Sui full node data and RPC types
 
@@ -97,7 +97,7 @@ A full node that starts from scratch can replay (and thus re-verify) transaction
 
 A Sui full node that fails to retrieve checkpoints from its peers through the state sync protocol falls back to downloading the missing checkpoints from its pre-configured archive. This fallback enables a full node to catch up with the rest of the system regardless of the pruning policies of its peers.
 
-## Pruning 
+## Pruning
 
 If your node's disk usage is growing beyond your capacity (commonly 7TB or more without pruning), copy one of the following configurations into your `fullnode.yaml` and restart the node. Pruning runs in the background and reclaims space over multiple days as RocksDB compaction completes.
 

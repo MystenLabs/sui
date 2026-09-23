@@ -3,7 +3,10 @@
 
 use crate::{
     get_extension, get_extension_mut, get_nth_struct_field, get_tag_and_layouts, legacy_test_cost,
-    object_runtime::{ObjectRuntime, RuntimeResults, object_store::ChildObjectEffects},
+    object_runtime::{
+        MoveAccumulatorAction, MoveAccumulatorEvent, MoveAccumulatorValue, ObjectRuntime,
+        RuntimeResults, object_store::ChildObjectEffects,
+    },
     scratch::ScratchRuntime,
 };
 use better_any::{Tid, TidAble};
@@ -15,6 +18,7 @@ use move_core_types::{
     annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout, MoveValue},
     annotated_visitor as AV,
     language_storage::StructTag,
+    u256::U256,
     vm_status::StatusCode,
 };
 use move_vm_runtime::{
@@ -47,7 +51,7 @@ use sui_types::{
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
-    storage::{BackingPackageStore, PackageObject, RuntimeObjectResolver},
+    storage::{BackingPackageStore, ObjectFundsResolver, PackageObject, RuntimeObjectResolver},
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -56,22 +60,108 @@ const E_OBJECT_NOT_FOUND_CODE: u64 = 4;
 const E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET: u64 = 5;
 const E_RECEIVING_TICKET_ALREADY_ALLOCATED: u64 = 6;
 const E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET: u64 = 7;
+const E_INSUFFICIENT_FUNDS: u64 = 8;
 
 type Set<K> = IndexSet<K>;
 
-/// An in-memory test store is a thin wrapper around the in-memory storage in a mutex. The mutex
-/// allows this to be used by both the object runtime (for reading) and the test scenario (for
-/// writing) while hiding mutability.
-#[derive(Tid)]
-pub struct InMemoryTestStore(pub RefCell<InMemoryStorage>);
+/// An in-memory test store is a thin wrapper around the in-memory storage and funds in a mutex.
+/// The mutex allows this to be used by both the object runtime (for reading) and the test
+/// scenario (for writing) while hiding mutability.
+#[derive(Tid, Default)]
+pub struct InMemoryTestStore {
+    /// Objects and packages visible to the object runtime.
+    storage: RefCell<InMemoryStorage>,
+    /// Settled funds balance per owner address (address or object) and funds type (e.g.
+    /// `Balance<T>`). Updated from each transaction's accumulator events when the transaction
+    /// ends; within a transaction, the object runtime tracks its own deposits and withdrawals.
+    funds: RefCell<BTreeMap<(SuiAddress, TypeTag), u128>>,
+    /// Funds reserved so far in the current transaction by address withdrawals, which stand in
+    /// for a transaction's funds withdrawal inputs. Object withdrawals are reserved by the object
+    /// runtime instead, under different rules.
+    address_reservations: RefCell<BTreeMap<(SuiAddress, TypeTag), U256>>,
+}
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
+
+impl InMemoryTestStore {
+    fn settled_funds(&self, owner: SuiAddress, type_: &TypeTag) -> u128 {
+        self.funds
+            .borrow()
+            .get(&(owner, type_.clone()))
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// Reserves `limit` of `type_` from `owner`'s settled funds, on top of what this transaction
+    /// has reserved from it already. Returns false if that exceeds the settled funds.
+    fn reserve_address_funds(&self, owner: SuiAddress, type_: TypeTag, limit: U256) -> bool {
+        let Some(reserved) = self
+            .address_reservations
+            .borrow()
+            .get(&(owner, type_.clone()))
+            .copied()
+            .unwrap_or_else(U256::zero)
+            .checked_add(limit)
+        else {
+            return false;
+        };
+        if reserved > U256::from(self.settled_funds(owner, &type_)) {
+            return false;
+        }
+        self.address_reservations
+            .borrow_mut()
+            .insert((owner, type_), reserved);
+        true
+    }
+
+    /// Applies the ending transaction's accumulator events to the settled balances, and drops
+    /// the reservations it took, which only cover that transaction.
+    fn settle_funds(&self, accumulator_events: Vec<MoveAccumulatorEvent>) {
+        self.address_reservations.borrow_mut().clear();
+        let mut changes: BTreeMap<(SuiAddress, TypeTag), (u128, u128)> = BTreeMap::new();
+        for event in accumulator_events {
+            let MoveAccumulatorValue::U64(amount) = event.value else {
+                continue;
+            };
+            let (merged, split) = changes
+                .entry((event.target_addr.into(), event.target_ty))
+                .or_default();
+            match event.action {
+                MoveAccumulatorAction::Merge => *merged += amount as u128,
+                MoveAccumulatorAction::Split => *split += amount as u128,
+            }
+        }
+        let mut funds = self.funds.borrow_mut();
+        // TODO: also write these balances into the accumulator root's fields, and refresh the
+        // object runtime's cached copies of them, so that `balance::settled_funds_value` reads
+        // them in test_scenario. Today it always returns zero there.
+        for (key, (merged, split)) in changes {
+            let balance = funds.entry(key).or_default();
+            // Reserved withdrawals cannot underflow, but withdrawals created without a
+            // reservation (e.g. `allowance::new_withdrawal_for_testing`) are never checked
+            // against this balance.
+            // TODO: abort instead of clamping once test-only withdrawals such as
+            // `allowance::new_withdrawal_for_testing` are reserved against the settled balance.
+            *balance = (*balance + merged).saturating_sub(split);
+        }
+    }
+}
 
 impl BackingPackageStore for InMemoryTestStore {
     fn get_package_object(
         &self,
         package_id: &ObjectID,
     ) -> sui_types::error::SuiResult<Option<PackageObject>> {
-        self.0.borrow().get_package_object(package_id)
+        self.storage.borrow().get_package_object(package_id)
+    }
+}
+
+impl ObjectFundsResolver for InMemoryTestStore {
+    fn object_available_balance(
+        &self,
+        owner: SuiAddress,
+        type_: &TypeTag,
+    ) -> sui_types::error::SuiResult<u128> {
+        Ok(self.settled_funds(owner, type_))
     }
 }
 
@@ -82,7 +172,7 @@ impl RuntimeObjectResolver for InMemoryTestStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        self.0
+        self.storage
             .borrow()
             .read_child_object(parent, child, child_version_upper_bound)
     }
@@ -94,7 +184,7 @@ impl RuntimeObjectResolver for InMemoryTestStore {
         receive_object_at_version: SequenceNumber,
         epoch_id: sui_types::committee::EpochId,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        self.0.borrow().get_object_received_at_version(
+        self.storage.borrow().get_object_received_at_version(
             owner,
             receiving_object_id,
             receive_object_at_version,
@@ -166,7 +256,7 @@ pub fn end_transaction(
         loaded_child_objects: _,
         created_object_ids,
         deleted_object_ids,
-        accumulator_events: _,
+        accumulator_events,
         settlement_input_sui: _,
         settlement_output_sui: _,
     } = match results {
@@ -272,13 +362,14 @@ pub fn end_transaction(
     // For any unused allocated tickets, remove them from the store.
     let store: &&InMemoryTestStore = get_extension!(context)?;
     for id in unreceived {
-        if store.0.borrow_mut().remove_object(id).is_none() {
+        if store.storage.borrow_mut().remove_object(id).is_none() {
             return Ok(NativeResult::err(
                 context.gas_used(),
                 E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,
             ));
         }
     }
+    store.settle_funds(accumulator_events);
 
     // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
@@ -389,6 +480,38 @@ pub fn end_transaction(
         // TODO: do we need accumulator events here?
     )?;
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![effects]))
+}
+
+pub fn reserve_funds_from_address(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    let funds_type = context.type_to_type_tag(&get_specified_ty(ty_args)?)?;
+    let limit = pop_arg!(args, U256);
+    let owner: SuiAddress = pop_arg!(args, AccountAddress).into();
+    safe_assert!(args.is_empty());
+    let store: &&InMemoryTestStore = get_extension!(context)?;
+    if !store.reserve_address_funds(owner, funds_type, limit) {
+        return Ok(NativeResult::err(legacy_test_cost(), E_INSUFFICIENT_FUNDS));
+    }
+    Ok(NativeResult::ok(legacy_test_cost(), smallvec![]))
+}
+
+pub fn settled_funds(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    let funds_type = context.type_to_type_tag(&get_specified_ty(ty_args)?)?;
+    let owner: SuiAddress = pop_arg!(args, AccountAddress).into();
+    safe_assert!(args.is_empty());
+    let store: &&InMemoryTestStore = get_extension!(context)?;
+    let value = store.settled_funds(owner, &funds_type);
+    Ok(NativeResult::ok(
+        legacy_test_cost(),
+        smallvec![Value::u128(value)],
+    ))
 }
 
 // native fun take_from_address_by_id<T: key>(account: address, id: ID): T;
@@ -732,7 +855,7 @@ pub fn allocate_receiving_ticket_for_object(
 
     // NB: Must be a `&&` reference since the extension stores a static ref to the object storage.
     let store: &&InMemoryTestStore = get_extension!(context)?;
-    store.0.borrow_mut().insert_object(object);
+    store.storage.borrow_mut().insert_object(object);
 
     Ok(NativeResult::ok(
         legacy_test_cost(),
@@ -763,7 +886,7 @@ pub fn deallocate_receiving_ticket_for_object(
 
     // Remove the object from storage. We should never hit this scenario either.
     let store: &&InMemoryTestStore = get_extension!(context)?;
-    if store.0.borrow_mut().remove_object(id).is_none() {
+    if store.storage.borrow_mut().remove_object(id).is_none() {
         return Ok(NativeResult::err(
             context.gas_used(),
             E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,

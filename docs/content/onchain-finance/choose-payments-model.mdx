@@ -1,71 +1,71 @@
 ---
-  title: Choose a Payment Model                                              
+title: Choose a Payment Model
+description: >-
+  Compare basic transfers and Payment Kit for Sui payment integrations, learn
+  when to use address balances versus coin objects, and pick a gas strategy
+  from user-pays, gasless stablecoin, or sponsored transactions.
+keywords:
+  - payments decision guide
+  - payment model
+  - basic transfer
+  - Payment Kit
+  - PaymentRegistry
+  - address balances
+  - coin objects
+  - gas strategy
+  - sponsored transactions
+  - gasless stablecoin transfers
+  - balance send_funds
+  - coin send_funds
+  - payment receipt
+  - payment URI
+goal:
   description: >-
-    Compare basic transfers and Payment Kit for Sui payment integrations, learn
-    when to use address balances versus coin objects, and pick a gas strategy
-    from user-pays, gasless stablecoin, or sponsored transactions.
-  keywords:                                   
-    - payments decision guide                                                   
-    - payment model
-    - basic transfer                                                            
-    - Payment Kit                                                            
-    - PaymentRegistry                                                           
-    - address balances                                                       
-    - coin objects
-    - gas strategy                                                              
-    - sponsored transactions
-    - gasless stablecoin transfers                                              
-    - balance send_funds                                                     
-    - coin send_funds                         
-    - payment receipt                     
-    - payment URI
-  goal:                                                                         
-    description: >-
-      Reader can choose between basic transfer and Payment Kit, decide whether  
-      to use address balances or coin objects, and select a gas strategy for 
-      their Sui payment integration.          
-    requires:                                                                   
-      - has_frontmatter:
-          - title                                                               
-          - description                                                      
-          - keywords                                                            
-        label: Has required frontmatter fields                               
-      - min_words: 300
-        label: Needs more content depth
-      - pattern: '```'                        
-        min: 1                            
-        label: Has code examples
-      - has_questions: true                                                     
-        label: Needs questions for AI search visibility
-      - has_answer: true                                                        
-        label: Needs answer summary for AI citation                          
-  builder_paths:
-    - path_id: p2p-payments                   
-      path_name: P2P Payments             
-      step: Choose payments model
-      stage: Payment Flow                                                       
-    - path_id: agentic-payments
-      path_name: Agentic Payments                                               
-      step: Choose payments model                                            
-      stage: Money Movement                   
-  questions:                              
-    - How do I choose a payment model on Sui?
-    - What is the difference between basic transfer and Payment Kit on Sui?     
-    - Should I use address balances or coin objects for payments?
-    - How do I pay gas for a payment transaction on Sui?                        
-    - What is a gasless stablecoin transfer on Sui?                          
-    - How do sponsored transactions work for Sui payments?
-  answer: >-                                  
-    Sui supports two main payment models out of the box. Basic transfers move   
-    value directly using balance::send_funds (address balances) or
-    transferObjects (coin objects), with no receipts or duplicate prevention.   
-    Payment Kit adds structured PaymentReceipt objects, duplicate prevention 
-    through PaymentRegistry, and a transaction URI format for wallet            
-    integration. Each model works with any gas strategy: user pays gas, a       
-    sponsor pays gas, or the network waives gas for allowlisted stablecoin      
-    transfers through balance::send_funds. Address balances suit high-volume    
-    transfers because they eliminate coin selection, merging, and object        
-    version lookups.   
+    Reader can choose between basic transfer and Payment Kit, decide whether
+    to use address balances or coin objects, and select a gas strategy for
+    their Sui payment integration.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - min_words: 300
+      label: Needs more content depth
+    - pattern: '```'
+      min: 1
+      label: Has code examples
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+builder_paths:
+  - path_id: p2p-payments
+    path_name: P2P Payments
+    step: Choose payments model
+    stage: Payment Flow
+  - path_id: agentic-payments
+    path_name: Agentic Payments
+    step: Choose payments model
+    stage: Money Movement
+questions:
+  - How do I choose a payment model on Sui?
+  - What is the difference between basic transfer and Payment Kit on Sui?
+  - Should I use address balances or coin objects for payments?
+  - How do I pay gas for a payment transaction on Sui?
+  - What is a gasless stablecoin transfer on Sui?
+  - How do sponsored transactions work for Sui payments?
+answer: >-
+  Sui supports two main payment models out of the box. Basic transfers move
+  value directly using balance::send_funds (address balances) or
+  transferObjects (coin objects), with no receipts or duplicate prevention.
+  Payment Kit adds structured PaymentReceipt objects, duplicate prevention
+  through PaymentRegistry, and a transaction URI format for wallet
+  integration. Each model works with any gas strategy: user pays gas, a
+  sponsor pays gas, or the network waives gas for allowlisted stablecoin
+  transfers through balance::send_funds. Address balances suit high-volume
+  transfers because they eliminate coin selection, merging, and object
+  version lookups.
 ---
 
 Sui supports a range of payment models, from direct transfers to structured checkout flows built on Payment Kit. The right choice depends on whether you need receipts, duplicate prevention, or custom spending logic. Most integrations start from one of the common models below, and many combine several in a single transaction.
@@ -119,7 +119,7 @@ Use [Payment Kit](/onchain-finance/payment-kit) when you need structured receipt
 The registry entry point takes a nonce, the expected amount, and the payment coin:
 
 ```move
-module sui::payment_kit;
+module payment_kit::payment_kit;
 
 public fun process_registry_payment<T>(
     registry: &mut PaymentRegistry,
@@ -129,7 +129,7 @@ public fun process_registry_payment<T>(
     receiver: Option<address>,
     clock: &Clock,
     ctx: &mut TxContext
-)
+): PaymentReceipt
 ```
 
 The function verifies that the coin value matches `payment_amount`, checks the composite key for a duplicate, records the payment, transfers funds to `receiver` or the registry, returns a `PaymentReceipt`, and emits an event. It aborts with `EDuplicatePayment` when the same key was already processed, and with `EPaymentAmountMismatch` when the coin value differs from the expected amount.

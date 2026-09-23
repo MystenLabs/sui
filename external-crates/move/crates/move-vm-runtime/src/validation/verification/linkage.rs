@@ -20,9 +20,123 @@ use move_binary_format::{
     errors::{Location, VMResult},
     partial_vm_error,
 };
-use move_bytecode_verifier::{cyclic_dependencies, dependencies};
-use std::collections::{BTreeMap, HashMap};
+use move_bytecode_verifier::{
+    cyclic_dependencies,
+    dependencies::{self, DependencyIndex, IndexedModule},
+};
+use move_core_types::language_storage::ModuleId;
+use quick_cache::unsync::Cache as QCache;
+use std::{
+    collections::{BTreeMap, HashMap},
+    rc::Rc,
+};
 use tracing::instrument;
+
+type ResolvedModuleKey = (VersionId, ModuleId);
+
+// Bound retained per-module declaration indexes during one linkage validation. Cache misses
+// repeat index construction and don't affect linkage-verification results.
+const MODULE_INDEX_CACHE_CAPACITY: usize = 1024;
+
+/// Indexed state created for one linkage-validation invocation and discarded before it returns.
+///
+/// A module ID is resolved through this invocation's original-package-to-version mapping before
+/// it is used to retrieve a module or a dependency declaration index.
+struct LinkageValidationEnvironment<'a> {
+    relocation_map: &'a HashMap<OriginalId, VersionId>,
+    resolved_modules: BTreeMap<ResolvedModuleKey, &'a CompiledModule>,
+    // Shared dependencies reuse their declaration indexes across callers.
+    //
+    // `Rc`'s are not _strictly_ necessary, however they are used to ensure that if a single
+    // DependencyIndex size exceeds the cache capacity, it is still retained for the duration of
+    // the linkage validation. It also makes the code a bit cleaner/simpler.
+    module_index_cache: QCache<ResolvedModuleKey, Rc<IndexedModule<'a>>>,
+}
+
+impl<'a> LinkageValidationEnvironment<'a> {
+    fn new(
+        cached_packages: &'a BTreeMap<VersionId, &'a Package>,
+        relocation_map: &'a HashMap<OriginalId, VersionId>,
+    ) -> VMResult<Self> {
+        let mut environment = Self {
+            relocation_map,
+            resolved_modules: BTreeMap::new(),
+            module_index_cache: QCache::new(MODULE_INDEX_CACHE_CAPACITY),
+        };
+        for (version_id, package) in cached_packages {
+            debug_assert!(version_id == &package.version_id);
+            environment.extend_with_package(package)?;
+        }
+        Ok(environment)
+    }
+
+    /// Adds a package to the environment for cached or publish-inclusive validation.
+    fn extend_with_package(&mut self, package: &'a Package) -> VMResult<()> {
+        // Both callers populate the relocation map for every package added to this environment, so
+        // valid linkage-validation has all entries and a missing entry is an invariant violation
+        // in environment construction.
+        let version_id = self
+            .relocation_map
+            .get(&package.original_id)
+            .copied()
+            .ok_or_else(|| {
+                partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR).finish(Location::Undefined)
+            })?;
+        for module in package.as_modules() {
+            let key = (version_id, module.value.self_id());
+            let previous = self.resolved_modules.insert(key.clone(), &module.value);
+            if previous.is_some() {
+                // TODO(execution-version-cut): Change this to an invariant violation. For now we
+                // remove the previous entry to ensure the cache remains consistent.
+                debug_assert!(
+                    previous.is_none(),
+                    "resolved module key should not be overwritten during linkage validation"
+                );
+                self.module_index_cache.remove(&key);
+            }
+        }
+        Ok(())
+    }
+
+    fn resolve_module(
+        &self,
+        module_id: &ModuleId,
+    ) -> VMResult<(ResolvedModuleKey, &'a CompiledModule)> {
+        let version_id = *self
+            .relocation_map
+            .get(module_id.address())
+            .ok_or_else(|| partial_vm_error!(MISSING_DEPENDENCY).finish(Location::Undefined))?;
+        let key = (version_id, module_id.clone());
+        let module = self.resolved_modules.get(&key).copied().ok_or_else(|| {
+            partial_vm_error!(MISSING_DEPENDENCY).finish(Location::Package(version_id))
+        })?;
+        Ok((key, module))
+    }
+
+    /// Verifies immediate dependency declarations using cached per-module indexes.
+    fn verify_module_dependencies(&mut self, module: &CompiledModule) -> VMResult<()> {
+        // Resolve every immediate dependency before verification to preserve missing-dependency
+        // errors from the linkage environment.
+        let resolved_dependencies = module
+            .immediate_dependencies()
+            .into_iter()
+            .map(|module_id| self.resolve_module(&module_id))
+            .collect::<VMResult<BTreeMap<_, _>>>()?;
+        let dependency_index = DependencyIndex::from_indexed_modules(
+            resolved_dependencies.into_iter().map(|(key, dependency)| {
+                if let Some(indexed) = self.module_index_cache.get(&key) {
+                    Rc::clone(indexed)
+                } else {
+                    let index = Rc::new(IndexedModule::new(dependency));
+                    self.module_index_cache.insert(key, Rc::clone(&index));
+                    index
+                }
+            }),
+        );
+        dependencies::verify_module(&dependency_index, module)?;
+        Ok(())
+    }
+}
 
 /// Verifies that all packages in the provided map have valid linkage and no cyclic dependencies
 /// between them.
@@ -41,9 +155,12 @@ pub fn verify_linkage_and_cyclic_checks(
         linkage_table = ?relocation_map,
         "verifying linkage and cyclic checks for packages",
     );
+    let mut validation_environment =
+        LinkageValidationEnvironment::new(cached_packages, &relocation_map)?;
+
     for package in cached_packages.values() {
         let package_modules = package.as_modules().into_iter().collect::<Vec<_>>();
-        verify_package_valid_linkage(&package_modules, cached_packages, &relocation_map)?;
+        verify_package_valid_linkage(&package_modules, &mut validation_environment)?;
         verify_package_no_cyclic_relationships(&package_modules, cached_packages, &relocation_map)?;
     }
 
@@ -77,19 +194,23 @@ pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
         )))
         .collect();
 
-    // Verify the dependencies of the package to publish.
+    // Verify the dependencies of the package to publish against the cached-only set without the
+    // to-be-published package first.
+    let mut validation_environment =
+        LinkageValidationEnvironment::new(cached_packages, &relocation_map)?;
     for package in cached_packages.values() {
         let package_modules = package.as_modules().into_iter().collect::<Vec<_>>();
-        verify_package_valid_linkage(&package_modules, cached_packages, &relocation_map)?;
+        verify_package_valid_linkage(&package_modules, &mut validation_environment)?;
         verify_package_no_cyclic_relationships(&package_modules, cached_packages, &relocation_map)?;
     }
 
-    // Now verify the package to publish
+    // Extend the validation environment with the package to publish before validating it.
+    validation_environment.extend_with_package(package_to_publish)?;
     let package_modules = package_to_publish
         .as_modules()
         .into_iter()
         .collect::<Vec<_>>();
-    verify_package_valid_linkage(&package_modules, cached_packages, &relocation_map)?;
+    verify_package_valid_linkage(&package_modules, &mut validation_environment)?;
     verify_package_no_cyclic_relationships(&package_modules, cached_packages, &relocation_map)?;
 
     Ok(())
@@ -137,44 +258,15 @@ fn verify_package_no_cyclic_relationships(
     Ok(())
 }
 
-// Given the package, the cached packages, and the relocation map, this function verifies that
+// Given the package and the validation environment this function verifies that
 // all modules in the provided package have valid linkage to their dependencies.
 #[instrument(level = "trace", skip_all, ret)]
 fn verify_package_valid_linkage(
     package: &[&Module],
-    cached_packages: &BTreeMap<VersionId, &Package>,
-    relocation_map: &HashMap<OriginalId, VersionId>,
+    validation_environment: &mut LinkageValidationEnvironment<'_>,
 ) -> VMResult<()> {
-    let package_module_map = package
-        .iter()
-        .map(|m| (m.value.self_id(), m))
-        .collect::<BTreeMap<_, _>>();
     for m in package {
-        let imm_deps = m.value.immediate_dependencies();
-        let module_deps = imm_deps
-            .iter()
-            .map(|module_id| {
-                if let Some(m) = package_module_map.get(module_id) {
-                    Ok(&m.value)
-                } else {
-                    let Some(version_id) = relocation_map.get(module_id.address()) else {
-                        return Err(
-                            partial_vm_error!(MISSING_DEPENDENCY).finish(Location::Undefined)
-                        );
-                    };
-                    let package = cached_packages.get(version_id).ok_or_else(|| {
-                        partial_vm_error!(MISSING_DEPENDENCY).finish(Location::Package(*version_id))
-                    })?;
-                    // Question: Should this be a `Location::Module(module_id)` instead of
-                    // `Package`?
-                    let module = package.modules.get(&module_id.to_owned()).ok_or_else(|| {
-                        partial_vm_error!(MISSING_DEPENDENCY).finish(Location::Package(*version_id))
-                    })?;
-                    Ok(&module.value)
-                }
-            })
-            .collect::<VMResult<Vec<&CompiledModule>>>()?;
-        dependencies::verify_module(&m.value, module_deps)?;
+        validation_environment.verify_module_dependencies(&m.value)?;
     }
     Ok(())
 }

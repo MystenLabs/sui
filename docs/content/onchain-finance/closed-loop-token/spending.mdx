@@ -1,8 +1,9 @@
 ---
 title: Spending
 description: >-
-  Token types cannot use the `store` ability to store other objects. Instead,
-  Tokens have a `spend` method.
+  Closed-Loop Tokens lack the `store` ability, so they use a `spend` method that
+  consumes the token and moves its balance into an `ActionRequest` for
+  confirmation or burning.
 keywords:
   - token
   - store
@@ -79,7 +80,7 @@ Normally, the `spend` action should have at least one rule assigned to it to pre
 
 ```move
 /// Rule-like witness to stamp the ActionRequest
-struct GiftShop has drop {}
+public struct GiftShop has drop {}
 
 /// Spend the token and return a Gift + ActionRequest
 public fun buy_gift(

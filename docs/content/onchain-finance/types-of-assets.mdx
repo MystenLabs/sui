@@ -123,7 +123,7 @@ Use the Currency standard if you are:
 
 ## Permissioned assets
 
-The Permissioned Asset Standard (PAS) enables asset ownership through Account objects. Account objects can hold assets and enforce transfer controls and compliance checks. Accounts can only hold one asset, independent of its types, and the asset can only move between Accounts through hot potato requests that must be approved and resolved in the same programmable transaction block (PTB).
+The Permissioned Asset Standard (PAS) enables asset ownership through Account objects. Account objects can hold assets and enforce transfer controls and compliance checks. There is one Account per address, and an Account can hold any asset type. Assets can only move between Accounts through hot potato requests that must be approved and resolved in the same programmable transaction block (PTB).
 
 PAS uses Sui [Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances). PAS balances are managed by PAS on behalf of the wallet address. They are held in a derived Account object, however, transfers always target the wallet address, not the Account address.
 

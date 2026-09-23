@@ -267,7 +267,7 @@ Tables can be queried for key containment with:
 module sui::table;
 
 public fun contains<K: copy + drop + store, V: store>(
-    table: &Table<K, V>
+    table: &Table<K, V>,
     k: K
 ): bool;
 ```

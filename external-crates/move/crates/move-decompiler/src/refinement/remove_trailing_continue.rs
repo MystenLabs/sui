@@ -99,8 +99,9 @@ fn elide_tail_continue(exp: &mut Exp, label: Option<Label>) -> bool {
         }
         Exp::Match(_, _, arms) => {
             let mut changed = false;
-            for (_, _, body) in arms.iter_mut() {
-                changed |= elide_tail_continue(peek_mut(body), label);
+            // Guards are never tail position, so only arm bodies are elided.
+            for arm in arms.iter_mut() {
+                changed |= elide_tail_continue(peek_mut(&mut arm.rhs), label);
             }
             changed
         }

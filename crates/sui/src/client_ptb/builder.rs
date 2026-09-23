@@ -36,6 +36,7 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     base_types::{ObjectID, TxContext, TxContextKind, is_primitive_type_tag},
+    gas_coin::GAS,
     move_package::MovePackage,
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -84,6 +85,18 @@ trait Resolver<'a>: Send {
 
     fn re_resolve(&self) -> bool {
         false
+    }
+
+    async fn funds_withdrawal(
+        &mut self,
+        builder: &mut PTBBuilder<'a>,
+        loc: Span,
+        arg: Tx::FundsWithdrawalArg,
+    ) -> PTBResult<Tx::Argument> {
+        builder
+            .ptb
+            .funds_withdrawal(arg)
+            .map_err(|e| err!(loc, "{e}"))
     }
 }
 
@@ -207,6 +220,15 @@ impl<'a> Resolver<'a> for ToPure {
         obj_id: ObjectID,
     ) -> PTBResult<Tx::Argument> {
         builder.ptb.pure(obj_id).map_err(|e| err!(loc, "{e}"))
+    }
+
+    async fn funds_withdrawal(
+        &mut self,
+        _builder: &mut PTBBuilder<'a>,
+        loc: Span,
+        _arg: Tx::FundsWithdrawalArg,
+    ) -> PTBResult<Tx::Argument> {
+        error!(loc, "Withdrawal inputs cannot be used as pure values.")
     }
 }
 
@@ -640,6 +662,17 @@ impl<'a> PTBBuilder<'a> {
             | PTBArg::Option(_)
             | PTBArg::Vector(_)) => ctx.pure(self, arg_loc, a).await,
             PTBArg::Gas => Ok(Tx::Argument::GasCoin),
+            PTBArg::Withdrawal(withdrawal) => {
+                let type_arg = withdrawal
+                    .type_arg
+                    .map(|type_arg| into_type_tag(&self.addresses, type_arg, &resolve_address))
+                    .transpose()
+                    .map_err(|e| err!(arg_loc, "{e}"))?
+                    .unwrap_or_else(GAS::type_tag);
+                let withdrawal_arg =
+                    Tx::FundsWithdrawalArg::balance_from_sender(withdrawal.amount, type_arg);
+                ctx.funds_withdrawal(self, arg_loc, withdrawal_arg).await
+            }
             // NB: the ordering of these lines is important so that shadowing is properly
             // supported.
             // If we encounter an identifier that we have not already resolved, then we resolve the

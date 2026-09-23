@@ -109,7 +109,7 @@ public fun confirm_with_treasury_cap<T>(
 ): (String, u64, address, Option<address>);
 ```
 
-An example of a transaction implemented in TypeScript with sui.js, confirming an action request with a `TreasuryCap`. Here the admin account owns the `TreasuryCap`, which is used to mint and confirm the transfer request for the token:
+An example of a transaction implemented in TypeScript with `@mysten/sui`, confirming an action request with a `TreasuryCap`. Here the admin account owns the `TreasuryCap`, which is used to mint and confirm the transfer request for the token:
 
 ```js
 let tx = new Transaction();
@@ -150,7 +150,7 @@ The signature for the `token::confirm_request` function is:
 ```move
 // module: sui::token
 public fun confirm_request<T>(
-    treasury_cap: &TokenPolicy<T>,
+    policy: &TokenPolicy<T>,
     request: ActionRequest<T>,
     ctx: &mut TxContext
 ): (String, u64, address, Option<address>);
@@ -263,10 +263,10 @@ The signature for the `token::new_request` function is:
 
 ```move
 public fun new_request<T>(
-    name: vector<u8>,
+    name: String,
     amount: u64,
-    recipient: option<address>,
-    spent_balance: option<Balance<T>>,
-    ctx: &mut TxContext
+    recipient: Option<address>,
+    spent_balance: Option<Balance<T>>,
+    ctx: &TxContext
 ): ActionRequest<T>;
 ```
