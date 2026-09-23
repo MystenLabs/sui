@@ -4,6 +4,8 @@
 #[test_only]
 module sui::test_scenario;
 
+use sui::balance::Balance;
+use sui::funds_accumulator::Withdrawal;
 use sui::vec_map::VecMap;
 
 #[allow(unused_const)]
@@ -40,6 +42,17 @@ const EReceivingTicketAlreadyAllocated: u64 = 6;
 #[allow(unused_const)]
 /// Unable to deallocate the receiving ticket
 const EUnableToDeallocateReceivingTicket: u64 = 7;
+
+#[allow(unused_const)]
+/// The funds withdrawals reserved from an address in this transaction exceed its settled funds
+const EInsufficientFunds: u64 = 8;
+
+/// The settled `Balance<T>` of an owner exceeds `u64::MAX`, which a real balance cannot
+const EBalanceOverflow: u64 = 9;
+
+/// A funds withdrawal from an address must be for a non-zero amount, as a transaction's funds
+/// withdrawal input must
+const EZeroWithdrawal: u64 = 10;
 
 /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.
 /// A `Scenario` maintains a view of the global object pool built up by the execution.
@@ -596,6 +609,37 @@ public fun return_receiving_ticket<T: key>(ticket: sui::transfer::Receiving<T>) 
     let id = sui::transfer::receiving_id(&ticket);
     deallocate_receiving_ticket_for_object(id);
 }
+
+/// Returns the value of the `Balance<T>` owned by `owner` (an address or an object) as of the
+/// end of the previous transaction.
+/// Aborts with `EBalanceOverflow` if that value exceeds `u64::MAX`.
+public fun settled_balance<T>(owner: address): u64 {
+    let value = settled_funds<Balance<T>>(owner);
+    assert!(value <= std::u64::max_value!() as u128, EBalanceOverflow);
+    value as u64
+}
+
+/// Create a `Withdrawal<Balance<T>>` from `owner`'s funds, standing in for a transaction's funds
+/// withdrawal input, which is normally reserved as a PTB argument before the transaction executes.
+/// The balance available to reserve is the `Balance<T>` settled to `owner` as of the end of the
+/// previous transaction; funds sent to `owner` in this transaction are not available.
+/// Aborts with `EZeroWithdrawal` if `value` is zero.
+/// Aborts with `EInsufficientFunds` if the withdrawals reserved from `owner` in this transaction
+/// exceed that balance.
+public fun withdraw_balance_from_address<T>(owner: address, value: u64): Withdrawal<Balance<T>> {
+    assert!(value > 0, EZeroWithdrawal);
+    let limit = value as u256;
+    reserve_funds_from_address<Balance<T>>(owner, limit);
+    sui::funds_accumulator::create_withdrawal(owner, limit)
+}
+
+/// Returns the funds of type `T` settled to `owner` as of the end of the previous transaction.
+native fun settled_funds<T: store>(owner: address): u128;
+
+/// Records a reservation of `limit` of `T` against `owner`'s settled funds for the current
+/// transaction.
+/// Aborts with `EInsufficientFunds` if this transaction's reservations exceed those funds.
+native fun reserve_funds_from_address<T: store>(owner: address, limit: u256);
 
 // == macros ==
 

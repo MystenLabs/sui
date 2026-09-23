@@ -1270,6 +1270,16 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             make_native!(test_scenario::deallocate_receiving_ticket_for_object),
         ),
         (
+            "test_scenario",
+            "settled_funds",
+            make_native!(test_scenario::settled_funds),
+        ),
+        (
+            "test_scenario",
+            "reserve_funds_from_address",
+            make_native!(test_scenario::reserve_funds_from_address),
+        ),
+        (
             "transfer",
             "transfer_impl",
             make_native!(transfer::transfer_internal),
