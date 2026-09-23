@@ -12,8 +12,8 @@ use serde_json::Value;
 use serde_json::json;
 use simulacrum::Simulacrum;
 use sui_indexer_alt_graphql::config::RpcConfig;
-use sui_indexer_alt_jsonrpc::config::NameServiceConfig;
 use sui_move_build::BuildConfig;
+use sui_name_service::NameServiceConfig;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
@@ -531,7 +531,6 @@ impl SuiNSCluster {
             reverse_registry_id,
         };
 
-        // Note: We need to configure both JSON-RPC and GraphQL with the same name service config
         let graphql_config = RpcConfig {
             name_service: config.clone(),
             ..Default::default()
