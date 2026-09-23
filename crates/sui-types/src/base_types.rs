@@ -426,6 +426,10 @@ impl MoveObjectType {
     }
 
     /// Return true if `self` is `0x2::coin::Coin<T>` for some T (note: T can be SUI)
+    pub fn is_allowance(&self) -> bool {
+        matches!(&self.0, MoveObjectType_::Other(s) if crate::allowance::Allowance::is_allowance(s))
+    }
+
     pub fn is_coin(&self) -> bool {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::Coin(_) => true,
