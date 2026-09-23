@@ -278,7 +278,7 @@ impl ConsensusCommitOutput {
         epoch_store: &AuthorityPerEpochStore,
         batch: &mut DBBatch,
     ) -> SuiResult {
-        let tables = epoch_store.tables()?;
+        let tables = epoch_store.tables();
         batch.insert_batch(
             &tables.consensus_message_processed,
             self.consensus_messages_processed
@@ -585,7 +585,7 @@ impl ConsensusOutputQuarantine {
     }
 
     pub(super) fn commit(&mut self, epoch_store: &AuthorityPerEpochStore) -> SuiResult {
-        let mut batch = epoch_store.db_batch()?;
+        let mut batch = epoch_store.db_batch();
         self.commit_with_batch(epoch_store, &mut batch)?;
         batch.write()?;
         Ok(())
@@ -603,7 +603,7 @@ impl ConsensusOutputQuarantine {
         //    checkpoint.
         // 3. Commit all consensus output at that height or below.
 
-        let tables = epoch_store.tables()?;
+        let tables = epoch_store.tables();
 
         let mut highest_committed_height = None;
 
@@ -781,8 +781,8 @@ impl ConsensusOutputQuarantine {
         &self,
         tables: &AuthorityEpochTables,
         objects_to_init: &[ConsensusObjectSequenceKey],
-    ) -> SuiResult<Vec<Option<SequenceNumber>>> {
-        Ok(do_fallback_lookup(
+    ) -> Vec<Option<SequenceNumber>> {
+        do_fallback_lookup(
             objects_to_init,
             |object_key| {
                 if let Some(next_version) = self.shared_object_next_versions.get(object_key) {
@@ -797,7 +797,7 @@ impl ConsensusOutputQuarantine {
                     .multi_get(object_keys)
                     .expect("db error")
             },
-        ))
+        )
     }
 
     /// Gets owned object locks, checking quarantine first then falling back to DB.
@@ -806,8 +806,8 @@ impl ConsensusOutputQuarantine {
         &self,
         tables: &AuthorityEpochTables,
         obj_refs: &[ObjectRef],
-    ) -> SuiResult<Vec<Option<LockDetails>>> {
-        Ok(do_fallback_lookup(
+    ) -> Vec<Option<LockDetails>> {
+        do_fallback_lookup(
             obj_refs,
             |obj_ref| {
                 if let Some(lock) = self.owned_object_locks.get(obj_ref) {
@@ -821,7 +821,7 @@ impl ConsensusOutputQuarantine {
                     .multi_get_locked_transactions(obj_refs)
                     .expect("db error")
             },
-        ))
+        )
     }
 
     pub(super) fn get_highest_pending_checkpoint_height(&self) -> Option<CheckpointHeight> {
@@ -898,7 +898,7 @@ impl ConsensusOutputQuarantine {
         let end = (round + 1, (empty_jwk_id, empty_jwk));
 
         Ok(epoch_store
-            .tables()?
+            .tables()
             .active_jwks
             .safe_iter_with_bounds(Some(start), Some(end))
             .map_ok(|((r, (jwk_id, jwk)), _)| {
@@ -922,9 +922,9 @@ impl ConsensusOutputQuarantine {
         current_round: Round,
         for_randomness: bool,
         transactions: &[VerifiedExecutableTransactionWithAliases],
-    ) -> SuiResult<impl IntoIterator<Item = (ObjectID, u64)>> {
+    ) -> impl IntoIterator<Item = (ObjectID, u64)> {
         let protocol_config = epoch_store.protocol_config();
-        let tables = epoch_store.tables()?;
+        let tables = epoch_store.tables();
         let default_per_commit_budget = protocol_config
             .max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option()
             .unwrap_or(0);
@@ -969,7 +969,7 @@ impl ConsensusOutputQuarantine {
             },
         );
 
-        Ok(results
+        results
             .into_iter()
             .zip_debug_eq(shared_input_object_ids)
             .filter_map(|(debt, object_id)| debt.map(|debt| (debt, object_id)))
@@ -981,7 +981,7 @@ impl ConsensusOutputQuarantine {
                 let num_rounds = current_round - round - 1;
                 let debt = debt.saturating_sub(per_commit_budget * num_rounds);
                 (object_id, debt)
-            }))
+            })
     }
 }
 

@@ -3,7 +3,7 @@
 
 use rand::rngs::OsRng;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolConfig};
@@ -423,6 +423,45 @@ async fn test_reconfig_with_committee_change_basic() {
             initial_num_validators
         );
     });
+}
+
+/// A validator that leaves the committee must release the store of its last epoch as a
+/// validator, even though it keeps running as a non-validator.
+#[sim_test]
+async fn test_epoch_store_released_after_leaving_committee() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(2)
+        .build()
+        .await;
+
+    let handle = test_cluster
+        .swarm
+        .validator_nodes()
+        .next()
+        .unwrap()
+        .get_node_handle()
+        .unwrap();
+    let epoch_store = handle.with(|node| Arc::downgrade(&*node.state().epoch_store_for_testing()));
+
+    execute_remove_validator_tx(&test_cluster, &handle).await;
+    test_cluster.trigger_reconfiguration().await;
+    handle.with(|node| {
+        assert!(
+            !node
+                .state()
+                .is_validator(&node.state().epoch_store_for_testing())
+        )
+    });
+
+    // Bounded holders (e.g. in-flight RPCs) may take a little while to finish.
+    let deadline = Instant::now() + Duration::from_secs(120);
+    while epoch_store.strong_count() > 0 {
+        assert!(
+            Instant::now() < deadline,
+            "epoch store of the removed validator's last validator epoch was not released"
+        );
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
 }
 
 #[sim_test]

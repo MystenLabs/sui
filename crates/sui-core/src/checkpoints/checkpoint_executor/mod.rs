@@ -577,7 +577,6 @@ impl CheckpointExecutor {
             self.epoch_store
                 .notify_read_checkpoint_state_hasher(&[sequence_number])
                 .await
-                .unwrap()
                 .pop()
                 .unwrap()
         };
@@ -691,11 +690,11 @@ impl CheckpointExecutor {
         // state, so we must wait until all transactions have been executed
         // before accumulating the checkpoint.
         if ckpt_state.state_hasher.is_none() {
-            ckpt_state.state_hasher = Some(
-                self.global_state_hasher
-                    .accumulate_checkpoint(&tx_data.effects, sequence_number, &self.epoch_store)
-                    .expect("epoch cannot have ended"),
-            );
+            ckpt_state.state_hasher = Some(self.global_state_hasher.accumulate_checkpoint(
+                &tx_data.effects,
+                sequence_number,
+                &self.epoch_store,
+            ));
         }
 
         finish_stage!(pipeline_handle, FinalizeTransactions);
@@ -958,8 +957,7 @@ impl CheckpointExecutor {
                                 effects,
                                 *accumulator_version,
                                 &*self.object_cache_reader,
-                            )
-                            .expect("failed to acquire shared version assignments");
+                            );
 
                         let mut env = ExecutionEnv::new()
                             .with_assigned_versions(assigned_versions)
@@ -1033,8 +1031,7 @@ impl CheckpointExecutor {
                 change_epoch_fx,
                 None,
                 self.object_cache_reader.as_ref(),
-            )
-            .expect("Acquiring shared version assignments for change_epoch tx cannot fail");
+            );
 
         info!(
             "scheduling change epoch txn with digest: {:?}, expected effects digest: {:?}, assigned versions: {:?}",

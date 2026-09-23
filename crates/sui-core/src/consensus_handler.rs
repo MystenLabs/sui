@@ -1760,8 +1760,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 "Writing pending checkpoint",
             );
             self.epoch_store
-                .write_pending_checkpoint(&mut state.output, &pending_checkpoint)
-                .expect("failed to write pending checkpoint");
+                .write_pending_checkpoint(&mut state.output, &pending_checkpoint);
         }
 
         state.output.set_checkpoint_queue_drained(queue_drained);
@@ -2104,7 +2103,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &mut state.output,
                 commit_info.round,
             )
-            .expect("db error")
             .into_iter()
             .flat_map(|(key, txns)| txns.into_iter().map(move |tx| (key, tx)))
             .map(|(key, tx)| {
@@ -2121,7 +2119,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let txns: Vec<_> = self
                 .epoch_store
                 .load_deferred_transactions_for_randomness_v2(&mut state.output)
-                .expect("db error")
                 .into_iter()
                 .flat_map(|(key, txns)| txns.into_iter().map(move |tx| (key, tx)))
                 .map(|(key, tx)| {
@@ -2161,8 +2158,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     commit_info.round,
                     for_randomness,
                     txns,
-                )
-                .expect("db error"),
+                ),
             self.epoch_store.protocol_config(),
             for_randomness,
             self.congestion_logger.is_some(),
@@ -2665,11 +2661,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
             prefetch_refs.sort();
             prefetch_refs.dedup();
-            // On a read error fall back to an empty map (treat refs as unlocked) — the
-            // same lenient behavior the per-transaction read had.
-            self.epoch_store
-                .get_owned_object_locks_map(&prefetch_refs)
-                .unwrap_or_default()
+            self.epoch_store.get_owned_object_locks_map(&prefetch_refs)
         };
 
         for (block, parsed_transactions) in block_transactions {
@@ -3815,7 +3807,6 @@ mod tests {
         assert!(
             epoch_store
                 .get_pending_checkpoints(None)
-                .unwrap()
                 .iter()
                 .all(|(_, checkpoint)| !checkpoint.details.last_of_epoch)
         );
@@ -3881,7 +3872,7 @@ mod tests {
                 .get_reconfig_state_read_lock_guard()
                 .is_reject_all_tx()
         );
-        let checkpoints = epoch_store.get_pending_checkpoints(None).unwrap();
+        let checkpoints = epoch_store.get_pending_checkpoints(None);
         assert!(checkpoints.last().unwrap().1.details.last_of_epoch);
         assert_eq!(
             setup
@@ -4311,9 +4302,7 @@ mod tests {
             NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Dropped)
         ));
 
-        let locks = epoch_store
-            .get_owned_object_locks_map(&[owned_object_ref])
-            .unwrap();
+        let locks = epoch_store.get_owned_object_locks_map(&[owned_object_ref]);
         assert_eq!(locks.get(&owned_object_ref), Some(&winner_digest));
         assert!(
             epoch_store
@@ -4332,8 +4321,7 @@ mod tests {
             epoch_store.consensus_messages_processed_notify(vec![loser_key]),
         )
         .await
-        .expect("processed notification for dropped transaction should resolve")
-        .unwrap();
+        .expect("processed notification for dropped transaction should resolve");
     }
 
     #[tokio::test(flavor = "current_thread")]

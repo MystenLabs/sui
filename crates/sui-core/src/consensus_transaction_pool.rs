@@ -536,7 +536,7 @@ impl ConsensusTransactionPool {
         // Check for tx already processed by consensus.
         let consensus_processed = self.epoch_store.check_consensus_messages_processed(
             watches.iter().map(|watch| watch.consensus.key().clone()),
-        )?;
+        );
         for (watch, consensus_processed) in watches.iter_mut().zip_eq(consensus_processed) {
             if consensus_processed {
                 watch.observed = Some(ProcessedMethod::ConsensusMessageProcessed);
