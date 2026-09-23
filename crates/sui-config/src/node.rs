@@ -288,11 +288,11 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_driver_config: Option<TransactionDriverConfig>,
 
-    /// When set, consensus pulls transactions directly from a validator-side pool
-    /// instead of the admission-queue drain thread pushing them. This takes
+    /// Consensus pulls transactions directly from a validator-side pool instead of
+    /// the admission-queue drain thread pushing them. Enabled by default; this takes
     /// precedence over `authority_overload_config.admission_queue_enabled`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub consensus_transaction_pool: Option<ConsensusTransactionPoolConfig>,
+    #[serde(default)]
+    pub consensus_transaction_pool: ConsensusTransactionPoolConfig,
 
     /// Configuration for congestion tracker binary logging.
     /// When set, enables per-commit binary logs of congestion tracker state.
@@ -335,13 +335,26 @@ impl Default for TransactionDriverConfig {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ConsensusTransactionPoolConfig {
+    /// Set false to fall back to the push-based admission queue.
+    #[serde(default = "bool_true")]
+    pub enabled: bool,
+
     /// Maximum queued user-lane entries. A soft bundle counts as one entry,
     /// matching the existing admission queue. Defaults to the consensus
     /// `max_pending_transactions` setting.
     pub max_pending_transactions: Option<usize>,
+}
+
+impl Default for ConsensusTransactionPoolConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_pending_transactions: None,
+        }
+    }
 }
 
 impl ConsensusTransactionPoolConfig {
@@ -1608,8 +1621,8 @@ pub struct AuthorityOverloadConfig {
 
     // Enables use of a gas-price-based priority queue for load shedding of
     // transactions at admission time. If false, when consensus is saturated, transactions
-    // are rejected with TooManyTransactionsPendingConsensus. Ignored when
-    // `consensus_transaction_pool` is configured.
+    // are rejected with TooManyTransactionsPendingConsensus. Ignored unless
+    // `consensus_transaction_pool.enabled` is set false.
     #[serde(default = "default_admission_queue_enabled")]
     pub admission_queue_enabled: bool,
 

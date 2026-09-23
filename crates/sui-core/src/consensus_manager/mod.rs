@@ -305,10 +305,7 @@ impl ConsensusManager {
             .filter(|_| is_validator);
         let transaction_pool: Option<Arc<dyn TransactionPool>> = if let Some(context) = pool_context
         {
-            let config = node_config
-                .consensus_transaction_pool
-                .as_ref()
-                .expect("transaction pool context requires pool config");
+            let config = &node_config.consensus_transaction_pool;
             let pool = Arc::new(ConsensusTransactionPool::new(
                 epoch_store.clone(),
                 config.max_pending_transactions(&self.consensus_config),

@@ -38,6 +38,7 @@ use parking_lot::Mutex;
 use prometheus::IntGauge;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
+use std::sync::Weak;
 use std::time::{Duration, Instant};
 use sui_macros::fail_point_if;
 use sui_types::base_types::EpochId;
@@ -1182,7 +1183,7 @@ fn consensus_client_error(error: ClientError) -> SuiError {
 enum PoolState {
     /// Before the first consensus start.
     Absent,
-    Active(EpochId, Arc<ConsensusTransactionPool>),
+    Active(EpochId, Weak<ConsensusTransactionPool>),
     /// No pool will be installed for this epoch (the node is not a validator, or is
     /// shutting down); waiters must fail rather than wait for it.
     Unavailable(EpochId),
@@ -1217,7 +1218,10 @@ impl TransactionPoolContext {
 
     pub fn set_active(&self, epoch: EpochId, pool: Arc<ConsensusTransactionPool>) {
         assert_eq!(epoch, pool.epoch());
-        drop(self.state.send_replace(PoolState::Active(epoch, pool)));
+        drop(
+            self.state
+                .send_replace(PoolState::Active(epoch, Arc::downgrade(&pool))),
+        );
     }
 
     /// Marks `epoch` as one that will never get a pool, promptly failing current and
@@ -1264,7 +1268,11 @@ impl TransactionPoolContext {
             let state = receiver.borrow_and_update().clone();
             match state {
                 PoolState::Active(epoch, pool) if epoch == caller_epoch => {
-                    return Ok(pool);
+                    // A dead pool with no state change means consensus for this epoch
+                    // was torn down abruptly; fail as for `Unavailable`.
+                    return pool
+                        .upgrade()
+                        .ok_or_else(|| SuiErrorKind::TooManyTransactionsPendingConsensus.into());
                 }
                 PoolState::Active(epoch, _) if epoch > caller_epoch => {
                     return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
@@ -2159,8 +2167,30 @@ mod tests {
         state.reconfigure_for_testing().await;
         let next_pool = pool_for_current_epoch(&state, 10);
         assert_eq!(next_pool.epoch(), next_epoch);
-        context.set_active(next_epoch, next_pool);
+        context.set_active(next_epoch, next_pool.clone());
         assert_eq!(waiter.await.unwrap().unwrap().epoch(), next_epoch);
+    }
+
+    #[tokio::test]
+    async fn context_fails_promptly_when_active_pool_is_dropped() {
+        let context =
+            TransactionPoolContext::new_for_tests(Arc::new(AdmissionQueueMetrics::new_for_tests()));
+        let state = TestAuthorityBuilder::new().build().await;
+        let pool = pool_for_current_epoch(&state, 10);
+        let epoch = pool.epoch();
+        context.set_active(epoch, pool.clone());
+        assert_eq!(context.wait_for_pool(epoch).await.unwrap().epoch(), epoch);
+
+        // The context holds the pool weakly, so an abrupt teardown that drops the
+        // pool without publishing a new state must fail waiters rather than hang.
+        drop(pool);
+        let Err(error) = context.wait_for_pool(epoch).await else {
+            panic!("waiting on a dropped pool must fail");
+        };
+        assert!(matches!(
+            error.as_inner(),
+            SuiErrorKind::TooManyTransactionsPendingConsensus
+        ));
     }
 
     #[tokio::test]
