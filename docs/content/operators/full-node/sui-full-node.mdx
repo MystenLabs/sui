@@ -522,7 +522,7 @@ Wants=network-online.target
 [Service]
 User=sui
 ExecStart=/usr/local/bin/sui-node --config-path /opt/sui/fullnode.yaml
-Environment=RUST_LOG=info,sui_core=debug,consensus=debug,jsonrpsee=error
+Environment=RUST_LOG=info,sui_core=debug,consensus=debug
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure
