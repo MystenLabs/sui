@@ -70,31 +70,4 @@ Selecting a provider depends on three factors:
 
 Most providers support a hosted widget approach. You construct a URL with query parameters that pre-fill the user's wallet address, preferred asset, and source currency. The user completes the purchase inside the provider's interface, and the provider delivers tokens directly to the wallet address you supplied.
 
-The following example shows how to construct a Coinbase on-ramp URL for a Sui user. Replace `YOUR_PROJECT_ID` with the project ID from the Coinbase Developer Platform and `USER_WALLET_ADDRESS` with the connected wallet address.
-
-```typescript
-const COINBASE_ONRAMP_BASE_URL = "https://pay.coinbase.com/buy/select-asset";
-
-function buildCoinbaseOnrampUrl(walletAddress: string): string {
-  const params = new URLSearchParams({
-    appId: "YOUR_PROJECT_ID",
-    addresses: JSON.stringify({ [walletAddress]: ["sui"] }),
-    assets: JSON.stringify(["SUI"]),
-    defaultNetwork: "sui",
-  });
-
-  return `${COINBASE_ONRAMP_BASE_URL}?${params.toString()}`;
-}
-
-// Open the URL in a new tab when the user clicks "Buy SUI"
-function handleBuyClick(walletAddress: string): void {
-  const url = buildCoinbaseOnrampUrl(walletAddress);
-  window.open(url, "_blank", "noopener,noreferrer");
-}
-```
-
-After the user completes the purchase, Coinbase delivers the tokens to `walletAddress` on the Sui network. Your app does not handle the payment flow or custody any funds.
-
-For providers that support iframe embeds, you can render the widget inline rather than opening a new tab. Refer to the provider's documentation for the correct embed approach and any postMessage event handling required to detect purchase completion.
-
 See [Fiat Off-Ramps](/onchain-finance/asset-custody/fiat-off-ramps) for the full off-ramp provider list.
