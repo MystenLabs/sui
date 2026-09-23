@@ -35,18 +35,6 @@ Reference these examples to learn common asset patterns on Sui, including loyalt
 
 Sui supports several standard patterns for creating and managing digital assets onchain. Each pattern defines how an asset is minted, transferred, spent, or restricted. Choosing the right pattern depends on your use case: whether the asset is freely tradeable, restricted to specific actions, or tied to a particular platform or ecosystem.
 
-The examples in this section cover the most common asset patterns used in Sui applications. Each example includes the Move code and an explanation of how the pattern works and when to use it.
-
-## What topics does this section cover?
-
-The subtopics in this section cover the following asset patterns:
-
-- **Loyalty tokens:** Non-transferable tokens that reward users for actions within an app. Loyalty tokens use the Sui Closed-Loop Token standard and restrict transfers to approved services only.
-- **Regulated coins:** Fungible coins that include an allowlist or denylist managed by a trusted authority. Regulated coins give issuers control over who can hold or transfer the asset.
-- **Closed-Loop Tokens:** Tokens that enforce spend policies onchain. A Closed-Loop Token can only be spent at services registered with the token's policy, making it suitable for points systems, vouchers, and reward programs.
-
-## How do asset patterns work on Sui?
-
 Asset patterns on Sui are implemented as Move modules. Each pattern uses Sui's object model to represent the asset and its associated policy. The Move type system enforces the rules of the pattern at compile time, so invalid operations are rejected before they reach the network.
 
 For example, a Closed-Loop Token requires a `TokenPolicy` object that lists approved services. When a user tries to spend the token, the policy checks whether the target service is registered. If it is not, the transaction fails.
