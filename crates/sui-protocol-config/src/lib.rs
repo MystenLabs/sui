@@ -413,6 +413,7 @@ const MAINNET_USDB: &str =
 //              Enable allowances on mainnet.
 //              Merge colliding deferred-transaction entries in the consensus handler
 //              instead of overwriting (which stranded the displaced transactions).
+//              Enable defer_owned_object_double_spend on all networks.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4795,6 +4796,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.disable_effects_tx_dependencies = true;
                     }
                     cfg.feature_flags.merge_colliding_deferrals = true;
+                    cfg.feature_flags.defer_owned_object_double_spend = true;
                 }
                 // Use this template when making changes:
                 //
