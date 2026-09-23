@@ -11,6 +11,9 @@ mod checked {
     use std::sync::Arc;
     use sui_config::verifier_signing_config::VerifierSigningConfig;
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::TypeTag;
+    use sui_types::allowance::parse_allowance_object;
+    use sui_types::balance::Balance;
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -703,8 +706,9 @@ mod checked {
         Ok(())
     }
 
-    /// Verify that all Move object inputs in a gasless transaction are `Coin<T>`
-    /// where `T` is in the allowlist.
+    /// Verify that all Move object inputs in a gasless transaction are owned `Coin<T>` where `T`
+    /// is in the allowlist, or (with `gasless_allowance_spend`) the Clock or a non-app-bound
+    /// `Allowance<Balance<T>>` with `T` in the allowlist.
     pub fn check_gasless_object_inputs(
         input_objects: &InputObjects,
         protocol_config: &ProtocolConfig,
@@ -721,6 +725,10 @@ mod checked {
             }
             match object.owner() {
                 Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => (),
+                Owner::Shared { .. } if protocol_config.gasless_allowance_spend() => {
+                    check_gasless_shared_input(object, &allowed_token_types)?;
+                    continue;
+                }
                 Owner::Immutable
                 | Owner::Shared { .. }
                 | Owner::ObjectOwner(_)
@@ -746,6 +754,31 @@ mod checked {
                 )
             );
         }
+        Ok(())
+    }
+
+    fn check_gasless_shared_input(
+        object: &Object,
+        allowed_token_types: &BTreeMap<TypeTag, u64>,
+    ) -> UserInputResult<()> {
+        if object.id() == SUI_CLOCK_OBJECT_ID {
+            return Ok(());
+        }
+        let unsupported = |msg: &str| UserInputError::Unsupported(msg.to_string());
+        let allowance = parse_allowance_object(object).map_err(|_| {
+            unsupported(
+                "Gasless transactions only support the Clock or an Allowance as shared inputs",
+            )
+        })?;
+        fp_ensure!(
+            !allowance.is_app_bound,
+            unsupported("Gasless transactions do not support app-bound allowances")
+        );
+        fp_ensure!(
+            Balance::maybe_get_balance_type_param(&allowance.funds_type)
+                .is_some_and(|coin_type| allowed_token_types.contains_key(&coin_type)),
+            unsupported("Gasless transactions only support allowances of allowlisted types")
+        );
         Ok(())
     }
 
