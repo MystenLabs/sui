@@ -66,7 +66,7 @@ pub fn list_package_versions(
         .reader
         .inner()
         .indexes()
-        .ok_or_else(RpcError::not_found)?;
+        .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
 
     let mut versions = vec![];
     let iter = indexes

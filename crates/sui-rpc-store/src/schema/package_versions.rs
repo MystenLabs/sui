@@ -168,12 +168,14 @@ impl<R: Reader> super::RpcStoreSchema<R> {
     /// published at `original_id` that existed as of `checkpoint`,
     /// returning its `(version, storage_id)`.
     ///
-    /// Walks every recorded version of the package — cheap, since
-    /// even the most-upgraded mainnet packages have on the order of
-    /// a hundred versions — and keeps the highest version whose
-    /// publish checkpoint is at or before `checkpoint`. Restore-floor
-    /// rows (no recorded publish checkpoint) count as having always
-    /// existed, since they predate the available window.
+    /// Versions are walked from highest to lowest, and the first
+    /// version whose publish checkpoint is at or before `checkpoint`
+    /// wins. Publish checkpoints are non-decreasing in version,
+    /// because every writer stamps the checkpoint being indexed, so
+    /// the scan's cost is bounded by the number of versions published
+    /// after `checkpoint`, not by the package's lineage length.
+    /// Restore-floor rows (no recorded publish checkpoint) count as
+    /// having always existed, since they predate the available window.
     ///
     /// Returns `Ok(None)` when no version of the package existed as
     /// of `checkpoint` (it was first published later, or the package
@@ -183,24 +185,20 @@ impl<R: Reader> super::RpcStoreSchema<R> {
         original_id: ObjectID,
         checkpoint: u64,
     ) -> Result<Option<(u64, ObjectID)>, Error> {
-        let mut latest: Option<(u64, ObjectID)> = None;
-        for row in self.iter_package_versions(original_id)? {
+        for row in self
+            .package_versions
+            .iter_rev_prefix(&OriginalIdPrefix(original_id))?
+        {
             let (key, value) = row?;
             let info = value.into_inner();
-            let existed = match info.checkpoint {
-                // Restore floor: published before the available
-                // window, so it existed as of any queried checkpoint.
-                None => true,
-                Some(published) => published <= checkpoint,
-            };
-            if !existed {
-                continue;
+            if info
+                .checkpoint
+                .is_none_or(|published| published <= checkpoint)
+            {
+                return Ok(Some((key.version, decode_storage_id(&info.storage_id)?)));
             }
-            // `iter_package_versions` yields ascending versions, so
-            // any qualifying row supersedes the prior candidate.
-            latest = Some((key.version, decode_storage_id(&info.storage_id)?));
         }
-        Ok(latest)
+        Ok(None)
     }
 }
 
