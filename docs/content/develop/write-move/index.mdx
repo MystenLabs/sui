@@ -29,9 +29,74 @@ answer: >-
   including syntax fundamentals, best practices, and package structure.
 ---
 
-Learn how to write Move smart contract packages for the Sui blockchain, including syntax fundamentals, best practices, and package structure.
+Move is the smart contract language of the Sui blockchain. You write Move code organized into packages, which are the deployable units on Sui. Each package contains one or more modules, and each module defines types, functions, and logic that run onchain.
 
-Learn how to write Move smart contract packages for Sui, including syntax fundamentals, best practices, and package structure.
+## What is a Move package?
+
+A Move package is a directory with a `Move.toml` manifest file and a `sources/` folder containing `.move` source files. The manifest declares the package name and edition. The source files define the modules that make up the package.
+
+A minimal package structure looks like this:
+
+```
+my_package/
+├── Move.toml
+└── sources/
+    └── my_module.move
+```
+
+Create a new package with the Sui CLI:
+
+```bash
+sui move new my_package
+```
+
+The generated `Move.toml` is all you need to get started:
+
+```toml
+[package]
+name = "my_package"
+edition = "2024"
+```
+
+The `edition = "2024"` line tells the CLI to resolve the Sui framework dependency automatically. You do not need a `[dependencies]` section for the Sui framework, and you do not need an `[addresses]` section.
+
+## What does a Move module look like?
+
+A Move module declares a module name, imports dependencies, defines types, and implements functions. The following example defines a simple counter object:
+
+```move
+module my_package::counter;
+
+use sui::event;
+
+public struct Counter has key {
+    id: UID,
+    value: u64,
+}
+
+public struct CounterIncremented has copy, drop {
+    value: u64,
+}
+
+fun init(ctx: &mut TxContext) {
+    let counter = Counter {
+        id: object::new(ctx),
+        value: 0,
+    };
+    transfer::transfer(counter, ctx.sender());
+}
+
+public fun increment(counter: &mut Counter) {
+    counter.value = counter.value + 1;
+    event::emit(CounterIncremented { value: counter.value });
+}
+```
+
+This module uses Move 2024 syntax: the module label declaration (`module my_package::counter;`), method-style calls (`ctx.sender()` instead of `tx_context::sender(ctx)`), and direct field access. The `Counter` type has the `key` ability, which makes it a Sui object. The `init` function runs once at package publication and creates the initial counter.
+
+## What topics does writing Move packages cover?
+
+The subtopics in this section cover everything you need to write Move packages on Sui, including the object model, abilities and type system, package structure, testing, and upgrade patterns.
 
 import DocCardList from '@theme/DocCardList';
 
