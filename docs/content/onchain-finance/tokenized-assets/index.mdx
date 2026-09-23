@@ -34,12 +34,6 @@ answer: >-
 
 Non-fungible tokens (NFTs) on Sui are objects with unique identities that you can own, transfer, and extend with custom logic. Because Sui treats every NFT as a first-class object, you get fine-grained control over ownership, composability, and programmable transfer rules without relying on a central contract registry.
 
-Learn how to create and extend non-fungible tokens on Sui.
-
-## What are NFTs on Sui?
-
-An NFT on Sui is a Move object with a globally unique ID. Unlike account-based chains where NFT state lives inside a shared contract, Sui stores each NFT as a distinct object owned directly by an address or by another object. This model lets you transfer NFTs in a single transaction, compose them into bundles, and attach dynamic fields without touching a central ledger.
-
 Every NFT object carries metadata you define in its Move struct. Common fields include a name, description, and URL pointing to offchain media. The Sui framework does not enforce a single metadata schema, so you can design your NFT struct to match your application's requirements exactly.
 
 ## How do NFTs work on Sui?
@@ -47,14 +41,6 @@ Every NFT object carries metadata you define in its Move struct. Common fields i
 Sui NFTs follow the object ownership model. When you mint an NFT, the runtime assigns it a unique `ID` and records the owner. Transferring the NFT changes that ownership record. Because ownership is tracked at the object level rather than inside a mapping, Sui can process NFT transfers in parallel when they involve different objects, which keeps throughput high.
 
 You can extend NFT behavior by adding custom transfer policies, attaching dynamic fields for evolving metadata, locking tokens as soulbound (non-transferable), or building rental mechanics that temporarily grant usage rights without changing the underlying owner.
-
-## What topics does this section cover?
-
-The subtopics in this section walk through the most common NFT patterns on Sui:
-
-- **Soulbound tokens:** Create NFTs that are permanently bound to an address and cannot be transferred.
-- **NFT rental:** Implement time-limited access rights that let a borrower use an NFT without taking ownership.
-- **Asset tokenization:** Represent real-world or onchain assets as NFTs with structured, verifiable metadata.
 
 import DocCardList from '@theme/DocCardList';
 
