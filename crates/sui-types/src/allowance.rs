@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 
 pub const ALLOWANCE_MODULE_NAME: &IdentStr = ident_str!("allowance");
 pub const ALLOWANCE_STRUCT_NAME: &IdentStr = ident_str!("Allowance");
+pub const ALLOWANCE_BALANCE_SPEND_FUNCTION_NAME: &IdentStr = ident_str!("balance_spend");
 pub const ALLOWANCE_WITHDRAWAL_STRUCT_NAME: &IdentStr = ident_str!("AllowanceWithdrawal");
 pub const RESOLVED_ALLOWANCE_WITHDRAWAL_STRUCT: (&AccountAddress, &IdentStr, &IdentStr) = (
     &SUI_FRAMEWORK_ADDRESS,
@@ -96,6 +97,8 @@ pub struct ResolvedAllowance {
     pub spender: Option<SuiAddress>,
     /// The accumulated type `T` of `Allowance<T>` (e.g. `Balance<SUI>`).
     pub funds_type: TypeTag,
+    /// App-bound allowances can only be spent through `app_balance_spend`.
+    pub is_app_bound: bool,
 }
 
 /// Parses an object as an `Allowance`, extracting the sign-time-relevant fields.
@@ -131,5 +134,6 @@ pub fn parse_allowance_object(object: &Object) -> UserInputResult<ResolvedAllowa
         funder: allowance.settings.funder,
         spender: allowance.settings.spender,
         funds_type,
+        is_app_bound: allowance.settings.app.is_some(),
     })
 }
