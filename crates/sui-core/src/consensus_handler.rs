@@ -197,6 +197,7 @@ impl ConsensusHandlerInitializer {
             self.congestion_logger.clone(),
             self.consensus_gasless_counter.clone(),
             self.state.transaction_deny_config_manager().clone(),
+            self.state.config.enable_staggered_submission_signal,
         )
     }
 }
@@ -748,6 +749,11 @@ pub struct ConsensusHandler<C> {
 
     transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
 
+    /// Node-local enablement of the staggered-submission activation signal
+    /// (`NodeConfig::enable_staggered_submission_signal`); ANDed with the protocol
+    /// flag before a signal transition may flip staggering.
+    enable_staggered_submission_signal: bool,
+
     checkpoint_queue: Mutex<CheckpointQueue>,
 }
 
@@ -797,6 +803,7 @@ impl<C> ConsensusHandler<C> {
         congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
         consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
         transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
+        enable_staggered_submission_signal: bool,
     ) -> Self {
         assert_supported_protocol_config(epoch_store.protocol_config());
 
@@ -843,6 +850,7 @@ impl<C> ConsensusHandler<C> {
             congestion_logger,
             consensus_gasless_counter,
             transaction_deny_config_manager,
+            enable_staggered_submission_signal,
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -905,6 +913,7 @@ impl<C> ConsensusHandler<C> {
             congestion_logger: None,
             consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
             transaction_deny_config_manager,
+            enable_staggered_submission_signal: true,
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -1833,10 +1842,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     /// so every honest validator computes the same values and the mode flips in
     /// lockstep.
     ///
-    /// The signal is measured and its transitions are tracked unconditionally; the
-    /// `staggered_submission_signal` protocol flag only decides whether a transition
-    /// actually flips staggering, so the signal can be observed in dry run before the
-    /// flag is enabled.
+    /// The signal is measured and its transitions are tracked unconditionally; whether
+    /// a transition actually flips staggering is decided by the
+    /// `staggered_submission_signal` protocol flag together with the node-local
+    /// `NodeConfig::enable_staggered_submission_signal` kill switch, so the signal can
+    /// be observed in dry run before enablement (or after a local opt-out).
     fn record_duplication_signal(
         &self,
         state: &CommitHandlerState,
@@ -1867,10 +1877,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.metrics
             .staggered_submission_excess_copies
             .observe(excess_copies as f64);
-        let apply = self
-            .epoch_store
-            .protocol_config()
-            .staggered_submission_signal();
+        let apply = self.enable_staggered_submission_signal
+            && self
+                .epoch_store
+                .protocol_config()
+                .staggered_submission_signal();
         let (transition, duplication_ratio) = self
             .epoch_store
             .staggered_submission()
@@ -4142,6 +4153,7 @@ mod tests {
             None,
             state.consensus_gasless_counter.clone(),
             state.transaction_deny_config_manager().clone(),
+            true,
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -4719,6 +4731,7 @@ mod tests {
             None,
             state.consensus_gasless_counter.clone(),
             state.transaction_deny_config_manager().clone(),
+            true,
         );
 
         handler.handle_consensus_commit_for_test(commit).await;
@@ -4843,6 +4856,7 @@ mod tests {
             None,
             state.consensus_gasless_counter.clone(),
             state.transaction_deny_config_manager().clone(),
+            true,
         );
 
         handler.handle_consensus_commit_for_test(commit).await;
@@ -4973,6 +4987,7 @@ mod tests {
             None,
             state.consensus_gasless_counter.clone(),
             state.transaction_deny_config_manager().clone(),
+            true,
         );
 
         handler.handle_consensus_commit_for_test(commit).await;
