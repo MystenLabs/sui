@@ -1,0 +1,90 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 13 tasks
+
+// Gasless allowance spends rejected at signing. Signing checks do not run under the simulator,
+// so these live apart from gasless_allowance.move.
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 9-23:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 10776800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 27-31:
+//# programmable --sender A --inputs 10000 object(1,1) @A
+// Mint 10000 USDC to A's address balance.
+//> 0: sui::coin::mint<test::usdc::USDC>(Input(1), Input(0));
+//> 1: sui::coin::into_balance<test::usdc::USDC>(Result(0));
+//> 2: sui::balance::send_funds<test::usdc::USDC>(Result(1), Input(2));
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Merge, 10000)
+gas summary: computation_cost: 1000000, storage_cost: 2690400,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 4, line 33:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 35-39:
+//# programmable --sender A --inputs b"b" @B vector[5000u256] vector[] vector[] 86400000 1000u256
+// A issues B an allowance: 5000 lifetime cap, 1000 per day.
+//> 0: sui::allowance::periodic_rate_limit(Input(5), Input(6));
+//> 1: std::option::some<sui::allowance::RateLimit>(Result(0));
+//> 2: sui::allowance::new<sui::balance::Balance<test::usdc::USDC>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(1));
+created: object(5,0), object(5,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7007200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 41-44:
+//# programmable --sender B --address-balance-gas --gas-price 0 --gas-budget 0 --inputs allowance_withdraw<sui::balance::Balance<test::usdc::USDC>>(100,@A,object(5,0)) mutshared(5,0) mutshared(6) @C
+// Rejected: the Clock must be an immutable input.
+//> 0: sui::allowance::balance_spend<test::usdc::USDC>(Input(1), Input(0), Input(2));
+//> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(3));
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support the immutable Clock or a mutable allowance backing a withdrawal as shared inputs, got object(0xobject(0x0000000000000000000000000000000000000000000000000000000000000006)) (Mutable)
+
+task 7, lines 46-49:
+//# programmable --sender B --address-balance-gas --gas-price 0 --gas-budget 0 --inputs allowance_withdraw<sui::balance::Balance<test::usdc::USDC>>(100,@A,object(5,0)) immshared(5,0) immshared(6) @C
+// Rejected: the allowance must be a mutable input.
+//> 0: sui::allowance::balance_spend<test::usdc::USDC>(Input(1), Input(0), Input(2));
+//> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(3));
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support the immutable Clock or a mutable allowance backing a withdrawal as shared inputs, got object(5,0) (Immutable)
+
+task 8, lines 51-53:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs mutshared(5,0) object(5,1)
+// Rejected: revoke is not a gasless function, and the allowance backs no withdrawal.
+//> 0: sui::allowance::revoke<sui::balance::Balance<test::usdc::USDC>>(Input(1), Input(0));
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support the immutable Clock or a mutable allowance backing a withdrawal as shared inputs, got object(5,0) (Mutable)
+
+task 9, lines 55-58:
+//# programmable --sender A --inputs 5000 @A
+// Fund A with SUI for a SUI allowance.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(9,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 5000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, line 60:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 11, lines 62-65:
+//# programmable --sender A --inputs b"sui" @B vector[1000u256] vector[] vector[99999999999999]
+// A SUI allowance for B.
+//> 0: std::option::none<sui::allowance::RateLimit>();
+//> 1: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
+created: object(11,0), object(11,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6422000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, lines 67-70:
+//# programmable --sender B --address-balance-gas --gas-price 0 --gas-budget 0 --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@A,object(11,0)) mutshared(11,0) immshared(6) @C
+// Rejected: SUI is not an allowlisted gasless token.
+//> 0: sui::allowance::balance_spend<sui::sui::SUI>(Input(1), Input(0), Input(2));
+//> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(3));
+Error: Error checking transaction input objects: Feature is not supported: Fund type 0x2::sui::SUI is not currently allowed in gasless transactions
