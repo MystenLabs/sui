@@ -40,6 +40,7 @@ use tokio::time::sleep;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
+use tonic::transport::server::TcpIncoming;
 use tracing::error;
 
 mod bigtable_client;
@@ -354,8 +355,21 @@ fn spawn_listener(
             .add_service(reflection_v1alpha_builder.build_v1alpha()?);
     }
 
+    // Bind here rather than inside the spawned task. `serve_with_shutdown` binds
+    // within the future it returns, so the caller would get a `Service` back while
+    // the address still refuses connections, and anything that dials immediately
+    // races the bind. Binding first also turns an unusable address into an error
+    // from `start_service` instead of a task that dies after start-up.
+    //
+    // `serve_with_incoming_shutdown` discards the builder's TCP configuration, so
+    // restate the `TCP_NODELAY` that `serve_with_shutdown` would have applied from
+    // its default. Keepalive stays off, which is also tonic's default.
+    let incoming = TcpIncoming::bind(listen_address)
+        .map_err(|e| anyhow::anyhow!("Failed to bind kv-rpc listener on {listen_address}: {e}"))?
+        .with_nodelay(Some(true));
+
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-    let server_future = router.serve_with_shutdown(listen_address, async {
+    let server_future = router.serve_with_incoming_shutdown(incoming, async {
         let _ = rx.await;
     });
 
