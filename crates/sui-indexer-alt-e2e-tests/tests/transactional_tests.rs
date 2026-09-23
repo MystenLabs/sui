@@ -4,8 +4,6 @@
 use std::error::Error;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -32,7 +30,6 @@ use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
 struct OffchainReader {
     cluster: Arc<OffchainCluster>,
     client: Client,
-    queries: AtomicUsize,
 }
 
 impl OffchainReader {
@@ -40,7 +37,6 @@ impl OffchainReader {
         Self {
             cluster,
             client: Client::new(),
-            queries: AtomicUsize::new(0),
         }
     }
 }
@@ -96,38 +92,6 @@ impl OffchainStateReader for OffchainReader {
             response_body: serde_json::to_string_pretty(&body)?,
             http_headers: Some(headers),
             service_version: version,
-        })
-    }
-
-    async fn execute_jsonrpc(&self, method: String, params: Value) -> anyhow::Result<TestResponse> {
-        let query = json!({
-            "jsonrpc": "2.0",
-            "id": self.queries.fetch_add(1, Ordering::SeqCst),
-            "method": method,
-            "params": params,
-        });
-
-        let response = self
-            .client
-            .post(self.cluster.jsonrpc_url())
-            .json(&query)
-            .send()
-            .await
-            .context("Request to JSON-RPC server failed")?;
-
-        // Extract headers but remove the ones that will change from run to run.
-        let mut headers = response.headers().clone();
-        headers.remove("date");
-
-        let body: Value = response
-            .json()
-            .await
-            .context("Failed to parse JSON-RPC response")?;
-
-        Ok(TestResponse {
-            response_body: serde_json::to_string_pretty(&body)?,
-            http_headers: Some(headers),
-            service_version: None,
         })
     }
 }
