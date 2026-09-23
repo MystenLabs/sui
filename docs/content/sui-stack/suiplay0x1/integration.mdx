@@ -68,33 +68,15 @@ The Node.js SDK ships as the `@playtron/sdk` package and requires Node.js 18 or 
 npm install @playtron/sdk
 ```
 
-The following example detects the Playtron environment with the `OS` class and retrieves the Playtron wallet address with the `Sui` class.
+Detect the environment with the `OS` class. `OS.isPlaytron()` returns `true` when the game runs on GameOS.
 
-```ts
-import { OS, Sui } from '@playtron/sdk';
+<ImportContent source="node/examples/src/is-playtron.ts" mode="code" org="playtron-os" repo="playtron-sdk" />
 
-async function main() {
-  // Check whether the game is running on GameOS
-  const isPlaytron = await new OS().isPlaytron();
+Read the wallet with the `Sui` class. `Sui.getWalletAddress()` returns the address of the user's Playtron wallet without any additional setup.
 
-  if (!isPlaytron) {
-    console.log('Not running on a Playtron device.');
-    return;
-  }
+<ImportContent source="node/examples/src/sui-address.ts" mode="code" org="playtron-os" repo="playtron-sdk" />
 
-  try {
-    // Read the address from the user's Playtron wallet
-    const address = await new Sui().getWalletAddress();
-    console.log(`User sui wallet address is: ${address}`);
-  } catch (err) {
-    console.error(`Error during wallet address retrieval, err:${err}`);
-  }
-}
-
-main();
-```
-
-`OS.isPlaytron()` returns `true` when the game runs on GameOS. `Sui.getWalletAddress()` then returns the address of the user's Playtron wallet without any additional setup. The `Sui` class also exposes `signMessage()`, `signTransaction()`, and `signAndExecuteTransaction()` for transaction flows. Refer to the [Playtron GameOS Node.js SDK reference](https://github.com/playtron-os/playtron-sdk/blob/main/node/README.md) for the full API and to the [SDK repository](https://github.com/playtron-os/playtron-sdk) for C++ and C# examples.
+The `Sui` class also exposes `signMessage()`, `signTransaction()`, and `signAndExecuteTransaction()` for transaction flows. Refer to the [Playtron GameOS Node.js SDK reference](https://github.com/playtron-os/playtron-sdk/blob/main/node/README.md) for the full API, and to the [examples directory](https://github.com/playtron-os/playtron-sdk/tree/main/node/examples/src) for the rest of the Node.js examples and their C++ and C# equivalents.
 
 ## Off-device integration
 
@@ -120,50 +102,17 @@ npm install @mysten/dapp-kit-react @mysten/sui
 
 :::
 
-Create a single dApp Kit instance for your game:
+Create a single dApp Kit instance for your game. The `declare module` block is what gives the hooks their types, so do not omit it:
 
-```ts
-// dapp-kit.ts
-import { createDAppKit } from '@mysten/dapp-kit-react';
-import { SuiGrpcClient } from '@mysten/sui/grpc';
+<ImportContent source="packages/dapp-kit/examples/react/simple/src/dApp-kit.ts" mode="code" org="MystenLabs" repo="ts-sdks" />
 
-const GRPC_URLS = {
-  mainnet: 'https://fullnode.mainnet.sui.io:443',
-  testnet: 'https://fullnode.testnet.sui.io:443',
-};
+That example defaults to Testnet and enables the burner wallet in development builds. Set `defaultNetwork` to `mainnet` and drop `enableBurnerWallet` for a production game.
 
-export const dAppKit = createDAppKit({
-  networks: ['mainnet', 'testnet'],
-  defaultNetwork: 'mainnet',
-  createClient(network) {
-    return new SuiGrpcClient({ network, baseUrl: GRPC_URLS[network] });
-  },
-});
+Wrap your game's UI in `DAppKitProvider`, then render the `ConnectButton` component from `@mysten/dapp-kit-react/ui` anywhere inside it:
 
-// The hooks require this global type registration
-declare module '@mysten/dapp-kit-react' {
-  interface Register {
-    dAppKit: typeof dAppKit;
-  }
-}
-```
+<ImportContent source="packages/dapp-kit/examples/react/simple/src/main.tsx" mode="code" org="MystenLabs" repo="ts-sdks" />
 
-Wrap your game's UI in `DAppKitProvider` and drop in the `ConnectButton` component:
-
-```tsx
-// App.tsx
-import { DAppKitProvider } from '@mysten/dapp-kit-react';
-import { ConnectButton } from '@mysten/dapp-kit-react/ui';
-import { dAppKit } from './dapp-kit';
-
-export function App() {
-  return (
-    <DAppKitProvider dAppKit={dAppKit}>
-      <ConnectButton />
-    </DAppKitProvider>
-  );
-}
-```
+<ImportContent source="packages/dapp-kit/examples/react/simple/src/App.tsx" mode="code" org="MystenLabs" repo="ts-sdks" />
 
 `ConnectButton` lists the wallets that dApp Kit detects. That covers every wallet the user's browser registers through the [Wallet Standard](/onchain-finance/asset-custody/wallets/wallet-standard), plus any wallet your game adds through the `walletInitializers` option on `createDAppKit`. A wallet that is not a browser extension, such as the Playtron zkLogin wallet, needs that explicit registration before it appears in the list. Refer to the [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit) for setup details, and to [Playtron](https://github.com/playtron-os/playtron-sdk) for the registration values their wallet requires.
 
