@@ -50,15 +50,13 @@ Create a new package with the Sui CLI:
 sui move new my_package
 ```
 
-The generated `Move.toml` is all you need to get started:
+A minimal `Move.toml` is all you need to get started:
 
 ```toml
 [package]
 name = "my_package"
 edition = "2024"
 ```
-
-The `edition = "2024"` line tells the CLI to resolve the Sui framework dependency automatically. You do not need a `[dependencies]` section for the Sui framework, and you do not need an `[addresses]` section.
 
 ## What does a Move module look like?
 
