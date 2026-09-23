@@ -118,8 +118,7 @@ jobs:
           git checkout -b "$BRANCH"
           git add \
             Cargo.toml \
-            Cargo.lock \
-            crates/sui-indexer-alt-jsonrpc/openrpc.json
+            Cargo.lock
           BODY="Sui v${NEW_VERSION} Version Bump"
           git commit -m "$BODY"
           # Push using the app token URL so the push is attributed to the GitHub App,
@@ -149,7 +148,6 @@ jobs:
 
           git add \
             Cargo.toml \
-            Cargo.lock \
-            crates/sui-indexer-alt-jsonrpc/openrpc.json
+            Cargo.lock
           git commit -m "$BODY"
           git push origin HEAD:"$REF_NAME"

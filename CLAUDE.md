@@ -70,7 +70,6 @@ sui/
 │   ├── sui-node/                       # Validator node implementation
 │   ├── sui-framework/                  # Move system packages & stdlib
 │   ├── sui-types/                      # Core type definitions
-│   ├── sui-indexer-alt-jsonrpc/        # JSON-RPC API server
 │   ├── sui-indexer-alt-graphql/        # GraphQL API server
 │   └── sui-indexer-alt/                # Blockchain data indexer
 ├── consensus/                          # Consensus mechanism (Mysticeti)
