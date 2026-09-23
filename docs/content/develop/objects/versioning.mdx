@@ -46,10 +46,6 @@ answer: >-
   against accidental deletion when non-empty.
 ---
 
-Sui tracks every onchain object by a unique (ID, version) pair. Each time a transaction modifies an object, Sui writes the updated contents to the same ID at a new, strictly higher version. Versions are assigned using Lamport timestamps, meaning no (ID, version) pair is ever reused. Objects follow one of two versioning paths: fastpath (for address-owned and immutable objects) or consensus (for shared and party objects). The path determines how versions are assigned and what ownership models are available.
-
-## What is object versioning in Sui?
-
 Every object stored onchain is referenced by an ID and version. When a transaction modifies an object, it writes the new contents to an onchain reference with the same ID but a new version. Despite appearing multiple times in the store, only the latest version of an object is available to transactions. Only one transaction can modify an object at a given version, guaranteeing a linear history.
 
 ```
