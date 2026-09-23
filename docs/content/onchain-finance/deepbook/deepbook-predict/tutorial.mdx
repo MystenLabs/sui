@@ -18,7 +18,7 @@ keywords:
   - pool vault
   - liquidity provider
   - no-trade window
-last_verified: 2026-09-22
+last_verified: 2026-09-23
 verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 goal:
   description: >-
@@ -63,7 +63,7 @@ import TabItem from '@theme/TabItem';
 
 A complete DeepBook Predict flow covers pricing a market board, creating an account, quoting and minting directional and two-sided range positions, closing before and after settlement, and running the queued liquidity provider flow. It continues from the [DeepBook Predict quickstart](/onchain-finance/deepbook/deepbook-predict), which covers install, funding, and a first mint.
 
-The walkthrough sends every transaction and every read through the `/predict` subpath of `@mysten/deepbook-v3`, version 2.6.0 or later. The SDK carries both the `deepbook-predict-mainnet` and `deepbook-predict-testnet` deployments, and the samples select one with a single `NETWORK` constant that defaults to `'testnet'`. The walkthrough runs on Testnet, where the quote coin is a mintable test coin. Set `NETWORK` to `'mainnet'` to point the same code at Mainnet, where the quote coin is native USDC. The SDK builds transactions and never signs them, and every read it exposes runs against the Sui client core API, so no indexer or server sits on the critical path. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`). This document does not execute them, so run the [manual verification steps](#verify-on-testnet) before you rely on the write paths.
+The walkthrough sends every transaction and every read through the `/predict` subpath of `@mysten/deepbook-v3`, version 2.6.1 or later. The SDK carries both the `deepbook-predict-mainnet` and `deepbook-predict-testnet` deployments, and the samples select one with a single `NETWORK` constant that defaults to `'testnet'`. The walkthrough runs on Testnet, where the quote coin is a mintable test coin. Set `NETWORK` to `'mainnet'` to point the same code at Mainnet, where the quote coin is native USDC. The SDK builds transactions and never signs them, and every read it exposes runs against the Sui client core API, so no indexer or server sits on the critical path. The samples live in the `examples/deepbook-predict` package, which type-checks with `npm run build` (`tsc --noEmit`). This document does not execute them, so run the [manual verification steps](#verify-on-testnet) before you rely on the write paths.
 
 :::caution
 
@@ -73,7 +73,7 @@ Both deployments went live on 2026-09-12. As of 2026-09-14 the markets created a
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
-- [x] Node.js 22 or later, with `@mysten/deepbook-v3` 2.6.0 or later and its `@mysten/sui` 2.30.0 or later peer dependency installed. See the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for client setup.
+- [x] Node.js 22 or later, with `@mysten/deepbook-v3` 2.6.1 or later and its `@mysten/sui` 2.30.0 or later peer dependency installed. See the [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) for client setup.
 - [x] A Testnet address funded with SUI for gas from a [Sui Testnet faucet](/getting-started/onboarding/get-coins). Hold at least 1 SUI as a working reserve.
 - [x] Test USDC from the [DeepBook Predict Testnet token request form](https://tally.so/r/Xx102L). Wallets display it as DUSDC. It never pays gas, so you need SUI as well. On Mainnet the quote asset is native USDC and there is no faucet.
 - [x] The deployment identifiers from [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information).
@@ -330,7 +330,7 @@ const tx = await client.predict.tx.mintCost(owner, descriptor, {
 
 `minQuantity` is this shape's only slippage guard: the spend is fixed, so an adverse move arrives as fewer contracts, and the floor is what rejects a fill that moved too far. `0` accepts whatever the budget buys.
 
-This entrypoint arrived in `predict` package version 2, which both networks run onchain. The published `@mysten/deepbook-v3` 2.6.0 predates the Mainnet upgrade and still addresses Mainnet `predict` at its version 1 address, so on that release these 2 calls work on Testnet and fail on Mainnet until the next patch ships. [Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint-cost) covers the sizing limits, and [Predict Cost SDK](/onchain-finance/deepbook/deepbook-predict-sdk/cost#mint-cost-for-budget) runs the same search locally with no chain call.
+This entrypoint arrived in `predict` package version 2, which both networks run, so these 2 calls work on either. [Predict Positions SDK](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint-cost) covers the sizing limits, and [Predict Cost SDK](/onchain-finance/deepbook/deepbook-predict-sdk/cost#mint-cost-for-budget) runs the same search locally with no chain call.
 
 ## Mint a two-sided range position
 

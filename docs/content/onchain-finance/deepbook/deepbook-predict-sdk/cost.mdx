@@ -52,8 +52,8 @@ answer: >-
   fee component is exported separately. These are local previews for a UI; the
   read.quoteMint, read.quoteMintCost, and read.quoteRedeem dry runs remain the
   pre-trade check against real account and market state.
-last_verified: 2026-09-22
-verified_against: '@mysten/deepbook-v3 2.6.0 plus the unreleased Mainnet id bump at ts-sdks b0422900; predict and sessions v2 on both networks, publication records at deepbookv3 2378336b'
+last_verified: 2026-09-23
+verified_against: '@mysten/deepbook-v3 2.6.1 (ts-sdks 56d51645); Mainnet predict/sessions v2, Testnet predict v3 and sessions v2, publication records at deepbookv3 36783242'
 ---
 
 The `cost` namespace on `@mysten/deepbook-v3/predict` prices a Predict trade without touching the chain. It is an exact integer port of the deployed fee path, not an estimate: feed it the same inputs the execution sees and it returns the same raw amounts the contract charges. That makes it the right tool for an order ticket that has to re-price on every keystroke, for a board of candidate strikes, and for sizing a spend before a transaction exists.
@@ -78,17 +78,17 @@ Every entry point in this namespace takes the same 3 kinds of input.
 
 `FeePolicy` is the market's own fee snapshot, taken when the market was created. A market created before an admin changed a rate keeps the old one, so read it from that market's `MarketCreated` event rather than assuming it:
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="136-155" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="136-155" />
 
 `cost.SHIPPED_FEE_POLICY` is the template both deployments shipped with: a 10 percent Bernoulli fee, a 2.2 percent per-leg floor, a one-day ramp window that is inert at a 1.0 multiplier, a 1 to 99 percent entry band, and inventory impact disabled. Use it to get a preview on screen, and verify against the market before you price money on it:
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="164-174" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="164-174" />
 
 ### The range's boundary probabilities {#probabilities}
 
 Predict charges a trading fee at each **finite** boundary of a range, so the namespace works in boundary probabilities rather than a single range probability. `null` is an infinite side: the negative infinity lower bound of a down position, and the positive infinity higher bound of an up position. Neither pays a fee leg.
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="179-184" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="179-184" />
 
 Pass either shape as `probabilities`:
 
@@ -107,13 +107,13 @@ The inventory-impact charge is priced against the market's payout tree, so a pol
 
 Use `cost.mintCost` to price an exact payout quantity, the local twin of `tx.mint`. It mirrors the contract's `compute_mint_quote`, including the admission checks, and throws a `PredictInputError` naming the abort the chain would have raised: the entry-probability band on each finite leg and on the range, the 1 USDC minimum premium, the lot grid, and the rule that a contract may never cost more than it can pay out.
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="726-726" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="726-726" />
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="545-548" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="545-548" />
 
 `MintCost` decomposes the debit in human units and carries the exact integers alongside. `costPerContract` is the all-in price of $1 of payout, which is the number to compare across strikes, and `payoutMultiple` is its reciprocal, the figure an order ticket usually shows:
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="563-592" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="563-592" />
 
 Note that `fees` here has no `referral` member, unlike the chain quote's. A referral is a split of protocol proceeds, not a trader debit, so it never changes `cost`.
 
@@ -136,13 +136,13 @@ console.log(preview.cost, preview.payoutMultiple, preview.exactProbabilities); /
 
 Use `cost.mintCostForBudget` to size a fill inside an all-in budget. It runs the same lot search as the contract's `mint_exact_cost` over the same cost function, so the quantity it reports is the quantity that entrypoint would size and the cost it reports is the debit that entrypoint would take.
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="768-768" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="768-768" />
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="551-559" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="551-559" />
 
 Pass `accountBalance` to reproduce the cap the chain applies before sizing, which also lets `U64_MAX` mean "my whole balance". The result adds the budget figures an order preview needs:
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="595-607" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="595-607" />
 
 The same 3 sizing limits that qualify the onchain entrypoint qualify this one, because it is the same search:
 
@@ -150,7 +150,7 @@ The same 3 sizing limits that qualify the onchain entrypoint qualify this one, b
 - **The maximum-payout step-down is best effort.** It preserves the contract's own fallback, rounding included, so it can miss a larger admissible fill or reject a `minQuantity` that another fill would have met.
 - **Backing is not a sizing input.** Neither this function nor the chain quote preflights the expiry's cash backing or its exposure-index capacity.
 
-Submit the result through [`tx.mintCost`](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint-cost). Both networks carry `mint_exact_cost` onchain, though SDK 2.6.0 addresses it on Testnet only, as that section explains. This preview itself is pure arithmetic and works for either network.
+Submit the result through [`tx.mintCost`](/onchain-finance/deepbook/deepbook-predict-sdk/positions#mint-cost), which works on either network. This preview itself is pure arithmetic, so it needs no deployment at all.
 
 ## Close previews {#close-previews}
 
@@ -158,11 +158,11 @@ Submit the result through [`tx.mintCost`](/onchain-finance/deepbook/deepbook-pre
 
 Use `cost.redeemLiveProceeds` to price closing a live position, the mirror of `cost.mintCost`. It charges the same per-boundary trading fee, the same builder fee, and the same congestion surcharge, and it credits the inventory-impact term as a rebate rather than charging it. There is no sponsor subsidy on a close, because incentives subsidize mints only. Each deduction is clamped at the payout remaining after the ones before it, exactly as the contract clamps them, so a close can never cost more than it releases.
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="927-927" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="927-927" />
 
 Price it against the **order's own range**, which is the pair of boundaries it was minted over, because that is what `redeem_live` reprices. Supply `positionQuantity` to validate the close and get the remainder back:
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="885-912" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="885-912" />
 
 `proceeds` is the figure `min_proceeds` is compared against on the real call. A preview does not guarantee execution at that amount, so take the floor you send from `read.quoteRedeem`.
 
@@ -173,7 +173,7 @@ An order ID packs the position's durable terms, and 2 helpers unpack the parts a
 - `cost.decodeOrderRange(orderId, lotSize?)` returns the order's `lowerTick`, `higherTick`, and minted `quantity`. A `lowerTick` of `0` is negative infinity and a `higherTick` of `cost.POS_INF_TICK` is positive infinity.
 - `cost.orderStrikes(range, tickSizeRaw)` converts that tick pair to strikes in USD, with `null` for each infinite side, which is the shape the `{ pricer, lower, upper }` probability source takes.
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="993-998" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="993-998" />
 
 ## Fee components {#fee-components}
 
@@ -195,7 +195,7 @@ Each term of the fee path is exported on its own, for a UI that itemizes a charg
 
 The scale constants are exported too: `cost.FLOAT_SCALING`, `cost.POSITION_LOT_SIZE`, `cost.MIN_PREMIUM`, `cost.BUILDER_FEE_MULTIPLIER`, `cost.MAX_BUILDER_FEE_RATE`, `cost.FEE_INCENTIVE_SUBSIDY_RATE`, and `cost.MAX_QUANTITY_LOTS`.
 
-<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="b042290014120fd45fcf234a7f1d2af26418f751" lines="45-58" />
+<ImportContent source="packages/deepbook-v3/src/predict/cost.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="45-58" />
 
 ## Related links {#related-links}
 
