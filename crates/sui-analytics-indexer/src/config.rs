@@ -217,7 +217,7 @@ pub struct IndexerConfig {
     pub sf_schema: Option<String>,
     pub sf_username: Option<String>,
     pub sf_role: Option<String>,
-    pub sf_password_file: Option<String>,
+    pub sf_private_key_file: Option<String>,
 
     /// Migration mode identifier. When set, the indexer operates in migration mode:
     /// - Overwrites existing files matching target checkpoint ranges
