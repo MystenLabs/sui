@@ -1472,6 +1472,72 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .lock();
             for (key, txns) in deferred_txns.into_iter() {
                 total_deferred_txns += txns.len();
+                // Keys reloaded by this commit are still present in the map here
+                // (record_deferral_deletion runs after this function), but no key
+                // inserted here can equal one of them: reloads cover
+                // future_round <= round while re-deferrals use round + 1, and a
+                // randomness reload and a randomness re-deferral are mutually exclusive
+                // per commit. A re-deferral does keep its original deferred_from_round,
+                // though: a randomness-using transaction deferred at round F by a check
+                // that precedes the randomness check (unpaid amplification, owned-object
+                // double spend) gets ConsensusRound{F + 1, F}, and when reloaded at
+                // F + 1 without randomness it lands on Randomness{F} - the key still
+                // holding round F's fresh randomness deferrals. Overwriting that entry
+                // (in memory and in the write batch below) strands the displaced
+                // transactions: finalized but never reloaded or executed this epoch,
+                // with their owned inputs locked until epoch end.
+                debug_assert!(
+                    !state
+                        .output
+                        .get_deleted_deferred_txn_keys()
+                        .any(|deleted| deleted == key),
+                    "deferral key {key:?} was reloaded by this commit and must not be re-inserted"
+                );
+                let txns = if protocol_config.merge_colliding_deferrals() {
+                    match deferred_transactions.remove(&key) {
+                        Some(mut merged) => {
+                            assert_reachable_gated!(
+                                "Merged colliding deferral entries instead of displacing finalized transactions.",
+                                |pc| pc.merge_colliding_deferrals()
+                                    && (pc.defer_owned_object_double_spend()
+                                        || pc.defer_unpaid_amplification())
+                            );
+                            debug_assert!(
+                                {
+                                    let prev_digests: HashSet<_> =
+                                        merged.iter().map(|t| *t.tx().digest()).collect();
+                                    txns.iter().all(|t| !prev_digests.contains(t.tx().digest()))
+                                },
+                                "colliding deferral entries must not share transactions"
+                            );
+                            // Deterministic merge: previously deferred transactions keep
+                            // their position ahead of this commit's.
+                            merged.extend(txns);
+                            merged
+                        }
+                        None => txns,
+                    }
+                } else {
+                    if let Some(prev) = deferred_transactions.get(&key) {
+                        // Last-writer-wins semantics must be preserved bit for bit for
+                        // protocol versions without the fix; flag the stranding.
+                        let new_digests: HashSet<_> =
+                            txns.iter().map(|t| *t.tx().digest()).collect();
+                        let displaced: Vec<_> = prev
+                            .iter()
+                            .map(|t| *t.tx().digest())
+                            .filter(|d| !new_digests.contains(d))
+                            .collect();
+                        if !displaced.is_empty() {
+                            debug_fatal!(
+                                "Deferral key collision displaced finalized transactions: key {:?}, displaced {:?}",
+                                key,
+                                displaced
+                            );
+                        }
+                    }
+                    txns
+                };
                 deferred_transactions.insert(key, txns.clone());
                 state.output.defer_transactions(key, txns);
             }
@@ -1877,6 +1943,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         "Successfully deferred transaction attempting to double spend owned object.",
                         |pc| pc.defer_owned_object_double_spend()
                     );
+                    if transaction.tx().transaction_data().uses_randomness()
+                        && state.randomness_round.is_none()
+                    {
+                        // Precondition for the deferral-key collision flagged in
+                        // collect_transactions_to_schedule: at the next commit without
+                        // randomness this transaction re-defers to Randomness{original
+                        // round}, the key that round's fresh randomness deferrals are
+                        // stored under.
+                        assert_reachable_gated!(
+                            "Double-spend deferred a randomness-using transaction at a round without randomness.",
+                            |pc| pc.defer_owned_object_double_spend()
+                        );
+                    }
                     deferred_txns
                         .entry(deferral_key)
                         .or_default()
@@ -3646,6 +3725,10 @@ mod tests {
         },
     };
 
+    use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::{ObjectArg, SharedObjectMutability};
+
     use super::*;
     use crate::{
         authority::{
@@ -4848,6 +4931,120 @@ mod tests {
             !snapshot.contains_key(&AuthorityName::ZERO),
             "spoofed authority claim should be dropped"
         );
+    }
+
+    /// A transaction whose shared inputs include the randomness state object, so
+    /// `uses_randomness()` is true. Gas is random, so every call yields a new digest.
+    fn randomness_user_txn() -> VerifiedExecutableTransactionWithAliases {
+        let (committee, keypairs) = Committee::new_simple_test_committee();
+        let (sender, sender_keypair) = deterministic_random_account_key();
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .obj(ObjectArg::SharedObject {
+                id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                initial_shared_version: 1.into(),
+                mutability: SharedObjectMutability::Immutable,
+            })
+            .unwrap();
+        let tx = sui_types::transaction::Transaction::from_data_and_signer(
+            TransactionData::new_programmable(
+                sender,
+                vec![random_object_ref()],
+                builder.finish(),
+                1_000_000,
+                1_000,
+            ),
+            vec![&sender_keypair],
+        );
+        let tx = VerifiedExecutableTransaction::new_from_certificate(
+            VerifiedCertificate::new_unchecked(
+                CertifiedTransaction::new_from_keypairs_for_testing(
+                    tx.into_data(),
+                    &keypairs,
+                    &committee,
+                ),
+            ),
+        );
+        VerifiedExecutableTransactionWithAliases::no_aliases(tx)
+    }
+
+    /// Seeds the deferral-key collision: a randomness-using transaction deferred at
+    /// round 1 by a check that precedes the randomness check (owned-object double spend)
+    /// carries ConsensusRound{2, 1}. The test authority's DKG never completes, so no
+    /// commit generates randomness: reloaded at round 2, that transaction re-defers to
+    /// Randomness{1} - the key still holding round 1's fresh randomness deferrals.
+    /// Returns the digests of (parked randomness deferral, re-deferring transaction).
+    fn seed_deferral_key_collision(
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> (TransactionDigest, TransactionDigest) {
+        let parked = randomness_user_txn();
+        let redeferred = randomness_user_txn();
+        let parked_digest = *parked.tx().digest();
+        let redeferred_digest = *redeferred.tx().digest();
+        // Round 1, no randomness generated: fresh randomness-using transactions were
+        // deferred under Randomness{1}...
+        epoch_store.insert_deferred_transactions_for_test(
+            DeferralKey::new_for_randomness(1),
+            vec![parked],
+        );
+        // ...while another randomness-using transaction won a contested owned-object
+        // lock in that commit and was double-spend-deferred under ConsensusRound{2, 1}.
+        epoch_store.insert_deferred_transactions_for_test(
+            DeferralKey::new_for_consensus_round(2, 1),
+            vec![redeferred],
+        );
+        (parked_digest, redeferred_digest)
+    }
+
+    /// With merge_colliding_deferrals enabled (current protocol version), the round 2
+    /// re-deferral merges into Randomness{1} instead of displacing its transactions.
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_deferral_key_collision_merges_entries() {
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let (parked_digest, redeferred_digest) = seed_deferral_key_collision(&epoch_store);
+
+        let mid_epoch = epoch_store
+            .next_reconfiguration_timestamp_ms()
+            .saturating_sub(10_000);
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::empty(2, mid_epoch, 1))
+            .await;
+
+        let deferred = epoch_store.get_all_deferred_transactions_for_test();
+        assert_eq!(deferred.len(), 1);
+        let (key, txns) = &deferred[0];
+        assert_eq!(*key, DeferralKey::new_for_randomness(1));
+        let digests: Vec<_> = txns.iter().map(|t| *t.tx().digest()).collect();
+        // Previously parked transactions keep their position ahead of the re-deferral.
+        assert_eq!(digests, vec![parked_digest, redeferred_digest]);
+    }
+
+    /// With merge_colliding_deferrals disabled, the last-writer-wins insert of older
+    /// protocol versions is preserved and the collision sensor flags the displaced
+    /// transactions (debug_fatal panics under test configuration).
+    #[tokio::test(flavor = "current_thread")]
+    #[should_panic(expected = "Deferral key collision displaced finalized transactions")]
+    async fn test_deferral_key_collision_displaces_randomness_deferrals() {
+        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        protocol_config.set_merge_colliding_deferrals_for_testing(false);
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(protocol_config)
+            .build()
+            .await;
+        let epoch_store = state.epoch_store_for_testing();
+        seed_deferral_key_collision(&epoch_store);
+
+        let mid_epoch = epoch_store
+            .next_reconfiguration_timestamp_ms()
+            .saturating_sub(10_000);
+        let mut setup = setup_consensus_handler_for_testing(&state).await;
+        setup
+            .consensus_handler
+            .handle_consensus_commit_for_test(TestConsensusCommit::empty(2, mid_epoch, 1))
+            .await;
     }
 
     fn user_txn(gas_price: u64) -> VerifiedExecutableTransactionWithAliases {

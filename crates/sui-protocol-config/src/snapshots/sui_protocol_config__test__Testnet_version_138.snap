@@ -187,6 +187,7 @@ feature_flags:
   check_object_funds_withdraw_in_execution: true
   memory_safety_invariant_check_v2: true
   disable_effects_tx_dependencies: true
+  merge_colliding_deferrals: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
