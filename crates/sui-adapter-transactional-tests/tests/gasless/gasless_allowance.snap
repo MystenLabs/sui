@@ -1,0 +1,307 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+// Gasless spends through an allowance: B spends A's USDC via a rate-limited allowance. The
+// allowance is written without storage cost, rebate, or non-refundable fee.
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 9-23:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 10776800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 27-31:
+//# programmable --sender A --inputs 10000 object(1,1) @A
+// Mint 10000 USDC to A's address balance.
+//> 0: sui::coin::mint<test::usdc::USDC>(Input(1), Input(0));
+//> 1: sui::coin::into_balance<test::usdc::USDC>(Result(0));
+//> 2: sui::balance::send_funds<test::usdc::USDC>(Result(1), Input(2));
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Merge, 10000)
+gas summary: computation_cost: 1000000, storage_cost: 2690400,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 4, line 33:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 35-39:
+//# programmable --sender A --inputs b"b" @B vector[5000u256] vector[] vector[] 86400000 1000u256
+// A issues B an allowance: 5000 lifetime cap, 1000 per day.
+//> 0: sui::allowance::periodic_rate_limit(Input(5), Input(6));
+//> 1: std::option::some<sui::allowance::RateLimit>(Result(0));
+//> 2: sui::allowance::new<sui::balance::Balance<test::usdc::USDC>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(1));
+created: object(5,0), object(5,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7007200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 41:
+//# view-object 5,0
+Owner: Shared( 4 )
+Version: 4
+Contents: sui::allowance::Allowance<sui::balance::Balance<test::usdc::USDC>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    settings: sui::allowance::Settings {
+        funder: A,
+        spender: std::option::Option<address> {
+            vec: vector[
+                B,
+            ],
+        },
+        app: std::option::Option<std::type_name::TypeName> {
+            vec: vector[],
+        },
+        lifetime_cap: std::option::Option<u256> {
+            vec: vector[
+                5000u256,
+            ],
+        },
+        start_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        expiration_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        rate_limit: std::option::Option<sui::allowance::RateLimit> {
+            vec: vector[
+                sui::allowance::RateLimit::Windowed{
+                    limit: 1000u256,
+                    spent: 0u256,
+                    anchor_ms: std::option::Option<u64> {
+                        vec: vector[],
+                    },
+                    index: 0u64,
+                    window: sui::allowance::Window::PeriodicMs{
+                        pos0: 86400000u64,
+                    },
+                },
+            ],
+        },
+        name: std::string::String {
+            bytes: vector[
+                98u8,
+            ],
+        },
+    },
+    current_spend: 0u256,
+}
+
+task 7, lines 43-46:
+//# programmable --sender B --address-balance-gas --gas-price 0 --gas-budget 0 --inputs allowance_withdraw<sui::balance::Balance<test::usdc::USDC>>(300,@A,object(5,0)) mutshared(5,0) immshared(6) @C
+// Gasless spend. The first rate-limited charge sets the window anchor, growing the allowance.
+//> 0: sui::allowance::balance_spend<test::usdc::USDC>(Input(1), Input(0), Input(2));
+//> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(3));
+mutated: object(5,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006, 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Split, 300), (object(7,0), C, sui::balance::Balance<test::usdc::USDC>, Merge, 300)
+gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 8, line 48:
+//# view-object 5,0
+Owner: Shared( 4 )
+Version: 5
+Contents: sui::allowance::Allowance<sui::balance::Balance<test::usdc::USDC>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    settings: sui::allowance::Settings {
+        funder: A,
+        spender: std::option::Option<address> {
+            vec: vector[
+                B,
+            ],
+        },
+        app: std::option::Option<std::type_name::TypeName> {
+            vec: vector[],
+        },
+        lifetime_cap: std::option::Option<u256> {
+            vec: vector[
+                5000u256,
+            ],
+        },
+        start_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        expiration_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        rate_limit: std::option::Option<sui::allowance::RateLimit> {
+            vec: vector[
+                sui::allowance::RateLimit::Windowed{
+                    limit: 1000u256,
+                    spent: 300u256,
+                    anchor_ms: std::option::Option<u64> {
+                        vec: vector[
+                            0u64,
+                        ],
+                    },
+                    index: 0u64,
+                    window: sui::allowance::Window::PeriodicMs{
+                        pos0: 86400000u64,
+                    },
+                },
+            ],
+        },
+        name: std::string::String {
+            bytes: vector[
+                98u8,
+            ],
+        },
+    },
+    current_spend: 300u256,
+}
+
+task 9, lines 50-53:
+//# programmable --sender B --address-balance-gas --gas-price 0 --gas-budget 0 --inputs allowance_withdraw<sui::balance::Balance<test::usdc::USDC>>(500,@A,object(5,0)) mutshared(5,0) immshared(6) @C
+// Second gasless spend: the allowance no longer grows.
+//> 0: sui::allowance::balance_spend<test::usdc::USDC>(Input(1), Input(0), Input(2));
+//> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(3));
+mutated: object(5,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006, 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Split, 500), (object(7,0), C, sui::balance::Balance<test::usdc::USDC>, Merge, 500)
+gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 10, line 55:
+//# view-object 5,0
+Owner: Shared( 4 )
+Version: 6
+Contents: sui::allowance::Allowance<sui::balance::Balance<test::usdc::USDC>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    settings: sui::allowance::Settings {
+        funder: A,
+        spender: std::option::Option<address> {
+            vec: vector[
+                B,
+            ],
+        },
+        app: std::option::Option<std::type_name::TypeName> {
+            vec: vector[],
+        },
+        lifetime_cap: std::option::Option<u256> {
+            vec: vector[
+                5000u256,
+            ],
+        },
+        start_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        expiration_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        rate_limit: std::option::Option<sui::allowance::RateLimit> {
+            vec: vector[
+                sui::allowance::RateLimit::Windowed{
+                    limit: 1000u256,
+                    spent: 800u256,
+                    anchor_ms: std::option::Option<u64> {
+                        vec: vector[
+                            0u64,
+                        ],
+                    },
+                    index: 0u64,
+                    window: sui::allowance::Window::PeriodicMs{
+                        pos0: 86400000u64,
+                    },
+                },
+            ],
+        },
+        name: std::string::String {
+            bytes: vector[
+                98u8,
+            ],
+        },
+    },
+    current_spend: 800u256,
+}
+
+task 11, lines 57-60:
+//# programmable --sender B --address-balance-gas --gas-price 0 --gas-budget 0 --inputs allowance_withdraw<sui::balance::Balance<test::usdc::USDC>>(201,@A,object(5,0)) mutshared(5,0) immshared(6) @C
+// Exceeds the daily limit: aborts, and is still free.
+//> 0: sui::allowance::balance_spend<test::usdc::USDC>(Input(1), Input(0), Input(2));
+//> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(3));
+Error: Transaction Effects Status: Move Abort in sui::allowance::charge (function index 34) at offset 79 at line 442 with clever code 4
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 34, instruction: 79, function_name: Some("charge") }, 13836185853565075465) at command Some(0)
+
+task 12, line 62:
+//# view-object 5,0
+Owner: Shared( 4 )
+Version: 7
+Contents: sui::allowance::Allowance<sui::balance::Balance<test::usdc::USDC>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    settings: sui::allowance::Settings {
+        funder: A,
+        spender: std::option::Option<address> {
+            vec: vector[
+                B,
+            ],
+        },
+        app: std::option::Option<std::type_name::TypeName> {
+            vec: vector[],
+        },
+        lifetime_cap: std::option::Option<u256> {
+            vec: vector[
+                5000u256,
+            ],
+        },
+        start_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        expiration_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        rate_limit: std::option::Option<sui::allowance::RateLimit> {
+            vec: vector[
+                sui::allowance::RateLimit::Windowed{
+                    limit: 1000u256,
+                    spent: 800u256,
+                    anchor_ms: std::option::Option<u64> {
+                        vec: vector[
+                            0u64,
+                        ],
+                    },
+                    index: 0u64,
+                    window: sui::allowance::Window::PeriodicMs{
+                        pos0: 86400000u64,
+                    },
+                },
+            ],
+        },
+        name: std::string::String {
+            bytes: vector[
+                98u8,
+            ],
+        },
+    },
+    current_spend: 800u256,
+}
+
+task 13, line 64:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 14, line 66:
+//# view-funds sui::balance::Balance<test::usdc::USDC> A
+9200
+
+task 15, line 68:
+//# view-funds sui::balance::Balance<test::usdc::USDC> C
+800
