@@ -122,7 +122,7 @@ if (typeof window !== 'undefined') {
 				{
 					name: 'get_sui_api_reference',
 					description:
-						'Get a summary of available Sui APIs including JSON-RPC, GraphQL, and gRPC endpoints with their documentation URLs.',
+						'Get a summary of available Sui APIs including GraphQL and gRPC endpoints with their documentation URLs.',
 					inputSchema: {
 						type: 'object',
 						properties: {},
@@ -141,11 +141,6 @@ if (typeof window !== 'undefined') {
 							type: 'text',
 							text: JSON.stringify({
 								apis: [
-									{
-										name: 'Sui JSON-RPC',
-										docs: 'https://docs.sui.io/references/sui-api',
-										spec: 'https://docs.sui.io/open-spec/mainnet/openrpc.json',
-									},
 									{
 										name: 'Sui GraphQL',
 										docs: 'https://docs.sui.io/references/sui-graphql',

@@ -81,7 +81,7 @@ const config = {
   onBrokenAnchors: "warn",
   onDuplicateRoutes: 'throw',
 
-  staticDirectories: ["static", "src/open-spec"],
+  staticDirectories: ["static"],
   markdown: {
     format: "detect",
     mermaid: true,
@@ -209,7 +209,6 @@ const config = {
     },
     //require.resolve('./src/plugins/framework'),
     "docusaurus-plugin-copy-page-button",
-    require.resolve("./src/plugins/validate-openrpc"),
 
     [
       require.resolve("./src/shared/plugins/plausible"),

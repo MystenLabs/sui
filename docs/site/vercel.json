@@ -1,6 +1,16 @@
 {
   "redirects": [
     {
+      "source": "/sui-api-ref",
+      "destination": "/develop/accessing-data/json-rpc-migration",
+      "permanent": true
+    },
+    {
+      "source": "/sui-api-ref/",
+      "destination": "/develop/accessing-data/json-rpc-migration",
+      "permanent": true
+    },
+    {
       "source": "/onchain-finance/deepbookv3",
       "destination": "/onchain-finance/deepbook/deepbookv3/deepbook",
       "permanent": true
