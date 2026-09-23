@@ -413,6 +413,7 @@ const MAINNET_USDB: &str =
 //              Enable allowances on mainnet.
 //              Merge colliding deferred-transaction entries in the consensus handler
 //              instead of overwriting (which stranded the displaced transactions).
+//              Allow allowance spends in gasless transactions on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1306,6 +1307,12 @@ struct FeatureFlags {
     // silently dropped the displaced (finalized) transactions.
     #[serde(skip_serializing_if = "is_false")]
     merge_colliding_deferrals: bool,
+
+    // Allow `sui::allowance::balance_spend` in gasless transactions. The spent allowance is
+    // written without storage charges or rebates. Requires `enable_gasless` and `enable_allowances`.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    gasless_allowance_spend: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2382,6 +2389,12 @@ impl ProtocolConfig {
 
     pub fn enable_allowances(&self) -> bool {
         self.feature_flags.enable_allowances && self.enable_accumulators()
+    }
+
+    pub fn gasless_allowance_spend(&self) -> bool {
+        self.feature_flags.gasless_allowance_spend
+            && self.enable_gasless()
+            && self.enable_allowances()
     }
 
     pub fn enable_coin_reservation_obj_refs(&self) -> bool {
@@ -4795,6 +4808,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.disable_effects_tx_dependencies = true;
                     }
                     cfg.feature_flags.merge_colliding_deferrals = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.gasless_allowance_spend = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
