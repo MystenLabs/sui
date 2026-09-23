@@ -329,6 +329,7 @@ The valuation flag no longer gates trading. Trades on a stamped market cannot re
 | `request_supply`, `request_withdraw` | Open | Open, but a request lands beyond this flush's cutoff |
 | `cancel_supply_request`, `cancel_withdraw_request` | Blocked with `EValuationInProgress` | Blocked with `EValuationInProgress` |
 | `sponsor_fee_incentives` | Blocked with `EValuationInProgress` | Blocked with `EValuationInProgress` |
+| `add_usdc_to_plp` | Blocked with `EValuationInProgress` | Blocked with `EValuationInProgress` |
 | `rebalance_expiry_cash` | Blocked with `ESnapshotStageOpen` | Open |
 | `set_reference_tick`, `create_and_share_expiry_market` | Open | Open |
 | Config setters the mark reads, such as fee rates, freshness windows, `max_lp_pool_value`, and `max_valuation_window_ms` | Blocked with `EValuationInProgress` | Blocked with `EValuationInProgress` |
@@ -609,7 +610,7 @@ Three admission rules apply, in this order:
 2. **At least 10 USDC.** Below `min_usdc_contribution`, which is `10_000_000` base units, the call aborts with `EBelowMinUsdcContribution`. It is the same floor as a supply request but a separate constant, so the 2 policies can diverge.
 3. **The contribution must not push the mark out of the executable band.** A flush fills only at a mark within `executable_price_band_factor` of unit parity in each direction, which is 0.01 to 100 USDC per PLP; both coins use 6 decimals, so unit parity is raw-unit parity. A donation raises value without raising supply, so a large enough one puts the mark above the top of that band and every later flush declines as [not executable](#redemption-value). The call restates the upper half of that test against idle, requiring `ceil((idle + amount) / 100) <= total_supply`, and otherwise aborts with `EContributionExceedsPriceCeiling`.
 
-A flush in progress blocks the call, which aborts with the valuation guard rather than changing the pool under a snapshot. Success emits [`UsdcAddedToPlp`](#events).
+A flush in progress blocks the call with `EValuationInProgress`, rather than letting a donation move the pool under a snapshot, as [What a flush blocks](#flush-gates) lists. Success emits [`UsdcAddedToPlp`](#events).
 
 <details>
 <summary>Source for `add_usdc_to_plp`</summary>
