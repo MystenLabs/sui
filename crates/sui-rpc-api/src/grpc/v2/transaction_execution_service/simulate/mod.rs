@@ -831,10 +831,12 @@ fn is_gasless_candidate(
         }
     }
     let input_objects = InputObjects::new(loaded);
-    Ok(
-        sui_transaction_checks::check_gasless_object_inputs(&input_objects, protocol_config)
-            .is_ok(),
+    Ok(sui_transaction_checks::check_gasless_object_inputs(
+        transaction,
+        &input_objects,
+        protocol_config,
     )
+    .is_ok())
 }
 
 /// The executor maps a post-execution gasless-requirements failure

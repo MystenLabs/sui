@@ -7,7 +7,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use std::collections::{BTreeMap, HashSet};
+    use std::collections::{BTreeMap, BTreeSet, HashSet};
     use std::sync::Arc;
     use sui_config::verifier_signing_config::VerifierSigningConfig;
     use sui_protocol_config::ProtocolConfig;
@@ -21,9 +21,9 @@ mod checked {
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::object::ObjectPermission;
     use sui_types::transaction::{
-        CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResultKind,
+        CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, SharedObjectMutability, TransactionData,
-        TransactionDataAPI, TransactionKind,
+        TransactionDataAPI, TransactionKind, WithdrawFrom,
     };
     use sui_types::{
         SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
@@ -213,7 +213,7 @@ mod checked {
         check_replay_protection(transaction, input_objects)?;
 
         if protocol_config.enable_gasless() && transaction.is_gasless_transaction() {
-            check_gasless_object_inputs(input_objects, protocol_config)?;
+            check_gasless_object_inputs(transaction, input_objects, protocol_config)?;
         }
 
         Ok(gas_status)
@@ -710,11 +710,20 @@ mod checked {
     /// is in the allowlist, or (with `gasless_allowance_spend`) the Clock or a non-app-bound
     /// `Allowance<Balance<T>>` with `T` in the allowlist.
     pub fn check_gasless_object_inputs(
+        transaction: &TransactionData,
         input_objects: &InputObjects,
         protocol_config: &ProtocolConfig,
     ) -> UserInputResult<()> {
         let allowed_token_types =
             sui_types::transaction::get_gasless_allowed_token_types(protocol_config);
+        let declared_allowances: BTreeSet<ObjectID> = transaction
+            .kind()
+            .get_funds_withdrawals()
+            .filter_map(|w| match w.withdraw_from {
+                WithdrawFrom::SenderAllowance { allowance, .. } => Some(allowance),
+                WithdrawFrom::Sender | WithdrawFrom::Sponsor => None,
+            })
+            .collect();
 
         for obj_read in input_objects.iter() {
             let Some(object) = obj_read.as_object() else {
@@ -726,7 +735,12 @@ mod checked {
             match object.owner() {
                 Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => (),
                 Owner::Shared { .. } if protocol_config.gasless_allowance_spend() => {
-                    check_gasless_shared_input(object, &allowed_token_types)?;
+                    check_gasless_shared_input(
+                        obj_read,
+                        object,
+                        &declared_allowances,
+                        &allowed_token_types,
+                    )?;
                     continue;
                 }
                 Owner::Immutable
@@ -757,14 +771,37 @@ mod checked {
         Ok(())
     }
 
+    /// Only the read-only Clock and the allowances backing this transaction's withdrawals (written
+    /// by `balance_spend`) may be shared inputs. Anything else would fail execution, and failed
+    /// gasless transactions are free.
     fn check_gasless_shared_input(
+        obj_read: &ObjectReadResult,
         object: &Object,
+        declared_allowances: &BTreeSet<ObjectID>,
         allowed_token_types: &BTreeMap<TypeTag, u64>,
     ) -> UserInputResult<()> {
+        let unsupported = |msg: &str| UserInputError::Unsupported(msg.to_string());
+        let mutability = match &obj_read.input_object_kind {
+            InputObjectKind::SharedMoveObject { mutability, .. } => mutability,
+            InputObjectKind::MovePackage(_) | InputObjectKind::ImmOrOwnedMoveObject(_) => {
+                return Err(unsupported("Shared object not passed as a shared input"));
+            }
+        };
         if object.id() == SUI_CLOCK_OBJECT_ID {
+            fp_ensure!(
+                matches!(mutability, SharedObjectMutability::Immutable),
+                unsupported("Gasless transactions only support the Clock as an immutable input")
+            );
             return Ok(());
         }
-        let unsupported = |msg: &str| UserInputError::Unsupported(msg.to_string());
+        fp_ensure!(
+            matches!(mutability, SharedObjectMutability::Mutable)
+                && declared_allowances.contains(&object.id()),
+            unsupported(
+                "Gasless transactions only support shared inputs that are the Clock or a mutable \
+                 allowance backing a withdrawal"
+            )
+        );
         let allowance = parse_allowance_object(object).map_err(|_| {
             unsupported(
                 "Gasless transactions only support the Clock or an Allowance as shared inputs",

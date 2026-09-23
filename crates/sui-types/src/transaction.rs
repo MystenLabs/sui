@@ -1080,40 +1080,13 @@ impl ProgrammableTransaction {
         );
 
         let allow_allowance_spend = config.gasless_allowance_spend();
-        let declared_allowances: BTreeSet<ObjectID> = self
-            .inputs
-            .iter()
-            .filter_map(|input| match input {
-                CallArg::FundsWithdrawal(FundsWithdrawalArg {
-                    withdraw_from: WithdrawFrom::SenderAllowance { allowance, .. },
-                    ..
-                }) => Some(*allowance),
-                _ => None,
-            })
-            .collect();
 
         for input in &self.inputs {
             match input {
                 CallArg::Pure(_) | CallArg::FundsWithdrawal(_) => {}
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => {}
-                CallArg::Object(ObjectArg::SharedObject { .. }) if !allow_allowance_spend => {}
-                // Only the clock (read-only) and the allowances backing this tx's withdrawals
-                // (written by `balance_spend`) may be shared inputs. Anything else would fail
-                // execution, and failed gasless transactions are free.
-                CallArg::Object(ObjectArg::SharedObject { id, mutability, .. }) => {
-                    let ok = match mutability {
-                        SharedObjectMutability::Immutable => *id == SUI_CLOCK_OBJECT_ID,
-                        SharedObjectMutability::Mutable => declared_allowances.contains(id),
-                        SharedObjectMutability::NonExclusiveWrite => false,
-                    };
-                    fp_ensure!(
-                        ok,
-                        UserInputError::Unsupported(format!(
-                            "Gasless transactions only support the immutable Clock or a mutable \
-                             allowance backing a withdrawal as shared inputs, got {id} ({mutability:?})"
-                        ))
-                    );
-                }
+                CallArg::Object(
+                    ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. },
+                ) => {}
                 CallArg::Object(ObjectArg::Receiving(_)) => {
                     return Err(UserInputError::Unsupported(
                         "Gasless transactions do not support Receiving object inputs".to_string(),
