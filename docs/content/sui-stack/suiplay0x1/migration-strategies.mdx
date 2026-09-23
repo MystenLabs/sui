@@ -75,37 +75,11 @@ The Playtron wallet is portable and can connect to any app using the Sui dApp Ki
 
 Use Sui dApp Kit to add wallet connection support to the off-device (PC or web) version of your game. Create a dApp Kit instance, wrap your game UI in `DAppKitProvider`, and render a `ConnectButton`:
 
-```tsx
-// App.tsx
-import { createDAppKit, DAppKitProvider } from '@mysten/dapp-kit-react';
-import { ConnectButton } from '@mysten/dapp-kit-react/ui';
-import { SuiGrpcClient } from '@mysten/sui/grpc';
+<ImportContent source="packages/dapp-kit/examples/react/simple/src/dApp-kit.ts" mode="code" org="MystenLabs" repo="ts-sdks" />
 
-const dAppKit = createDAppKit({
-  networks: ['mainnet'],
-  defaultNetwork: 'mainnet',
-  createClient(network) {
-    return new SuiGrpcClient({ network, baseUrl: 'https://fullnode.mainnet.sui.io:443' });
-  },
-});
+<ImportContent source="packages/dapp-kit/examples/react/simple/src/main.tsx" mode="code" org="MystenLabs" repo="ts-sdks" />
 
-declare module '@mysten/dapp-kit-react' {
-  interface Register {
-    dAppKit: typeof dAppKit;
-  }
-}
-
-export default function App() {
-  return (
-    <DAppKitProvider dAppKit={dAppKit}>
-      <ConnectButton />
-      <YourGameUI />
-    </DAppKitProvider>
-  );
-}
-```
-
-`ConnectButton` lists every wallet that dApp Kit detects, plus any wallet you register through the `walletInitializers` option on `createDAppKit`. The Playtron zkLogin wallet is not a browser extension, so it needs that explicit registration before players can select it. For the full setup, see [SDK Integrations](/sui-stack/suiplay0x1/integration).
+`ConnectButton` lists every wallet that dApp Kit detects, plus any wallet you register through the `walletInitializers` option on `createDAppKit`. The Playtron zkLogin wallet is not a browser extension, so it needs that explicit registration before players can select it. For the full setup, including the package to install and which networks to configure, see [SDK Integrations](/sui-stack/suiplay0x1/integration#off-device-example-add-wallet-connection-with-sui-dapp-kit).
 
 :::info
 
@@ -143,54 +117,23 @@ Never grant an in-game benefit based on an address a client supplies. Any player
 
 :::
 
-The following example resolves the linked addresses from a player's Sui-to-Sui SuiLink NFTs, then checks each one for a membership asset. Both queries page through their results, because `listOwnedObjects` returns one page at a time.
+Start with the `listAllOwnedObjects` and `getLinkedAddresses` helpers from [SuiLink](/onchain-finance/asset-custody/wallets/suilink#querying-suilink-objects):
+
+<ImportContent source="suilink-query-objects" mode="snippet" />
+
+Then check the player's Playtron wallet and each linked address for the asset your game gates on:
 
 ```ts
-import { SuiGrpcClient } from '@mysten/sui/grpc';
-
-const client = new SuiGrpcClient({
-  network: 'mainnet',
-  baseUrl: 'https://fullnode.mainnet.sui.io:443',
-});
-
-// Sui-to-Sui SuiLink package on Mainnet
-const SUILINK_PACKAGE_ID = '0x73f5ab2461c5993408fff21354fa9831d4f4a66cc81382419ec29e3c80c384b5';
 const MEMBERSHIP_TYPE = '0xPACKAGE_ID::membership::Membership';
 
-// Walk every page, because a player can own more objects than one page holds
-async function listAllOwnedObjects(owner: string, type: string) {
-  const all = [];
-  let cursor: string | null = null;
-
-  do {
-    const page = await client.listOwnedObjects({
-      owner,
-      type,
-      cursor,
-      include: { json: true },
-    });
-
-    all.push(...page.objects);
-    cursor = page.hasNextPage ? page.cursor : null;
-  } while (cursor);
-
-  return all;
-}
-
 async function hasMembership(playtronAddress: string) {
-  // The Playtron wallet address is the one the player connected, so check it directly
+  // The Playtron wallet is the address the player connected, so check it directly
   const owned = await listAllOwnedObjects(playtronAddress, MEMBERSHIP_TYPE);
   if (owned.length > 0) return true;
 
-  // Then check each address the player has proven they own through SuiLink
-  const links = await listAllOwnedObjects(
-    playtronAddress,
-    `${SUILINK_PACKAGE_ID}::suilink::SuiLink`,
-  );
-
-  for (const link of links) {
-    const linkedAddress = link.json.network_address as string;
-    const linkedAssets = await listAllOwnedObjects(linkedAddress, MEMBERSHIP_TYPE);
+  // Then check every address the player has proven they own through SuiLink
+  for (const link of await getLinkedAddresses(playtronAddress)) {
+    const linkedAssets = await listAllOwnedObjects(link.address, MEMBERSHIP_TYPE);
     if (linkedAssets.length > 0) return true;
   }
 
