@@ -51,31 +51,6 @@ Sui nodes support several data management strategies depending on your storage a
 
 Disk usage grows as the node processes checkpoints and stores object versions. You manage disk usage by enabling pruning in your node configuration. Pruning removes object and transaction data older than a configurable retention window while keeping the data available through archival stores if you configure one.
 
-The following example shows the relevant sections of a full node configuration file that enable both pruning and archival export:
-
-```yaml
-authority-store-pruning-config:
-  num-latest-epoch-dbs-to-retain: 3
-  epoch-db-pruning-period-secs: 3600
-  num-epochs-to-retain: 0
-  max-checkpoints-in-batch: 10
-  max-transactions-in-batch: 1000
-
-checkpoint-executor-config:
-  checkpoint-execution-max-concurrency: 200
-  local-execution-timeout-sec: 30
-
-state-archive-write-config:
-  object-store-config:
-    object-store: "S3"
-    bucket: "YOUR_BUCKET_NAME"
-    aws-region: "YOUR_AWS_REGION"
-    object-store-connection-limit: 20
-  concurrency: 5
-  use-for-pruning-watermark: true
-```
-
-Replace `YOUR_BUCKET_NAME` and `YOUR_AWS_REGION` with your actual bucket name and region.
 
 ## What is the difference between archival and pruned data?
 
