@@ -258,8 +258,15 @@ const VALIDATOR_GRPC_SERVER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(30)
 
 /// How long after reconfiguration every reference to the previous epoch's store must be gone.
 /// The longest legitimate holder is an RPC handler on a fullnode waiting up to the local
-/// execution timeout (10s) for a transaction to be checkpointed.
-const EPOCH_STORE_RELEASE_GRACE_PERIOD: Duration = Duration::from_secs(60);
+/// execution timeout (10s) for a transaction to be checkpointed. Simtests use a shorter period
+/// so that the check is exercised even by tests with short epochs.
+fn epoch_store_release_grace_period() -> Duration {
+    if cfg!(msim) {
+        Duration::from_secs(15)
+    } else {
+        Duration::from_secs(60)
+    }
+}
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -2321,12 +2328,13 @@ impl SuiNode {
         prev_epoch_store: Weak<AuthorityPerEpochStore>,
         prev_epoch: EpochId,
     ) {
-        tokio::time::sleep(EPOCH_STORE_RELEASE_GRACE_PERIOD).await;
+        let grace_period = epoch_store_release_grace_period();
+        tokio::time::sleep(grace_period).await;
         let strong_count = prev_epoch_store.strong_count();
         if strong_count > 0 {
             debug_fatal!(
                 "AuthorityPerEpochStore for epoch {prev_epoch} still has {strong_count} strong \
-                 references {EPOCH_STORE_RELEASE_GRACE_PERIOD:?} after reconfiguration"
+                 references {grace_period:?} after reconfiguration"
             );
         } else {
             info!(prev_epoch, "Previous epoch store released");
@@ -2851,7 +2859,8 @@ impl ValidatorGrpcServer {
             {
                 Ok(()) => info!("Validator gRPC server stopped"),
                 // Shutdown was triggered, so the server still winds down in the background.
-                Err(_) => warn!(
+                Err(e) => warn!(
+                    error = ?e,
                     "Validator gRPC server did not stop within {VALIDATOR_GRPC_SERVER_SHUTDOWN_TIMEOUT:?}"
                 ),
             }
