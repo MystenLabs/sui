@@ -30,8 +30,8 @@ builder_paths:
     step: 'Margin contract: Orders'
     stage: Margin
 questions:
-  - What is Orders in Sui?
-  - How does orders work on Sui?
+  - What are Orders in Sui?
+  - How do orders work on Sui?
   - Why should I use orders?
 answer: Learn how to place and manage orders using margin managers.
 ---
@@ -60,52 +60,6 @@ You can modify an existing open order to change its quantity. To cancel, you can
 ## How do you withdraw funds after a trade?
 
 After an order fills, call `withdraw_settled_amounts` to move the proceeds from the pool back to the margin manager's balance manager. Settled amounts are not automatically returned.
-
-## Code example
-
-The following example shows the sequence of calls to place a limit order and withdraw the settled amounts after it fills. This uses the Sui TypeScript SDK to construct a programmable transaction block (PTB).
-
-```typescript
-import { Transaction } from "@mysten/sui/transactions";
-
-const tx = new Transaction();
-
-// Place a limit order through the margin manager
-tx.moveCall({
-  target: `${DEEPBOOK_MARGIN_PACKAGE_ID}::pool_proxy::place_limit_order`,
-  arguments: [
-    tx.object(POOL_ID),
-    tx.object(MARGIN_MANAGER_ID),
-    tx.pure.u64(CLIENT_ORDER_ID),
-    tx.pure.u8(ORDER_TYPE),       // 0 = no restriction, 1 = immediate-or-cancel, 2 = fill-or-kill, 3 = post-only
-    tx.pure.u8(SELF_MATCHING),    // 0 = allow, 1 = cancel taker, 2 = cancel maker
-    tx.pure.u64(PRICE),           // price in base asset units
-    tx.pure.u64(QUANTITY),        // quantity in base asset units
-    tx.pure.bool(IS_BID),         // true = buy, false = sell
-    tx.pure.u64(EXPIRE_TIMESTAMP),
-    tx.object(DEEP_COIN),
-    tx.object(SUI_CLOCK_ID),
-  ],
-  typeArguments: [BASE_TYPE, QUOTE_TYPE],
-});
-
-// Withdraw settled amounts back to the balance manager after the order fills
-tx.moveCall({
-  target: `${DEEPBOOK_MARGIN_PACKAGE_ID}::pool_proxy::withdraw_settled_amounts`,
-  arguments: [
-    tx.object(POOL_ID),
-    tx.object(MARGIN_MANAGER_ID),
-  ],
-  typeArguments: [BASE_TYPE, QUOTE_TYPE],
-});
-
-const result = await client.signAndExecuteTransaction({
-  signer: keypair,
-  transaction: tx,
-});
-```
-
-Replace `DEEPBOOK_MARGIN_PACKAGE_ID`, `POOL_ID`, `MARGIN_MANAGER_ID`, and the type arguments with values for your target pool.
 
 ## API
 
