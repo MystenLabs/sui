@@ -170,12 +170,22 @@ pub struct ValidatorComponents {
     validator_server_handle: Option<SpawnOnce>,
     validator_overload_monitor_handle: Option<JoinHandle<()>>,
     consensus_manager: Arc<ConsensusManager>,
+    consensus_startup_task: Option<JoinHandle<()>>,
     consensus_store_pruner: ConsensusStorePruner,
     consensus_adapter: Arc<ConsensusAdapter>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     admission_queue: Option<AdmissionQueueContext>,
     transaction_pool_context: Option<Arc<TransactionPoolContext>>,
+}
+
+impl ValidatorComponents {
+    async fn await_consensus_startup(&mut self) {
+        if let Some(task) = self.consensus_startup_task.take() {
+            task.await
+                .expect("Consensus startup task should complete successfully");
+        }
+    }
 }
 
 pub struct P2pComponents {
@@ -1630,7 +1640,7 @@ impl SuiNode {
         info!("Starting consensus manager asynchronously");
 
         // Spawn consensus startup asynchronously to avoid blocking other components
-        tokio::spawn({
+        let consensus_startup_task = tokio::spawn({
             let config = config.clone();
             let epoch_store = epoch_store.clone();
             let sui_tx_validator = SuiTxValidator::new(
@@ -1682,6 +1692,7 @@ impl SuiNode {
             validator_server_handle,
             validator_overload_monitor_handle,
             consensus_manager,
+            consensus_startup_task: Some(consensus_startup_task),
             consensus_store_pruner,
             consensus_adapter,
             checkpoint_metrics,
@@ -2140,21 +2151,26 @@ impl SuiNode {
                 context.set_unavailable(next_epoch);
             }
 
-            let new_validator_components = if let Some(ValidatorComponents {
-                validator_server_handle,
-                validator_overload_monitor_handle,
-                consensus_manager,
-                consensus_store_pruner,
-                consensus_adapter,
-                checkpoint_metrics,
-                sui_tx_validator_metrics,
-                admission_queue,
-                transaction_pool_context,
-            }) = validator_components_lock_guard.take()
+            let new_validator_components = if let Some(mut validator_components) =
+                validator_components_lock_guard.take()
             {
                 info!("Reconfiguring node (was running consensus).");
 
                 fail_point_async!("consensus_transaction_pool_reconfig_before_shutdown");
+                validator_components.await_consensus_startup().await;
+
+                let ValidatorComponents {
+                    validator_server_handle,
+                    validator_overload_monitor_handle,
+                    consensus_manager,
+                    consensus_startup_task: _,
+                    consensus_store_pruner,
+                    consensus_adapter,
+                    checkpoint_metrics,
+                    sui_tx_validator_metrics,
+                    admission_queue,
+                    transaction_pool_context,
+                } = validator_components;
                 consensus_manager.shutdown().await;
                 info!("Consensus has shut down.");
 
@@ -2301,8 +2317,12 @@ impl SuiNode {
     }
 
     async fn shutdown(&self) {
-        if let Some(validator_components) = &*self.validator_components.lock().await {
-            validator_components.consensus_manager.shutdown().await;
+        {
+            let mut validator_components = self.validator_components.lock().await;
+            if let Some(validator_components) = validator_components.as_mut() {
+                validator_components.await_consensus_startup().await;
+                validator_components.consensus_manager.shutdown().await;
+            }
         }
         if let Some(context) = &self.transaction_pool_context {
             context.set_unavailable(self.state.load_epoch_store_one_call_per_task().epoch());
