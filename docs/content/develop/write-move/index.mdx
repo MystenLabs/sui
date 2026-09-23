@@ -94,10 +94,6 @@ public fun increment(counter: &mut Counter) {
 
 This module uses Move 2024 syntax: the module label declaration (`module my_package::counter;`), method-style calls (`ctx.sender()` instead of `tx_context::sender(ctx)`), and direct field access. The `Counter` type has the `key` ability, which makes it a Sui object. The `init` function runs once at package publication and creates the initial counter.
 
-## What topics does writing Move packages cover?
-
-The subtopics in this section cover everything you need to write Move packages on Sui, including the object model, abilities and type system, package structure, testing, and upgrade patterns.
-
 import DocCardList from '@theme/DocCardList';
 
 <DocCardList />
