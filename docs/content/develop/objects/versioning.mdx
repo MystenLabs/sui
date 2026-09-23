@@ -41,9 +41,9 @@ questions:
   - How does object versioning work on Sui?
   - Why should I use object versioning?
 answer: >-
-  Sui provides `Table` and `Bag` collections built using dynamic fields, but
-  with additional support to count the number of entries they contain to protect
-  against accidental deletion when non-empty.
+  Sui versions every onchain object by (ID, version) pair using Lamport
+  timestamps, with objects versioned either through the fastpath or through
+  consensus depending on their ownership type.
 ---
 
 Every object stored onchain is referenced by an ID and version. When a transaction modifies an object, it writes the new contents to an onchain reference with the same ID but a new version. Despite appearing multiple times in the store, only the latest version of an object is available to transactions. Only one transaction can modify an object at a given version, guaranteeing a linear history.
