@@ -75,33 +75,6 @@ Most off-ramp providers follow a similar integration pattern:
 
 The specific parameters, authentication method, and webhook events differ by provider. Review the provider's documentation before building.
 
-## Example: launch a Coinbase off-ramp session
-
-The Coinbase CDP off-ramp generates a URL that opens a hosted checkout flow. Your backend signs the session, then passes the URL to your frontend to open in a new tab or modal.
-
-The following example constructs a Coinbase off-ramp URL for a user who wants to sell SUI:
-
-```typescript
-const COINBASE_APP_ID = "YOUR_COINBASE_APP_ID";
-const userWalletAddress = "USER_SUI_WALLET_ADDRESS";
-
-const params = new URLSearchParams({
-  appId: COINBASE_APP_ID,
-  addresses: JSON.stringify({ [userWalletAddress]: ["sui"] }),
-  assets: JSON.stringify(["SUI"]),
-  redirectUrl: "https://your-app.com/offramp-complete",
-});
-
-const offrampUrl = `https://pay.coinbase.com/v3/sell/input?${params.toString()}`;
-
-// Open the off-ramp URL in a popup or redirect
-window.open(offrampUrl, "_blank");
-```
-
-Replace `YOUR_COINBASE_APP_ID` with the app ID from your Coinbase Developer Platform dashboard and `USER_SUI_WALLET_ADDRESS` with the address of the connected wallet. The `redirectUrl` receives the user after they complete or cancel the off-ramp flow.
-
-For production integrations, generate session tokens on your backend rather than constructing the URL client-side, to protect your API credentials. See the [Coinbase CDP off-ramp docs](https://docs.cdp.coinbase.com/onramp/offramp/offramp-overview) for session token generation and webhook event handling.
-
 ## Which off-ramp provider should you choose?
 
 Provider selection depends on your users' geography, the assets you support, and your integration preferences. Consider the following when evaluating:
