@@ -24,7 +24,9 @@ use sui_macros::EnumVariantOrder;
 use tracing::warn;
 
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::execution_status::MoveLocation;
+use sui_types::gas_coin::GasCoin;
 use sui_types::sui_serde::SuiStructTag;
 
 pub type SuiMoveTypeParameterIndex = u16;
@@ -749,6 +751,54 @@ impl From<MoveStruct> for SuiMoveStruct {
                 .map(|(id, value)| (id.into_string(), value.into()))
                 .collect(),
         }
+    }
+}
+
+impl TryFrom<&SuiMoveStruct> for GasCoin {
+    type Error = anyhow::Error;
+    fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
+        match move_struct {
+            SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
+                if let Some(SuiMoveValue::String(balance)) = fields.get("balance")
+                    && let Ok(balance) = balance.parse::<u64>()
+                    && let Some(SuiMoveValue::UID { id }) = fields.get("id")
+                {
+                    return Ok(GasCoin::new(*id, balance));
+                }
+            }
+            _ => {}
+        }
+        Err(anyhow::anyhow!("Struct is not a gas coin: {move_struct:?}"))
+    }
+}
+
+/// Split an event's payload into its type and its fields rendered as JSON.
+/// Events always carry a struct or an enum variant at the top level; every
+/// other `MoveValue` shape is rejected rather than rendered.
+pub fn type_and_fields_from_move_event_data(
+    event_data: MoveValue,
+) -> SuiResult<(StructTag, Value)> {
+    match event_data.into() {
+        SuiMoveValue::Struct(move_struct) => match &move_struct {
+            SuiMoveStruct::WithTypes { type_, .. } => {
+                Ok((type_.clone(), move_struct.clone().to_json_value()))
+            }
+            _ => Err(SuiErrorKind::ObjectDeserializationError {
+                error: "Found non-type SuiMoveStruct in MoveValue event".to_string(),
+            }
+            .into()),
+        },
+        SuiMoveValue::Variant(v) => Ok((v.type_.clone(), v.clone().to_json_value())),
+        SuiMoveValue::Vector(_)
+        | SuiMoveValue::Number(_)
+        | SuiMoveValue::Bool(_)
+        | SuiMoveValue::Address(_)
+        | SuiMoveValue::String(_)
+        | SuiMoveValue::UID { .. }
+        | SuiMoveValue::Option(_) => Err(SuiErrorKind::ObjectDeserializationError {
+            error: "Invalid MoveValue event type -- this should not be possible".to_string(),
+        }
+        .into()),
     }
 }
 
