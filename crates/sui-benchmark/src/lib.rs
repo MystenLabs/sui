@@ -1049,7 +1049,7 @@ fn max_rpc_retries() -> usize {
 /// budget, so the client gives up while the fault is still in effect.
 fn rpc_retry_budget() -> Duration {
     if in_antithesis() {
-        Duration::from_secs(300)
+        Duration::from_secs(600)
     } else {
         Duration::from_secs(60)
     }
