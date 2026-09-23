@@ -703,6 +703,12 @@ impl ValidatorService {
         inflight_guard: &mut InflightTransactionsGuard,
     ) -> SuiResult<(RawSubmitTxResponse, Weight)> {
         let epoch_store = state.load_epoch_store_one_call_per_task();
+        // A node leaving the committee keeps serving until reconfiguration shuts this server
+        // down, but it can no longer sequence transactions: a submission would wait for a
+        // consensus position until the epoch ends.
+        if !epoch_store.is_validator() {
+            return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
+        }
         let submit_type = SubmitTxType::try_from(request.submit_type).map_err(|e| {
             SuiErrorKind::GrpcMessageDeserializeError {
                 type_info: "RawSubmitTxRequest.submit_type".to_string(),
