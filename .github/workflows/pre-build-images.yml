@@ -9,6 +9,8 @@ on:
       - 'testnet'
       - 'mainnet'
       - 'releases/sui-*-release'
+    paths-ignore:
+      - 'docs/**'
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
