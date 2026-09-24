@@ -253,7 +253,7 @@ impl AuthorityPerpetualTables {
         let object_indexing = KeyIndexing::fixed(32 + 8); //  KeyIndexing::key_reduction(32 + 8, 16..(32 + 8));
         let mut objects_config = KeySpaceConfig::new()
             .with_max_dirty_keys(16 * default_max_dirty_keys())
-            .with_value_cache_size(value_cache_size);
+            .with_value_cache_size(2 * value_cache_size);
         if matches!(db_options_override, Some(options) if options.enable_objects_compactor) {
             objects_config = objects_config.with_compactor(Box::new(objects_compactor));
         }
@@ -275,7 +275,7 @@ impl AuthorityPerpetualTables {
                     transaction_mutexes,
                     uniform_key,
                     KeySpaceConfig::new()
-                        .with_value_cache_size(value_cache_size)
+                        .with_value_cache_size(2 * value_cache_size)
                         .with_relocation_filter(|_, _| Decision::Remove),
                     digest_prefix.clone(),
                 ),
