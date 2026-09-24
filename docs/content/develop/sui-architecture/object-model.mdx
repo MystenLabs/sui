@@ -92,7 +92,7 @@ You can refer to objects by their:
 
 ## Object ownership 
 
-Every object has an owner field that dictates who can use it in transactions. This field can contain one of the following options:
+Every object has an owner field that dictates who can use it in transactions, except for immutable objects which have no owner. This field can contain one of the following options:
 
 - **[Address owned](/develop/objects/object-ownership/address-owned):** Owned by a specific 32-byte address that is either an account address derived from a particular signature scheme or an object ID. 
 
