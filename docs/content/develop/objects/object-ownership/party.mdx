@@ -106,7 +106,7 @@ After creation, a party object behaves like an [address-owned](/develop/objects/
 
 Use party objects when you want an object to remain owned by one address but be versioned by [consensus](/develop/sui-architecture/consensus), such as for operational convenience. If you only use an object together with other party or [shared](/develop/objects/object-ownership/shared) objects, converting it to a party object has no additional performance cost.
 
-Party objects can be used by multiple inflight [transactions](/develop/transactions/txn-overview) at the same time. This contrasts with [address-owned](/develop/objects/object-ownership/address-owned) objects, which allow only a single inflight transaction at a time. Because consensus manages the versioning of a party object, many applications can pipeline several transactions against the same object without waiting for one to finalize before submitting the next.
+Party objects can be used by multiple inflight [transactions](/develop/transactions/txn-overview) sequentially, but like address-owned objects, only one transaction can be inflight at a time. This contrasts with [address-owned](/develop/objects/object-ownership/address-owned) objects, which allow only a single inflight transaction at a time. Because consensus manages the versioning of a party object, many applications can pipeline several transactions against the same object without waiting for one to finalize before submitting the next.
 
 :::info
 

@@ -218,7 +218,7 @@ The `useWallet` hook derives the deterministic Sui address from the JWT and salt
 
 <ImportContent source="K2/src/hooks/useWallet.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="useWallet" />
 
-`jwtToAddress` maps the JWT's `sub` claim and the salt to a Sui address. `genAddressSeed` produces the address seed needed later for the zkLogin signature. The same JWT `sub` + salt always produces the same address, so the user's wallet persists across sessions.
+`jwtToAddress` maps the JWT's `sub` claim and the salt to a Sui address. `genAddressSeed` produces the address seed needed later for the zkLogin signature. The same JWT `sub` claim + salt always produces the same address, so the user's wallet persists across sessions.
 
 ### Transaction building and zkLogin execution
 

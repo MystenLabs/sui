@@ -61,7 +61,7 @@ Input arguments to a PTB are broadly categorized as either objects or pure value
 
 For object inputs, the metadata needed differs depending on the type of [ownership of the object](/develop/objects/object-ownership). The data for the `ObjectArg` enum follows:
 
-- If the object is owned by an address or it is immutable, then use `ObjectArg::ImmOrOwnedObject(ObjectID, SequenceNumber, ObjectDigest)`. The triple respectively specifies the object's ID, its sequence or version number, and the digest of the object's data.
+- If the object is owned by an address or it is immutable, then use `ObjectArg::ImmOrOwnedObject(ObjectID, SequenceNumber, ObjectDigest)`. Note that if the object is immutable, it cannot be transferred to another object. The triple respectively specifies the object's ID, its sequence or version number, and the digest of the object's data.
 
 - If an object is shared, then use `ObjectArg::SharedObject { id: ObjectID, initial_shared_version: SequenceNumber, mutable: bool }`. Unlike `ImmOrOwnedObject`, a shared object's version and digest are determined by the network's consensus protocol. The `initial_shared_version` is the version of the object when it was first shared, which is used by consensus when it has not yet seen a transaction with that object. While all shared objects can be mutated, the `mutable` flag indicates whether the object is to be used mutably in this transaction. In the case where the `mutable` flag is set to `false`, the object is read-only and the system can schedule other read-only transactions in parallel.
 

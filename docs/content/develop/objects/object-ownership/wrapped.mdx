@@ -265,7 +265,7 @@ public fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mut TxCo
 
 The function passes a `warrior` as a mutable reference of `SimpleWarrior`, and passes a `sword` by value to wrap it into the `warrior`.
 
-Because `Sword` is a Sui object type without `drop` ability, if the warrior already has a sword equipped, the warrior can't drop that sword. If you call `option::fill` without first calling `equip_sword`, an error occurs. `equip_sword` checks whether there is already a sword equipped and if so, removes it and sends it back to the sender. To the player, this returns an equipped sword to their inventory when they equip the different sword.
+Because `Sword` is a Sui object type without `drop` ability, if the warrior already has a sword equipped, the sword can't be dropped. If you call `option::fill` without first calling `equip_sword`, an error occurs. `equip_sword` checks whether there is already a sword equipped and if so, removes it and sends it back to the sender. To the player, this returns an equipped sword to their inventory when they equip the different sword.
 
 View the source code in the [`simple_warrior`](https://github.com/MystenLabs/sui/tree/main/examples/move/simple_warrior) example or check out the [`hero`](https://github.com/MystenLabs/sui/tree/main/examples/move/hero) example for a more complex implementation.
 

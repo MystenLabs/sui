@@ -68,7 +68,7 @@ However, more intricate programming patterns, such as loops, are not supported. 
 
 The individual transaction commands within a PTB execute in order. You can use the results from one transaction command in any subsequent transaction command within the PTB. The effects of each transaction command in the block, such as object modifications or transfers, are applied atomically at the end of the transaction. If one transaction command fails, the entire block fails and no effects from the commands are applied.
 
-A PTB can perform up to 1,024 unique operations in a single execution, whereas transactions on traditional blockchains would require 1,024 individual executions to accomplish the same result. This structure also results in cheaper gas fees. The cost of facilitating individual transactions is always more than the cost of those same transactions blocked together in a PTB.
+A PTB can perform up to 1,024 unique operations in a single execution, whereas transactions on traditional blockchains would require 1,024 individual executions to accomplish the same result. This structure also results in cheaper gas fees. The cost of facilitating individual transactions is always more than the cost of those same transactions blocked together in a PTB when compared on a per-operation basis.
 
 ## Transaction components
 

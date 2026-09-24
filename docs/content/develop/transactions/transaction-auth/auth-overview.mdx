@@ -76,7 +76,7 @@ The mnemonics and private keys shown on this page are illustrative placeholders.
 
 ### Key derivation schemes
 
-For managing wallets that support the Ed25519 (EdDSA) signing scheme, Sui follows [SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010), which enforces wallets to always derive child private keys from parent private keys using the hardened key path.
+For managing wallets that support the Ed25519 (EdDSA) signing scheme, Sui follows [BIP-32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki) or [BIP-44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki), which are the standard key derivation standards (SLIP-0010 is a variant for Ed25519 but not the primary standard Sui follows).
 
 Sui follows BIP-32 for managing wallets that support the ECDSA Secp256k1 and ECDSA Secp256r1 signing schemes.
 
