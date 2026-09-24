@@ -1016,7 +1016,7 @@ query ($before: String) {
 
 ### Execute a transaction
 
-GraphQL is not read-only. Transaction execution takes 2 arguments, `transactionDataBcs` and `signatures`. `transactionDataBcs` is the serialized unsigned transaction data, which the [Sui Client CLI](/references/cli/client) `client call` command can generate. Pass the `--serialize-unsigned-transaction` flag to the command to call a Move function. The [Sui Keytool CLI](/references/cli/keytool) command `sui keytool sign` can generate the `signatures`. Select fields from `effects` in the same mutation to read execution results immediately without waiting for a separate indexed query.
+GraphQL is not read-only. Transaction execution takes 2 arguments, `transactionDataBcs` and `signatures`. `transactionDataBcs` is the serialized unsigned transaction data, which the [Sui Client CLI](/references/cli/client) `client call` command can generate. Pass the `--serialize-unsigned-transaction` flag to the command to call a Move function. The [Sui Keytool CLI](/references/cli/keytool) command `sui keytool sign` can generate the `signatures`. Select fields from `effects` in the same mutation to read execution results immediately without waiting for a separate query.
 
 ```graphql
 mutation ($tx: String!, $sigs: [String!]!) {

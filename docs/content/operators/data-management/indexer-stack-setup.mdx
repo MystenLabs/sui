@@ -448,7 +448,7 @@ Do not route traffic to this temporary catch-up process. After it reaches the ne
 
 To build a consistent store without a formal snapshot, run from an empty path against the full-retention GCS bucket and process from checkpoint 0. Do not set `--first-checkpoint` to a later checkpoint, because doing so produces incomplete ownership and balance state.
 
-For Testnet, use `https://formal-snapshot.testnet.sui.io`, `https://checkpoints.testnet.sui.io`, and a production-grade Testnet fullnode endpoint from an RPC provider. Use the `mysten-testnet-checkpoints-use4` bucket when GCS catch-up is necessary. Keep every source on the same network and use a separate RocksDB path per network.
+For Testnet, use `https://formal-snapshot.testnet.sui.io`, `https://checkpoints.testnet.sui.io`, and a production-grade Testnet fullnode endpoint from an RPC provider. Use the `mysten-testnet-checkpoints-use4` bucket when GCS catch-up is necessary. Keep every source on the same network and use a separate RocksDB path per source.
 
 ### Run config recommendations
 

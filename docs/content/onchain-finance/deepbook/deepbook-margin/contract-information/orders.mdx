@@ -51,7 +51,7 @@ Following are the different public functions for managing orders with margin man
 <details>
 <summary>Place orders</summary>
 
-Place limit and market orders through a margin manager. Orders can only be placed if margin trading is enabled for the pool.
+Place limit and market orders through a margin manager. Place limit and market orders through a margin manager.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/pool_proxy.move"
@@ -66,7 +66,7 @@ Place limit and market orders through a margin manager. Orders can only be place
 <details>
 <summary>Place reduce-only orders</summary>
 
-Place reduce-only orders that can only decrease your debt position. These orders are useful when margin trading is disabled and you need to close existing positions.
+Place reduce-only orders that can only decrease your debt position. These orders are useful when margin trading is enabled and you need to close existing positions.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/pool_proxy.move"
