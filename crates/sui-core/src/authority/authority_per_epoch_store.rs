@@ -1170,6 +1170,18 @@ impl AuthorityPerEpochStore {
         self.protocol_config().enable_coin_deny_list() && self.coin_deny_list_state_exists()
     }
 
+    pub fn package_config_exists(&self) -> bool {
+        self.epoch_start_configuration
+            .package_config_obj_initial_shared_version()
+            .is_some()
+    }
+
+    pub fn package_policy_enabled(&self) -> bool {
+        let config = self.protocol_config();
+        self.package_config_exists()
+            && (config.enable_package_version_forbid_list() || config.enable_package_minversion())
+    }
+
     pub fn bridge_exists(&self) -> bool {
         self.epoch_start_configuration
             .bridge_obj_initial_shared_version()
