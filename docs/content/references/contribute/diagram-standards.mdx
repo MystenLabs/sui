@@ -419,7 +419,7 @@ Generic slugs such as `architecture_diagram_v1` or `sequence_flow_v1` are not al
 
 ### Source files
 
-- Every pull request that adds or updates a diagram must include an editable source file alongside the exported PNG.
+- Every pull request that adds or updates a diagram must include an editable source file alongside the exported PNG, except for Mermaid diagrams which use inline code blocks.
 - For Mermaid diagrams, the source is the fenced `mermaid` code block in the `.mdx` page. No separate source file is needed.
 - For Claude Design diagrams, the source is the exported `.svg` file. Commit both the `.svg` and the `.png`.
 - Store source files in the same directory as the documentation page that references them.

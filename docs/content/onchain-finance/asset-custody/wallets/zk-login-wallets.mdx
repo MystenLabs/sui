@@ -62,7 +62,7 @@ At a high level, a zkLogin wallet works as follows:
 1. The app generates an [ephemeral key pair](/sui-stack/zklogin-integration/zklogin#how-zklogin-works), valid for a limited number of epochs.
 2. The user authenticates with an OAuth provider. The provider returns a [JSON Web Token (JWT)](/sui-stack/zklogin-integration/zklogin#json-web-token-jwt) that contains a nonce derived from the ephemeral public key.
 3. The app or a proving service uses the JWT to generate a zero-knowledge proof. The proof confirms the user holds a valid OAuth credential without revealing the credential onchain.
-4. The app uses the JWT, a [per-user salt](/sui-stack/zklogin-integration/zklogin#user-salt), and the issuer URL to [derive a stable Sui address](/sui-stack/zklogin-integration/zklogin#address-definition) for the user. The same credential always produces the same address for a given app and salt.
+4. The app uses the JWT, a [per-user salt](/sui-stack/zklogin-integration/zklogin#user-salt), and the issuer URL to [derive a stable Sui address](/sui-stack/zklogin-integration/zklogin#address-definition) for the user. The same credential always produces the same address for a given issuer and salt.
 5. Transactions are signed with the [ephemeral private key](/sui-stack/zklogin-integration/zklogin#ephemeral-private-key) and submitted alongside the zero-knowledge proof. Validators verify the proof and execute the transaction.
 
 Because zkLogin is a two-factor scheme, an attacker who compromises an OAuth account cannot sign transactions unless they also compromise the per-user salt.

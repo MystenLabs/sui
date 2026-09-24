@@ -76,7 +76,7 @@ Use this pattern when you need to:
 
 - Onboard users who do not have a Sui wallet by letting them sign in with Google or Apple.
 
-- Derive a deterministic Sui address from a JWT token and a salt so users always get the same address.
+- Derive a deterministic Sui address from an OAuth identity and a salt so users always get the same address.
 
 - Generate and manage ephemeral key pairs that sign transactions on behalf of the authenticated user.
 
@@ -94,7 +94,7 @@ This example teaches:
 
 - **ZK proof generation:** The prover service takes the JWT, extended ephemeral public key, max epoch, randomness, and salt, and returns a zero-knowledge proof. This proof lets the network verify the transaction was authorized by the OAuth identity holder without seeing the JWT.
 
-- **Address derivation:** `jwtToAddress(jwt, salt, false)` deterministically maps an OAuth identity to a Sui address. The third argument (`legacyAddress`) is required; pass `false` for new integrations. The same user with the same salt always gets the same address, enabling persistent wallet identity across sessions.
+- **Address derivation:** `jwtToAddress(jwt, salt, false)` deterministically maps an OAuth identity to a Sui address. The third argument (`legacyAddress`) is required; pass `false` for new integrations. The same user with the same salt always gets the same address, enabling deterministic address derivation; however, the ephemeral key pair changes per session, so the actual signing capability is session-specific.
 
 - **zkLogin transaction signing:** The ephemeral key pair signs the transaction bytes, then `getZkLoginSignature` combines the ephemeral signature with the ZK proof and address seed to produce a composite signature the network accepts.
 
@@ -148,7 +148,7 @@ The following steps walk through the flow:
 
 ### How zkLogin works
 
-The zkLogin system maps an OAuth identity (like a Google account) to a Sui address using zero-knowledge proofs. The key insight is that the user's Sui address is derived deterministically from 2 inputs: their OAuth `sub` claim (a unique user identifier from the provider) and an application-specific salt. The same user with the same salt always gets the same address.
+The zkLogin system maps an OAuth identity (like a Google account) to a Sui address using zero-knowledge proofs. The key insight is that the user's Sui address is derived deterministically from 2 inputs: their OAuth `sub` claim (a unique user identifier from the provider) and an application-specific salt. The same user with the same salt always gets the same address, but different salts produce different addresses for the same user.
 
 To authorize a transaction, the user does not sign with a long-lived private key. Instead, the application generates a short-lived ephemeral key pair, embeds the key pair's nonce in the OAuth login request, and receives a JWT that binds the user's identity to that ephemeral key. A ZK prover service then generates a proof that the JWT is valid and corresponds to the claimed address, without revealing the JWT itself to the network. The ephemeral key signs the transaction bytes, and the ZK proof wraps the signature so the network can verify authorization without seeing the user's OAuth credentials.
 

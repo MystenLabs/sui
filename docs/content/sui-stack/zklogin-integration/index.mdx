@@ -52,7 +52,7 @@ A proving service takes the JWT, the ephemeral public key, a per-user salt, and 
 
 **3. Address derivation**
 
-The user's Sui address derives deterministically from `sub` (the provider's user identifier), `iss` (the provider), `aud` (the application's client ID), and `user_salt`. The same inputs always produce the same address. See [Address definition](/sui-stack/zklogin-integration/zklogin#address-definition) for the full formula.
+The user's Sui address derives deterministically from `sub` (the provider's user identifier), `iss` (the provider), `aud` (the application's client ID), and `user_salt`. The same inputs always produce the same address, unless the user_salt differs. See [Address definition](/sui-stack/zklogin-integration/zklogin#address-definition) for the full formula.
 
 **4. Transaction signing and submission**
 

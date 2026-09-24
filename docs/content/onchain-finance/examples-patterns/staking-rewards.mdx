@@ -206,7 +206,7 @@ $ sui client ptb \
 
 <CodeWalkthrough source="staking/sources/staking.move" org="MystenLabs" repo="staking-contract-template" language="move">
   <Step lines="36-47" title="`StakingPool` shared object">
-    The pool is a shared object parameterized on `<S, R>` (stake and reward token types). It holds the total staked amount, the reward-per-token accumulator (`reward_per_token_stored`), the emission rate and window (`reward_rate`, `start_timestamp`, `stop_timestamp`), and both token balances. The `paused` flag lets the admin halt new deposits without locking existing principal.
+    The pool is a shared object parameterized on `<S, R>` (stake and reward token types). It holds the total staked amount, the reward-per-token accumulator (`reward_per_token_stored`), the emission rate and window (`reward_rate`, `start_timestamp`, `stop_timestamp`), and both token balances. The `paused` flag lets the admin halt new deposits without locking existing staked amounts.
   </Step>
   <Step lines="70-76" title="`StakeReceipt` owned object">
     Each staker receives a receipt recording their staked `amount`, the pool's accumulator value at their last interaction (`reward_per_token_paid`), and any checkpointed `pending_rewards`. The `pool: ID` field binds the receipt to its pool, preventing cross-pool attacks. The `key + store` abilities make the receipt transferable, enabling composability (for example, using it as collateral in another protocol).

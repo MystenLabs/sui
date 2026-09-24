@@ -61,7 +61,7 @@ If a single byte changes, then the PCR changes. This is how Sui confirms that th
 
 ### Step 1: Enclave starts
 
-It generates a new ephemeral keypair inside its isolated memory. The private key never leaves the enclave while the public key is returned through `/get_attestation`.
+It generates a new ephemeral keypair inside its isolated memory. The private key never leaves the enclave while the public key is returned through `/get_public_key`.
 
 ### Step 2: Enclave signs data
 
