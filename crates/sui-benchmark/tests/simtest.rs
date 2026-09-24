@@ -448,6 +448,14 @@ mod test {
 
         register_fail_point_if("select-random-cache", || true);
 
+        // Randomize each node's execution concurrency limit (re-drawn on restart),
+        // including limits small enough to force transactions through the causal-next
+        // admission lane. Only this test does so: low draws cut cluster throughput,
+        // which would skew the transaction-count assertions of other tests.
+        register_fail_point_arg("execution-concurrency-limit", || {
+            Some(thread_rng().gen_range(1..=8usize))
+        });
+
         let test_cluster = Arc::new(
             init_test_cluster_builder(4, 10000)
                 .with_num_unpruned_validators(4)

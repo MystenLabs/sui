@@ -6043,8 +6043,12 @@ where
         .handle_consensus_commit_for_test(commit)
         .await;
 
-    // Give a bit of time for the async capture to complete
-    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    // The scheduler sender is drained by a separate task, so wait for it to observe
+    // the commit rather than assuming a fixed delay is enough under load.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while captured_transactions.lock().is_empty() && std::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+    }
 
     // Retrieve the captured transactions
     let mut captured = captured_transactions.lock();
