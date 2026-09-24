@@ -171,16 +171,10 @@ fn check_overload_signals(
         let calculated_load_shedding_percentage =
             calculate_load_shedding_percentage(txn_ready_rate, execution_rate);
 
-        additional_load_shedding_percentage = if calculated_load_shedding_percentage > 0
-            || txn_ready_rate >= config.safe_transaction_ready_rate as f64
-        {
-            max(
-                calculated_load_shedding_percentage,
-                config.min_load_shedding_percentage_above_hard_limit,
-            )
-        } else {
-            0
-        };
+        additional_load_shedding_percentage = max(
+            calculated_load_shedding_percentage,
+            config.min_load_shedding_percentage_above_hard_limit,
+        );
     } else if queueing_latency > config.execution_queue_latency_soft_limit {
         additional_load_shedding_percentage =
             calculate_load_shedding_percentage(txn_ready_rate, execution_rate);
@@ -196,15 +190,16 @@ fn check_overload_signals(
         // `additional_load_shedding_percentage`.
         current_load_shedding_percentage
             + (100 - current_load_shedding_percentage) * additional_load_shedding_percentage / 100
-    } else if txn_ready_rate > config.safe_transaction_ready_rate as f64
-        && current_load_shedding_percentage > 10
-    {
-        // We don't need to shed more load. However, the enqueue rate is still not minimal.
-        // We gradually reduce load shedding percentage (10% at a time) to gracefully accept
-        // more load.
+    } else if queueing_latency > config.execution_queue_latency_soft_limit {
+        // We don't need to shed more load, but the queue has not drained yet. Hold the
+        // current load shedding percentage until it does, so that admitted load does not
+        // swing between saturating execution and starving it.
+        current_load_shedding_percentage
+    } else if current_load_shedding_percentage > 10 {
+        // We don't need to shed more load and the queue has drained. We gradually reduce
+        // load shedding percentage (10% at a time) to gracefully accept more load.
         current_load_shedding_percentage - STEADY_OVERLOAD_REDUCTION_PERCENTAGE
     } else {
-        // The current transaction ready rate is considered very low. Turn off load shedding mode.
         0
     };
 
@@ -378,11 +373,12 @@ mod tests {
             (true, 62)
         );
 
-        // When execution queueing latency hits hard limit, but transaction ready rate
-        // is within safe_transaction_ready_rate, don't start overload protection.
+        // When execution queueing latency hits hard limit, start overload protection even
+        // if the transaction ready rate is within safe_transaction_ready_rate: a low
+        // transaction count can still saturate execution when each transaction is expensive.
         assert_eq!(
             check_overload_signals(&config, 0, Duration::from_secs(11), 20.0, 100.0),
-            (false, 0)
+            (true, 50)
         );
 
         // Maximum transactions shed is cap by `max_load_shedding_percentage` config.
@@ -398,10 +394,10 @@ mod tests {
             (true, 60)
         );
 
-        // Load shedding percentage is gradually reduced when txn ready rate is lower than
-        // execution rate.
+        // Load shedding percentage is gradually reduced once queueing delay is within the
+        // soft limit and txn ready rate is above the safe rate.
         assert_eq!(
-            check_overload_signals(&config, 90, Duration::from_secs(2), 200.0, 300.0),
+            check_overload_signals(&config, 90, Duration::from_millis(500), 200.0, 300.0),
             (true, 80)
         );
 
@@ -409,6 +405,28 @@ mod tests {
         assert_eq!(
             check_overload_signals(&config, 50, Duration::from_secs(11), 100.0, 100.0),
             (true, 75)
+        );
+
+        // While queueing delay is still above the soft limit and no additional shedding is
+        // needed, the current load shedding percentage is held.
+        assert_eq!(
+            check_overload_signals(&config, 50, Duration::from_secs(2), 20.0, 100.0),
+            (true, 50)
+        );
+        assert_eq!(
+            check_overload_signals(&config, 50, Duration::from_secs(2), 200.0, 300.0),
+            (true, 50)
+        );
+
+        // Once queueing delay is back within the soft limit, load shedding is reduced
+        // gradually regardless of the transaction ready rate.
+        assert_eq!(
+            check_overload_signals(&config, 50, Duration::from_millis(500), 20.0, 100.0),
+            (true, 40)
+        );
+        assert_eq!(
+            check_overload_signals(&config, 10, Duration::from_millis(500), 20.0, 100.0),
+            (false, 0)
         );
     }
 
