@@ -37,7 +37,7 @@ questions:
   - How does groth16 work on Sui?
   - Why should I use groth16?
 answer: >-
-  A zero-knowledge proof allows a prover to validate that a statement is true
+  A zero-knowledge proof allows a prover to prove that a statement is true
   without revealing any information about the inputs.
 ---
 
@@ -49,7 +49,7 @@ The Move API in Sui enables you to verify any statement that can be expressed in
 
 There are high-level languages for expressing these statements, such as [Circom](https://docs.circom.io), used in the following example.
 
-Groth16 requires a trusted setup for each circuit to generate the verification key. The API is not pinning any particular verification key and each user can generate their own parameters or use an existing verification to their apps.
+Groth16 requires a trusted setup for each circuit to generate the verification key. The API is not pinning any particular verification key and each user can generate their own parameters or use an existing verification key for their apps.
 
 :::danger
 

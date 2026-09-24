@@ -304,7 +304,7 @@ After deriving the zkLogin address, you can use it as the destination address fo
 2. Pass `zkLoginUserAddress` to the on-ramp provider's configuration (for example, Banxa, Stripe, or Meld). Each provider accepts a destination address parameter in their widget SDK or API. See [Fiat On-Ramps](/onchain-finance/asset-custody/fiat-on-ramps) for provider-specific documentation links.
 3. The provider delivers the purchased tokens to the zkLogin address. The user can then sign transactions with their ephemeral key pair and zero-knowledge proof.
 
-The zkLogin address is deterministic. The same OAuth identity and salt always produce the same address, so the user can receive tokens from an on-ramp provider across multiple sessions without re-deriving.
+The zkLogin address is deterministic. The same OAuth identity (`sub` + `iss` + `aud`) and salt always produce the same address, so the user can receive tokens from an on-ramp provider across multiple sessions without re-deriving.
 
 ## Step 6: Get the zero-knowledge proof
 

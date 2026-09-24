@@ -136,7 +136,7 @@ example_dependency = { local = "../example_dependency" }
 dep_of_dep = { git = "..." }
 ```
 
-You must define a dependency for every package that you name in your source code, although you do not need to add a dependency if you do not directly use the package. The name you use in `Move.toml` for the dependency is what defines the name in your Move code. The name you use in the `[package]` section is how you refer to your own address in Move.
+You must define a dependency for every package that you directly use in your source code. The name you use in `Move.toml` for the dependency is what defines the name in your Move code. The name you use in the `[package]` section is how you refer to your own address in Move.
 
 ### `package` section
 
