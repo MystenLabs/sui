@@ -109,6 +109,19 @@ fn out_of_bounds_parameter(param: TypeParameterIndex, len: usize) -> PartialVMEr
     )
 }
 
+fn linearization_step(steps: &mut u64) -> PartialVMResult<()> {
+    *steps = steps.saturating_add(1);
+
+    // A compile step consumes at least one type node, and datatype nodes add one assemble step.
+    if *steps > MAX_TYPE_INSTANTIATION_NODES.saturating_mul(2) {
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "type-size formula linearization exceeded its work bound"
+        ));
+    }
+    Ok(())
+}
+
 // The solve loops, shared between the heap forms and their arena flavors (which differ only in
 // where the term slice lives).
 
@@ -120,9 +133,12 @@ fn solve_linear_terms(constant: u64, terms: &[LinearTerm], args: &[u64]) -> Part
             .ok_or_else(|| out_of_bounds_parameter(term.param, args.len()))?;
         acc = acc.saturating_add(term.coefficient.saturating_mul(*value));
     }
-    // Every measure of a real type is at least one node/level, and argument measures are
-    // themselves solved measures, so a zero here means a broken formula.
-    debug_assert_ne!(acc, 0, "linear form solved to zero");
+    if acc == 0 {
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "linear form solved to zero"
+        ));
+    }
     Ok(acc)
 }
 
@@ -138,9 +154,12 @@ fn solve_max_plus_terms(
             .ok_or_else(|| out_of_bounds_parameter(term.param, args.len()))?;
         acc = acc.max(term.offset.saturating_add(*value));
     }
-    // Every measure of a real type is at least one node/level, and argument measures are
-    // themselves solved measures, so a zero here means a broken formula.
-    debug_assert_ne!(acc, 0, "max-plus form solved to zero");
+    if acc == 0 {
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "max-plus form solved to zero"
+        ));
+    }
     Ok(acc)
 }
 
@@ -424,17 +443,36 @@ impl PartialTypeSizeFormula {
         }
     }
 
-    /// The form of `vector<self>` / `&self` / `&mut self`: one node and one level on top of the
-    /// element in every measure.
-    pub(crate) fn wrap(&self) -> Self {
-        let mut type_size = LinearForm::constant(1);
-        type_size.absorb(1, &self.type_size);
-        let mut layout_size = LinearForm::constant(1);
-        layout_size.absorb(1, &self.layout_size);
-        let mut type_depth = MaxPlusForm::constant(1);
-        type_depth.absorb(1, &self.type_depth);
-        let mut value_depth = MaxPlusForm::constant(1);
-        value_depth.absorb(1, &self.value_depth);
+    /// Wrap this formula in `layers` vector/reference layers.
+    ///
+    /// Additive measures gain one node per wrapper. Max-plus measures gain one level per
+    /// wrapper on both the constant branch and every parameter branch.
+    ///
+    /// Example: wrapping `type_size = 1 + x0` and `type_depth = max(1, 1 + x0)` twice gives
+    /// `type_size = 3 + x0` and `type_depth = max(3, 3 + x0)`.
+    pub(crate) fn wrap_n(&self, layers: u16) -> Self {
+        let layers = u64::from(layers);
+
+        // Linear forms store wrapper nodes in the constant term.
+        let mut type_size = self.type_size.clone();
+        type_size.constant = type_size.constant.saturating_add(layers);
+
+        let mut layout_size = self.layout_size.clone();
+        layout_size.constant = layout_size.constant.saturating_add(layers);
+
+        // Max-plus forms store wrapper depth in every branch.
+        let mut type_depth = self.type_depth.clone();
+        type_depth.constant = type_depth.constant.saturating_add(layers);
+        for term in &mut type_depth.terms {
+            term.offset = term.offset.saturating_add(layers);
+        }
+
+        let mut value_depth = self.value_depth.clone();
+        value_depth.constant = value_depth.constant.saturating_add(layers);
+        for term in &mut value_depth.terms {
+            term.offset = term.offset.saturating_add(layers);
+        }
+
         Self {
             type_size,
             type_depth,
@@ -549,12 +587,12 @@ pub(crate) struct Application {
 /// One type argument of an [`Application`]: a base type under some number of `vector<…>` (or
 /// reference) layers.
 ///
-/// Example: `vector<vector<u64>>` is `{ vector_layers: 2, base: Primitive }`.
+/// Example: `vector<vector<u64>>` is `{ primitive_wrap_layers: 2, base: Primitive }`.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Argument {
     /// Number of `vector<…>`/reference layers around `base`; each contributes one node and one
-    /// level to every measure (one [`wrap`](PartialTypeSizeFormula::wrap) at evaluation).
-    vector_layers: u16,
+    /// level to every measure.
+    primitive_wrap_layers: u16,
     base: ArgumentBase,
 }
 
@@ -638,66 +676,68 @@ impl Linearizer {
 
     /// The index of `key` in the deduplicated key list, appending it on first mention.
     fn intern_key(&mut self, key: &VirtualTableKey) -> PartialVMResult<KeyIndex> {
-        let ndx = match self.keys.iter().position(|k| k == key) {
-            Some(ndx) => ndx,
+        match self.keys.iter().position(|existing| existing == key) {
+            Some(index) => checked_as!(index, u16),
             None => {
+                let index = checked_as!(self.keys.len(), u16)?;
                 self.keys.push(key.clone());
-                self.keys.len().saturating_sub(1)
+                Ok(index)
             }
-        };
-        checked_as!(ndx, u16)
+        }
     }
 
     /// Emit the applications of a datatype-application type in post-order (arguments before the
     /// application that consumes them -- the linearization invariant) and return the root's
-    /// index. Runs on an explicit work stack: nothing recurs, however deeply the type nests.
+    /// index. Runs on an explicit work stack with bounded wrapper-layer walks.
     ///
     /// Example: for datatypes `R` and `S` and enclosing parameter `A`, `R<S<A>>` emits `S<x0>`
     /// then `R<r0>` and returns `R`'s index; the argument `vector<vector<A>>` compiles to
-    /// `{ vector_layers: 2, base: TypeParameter(A) }`.
-    fn emit_application(&mut self, ty: &ArenaType) -> PartialVMResult<ApplicationIndex> {
+    /// `{ primitive_wrap_layers: 2, base: TypeParameter(A) }`.
+    fn emit_datatype_application(&mut self, ty: &ArenaType) -> PartialVMResult<ApplicationIndex> {
         // One work item: compile a type into an `Argument`, or assemble an application from
-        // the last `argc` compiled arguments (its own, in order).
+        // the last `argument_count` compiled arguments.
         enum Item<'a> {
             Compile(&'a ArenaType),
             Assemble {
                 key: &'a VirtualTableKey,
-                argc: usize,
-                vector_layers: u16,
+                argument_count: usize,
+                primitive_wrap_layers: u16,
             },
         }
 
         let mut work = vec![Item::Compile(ty)];
         let mut compiled: Vec<Argument> = vec![];
+        let mut steps = 0;
         while let Some(item) = work.pop() {
+            linearization_step(&mut steps)?;
             match item {
                 Item::Compile(mut ty) => {
-                    // Strip the vector/reference layers, then dispatch on the base.
-                    let mut vector_layers: usize = 0;
+                    let mut primitive_wrap_layers: u64 = 0;
                     while let ArenaType::Vector(inner)
                     | ArenaType::Reference(inner)
                     | ArenaType::MutableReference(inner) = ty
                     {
-                        vector_layers = vector_layers.saturating_add(1);
+                        linearization_step(&mut steps)?;
+                        primitive_wrap_layers = primitive_wrap_layers.saturating_add(1);
                         ty = inner;
                     }
-                    let vector_layers = checked_as!(vector_layers, u16)?;
+                    let primitive_wrap_layers = checked_as!(primitive_wrap_layers, u16)?;
                     match ty {
                         ArenaType::TyParam(idx) => compiled.push(Argument {
-                            vector_layers,
+                            primitive_wrap_layers,
                             base: ArgumentBase::TypeParameter(*idx),
                         }),
                         ArenaType::Datatype(key) => work.push(Item::Assemble {
                             key,
-                            argc: 0,
-                            vector_layers,
+                            argument_count: 0,
+                            primitive_wrap_layers,
                         }),
                         ArenaType::DatatypeInstantiation(inst) => {
                             let (key, args) = &**inst;
                             work.push(Item::Assemble {
                                 key,
-                                argc: args.len(),
-                                vector_layers,
+                                argument_count: args.len(),
+                                primitive_wrap_layers,
                             });
                             // Reverse-pushed so the arguments compile (and land in
                             // `compiled`) in argument order.
@@ -714,7 +754,7 @@ impl Linearizer {
                         | ArenaType::U256
                         | ArenaType::Address
                         | ArenaType::Signer => compiled.push(Argument {
-                            vector_layers,
+                            primitive_wrap_layers,
                             base: ArgumentBase::Primitive,
                         }),
                         ArenaType::Vector(_)
@@ -729,26 +769,27 @@ impl Linearizer {
                 }
                 Item::Assemble {
                     key,
-                    argc,
-                    vector_layers,
+                    argument_count,
+                    primitive_wrap_layers,
                 } => {
-                    let split = compiled.len().checked_sub(argc).ok_or_else(|| {
+                    let split = compiled.len().checked_sub(argument_count).ok_or_else(|| {
                         partial_vm_error!(
                             UNKNOWN_INVARIANT_VIOLATION_ERROR,
                             "argument underflow while linearizing a size formula"
                         )
                     })?;
+                    let index = self.applications.len();
+                    let index = checked_as!(index, u16)?;
                     let arguments = compiled.split_off(split);
                     let datatype = self.intern_key(key)?;
-                    let ndx = self.applications.len();
                     self.applications.push(ApplicationBuilder {
                         datatype,
                         arguments,
                         field_depth: None,
                     });
                     compiled.push(Argument {
-                        vector_layers,
-                        base: ArgumentBase::Application(checked_as!(ndx, u16)?),
+                        primitive_wrap_layers,
+                        base: ArgumentBase::Application(index),
                     });
                 }
             }
@@ -757,13 +798,13 @@ impl Linearizer {
         match compiled.as_slice() {
             [
                 Argument {
-                    vector_layers: 0,
+                    primitive_wrap_layers: 0,
                     base: ArgumentBase::Application(root),
                 },
             ] => Ok(*root),
             _ => Err(partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "emit_application on a non-application type"
+                "emit_datatype_application on a non-application type"
             )),
         }
     }
@@ -813,6 +854,12 @@ fn visit_field(
             ArenaType::Vector(inner)
             | ArenaType::Reference(inner)
             | ArenaType::MutableReference(inner) => {
+                if prefix_depth >= MAX_TYPE_INSTANTIATION_NODES {
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "field traversal exceeded the type traversal limit"
+                    ));
+                }
                 value_depth_local.constant = value_depth_local
                     .constant
                     .max(prefix_depth.saturating_add(1));
@@ -838,7 +885,7 @@ fn visit_field(
                 return Ok(());
             }
             ArenaType::Datatype(_) | ArenaType::DatatypeInstantiation(_) => {
-                let root = linearizer.emit_application(ty)?;
+                let root = linearizer.emit_datatype_application(ty)?;
                 linearizer
                     .applications
                     .get_mut(root as usize)
@@ -1128,12 +1175,12 @@ impl ArenaTypeSizeFormula {
                     let base = match argument.base {
                         ArgumentBase::Primitive => PartialTypeSizeFormula::primitive(),
                         ArgumentBase::TypeParameter(idx) => PartialTypeSizeFormula::parameter(idx),
-                        ArgumentBase::Application(ndx) => results
-                            .get(ndx as usize)
+                        ArgumentBase::Application(index) => results
+                            .get(index as usize)
                             .cloned()
                             .ok_or_else(|| broken("out-of-order application reference"))?,
                     };
-                    Ok((0..argument.vector_layers).fold(base, |formula, _| formula.wrap()))
+                    Ok(base.wrap_n(argument.primitive_wrap_layers))
                 })
                 .collect::<PartialVMResult<Vec<_>>>()?;
             let key = self

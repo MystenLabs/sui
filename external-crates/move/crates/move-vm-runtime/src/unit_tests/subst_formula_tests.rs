@@ -63,7 +63,7 @@ fn next(seed: &mut u64) -> u64 {
 
 /// A random linear form over `n_params` parameters. Built with `absorb`, so terms merge by
 /// parameter. Coefficients and constant are kept small so no measure saturates, and constants
-/// stay >= 1 like every real formula's (`solve` debug-asserts nonzero results).
+/// stay >= 1 like every real formula's.
 fn rand_linear(seed: &mut u64, n_params: u16) -> LinearForm {
     let mut form = LinearForm::constant(1 + next(seed) % 4);
     for _ in 0..(next(seed) % 4) {
@@ -74,8 +74,7 @@ fn rand_linear(seed: &mut u64, n_params: u16) -> LinearForm {
 }
 
 /// A random max-plus form over `n_params` parameters. Built with `absorb`, so terms merge by
-/// parameter (taking the max offset). Constants stay >= 1 like every real formula's (`solve`
-/// debug-asserts nonzero results).
+/// parameter (taking the max offset). Constants stay >= 1 like every real formula's.
 fn rand_maxplus(seed: &mut u64, n_params: u16) -> MaxPlusForm {
     let mut form = MaxPlusForm::constant(1 + next(seed) % 4);
     for _ in 0..(next(seed) % 4) {
@@ -170,7 +169,7 @@ fn wrap_adds_one_level_to_every_measure() {
     };
     // A parameter formula solved against `inner` is `inner`; wrapping it must add one everywhere.
     let wrapped = PartialTypeSizeFormula::parameter(0)
-        .wrap()
+        .wrap_n(1)
         .solve(&[inner])
         .unwrap();
     assert_eq!(wrapped, inner.wrap());
