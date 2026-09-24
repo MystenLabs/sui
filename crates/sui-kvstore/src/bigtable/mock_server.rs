@@ -10,9 +10,15 @@
 //! - `ReadRows`: explicit row-key lookups with an optional row limit. Supports
 //!   the column filters this crate builds (`None`, `CellsPerColumnLimitFilter(1)`,
 //!   `ColumnQualifierRegexFilter`, and `Chain`s of those plus an optional
-//!   `FamilyNameRegexFilter`), records each call for assertions, can emit
-//!   rows in reverse request order, and serves row-range scans in either
-//!   direction (reversed scans are range-only).
+//!   `FamilyNameRegexFilter`). A `Chain` may also hold one `Condition` filter,
+//!   placed before any column qualifier filter, whose predicate is the CAS
+//!   helper shape (`Chain` of family regex, column qualifier regex, optional
+//!   cells-per-column limit, and optional value range) with a
+//!   `PassAllFilter(true)` true branch and no false branch. Rows failing a
+//!   `Condition` predicate are dropped before `rows_limit` is applied, mirroring
+//!   BigTable where the limit counts emitted rows. Records each call for
+//!   assertions, can emit rows in reverse request order, and serves row-range
+//!   scans in either direction (reversed scans are range-only).
 //! - `CheckAndMutateRow`: `PassAllFilter(true)` and the CAS helper shape used
 //!   by this crate (`Chain` of family regex, column qualifier regex, optional
 //!   value range, and optional cells-per-column limit).
@@ -66,6 +72,7 @@ use crate::bigtable::proto::bigtable::v2::mutate_rows_response::Entry;
 use crate::bigtable::proto::bigtable::v2::mutation;
 use crate::bigtable::proto::bigtable::v2::read_rows_response::CellChunk;
 use crate::bigtable::proto::bigtable::v2::read_rows_response::cell_chunk::RowStatus;
+use crate::bigtable::proto::bigtable::v2::row_filter;
 use crate::bigtable::proto::bigtable::v2::row_filter::Filter;
 use crate::bigtable::proto::bigtable::v2::value_range::EndValue;
 use crate::bigtable::proto::bigtable::v2::value_range::StartValue;
@@ -408,13 +415,25 @@ fn extract_qualifier_alternation(pattern: &[u8]) -> Option<Vec<Vec<u8>>> {
     Some(inner.split(|&b| b == b'|').map(|s| s.to_vec()).collect())
 }
 
-/// Parse a `ReadRows` row filter into the set of allowed column qualifiers.
-/// `Ok(None)` means no qualifier restriction (all cells pass); `Ok(Some(set))`
-/// restricts emitted cells to those qualifiers. Only the filter shapes this
-/// crate builds are supported: `None`, `CellsPerColumnLimitFilter(1)`,
+/// The parsed form of a `ReadRows` row filter: an optional restriction on
+/// emitted column qualifiers (`None` means every qualifier passes) and an
+/// optional row-selecting `Condition` predicate.
+struct ReadFilter {
+    allowed_qualifiers: Option<HashSet<Vec<u8>>>,
+    condition: Option<RowPredicate>,
+}
+
+/// Parse a `ReadRows` row filter. Only the filter shapes this crate builds are
+/// supported: `None`, `CellsPerColumnLimitFilter(1)`,
 /// `ColumnQualifierRegexFilter`, and a `Chain` of those plus an optional
-/// `FamilyNameRegexFilter` matching [`crate::tables::FAMILY`].
-fn parse_read_filter(filter: Option<Filter>) -> Result<Option<HashSet<Vec<u8>>>, Status> {
+/// `FamilyNameRegexFilter` matching [`crate::tables::FAMILY`] and at most one
+/// `Condition` (see [`parse_read_condition`]).
+///
+/// The mock evaluates a `Condition` predicate against the full stored row.
+/// BigTable feeds each `Chain` element the output of the previous one, so a
+/// `Condition` after a column qualifier filter would only see the surviving
+/// cells; that ordering is rejected rather than modeled.
+fn parse_read_filter(filter: Option<Filter>) -> Result<ReadFilter, Status> {
     fn qualifiers_from_regex(pattern: &Bytes) -> Result<HashSet<Vec<u8>>, Status> {
         extract_qualifier_alternation(pattern.as_ref())
             .map(|quals| quals.into_iter().collect())
@@ -424,18 +443,21 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<Option<HashSet<Vec<u8>>>,
                 )
             })
     }
+    let mut parsed = ReadFilter {
+        allowed_qualifiers: None,
+        condition: None,
+    };
     match filter {
-        None | Some(Filter::CellsPerColumnLimitFilter(1)) => Ok(None),
+        None | Some(Filter::CellsPerColumnLimitFilter(1)) => {}
         Some(Filter::ColumnQualifierRegexFilter(pattern)) => {
-            Ok(Some(qualifiers_from_regex(&pattern)?))
+            parsed.allowed_qualifiers = Some(qualifiers_from_regex(&pattern)?);
         }
         Some(Filter::Chain(chain)) => {
-            let mut allowed: Option<HashSet<Vec<u8>>> = None;
             for f in chain.filters {
                 match f.filter {
                     Some(Filter::CellsPerColumnLimitFilter(1)) | None => {}
                     Some(Filter::ColumnQualifierRegexFilter(pattern)) => {
-                        allowed = Some(qualifiers_from_regex(&pattern)?);
+                        parsed.allowed_qualifiers = Some(qualifiers_from_regex(&pattern)?);
                     }
                     Some(Filter::FamilyNameRegexFilter(family)) => {
                         let family = Bytes::from(family.into_bytes());
@@ -445,6 +467,19 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<Option<HashSet<Vec<u8>>>,
                             ));
                         }
                     }
+                    Some(Filter::Condition(condition)) => {
+                        if parsed.condition.is_some() {
+                            return Err(Status::unimplemented(
+                                "mock ReadRows supports at most one Condition per Chain",
+                            ));
+                        }
+                        if parsed.allowed_qualifiers.is_some() {
+                            return Err(Status::unimplemented(
+                                "mock ReadRows does not support a Condition after a column qualifier filter",
+                            ));
+                        }
+                        parsed.condition = Some(parse_read_condition(*condition)?);
+                    }
                     _ => {
                         return Err(Status::unimplemented(
                             "mock ReadRows Chain filter contains an unsupported sub-filter",
@@ -452,10 +487,42 @@ fn parse_read_filter(filter: Option<Filter>) -> Result<Option<HashSet<Vec<u8>>>,
                     }
                 }
             }
-            Ok(allowed)
         }
-        Some(_) => Err(Status::unimplemented(
-            "mock ReadRows only supports column-qualifier / cells-per-column / chain filters",
+        Some(_) => {
+            return Err(Status::unimplemented(
+                "mock ReadRows only supports column-qualifier / cells-per-column / chain filters",
+            ));
+        }
+    }
+    Ok(parsed)
+}
+
+/// Parse a `ReadRows` `Condition` filter whose predicate is the CAS helper
+/// shape into a [`RowPredicate`]. The true branch must pass all cells and no
+/// false branch is supported — anything else is unsupported.
+fn parse_read_condition(condition: row_filter::Condition) -> Result<RowPredicate, Status> {
+    let row_filter::Condition {
+        predicate_filter,
+        true_filter,
+        false_filter,
+    } = condition;
+    if false_filter.is_some() {
+        return Err(Status::unimplemented(
+            "mock ReadRows Condition does not support a false_filter",
+        ));
+    }
+    match true_filter.as_ref().and_then(|f| f.filter.as_ref()) {
+        Some(Filter::PassAllFilter(true)) => {}
+        _ => {
+            return Err(Status::unimplemented(
+                "mock ReadRows Condition only supports PassAllFilter(true) as the true_filter",
+            ));
+        }
+    }
+    match predicate_filter.map(|f| f.filter) {
+        Some(Some(Filter::Chain(chain))) => parse_predicate_chain(chain),
+        _ => Err(Status::unimplemented(
+            "mock ReadRows Condition only supports a CAS-style Chain predicate",
         )),
     }
 }
@@ -486,6 +553,68 @@ fn value_in_range(value: &Bytes, vr: &crate::bigtable::proto::bigtable::v2::Valu
         None => true,
     };
     lo_ok && hi_ok
+}
+
+/// A parsed CAS-style predicate chain: optional family, required column
+/// qualifier, optional value range. Both `CheckAndMutateRow` and `ReadRows`
+/// `Condition` filters use this shape.
+struct RowPredicate {
+    family: Option<String>,
+    column: Vec<u8>,
+    value_range: Option<crate::bigtable::proto::bigtable::v2::ValueRange>,
+}
+
+/// Parse the CAS predicate chain into a [`RowPredicate`]. The CAS helpers in
+/// this crate build a `Chain` with at least a FamilyNameRegex +
+/// ColumnQualifierRegex, optionally followed by a ValueRangeFilter (ignoring a
+/// no-op CellsPerColumnLimitFilter if present). Anything else is unsupported.
+fn parse_predicate_chain(
+    chain: crate::bigtable::proto::bigtable::v2::row_filter::Chain,
+) -> Result<RowPredicate, Status> {
+    let mut family: Option<String> = None;
+    let mut column: Option<Bytes> = None;
+    let mut value_range: Option<crate::bigtable::proto::bigtable::v2::ValueRange> = None;
+    for f in chain.filters {
+        match f.filter {
+            Some(Filter::FamilyNameRegexFilter(s)) => family = Some(s),
+            Some(Filter::ColumnQualifierRegexFilter(q)) => column = Some(q),
+            Some(Filter::ValueRangeFilter(vr)) => value_range = Some(vr),
+            Some(Filter::CellsPerColumnLimitFilter(1)) => {}
+            Some(Filter::CellsPerColumnLimitFilter(_)) => {
+                return Err(Status::unimplemented(
+                    "mock CAS predicate only supports CellsPerColumnLimitFilter(1)",
+                ));
+            }
+            _ => {
+                return Err(Status::unimplemented(
+                    "mock only supports Chain of Family/ColumnQualifier/ValueRange",
+                ));
+            }
+        }
+    }
+    let Some(column) = column else {
+        return Err(Status::unimplemented(
+            "mock CAS predicate chain requires a ColumnQualifierRegex",
+        ));
+    };
+    // The production helpers emit `^<literal>$`; strip anchors for exact match.
+    Ok(RowPredicate {
+        family,
+        column: strip_regex_anchors(&column).to_vec(),
+        value_range,
+    })
+}
+
+/// Whether any cell in `row` satisfies the parsed predicate.
+fn row_satisfies(row: &Row, predicate: &RowPredicate) -> bool {
+    row.iter().any(|((fam, col), cell)| {
+        predicate.family.as_deref().is_none_or(|f| fam == f)
+            && col.as_ref() == predicate.column.as_slice()
+            && predicate
+                .value_range
+                .as_ref()
+                .is_none_or(|vr| value_in_range(&cell.value, vr))
+    })
 }
 
 /// Stream type for streaming responses.
@@ -650,15 +779,14 @@ impl Bigtable for MockBigtableServer {
                 "mock ReadRows does not support negative rows_limit",
             ));
         }
-        // Parse the column filter into an optional set of allowed qualifiers.
-        // `None` means every qualifier passes; `Some(set)` restricts emitted
-        // cells to those qualifiers. Only the filter shapes this crate builds
-        // are supported (see `BigTableClient::column_filter` /
-        // `build_multi_get_request`).
-        let allowed_qualifiers = match parse_read_filter(req.filter.and_then(|f| f.filter)) {
-            Ok(set) => set,
-            Err(status) => return Err(status),
-        };
+        // Parse the row filter into an optional set of allowed qualifiers and
+        // an optional row-selecting predicate. Only the filter shapes this
+        // crate builds are supported (see `BigTableClient::column_filter` /
+        // `build_multi_get_request` / `range_scan_internal`).
+        let ReadFilter {
+            allowed_qualifiers,
+            condition,
+        } = parse_read_filter(req.filter.and_then(|f| f.filter))?;
         let Some(row_set) = req.rows else {
             return Err(Status::unimplemented(
                 "mock ReadRows requires row_keys or row_ranges",
@@ -690,6 +818,18 @@ impl Bigtable for MockBigtableServer {
             if req.reversed {
                 requested_keys.reverse();
             }
+        }
+
+        // A `Condition` filter selects rows server-side: rows whose predicate
+        // does not match are dropped before `rows_limit` is applied, mirroring
+        // BigTable where the limit counts rows actually emitted after filtering.
+        if let Some(predicate) = &condition {
+            requested_keys.retain(|key| {
+                state
+                    .rows
+                    .get(&(table.clone(), key.clone()))
+                    .is_some_and(|row| row_satisfies(row, predicate))
+            });
         }
         if req.rows_limit != 0 {
             requested_keys.truncate(req.rows_limit as usize);
@@ -794,45 +934,12 @@ impl Bigtable for MockBigtableServer {
             Some(Filter::Chain(chain)) => {
                 // The CAS helpers in this crate always build a Chain with at least a
                 // FamilyNameRegex + ColumnQualifierRegex, optionally followed by a
-                // ValueRangeFilter. Parse those components (ignoring a no-op
-                // CellsPerColumnLimitFilter if present) and check whether any cell in
-                // the row satisfies all of them. Anything else is unsupported.
-                let mut family: Option<&str> = None;
-                let mut column: Option<&Bytes> = None;
-                let mut value_range: Option<&crate::bigtable::proto::bigtable::v2::ValueRange> =
-                    None;
-                for f in &chain.filters {
-                    match &f.filter {
-                        Some(Filter::FamilyNameRegexFilter(s)) => family = Some(s.as_str()),
-                        Some(Filter::ColumnQualifierRegexFilter(q)) => column = Some(q),
-                        Some(Filter::ValueRangeFilter(vr)) => value_range = Some(vr),
-                        Some(Filter::CellsPerColumnLimitFilter(1)) => {}
-                        Some(Filter::CellsPerColumnLimitFilter(_)) => {
-                            return Err(Status::unimplemented(
-                                "mock CAS predicate only supports CellsPerColumnLimitFilter(1)",
-                            ));
-                        }
-                        _ => {
-                            return Err(Status::unimplemented(
-                                "mock only supports Chain of Family/ColumnQualifier/ValueRange",
-                            ));
-                        }
-                    }
-                }
-                let Some(column) = column else {
-                    return Err(Status::unimplemented(
-                        "mock CAS predicate chain requires a ColumnQualifierRegex",
-                    ));
-                };
-                // The production helpers emit `^<literal>$`; strip anchors for exact match.
-                let column_literal = strip_regex_anchors(column);
+                // ValueRangeFilter. Check whether any cell in the row satisfies all
+                // of the parsed components. Anything else is unsupported.
+                let predicate = parse_predicate_chain(chain)?;
                 match row {
                     None => false,
-                    Some(row) => row.iter().any(|((fam, col), cell)| {
-                        family.is_none_or(|f| fam == f)
-                            && col.as_ref() == column_literal
-                            && value_range.is_none_or(|vr| value_in_range(&cell.value, vr))
-                    }),
+                    Some(row) => row_satisfies(row, &predicate),
                 }
             }
             None => false,
