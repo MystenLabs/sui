@@ -17,7 +17,7 @@ keywords:
   - account app
   - deauthorize app
 last_verified: 2026-09-23
-verified_against: deepbookv3 36783242; '@mysten/deepbook-v3' 2.6.1 (ts-sdks 56d51645); sessions v2 on both networks
+verified_against: deepbookv3 abb4cfd9; '@mysten/deepbook-v3' 2.6.1 (ts-sdks 56d51645); sessions v2 on both networks
 goal:
   description: >-
     Reader understands how much authority a DeepBook Predict session key holds,
@@ -55,10 +55,10 @@ Sessions is an account app. It stores grants in the account's app-local data slo
 
 The surface spans 2 modules:
 
-- `deepbook_sessions::sessions`: Grant storage, the lifecycle calls, and every trading wrapper ([source](https://github.com/MystenLabs/deepbookv3/blob/2378336bbe49d9de5cc55d6208ab38fd78f444f0/packages/sessions/sources/sessions.move)).
-- `deepbook_sessions::session_config`: The shared `SessionsConfig` object and the package version floor ([source](https://github.com/MystenLabs/deepbookv3/blob/2378336bbe49d9de5cc55d6208ab38fd78f444f0/packages/sessions/sources/session_config.move)).
+- `deepbook_sessions::sessions`: Grant storage, the lifecycle calls, and every trading wrapper ([source](https://github.com/MystenLabs/deepbookv3/blob/abb4cfd93b2e51f7925941fe5d53b3fe70fc140c/packages/sessions/sources/sessions.move)).
+- `deepbook_sessions::session_config`: The shared `SessionsConfig` object and the package version floor ([source](https://github.com/MystenLabs/deepbookv3/blob/abb4cfd93b2e51f7925941fe5d53b3fe70fc140c/packages/sessions/sources/session_config.move)).
 
-Sui Mainnet and Sui Testnet each run a separate deployment of the package, and the Move snippets on this page pin DeepBookV3 `main` at `36783242`. Both deployments are at `sessions` version 2, which adds the `mint_exact_cost` wrapper, so every wrapper on this page is callable on either network. Because the package has been upgraded, it carries a call target and an original ID that differ; the table below gives both. In TypeScript, `getSessionsConfig(network)` from `@mysten/deepbook-v3/sessions` returns the package call target and its original ID, the shared config, the account registry that authorizes the app, the Predict protocol config, and the 2 extra IDs the DeepBook spot wrappers take. Version 2.6.1 returns the current call target for `sessions` on both networks. The full tables are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#packages):
+Sui Mainnet and Sui Testnet each run a separate deployment of the package, and the Move snippets on this page pin DeepBookV3 `main` at `abb4cfd9`. Both deployments run `sessions` protocol version 2, which adds the `mint_exact_cost` wrapper, so every wrapper on this page is callable on either network. Because the package has been upgraded, it carries a call target and an original ID that differ; the table below gives both. In TypeScript, `getSessionsConfig(network)` from `@mysten/deepbook-v3/sessions` returns the package call target and its original ID, the shared config, the account registry that authorizes the app, the Predict protocol config, and the 2 extra IDs the DeepBook spot wrappers take. Version 2.6.1 returns the current call target for `sessions` on both networks. The full tables are on [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#packages):
 
 | **Object** | **Mainnet** | **Testnet** |
 |---|---|---|
@@ -107,7 +107,7 @@ Each trading wrapper resolves authority through one private helper before it tou
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="generate_auth_as_session"
 />
 
@@ -128,7 +128,7 @@ The registry administrator must authorize `SessionsApp` on the account registry 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="deauthorize_app,generate_auth_as_app"
 />
 
@@ -143,7 +143,7 @@ The whole lifecycle takes 3 calls. Owner authority derives from the transaction 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="session_expiration_ms,authorize_session,revoke_session"
 	noComments
 />
@@ -185,7 +185,7 @@ There is no bulk onchain read. `session_expiration_ms` answers one address at a 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="SessionsApp,SessionsData"
 />
 
@@ -221,7 +221,7 @@ The `@mysten/deepbook-v3/sessions` mint builders require the slippage caps that 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="mint_exact_quantity,mint_exact_amount,mint_exact_cost,redeem_live,redeem_settled"
 	noComments
 />
@@ -248,7 +248,7 @@ The TypeScript SDK does not wrap these calls on `SessionsContract`, and [Predict
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="place_limit_order,place_market_order,cancel_live_order,cancel_live_orders,withdraw_settled_amounts"
 	signatureOnly
 />
@@ -264,7 +264,7 @@ Publishing the package creates a shared `SessionsConfig` at the package's compil
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="SessionsConfig"
 />
 
@@ -275,7 +275,7 @@ Each package upgrade increments a compiled-in version constant. After clients mo
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="version_watermark,bump_version_watermark"
 	noComments
 />
@@ -291,7 +291,7 @@ The lifecycle emits 2 events. Predict and DeepBook core keep emitting their own 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="SessionAuthorized,SessionRevoked"
 />
 

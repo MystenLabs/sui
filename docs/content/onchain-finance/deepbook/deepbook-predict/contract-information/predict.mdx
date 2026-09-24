@@ -58,7 +58,7 @@ answer: >-
   than on top of it. Live trades close in the last no_trade_window_ms before expiry, and
   settlement is the permissionless try_settle.
 last_verified: 2026-09-23
-verified_against: deepbookv3 2378336b; predict and sessions v2 on both networks, upgraded from 8d7d42a0
+verified_against: deepbookv3 abb4cfd9; predict protocol version 3 and sessions 2 on both networks
 ---
 
 Trading on DeepBook Predict runs through the `deepbook_predict::expiry_market` module. One shared `ExpiryMarket` object exists per underlying and expiry, and it owns that expiry's USDC custody, strike exposure index, congestion estimator, mint pause flag, and flush stamp. Every call on this page is a `public fun` that you invoke from a programmable transaction block with a `moveCall`. Several of them take values only another command in the same block can produce, a transaction-local `Pricer` and a single-use account `Auth`, so plan the whole flow as one block.
@@ -97,7 +97,7 @@ The field order in the table is declaration order, which is also the Binary Cano
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="ExpiryMarket,ValuationStamp"
 />
 
@@ -138,7 +138,7 @@ See [Oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/ora
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="load_live_pricer"
 	noComments
 />
@@ -213,7 +213,7 @@ The SDK's `client.predict.read.quoteMint` is a different thing at a different la
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="quote_mint,quote_mint_for_account,quote_mint_exact_cost_for_account"
 	noComments
 />
@@ -248,7 +248,7 @@ The congestion surcharge is one mechanism with 2 names, `penalty_fee` onchain an
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="MintQuote"
 />
 
@@ -257,7 +257,7 @@ The congestion surcharge is one mechanism with 2 names, `penalty_fee` onchain an
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="quantity,entry_probability,premium,trading_fee,fee_incentive_subsidy,builder_fee,penalty_fee,inventory_impact_charge,all_in_cost"
 	noComments
 />
@@ -373,7 +373,7 @@ You address positions by absolute integer ticks, with `0` as the open lower end 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="mint_exact_quantity,mint_exact_amount,mint_exact_cost"
 	noComments
 />
@@ -478,7 +478,7 @@ Both settled paths run the version gate and refuse to run inside a pool flush's 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="redeem_live,redeem_settled,redeem_settled_permissionless"
 	noComments
 />
@@ -531,7 +531,7 @@ Settled redeems, pool rebalancing, and the flush's snapshot stage only read the 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="try_settle"
 	noComments
 />
@@ -559,7 +559,7 @@ The call always returns the resolved tick as a `u64`, but it emits `ReferenceTic
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="set_reference_tick,set_mint_paused"
 	noComments
 />
@@ -602,7 +602,7 @@ public fun settled_order_payout(market: &ExpiryMarket, order_id: u256): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="id,expiry,is_settled,try_settlement_price,cash_balance,required_cash,payout_liability,tick_size,admission_tick_size,reference_tick,mint_paused,is_pending_valuation"
 	noComments
 />
@@ -612,7 +612,7 @@ public fun settled_order_payout(market: &ExpiryMarket, order_id: u256): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="current_nav,live_order_value,settled_order_payout"
 	noComments
 />
@@ -757,7 +757,7 @@ The event carries the payout but not the settlement price. Read that from the `M
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="36783242f42c9e85bf92b52784b3d0b4b2705f71"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="OrderMinted,LiveOrderRedeemed,SettledOrderRedeemed"
 />
 
