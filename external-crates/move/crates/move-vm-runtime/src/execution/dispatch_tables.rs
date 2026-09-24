@@ -577,9 +577,10 @@ impl VMDispatchTables {
     /// cache, each formula closed by one `evaluate` pass on the way back up.
     ///
     /// Example: resolving `W` from `struct W<A> { x: u64, y: T<u64>, z: vector<R<S<A>>> }`
-    /// (`T`, `R`, `S` datatypes, none cached) stages `[W, T, S, R]`; `T`, `S`, and `R` have no
-    /// dependencies of their own, so each closes immediately, and `W` then closes against
-    /// them. Resolving any of the four again is a cache hit.
+    /// (`T`, `R`, `S` datatypes, none cached) discovers `W`'s dependencies in first-mention
+    /// order `[T, S, R]`. The stack is LIFO, so the last staged dependency is visited first;
+    /// all three close before `W` closes against them. Resolving any of the four again is a
+    /// cache hit.
     pub(crate) fn virtual_key_size_formula(
         &self,
         key: &VirtualTableKey,
