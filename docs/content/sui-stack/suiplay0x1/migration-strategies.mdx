@@ -73,17 +73,44 @@ The Playtron wallet is portable and can connect to any app using the Sui dApp Ki
 
 ### How do I connect a Playtron wallet in my off-device app?
 
-Use Sui dApp Kit to add wallet connection support to the off-device (PC or web) version of your game. Create a dApp Kit instance, wrap your game UI in `DAppKitProvider`, and render a `ConnectButton`:
+Use Sui dApp Kit to add wallet connection support to the off-device (PC or web) version of your game. The Playtron wallet is an [Enoki Connect](https://docs.enoki.mystenlabs.com/enoki-connect) wallet rather than a browser extension, so `ConnectButton` does not find it on its own. Register it first, then it appears in the connection list alongside any extension wallets the player has installed.
 
-<ImportContent source="packages/dapp-kit/examples/react/simple/src/dApp-kit.ts" mode="code" org="MystenLabs" repo="ts-sdks" />
+Create the dApp Kit instance:
 
-<ImportContent source="packages/dapp-kit/examples/react/simple/src/main.tsx" mode="code" org="MystenLabs" repo="ts-sdks" />
+<ImportContent source="packages/enoki-connect/demo-dapp/src/dapp-kit.ts" mode="code" org="MystenLabs" repo="ts-sdks" />
 
-`ConnectButton` lists every wallet that dApp Kit detects, plus any wallet you register through the `walletInitializers` option on `createDAppKit`. The Playtron zkLogin wallet is not a browser extension, so it needs that explicit registration before players can select it. For the full setup, including the package to install and which networks to configure, see [SDK Integrations](/sui-stack/suiplay0x1/integration#off-device-example-add-wallet-connection-with-sui-dapp-kit).
+Then call `registerEnokiConnectWallets` with the `playtron` app slug before you render, and wrap your game UI in `DAppKitProvider`:
+
+```tsx
+// main.tsx
+import ReactDOM from 'react-dom/client';
+import { DAppKitProvider } from '@mysten/dapp-kit-react';
+import { registerEnokiConnectWallets } from '@mysten/enoki-connect';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { dAppKit } from './dapp-kit';
+import App from './App';
+
+const queryClient = new QueryClient();
+
+registerEnokiConnectWallets({
+  publicAppSlugs: ['playtron'],
+  dappName: 'Your game',
+}).catch(() => {});
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <QueryClientProvider client={queryClient}>
+    <DAppKitProvider dAppKit={dAppKit}>
+      <App />
+    </DAppKitProvider>
+  </QueryClientProvider>,
+);
+```
+
+This follows the [Enoki Connect demo app](https://github.com/MystenLabs/ts-sdks/tree/main/packages/enoki-connect/demo-dapp), with `playtron` in place of the demo slugs. For the registration flow and what a public app slug is, see [Wallet registration by other dApps](https://docs.enoki.mystenlabs.com/enoki-connect#wallet-registration-by-other-dapps). For the rest of the dApp Kit setup, including the package to install and which networks to configure, see [SDK Integrations](/sui-stack/suiplay0x1/integration#off-device-example-add-wallet-connection-with-sui-dapp-kit).
 
 :::info
 
-`@mysten/dapp-kit` without a suffix is the deprecated 1.x package. Older examples that wrap your app in `SuiClientProvider` and `WalletProvider` target that version.
+`@mysten/enoki-connect` is in active development, and its API can change without notice. `@mysten/dapp-kit` without a suffix is the deprecated 1.x package, so older examples that wrap your app in `SuiClientProvider` and `WalletProvider` target a version you should not build on.
 
 :::
 
