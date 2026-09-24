@@ -1822,18 +1822,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.metrics
             .staggered_submission_duplication_ratio
             .set(duplication_ratio);
-        if let Some(activated) = transition {
-            let state = if activated {
-                "activated"
-            } else {
-                "deactivated"
-            };
+        if let Some(band) = transition {
             self.metrics
-                .staggered_submission_signal_activated
-                .set(activated as i64);
+                .staggered_submission_signal_band
+                .set(band as i64);
             self.metrics
                 .staggered_submission_signal_transitions
-                .with_label_values(&[state])
+                .with_label_values(&[crate::staggered_submission::signal_band_label(band)])
                 .inc();
         }
     }

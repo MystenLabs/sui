@@ -317,7 +317,7 @@ pub struct AuthorityMetrics {
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
     pub(crate) consensus_handler_duplicate_tx_count: Histogram,
     pub(crate) staggered_submission_excess_copies: Histogram,
-    pub(crate) staggered_submission_signal_activated: IntGauge,
+    pub(crate) staggered_submission_signal_band: IntGauge,
     pub(crate) staggered_submission_signal_transitions: IntCounterVec,
     pub(crate) staggered_submission_duplication_ratio: Gauge,
 
@@ -644,22 +644,22 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            staggered_submission_signal_activated: register_int_gauge_with_registry!(
-                "staggered_submission_signal_activated",
-                "Whether the duplication signal is currently activated (1) or not (0); staggering itself only follows when the staggered_submission_signal protocol flag and the node's enable_staggered_submission_signal config are both enabled",
+            staggered_submission_signal_band: register_int_gauge_with_registry!(
+                "staggered_submission_signal_band",
+                "The duplication signal's current band level (0 = off; higher bands stagger with longer hold caps); staggering itself only follows when the staggered_submission_signal protocol flag and the node's enable_staggered_submission_signal config are both enabled",
                 registry,
             )
             .unwrap(),
             staggered_submission_signal_transitions: register_int_counter_vec_with_registry!(
                 "staggered_submission_signal_transitions",
-                "Number of duplication-signal transitions, labeled by the state entered",
+                "Number of duplication-signal transitions, labeled by the band entered",
                 &["state"],
                 registry,
             )
             .unwrap(),
             staggered_submission_duplication_ratio: register_gauge_with_registry!(
                 "staggered_submission_duplication_ratio",
-                "Amplification measured by the duplication signal: excess duplicate copies as a percentage of unique user transactions over the signal window, compared against the activate/deactivate thresholds",
+                "Amplification measured by the duplication signal: excess duplicate copies as a fraction of unique user transactions over the signal window, compared against the band enter/exit ratios",
                 registry,
             )
             .unwrap(),
