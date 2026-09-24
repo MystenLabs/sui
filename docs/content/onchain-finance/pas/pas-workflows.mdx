@@ -151,7 +151,7 @@ There are 2 resolution paths:
 | `unlock_funds::resolve(request, &policy)` | Managed asset (`Policy<T>` exists) | Requires matching approvals |
 | `unlock_funds::resolve_unrestricted_balance(request, &namespace)` | Unmanaged balance (no Policy) | No approvals needed |
 
-The unrestricted path is `Balance<C>`-specific. It exists for assets like SUI that might accidentally end up in an Account. It aborts if a `Policy<Balance<C>>` exists for the type because you cannot bypass managed asset controls.
+The unrestricted path is `Balance<C>`-specific. It exists for assets like SUI that might accidentally end up in an Account. It aborts if a `Policy<C>` exists for the type because you cannot bypass managed asset controls.
 
 ### Managed assets (policy exists)
 

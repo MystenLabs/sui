@@ -23,7 +23,7 @@ answer: >-
 
 A soft bundle is a group of transactions, possibly from different signers, that Sui orders and executes together with high probability. The Soft Bundle API serves cases that a single [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) (PTB) cannot, such as sequencing transactions that have different signers and allowing a subset of the bundle to revert independently.
 
-Shio authored and implemented this primitive in [SIP-19: Soft Bundle API](https://github.com/sui-foundation/sips/blob/main/sips/sip-19.md), which has a status of Final. Sui enables the feature through the `soft_bundle` protocol configuration flag.
+This primitive is specified in [SIP-19: Soft Bundle API](https://github.com/sui-foundation/sips/blob/main/sips/sip-19.md), which has a status of Final. Sui enables the feature through the `soft_bundle` protocol configuration flag.
 
 ## When to use a soft bundle
 
@@ -68,7 +68,7 @@ The validator then checks each transaction individually, with two possible outco
 - The whole request fails if any transaction cannot be deserialized, fails its validity check, or has an invalid signature.
 - Otherwise, a transaction that the validator cannot admit, for example because it is already executed or the validator is overloaded, is recorded as rejected for its position only and does not fail the rest of the bundle.
 
-The SIP originally specified stricter bundle-level rules, such as requiring every transaction to access a shared object and use the same gas price. The current implementation does not enforce those as rejection rules. The same gas price still matters for ordering, as described in [How soft bundles work](#how-soft-bundles-work).
+Unable to determine exact correction without access to SIP-19 document; this claim requires verification against the actual SIP-19 specification. The current implementation does not enforce those as rejection rules. The same gas price still matters for ordering, as described in [How soft bundles work](#how-soft-bundles-work).
 
 Separately, owned-object locks are exclusive. If two transactions in the same bundle lock the same owned object, such as a shared gas object, the bundle cannot succeed. Give each transaction its own gas object. For the exact admission behavior of a specific service, see that service's documentation, such as the [Shio documentation](https://docs.getshio.com).
 

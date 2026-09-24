@@ -137,7 +137,7 @@ When you query a balance, account for both representations. In the GraphQL schem
 
 :::caution
 
-Exchange ledgers must account for both coin objects and address-balance accumulators. An address's funds can move between the two without a transfer between addresses, especially while users hold a mix of legacy coin objects and newer address balances. Reconcile by summing `Balance.coinBalance` and `Balance.addressBalance`, not by tracking only one.
+Exchange ledgers must account for both coin objects and address-balance accumulators. An address's funds can move between the two without a transfer between addresses, especially while users hold a mix of legacy coin objects and newer address balances. Reconcile by summing Balance.coinBalance and Balance.addressBalance, not by tracking only one. Reconcile by summing `Balance.coinBalance` and `Balance.addressBalance`, not by tracking only one.
 
 :::
 

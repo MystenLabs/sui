@@ -94,7 +94,7 @@ An account receives credit through 2 delivery paths, and they surface as differe
 - **Straight into stored balance:** Settled payouts and live-close proceeds call `account::deposit<USDC>` on the account itself and emit `Deposited`. The funds are spendable as soon as the transaction lands, with no follow-up call.
 - **Through the balance accumulator:** Builder fees, referral shares, and liquidity queue fills and refunds go to the account's receive address instead. They stay outside stored balance until the permissionless `account::settle<T>` folds them in and emits `FundsSettled`.
 
-Reading a balance settles nothing. `account::balance<T>` takes an immutable `&Account`, so it cannot mutate anything: it reports stored balance plus the unsettled accumulator balance, which covers both paths without moving either. `account::settle<T>` is the mutating call, it takes the wrapper rather than the account, and anyone can make it.
+Reading a balance settles nothing. `account::balance<T>` takes an immutable `&Account`, so it cannot mutate anything: it reports stored balance plus the unsettled accumulator balance, which covers both paths without moving either. `account::settle<T>` is the mutating call, it takes the account rather than the wrapper, and anyone can make it.
 
 ## Oracle feeds {#oracle-feeds}
 
