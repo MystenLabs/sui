@@ -109,19 +109,6 @@ fn out_of_bounds_parameter(param: TypeParameterIndex, len: usize) -> PartialVMEr
     )
 }
 
-fn linearization_step(steps: &mut u64) -> PartialVMResult<()> {
-    *steps = steps.saturating_add(1);
-
-    // A compile step consumes at least one type node, and datatype nodes add one assemble step.
-    if *steps > MAX_TYPE_INSTANTIATION_NODES.saturating_mul(2) {
-        return Err(partial_vm_error!(
-            UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            "type-size formula linearization exceeded its work bound"
-        ));
-    }
-    Ok(())
-}
-
 // The solve loops, shared between the heap forms and their arena flavors (which differ only in
 // where the term slice lives).
 
@@ -688,7 +675,7 @@ impl Linearizer {
 
     /// Emit the applications of a datatype-application type in post-order (arguments before the
     /// application that consumes them -- the linearization invariant) and return the root's
-    /// index. Runs on an explicit work stack with bounded wrapper-layer walks.
+    /// index. Runs on an explicit work stack: nothing recurs, however deeply the type nests.
     ///
     /// Example: for datatypes `R` and `S` and enclosing parameter `A`, `R<S<A>>` emits `S<x0>`
     /// then `R<r0>` and returns `R`'s index; the argument `vector<vector<A>>` compiles to
@@ -707,9 +694,7 @@ impl Linearizer {
 
         let mut work = vec![Item::Compile(ty)];
         let mut compiled: Vec<Argument> = vec![];
-        let mut steps = 0;
         while let Some(item) = work.pop() {
-            linearization_step(&mut steps)?;
             match item {
                 Item::Compile(mut ty) => {
                     let mut primitive_wrap_layers: u64 = 0;
@@ -717,7 +702,6 @@ impl Linearizer {
                     | ArenaType::Reference(inner)
                     | ArenaType::MutableReference(inner) = ty
                     {
-                        linearization_step(&mut steps)?;
                         primitive_wrap_layers = primitive_wrap_layers.saturating_add(1);
                         ty = inner;
                     }
@@ -849,17 +833,20 @@ fn visit_field(
     layout_size_local: &mut LinearForm,
     linearizer: &mut Linearizer,
 ) -> PartialVMResult<()> {
+    let mut remaining_nodes = MAX_TYPE_INSTANTIATION_NODES;
     loop {
+        if remaining_nodes == 0 {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "field traversal exceeded the type traversal limit"
+            ));
+        }
+        remaining_nodes = remaining_nodes.saturating_sub(1);
+
         match ty {
             ArenaType::Vector(inner)
             | ArenaType::Reference(inner)
             | ArenaType::MutableReference(inner) => {
-                if prefix_depth >= MAX_TYPE_INSTANTIATION_NODES {
-                    return Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "field traversal exceeded the type traversal limit"
-                    ));
-                }
                 value_depth_local.constant = value_depth_local
                     .constant
                     .max(prefix_depth.saturating_add(1));
