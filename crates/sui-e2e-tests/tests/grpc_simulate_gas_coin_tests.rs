@@ -466,6 +466,55 @@ async fn test_no_ab_has_coins() {
 }
 
 // =============================================================================
+// Test 4b: Clients that don't report a protocol version never get allowed proposers,
+// since they may not be able to decode `TransactionExpiration::Validity`.
+// =============================================================================
+
+#[sim_test]
+async fn test_no_allowed_proposers_without_client_protocol_version() {
+    use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+    use sui_rpc::proto::sui::rpc::v2::{Bcs, SimulateTransactionRequest, Transaction};
+    use sui_types::transaction::TransactionExpiration;
+
+    let test_env = TestEnvBuilder::new().build().await;
+
+    let (sender, _gas) = test_env.get_sender_and_gas(0);
+    let recipient = SuiAddress::random_for_testing_only();
+    let tx = build_split_gas_coin_ptb(
+        sender,
+        MIST_PER_SUI,
+        recipient,
+        None,
+        50_000_000,
+        test_env.rgp,
+    );
+
+    // A bare tonic client, which sends no `x-sui-client-protocol-version` header.
+    let mut client =
+        TransactionExecutionServiceClient::connect(test_env.cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+    let response = client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(
+                Transaction::default().with_bcs(Bcs::serialize(&tx).unwrap()),
+            )
+            .with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+
+    let resolved: TransactionData = response
+        .transaction()
+        .transaction()
+        .bcs()
+        .deserialize()
+        .unwrap();
+    assert_eq!(resolved.expiration(), &TransactionExpiration::None);
+}
+
+// =============================================================================
 // Test 5: Insufficient total funds
 // =============================================================================
 
