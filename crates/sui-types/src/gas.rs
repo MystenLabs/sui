@@ -105,6 +105,22 @@ pub mod checked {
                 }
                 .into());
             }
+            // The gas model panics on a zero price or when `max_gas_computation_bucket * gas_price`
+            // overflows. A nonzero RGP and the `max_gas_price` cap rule both out, but the RGP may be
+            // 0 and gas models < 4 have no cap. The base-cost multiplier product in `SuiCostTable`
+            // is smaller than this one in every protocol version.
+            if gas_price == 0 {
+                return Err(
+                    UserInputError::Unsupported("gas price cannot be 0".to_string()).into(),
+                );
+            }
+            let max_computation_bucket = config.max_gas_computation_bucket();
+            if max_computation_bucket.checked_mul(gas_price).is_none() {
+                return Err(UserInputError::GasPriceTooHigh {
+                    max_gas_price: u64::MAX / max_computation_bucket,
+                }
+                .into());
+            }
 
             // Dispatch by gas model version: v15+ uses the clean gas_v3 pipeline;
             // everything older keeps the legacy gas_v2 path so replay determinism holds.
@@ -318,3 +334,7 @@ pub struct GasUsageReport {
     pub rebate_rate: u64,
     pub per_object_storage: Vec<(ObjectID, PerObjectStorage)>,
 }
+
+#[cfg(test)]
+#[path = "unit_tests/gas_tests.rs"]
+mod gas_tests;
