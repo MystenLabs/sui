@@ -25,18 +25,21 @@ task 3, lines 18-21:
 //# publish --upgradeable --dependencies DepV1 --sender A
 created: object(3,0), object(3,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 23-25:
 //# upgrade --package DepConsumerV1 --upgrade-capability 3,1 --dependencies DepV2 --sender A
 created: object(4,0)
 mutated: object(0,0), object(3,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 5, lines 27-31:
 //# publish --dependencies DepV1 --sender A
 created: object(5,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4316800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, lines 37-41:
@@ -47,6 +50,7 @@ task 7, lines 37-41:
 //> TransferObjects([Result(0)], Input(0))
 created: object(7,0), object(7,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6072400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8, lines 43-47:
@@ -57,6 +61,7 @@ task 8, lines 43-47:
 //> TransferObjects([Result(0)], Input(0))
 created: object(8,0), object(8,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6072400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 9, lines 49-52:
@@ -65,4 +70,5 @@ task 9, lines 49-52:
 //> 0: OtherConsumer::M::consume();
 //> 1: DepConsumerV2::M::consume();
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

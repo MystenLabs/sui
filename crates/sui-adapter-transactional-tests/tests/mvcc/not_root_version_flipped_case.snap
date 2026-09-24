@@ -22,6 +22,7 @@ task 2, lines 55-57:
 //> TransferObjects([Result(0)], Input(0))
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 60:
@@ -44,6 +45,7 @@ task 4, lines 65-67:
 //> TransferObjects([Result(0)], Input(0))
 created: object(4,0), object(4,1)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 5, line 69:
@@ -64,6 +66,7 @@ task 6, lines 71-72:
 //# programmable --sender P2 --inputs object(4,0)
 //> 0: test::m::bump(Input(0));
 mutated: object(0,1), object(4,0), object(4,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 3626568, non_refundable_storage_fee: 36632
 
 task 7, line 74:

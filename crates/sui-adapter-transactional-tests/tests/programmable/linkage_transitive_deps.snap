@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 11 tasks
+processed 16 tasks
 
 // Visibility-based pinning applies to the transitive dependency closure, not just direct deps.
 // `Root -> Mid -> Leaf`. `Leaf::val` returns a per-version constant (10 in v1, 20 in v2) which
@@ -22,18 +22,21 @@ task 2, lines 19-23:
 //# publish --dependencies Leaf_V1 --sender A
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4362400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 25-39:
 //# publish --dependencies Mid Leaf_V1 --sender A
 created: object(3,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6984400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, line 41:
 //# run Root::m::make --sender A
 created: object(4,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 43-48:
@@ -47,6 +50,7 @@ task 6, lines 50-52:
 // Entry locks the whole closure: transitive `Leaf` pinned exact(1) => runs v1 => writes 10.
 //> Root::m::ent_go(Input(0));
 mutated: object(0,0), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
 
 task 7, line 54:
@@ -68,6 +72,7 @@ task 8, lines 56-59:
 //> 0: Root::m::pub_go(Input(0));
 //> 1: Leaf_V2::l::ping();
 mutated: object(0,0), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
 
 task 9, line 61:
@@ -90,3 +95,54 @@ task 10, lines 63-66:
 //> 1: Leaf_V2::l::ping();
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Debug of error: InvalidLinkage at command Some(1)
+
+task 11, lines 68-71:
+// Enroll the upgraded leaf as the selected minimum version.
+//# programmable --sender A --inputs object(1,1) object(0x426)
+//> 0: sui::package::enable_minversion(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(11,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 12, lines 73-75:
+//# programmable --sender A --inputs object(4,0)
+// Public linkage remains at-least: the historical Leaf_V1 dependency is raised to selected v2.
+//> Root::m::pub_go(Input(0));
+mutated: object(0,0), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+
+task 13, line 77:
+//# view-object 4,0
+Owner: Shared( 5 )
+Version: 11
+Contents: Root::m::R {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    v: 2u64,
+}
+
+task 14, lines 79-81:
+//# programmable --sender A --inputs object(4,0)
+// Entry linkage remains exact after selection: it executes the selected v2 dependency.
+//> Root::m::ent_go(Input(0));
+mutated: object(0,0), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+
+task 15, line 83:
+//# view-object 4,0
+Owner: Shared( 5 )
+Version: 12
+Contents: Root::m::R {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    v: 2u64,
+}

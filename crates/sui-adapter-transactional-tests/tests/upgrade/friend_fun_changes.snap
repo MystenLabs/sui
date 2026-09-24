@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 937
 ---
 processed 8 tasks
 
@@ -37,12 +36,14 @@ gas summary: computation_cost: 1000000, storage_cost: 9864800,  storage_rebate: 
 task 5, line 85:
 //# run V3::friend_module::call_friend
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 6, line 87:
 //# run V3::friend_module::call_public
 created: object(6,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2432000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, line 89:

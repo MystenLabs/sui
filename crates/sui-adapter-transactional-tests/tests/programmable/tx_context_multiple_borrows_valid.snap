@@ -15,30 +15,35 @@ task 2, lines 29-30:
 //# programmable
 //> test::m::t2();
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 32-33:
 //# programmable
 //> test::m::t3();
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 35-36:
 //# programmable
 //> test::m::t4();
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 38-39:
 //# programmable --inputs 0
 //> test::m::t3_u1(Input(0));
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 6, lines 41-42:
 //# programmable --inputs 0 0
 //> test::m::t3_u2(Input(0), Input(1));
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, lines 44-46:
@@ -46,4 +51,5 @@ task 7, lines 44-46:
 // a generic &T unifying to &TxContext alongside a concrete &TxContext is two immutable usages
 //> test::m::gen_imm_tx<sui::tx_context::TxContext>();
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

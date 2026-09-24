@@ -16,6 +16,7 @@ task 2, lines 32-33:
 //# run Test::M1::transfer_n_ids --args 1 --gas-budget 100000000000000 --summarize
 created: 1
 mutated: 1
+unchanged_shared: 1
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 35-36:
@@ -23,6 +24,7 @@ task 3, lines 35-36:
 //# run Test::M1::transfer_n_ids --args 256 --gas-budget 100000000000000 --summarize
 created: 256
 mutated: 1
+unchanged_shared: 1
 gas summary: computation_cost: 1000000, storage_cost: 316175200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 38-39:
@@ -30,6 +32,7 @@ task 4, lines 38-39:
 //# run Test::M1::transfer_n_ids --args 2048 --gas-budget 100000000000000 --summarize
 created: 2048
 mutated: 1
+unchanged_shared: 1
 gas summary: computation_cost: 17300000, storage_cost: 2522485600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 41-42:

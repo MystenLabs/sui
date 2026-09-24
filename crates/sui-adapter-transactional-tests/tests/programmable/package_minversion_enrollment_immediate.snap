@@ -1,0 +1,87 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+// Enrollment takes effect for the next transaction. A historical v1 reference selects the
+// enrolled v2 package immediately after the enrollment transaction commits.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-11:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5137600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-15:
+//# upgrade --package BaseV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5069200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 17-22:
+// The policy write is not visible to another command in the same PTB: linkage uses the explicit
+// root input's pre-state, so this historical v1 call still aborts and the PTB rolls back.
+//# programmable --sender A --inputs object(1,1) object(0x426)
+//> 0: sui::package::enable_minversion(Input(0));
+//> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+//> 2: BaseV1::base::ping();
+Error: Transaction Effects Status: Move Runtime Abort. Location: BaseV1::base::ping (function index 0) at offset 1, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: BaseV1, name: Identifier("base") }, function: 0, instruction: 1, function_name: Some("ping") }, 1) at command Some(2)
+
+task 4, lines 24-26:
+//# programmable --sender A --inputs object(1,1) object(0x426)
+//> 0: sui::package::enable_minversion(Input(0));
+//> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(4,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 3980196, non_refundable_storage_fee: 40204
+
+task 5, lines 28-31:
+// A second enrollment is rejected and leaves the original selection intact.
+//# programmable --sender A --inputs object(1,1) object(0x426)
+//> 0: sui::package::enable_minversion(Input(0));
+//> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::enable_minversion_impl (function index 14) at offset 8, Abort Code: 7
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 14, instruction: 8, function_name: Some("enable_minversion_impl") }, 7) at command Some(0)
+
+task 6, lines 33-34:
+// The enrolled selection immediately redirects v1 to v2.
+//# run BaseV1::base::ping --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 36-37:
+// An explicit newer root is never downgraded to the selected package.
+//# run BaseV2::base::ping --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, lines 39-40:
+// An equal root remains v2 after selection.
+//# run BaseV2::base::ping --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, lines 42-43:
+// An enrolled cap cannot be permanently disabled. It can still perform a minversion upgrade.
+//# run sui::package::disable_minversion_permanently --args object(1,1) --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::disable_minversion_permanently (function index 15) at offset 8, Abort Code: 7
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 15, instruction: 8, function_name: Some("disable_minversion_permanently") }, 7), source: Some(VMError { major_status: ABORTED, sub_status: Some(7), message: Some("sui::package::disable_minversion_permanently at offset 8"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(15), 8)] }), command: Some(0) } }
+
+task 10, lines 45-47:
+//# upgrade --package BaseV2 --upgrade-capability 1,1 --sender A --minversion
+created: object(10,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 9279600,  storage_rebate: 6764076, non_refundable_storage_fee: 68324
+
+task 11, line 49:
+//# run BaseV1::base::ping --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

@@ -20,6 +20,7 @@ task 2, lines 53-55:
 //> TransferObjects([Result(0)], Input(0))
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6285200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 // All 3 objects have version 2
@@ -83,6 +84,7 @@ task 6, lines 65-66:
 //# programmable --sender A --inputs object(2,0) 112
 //> test::m::set(Input(0), Input(1))
 mutated: object(0,0), object(2,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4278800,  storage_rebate: 4236012, non_refundable_storage_fee: 42788
 
 // The middle object has version 2, while the root and modified leaf have version 3
@@ -149,4 +151,5 @@ task 10, lines 79-80:
 //# programmable --sender A --inputs object(2,0) 112
 //> test::m::check(Input(0), Input(1))
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724

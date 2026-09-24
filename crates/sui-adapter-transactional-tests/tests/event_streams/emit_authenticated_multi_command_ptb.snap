@@ -18,6 +18,7 @@ task 2, lines 38-39:
 //# run test::events::emit_auth --sender A --args 42
 events: Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("AuthEvent"), type_params: [] }, contents: [42, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0])
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
@@ -29,6 +30,7 @@ task 3, lines 41-45:
 //> 1: test::events::emit_auth(Input(2));
 events: Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("AuthEvent"), type_params: [] }, contents: [231, 3, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[3])
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
@@ -46,6 +48,7 @@ task 4, lines 47-57:
 //> 3: test::events::emit_auth(Input(5));
 events: Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [4, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("AuthEvent"), type_params: [] }, contents: [100, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [10, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("RegularEvent"), type_params: [] }, contents: [11, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: test, transaction_module: Identifier("events"), sender: A, type_: StructTag { address: test, module: Identifier("events"), name: Identifier("AuthEvent"), type_params: [] }, contents: [200, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[5, 8])
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 

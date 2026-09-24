@@ -35,6 +35,7 @@ task 5, lines 36-41:
 //> sui::package::commit_upgrade(Input(2), Result(2))
 created: object(5,0), object(5,1)
 mutated: object(0,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 6, lines 43-45:
@@ -49,15 +50,18 @@ task 8, lines 49-51:
 //> 0: q_2::m::x();
 //> p::m::foo(Result(0))
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 9, lines 53-58:
 //# publish --dependencies p q_2 r
 created: object(9,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 5776000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 10, line 60:
 //# run s::all::foo_x
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

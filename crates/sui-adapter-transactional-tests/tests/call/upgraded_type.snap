@@ -28,31 +28,37 @@ task 4, lines 21-26:
 //# publish --upgradeable --dependencies TestDepV2 --sender A
 created: object(4,0), object(4,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 5783600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, line 28:
 //# run TestRoot::m::pub_fun --type-args TestDepV1::m::V1
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 6, line 30:
 //# run TestRoot::m::entry_fun --type-args TestDepV1::m::V1
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, line 32:
 //# run TestRoot::m::pub_fun --type-args TestDepV2::m::V2
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8, line 34:
 //# run TestRoot::m::entry_fun --type-args TestDepV2::m::V2
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 9, line 36:
 //# run TestRoot::m::pub_fun --type-args TestDepV3::m::V3
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 10, line 38:

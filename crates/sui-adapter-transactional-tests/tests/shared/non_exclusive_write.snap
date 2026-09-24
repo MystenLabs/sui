@@ -19,6 +19,7 @@ task 2, line 60:
 //# run a::m::create --sender A
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 62:
@@ -39,7 +40,7 @@ task 4, lines 64-65:
 //# run a::m::add_dynamic_field --sender A --args nonexclusive(2,0)
 created: object(4,0)
 mutated: object(0,0)
-unchanged_shared: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426, object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2454800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 67-68:
@@ -69,6 +70,7 @@ task 7, lines 73-75:
 created: object(7,0)
 mutated: object(0,0), object(2,0)
 deleted: object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3556800,  storage_rebate: 3701808, non_refundable_storage_fee: 37392
 
 task 8, line 77:
@@ -113,6 +115,7 @@ task 12, lines 86-87:
 // Can mutate mutable shared object
 //# run a::m::mutate --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
 
 task 13, line 89:
@@ -132,14 +135,14 @@ task 14, lines 91-92:
 // Passing by value without mutation is allowed
 //# run a::m::by_value_without_mutation --sender A --args nonexclusive(2,0)
 mutated: object(0,0)
-unchanged_shared: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426, object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 15, lines 94-95:
 // Passing by value without mutation is allowed with wrap/unwrap
 //# run a::m::by_value_without_mutation_wrapped --sender A --args nonexclusive(2,0)
 mutated: object(0,0)
-unchanged_shared: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426, object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 16, lines 97-98:

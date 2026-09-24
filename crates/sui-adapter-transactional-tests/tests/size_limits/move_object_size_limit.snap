@@ -27,6 +27,7 @@ task 3, lines 81-82:
 //# run Test::M1::transfer_object_with_size --args 255999 --sender A --gas-budget 100000000000000
 created: object(3,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1172000000, storage_cost: 1947553200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 84-85:
@@ -34,4 +35,5 @@ task 4, lines 84-85:
 //# run Test::M1::transfer_object_with_size --args 256000 --sender A --gas-budget 100000000000000
 created: object(4,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1172000000, storage_cost: 1947560800,  storage_rebate: 978120, non_refundable_storage_fee: 9880

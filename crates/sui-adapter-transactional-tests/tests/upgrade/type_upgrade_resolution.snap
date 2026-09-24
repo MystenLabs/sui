@@ -28,12 +28,14 @@ task 5, lines 24-28:
 //# publish --upgradeable --sender A --dependencies A1
 created: object(5,0), object(5,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 5548000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 6, lines 30-37:
 //# upgrade --package B --upgrade-capability 5,1 --sender A --dependencies A2
 created: object(6,0)
 mutated: object(0,0), object(5,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6444800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 7, lines 39-41:
@@ -41,4 +43,5 @@ task 7, lines 39-41:
 //> M::m::g<sui::coin::Coin<A1::a::Base>>();
 //> M::m::g<sui::coin::Coin<B2::b::BB<A2::a::Base>>>();
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0

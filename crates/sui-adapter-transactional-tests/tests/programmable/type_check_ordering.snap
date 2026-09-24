@@ -16,6 +16,7 @@ task 2, lines 37-38:
 //> test::m::a()
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 40-41:
@@ -23,6 +24,7 @@ task 3, lines 40-41:
 //> test::m::b()
 created: object(3,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 43-44:
@@ -30,6 +32,7 @@ task 4, lines 43-44:
 //> test::m::c()
 created: object(4,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 47-49:

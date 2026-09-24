@@ -145,6 +145,7 @@ task 12, lines 54-58:
 //> TransferObjects([NestedResult(1,0), NestedResult(1,1)], Input(2));
 created: object(12,0), object(12,1)
 mutated: object(0,0), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
 task 13, line 60:
@@ -202,6 +203,7 @@ task 16, lines 66-72:
 //> test::m1::transfer_(Result(2), Input(2));
 created: object(16,0), object(16,1)
 mutated: object(0,0), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
 task 17, line 74:

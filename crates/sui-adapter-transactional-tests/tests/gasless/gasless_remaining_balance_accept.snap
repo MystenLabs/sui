@@ -21,7 +21,7 @@ task 3, lines 27-30:
 //> 1: sui::coin::into_balance<test::usdc::USDC>(Result(0));
 //> 2: sui::balance::send_funds<test::usdc::USDC>(Result(1), Input(2));
 mutated: object(0,0), object(1,1)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Merge, 10000)
 gas summary: computation_cost: 1000000, storage_cost: 2690400,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
@@ -38,7 +38,7 @@ task 6, lines 36-39:
 // Accept: withdraw 9000 from 10000, leaving 1000 (== min)
 //> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
 //> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Split, 9000), (object(6,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 9000)
 gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
@@ -55,7 +55,7 @@ task 9, lines 45-48:
 // Accept: withdraw all remaining 1000, leaving 0
 //> 0: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
 //> 1: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(1));
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Split, 1000), (object(6,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 1000)
 gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
@@ -73,7 +73,7 @@ task 12, lines 54-57:
 //> 1: sui::coin::into_balance<test::usdc::USDC>(Result(0));
 //> 2: sui::balance::send_funds<test::usdc::USDC>(Result(1), Input(2));
 mutated: object(0,0), object(1,1)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Merge, 10000)
 gas summary: computation_cost: 1000000, storage_cost: 2690400,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
@@ -92,7 +92,7 @@ task 15, lines 63-68:
 //> 1: sui::balance::split<test::usdc::USDC>(Result(0), Input(2));
 //> 2: sui::balance::send_funds<test::usdc::USDC>(Result(1), Input(1));
 //> 3: sui::balance::send_funds<test::usdc::USDC>(Result(0), Input(3));
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Split, 2000), (object(6,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 2000)
 gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 
@@ -112,7 +112,7 @@ task 18, lines 74-80:
 //> 2: sui::balance::send_funds<test::usdc::USDC>(Result(1), Input(1));
 //> 3: sui::balance::redeem_funds<test::usdc::USDC>(Input(0));
 //> 4: sui::balance::send_funds<test::usdc::USDC>(Result(3), Input(1));
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Split, 2000), (object(6,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 2000)
 gas summary: computation_cost: 0, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
 

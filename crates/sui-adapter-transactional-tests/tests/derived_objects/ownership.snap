@@ -18,18 +18,21 @@ task 2, line 41:
 //# run a::m::create_parent --sender A
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 43:
 //# run a::m::derive_and_share --sender A --args object(2,0)
 created: object(3,0), object(3,1)
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
 task 4, line 45:
 //# run a::m::derive_and_make_party --sender A --args object(2,0)
 created: object(4,0), object(4,1)
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
 task 5, line 47:
@@ -48,6 +51,7 @@ task 6, lines 49-50:
 // transfer this object back to single owner
 //# transfer-object 4,0 --sender A --recipient A
 mutated: object(0,0), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 2219580, non_refundable_storage_fee: 22420
 
 task 7, line 52:
@@ -66,6 +70,7 @@ task 8, line 54:
 //# run a::m::derive_and_make_immutable --sender A --args object(2,0)
 created: object(8,0), object(8,1)
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
 task 9, line 56:

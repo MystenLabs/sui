@@ -33,7 +33,7 @@ task 2, lines 35-48:
 //> 10: sui::coin::send_funds<test::regulated_coin::REGULATED_COIN>(NestedResult(0,9), Input(11));
 //> 11: sui::coin::send_funds<test::regulated_coin::REGULATED_COIN>(NestedResult(0,10), Input(12));
 mutated: object(0,0), object(1,5)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(2,0), F1, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,1), F10, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,2), F11, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,3), F2, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,4), F3, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,5), F4, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,6), F5, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,7), F6, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,8), F7, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,9), F8, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,10), F9, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100)
 gas summary: computation_cost: 1840000, storage_cost: 2462400,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
@@ -48,6 +48,7 @@ task 4, lines 52-55:
 //> 1: sui::allowance::new<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 created: object(4,0), object(4,1)
 mutated: object(0,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6733600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 5, lines 57-60:
@@ -57,6 +58,7 @@ task 5, lines 57-60:
 //> 1: sui::allowance::new<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 created: object(5,0), object(5,1)
 mutated: object(0,5)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6733600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 6, lines 62-65:
@@ -66,6 +68,7 @@ task 6, lines 62-65:
 //> 1: sui::allowance::new<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 created: object(6,0), object(6,1)
 mutated: object(0,6)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6733600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 7, lines 67-70:
@@ -75,6 +78,7 @@ task 7, lines 67-70:
 //> 1: sui::allowance::new<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 created: object(7,0), object(7,1)
 mutated: object(0,7)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6733600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 8, lines 72-75:
@@ -84,6 +88,7 @@ task 8, lines 72-75:
 //> 1: sui::allowance::new<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 created: object(8,0), object(8,1)
 mutated: object(0,8)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6733600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 9, lines 77-80:
@@ -93,6 +98,7 @@ task 9, lines 77-80:
 //> 1: sui::allowance::new<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 created: object(9,0), object(9,1)
 mutated: object(0,9)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6733600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 10, lines 82-85:
@@ -102,6 +108,7 @@ task 10, lines 82-85:
 //> 1: sui::allowance::new<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 created: object(10,0), object(10,1)
 mutated: object(0,10)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6733600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 11, lines 87-90:
@@ -111,6 +118,7 @@ task 11, lines 87-90:
 //> 1: sui::allowance::new<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 created: object(11,0), object(11,1)
 mutated: object(0,11)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6733600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 12, lines 92-95:
@@ -120,6 +128,7 @@ task 12, lines 92-95:
 //> 1: sui::allowance::new<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 created: object(12,0), object(12,1)
 mutated: object(0,12)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6733600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 13, lines 97-100:
@@ -129,6 +138,7 @@ task 13, lines 97-100:
 //> 1: sui::allowance::new<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 created: object(13,0), object(13,1)
 mutated: object(0,3)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6733600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 14, lines 102-105:
@@ -138,6 +148,7 @@ task 14, lines 102-105:
 //> 1: sui::allowance::new<sui::balance::Balance<test::regulated_coin::REGULATED_COIN>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
 created: object(14,0), object(14,1)
 mutated: object(0,4)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6733600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 15, lines 107-130:

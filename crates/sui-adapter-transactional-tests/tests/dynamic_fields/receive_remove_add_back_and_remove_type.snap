@@ -21,30 +21,35 @@ task 2, line 89:
 //# run test::m1::create --sender A
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4689200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 91:
 //# run test::m1::test_dof --args object(2,0) receiving(2,1) receiving(2,2) --sender A
 mutated: object(0,0), object(2,0), object(2,1)
 deleted: object(2,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 4642308, non_refundable_storage_fee: 46892
 
 task 4, line 93:
 //# run test::m1::create --sender A
 created: object(4,0), object(4,1), object(4,2)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4689200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, line 95:
 //# run test::m1::test_df --args object(4,0) receiving(4,1) receiving(4,2) --sender A
 mutated: object(0,0), object(4,0), object(4,1)
 deleted: object(4,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 4642308, non_refundable_storage_fee: 46892
 
 task 6, line 97:
 //# run test::m1::create --sender A
 created: object(6,0), object(6,1), object(6,2)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4689200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, line 99:
@@ -52,12 +57,14 @@ task 7, line 99:
 created: object(7,0)
 mutated: object(0,0), object(6,0)
 wrapped: object(6,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4050800,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
 
 task 8, line 101:
 //# run test::m1::create --sender A
 created: object(8,0), object(8,1), object(8,2)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4689200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 9, line 103:
@@ -65,4 +72,5 @@ task 9, line 103:
 created: object(9,0)
 mutated: object(0,0), object(8,0)
 wrapped: object(8,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4050800,  storage_rebate: 3430944, non_refundable_storage_fee: 34656

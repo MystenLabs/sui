@@ -16,6 +16,7 @@ task 2, line 33:
 //# run Test::f::create_and_test
 created: object(2,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 35:
@@ -34,6 +35,7 @@ Contents: Test::f::S {
 task 4, line 37:
 //# run Test::f::update_inner --args object(2,0)
 mutated: object(0,1), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
 
 task 5, line 39:
@@ -75,6 +77,7 @@ Contents: fake(1,0)::f::S {
 task 8, line 74:
 //# run Test::f::update_inner2 --args object(2,0)
 mutated: object(0,1), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2242152, non_refundable_storage_fee: 22648
 
 task 9, line 76:

@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 937
 ---
 processed 9 tasks
 
@@ -14,6 +13,7 @@ task 2, line 46:
 //# run tto::M1::start
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, line 48:
@@ -57,6 +57,7 @@ task 6, lines 54-56:
 //# programmable --inputs object(2,0) receiving(2,1) receiving(2,2)
 //> 0: tto::M1::make_duo(Input(1), Input(2))
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
 
 task 7, lines 58-61:
@@ -73,4 +74,5 @@ task 8, lines 63-67:
 //> 1: tto::M1::receive_duo(Input(0), Result(0));
 //> 2: TransferObjects([NestedResult(1, 0), NestedResult(1, 1)], Input(3));
 mutated: object(0,0), object(2,0), object(2,1), object(2,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 4589640, non_refundable_storage_fee: 46360

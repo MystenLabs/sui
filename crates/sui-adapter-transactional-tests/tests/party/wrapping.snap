@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 937
 ---
 processed 11 tasks
 
@@ -19,6 +18,7 @@ task 2, lines 34-36:
 //> ex::m::create_party()
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 38:
@@ -40,6 +40,7 @@ task 4, lines 40-42:
 created: object(4,0)
 mutated: object(0,0)
 wrapped: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2492800,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
 task 5, line 44:
@@ -79,6 +80,7 @@ task 8, lines 53-55:
 mutated: object(0,0)
 unwrapped: object(2,0)
 deleted: object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2467872, non_refundable_storage_fee: 24928
 
 task 9, lines 57-60:
@@ -87,6 +89,7 @@ task 9, lines 57-60:
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::A>(Input(0), Result(0))
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
 task 10, line 62:

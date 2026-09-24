@@ -20,6 +20,7 @@ task 2, lines 221-223:
 //> TransferObjects([Result(0)], Input(0))
 created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 17654800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 225:
@@ -38,6 +39,7 @@ task 4, lines 227-228:
 //# programmable --sender A --inputs object(2,0) 112
 //> test::m::set(Input(0), Input(1))
 mutated: object(0,0), object(2,0), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 13968800,  storage_rebate: 13829112, non_refundable_storage_fee: 139688
 
 task 5, line 230:
@@ -57,6 +59,7 @@ task 6, lines 232-233:
 //> test::m::remove(Input(0))
 mutated: object(0,0), object(2,0)
 deleted: object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 13829112, non_refundable_storage_fee: 139688
 
 task 7, line 235:

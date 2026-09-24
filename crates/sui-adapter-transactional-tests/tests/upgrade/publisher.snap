@@ -21,9 +21,11 @@ gas summary: computation_cost: 1000000, storage_cost: 7706400,  storage_rebate: 
 task 3, line 35:
 //# run A1::m::test --type-args A0::m::A --args object(1,1) --sender A
 mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2812000,  storage_rebate: 2783880, non_refundable_storage_fee: 28120
 
 task 4, line 37:
 //# run A1::m::test --type-args A1::m::B --args object(1,1) --sender A
 mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2812000,  storage_rebate: 2783880, non_refundable_storage_fee: 28120

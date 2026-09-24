@@ -1,0 +1,105 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+// `public(package)` replaces the deprecated `friend` mechanism for package-internal APIs. The
+// Consumer's entry call pins its historical PackageV1 dependency exact; minversion selects
+// PackageV2 without making the package-internal API externally callable.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-19:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6049600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 21-31:
+//# publish --dependencies PackageV1 --sender A
+created: object(2,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 6399200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 33:
+//# run Consumer::consumer::new --sender A
+created: object(3,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 2348400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 35:
+//# run Consumer::consumer::call --args object(3,0) --sender A
+mutated: object(0,0), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 2348400,  storage_rebate: 2324916, non_refundable_storage_fee: 23484
+
+task 5, line 37:
+//# view-object 3,0
+Owner: Shared( 4 )
+Version: 5
+Contents: Consumer::consumer::Result {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 1u64,
+}
+
+task 6, lines 39-48:
+//# upgrade --package PackageV1 --upgrade-capability 1,1 --sender A
+created: object(6,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6049600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 7, lines 50-51:
+// The Consumer retains its exact historical PackageV1 reference before minversion enrollment.
+//# run Consumer::consumer::call --args object(3,0) --sender A
+mutated: object(0,0), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 2348400,  storage_rebate: 2324916, non_refundable_storage_fee: 23484
+
+task 8, line 53:
+//# view-object 3,0
+Owner: Shared( 4 )
+Version: 7
+Contents: Consumer::consumer::Result {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 1u64,
+}
+
+task 9, lines 55-57:
+//# programmable --sender A --inputs object(1,1) object(0x426)
+//> 0: sui::package::enable_minversion(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(9,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 10, lines 59-61:
+// The exact historical reference immediately selects PackageV2, whose public(package) API is callable
+// only by the sibling entry module in the selected package.
+//# run Consumer::consumer::call --args object(3,0) --sender A
+mutated: object(0,0), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 2348400,  storage_rebate: 2324916, non_refundable_storage_fee: 23484
+
+task 11, line 63:
+//# view-object 3,0
+Owner: Shared( 4 )
+Version: 9
+Contents: Consumer::consumer::Result {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 2u64,
+}

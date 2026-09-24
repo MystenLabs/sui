@@ -32,7 +32,7 @@ task 4, lines 57-59:
 // Check that we can read the balance of B
 //> 0: test::balance_read::balance_check(Input(0), Input(1), Input(2));
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426, 0x0000000000000000000000000000000000000000000000000000000000000acc
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 61-63:
@@ -40,7 +40,7 @@ task 5, lines 61-63:
 // Check that C has a zero balance
 //> 0: test::balance_read::balance_check(Input(0), Input(1), Input(2));
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426, 0x0000000000000000000000000000000000000000000000000000000000000acc
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 6, lines 65-69:
@@ -51,6 +51,7 @@ task 6, lines 65-69:
 //> 0: test::balance_read::create_supply_holder();
 created: object(6,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2363600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, lines 70-71:
@@ -58,7 +59,7 @@ task 7, lines 70-71:
 //> 0: test::balance_read::send_max(Input(0), Input(1), Input(2));
 created: object(7,0)
 mutated: object(0,0), object(6,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(7,1), D, sui::balance::Balance<u64>, Merge, 18446744073709551614)
 gas summary: computation_cost: 1000000, storage_cost: 4202800,  storage_rebate: 2339964, non_refundable_storage_fee: 23636
 
@@ -67,7 +68,7 @@ task 8, lines 72-73:
 //> 0: test::balance_read::send_max(Input(0), Input(1), Input(2));
 created: object(8,0)
 mutated: object(0,0), object(6,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(7,1), D, sui::balance::Balance<u64>, Merge, 18446744073709551614)
 gas summary: computation_cost: 1000000, storage_cost: 4202800,  storage_rebate: 2339964, non_refundable_storage_fee: 23636
 
@@ -80,5 +81,5 @@ task 10, lines 77-79:
 // Check that D's balance is clamped to u64::MAX
 //> 0: test::balance_read::balance_check_fake(Input(0), Input(1), Input(2));
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426, 0x0000000000000000000000000000000000000000000000000000000000000acc
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

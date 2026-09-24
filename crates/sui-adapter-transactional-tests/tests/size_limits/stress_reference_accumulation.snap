@@ -66,4 +66,5 @@ task 2, lines 40-88:
 //> 46: test::accum::accum(Input(1105), Input(1106), Input(1107), Input(1108), Input(1109), Input(1110), Input(1111), Input(1112), Input(1113), Input(1114), Input(1115), Input(1116), Input(1117), Input(1118), Input(1119), Input(1120), Input(1121), Input(1122), Input(1123), Input(1124), Input(1125), Input(1126), Input(1127), Input(1128), Result(45));
 //> 47: test::accum::accum(Input(1129), Input(1130), Input(1131), Input(1132), Input(1133), Input(1134), Input(1135), Input(1136), Input(1137), Input(1138), Input(1139), Input(1140), Input(1141), Input(1142), Input(1143), Input(1144), Input(1145), Input(1146), Input(1147), Input(1148), Input(1149), Input(1150), Input(1151), Input(1152), Result(46));
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 3180000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0

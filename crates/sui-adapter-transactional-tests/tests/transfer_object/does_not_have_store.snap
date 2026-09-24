@@ -20,6 +20,7 @@ task 2, line 27:
 //# run test::m::mint_s --sender A
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 29:
@@ -57,6 +58,7 @@ task 6, line 38:
 //# run test::m::mint_cup --type-args test::m::S --sender A
 created: object(6,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2500400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, line 40:

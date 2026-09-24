@@ -1,0 +1,44 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+// A minversion upgrade must not downgrade an explicit reference to the new package. Older
+// references select the new package in the following transaction.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-11:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5137600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-15:
+//# programmable --sender A --inputs object(1,1) object(0x426)
+//> 0: sui::package::enable_minversion(Input(0));
+//> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(2,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 17-19:
+//# upgrade --package BaseV1 --upgrade-capability 1,1 --sender A --minversion
+created: object(3,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 9279600,  storage_rebate: 6764076, non_refundable_storage_fee: 68324
+
+task 4, lines 21-22:
+// The v2 reference must execute v2, not be redirected back to stable v1.
+//# run BaseV2::base::ping --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 24-25:
+// An older v1 reference resolves to v2 immediately after the upgrade.
+//# run BaseV1::base::ping --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

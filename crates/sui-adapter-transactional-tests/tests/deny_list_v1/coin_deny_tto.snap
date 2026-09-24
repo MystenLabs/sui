@@ -160,6 +160,7 @@ task 9, lines 63-64:
 //# run sui::coin::deny_list_add --args object(0x403) object(1,3) @A --type-args test::regulated_coin::REGULATED_COIN --sender A
 created: object(9,0), object(9,1)
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 11415200,  storage_rebate: 2723688, non_refundable_storage_fee: 27512
 
 task 10, lines 66-67:
@@ -172,11 +173,12 @@ task 11, lines 69-70:
 //# run sui::coin::deny_list_remove --args object(0x403) object(1,3) @A --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(9,1)
 deleted: object(9,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 9522800,  storage_rebate: 11301048, non_refundable_storage_fee: 114152
 
 task 12, lines 72-73:
 // Try to receive coin in Wallet. This should now succeed.
 //# run test::regulated_coin::receive_coin --args object(1,6) receiving(1,5) --sender A
 mutated: object(0,0), object(1,5), object(1,6)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3807600,  storage_rebate: 3769524, non_refundable_storage_fee: 38076

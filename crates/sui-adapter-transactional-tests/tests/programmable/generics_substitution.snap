@@ -25,6 +25,7 @@ task 2, lines 26-34:
 //  correct usage A                  B                  A
 //> test::m1::eat(NestedResult(4,1), NestedResult(4,0), NestedResult(4,1));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 36-44:

@@ -22,4 +22,5 @@ task 2, lines 18-25:
 //> 2: test::m::p16(NestedResult(1,0), NestedResult(1,1), NestedResult(1,2), NestedResult(1,3), NestedResult(1,4), NestedResult(1,5), NestedResult(1,6), NestedResult(1,7), NestedResult(1,8), NestedResult(1,9), NestedResult(1,10), NestedResult(1,11), NestedResult(1,12), NestedResult(1,13), NestedResult(1,14), NestedResult(1,15));
 //> 3: test::m::p16(NestedResult(2,0), NestedResult(2,1), NestedResult(2,2), NestedResult(2,3), NestedResult(2,4), NestedResult(2,5), NestedResult(2,6), NestedResult(2,7), NestedResult(2,8), NestedResult(2,9), NestedResult(2,10), NestedResult(2,11), NestedResult(2,12), NestedResult(2,13), NestedResult(2,14), NestedResult(2,15));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

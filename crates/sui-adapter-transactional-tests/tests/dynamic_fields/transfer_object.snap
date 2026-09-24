@@ -20,28 +20,33 @@ task 2, line 67:
 //# run a::m::create --sender A
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 69:
 //# run a::m::create --sender A
 created: object(3,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, line 71:
 //# run a::m::add_counter --sender A --args object(2,0)
 created: object(4,0), object(4,1)
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
 
 task 5, line 73:
 //# run a::m::obj_bump --sender A --args object(2,0)
 mutated: object(0,0), object(2,0), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3526400,  storage_rebate: 3491136, non_refundable_storage_fee: 35264
 
 task 6, line 75:
 //# run a::m::assert_count --sender A --args object(2,0) 1
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
 
 task 7, line 77:
@@ -49,16 +54,19 @@ task 7, line 77:
 created: object(7,0)
 mutated: object(0,0), object(2,0), object(3,0), object(4,0)
 deleted: object(4,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 7204800,  storage_rebate: 7132752, non_refundable_storage_fee: 72048
 
 task 8, line 79:
 //# run a::m::obj_bump --sender A --args object(3,0)
 mutated: object(0,0), object(3,0), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3526400,  storage_rebate: 3491136, non_refundable_storage_fee: 35264
 
 task 9, line 81:
 //# run a::m::assert_count --sender A --args object(3,0) 2
 mutated: object(0,0), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
 
 task 10, line 83:

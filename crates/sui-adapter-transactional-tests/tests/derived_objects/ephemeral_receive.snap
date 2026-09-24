@@ -19,16 +19,19 @@ task 2, line 50:
 //# run a::m::create_parent --sender A
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 52:
 //# run a::m::transfer_obj_to_derived --sender A --args object(2,0) 0
 created: object(3,0)
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3458000,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
 task 4, line 54:
 //# run a::m::ephemeral_receive --sender A --args object(2,0) 0 receiving(3,0)
 created: object(4,0)
 mutated: object(0,0), object(2,0), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 3423420, non_refundable_storage_fee: 34580
