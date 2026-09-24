@@ -85,9 +85,9 @@ pub fn proposers_metric_label(
 pub struct StaggerParams {
     /// Delay between consecutive slots beyond the free slots.
     pub step: Duration,
-    /// Upper bound on any submission delay: all slots past `free_slots + max_delay/step`
-    /// fire at `max_delay`, so a submitter never waits longer than this regardless of
-    /// committee size.
+    /// Upper bound on any submission delay: slots wrap around the `max_delay/step`
+    /// firing steps (see [`compute_delay`]), so a submitter never waits longer than
+    /// this regardless of committee size.
     pub max_delay: Duration,
     /// Number of leading slots that submit without delay.
     pub free_slots: u64,
@@ -313,17 +313,31 @@ impl Drop for StaggeredSlot {
 
 /// The delay for `slot`, given that `paid_amplification` immediate slots were paid for
 /// beyond the default free slots. The first slot past the free slots waits one step.
+///
+/// Held slots wrap around the `max_delay / step` firing steps rather than saturating at
+/// `max_delay`. Saturating would give every slot past `free_slots + max_delay/step` the
+/// same firing time: an attacker who computes the (public) permutation and fans out only
+/// to those tail validators gets every copy proposed simultaneously at the cap, with no
+/// earlier copy to trigger drop-on-commit — amplification ≈ the tail size, defeating the
+/// mechanism. Wrapping spreads the tail evenly across the window (~committee/steps
+/// validators per firing time), leaving a residual bound of roughly
+/// `committee_size × commit_latency / max_delay` copies against a fan-out aimed at one
+/// stretch of firing times — the best any schedule confined to `max_delay` can do, since
+/// copies firing within one commit latency of each other cannot dedup one another.
 fn compute_delay(params: &StaggerParams, slot: u64, paid_amplification: u64) -> Option<Duration> {
     let free_slots = params.free_slots.max(paid_amplification);
     if slot < free_slots {
         return None;
     }
-    let steps = slot - free_slots + 1;
-    if steps > u32::MAX as u64 {
-        // Unreachable: the slot is bounded by the committee size.
+    // Degenerate params (step > max_delay) clamp to a single firing step; the final
+    // min() then keeps the ≤ max_delay invariant.
+    let firing_steps = (params.max_delay.as_millis() / params.step.as_millis().max(1)).max(1);
+    let steps = (slot - free_slots) as u128 % firing_steps + 1;
+    if steps > u32::MAX as u128 {
+        // Unreachable: the step count is bounded by the wrap.
         debug_fatal!("stagger step count {steps} overflows u32");
     }
-    let steps = steps.min(u32::MAX as u64) as u32;
+    let steps = steps.min(u32::MAX as u128) as u32;
     Some(params.step.saturating_mul(steps).min(params.max_delay))
 }
 
@@ -475,9 +489,17 @@ mod tests {
             compute_delay(&params, 4, 1),
             Some(Duration::from_millis(500))
         );
-        // The delay is capped: distant slots all fire at max_delay.
-        assert_eq!(compute_delay(&params, 11, 1), Some(Duration::from_secs(2)));
-        assert_eq!(compute_delay(&params, 120, 1), Some(Duration::from_secs(2)));
+        // 2s / 250ms = 8 firing steps: the last one fires exactly at max_delay, then the
+        // schedule wraps instead of piling further slots onto the cap.
+        assert_eq!(compute_delay(&params, 10, 1), Some(Duration::from_secs(2)));
+        assert_eq!(
+            compute_delay(&params, 11, 1),
+            Some(Duration::from_millis(250))
+        );
+        assert_eq!(
+            compute_delay(&params, 120, 1),
+            Some(Duration::from_millis(1500))
+        );
         // Paid amplification widens the free slots, and never narrows them.
         assert_eq!(compute_delay(&params, 4, 5), None);
         assert_eq!(
@@ -485,6 +507,51 @@ mod tests {
             Some(Duration::from_millis(250))
         );
         assert_eq!(compute_delay(&params, 2, 1), None);
+    }
+
+    #[test]
+    fn delay_wraps_instead_of_capping() {
+        let params = StaggerParams {
+            step: Duration::from_millis(250),
+            max_delay: Duration::from_secs(2),
+            free_slots: 3,
+        };
+        let firing_steps = 8u64; // 2s / 250ms
+        // Every held slot waits at least one step and at most max_delay, and the
+        // schedule cycles with the firing-step period, so tail slots spread across all
+        // firing times instead of sharing the cap.
+        let mut tail_delays = std::collections::HashSet::new();
+        for slot in 3..200u64 {
+            let delay = compute_delay(&params, slot, 1).unwrap();
+            assert!(delay >= params.step, "slot {slot} waited {delay:?}");
+            assert!(delay <= params.max_delay, "slot {slot} waited {delay:?}");
+            assert_eq!(
+                delay,
+                compute_delay(&params, slot + firing_steps, 1).unwrap(),
+                "schedule does not cycle at slot {slot}"
+            );
+            if slot >= 3 + firing_steps {
+                tail_delays.insert(delay);
+            }
+        }
+        assert_eq!(tail_delays.len() as u64, firing_steps);
+        // Paid amplification shifts the wrap origin with the free slots.
+        assert_eq!(
+            compute_delay(&params, 5 + firing_steps, 5),
+            Some(Duration::from_millis(250))
+        );
+        // Degenerate params (one firing step) still respect the max_delay bound.
+        let degenerate = StaggerParams {
+            step: Duration::from_secs(3),
+            max_delay: Duration::from_secs(2),
+            free_slots: 1,
+        };
+        for slot in 1..10u64 {
+            assert_eq!(
+                compute_delay(&degenerate, slot, 1),
+                Some(Duration::from_secs(2))
+            );
+        }
     }
 
     #[test]
@@ -873,7 +940,7 @@ mod pool_tests {
         drop(ack);
         assert_eq!(pool.queue_depth("user"), 1);
 
-        // Past the (capped) delay the entry is proposed as usual.
+        // Past the (bounded) delay the entry is proposed as usual.
         tokio::time::sleep(Duration::from_millis(600)).await;
         let (transactions, ack, _) = pool.take(10, usize::MAX);
         assert_eq!(transactions.len(), 1, "eligible entry was not proposed");
@@ -1006,7 +1073,7 @@ mod pool_tests {
         );
         drop(ack);
 
-        // Past the (capped) delay the bundle is proposed atomically.
+        // Past the (bounded) delay the bundle is proposed atomically.
         tokio::time::sleep(Duration::from_millis(600)).await;
         let (transactions, ack, _) = pool.take(10, usize::MAX);
         assert_eq!(
