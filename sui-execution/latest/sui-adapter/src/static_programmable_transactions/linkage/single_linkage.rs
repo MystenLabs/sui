@@ -329,7 +329,7 @@ pub(crate) fn compute_linkage_from_facts<E: ExecutionErrorTrait, S: PackageStore
     Ok(base_linkage)
 }
 
-fn collect_execution_original_ids<E: ExecutionErrorTrait, S: PackageStore + ?Sized>(
+pub(crate) fn collect_execution_original_ids<E: ExecutionErrorTrait, S: PackageStore + ?Sized>(
     facts: &LinkageCommandFacts,
     resolution_table: &ResolutionTable,
     store: &S,
