@@ -198,6 +198,14 @@ pub async fn execution_process(
             continue;
         }
 
+        // A transaction can be executed while it waits for its inputs, in which case the
+        // scheduler still sends it so that its causal index is retired. Dropping the slot
+        // here retires the index without paying for a dispatch that would no-op inside
+        // `try_execute_immediately`, and without holding a concurrency slot while doing so.
+        if authority.is_tx_already_executed(&digest) {
+            continue;
+        }
+
         if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {
             authority
                 .metrics
