@@ -1,0 +1,44 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# The committee of sui-operations' Antithesis cluster
+# (docker/sui-antithesis/genesis/compose-validators.yaml): four validators
+# of equal stake, two-minute epochs. The gas account is sui.keystore's
+# key, made for this example.
+accounts:
+  - address: '0x9b1b191f7df4f55c0f73e7638606ca4029fd52a2735b98f2d5674038affe3481'
+    gas_amounts:
+      - 750000000000000000
+      - 750000000000000000
+parameters:
+  allow_insertion_of_extra_objects: false
+  epoch_duration_ms: 120000
+validator_config_info:
+  - &validator
+    name: validator1
+    commission_rate: 0
+    gas_price: 1000
+    stake: 20000000000000000
+    consensus_address: /ip4/127.0.0.1/tcp/8083/http
+    network_address: /dns/validator1/tcp/8080/http
+    narwhal_primary_address: /dns/validator1/udp/8081
+    narwhal_worker_address: /dns/validator1/udp/8082
+    p2p_address: /dns/validator1/udp/8084
+  - <<: *validator
+    name: validator2
+    network_address: /dns/validator2/tcp/8080/http
+    narwhal_primary_address: /dns/validator2/udp/8081
+    narwhal_worker_address: /dns/validator2/udp/8082
+    p2p_address: /dns/validator2/udp/8084
+  - <<: *validator
+    name: validator3
+    network_address: /dns/validator3/tcp/8080/http
+    narwhal_primary_address: /dns/validator3/udp/8081
+    narwhal_worker_address: /dns/validator3/udp/8082
+    p2p_address: /dns/validator3/udp/8084
+  - <<: *validator
+    name: validator4
+    network_address: /dns/validator4/tcp/8080/http
+    narwhal_primary_address: /dns/validator4/udp/8081
+    narwhal_worker_address: /dns/validator4/udp/8082
+    p2p_address: /dns/validator4/udp/8084

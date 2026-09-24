@@ -1,0 +1,34 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# sui-operations' genesis/static/fullnode.yaml, with paths relative to
+# the host's directory instead of the container's /opt/sui.
+db-path: db
+network-address: /ip4/0.0.0.0/tcp/8080/http
+json-rpc-address: "0.0.0.0:9000"
+metrics-address: "0.0.0.0:9184"
+admin-interface-port: 1337
+enable-event-processing: true
+grpc-load-shed: ~
+grpc-concurrency-limit: ~
+p2p-config:
+  listen-address: "0.0.0.0:8084"
+  seed-peers:
+    - address: /dns/validator1/udp/8084
+    - address: /dns/validator2/udp/8084
+    - address: /dns/validator3/udp/8084
+    - address: /dns/validator4/udp/8084
+genesis:
+  genesis-file-location: genesis.blob
+authority-store-pruning-config:
+  num-latest-epoch-dbs-to-retain: 3
+  epoch-db-pruning-period-secs: 3600
+  num-epochs-to-retain: 18446744073709551615
+  max-checkpoints-in-batch: 5
+  max-transactions-in-batch: 1000
+  use-range-deletion: true
+  pruning-run-delay-seconds: 60
+state-debug-dump-config:
+  dump-file-directory: state_debug_dump
+rpc:
+  enable-indexing: true
