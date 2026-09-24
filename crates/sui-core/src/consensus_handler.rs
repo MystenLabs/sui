@@ -1048,7 +1048,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         &mut self,
         consensus_commit: impl ConsensusCommitAPI,
     ) {
-        let transactions = consensus_commit.transactions();
+        let transactions = parse_consensus_commit(
+            self.epoch_store
+                .protocol_config()
+                .shuffle_consensus_commit_blocks(),
+            &consensus_commit,
+        );
         self.handle_consensus_commit(consensus_commit, transactions)
             .await;
     }
@@ -3285,6 +3290,17 @@ const CONSENSUS_HANDLER_DESERIALIZE_CHANNEL_CAPACITY: usize = 2;
 /// critical path.
 type ParsedConsensusTransactions = Vec<(BlockRef, Vec<ParsedTransaction>)>;
 
+fn parse_consensus_commit(
+    shuffle_blocks: bool,
+    consensus_commit: &impl ConsensusCommitAPI,
+) -> ParsedConsensusTransactions {
+    if shuffle_blocks {
+        consensus_commit.shuffled_transactions()
+    } else {
+        consensus_commit.transactions()
+    }
+}
+
 /// Manages the lifetime of tasks handling the commits and transactions output by consensus.
 pub(crate) struct MysticetiConsensusHandler {
     tasks: JoinSet<()>,
@@ -3302,6 +3318,10 @@ impl MysticetiConsensusHandler {
             "Starting consensus replay"
         );
         let mut tasks = JoinSet::new();
+        let shuffle_blocks = consensus_handler
+            .epoch_store
+            .protocol_config()
+            .shuffle_consensus_commit_blocks();
 
         // Stage 1 — deserialize worker: BCS-parses each commit's transactions off the handler's
         // critical path, so parsing overlaps the handler processing the previous commit. The
@@ -3316,7 +3336,7 @@ impl MysticetiConsensusHandler {
             while let Some(consensus_commit) = commit_receiver.recv().await {
                 let transactions: ParsedConsensusTransactions = {
                     let _scope = monitored_scope("ConsensusCommitHandler::deserialize_worker");
-                    consensus_commit.transactions()
+                    parse_consensus_commit(shuffle_blocks, &consensus_commit)
                 };
                 // The send is intentionally outside the scope above: on the bounded channel it
                 // blocks when the handler is the bottleneck, and that idle-wait would otherwise
