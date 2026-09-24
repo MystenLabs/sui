@@ -14,7 +14,7 @@ warning[WL02014]: mutation in match guard
    │               │ This may mutate state
    │               Match guard may mutate state
    │
-   = Match guards can be evaluated more than once when matching backtracks.
+   = Match guards may be run multiple times during match decisions, and should not be used to mutate state.
    = This warning can be suppressed with '#[allow(lint(mutation_in_match_guard))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[WL02014]: mutation in match guard
@@ -26,7 +26,7 @@ warning[WL02014]: mutation in match guard
    │               Match guard may mutate state
    │               This may mutate state
    │
-   = Match guards can be evaluated more than once when matching backtracks.
+   = Match guards may be run multiple times during match decisions, and should not be used to mutate state.
    = This warning can be suppressed with '#[allow(lint(mutation_in_match_guard))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[WL02014]: mutation in match guard
@@ -38,5 +38,5 @@ warning[WL02014]: mutation in match guard
    │               │ This may mutate state
    │               Match guard may mutate state
    │
-   = Match guards can be evaluated more than once when matching backtracks.
+   = Match guards may be run multiple times during match decisions, and should not be used to mutate state.
    = This warning can be suppressed with '#[allow(lint(mutation_in_match_guard))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -28,7 +28,10 @@ simple_visitor!(
                 (guard.exp.loc, "Match guard may mutate state"),
                 (mutation.loc(), "This may mutate state"),
             );
-            diag.add_note("Match guards can be evaluated more than once when matching backtracks.");
+            diag.add_note(
+                "Match guards may be run multiple times during match decisions, and should not be \
+                 used to mutate state.",
+            );
             self.add_diag(diag);
         }
         false
