@@ -235,7 +235,11 @@ where
                     }
                 }
             }
-            last_checkpoint = handoff;
+            // Floor the live delivery boundary at the resume point. The handoff pins at this
+            // replica's streamed tip, which can sit below the resume point (a client resuming from a
+            // cursor minted by a more caught-up replica behind a load balancer), and delivering at or
+            // below the resume point would replay checkpoints the client asked to skip.
+            last_checkpoint = handoff.max(start_from);
         }
 
         // Phase 2: follow live from `handoff + 1` (a fresh receiver if there was no backfill).
