@@ -5,6 +5,7 @@ use crate::{TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use serde_json::json;
+use std::collections::BTreeSet;
 use sui_json::SuiJsonValue;
 use sui_move_build::test_utils::compile_managed_coin_package;
 use sui_rpc_api::client::ExecutedTransaction;
@@ -46,9 +47,23 @@ impl TestCaseImpl for CoinIndexTest {
         let coins = ctx.get_sui(Some(1)).await;
         let gas_coin_id = *coins[0].id();
 
-        // Record initial SUI balance + coin count (StateService).
+        // Record the initial coin state. A prefunded account is reused across
+        // cluster-test invocations, so tolerate non-SUI coins left by an
+        // interrupted earlier run while ensuring this run does not add to them.
         let mut old_total_balance = Self::sui_balance(ctx, account).await;
-        let mut old_coin_object_count = Self::sui_coins(ctx, account).await.len();
+        let initial_sui_coins = Self::sui_coins(ctx, account).await;
+        let initial_all_coins = Self::all_coins(ctx, account).await;
+        let initial_sui_ids = Self::coin_ids(&initial_sui_coins);
+        let initial_all_ids = Self::coin_ids(&initial_all_coins);
+        assert!(
+            initial_sui_ids.is_subset(&initial_all_ids),
+            "all-coins should include every initial SUI coin",
+        );
+        let baseline_non_sui_coin_ids = initial_all_ids
+            .difference(&initial_sui_ids)
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let mut old_coin_object_count = initial_sui_coins.len();
 
         // 1. Execute one transfer coin transaction (to another address). A small
         //    amount is split off an already-owned coin (also the gas coin) and
@@ -271,20 +286,24 @@ impl TestCaseImpl for CoinIndexTest {
         );
 
         // =========================== All-coins vs SUI-coins ===========================
-        // With no MANAGED coins left, the "all coins" enumeration (parameterless
-        // `0x2::coin::Coin` filter) must equal the SUI-only enumeration.
+        // With no MANAGED coins from this run left, the "all coins"
+        // enumeration must contain every SUI coin plus exactly the non-SUI
+        // baseline that existed before this run.
         let sui_coins = Self::sui_coins(ctx, account).await;
         let all_coins = Self::all_coins(ctx, account).await;
+        let sui_coin_ids = Self::coin_ids(&sui_coins);
+        let all_coin_ids = Self::coin_ids(&all_coins);
+        assert!(
+            sui_coin_ids.is_subset(&all_coin_ids),
+            "all-coins should include every SUI coin",
+        );
         assert_eq!(
-            sui_coins
-                .iter()
-                .map(|c| c.id)
-                .collect::<std::collections::BTreeSet<_>>(),
-            all_coins
-                .iter()
-                .map(|c| c.id)
-                .collect::<std::collections::BTreeSet<_>>(),
-            "with only SUI left, all-coins should equal SUI-coins",
+            all_coin_ids
+                .difference(&sui_coin_ids)
+                .copied()
+                .collect::<BTreeSet<_>>(),
+            baseline_non_sui_coin_ids,
+            "burning this run's MANAGED coins should restore the non-SUI baseline",
         );
         let sui_balance = Self::sui_balance(ctx, account).await;
         assert_eq!(
@@ -312,13 +331,17 @@ impl TestCaseImpl for CoinIndexTest {
         assert_eq!(managed_coins.len(), 40);
         assert!(managed_coins.iter().all(|c| c.balance == 5));
 
-        // Completeness: all-coins == sui-coins + managed-coins (counts).
+        // Completeness: all-coins == SUI + pre-existing non-SUI + this run's
+        // MANAGED coins.
         let sui_coins = Self::sui_coins(ctx, account).await;
         let all_coins = Self::all_coins(ctx, account).await;
+        let mut expected_all_coin_ids = Self::coin_ids(&sui_coins);
+        expected_all_coin_ids.extend(baseline_non_sui_coin_ids.iter().copied());
+        expected_all_coin_ids.extend(managed_coins.iter().map(|coin| coin.id));
         assert_eq!(
-            sui_coins.len() + managed_coins.len(),
-            all_coins.len(),
-            "all-coins count should equal SUI + MANAGED counts",
+            Self::coin_ids(&all_coins),
+            expected_all_coin_ids,
+            "all-coins should equal SUI + baseline + this run's MANAGED coins",
         );
 
         // Pagination: a page smaller than the full set reports a continuation
@@ -359,11 +382,47 @@ impl TestCaseImpl for CoinIndexTest {
             "balance should exclude the wrapped coin",
         );
 
+        // Leave the persistent account in the state in which this test found
+        // it. Burn the 39 directly-owned coins, then the wrapped coin.
+        for coin in managed_after {
+            Self::call_managed(
+                ctx,
+                package.0,
+                "burn",
+                vec![
+                    SuiJsonValue::from_object_id(cap.0),
+                    SuiJsonValue::from_object_id(coin.id),
+                ],
+                gas_coin_id,
+            )
+            .await;
+        }
+        Self::call_managed(
+            ctx,
+            package.0,
+            "take_from_envelope_and_burn",
+            vec![
+                SuiJsonValue::from_object_id(cap.0),
+                SuiJsonValue::from_object_id(envelope.0),
+            ],
+            gas_coin_id,
+        )
+        .await;
+        assert_eq!(
+            Self::coins_of_type(ctx, account, &managed_type).await.len(),
+            0,
+            "coin-index test should clean up its MANAGED coins",
+        );
+
         Ok(())
     }
 }
 
 impl CoinIndexTest {
+    fn coin_ids(coins: &[OwnedCoin]) -> BTreeSet<ObjectID> {
+        coins.iter().map(|coin| coin.id).collect()
+    }
+
     /// Total SUI balance (`StateService::GetBalance`).
     async fn sui_balance(ctx: &TestContext, owner: SuiAddress) -> u128 {
         Self::balance_of_type(ctx, owner, &GAS::type_()).await as u128
