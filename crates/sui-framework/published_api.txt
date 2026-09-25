@@ -6112,6 +6112,21 @@ take
 flatten
 	public fun
 	0x1::vector
+keep_range
+	public fun
+	0x1::vector
+truncate
+	public fun
+	0x1::vector
+remove_range
+	public fun
+	0x1::vector
+copy_range
+	public fun
+	0x1::vector
+replace_range
+	public fun
+	0x1::vector
 empty
 	public fun
 	0x1::vector
