@@ -411,6 +411,7 @@ mod test {
                 AuthorityIndex::new_for_test(1),
                 BlockDigest::MIN,
             )],
+            slim: None,
         });
 
         // Simulate proposing a new block
@@ -430,6 +431,7 @@ mod test {
                 AuthorityIndex::new_for_test(1),
                 BlockDigest::MIN,
             )],
+            slim: None,
         });
 
         // Compute quorum rounds based on highest accepted rounds (max from prober
@@ -482,6 +484,7 @@ mod test {
             round_tracker.update_from_verified_block(&ExtendedBlock {
                 block,
                 excluded_ancestors: vec![],
+                slim: None,
             });
         }
 
