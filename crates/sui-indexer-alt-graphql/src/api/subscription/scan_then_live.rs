@@ -27,7 +27,6 @@ use backoff::ExponentialBackoff;
 use futures::Stream;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
-use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use tokio::sync::broadcast;
 use tokio::sync::watch;
@@ -315,14 +314,11 @@ fn backfill<S: Subscribable>(
     }
 }
 
-/// The highest checkpoint fully scanned as of `token`: its own checkpoint for a `Boundary`, one less
-/// for an `Item` (whose checkpoint may still hold later matches).
+/// The highest checkpoint fully scanned as of `token`. An item can leave later matches in its
+/// checkpoint, while an ascending boundary resumes inclusively at its coordinate. Neither proves
+/// that the checkpoint is fully covered.
 fn covered_checkpoint(token: &CursorToken) -> u64 {
-    let checkpoint = token.position.checkpoint();
-    match token.kind {
-        CursorKind::Boundary => checkpoint,
-        CursorKind::Item => checkpoint.saturating_sub(1),
-    }
+    token.position.checkpoint().saturating_sub(1)
 }
 
 /// Follow the live broadcast from `last_checkpoint + 1`, delivering matching items. Drops the
@@ -483,4 +479,224 @@ async fn scan_with_retry<S: Subscribable>(
             })
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ops::RangeInclusive;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use async_graphql::SimpleObject;
+    use async_graphql::connection::CursorType;
+    use async_graphql::connection::Edge;
+    use async_graphql::connection::EmptyFields;
+    use futures::StreamExt;
+    use prometheus::Registry;
+    use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
+    use sui_indexer_alt_reader::alpha_ledger_grpc_reader::PageItem;
+    use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
+    use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcArgs;
+    use sui_indexer_alt_reader::package_resolver::DbPackageStore;
+    use sui_indexer_alt_reader::package_resolver::PackageCache;
+    use sui_indexer_alt_reader::pg_reader::PgReader;
+    use sui_pg_db::DbArgs;
+    use sui_rpc_cursor::CursorKind;
+    use sui_rpc_cursor::Position;
+    use tokio::sync::broadcast;
+    use tokio::sync::watch;
+
+    use super::CursorToken;
+    use super::Subscribable;
+    use super::subscribe;
+    use crate::api::types::checkpoint::CCheckpoint;
+    use crate::api::types::checkpoint::CheckpointToken;
+    use crate::config::SubscriptionConfig;
+    use crate::metrics::SubscriptionMetrics;
+    use crate::task::streaming::ProcessedCheckpoint;
+    use crate::task::streaming::StreamedCaches;
+    use crate::task::streaming::StreamedObjectStore;
+    use crate::task::streaming::StreamedTransactionStore;
+    use crate::task::streaming::StreamingPackageStore;
+    use crate::task::streaming::SubscriberLimit;
+    use crate::task::streaming::SubscriptionBroadcast;
+    use crate::task::streaming::process_checkpoint;
+    use crate::task::streaming::test_utils::make_test_proto_checkpoint;
+    use crate::task::watermark::Watermarks;
+
+    const HANDOFF: u64 = 42;
+
+    #[derive(SimpleObject)]
+    struct TestItem {
+        checkpoint: u64,
+    }
+
+    #[derive(Clone)]
+    struct TestFilter {
+        sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
+    }
+
+    struct TestSubscription;
+
+    impl Subscribable for TestSubscription {
+        type Item = TestItem;
+        type Cursor = CCheckpoint;
+        type Filter = TestFilter;
+        type ScanItem = u64;
+
+        fn scan<'a>(
+            _reader: &'a AlphaLedgerGrpcReader,
+            _cp_bounds: RangeInclusive<u64>,
+            page: &'a crate::pagination::Page<Self::Cursor>,
+            filter: &'a Self::Filter,
+        ) -> impl Future<Output = Result<StreamPage<Self::ScanItem>, crate::error::RpcError>> + Send + 'a
+        {
+            let cursor_kind = page.after().map(|cursor| CursorToken::from(cursor).kind);
+            let sender = filter.sender.clone();
+            async move {
+                match cursor_kind {
+                    None => Ok(StreamPage::for_test(
+                        vec![],
+                        None,
+                        Some(
+                            CursorToken::boundary(Position::Checkpoints {
+                                checkpoint: HANDOFF,
+                            })
+                            .encode(),
+                        ),
+                        None,
+                    )),
+                    Some(CursorKind::Boundary) => {
+                        sender
+                            .send(test_processed_checkpoint(HANDOFF + 1))
+                            .unwrap_or_else(|_| {
+                                panic!("live checkpoint receiver remains subscribed")
+                            });
+                        Ok(StreamPage::for_test(
+                            vec![PageItem {
+                                payload: HANDOFF,
+                                cursor: CursorToken::item(Position::Checkpoints {
+                                    checkpoint: HANDOFF,
+                                })
+                                .encode(),
+                            }],
+                            None,
+                            None,
+                            None,
+                        ))
+                    }
+                    Some(CursorKind::Item) => Ok(StreamPage::for_test(
+                        vec![],
+                        None,
+                        Some(
+                            CursorToken::boundary(Position::Checkpoints {
+                                checkpoint: HANDOFF + 1,
+                            })
+                            .encode(),
+                        ),
+                        None,
+                    )),
+                }
+            }
+        }
+
+        fn build_node(
+            _caches: &Arc<StreamedCaches>,
+            _resolver_limits: &sui_package_resolver::Limits,
+            checkpoint: &Self::ScanItem,
+        ) -> Result<Self::Item, crate::error::RpcError> {
+            Ok(TestItem {
+                checkpoint: *checkpoint,
+            })
+        }
+
+        fn matching_edges(
+            checkpoint: &Arc<ProcessedCheckpoint>,
+            _caches: &Arc<StreamedCaches>,
+            _resolver_limits: &sui_package_resolver::Limits,
+            _filter: &Self::Filter,
+        ) -> Result<Vec<Edge<String, Self::Item, EmptyFields>>, crate::error::RpcError> {
+            let checkpoint = checkpoint.summary.sequence_number;
+            Ok(vec![Edge::new(
+                CheckpointToken::cursor(checkpoint).encode_cursor(),
+                TestItem { checkpoint },
+            )])
+        }
+
+        fn subscription_type() -> &'static str {
+            "handoff-regression"
+        }
+    }
+
+    fn test_processed_checkpoint(checkpoint: u64) -> Arc<ProcessedCheckpoint> {
+        Arc::new(
+            process_checkpoint(make_test_proto_checkpoint(checkpoint))
+                .expect("test checkpoint is processable"),
+        )
+    }
+
+    async fn test_caches(registry: &Registry) -> Arc<StreamedCaches> {
+        let pg_reader = PgReader::new(None, None, DbArgs::default(), registry)
+            .await
+            .expect("construct unconfigured test reader");
+        let package_store = Arc::new(PackageCache::new(DbPackageStore::new(Arc::new(
+            pg_reader.as_data_loader(),
+        ))));
+        Arc::new(StreamedCaches::new(
+            Arc::new(StreamingPackageStore::new(package_store)),
+            Arc::new(StreamedTransactionStore::new()),
+            Arc::new(StreamedObjectStore::new()),
+        ))
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn boundary_at_handoff_delivers_its_matching_item_once() {
+        let registry = Registry::new();
+        let reader = AlphaLedgerGrpcReader::new(
+            "http://127.0.0.1:9".parse().expect("valid test URI"),
+            LedgerGrpcArgs::default(),
+            None,
+            &registry,
+        )
+        .await
+        .expect("construct reader");
+        let metrics = SubscriptionMetrics::new_for_test();
+        let (sender, receiver) = broadcast::channel(4);
+        sender
+            .send(test_processed_checkpoint(HANDOFF))
+            .unwrap_or_else(|_| panic!("broadcast template receiver is active"));
+        let broadcast = Arc::new(SubscriptionBroadcast::new(receiver, HANDOFF, metrics));
+        let (_watermarks_tx, watermarks_rx) =
+            watch::channel(Arc::new(Watermarks::for_test(&[("test", HANDOFF + 1)])));
+
+        let stream = subscribe::<TestSubscription>(
+            reader,
+            broadcast,
+            test_caches(&registry).await,
+            crate::config::Limits::default().package_resolver(),
+            watermarks_rx,
+            TestFilter { sender },
+            None,
+            Some(HANDOFF - 1),
+            SubscriberLimit::new(1),
+            SubscriptionConfig {
+                broadcast_buffer: 2,
+                max_concurrent_resolutions: 1,
+                ..Default::default()
+            },
+        )
+        .expect("subscription is admitted");
+
+        let delivered = tokio::time::timeout(
+            Duration::from_secs(1),
+            stream
+                .take(2)
+                .map(|edge| edge.expect("handoff delivery succeeds").node.checkpoint)
+                .collect::<Vec<_>>(),
+        )
+        .await
+        .expect("handoff delivers both the boundary match and its next live checkpoint");
+
+        assert_eq!(delivered, vec![HANDOFF, HANDOFF + 1]);
+    }
 }
