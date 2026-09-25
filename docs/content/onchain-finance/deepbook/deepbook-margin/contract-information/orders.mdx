@@ -30,8 +30,8 @@ builder_paths:
     step: 'Margin contract: Orders'
     stage: Margin
 questions:
-  - What is Orders in Sui?
-  - How does orders work on Sui?
+  - What are orders in Sui?
+  - How do orders work on Sui?
   - Why should I use orders?
 answer: Learn how to place and manage orders using margin managers.
 ---
@@ -40,29 +40,37 @@ The `pool_proxy` module provides wrapper functions for trading with margin manag
 
 ## What are margin orders in DeepBook?
 
-Margin orders in DeepBook are trading instructions placed through a margin manager rather than a standard balance manager. The margin manager holds your collateral and debt positions, and the `pool_proxy` module routes your orders through it to the underlying DeepBook pool. Before placing any order, the pool must have margin trading enabled.
+Margin orders in DeepBook are trading instructions placed through a margin manager rather than a standard balance manager. The margin manager holds your collateral and tracks your debt, and the `pool_proxy` module routes orders through it to the underlying DeepBook pool.
 
 There are two primary order types:
 
 - **Limit orders** execute at a specified price or better. The order rests in the order book until it fills or you cancel it.
-- **Market orders** execute immediately at the best available price. They do not rest in the order book.
+- **Market orders** execute immediately at the best available prices. They do not rest in the order book.
 
-In addition, **reduce-only orders** are a special variant of both types. A reduce-only order can only decrease your existing debt position. It cannot open or increase a position. These are useful when margin trading is disabled for a pool but you still need to close open positions.
+Regular limit and market orders require margin trading to be enabled for the pool, and abort with `EPoolNotEnabledForMarginTrading` otherwise. When the margin manager carries debt, the order must also leave the post-trade risk ratio at or above the pool's minimum open risk ratio.
+
+**Reduce-only orders** are a variant of both types. Reduce-only is a direction guard rather than a size limit: a bid requires base (short-side) debt, and an ask requires quote (long-side) debt and can sell up to the base the manager holds. The order must also leave the post-trade risk ratio no worse than it was before the trade. Reduce-only orders skip the margin-trading-enabled check, so you can still wind a position down after an admin disables margin trading for the pool.
+
+Placing an order never borrows. Debt changes only through the `borrow_*` and `repay_*` functions on the margin manager. To close a position and repay in the same call, use `place_reduce_only_market_order_and_repay_loan` or `place_reduce_only_limit_order_and_repay_loan`.
 
 ## How do I place an order using a margin manager?
 
-Call `place_limit_order` or `place_market_order` through the `pool_proxy` module, passing your margin manager as an argument. The pool checks that margin trading is enabled before accepting the order.
+Call `place_limit_order_v2` or `place_market_order_v2` in the `pool_proxy_upgraded` module, passing the margin registry, your margin manager, the DeepBook pool, both margin pools, and the base and quote Pyth `PriceInfoObject`s. The margin manager checks ownership against the transaction sender, so there is no capability object to pass.
 
-The following example shows how to call `place_limit_order` in a Move transaction:
+The following example shows how to call `place_limit_order_v2` in a Move transaction:
 
 ```move
-use deepbook_margin::pool_proxy;
+use deepbook_margin::pool_proxy_upgraded;
 
 // Place a limit order through a margin manager
-pool_proxy::place_limit_order(
-    pool,
+pool_proxy_upgraded::place_limit_order_v2(
+    registry,
     margin_manager,
-    margin_manager_cap,
+    pool,
+    base_margin_pool,
+    quote_margin_pool,
+    base_oracle,
+    quote_oracle,
     client_order_id,
     order_type,
     self_matching_option,
@@ -76,11 +84,17 @@ pool_proxy::place_limit_order(
 );
 ```
 
-To place a reduce-only order, call `place_reduce_only_limit_order` or `place_reduce_only_market_order` instead. These functions accept the same parameters but enforce that the order can only reduce an existing debt position.
+To place a reduce-only order, call `place_reduce_only_limit_order_v2` or `place_reduce_only_market_order_v2` instead. Both take the same parameters and apply the reduce-only direction guard.
+
+:::info
+
+The original `place_limit_order`, `place_market_order`, and `place_reduce_only_*` entries in `pool_proxy`, along with their legacy-Pyth `_v2` twins in the same module, all abort. Call the `_v2` functions in `pool_proxy_upgraded` instead.
+
+:::
 
 ## How do I modify or cancel an order?
 
-Use `modify_order` to change the quantity of an existing resting limit order. You must provide the order ID returned when the order was placed.
+Use `modify_order` to reduce the quantity of a resting limit order. The new quantity must be lower than the original, otherwise the call aborts with `ENewQuantityMustBeLessThanOriginal`. Provide the order ID returned when you placed the order.
 
 To cancel orders, use one of three functions depending on scope:
 
@@ -88,7 +102,9 @@ To cancel orders, use one of three functions depending on scope:
 - `cancel_orders` cancels a list of orders by ID.
 - `cancel_all_orders` cancels every open order for the margin manager in the pool.
 
-After trades fill, call `withdraw_settled_amounts` to move settled funds back to the margin manager's balance manager.
+## How do I withdraw funds after a trade?
+
+Settled amounts flow back into the margin manager's balance manager on the manager's next order, modify, or cancel in that pool. Call `withdraw_settled_amounts` to settle without placing another order. Anyone can call `withdraw_settled_amounts_permissionless` to settle on behalf of a margin manager they do not own.
 
 ## API
 
@@ -97,14 +113,14 @@ Following are the different public functions for managing orders with margin man
 <details>
 <summary>Place orders</summary>
 
-Place limit and market orders through a margin manager. Orders can only be placed if margin trading is enabled for the pool.
+Place limit and market orders through a margin manager. These entries require margin trading to be enabled for the pool.
 
 <ImportContent
-	source="packages/deepbook_margin/sources/pool_proxy.move"
+	source="packages/deepbook_margin/sources/pool_proxy_upgraded.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="place_limit_order,place_market_order"
+	fun="place_limit_order_v2,place_market_order_v2"
 />
 
 </details>
@@ -112,14 +128,29 @@ Place limit and market orders through a margin manager. Orders can only be place
 <details>
 <summary>Place reduce-only orders</summary>
 
-Place reduce-only orders that can only decrease your debt position. These orders are useful when margin trading is disabled and you need to close existing positions.
+Place reduce-only orders, which trade only in the direction that unwinds an existing debt. These orders are useful when margin trading is disabled and you need to close existing positions.
 
 <ImportContent
-	source="packages/deepbook_margin/sources/pool_proxy.move"
+	source="packages/deepbook_margin/sources/pool_proxy_upgraded.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="place_reduce_only_limit_order,place_reduce_only_market_order"
+	fun="place_reduce_only_limit_order_v2,place_reduce_only_market_order_v2"
+/>
+
+</details>
+
+<details>
+<summary>Close a position and repay in one call</summary>
+
+Place a reduce-only order and repay the loan with the proceeds in the same call. The post-repay risk ratio must be at least the pre-trade ratio.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/pool_proxy_upgraded.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="place_reduce_only_limit_order_and_repay_loan,place_reduce_only_market_order_and_repay_loan"
 />
 
 </details>
@@ -127,7 +158,7 @@ Place reduce-only orders that can only decrease your debt position. These orders
 <details>
 <summary>Modify order</summary>
 
-Modify an existing order by changing its quantity.
+Modify an existing order by reducing its quantity.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/pool_proxy.move"
@@ -157,14 +188,14 @@ Cancel one, multiple, or all orders for the margin manager.
 <details>
 <summary>Withdraw settled amounts</summary>
 
-Withdraw settled amounts from completed trades back to the margin manager's balance manager.
+Withdraw settled amounts from completed trades back to the margin manager's balance manager. The permissionless variant lets anyone settle on behalf of a margin manager.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/pool_proxy.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="withdraw_settled_amounts"
+	fun="withdraw_settled_amounts,withdraw_settled_amounts_permissionless"
 />
 
 </details>
