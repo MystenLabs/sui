@@ -79,6 +79,7 @@ lints!(
     SuiLintCode,
     DiagnosticOrigin::SuiLint,
     SUI_LINT_WARNING_FILTERS,
+    SUI_LINTS,
     (
         ShareOwned,
         Suspicious,

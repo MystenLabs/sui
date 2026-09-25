@@ -27,6 +27,7 @@ pub enum Command {
     #[command(hide = true)]
     CachePackage(cache_package::CachePackage),
     Disassemble(disassemble::Disassemble),
+    Explain(move_cli::base::explain::Explain),
     Format(format::Format),
     Lint(lint::Lint),
     Migrate(migrate::Migrate),
@@ -55,6 +56,7 @@ pub async fn execute_move_command(
         Command::CachePackage(c) => c.execute(flavor).await,
         Command::Coverage(c) => c.execute(package_path, build_config, flavor).await,
         Command::Disassemble(c) => c.execute(package_path, build_config, flavor).await,
+        Command::Explain(c) => c.execute(),
         Command::Format(c) => c.execute().await,
         Command::Lint(c) => c.execute(package_path, build_config, flavor).await,
         Command::Migrate(c) => c.execute(package_path, build_config, flavor).await,

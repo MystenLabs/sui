@@ -51,6 +51,30 @@ pub enum LinterDiagnosticCategory {
     Conventions,
 }
 
+impl LinterDiagnosticCategory {
+    pub const ALL: &'static [Self] = &[
+        Self::Correctness,
+        Self::Complexity,
+        Self::Suspicious,
+        Self::Deprecated,
+        Self::Style,
+        Self::Security,
+        Self::Conventions,
+    ];
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Correctness => "Correctness",
+            Self::Complexity => "Complexity",
+            Self::Suspicious => "Suspicious",
+            Self::Deprecated => "Deprecated",
+            Self::Style => "Style",
+            Self::Security => "Security",
+            Self::Conventions => "Conventions",
+        }
+    }
+}
+
 /// Declares a lint code enum and its `(category, code, filter_name)` table for one lint source.
 /// Codes are positional and published; append only, never reorder or insert.
 macro_rules! lints {
@@ -58,8 +82,9 @@ macro_rules! lints {
         $enum_name:ident,
         $origin:expr,
         $filters_const:ident,
+        $diagnostics_const:ident,
         $(
-            ($lint_name:ident, $category:ident, $filter_name:expr, $code_msg:expr)
+            ($lint_name:ident, $category:ident, $filter_name:literal, $code_msg:expr)
         ),* $(,)?
     ) => {
         #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, PartialOrd, Ord)]
@@ -121,6 +146,19 @@ macro_rules! lints {
                 $enum_name::$lint_name.category_code_and_filter_name(),
             )*
         ];
+
+        pub(crate) const $diagnostics_const: &[$crate::diagnostics::codes::DiagnosticDescription] = &[
+            $($crate::diagnostics::codes::DiagnosticDescription::new(
+                $enum_name::$lint_name.diag_info(),
+                Some(include_str!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/src/diagnostics/explanations/",
+                    $filter_name,
+                    ".md"
+                ))),
+                Some($filter_name),
+            ),)*
+        ];
     }
 }
 pub(crate) use lints;
@@ -129,6 +167,7 @@ lints!(
     StyleCodes,
     DiagnosticOrigin::Lint,
     CORE_LINT_WARNING_FILTERS,
+    MOVE_LINTS,
     (
         ConstantNaming,
         Style,
