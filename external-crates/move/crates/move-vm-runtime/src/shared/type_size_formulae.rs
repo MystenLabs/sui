@@ -46,7 +46,7 @@ use crate::{
     cache::arena::{ArenaBuilder, ArenaVec},
     execution::dispatch_tables::{TypeCache, VirtualTableKey},
     jit::execution::ast::{ArenaType, Datatype},
-    shared::constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
+    shared::TypeLimits,
 };
 use move_binary_format::{
     checked_as,
@@ -92,14 +92,12 @@ impl TypeSize {
 
 /// Check a solved `(type_size, type_depth)` against the type-traversal limits: depth first,
 /// then size.
-pub(crate) fn check_syntactic_limits(type_size: u64, type_depth: u64) -> PartialVMResult<()> {
-    if type_depth > TYPE_DEPTH_MAX {
-        return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
-    }
-    if type_size > MAX_TYPE_INSTANTIATION_NODES {
-        return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
-    }
-    Ok(())
+pub(crate) fn check_syntactic_limits(
+    limits: &TypeLimits,
+    type_size: u64,
+    type_depth: u64,
+) -> PartialVMResult<()> {
+    limits.check_syntactic_limits(type_size, type_depth)
 }
 
 fn out_of_bounds_parameter(param: TypeParameterIndex, len: usize) -> PartialVMError {
@@ -833,7 +831,7 @@ fn visit_field(
     layout_size_local: &mut LinearForm,
     linearizer: &mut Linearizer,
 ) -> PartialVMResult<()> {
-    let mut remaining_nodes = MAX_TYPE_INSTANTIATION_NODES;
+    let mut remaining_nodes = TypeLimits::VM_DEFAULT.max_type_nodes();
     loop {
         if remaining_nodes == 0 {
             return Err(partial_vm_error!(

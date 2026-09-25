@@ -181,15 +181,32 @@ fn wrap_adds_one_level_to_every_measure() {
 
 #[test]
 fn check_syntactic_limits_boundaries() {
-    assert!(check_syntactic_limits(MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX).is_ok());
+    assert!(
+        check_syntactic_limits(
+            &crate::shared::TypeLimits::VM_DEFAULT,
+            MAX_TYPE_INSTANTIATION_NODES,
+            TYPE_DEPTH_MAX,
+        )
+        .is_ok()
+    );
 
-    let node_err = check_syntactic_limits(MAX_TYPE_INSTANTIATION_NODES + 1, 1).unwrap_err();
+    let node_err = check_syntactic_limits(
+        &crate::shared::TypeLimits::VM_DEFAULT,
+        MAX_TYPE_INSTANTIATION_NODES + 1,
+        1,
+    )
+    .unwrap_err();
     assert_eq!(
         node_err.major_status(),
         StatusCode::VM_MAX_TYPE_NODES_REACHED
     );
 
-    let depth_err = check_syntactic_limits(1, TYPE_DEPTH_MAX + 1).unwrap_err();
+    let depth_err = check_syntactic_limits(
+        &crate::shared::TypeLimits::VM_DEFAULT,
+        1,
+        TYPE_DEPTH_MAX + 1,
+    )
+    .unwrap_err();
     assert_eq!(
         depth_err.major_status(),
         StatusCode::VM_MAX_TYPE_DEPTH_REACHED

@@ -62,10 +62,14 @@ impl TypeArguments {
     }
 
     /// Pair each (concrete) type with its size, computed here so the two can never drift.
-    pub(crate) fn new(vtables: &VMDispatchTables, types: Vec<Type>) -> PartialVMResult<Self> {
+    pub(crate) fn new(
+        vtables: &VMDispatchTables,
+        types: Vec<Type>,
+        limits: &TypeLimits,
+    ) -> PartialVMResult<Self> {
         let sizes = types
             .iter()
-            .map(|ty| vtables.type_size_of(ty))
+            .map(|ty| vtables.type_size_of(ty, limits))
             .collect::<PartialVMResult<Vec<_>>>()?;
         Ok(Self { types, sizes })
     }

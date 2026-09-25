@@ -235,7 +235,7 @@ impl<'extensions> MoveVM<'extensions> {
             function,
             parameters,
             return_type,
-        } = self.find_function(module_id, function_name, ty_args)?;
+        } = self.find_function(module_id, function_name, ty_args, TypeLimits::VM_DEFAULT)?;
         let instruction_count = checked_as!(function.to_ref().code.len(), CodeOffset)
             .map_err(|e| e.finish(Location::Module(module_id.clone())))?;
 
@@ -382,7 +382,7 @@ impl<'extensions> MoveVM<'extensions> {
                     function,
                     parameters: _,
                     return_type: _,
-                } = self.find_function(original_id, function_name, &type_arguments)?;
+                } = self.find_function(original_id, function_name, &type_arguments, type_limits)?;
 
                 if args.len() != function.to_ref().parameters.len() {
                     return Err(partial_vm_error!(
@@ -438,6 +438,7 @@ impl<'extensions> MoveVM<'extensions> {
         original_id: &ModuleId,
         function_name: &IdentStr,
         ty_args: &[Type],
+        type_limits: TypeLimits,
     ) -> VMResult<MoveVMFunction> {
         let function = self
             .virtual_tables
@@ -459,9 +460,10 @@ impl<'extensions> MoveVM<'extensions> {
         // Pair the type arguments with their sizes so substitution goes through the checked
         // dispatch-table path, which bounds each realized type against the traversal limits
         // before building it.
-        let ty_args = TypeArguments::new(&self.virtual_tables, ty_args.to_vec())
+        let ty_args = TypeArguments::new(&self.virtual_tables, ty_args.to_vec(), &type_limits)
             .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
-        let instantiate = |ty: &SizedArenaType| self.virtual_tables.subst_type(ty, &ty_args);
+        let instantiate =
+            |ty: &SizedArenaType| self.virtual_tables.subst_type(ty, &ty_args, &type_limits);
 
         let parameters = fun_ref
             .parameters
