@@ -127,6 +127,7 @@ pub(crate) struct DispatchTables {
 #[derive(Debug)]
 pub(crate) struct VMDispatchTables {
     pub(crate) tables: DispatchTables,
+    pub(crate) type_limits: Arc<TypeLimits>,
     pub(crate) size_formulas: TypeCache,
 }
 
@@ -233,9 +234,10 @@ impl DispatchTables {
 
 impl VMDispatchTables {
     /// Wrap shared resolution tables in a fresh per-execution resolver (with an empty size cache).
-    pub(crate) fn new(tables: DispatchTables) -> Self {
+    pub(crate) fn new(tables: DispatchTables, type_limits: Arc<TypeLimits>) -> Self {
         Self {
             tables,
+            type_limits,
             size_formulas: TypeCache::new(),
         }
     }
@@ -373,7 +375,7 @@ impl VMDispatchTables {
     // NB: the type `TypeTag` _must_ be defining ID based. Otherwise, the type resolution will
     // fail.
     pub(crate) fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
-        self.load_type_impl(type_tag, &mut TypeTraversalBudget::for_type_traversal())
+        self.load_type_impl(type_tag, &mut self.type_limits.traversal())
             .map_err(|e| e.finish(Location::Undefined))
     }
 
@@ -472,7 +474,7 @@ impl VMDispatchTables {
     }
 
     pub(crate) fn abilities(&self, ty: &Type) -> PartialVMResult<AbilitySet> {
-        self.abilities_impl(ty, &mut TypeTraversalBudget::for_type_traversal())
+        self.abilities_impl(ty, &mut self.type_limits.traversal())
     }
 
     fn abilities_impl(
@@ -605,8 +607,14 @@ impl VMDispatchTables {
         &self,
         term: &SizedArenaType,
     ) -> PartialVMResult<PartialTypeSizeFormula> {
-        self.resolve_size_formulas(term.size_formula.vtable_keys())?;
-        term.size_formula.evaluate(&self.size_formulas)
+        let Some(size_formula) = &term.size_formula else {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "missing size formula for runtime-sized type"
+            ));
+        };
+        self.resolve_size_formulas(size_formula.vtable_keys())?;
+        size_formula.evaluate(&self.size_formulas)
     }
 
     /// Resolve `roots`, and transitively their dependencies, into the size-formula cache.
@@ -861,7 +869,7 @@ impl VMDispatchTables {
         self.type_to_type_tag_impl(
             ty,
             DatatypeTagType::Defining,
-            &mut TypeTraversalBudget::for_type_traversal(),
+            &mut self.type_limits.traversal(),
         )
     }
 
@@ -869,7 +877,7 @@ impl VMDispatchTables {
         self.type_to_type_tag_impl(
             ty,
             DatatypeTagType::Runtime,
-            &mut TypeTraversalBudget::for_type_traversal(),
+            &mut self.type_limits.traversal(),
         )
     }
 
@@ -877,7 +885,7 @@ impl VMDispatchTables {
     /// before any layout generation -- pure arithmetic over the descriptor formulas; nothing of
     /// an oversized layout is ever built. The error codes mirror the legacy cursor's.
     fn check_layout_limits(&self, ty: &Type) -> PartialVMResult<()> {
-        let size = self.type_size_of(ty, &TypeLimits::VM_DEFAULT)?;
+        let size = self.type_size_of(ty, &self.type_limits)?;
         if size.value_depth
             > safe_unwrap!(self.vm_config.runtime_limits_config.max_value_nest_depth)
         {
@@ -1006,7 +1014,7 @@ impl VMDispatchTables {
                 datatype_name,
                 ty_args,
                 DatatypeTagType::Defining,
-                &mut TypeTraversalBudget::for_type_traversal(),
+                &mut tables.type_limits.traversal(),
             )?;
 
             let type_layout = match ty.datatype_info.inner_ref() {
@@ -1148,13 +1156,15 @@ impl VMDispatchTables {
         ty_args: &TypeArguments,
         limits: &TypeLimits,
     ) -> PartialVMResult<(Type, u64)> {
+        let Some(size_formula) = &term.size_formula else {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "missing size formula for substituted type"
+            ));
+        };
         let sizes = ty_args.sizes();
-        let type_size = term.size_formula.solve_type_size(sizes)?;
-        check_syntactic_limits(
-            limits,
-            type_size,
-            term.size_formula.solve_type_depth(sizes)?,
-        )?;
+        let type_size = size_formula.solve_type_size(sizes)?;
+        check_syntactic_limits(limits, type_size, size_formula.solve_type_depth(sizes)?)?;
         Ok((term.ty.subst_unchecked(ty_args.types())?, type_size))
     }
 

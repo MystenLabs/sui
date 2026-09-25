@@ -22,7 +22,7 @@ use crate::{
     },
     natives::functions::NativeFunctions,
     shared::{
-        TypeTraversalBudget,
+        TypeLimits, TypeTraversalBudget,
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         type_size_formulae::ArenaTypeSizeFormula,
         types::{DefiningTypeId, OriginalId, VersionId},
@@ -61,6 +61,7 @@ struct PackageContext<'borrows> {
     pub natives: &'borrows NativeFunctions,
     pub interner: &'borrows IdentifierInterner,
     pub vm_config: &'borrows VMConfig,
+    pub type_limits: &'borrows TypeLimits,
 
     pub type_origin_table: HashMap<IntraPackageKey, DefiningTypeId>,
 
@@ -223,6 +224,7 @@ impl FunctionContext<'_, '_> {
 #[instrument(level = "trace", skip_all)]
 pub fn package(
     vm_config: &VMConfig,
+    type_limits: &TypeLimits,
     interner: &IdentifierInterner,
     natives: &NativeFunctions,
     system_packages: &BTreeMap<OriginalId, Arc<CachedPackage>>,
@@ -271,6 +273,7 @@ pub fn package(
         natives,
         interner,
         vm_config,
+        type_limits,
         version_id,
         original_id,
         loaded_modules: IndexMap::new(),
@@ -289,6 +292,7 @@ pub fn package(
         natives: _,
         interner: _,
         vm_config: _,
+        type_limits: _,
         original_id,
         loaded_modules,
         package_arena,
@@ -630,8 +634,11 @@ fn datatypes(
             let original_id = module_original_id;
             let datatype_info =
                 context.arena_box(Datatype::Struct(VMPointer::from_ref(struct_)))?;
-            let size_formula =
-                ArenaTypeSizeFormula::from_datatype(&datatype_info, &context.package_arena)?;
+            let size_formula = ArenaTypeSizeFormula::from_datatype(
+                &datatype_info,
+                &context.package_arena,
+                context.type_limits,
+            )?;
             let name = context.interner.intern_identifier(&name);
             let descriptor = DatatypeDescriptor::new(
                 name,
@@ -651,8 +658,11 @@ fn datatypes(
             let defining_id = defining_id(context, version_id, &enum_.def_vtable_key)?;
             let original_id = module_original_id;
             let datatype_info = context.arena_box(Datatype::Enum(VMPointer::from_ref(enum_)))?;
-            let size_formula =
-                ArenaTypeSizeFormula::from_datatype(&datatype_info, &context.package_arena)?;
+            let size_formula = ArenaTypeSizeFormula::from_datatype(
+                &datatype_info,
+                &context.package_arena,
+                context.type_limits,
+            )?;
             let name = context.interner.intern_identifier(&name);
             let descriptor = DatatypeDescriptor::new(
                 name,
@@ -1227,7 +1237,7 @@ fn alloc_function(
                 .signature_at(code.locals)
                 .0
                 .iter()
-                .map(|tok| make_sized_type(context, module, tok))
+                .map(|tok| make_unsized_type(context, module, tok))
                 .collect::<PartialVMResult<Vec<_>>>()?;
             let locals = context.arena_vec(locals.into_iter())?;
             (locals_len, locals)
@@ -1740,8 +1750,23 @@ fn make_sized_type(
     tok: &SignatureToken,
 ) -> PartialVMResult<SizedArenaType> {
     let ty = make_arena_type(context, module, tok)?;
-    let size_formula = ArenaTypeSizeFormula::from_term(&ty, &context.package_arena)?;
-    Ok(SizedArenaType { ty, size_formula })
+    let size_formula =
+        ArenaTypeSizeFormula::from_term(&ty, &context.package_arena, context.type_limits)?;
+    Ok(SizedArenaType {
+        ty,
+        size_formula: Some(size_formula),
+    })
+}
+
+fn make_unsized_type(
+    context: &mut PackageContext,
+    module: &CompiledModule,
+    tok: &SignatureToken,
+) -> PartialVMResult<SizedArenaType> {
+    Ok(SizedArenaType {
+        ty: make_arena_type(context, module, tok)?,
+        size_formula: None,
+    })
 }
 
 /// Intern a signature token after converting datatype handles into VTable entry keys.
@@ -1750,13 +1775,8 @@ fn make_arena_type(
     module: &CompiledModule,
     tok: &SignatureToken,
 ) -> PartialVMResult<VMPointer<ArenaType>> {
-    Ok(make_arena_type_impl(
-        context,
-        module,
-        tok,
-        &mut TypeTraversalBudget::for_type_traversal(),
-    )?
-    .ptr())
+    let mut traversal = context.type_limits.traversal();
+    Ok(make_arena_type_impl(context, module, tok, &mut traversal)?.ptr())
 }
 
 fn make_arena_type_impl(

@@ -304,13 +304,11 @@ pub(crate) enum ArenaType {
     U256,
 }
 
-/// A type *term* paired with its JIT-compiled size formula: every type the runtime must know the
-/// size of (instruction operands, instantiation signature entries, function parameter/return
-/// types). These are used to avoid re-deriving the size formulae from the type's structure.
+/// A type *term* paired with its JIT-compiled size formula when runtime checks need it.
 #[derive(Debug)]
 pub(crate) struct SizedArenaType {
     pub ty: VMPointer<ArenaType>,
-    pub size_formula: ArenaTypeSizeFormula,
+    pub size_formula: Option<ArenaTypeSizeFormula>,
 }
 
 #[derive(Debug)]

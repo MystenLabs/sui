@@ -163,6 +163,7 @@ impl MoveRuntime {
             cache,
             telemetry,
             natives,
+            type_limits,
             ..
         } = self;
         let Some(cache) = Arc::get_mut(cache) else {
@@ -194,6 +195,7 @@ impl MoveRuntime {
                     tx_telemetry,
                     cache,
                     natives,
+                    type_limits,
                     std::iter::once(version_id).collect(),
                 )
             });
@@ -267,6 +269,7 @@ impl MoveRuntime {
                 txn_telemetry,
                 &self.cache,
                 &self.natives,
+                &self.type_limits,
                 package_key,
             )
         })
@@ -328,7 +331,7 @@ impl MoveRuntime {
                 }
 
                 // Wrap the shared tables in a per-execution resolver (with a fresh size cache).
-                let virtual_tables = VMDispatchTables::new(tables);
+                let virtual_tables = VMDispatchTables::new(tables, self.type_limits.clone());
 
                 // Called and checked linkage, etc.
                 let instance = MoveVM {
@@ -372,6 +375,7 @@ impl MoveRuntime {
             txn_telemetry,
             &self.cache,
             &self.natives,
+            &self.type_limits,
             all_packages,
         )?;
         let validation_packages = packages
@@ -444,6 +448,7 @@ impl MoveRuntime {
                     txn_telemetry,
                     &self.cache,
                     &self.natives,
+                    &self.type_limits,
                     link_context.all_package_dependencies_except(pkg.version_id)?,
                 )?;
                 let valdation_timer = txn_telemetry.make_timer_with_count(
@@ -465,6 +470,7 @@ impl MoveRuntime {
                     txn_telemetry,
                     &self.cache,
                     &self.natives,
+                    &self.type_limits,
                     self.cache.system_packages(),
                     verified_pkg.clone(),
                 )?;
@@ -476,12 +482,15 @@ impl MoveRuntime {
                     .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
                     .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
 
-                let virtual_tables = VMDispatchTables::new(DispatchTables::new(
+                let virtual_tables = VMDispatchTables::new(
+                    DispatchTables::new(
                     self.vm_config.clone(),
                     self.cache.interner.clone(),
                     link_context.clone(),
-                    runtime_packages,
-                )?);
+                        runtime_packages,
+                    )?,
+                    self.type_limits.clone(),
+                );
 
                 // Called and checked linkage, etc.
                 let instance = MoveVM {

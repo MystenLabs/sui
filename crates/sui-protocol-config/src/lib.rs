@@ -413,6 +413,7 @@ const MAINNET_USDB: &str =
 //              Enable allowances on mainnet.
 //              Merge colliding deferred-transaction entries in the consensus handler
 //              instead of overwriting (which stranded the displaced transactions).
+// Version 139: Cut execution version 5 and raise the package arena size.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4800,6 +4801,7 @@ impl ProtocolConfig {
                     // TODO/XXX(execution-version-cut): Move this execution version setting to the
                     // current next protocol version at the time of merging into `main`.
                     cfg.execution_version = Some(5);
+                    cfg.package_arena_size_in_bytes = Some(20_000_000);
                 }
                 // Use this template when making changes:
                 //
