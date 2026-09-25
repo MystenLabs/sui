@@ -20,6 +20,7 @@ use crate::{
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     runtime::telemetry::TransactionTelemetryContext,
     shared::{
+        TypeLimits,
         gas::{GasMeter, SimpleInstruction},
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         vm_pointer::VMPointer,
@@ -105,6 +106,7 @@ pub(super) fn run(
         operand_stack,
         call_stack,
         interner: _,
+        type_limits: _,
         callstack_highwatermark,
         valuestack_highwatermark,
     } = state;
@@ -242,6 +244,7 @@ fn step(
                 .instantiate_generic_function(
                     fun_inst_ptr,
                     state.call_stack.current_frame.ty_args(),
+                    &state.type_limits,
                 )
                 .map_err(|e| {
                     set_err_info!(run_context.interner(), state.call_stack.current_frame, e)
@@ -570,6 +573,7 @@ fn op_step_impl(
             run_context.vtables.check_struct_instantiation(
                 struct_inst_ptr,
                 state.call_stack.current_frame.ty_args(),
+                &state.type_limits,
             )?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
@@ -749,9 +753,11 @@ fn op_step_impl(
             let num = checked_as!(*num, u16)?;
             // A vector value of this element type is created here; validate the element type's
             // limits and the created value's depth before doing anything else.
-            run_context
-                .vtables
-                .check_vector_element(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            run_context.vtables.check_vector_element(
+                ty_ptr,
+                state.call_stack.current_frame.ty_args(),
+                &state.type_limits,
+            )?;
             let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_pack(state.last_n_operands(num as usize)?)?;
             let elements = state.pop_n_operands(num)?;
@@ -827,9 +833,11 @@ fn op_step_impl(
         Bytecode::PackVariantGeneric(vinst_ptr) => {
             let variant = &vinst_ptr.variant;
             let (field_count, variant_tag) = (variant.field_count(), variant.variant_tag);
-            run_context
-                .vtables
-                .check_variant_instantiation(vinst_ptr, state.call_stack.current_frame.ty_args())?;
+            run_context.vtables.check_variant_instantiation(
+                vinst_ptr,
+                state.call_stack.current_frame.ty_args(),
+                &state.type_limits,
+            )?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count)?)?;
             let args = state.pop_n_operands(checked_as!(field_count, u16)?)?;
             state.push_operand(Value::make_variant(variant_tag, args))?;
@@ -1181,7 +1189,11 @@ fn check_value_depth_of_type(run_context: &mut RunContext, ty: &Type) -> Partial
             .runtime_limits_config
             .max_value_nest_depth
     );
-    if run_context.vtables.value_depth_of(ty)? > max_depth {
+    if run_context
+        .vtables
+        .value_depth_of(ty, &TypeLimits::VM_DEFAULT)?
+        > max_depth
+    {
         return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
     }
     Ok(())

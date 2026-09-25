@@ -264,7 +264,9 @@ impl Adapter {
     fn try_type_size_of(&self, ty: &Type) -> PartialVMResult<TypeSize> {
         let vm = self.runtime_adapter.write();
         let session = vm.make_vm(self.store.linkage.clone()).unwrap();
-        session.virtual_tables.type_size_of(ty)
+        session
+            .virtual_tables
+            .type_size_of(ty, &crate::shared::TypeLimits::VM_DEFAULT)
     }
 
     /// The number of nodes in the runtime layout generated for `ty`.
@@ -949,7 +951,9 @@ fn test_term_formula_argument_order() {
             .unwrap()
     };
 
-    let arena = ArenaBuilder::new_bounded();
+    let arena = ArenaBuilder::new_bounded(&VMConfig::new_for_test(
+        /* allow_unpublishable_code_execution */ false, None,
+    ));
     let apply = |name: &str, args: Vec<ArenaType>| {
         ArenaType::DatatypeInstantiation(
             arena
