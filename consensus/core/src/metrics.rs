@@ -15,9 +15,10 @@ use crate::network::metrics::NetworkMetrics;
 
 // starts from 1μs, 50μs, 100μs...
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.000_001, 0.000_050, 0.000_100, 0.000_500, 0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25,
-    0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5,
-    4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10., 20., 30., 60., 120.,
+    0.000_001, 0.000_050, 0.000_100, 0.000_500, 0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.125,
+    0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2,
+    1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5,
+    10., 20., 30., 60., 120.,
 ];
 
 const NUM_BUCKETS: &[f64] = &[
@@ -66,9 +67,10 @@ const NUM_BUCKETS: &[f64] = &[
 ];
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9,
-    1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5,
-    9.0, 9.5, 10., 12.5, 15., 17.5, 20., 25., 30., 60., 90., 120., 180., 300.,
+    0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3, 0.35, 0.4, 0.45,
+    0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0,
+    6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10., 12.5, 15., 17.5, 20., 25., 30., 60., 90., 120., 180.,
+    300.,
 ];
 
 const SIZE_BUCKETS: &[f64] = &[
@@ -257,6 +259,13 @@ pub(crate) struct NodeMetrics {
     pub(crate) finalizer_reject_votes: IntCounterVec,
     pub(crate) finalizer_output_commits: IntCounterVec,
     pub(crate) finalizer_skipped_voting_blocks: IntCounterVec,
+    pub(crate) finalizer_v3_attempts: IntCounterVec,
+    pub(crate) finalizer_v3_commit_wait_seconds: HistogramVec,
+    pub(crate) finalizer_v3_phase_duration_seconds: HistogramVec,
+    pub(crate) finalizer_v3_pending_transactions: IntGauge,
+    pub(crate) finalizer_v3_ready_commits: IntGauge,
+    pub(crate) finalizer_v3_oldest_pending_seconds: Gauge,
+    pub(crate) finalizer_v3_anchor_round_gap: IntGauge,
     pub(crate) uptime: Histogram,
 }
 
@@ -374,7 +383,7 @@ impl NodeMetrics {
             block_proposal_interval: register_histogram_with_registry!(
                 "block_proposal_interval",
                 "Intervals (in secs) between block proposals.",
-                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             block_proposal_leader_wait_ms: register_int_counter_vec_with_registry!(
@@ -653,7 +662,7 @@ impl NodeMetrics {
             commit_round_advancement_interval: register_histogram_with_registry!(
                 "commit_round_advancement_interval",
                 "Intervals (in secs) between commit round advancements.",
-                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             last_decided_leader_round: register_int_gauge_with_registry!(
@@ -1018,6 +1027,46 @@ impl NodeMetrics {
                 "finalizer_skipped_voting_blocks",
                 "Number of times where another block skipped voting due to potentially out of GC bound. Authority is from the voted block.",
                 &["authority", "type"],
+                registry
+            ).unwrap(),
+            finalizer_v3_attempts: register_int_counter_vec_with_registry!(
+                "finalizer_v3_attempts",
+                "V3 finalization attempts, grouped by trigger. Block notifications can be combined.",
+                &["trigger"],
+                registry
+            ).unwrap(),
+            finalizer_v3_commit_wait_seconds: register_histogram_vec_with_registry!(
+                "finalizer_v3_commit_wait_seconds",
+                "V3 commit wait from entry into the pending queue to decision, from decision to ordered release, and in total. Excludes input channel wait and storage writes.",
+                &["stage"],
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            finalizer_v3_phase_duration_seconds: register_histogram_vec_with_registry!(
+                "finalizer_v3_phase_duration_seconds",
+                "Time spent in each V3 finalizer phase, including lock wait. direct_collect and direct_decisions are parts of direct.",
+                &["phase"],
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            finalizer_v3_pending_transactions: register_int_gauge_with_registry!(
+                "finalizer_v3_pending_transactions",
+                "Transactions without a decision in the V3 pending queue.",
+                registry
+            ).unwrap(),
+            finalizer_v3_ready_commits: register_int_gauge_with_registry!(
+                "finalizer_v3_ready_commits",
+                "V3 commits with all decisions complete that wait for an earlier commit.",
+                registry
+            ).unwrap(),
+            finalizer_v3_oldest_pending_seconds: register_gauge_with_registry!(
+                "finalizer_v3_oldest_pending_seconds",
+                "Age of the first V3 pending commit in seconds. Updated at least once per second while the task can run.",
+                registry
+            ).unwrap(),
+            finalizer_v3_anchor_round_gap: register_int_gauge_with_registry!(
+                "finalizer_v3_anchor_round_gap",
+                "More committed leader rounds needed to force a decision for the first V3 pending commit.",
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

@@ -14,10 +14,12 @@ use mysten_metrics::{
     monitored_scope, spawn_logged_monitored_task,
 };
 use parking_lot::RwLock;
+use tokio::sync::watch;
 
 use crate::{
     BlockAPI, CommitIndex, CommittedSubDag, VerifiedBlock,
     commit::DEFAULT_WAVE_LENGTH,
+    commit_finalizer_v3::CommitFinalizerV3,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
@@ -34,10 +36,36 @@ pub(crate) const INDIRECT_REJECT_DEPTH: Round = 3;
 /// Handle to CommitFinalizer, for sending CommittedSubDag.
 pub(crate) struct CommitFinalizerHandle {
     sender: Option<UnboundedSender<CommittedSubDag>>,
+    block_updates: Option<watch::Sender<()>>,
     task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl CommitFinalizerHandle {
+    pub(crate) fn new(
+        sender: UnboundedSender<CommittedSubDag>,
+        block_updates: Option<watch::Sender<()>>,
+        task: tokio::task::JoinHandle<()>,
+    ) -> Self {
+        Self {
+            sender: Some(sender),
+            block_updates,
+            task: Some(task),
+        }
+    }
+
+    pub(crate) fn start(
+        context: Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
+        transaction_vote_tracker: TransactionVoteTracker,
+        commit_sender: UnboundedSender<CommittedSubDag>,
+    ) -> Self {
+        if context.protocol_config.enable_v3() {
+            CommitFinalizerV3::start(context, dag_state, transaction_vote_tracker, commit_sender)
+        } else {
+            CommitFinalizer::start(context, dag_state, transaction_vote_tracker, commit_sender)
+        }
+    }
+
     // Sends a CommittedSubDag to CommitFinalizer, which will finalize it before sending it to execution.
     pub(crate) fn send(&self, commit: CommittedSubDag) -> ConsensusResult<()> {
         self.sender
@@ -50,6 +78,12 @@ impl CommitFinalizerHandle {
                 );
                 ConsensusError::Shutdown
             })
+    }
+
+    pub(crate) fn notify_new_blocks(&self) {
+        if let Some(block_updates) = &self.block_updates {
+            block_updates.send_replace(());
+        }
     }
 
     pub(crate) async fn stop(&mut self) {
@@ -124,10 +158,7 @@ impl CommitFinalizer {
         let (sender, receiver) = unbounded_channel("consensus_commit_finalizer");
         let task =
             spawn_logged_monitored_task!(processor.run(receiver), "consensus_commit_finalizer");
-        CommitFinalizerHandle {
-            sender: Some(sender),
-            task: Some(task),
-        }
+        CommitFinalizerHandle::new(sender, None, task)
     }
 
     async fn run(mut self, mut receiver: UnboundedReceiver<CommittedSubDag>) {
@@ -139,27 +170,12 @@ impl CommitFinalizer {
             } else {
                 vec![committed_sub_dag]
             };
-            if !finalized_commits.is_empty() {
-                // Transaction certifier state should be GC'ed as soon as new commits are finalized.
-                // But this is done outside of process_commit(), because during recovery process_commit()
-                // is not called to finalize commits, but GC still needs to run.
-                self.try_update_gc_round(finalized_commits.last().unwrap().leader.round);
-                let mut dag_state = self.dag_state.write();
-                if !already_finalized {
-                    // Records rejected transactions in newly finalized commits.
-                    for commit in &finalized_commits {
-                        dag_state.add_finalized_commit(
-                            commit.commit_ref,
-                            commit.rejected_transactions_by_block.clone(),
-                        );
-                    }
-                }
-                // Commits and committed blocks must be persisted to storage before sending them to Sui
-                // to execute their finalized transactions.
-                // Commit metadata and uncommitted blocks can be persisted more lazily because they are recoverable.
-                // But for simplicity, all unpersisted commits and blocks are flushed to storage.
-                dag_state.flush();
-            }
+            persist_finalized_commits(
+                &self.dag_state,
+                &self.transaction_vote_tracker,
+                &finalized_commits,
+                !already_finalized,
+            );
             for commit in finalized_commits {
                 if let Err(e) = self.commit_sender.send(commit) {
                     tracing::warn!(
@@ -891,20 +907,39 @@ impl CommitFinalizer {
         finalized_commits
     }
 
-    fn try_update_gc_round(&mut self, last_finalized_commit_round: Round) {
-        // GC TransactionVoteTracker state only with finalized commits, to ensure unfinalized transactions
-        // can access their reject votes from TransactionVoteTracker.
-        let gc_round = self
-            .dag_state
-            .read()
-            .calculate_gc_round(last_finalized_commit_round);
-        self.transaction_vote_tracker.run_gc(gc_round);
-    }
-
     #[cfg(test)]
     fn is_empty(&self) -> bool {
         self.pending_commits.is_empty() && self.blocks.read().is_empty()
     }
+}
+
+pub(crate) fn persist_finalized_commits(
+    dag_state: &Arc<RwLock<DagState>>,
+    transaction_vote_tracker: &TransactionVoteTracker,
+    finalized_commits: &[CommittedSubDag],
+    // False when transaction voting is disabled or rejected transactions were already recovered.
+    record_rejected_transactions: bool,
+) {
+    if finalized_commits.is_empty() {
+        return;
+    }
+
+    // GC vote state only after commits are finalized. Pending transactions can still need old votes.
+    let last_round = finalized_commits.last().unwrap().leader.round;
+    let gc_round = dag_state.read().calculate_gc_round(last_round);
+    transaction_vote_tracker.run_gc(gc_round);
+
+    let mut dag_state = dag_state.write();
+    if record_rejected_transactions {
+        for commit in finalized_commits {
+            dag_state.add_finalized_commit(
+                commit.commit_ref,
+                commit.rejected_transactions_by_block.clone(),
+            );
+        }
+    }
+    // Commits and committed blocks must be durable before execution receives them.
+    dag_state.flush();
 }
 
 struct CommitState {
