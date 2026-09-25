@@ -849,6 +849,13 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_upgrade_compatibility() {
+        // The test starts on the previous protocol version, where deferral-key collisions retain
+        // legacy behavior. Let the compatibility run continue until the gated fix activates.
+        register_debug_fatal_handler!(
+            "Deferral key collision displaced finalized transactions",
+            || {}
+        );
+
         // This test is intended to test the compatibility of the latest protocol version with
         // the previous protocol version. It does this by starting a network with
         // the previous protocol version that this binary supports, and then upgrading the network
