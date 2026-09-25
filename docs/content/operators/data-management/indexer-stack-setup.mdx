@@ -72,8 +72,6 @@ The general-purpose indexer writes to a Postgres database. The storage footprint
 
 The bulk of the storage is consumed by `obj_versions` at 8.2 TB. A pruning strategy is in development.
 
-The unpruned `tx_balance_changes` table adds another 1.2 TB.
-
 A 30-day retention adds 1.8 TB on top, while a 90-day retention contributes up to an additional 3.1 TB.
 
 30-day retention:
@@ -343,7 +341,6 @@ Once caught up to network tip, you can manually set the max concurrency to a low
 					<li>`kv_packages`</li>
 					<li>`kv_protocol_configs`</li>
 					<li>`sum_displays`</li>
-					<li>`tx_balance_changes`</li>
 					<li>`tx_digests`</li>
 				</ul>
 			</td>
