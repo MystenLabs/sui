@@ -858,8 +858,15 @@ impl<'backing> TemporaryStore<'backing> {
         &self,
         withdrawal_reservations: Option<&BTreeMap<(SuiAddress, TypeTag), u64>>,
     ) -> Result<(), String> {
-        if !self.execution_results.written_objects.is_empty() {
-            return Err("Gasless transactions cannot create or mutate objects".to_string());
+        if let Some((id, _)) = self
+            .execution_results
+            .written_objects
+            .iter()
+            .find(|(id, obj)| !self.is_gasless_allowance_write(id, obj))
+        {
+            return Err(format!(
+                "Gasless transactions cannot create or mutate objects, but wrote {id}"
+            ));
         }
 
         let input_coin_ids: BTreeSet<ObjectID> = self
@@ -927,6 +934,22 @@ impl<'backing> TemporaryStore<'backing> {
         }
 
         Ok(())
+    }
+
+    /// Whether `object` is an allowance input that a gasless transaction may write. Such writes
+    /// carry the input's storage rebate over unchanged instead of being charged for storage.
+    fn is_gasless_allowance_write(&self, id: &ObjectID, object: &Object) -> bool {
+        if !self.protocol_config.gasless_allowance_spend() {
+            return false;
+        }
+        let is_shared_allowance =
+            |o: &Object| o.owner.is_shared() && o.type_().is_some_and(|t| t.is_allowance());
+        self.mutable_input_refs.contains_key(id)
+            && self.input_objects.get(id).is_some_and(|input| {
+                is_shared_allowance(input)
+                    && is_shared_allowance(object)
+                    && input.type_() == object.type_()
+            })
     }
 
     /// If there are unmetered storage rebate (due to system transaction), we put them into
@@ -1059,23 +1082,34 @@ impl TemporaryStore<'_> {
         &mut self,
         gas_charger: &mut GasCharger,
     ) -> Result<(), ExecutionError> {
+        let is_gasless = gas_charger.is_gasless();
         // Use two loops because we cannot mut iterate written while calling get_object_modified_at.
         let old_storage_rebates: Vec<_> = self
             .execution_results
             .written_objects
-            .keys()
-            .map(|object_id| {
-                self.get_object_modified_at(object_id)
+            .iter()
+            .map(|(object_id, object)| {
+                let passthrough = is_gasless && self.is_gasless_allowance_write(object_id, object);
+                let old_storage_rebate = self
+                    .get_object_modified_at(object_id)
                     .map(|metadata| metadata.storage_rebate)
-                    .unwrap_or_default()
+                    .unwrap_or_default();
+                (passthrough, old_storage_rebate)
             })
             .collect();
-        for (object, old_storage_rebate) in self
+        for (object, (passthrough, old_storage_rebate)) in self
             .execution_results
             .written_objects
             .values_mut()
             .zip_debug_eq(old_storage_rebates)
         {
+            // The allowance's storage is neither charged nor rebated, so there is no
+            // non-refundable fee. It only grows by the first rate-limit anchor (8 bytes), which
+            // goes unpaid; the `Allowance` type bounds its size.
+            if passthrough {
+                object.storage_rebate = old_storage_rebate;
+                continue;
+            }
             // new object size
             let new_object_size = object.object_size_for_gas_metering();
             // track changes and compute the new object `storage_rebate`

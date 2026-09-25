@@ -234,6 +234,10 @@ pub mod checked {
                 && self.gas_status.storage_gas_units() == 0
         }
 
+        pub fn is_gasless(&self) -> bool {
+            matches!(self.payment, PaymentMetadata::Gasless)
+        }
+
         pub fn is_unmetered(&self) -> bool {
             self.gas_status.is_unmetered()
         }

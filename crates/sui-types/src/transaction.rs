@@ -4,7 +4,10 @@
 
 use super::{SUI_BRIDGE_OBJECT_ID, base_types::*, error::*};
 use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue, check_accumulator_type_bounds};
-use crate::allowance::{ResolvedAllowance, parse_allowance_object};
+use crate::allowance::{
+    ALLOWANCE_BALANCE_SPEND_FUNCTION_NAME, ALLOWANCE_MODULE_NAME, ResolvedAllowance,
+    parse_allowance_object,
+};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::{
     BALANCE_MODULE_NAME, BALANCE_REDEEM_FUNDS_FUNCTION_NAME, BALANCE_SEND_FUNDS_FUNCTION_NAME,
@@ -1076,6 +1079,8 @@ impl ProgrammableTransaction {
             )
         );
 
+        let allow_allowance_spend = config.gasless_allowance_spend();
+
         for input in &self.inputs {
             match input {
                 CallArg::Pure(_) | CallArg::FundsWithdrawal(_) => {}
@@ -1093,7 +1098,7 @@ impl ProgrammableTransaction {
         let allowed_token_types = get_gasless_allowed_token_types(config);
 
         for command in &self.commands {
-            command.validate_gasless_transaction(&allowed_token_types)?;
+            command.validate_gasless_transaction(&allowed_token_types, allow_allowance_spend)?;
         }
 
         self.validate_gasless_inputs(config)?;
@@ -1337,6 +1342,7 @@ impl ProgrammableMoveCall {
     fn validate_gasless_transaction(
         &self,
         allowed_token_types: &BTreeMap<TypeTag, u64>,
+        allow_allowance_spend: bool,
     ) -> UserInputResult {
         type FunctionIdent = (AccountAddress, &'static IdentStr, &'static IdentStr);
 
@@ -1390,6 +1396,11 @@ impl ProgrammableMoveCall {
         );
         const SUI_COIN_PUT: FunctionIdent =
             (SUI_FRAMEWORK_ADDRESS, COIN_MODULE_NAME, PUT_FUNC_NAME);
+        const SUI_ALLOWANCE_BALANCE_SPEND: FunctionIdent = (
+            SUI_FRAMEWORK_ADDRESS,
+            ALLOWANCE_MODULE_NAME,
+            ALLOWANCE_BALANCE_SPEND_FUNCTION_NAME,
+        );
 
         const GASLESS_FUNCTIONS: &[(FunctionIdent, &[Option<TypeArgConstraint>])] = &[
             (SUI_BALANCE_SEND_FUNDS, &[Some(FundType)]),
@@ -1402,15 +1413,22 @@ impl ProgrammableMoveCall {
             (SUI_COIN_SEND_FUNDS, &[Some(FundType)]),
             (SUI_COIN_PUT, &[Some(FundType)]),
         ];
+        const GASLESS_ALLOWANCE_FUNCTIONS: &[(FunctionIdent, &[Option<TypeArgConstraint>])] =
+            &[(SUI_ALLOWANCE_BALANCE_SPEND, &[Some(FundType)])];
 
-        let Some((_, type_arg_constraints)) =
-            GASLESS_FUNCTIONS
-                .iter()
-                .find(|((addr, module, function), _)| {
-                    *addr == AccountAddress::from(self.package)
-                        && module.as_str() == self.module
-                        && function.as_str() == self.function
-                })
+        let allowance_functions: &[_] = if allow_allowance_spend {
+            GASLESS_ALLOWANCE_FUNCTIONS
+        } else {
+            &[]
+        };
+        let Some((_, type_arg_constraints)) = GASLESS_FUNCTIONS
+            .iter()
+            .chain(allowance_functions)
+            .find(|((addr, module, function), _)| {
+                *addr == AccountAddress::from(self.package)
+                    && module.as_str() == self.module
+                    && function.as_str() == self.function
+            })
         else {
             return Err(UserInputError::Unsupported(format!(
                 "Function {}::{}::{} is not supported in gasless transactions",
@@ -1588,9 +1606,12 @@ impl Command {
     fn validate_gasless_transaction(
         &self,
         allowed_token_types: &BTreeMap<TypeTag, u64>,
+        allow_allowance_spend: bool,
     ) -> UserInputResult {
         match self {
-            Command::MoveCall(call) => call.validate_gasless_transaction(allowed_token_types),
+            Command::MoveCall(call) => {
+                call.validate_gasless_transaction(allowed_token_types, allow_allowance_spend)
+            }
             Command::MergeCoins(_, _) | Command::SplitCoins(_, _) => Ok(()),
             _ => Err(UserInputError::Unsupported(
                 "Gasless transactions only support MoveCall, MergeCoins, and SplitCoins commands"
