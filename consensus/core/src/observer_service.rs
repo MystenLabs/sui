@@ -30,8 +30,8 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{
-        NodeId, ObserverBlockStream, ObserverNetworkService, ObserverStreamItem, PeerId,
-        observer::AuxiliaryData,
+        BlockStreamFilter, NodeId, ObserverBlockStream, ObserverNetworkService, ObserverStreamItem,
+        PeerId, observer::AuxiliaryData,
     },
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     synchronizer::SynchronizerHandle,
@@ -229,6 +229,7 @@ impl ObserverNetworkService for ObserverService {
         &self,
         peer: NodeId,
         highest_round_per_authority: Vec<Round>,
+        filter: BlockStreamFilter,
     ) -> ConsensusResult<ObserverBlockStream> {
         if highest_round_per_authority.len() != self.context.committee.size() {
             return Err(ConsensusError::InvalidSizeOfHighestAcceptedRounds(
@@ -236,6 +237,32 @@ impl ObserverNetworkService for ObserverService {
                 self.context.committee.size(),
             ));
         }
+
+        // Validate the requested author filter against the committee before establishing
+        // the stream. `None` means no filtering.
+        let author_filter: Option<Vec<bool>> = if filter.authors.is_empty() {
+            None
+        } else {
+            let mut allowed = vec![false; self.context.committee.size()];
+            for &index in &filter.authors {
+                let authority = self
+                    .context
+                    .committee
+                    .to_authority_index(index as usize)
+                    .ok_or_else(|| {
+                        ConsensusError::InvalidBlockStreamFilter(format!(
+                            "unknown authority index {index}, committee size is {}",
+                            self.context.committee.size()
+                        ))
+                    })?;
+                if std::mem::replace(&mut allowed[authority.value()], true) {
+                    return Err(ConsensusError::InvalidBlockStreamFilter(format!(
+                        "duplicate authority index {index}"
+                    )));
+                }
+            }
+            Some(allowed)
+        };
 
         // Subscribe before snapshotting past blocks below. This can duplicate
         // a block in both the subscription stream and snapshot, which is fine.
@@ -250,6 +277,11 @@ impl ObserverNetworkService for ObserverService {
             let mut past_blocks = Vec::new();
 
             for (authority, _) in self.context.committee.authorities() {
+                if let Some(allowed) = &author_filter
+                    && !allowed[authority.value()]
+                {
+                    continue;
+                }
                 // Saturate so an out-of-range round from the peer cannot wrap to 0 and
                 // replay the entire block cache.
                 let from_round = highest_round_per_authority[authority.value()].saturating_add(1);
@@ -279,6 +311,10 @@ impl ObserverNetworkService for ObserverService {
         );
         // When quorum-gated release is disabled, serve blocks straight off the broadcast as
         // soon as they are accepted, without the buffering task in between.
+        //
+        // The author filter is applied after quorum gating rather than before: gating needs
+        // to observe blocks from all authorities to detect round quorums, so filtering may
+        // only affect what is released to this subscriber.
         let live_block_stream = if self.context.parameters.observer.quorum_release {
             Either::Left(quorum_gated_accepted_block_stream(
                 self.context.clone(),
@@ -288,13 +324,20 @@ impl ObserverNetworkService for ObserverService {
         } else {
             Either::Right(broadcast_stream)
         }
-        .map(|blocks| ObserverStreamItem {
+        .map(move |blocks| ObserverStreamItem {
             blocks: blocks
                 .into_iter()
+                .filter(|block| {
+                    author_filter
+                        .as_ref()
+                        .is_none_or(|allowed| allowed[block.author().value()])
+                })
                 .map(|block| block.serialized().clone())
                 .collect(),
             auxiliary_data: Default::default(),
-        });
+        })
+        // Filtering can leave an item with no blocks; don't send empty responses.
+        .filter(|item| futures::future::ready(!item.blocks.is_empty()));
 
         let block_stream = past_stream.chain(live_block_stream);
 
@@ -592,7 +635,11 @@ mod tests {
         let peer = keys[0].0.public().clone();
 
         let mut stream = observer_service
-            .handle_stream_blocks(peer, highest_round_per_authority)
+            .handle_stream_blocks(
+                peer,
+                highest_round_per_authority,
+                BlockStreamFilter::default(),
+            )
             .await
             .unwrap();
 
@@ -921,7 +968,11 @@ mod tests {
         let highest_round_per_authority = vec![0 as Round; context.committee.size()];
         let peer = keys[0].0.public().clone();
         let mut stream = observer_service
-            .handle_stream_blocks(peer, highest_round_per_authority)
+            .handle_stream_blocks(
+                peer,
+                highest_round_per_authority,
+                BlockStreamFilter::default(),
+            )
             .await
             .unwrap();
 
@@ -994,7 +1045,11 @@ mod tests {
         let highest_round_per_authority = vec![0 as Round; context.committee.size()];
         let peer = keys[0].0.public().clone();
         let mut stream = observer_service
-            .handle_stream_blocks(peer, highest_round_per_authority)
+            .handle_stream_blocks(
+                peer,
+                highest_round_per_authority,
+                BlockStreamFilter::default(),
+            )
             .await
             .unwrap();
 
@@ -1053,7 +1108,7 @@ mod tests {
         // Test with wrong size of highest_round_per_authority
         let invalid_highest_rounds = vec![0 as Round; 10]; // Wrong size, should be 4
         let result = observer_service
-            .handle_stream_blocks(peer, invalid_highest_rounds)
+            .handle_stream_blocks(peer, invalid_highest_rounds, BlockStreamFilter::default())
             .await;
 
         match result {
@@ -1067,5 +1122,229 @@ mod tests {
             ),
             Ok(_) => panic!("Expected error, got Ok"),
         }
+    }
+
+    fn new_test_observer_service(
+        context: Arc<Context>,
+    ) -> (
+        ObserverService,
+        broadcast::Sender<VerifiedBlock>,
+        Arc<RwLock<DagState>>,
+    ) {
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let (tx_accepted_block, rx_accepted_block) = broadcast::channel::<VerifiedBlock>(100);
+        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let block_verifier = Arc::new(NoopBlockVerifier);
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let block_sync_service = Arc::new(BlockSyncService::new(
+            context.clone(),
+            dag_state.clone(),
+            store,
+        ));
+        let observer_service = ObserverService::new(
+            context,
+            core_dispatcher,
+            dag_state.clone(),
+            rx_accepted_block,
+            block_verifier,
+            commit_vote_monitor,
+            transaction_vote_tracker,
+            create_mock_synchronizer(),
+            block_sync_service,
+            None,
+        );
+        (observer_service, tx_accepted_block, dag_state)
+    }
+
+    fn deserialize_blocks(item: &ObserverStreamItem) -> Vec<VerifiedBlock> {
+        item.blocks
+            .iter()
+            .map(|block_bytes| {
+                let signed: SignedBlock = bcs::from_bytes(block_bytes).unwrap();
+                VerifiedBlock::new_verified(signed, block_bytes.clone())
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn test_observer_stream_author_filter_live_blocks() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, keys) = Context::new_for_test(4);
+        context.parameters.observer.quorum_release = false;
+        let context = Arc::new(context);
+        let (observer_service, tx_accepted_block, _dag_state) =
+            new_test_observer_service(context.clone());
+
+        let highest_round_per_authority = vec![0 as Round; context.committee.size()];
+        let peer = keys[0].0.public().clone();
+        let filter = BlockStreamFilter {
+            authors: vec![0, 2],
+        };
+        let mut stream = observer_service
+            .handle_stream_blocks(peer, highest_round_per_authority, filter)
+            .await
+            .unwrap();
+
+        // Broadcast blocks from all authorities over two rounds.
+        for round in 1..=2 {
+            for author in 0..4 {
+                let block = VerifiedBlock::new_for_test(TestBlock::new(round, author).build());
+                tx_accepted_block.send(block).unwrap();
+            }
+        }
+
+        // Only blocks from authorities 0 and 2 are released: two per round.
+        let mut received_blocks = Vec::new();
+        while received_blocks.len() < 4 {
+            let item = stream.next().await.unwrap();
+            received_blocks.extend(deserialize_blocks(&item));
+        }
+        assert_eq!(
+            received_blocks
+                .iter()
+                .map(|block| (block.round(), block.author().value()))
+                .collect::<Vec<_>>(),
+            [(1, 0), (1, 2), (2, 0), (2, 2)]
+        );
+
+        // Nothing else may be released for the filtered-out authorities.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), stream.next())
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_observer_stream_author_filter_past_blocks() {
+        telemetry_subscribers::init_for_testing();
+        let (context, keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let (observer_service, _tx_accepted_block, dag_state) =
+            new_test_observer_service(context.clone());
+
+        // Populate DagState with blocks from all authorities over three rounds.
+        {
+            let mut dag_state = dag_state.write();
+            for round in 1..=3 {
+                for author in 0..4 {
+                    dag_state.accept_block(VerifiedBlock::new_for_test(
+                        TestBlock::new(round, author).build(),
+                    ));
+                }
+            }
+        }
+
+        let highest_round_per_authority = vec![0 as Round; context.committee.size()];
+        let peer = keys[0].0.public().clone();
+        let filter = BlockStreamFilter {
+            authors: vec![1, 3],
+        };
+        let mut stream = observer_service
+            .handle_stream_blocks(peer, highest_round_per_authority, filter)
+            .await
+            .unwrap();
+
+        // The snapshot phase serves only the filtered authorities: two per round.
+        let mut received_blocks = Vec::new();
+        while received_blocks.len() < 6 {
+            let item = stream.next().await.unwrap();
+            received_blocks.extend(deserialize_blocks(&item));
+        }
+        // The snapshot is sorted by round only, so order within a round is unspecified.
+        let mut received = received_blocks
+            .iter()
+            .map(|block| (block.round(), block.author().value()))
+            .collect::<Vec<_>>();
+        received.sort_unstable();
+        assert_eq!(received, [(1, 1), (1, 3), (2, 1), (2, 3), (3, 1), (3, 3)]);
+    }
+
+    #[tokio::test]
+    async fn test_observer_stream_author_filter_with_quorum_release() {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, keys) = Context::new_for_test(4);
+        // Make the release timeout long enough that only a round quorum can release
+        // blocks within the test duration.
+        context.parameters.leader_timeout = Duration::from_secs(300);
+        let context = Arc::new(context);
+        let (observer_service, tx_accepted_block, _dag_state) =
+            new_test_observer_service(context.clone());
+
+        let highest_round_per_authority = vec![0 as Round; context.committee.size()];
+        let peer = keys[0].0.public().clone();
+        let filter = BlockStreamFilter { authors: vec![1] };
+        let mut stream = observer_service
+            .handle_stream_blocks(peer, highest_round_per_authority, filter)
+            .await
+            .unwrap();
+
+        // Broadcast round 1 blocks from 3 of 4 authorities to reach quorum. The filter
+        // must not affect quorum detection, only which blocks are released.
+        for author in 0..3 {
+            let block = VerifiedBlock::new_for_test(TestBlock::new(1, author).build());
+            tx_accepted_block.send(block).unwrap();
+        }
+
+        let item = tokio::time::timeout(Duration::from_secs(5), stream.next())
+            .await
+            .expect("filtered block should be released on round quorum")
+            .unwrap();
+        let received_blocks = deserialize_blocks(&item);
+        assert_eq!(received_blocks.len(), 1);
+        assert_eq!(received_blocks[0].round(), 1);
+        assert_eq!(received_blocks[0].author().value(), 1);
+
+        // No blocks from the filtered-out authorities are released.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), stream.next())
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_observer_stream_invalid_author_filter() {
+        telemetry_subscribers::init_for_testing();
+        let (context, keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let (observer_service, _tx_accepted_block, _dag_state) =
+            new_test_observer_service(context.clone());
+
+        let highest_round_per_authority = vec![0 as Round; context.committee.size()];
+        let peer = keys[0].0.public().clone();
+
+        // An authority index outside the committee is rejected.
+        let result = observer_service
+            .handle_stream_blocks(
+                peer.clone(),
+                highest_round_per_authority.clone(),
+                BlockStreamFilter {
+                    authors: vec![0, 10],
+                },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(ConsensusError::InvalidBlockStreamFilter(_))
+        ));
+
+        // Duplicate authority indices are rejected.
+        let result = observer_service
+            .handle_stream_blocks(
+                peer,
+                highest_round_per_authority,
+                BlockStreamFilter {
+                    authors: vec![2, 1, 2],
+                },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(ConsensusError::InvalidBlockStreamFilter(_))
+        ));
     }
 }
