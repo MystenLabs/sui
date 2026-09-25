@@ -25,6 +25,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::coin::{CoinMetadata, TreasuryCap};
 use sui_types::coin_registry::{Currency, SupplyState};
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::error::SuiErrorKind;
 use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_MIST};
 use sui_types::object::Object;
 use sui_types::parse_sui_struct_tag;
@@ -47,6 +48,30 @@ pub fn parse_to_type_tag(coin_type: Option<String>) -> Result<TypeTag, SuiRpcInp
         Some(c) => parse_to_struct_tag(&c)?,
         None => GAS::type_(),
     })))
+}
+
+fn build_balance_response(coin_type: String, balance: TotalBalance) -> RpcInterimResult<Balance> {
+    let coin_object_count = usize::try_from(balance.num_coins).map_err(|_| {
+        Error::from(SuiErrorKind::ExecutionError(format!(
+            "negative coin object count in JSON-RPC balance cache for {coin_type}: {}",
+            balance.num_coins
+        )))
+    })?;
+    let total_balance = u128::try_from(balance.balance).map_err(|_| {
+        Error::from(SuiErrorKind::ExecutionError(format!(
+            "negative total balance in JSON-RPC balance cache for {coin_type}: {}",
+            balance.balance
+        )))
+    })?;
+
+    Ok(Balance {
+        coin_type,
+        coin_object_count,
+        total_balance,
+        // note: LockedCoin is deprecated
+        locked_balance: Default::default(),
+        funds_in_address_balance: u128::from(balance.address_balance),
+    })
 }
 
 pub struct CoinReadApi {
@@ -213,14 +238,7 @@ impl CoinReadApiServer for CoinReadApi {
                 .tap_err(|e| {
                     debug!(?owner, "Failed to get balance with error: {:?}", e);
                 })?;
-            Ok(Balance {
-                coin_type: coin_type_tag.to_string(),
-                coin_object_count: balance.num_coins as usize,
-                total_balance: balance.balance as u128,
-                // note: LockedCoin is deprecated
-                locked_balance: Default::default(),
-                funds_in_address_balance: balance.address_balance as u128,
-            })
+            build_balance_response(coin_type_tag.to_string(), balance)
         })
     }
 
@@ -230,19 +248,10 @@ impl CoinReadApiServer for CoinReadApi {
             let all_balance = self.internal.get_all_balance(owner).await.tap_err(|e| {
                 debug!(?owner, "Failed to get all balance with error: {:?}", e);
             })?;
-            Ok(all_balance
+            all_balance
                 .iter()
-                .map(|(coin_type, balance)| {
-                    Balance {
-                        coin_type: coin_type.to_string(),
-                        coin_object_count: balance.num_coins as usize,
-                        total_balance: balance.balance as u128,
-                        // note: LockedCoin is deprecated
-                        locked_balance: Default::default(),
-                        funds_in_address_balance: balance.address_balance as u128,
-                    }
-                })
-                .collect())
+                .map(|(coin_type, balance)| build_balance_response(coin_type.to_string(), *balance))
+                .collect::<RpcInterimResult<_>>()
         })
     }
 
@@ -537,7 +546,7 @@ mod tests {
     use sui_types::coin::TreasuryCap;
     use sui_types::digests::{ObjectDigest, TransactionDigest};
     use sui_types::effects::{TransactionEffects, TransactionEvents};
-    use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
+    use sui_types::error::{SuiError, SuiResult};
     use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
     use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber};
@@ -1330,6 +1339,31 @@ mod tests {
             let expected = expect!["Error executing mock db error"];
             expected.assert_eq(error_object.message());
         }
+
+        #[tokio::test]
+        async fn test_get_balance_negative_total_balance_returns_error() {
+            let owner = get_test_owner();
+            let mut mock_state = MockStateRead::new();
+            mock_state.expect_get_balance().return_once(move |_, _| {
+                Ok(TotalBalance {
+                    balance: -1,
+                    num_coins: 1,
+                    address_balance: 0,
+                })
+            });
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
+            let response = coin_read_api.get_balance(owner, None).await;
+
+            let error_object = response.unwrap_err();
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE
+            );
+            let expected = expect![
+                "Error executing negative total balance in JSON-RPC balance cache for 0x2::sui::SUI: -1"
+            ];
+            expected.assert_eq(error_object.message());
+        }
     }
 
     mod get_all_balances_tests {
@@ -1422,6 +1456,35 @@ mod tests {
                 jsonrpsee::types::error::INVALID_PARAMS_CODE
             );
             let expected = expect!["Index store not available on this Fullnode."];
+            expected.assert_eq(error_object.message());
+        }
+
+        #[tokio::test]
+        async fn test_negative_coin_count_returns_error() {
+            let owner = get_test_owner();
+            let gas_coin_type_tag = GAS::type_tag();
+            let mut mock_state = MockStateRead::new();
+            mock_state.expect_get_all_balance().return_once(move |_| {
+                Ok(Arc::new(HashMap::from([(
+                    gas_coin_type_tag,
+                    TotalBalance {
+                        balance: 1,
+                        num_coins: -1,
+                        address_balance: 0,
+                    },
+                )])))
+            });
+            let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
+            let response = coin_read_api.get_all_balances(owner).await;
+
+            let error_object = response.unwrap_err();
+            assert_eq!(
+                error_object.code(),
+                jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE
+            );
+            let expected = expect![
+                "Error executing negative coin object count in JSON-RPC balance cache for 0x2::sui::SUI: -1"
+            ];
             expected.assert_eq(error_object.message());
         }
     }
