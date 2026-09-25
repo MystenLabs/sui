@@ -472,10 +472,7 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::U64(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U256(value) => SuiMoveValue::String(format!("{value}")),
-            // Signed integer types are not acceptable as pure transaction inputs; they may
-            // appear in Move values read back from on-chain data once VM support lands.
-            // They mirror the unsigned convention: widths up to 32 bits render as native
-            // numbers, wider widths render as strings to avoid overflow.
+            // REVIEW: i8/i16/i32 render as numbers; wider signed widths render as strings.
             MoveValue::I8(value) => SuiMoveValue::SignedNumber(value.into()),
             MoveValue::I16(value) => SuiMoveValue::SignedNumber(value.into()),
             MoveValue::I32(value) => SuiMoveValue::SignedNumber(value),

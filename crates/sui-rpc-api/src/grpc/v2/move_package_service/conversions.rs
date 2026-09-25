@@ -253,7 +253,7 @@ fn convert_open_signature_body(
         sui_package_resolver::OpenSignatureBody::TypeParameter(idx) => {
             (SignatureType::Parameter, None, vec![], Some(*idx as u32))
         }
-        // TODO [signed-ints]: the proto `open_signature_body::Type` enum (defined in
+        // TODO (signed-ints): the proto `open_signature_body::Type` enum (defined in
         // sui-rust-sdk) has no values for signed integer types yet, so render them as
         // `Unknown`. Unreachable in practice until modules mentioning signed types can be
         // published.

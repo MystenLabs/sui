@@ -278,10 +278,8 @@ impl Token for ValueToken {
                     .count();
                 number_maybe_with_suffix(s, len)
             }
-            // A `-` folds into the numeric literal that must immediately follow it (matching the
-            // expression-side treatment of negative literals in the compiler); for hex literals
-            // the digits are a magnitude, e.g. `-0x80i8` is -128. Sign/range checking happens
-            // when the literal is parsed, so `-1u8` lexes but fails to parse.
+            // A leading `-` belongs to the following typed signed literal.
+            // Untyped or unsigned negatives fail during parsing.
             '-' => {
                 let tail = &s[1..];
                 let mut tail_chars = tail.chars().peekable();

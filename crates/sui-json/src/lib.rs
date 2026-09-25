@@ -406,8 +406,7 @@ fn move_value_to_json(move_value: &MoveValue) -> Option<JsonValue> {
         MoveValue::U16(v) => json!(v),
         MoveValue::U32(v) => json!(v),
         MoveValue::U256(v) => json!(v.to_string()),
-        // Signed integers mirror the unsigned convention: widths up to 32 bits render as
-        // native JSON numbers, wider widths render as strings.
+        // REVIEW: i8/i16/i32 render as numbers; wider signed widths render as strings.
         MoveValue::I8(v) => json!(v),
         MoveValue::I16(v) => json!(v),
         MoveValue::I32(v) => json!(v),

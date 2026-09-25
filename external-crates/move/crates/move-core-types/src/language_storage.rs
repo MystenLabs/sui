@@ -74,8 +74,8 @@ impl TypeTag {
     /// Return a canonical string representation of the type. All types are represented using their
     /// source syntax:
     ///
-    /// - "bool", "u8", "u16", "u32", "u64", "u128", "u256", "address", "signer", "vector" for
-    ///   ground types.
+    /// - "bool", "u8", "u16", "u32", "u64", "u128", "u256", "i8", "i16", "i32", "i64", "i128",
+    ///   "i256", "address", "signer", "vector" for ground types.
     ///
     /// - Structs are represented as fully qualified type names, with or without the prefix "0x"
     ///   depending on the `with_prefix` flag, e.g. `0x000...0001::string::String` or
@@ -172,6 +172,12 @@ impl TypeTag {
                 | TypeTag::U64
                 | TypeTag::U128
                 | TypeTag::U256
+                | TypeTag::I8
+                | TypeTag::I16
+                | TypeTag::I32
+                | TypeTag::I64
+                | TypeTag::I128
+                | TypeTag::I256
                 | TypeTag::Address
                 | TypeTag::Signer => (),
             }

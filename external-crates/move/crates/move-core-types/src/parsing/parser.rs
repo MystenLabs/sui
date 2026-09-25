@@ -551,10 +551,7 @@ pub fn parse_u256(s: &str) -> Result<(U256, NumberFormat), U256FromStrError> {
     ))
 }
 
-// Parse a signed integer from a decimal or hex encoding. A leading `-` negates the (decimal
-// or hex) magnitude that follows it, so `-0x80` parses as `-128` for `i8`. The sign is
-// re-attached after the hex prefix is stripped because `determine_num_text_and_base` only
-// recognizes `0x` at the start of its input.
+// Parse a signed integer from a decimal or hex encoding.
 macro_rules! parse_signed_int {
     ($name:ident, $ty:ty, $err:ty) => {
         pub fn $name(s: &str) -> Result<($ty, NumberFormat), $err> {

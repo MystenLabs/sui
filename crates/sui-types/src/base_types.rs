@@ -647,7 +647,7 @@ impl From<MoveObjectType> for TypeTag {
 /// support for signed values does not exist yet — signed type inputs are rejected earlier, by
 /// `type_input_validity_check`, until the `enable_signed_integers` protocol feature flips.
 ///
-/// TODO [signed-ints]: audit this predicate's callers (e.g. `client_ptb/builder.rs`'s `ToPure`
+/// TODO (signed-ints): audit this predicate's callers (e.g. `client_ptb/builder.rs`'s `ToPure`
 /// routing) and flip them together in the enablement PR, when signed pure inputs become real.
 pub fn is_primitive_type_tag(t: &TypeTag) -> bool {
     use TypeTag as T;

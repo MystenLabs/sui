@@ -266,11 +266,7 @@ fn type_input_validity_check(
             | TypeInput::U16
             | TypeInput::U32
             | TypeInput::U256 => (),
-            // Rejecting signed type inputs here (pre-consensus, as a `UserInputError`) matches
-            // the observable behavior of pre-signed-ints binaries, where these variants fail
-            // BCS deserialization at the API boundary: nothing lands on chain. It also makes
-            // the signed-integer errors on the read paths (replay, GraphQL, SDK conversions)
-            // unreachable for new transactions until the feature flag flips.
+            // Signed type arguments are disabled until enable_signed_integers flips.
             TypeInput::I8
             | TypeInput::I16
             | TypeInput::I32

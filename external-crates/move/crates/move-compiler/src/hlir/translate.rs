@@ -3107,6 +3107,12 @@ pub(crate) fn precompiled_constants(
             MV::U64(u) => V::U64(*u),
             MV::U128(u) => V::U128(*u),
             MV::U256(u) => V::U256(*u),
+            MV::I8(i) => V::I8(*i),
+            MV::I16(i) => V::I16(*i),
+            MV::I32(i) => V::I32(*i),
+            MV::I64(i) => V::I64(*i),
+            MV::I128(i) => V::I128(*i),
+            MV::I256(i) => V::I256(*i),
             MV::Bool(b) => V::Bool(*b),
             MV::Address(a) => V::Address(NumericalAddress::new(a.into_bytes(), NumberFormat::Hex)),
             MV::Vector(vs) => {
