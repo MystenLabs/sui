@@ -1044,7 +1044,7 @@ impl NodeMetrics {
             ).unwrap(),
             finalizer_v3_phase_duration_seconds: register_histogram_vec_with_registry!(
                 "finalizer_v3_phase_duration_seconds",
-                "Time spent in each V3 finalizer phase, including lock wait.",
+                "Time spent in each V3 finalizer phase, including lock wait. direct_collect and direct_decisions are parts of direct.",
                 &["phase"],
                 FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry

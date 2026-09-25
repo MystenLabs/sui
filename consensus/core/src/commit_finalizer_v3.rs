@@ -9,6 +9,7 @@ use std::{
 
 use consensus_config::{AuthorityIndex, Stake};
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::{
     monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
     monitored_scope, spawn_logged_monitored_task,
@@ -339,17 +340,46 @@ impl CommitFinalizerV3 {
         let pending_transactions = self.pending_commits[commit_index]
             .pending_transactions
             .clone();
+        if pending_transactions.is_empty() {
+            return;
+        }
+        let collect_timer = self
+            .context
+            .metrics
+            .node_metrics
+            .finalizer_v3_phase_duration_seconds
+            .with_label_values(&["direct_collect"])
+            .start_timer();
+        let (mut votes_by_target, gc_round) = {
+            let dag_state = self.dag_state.read();
+            let gc_round = dag_state.gc_round();
+            // A pruned target must not seed the shared traversal. Its first votes may be missing.
+            let targets: Vec<_> = pending_transactions
+                .keys()
+                .copied()
+                .filter(|target| {
+                    target.round > gc_round && dag_state.get_block_children(target).is_some()
+                })
+                .collect();
+            let votes = collect_first_votes_for_targets(&*dag_state, &targets, last_voting_round);
+            (
+                targets
+                    .into_iter()
+                    .zip_debug_eq(votes)
+                    .collect::<BTreeMap<_, _>>(),
+                gc_round,
+            )
+        };
+        drop(collect_timer);
+        let _decisions_timer = self
+            .context
+            .metrics
+            .node_metrics
+            .finalizer_v3_phase_duration_seconds
+            .with_label_values(&["direct_decisions"])
+            .start_timer();
         for (block_ref, transaction_indices) in pending_transactions {
-            // First votes come from the earliest blocks on each authority chain that include
-            // block_ref in their causal history. Only rounds through leader_round + 1 are eligible;
-            // DagState returns no children for targets at or below its current GC round.
-            let (first_votes, gc_round) = {
-                let dag_state = self.dag_state.read();
-                (
-                    collect_first_votes(&*dag_state, block_ref, last_voting_round),
-                    dag_state.gc_round(),
-                )
-            };
+            let first_votes = votes_by_target.remove(&block_ref).unwrap_or_default();
             let mut decisions =
                 self.compute_direct_decisions(block_ref, &transaction_indices, &first_votes);
             if self.pending_commits[commit_index]
@@ -394,7 +424,7 @@ impl CommitFinalizerV3 {
         &self,
         block_ref: BlockRef,
         transaction_indices: &BTreeSet<TransactionIndex>,
-        first_votes: &[VotingBlock],
+        first_votes: &[Arc<VotingBlock>],
     ) -> TransactionDecisions {
         let explicit_reject_votes = self
             .transaction_vote_tracker
@@ -494,7 +524,7 @@ impl CommitFinalizerV3 {
         &self,
         block_ref: BlockRef,
         transaction_indices: &BTreeSet<TransactionIndex>,
-        first_votes: &[VotingBlock],
+        first_votes: &[Arc<VotingBlock>],
         reject_remaining: bool,
     ) -> TransactionDecisions {
         let accept_votes: TransactionVotes<CertificationThreshold> =
@@ -542,7 +572,7 @@ impl CommitFinalizerV3 {
         &self,
         block_ref: BlockRef,
         transaction_indices: &BTreeSet<TransactionIndex>,
-        first_votes: &[VotingBlock],
+        first_votes: &[Arc<VotingBlock>],
     ) -> TransactionVotes<T> {
         // Most transactions have no explicit reject. Use one shared aggregator for them, and
         // create transaction-specific aggregators only when a first vote contains a reject.
@@ -587,7 +617,7 @@ impl CommitFinalizerV3 {
         &self,
         block_ref: BlockRef,
         transaction_indices: &BTreeSet<TransactionIndex>,
-        first_votes: &[VotingBlock],
+        first_votes: &[Arc<VotingBlock>],
         mut by_transaction: BTreeMap<TransactionIndex, StakeAggregator<QuorumThreshold>>,
     ) -> TransactionVotes<QuorumThreshold> {
         by_transaction.retain(|index, _| transaction_indices.contains(index));
@@ -894,11 +924,91 @@ impl ReverseBlockGraph for CommittedBlockGraph {
     }
 }
 
+/// Collects first votes for all targets in one round-ordered pass.
+/// Targets must be unique. The caller must exclude targets whose child links have been pruned.
+fn collect_first_votes_for_targets(
+    graph: &impl ReverseBlockGraph,
+    targets: &[BlockRef],
+    last_voting_round: Round,
+) -> Vec<Vec<Arc<VotingBlock>>> {
+    struct TargetHistory {
+        including_self: Vec<u64>,
+        strict: Vec<u64>,
+    }
+
+    let target_indices: BTreeMap<_, _> = targets
+        .iter()
+        .enumerate()
+        .map(|(index, target)| (*target, index))
+        .collect();
+    let word_count = targets.len().div_ceil(64);
+    let mut first_votes = vec![vec![]; targets.len()];
+    let mut histories: BTreeMap<BlockRef, TargetHistory> = BTreeMap::new();
+    let mut to_visit: BTreeSet<_> = targets
+        .iter()
+        .copied()
+        .filter(|target| target.round <= last_voting_round)
+        .collect();
+    while let Some(current_ref) = to_visit.pop_first() {
+        let block = graph
+            .block(&current_ref)
+            .unwrap_or_else(|| panic!("No block data found for voting block {current_ref}"));
+        let mut inherited = vec![0u64; word_count];
+        let mut own_history = vec![0u64; word_count];
+        for ancestor in block.ancestors() {
+            let Some(history) = histories.get(ancestor) else {
+                continue;
+            };
+            for (word, ancestor_word) in inherited.iter_mut().zip_debug_eq(&history.including_self)
+            {
+                *word |= ancestor_word;
+            }
+            if ancestor.author == current_ref.author {
+                for (word, ancestor_word) in own_history.iter_mut().zip_debug_eq(&history.strict) {
+                    *word |= ancestor_word;
+                }
+            }
+        }
+        // A first vote includes the target, but its own-authority parents are not strict
+        // descendants of that target. The target itself is not a vote for itself.
+        let mut voting_block = None;
+        for (word_index, (inherited_word, own_word)) in
+            inherited.iter().zip_debug_eq(&own_history).enumerate()
+        {
+            let mut voters = inherited_word & !own_word;
+            while voters != 0 {
+                let index = word_index * 64 + voters.trailing_zeros() as usize;
+                let vote =
+                    voting_block.get_or_insert_with(|| Arc::new(VotingBlock::new(block.clone())));
+                first_votes[index].push(vote.clone());
+                voters &= voters - 1;
+            }
+        }
+        let mut including_self = inherited.clone();
+        if let Some(index) = target_indices.get(&current_ref) {
+            including_self[index / 64] |= 1 << (index % 64);
+        }
+        histories.insert(
+            current_ref,
+            TargetHistory {
+                including_self,
+                strict: inherited,
+            },
+        );
+        if current_ref.round < last_voting_round {
+            to_visit.extend(graph.children(&current_ref).into_iter().filter(|child| {
+                child.round <= last_voting_round && !histories.contains_key(child)
+            }));
+        }
+    }
+    first_votes
+}
+
 fn collect_first_votes(
     graph: &impl ReverseBlockGraph,
     block_ref: BlockRef,
     last_voting_round: Round,
-) -> Vec<VotingBlock> {
+) -> Vec<Arc<VotingBlock>> {
     let mut to_visit: BTreeSet<_> = graph
         .children(&block_ref)
         .into_iter()
@@ -919,7 +1029,7 @@ fn collect_first_votes(
             let current_block = graph
                 .block(&current_ref)
                 .unwrap_or_else(|| panic!("No block data found for voting block {current_ref}"));
-            first_votes.push(VotingBlock::new(current_block));
+            first_votes.push(Arc::new(VotingBlock::new(current_block)));
             ignored.insert(current_ref);
             ignore_origin_descendants(graph, current_ref, last_voting_round, &mut ignored);
         }
@@ -969,6 +1079,7 @@ fn ignore_origin_descendants(
     }
 }
 
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 struct VotingBlock {
     block_ref: BlockRef,
     cutoff_round: Round,
@@ -1047,7 +1158,7 @@ impl PendingVoteStatus {
         transaction_index: TransactionIndex,
         accept_votes: &StakeAggregator<T>,
         reject_votes: &StakeAggregator<QuorumThreshold>,
-        first_votes: &[VotingBlock],
+        first_votes: &[Arc<VotingBlock>],
     ) -> Self {
         Self {
             block_ref,
@@ -1432,6 +1543,168 @@ mod tests {
             }
             assert_eq!(graph.boundary_reads.get(), 0);
         }
+    }
+
+    #[tokio::test]
+    async fn shared_first_votes_match_per_target_traversal() {
+        use rand::{Rng, SeedableRng, rngs::StdRng};
+
+        struct CountingGraph<'a> {
+            dag: &'a DagState,
+            child_reads: std::cell::Cell<usize>,
+        }
+        impl ReverseBlockGraph for CountingGraph<'_> {
+            fn block(&self, block_ref: &BlockRef) -> Option<VerifiedBlock> {
+                self.dag.get_block(block_ref)
+            }
+            fn children(&self, block_ref: &BlockRef) -> Vec<BlockRef> {
+                self.child_reads.set(self.child_reads.get() + 1);
+                self.dag.get_block_children(block_ref).unwrap_or_default()
+            }
+        }
+
+        let fixture = Fixture::with_fault_budget(127, 21, 0, |_| {});
+        let round_one = fixture.make_round_one_blocks(&[]);
+        let mut targets: Vec<_> = round_one.iter().map(|block| block.reference()).collect();
+        let mut parents = targets.clone();
+        for round in 2..=4 {
+            let blocks: Vec<_> = (0..127)
+                .map(|author| fixture.make_graph_block(round, author, parents.clone(), vec![], 0))
+                .collect();
+            fixture.add_blocks(&blocks);
+            parents = blocks.iter().map(|block| block.reference()).collect();
+            if round == 2 {
+                targets.extend_from_slice(&parents);
+            }
+        }
+        let dag = fixture.dag_state.read();
+        let graph = CountingGraph {
+            dag: &dag,
+            child_reads: std::cell::Cell::new(0),
+        };
+        let expected: Vec<Vec<_>> = targets
+            .iter()
+            .map(|target| collect_first_votes(&graph, *target, 3))
+            .collect();
+        let reference_reads = graph.child_reads.replace(0);
+        let actual = collect_first_votes_for_targets(&graph, &targets, 3);
+        assert_eq!(actual, expected);
+        assert_eq!(graph.child_reads.get(), 254);
+        assert!(graph.child_reads.get() < reference_reads);
+
+        let fixture = Fixture::new();
+        let mut rng = StdRng::seed_from_u64(0xF1_2A_11_2E);
+        for case in 0..64 {
+            let genesis = genesis_blocks(&fixture.context);
+            let mut history: Vec<Vec<_>> = genesis
+                .iter()
+                .map(|block| vec![block.reference()])
+                .collect();
+            let mut blocks = vec![];
+            for round in 1..=7 {
+                let mut round_blocks = vec![];
+                for author in 0..COMMITTEE_SIZE {
+                    let fork_count = if rng.gen_bool(0.25) { 2 } else { 1 };
+                    for fork in 0..fork_count {
+                        let mut ancestors =
+                            vec![history[author][rng.gen_range(0..history[author].len())]];
+                        for (other_author, own_blocks) in history.iter().enumerate() {
+                            if other_author != author && rng.gen_bool(0.7) {
+                                ancestors.push(own_blocks[rng.gen_range(0..own_blocks.len())]);
+                            }
+                        }
+                        let transaction_votes = ancestors
+                            .iter()
+                            .find(|ancestor| ancestor.round > 0)
+                            .filter(|_| rng.gen_bool(0.3))
+                            .map(|ancestor| BlockTransactionVotes {
+                                block_ref: *ancestor,
+                                rejects: vec![0],
+                            })
+                            .into_iter()
+                            .collect();
+                        round_blocks.push(VerifiedBlock::new_for_test(
+                            TestBlock::new(round, author as u32)
+                                .set_ancestors(ancestors)
+                                .set_transaction_votes(transaction_votes)
+                                .set_transactions(vec![Transaction::new(vec![fork])])
+                                .build_v3(rng.gen_range(0..round)),
+                        ));
+                    }
+                }
+                for block in &round_blocks {
+                    history[block.author().value()].push(block.reference());
+                }
+                blocks.extend(round_blocks);
+            }
+            let gc_round = rng.gen_range(0..=2);
+            blocks.retain(|block| block.round() > gc_round);
+            let targets: Vec<_> = blocks
+                .iter()
+                .filter(|_| rng.gen_bool(0.4))
+                .map(|block| block.reference())
+                .collect();
+            let graph = CommittedBlockGraph::new(blocks);
+            for last_voting_round in 2..=8 {
+                let expected: Vec<Vec<_>> = targets
+                    .iter()
+                    .map(|target| collect_first_votes(&graph, *target, last_voting_round))
+                    .collect();
+                assert_eq!(
+                    collect_first_votes_for_targets(&graph, &targets, last_voting_round),
+                    expected,
+                    "case {case}, GC round {gc_round}, voting round {last_voting_round}",
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn shared_direct_votes_do_not_seed_gc_targets() {
+        let mut fixture = Fixture::with_gc_depth(3);
+        let (old_target, round_one_refs) = fixture.make_round_one(1);
+        let mut targets = vec![old_target.clone()];
+        let mut parents = round_one_refs;
+        let mut leader = None;
+        for round in 2..=5 {
+            let blocks: Vec<_> = (0..COMMITTEE_SIZE as u32)
+                .map(|author| {
+                    let mut ancestors = parents.clone();
+                    let own_authority = AuthorityIndex::new_for_test(author);
+                    ancestors.sort_by_key(|block_ref| block_ref.author != own_authority);
+                    let transactions = if round == 2 && author == 0 {
+                        vec![Transaction::new(vec![1])]
+                    } else {
+                        vec![]
+                    };
+                    VerifiedBlock::new_for_test(
+                        TestBlock::new(round, author)
+                            .set_ancestors(ancestors)
+                            .set_transactions(transactions)
+                            .build_v3(0),
+                    )
+                })
+                .collect();
+            fixture.add_blocks(&blocks);
+            parents = blocks.iter().map(|block| block.reference()).collect();
+            if round == 2 {
+                targets.push(blocks[0].clone());
+            }
+            if round == 4 {
+                leader = Some(blocks[0].clone());
+            }
+        }
+        let mut linearizer =
+            crate::linearizer::Linearizer::new(fixture.context.clone(), fixture.dag_state.clone());
+        let commit = linearizer
+            .handle_commit(vec![leader.unwrap()])
+            .pop()
+            .unwrap();
+        assert_eq!(fixture.dag_state.read().gc_round(), 1);
+        assert!(fixture.finalizer.process_commit(commit).is_empty());
+        let pending = &fixture.finalizer.pending_commits[0].pending_transactions;
+        assert!(pending.contains_key(&targets[0].reference()));
+        assert!(!pending.contains_key(&targets[1].reference()));
     }
 
     #[tokio::test]
