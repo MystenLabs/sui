@@ -252,6 +252,24 @@ macro_rules! map_prim_vec {
     };
 }
 
+macro_rules! map_prim_vec_pair {
+    ($prim_vec_1:expr, $prim_vec_2:expr, $items_1:ident, $items_2:ident, $rhs:expr, $err:expr) => {
+        match ($prim_vec_1, $prim_vec_2) {
+            (PrimVec::VecU8($items_1), PrimVec::VecU8($items_2)) => Ok(PrimVec::VecU8($rhs)),
+            (PrimVec::VecU16($items_1), PrimVec::VecU16($items_2)) => Ok(PrimVec::VecU16($rhs)),
+            (PrimVec::VecU32($items_1), PrimVec::VecU32($items_2)) => Ok(PrimVec::VecU32($rhs)),
+            (PrimVec::VecU64($items_1), PrimVec::VecU64($items_2)) => Ok(PrimVec::VecU64($rhs)),
+            (PrimVec::VecU128($items_1), PrimVec::VecU128($items_2)) => Ok(PrimVec::VecU128($rhs)),
+            (PrimVec::VecU256($items_1), PrimVec::VecU256($items_2)) => Ok(PrimVec::VecU256($rhs)),
+            (PrimVec::VecBool($items_1), PrimVec::VecBool($items_2)) => Ok(PrimVec::VecBool($rhs)),
+            (PrimVec::VecAddress($items_1), PrimVec::VecAddress($items_2)) => {
+                Ok(PrimVec::VecAddress($rhs))
+            }
+            _ => Err($err),
+        }
+    };
+}
+
 // -------------------------------------------------------------------------------------------------
 // Helper Functions
 // -------------------------------------------------------------------------------------------------
@@ -1879,6 +1897,43 @@ pub const POP_EMPTY_VEC: u64 = NFE_VECTOR_ERROR_BASE + 2;
 pub const VEC_UNPACK_PARITY_MISMATCH: u64 = NFE_VECTOR_ERROR_BASE + 3;
 pub const VEC_SIZE_LIMIT_REACHED: u64 = NFE_VECTOR_ERROR_BASE + 4;
 
+fn range_out_of_bounds(i: usize, j: usize, len: usize) -> PartialVMError {
+    partial_vm_error!(
+        VECTOR_OPERATION_ERROR,
+        "range [{i}, {j}) out of bounds for vector of length {len}",
+    )
+    .with_sub_status(INDEX_OUT_OF_BOUNDS)
+}
+
+fn check_vector_range(i: usize, j: usize, len: usize) -> PartialVMResult<()> {
+    if i > j || j > len {
+        return Err(range_out_of_bounds(i, j, len));
+    }
+    Ok(())
+}
+
+fn checked_range<T>(v: &[T], i: usize, j: usize) -> PartialVMResult<&[T]> {
+    let len = v.len();
+    v.get(i..j).ok_or_else(|| range_out_of_bounds(i, j, len))
+}
+
+/// Vec-to-Vec splice on pre-validated bounds: removes `v[i..j)`, inserts `other` at `i`,
+/// returns the removed elements.
+fn replace_range_impl<T>(v: &mut Vec<T>, i: usize, j: usize, mut other: Vec<T>) -> Vec<T> {
+    if i == 0 && j == v.len() {
+        // whole vector replaced, just swap the 2 vectors
+        return std::mem::replace(v, other);
+    }
+    if other.len() == j.saturating_sub(i) {
+        // elemets removed same as `other` size, swap with slice
+        if let Some(range) = v.get_mut(i..j) {
+            range.swap_with_slice(&mut other);
+        }
+        return other;
+    }
+    v.splice(i..j, other).collect()
+}
+
 fn check_elem_layout(ty: &Type, v: &Value) -> PartialVMResult<()> {
     macro_rules! allowed_types {
         ($ty:expr; $v:expr; $allowed:pat) => {
@@ -2001,13 +2056,14 @@ impl std::ops::Deref for VecU8Ref<'_> {
 }
 
 impl VectorRef {
-    pub fn len(&self, type_param: &Type) -> PartialVMResult<Value> {
+    pub fn elem_len(&self, type_param: &Type) -> PartialVMResult<usize> {
         let value = &*self.0.try_borrow()?;
         check_elem_layout(type_param, value)?;
-        value
-            .vector_ref()
-            .map(|vec| vec.len() as u64)
-            .map(Value::U64)
+        Ok(value.vector_ref()?.len())
+    }
+
+    pub fn len(&self, type_param: &Type) -> PartialVMResult<Value> {
+        Ok(Value::U64(checked_as!(self.elem_len(type_param)?, u64)?))
     }
 
     pub fn push_back(&self, e: Value, type_param: &Type, capacity: u64) -> PartialVMResult<()> {
@@ -2030,6 +2086,117 @@ impl VectorRef {
             vec r => r.push(MemBox::new(e));
         );
         Ok(())
+    }
+
+    /// Retains `v[start..end)`, moving the retained elements to the front and dropping all
+    /// elements outside the range.
+    pub fn keep_range(&self, start: usize, end: usize, type_param: &Type) -> PartialVMResult<()> {
+        let value = &mut *self.0.try_borrow_mut()?;
+        check_elem_layout(type_param, value)?;
+        let vec = value.vector_mut_ref()?;
+        check_vector_range(start, end, vec.len())?;
+
+        fn keep_range<T>(v: &mut Vec<T>, start: usize, end: usize) {
+            v.truncate(end);
+            drop(v.drain(..start));
+        }
+
+        match_vec_ref_container!(
+            (mut vec)
+            prim r => keep_range(r, start, end);
+            vec r => keep_range(r, start, end);
+        );
+        Ok(())
+    }
+
+    /// Reverses `v` in place.
+    pub fn reverse(&self, type_param: &Type) -> PartialVMResult<()> {
+        let value = &mut *self.0.try_borrow_mut()?;
+        check_elem_layout(type_param, value)?;
+        let vec = value.vector_mut_ref()?;
+        match_vec_ref_container!(
+            (mut vec)
+            prim r => r.reverse();
+            vec r => r.reverse();
+        );
+        Ok(())
+    }
+
+    /// Copies `v[i..j)` into a new vector; `v` is untouched. Elements of boxed vectors are
+    /// deep-copied.
+    pub fn copy_range(&self, i: usize, j: usize, type_param: &Type) -> PartialVMResult<Value> {
+        let value = &*self.0.try_borrow()?;
+        check_elem_layout(type_param, value)?;
+        Ok(match value.vector_ref()?.0 {
+            VectorMatch::PrimVec(prim_vec) => Value::PrimVec(map_prim_vec!(
+                prim_vec,
+                items,
+                checked_range(items, i, j)?.to_vec()
+            )),
+            VectorMatch::Vec(items) => Value::Vec(
+                checked_range(items, i, j)?
+                    .iter()
+                    .map(MemBox::copy_value)
+                    .collect(),
+            ),
+        })
+    }
+
+    /// Removes `v[i..j)`, inserts all elements of `other` at position `i`, and returns the
+    /// removed elements. The vector grows or shrinks by `other.len() - (j - i)`.
+    pub fn replace_range(
+        &self,
+        i: usize,
+        j: usize,
+        other: Vector,
+        type_param: &Type,
+        capacity: u64,
+    ) -> PartialVMResult<Value> {
+        let value = &mut *self.0.try_borrow_mut()?;
+        check_elem_layout(type_param, value)?;
+        let Vector(other) = other;
+        check_elem_layout(type_param, &other)?;
+
+        let other_len = other.vector_ref()?.len();
+        let len = value.vector_mut_ref()?.len();
+        check_vector_range(i, j, len)?;
+        let new_len = len
+            .checked_sub(j.saturating_sub(i))
+            .and_then(|kept| kept.checked_add(other_len))
+            .ok_or_else(|| {
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "vector length overflow during splice"
+                )
+            })?;
+        if new_len > checked_as!(capacity, usize)? {
+            return Err(partial_vm_error!(
+                VECTOR_OPERATION_ERROR,
+                "vector size limit is {capacity}",
+            )
+            .with_sub_status(VEC_SIZE_LIMIT_REACHED));
+        }
+
+        let mismatch = || {
+            partial_vm_error!(
+                INTERNAL_TYPE_ERROR,
+                "vector::splice called on mismatched or non-vector containers"
+            )
+        };
+        Ok(match (value, other) {
+            (Value::PrimVec(vec), Value::PrimVec(other_vec)) => Value::PrimVec(map_prim_vec_pair!(
+                vec,
+                other_vec,
+                items,
+                other_items,
+                replace_range_impl(items, i, j, other_items),
+                mismatch()
+            )?),
+            (Value::Vec(vec), Value::Vec(other_vec)) => {
+                Value::Vec(replace_range_impl(vec, i, j, other_vec))
+            }
+            _ => return Err(mismatch()),
+        })
     }
 
     pub fn as_bytes_ref(&self) -> PartialVMResult<std::cell::Ref<'_, Vec<u8>>> {
@@ -2216,6 +2383,10 @@ impl Vector {
 
     pub fn empty(specialization: VectorSpecialization) -> PartialVMResult<Value> {
         Self::pack(specialization, vec![])
+    }
+
+    pub fn into_value(self) -> Value {
+        self.0
     }
 
     pub fn unpack(self, type_param: &Type, expected_num: u64) -> PartialVMResult<Vec<Value>> {
