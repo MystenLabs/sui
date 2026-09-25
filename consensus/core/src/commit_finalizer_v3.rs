@@ -34,6 +34,8 @@ use crate::{
 
 const STATUS_INTERVAL: Duration = Duration::from_secs(1);
 const SLOW_FINALIZATION: Duration = Duration::from_millis(200);
+// Limit the target bits and retained vote data for large commits.
+const DIRECT_VOTE_TARGETS_PER_BATCH: usize = 256;
 
 /// Finalizes transactions in committed sub-DAGs under the Mysticeti v3 transaction voting rules.
 ///
@@ -337,65 +339,72 @@ impl CommitFinalizerV3 {
         self.pending_commits[commit_index].attempts += 1;
         let leader_round = self.pending_commits[commit_index].commit.leader.round;
         let last_voting_round = leader_round.saturating_add(1);
-        let pending_transactions = self.pending_commits[commit_index]
+        let pending_transactions: Vec<_> = self.pending_commits[commit_index]
             .pending_transactions
-            .clone();
+            .iter()
+            .map(|(block_ref, indices)| (*block_ref, indices.clone()))
+            .collect();
         if pending_transactions.is_empty() {
             return;
         }
-        let collect_timer = self
-            .context
-            .metrics
-            .node_metrics
-            .finalizer_v3_phase_duration_seconds
-            .with_label_values(&["direct_collect"])
-            .start_timer();
-        let (mut votes_by_target, gc_round) = {
-            let dag_state = self.dag_state.read();
-            let gc_round = dag_state.gc_round();
-            // A pruned target must not seed the shared traversal. Its first votes may be missing.
-            let targets: Vec<_> = pending_transactions
-                .keys()
-                .copied()
-                .filter(|target| {
-                    target.round > gc_round && dag_state.get_block_children(target).is_some()
-                })
-                .collect();
-            let votes = collect_first_votes_for_targets(&*dag_state, &targets, last_voting_round);
-            (
-                targets
-                    .into_iter()
-                    .zip_debug_eq(votes)
-                    .collect::<BTreeMap<_, _>>(),
-                gc_round,
-            )
-        };
-        drop(collect_timer);
-        let _decisions_timer = self
-            .context
-            .metrics
-            .node_metrics
-            .finalizer_v3_phase_duration_seconds
-            .with_label_values(&["direct_decisions"])
-            .start_timer();
-        for (block_ref, transaction_indices) in pending_transactions {
-            let first_votes = votes_by_target.remove(&block_ref).unwrap_or_default();
-            let mut decisions =
-                self.compute_direct_decisions(block_ref, &transaction_indices, &first_votes);
-            if self.pending_commits[commit_index]
-                .pending_direct_vote
-                .is_none()
-            {
-                self.pending_commits[commit_index].pending_direct_vote =
-                    decisions.pending.take().map(|vote| (gc_round, vote));
+        let mut collect_duration = Duration::ZERO;
+        let mut decisions_duration = Duration::ZERO;
+        for batch in pending_transactions.chunks(DIRECT_VOTE_TARGETS_PER_BATCH) {
+            let collect_started = Instant::now();
+            let (mut votes_by_target, gc_round) = {
+                let dag_state = self.dag_state.read();
+                let gc_round = dag_state.gc_round();
+                // A pruned target must not seed the shared traversal. Its first votes may be missing.
+                let targets: Vec<_> = batch
+                    .iter()
+                    .map(|(target, _)| *target)
+                    .filter(|target| {
+                        target.round > gc_round && dag_state.get_block_children(target).is_some()
+                    })
+                    .collect();
+                let votes =
+                    collect_first_votes_for_targets(&*dag_state, &targets, last_voting_round);
+                (
+                    targets
+                        .into_iter()
+                        .zip_debug_eq(votes)
+                        .collect::<BTreeMap<_, _>>(),
+                    gc_round,
+                )
+            };
+            collect_duration += collect_started.elapsed();
+            let decisions_started = Instant::now();
+            for (block_ref, transaction_indices) in batch {
+                let first_votes = votes_by_target.remove(block_ref).unwrap_or_default();
+                let mut decisions =
+                    self.compute_direct_decisions(*block_ref, transaction_indices, &first_votes);
+                if self.pending_commits[commit_index]
+                    .pending_direct_vote
+                    .is_none()
+                {
+                    self.pending_commits[commit_index].pending_direct_vote =
+                        decisions.pending.take().map(|vote| (gc_round, vote));
+                }
+                self.apply_decisions(
+                    commit_index,
+                    *block_ref,
+                    decisions,
+                    "direct_finalize",
+                    "direct_reject",
+                );
             }
-            self.apply_decisions(
-                commit_index,
-                block_ref,
-                decisions,
-                "direct_finalize",
-                "direct_reject",
-            );
+            decisions_duration += decisions_started.elapsed();
+        }
+        for (phase, duration) in [
+            ("direct_collect", collect_duration),
+            ("direct_decisions", decisions_duration),
+        ] {
+            self.context
+                .metrics
+                .node_metrics
+                .finalizer_v3_phase_duration_seconds
+                .with_label_values(&[phase])
+                .observe(duration.as_secs_f64());
         }
     }
 
@@ -925,12 +934,13 @@ impl ReverseBlockGraph for CommittedBlockGraph {
 }
 
 /// Collects first votes for all targets in one round-ordered pass.
-/// Targets must be unique. The caller must exclude targets whose child links have been pruned.
+/// Targets must be unique and within the batch limit. The caller must exclude pruned child links.
 fn collect_first_votes_for_targets(
     graph: &impl ReverseBlockGraph,
     targets: &[BlockRef],
     last_voting_round: Round,
 ) -> Vec<Vec<Arc<VotingBlock>>> {
+    assert!(targets.len() <= DIRECT_VOTE_TARGETS_PER_BATCH);
     struct TargetHistory {
         including_self: Vec<u64>,
         strict: Vec<u64>,
@@ -1656,6 +1666,67 @@ mod tests {
                     "case {case}, GC round {gc_round}, voting round {last_voting_round}",
                 );
             }
+        }
+    }
+
+    #[tokio::test]
+    async fn shared_direct_votes_use_bounded_batches() {
+        let mut fixture = Fixture::with_fault_budget(127, 21, 0, |_| {});
+        let round_one = fixture.make_round_one_blocks(&[1; 127]);
+        let mut parents: Vec<_> = round_one.iter().map(|block| block.reference()).collect();
+        let mut leader = None;
+        for round in 2..=5 {
+            let blocks: Vec<_> = (0..127)
+                .map(|author| {
+                    let mut ancestors = parents.clone();
+                    let own_authority = AuthorityIndex::new_for_test(author);
+                    ancestors.sort_by_key(|block_ref| block_ref.author != own_authority);
+                    VerifiedBlock::new_for_test(
+                        TestBlock::new(round, author)
+                            .set_ancestors(ancestors)
+                            .set_transactions(vec![Transaction::new(vec![1])])
+                            .build_v3(0),
+                    )
+                })
+                .collect();
+            fixture.add_blocks(&blocks);
+            parents = blocks.iter().map(|block| block.reference()).collect();
+            if round == 4 {
+                leader = Some(blocks[0].clone());
+            }
+        }
+        let mut linearizer =
+            crate::linearizer::Linearizer::new(fixture.context.clone(), fixture.dag_state.clone());
+        let commit = linearizer
+            .handle_commit(vec![leader.unwrap()])
+            .pop()
+            .unwrap();
+        let target_count = commit.blocks.len();
+        assert!(target_count > DIRECT_VOTE_TARGETS_PER_BATCH);
+        let finalized = fixture.finalizer.process_commit(commit);
+        assert_eq!(finalized.len(), 1);
+        assert!(finalized[0].rejected_transactions_by_block.is_empty());
+        assert_eq!(
+            fixture
+                .context
+                .metrics
+                .node_metrics
+                .finalizer_transaction_status
+                .with_label_values(&["direct_finalize"])
+                .get(),
+            target_count as u64,
+        );
+        for phase in ["direct_collect", "direct_decisions"] {
+            assert_eq!(
+                fixture
+                    .context
+                    .metrics
+                    .node_metrics
+                    .finalizer_v3_phase_duration_seconds
+                    .with_label_values(&[phase])
+                    .get_sample_count(),
+                1,
+            );
         }
     }
 
