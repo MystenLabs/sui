@@ -26,6 +26,7 @@ use crate::consensus_adapter::{
     processing_error,
 };
 use crate::consensus_handler::{SequencedConsensusTransactionKey, tx_type_label};
+use crate::overload_monitor::AuthorityOverloadInfo;
 use async_trait::async_trait;
 use consensus_core::{BlockStatus, ClientError, LimitReached, Transaction, TransactionPool};
 use consensus_types::block::{
@@ -39,6 +40,7 @@ use prometheus::IntGauge;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::sync::Weak;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use sui_macros::fail_point_if;
 use sui_types::base_types::EpochId;
@@ -313,6 +315,7 @@ pub struct ConsensusTransactionPool {
     epoch_store: Arc<AuthorityPerEpochStore>,
     metrics: Arc<AdmissionQueueMetrics>,
     adapter_metrics: ConsensusAdapterMetrics,
+    overload_info: Arc<AuthorityOverloadInfo>,
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -322,6 +325,7 @@ impl ConsensusTransactionPool {
         max_pending_transactions: usize,
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
+        overload_info: Arc<AuthorityOverloadInfo>,
     ) -> Self {
         assert!(
             max_pending_transactions > 0,
@@ -343,6 +347,7 @@ impl ConsensusTransactionPool {
             epoch_store,
             metrics: metrics.clone(),
             adapter_metrics,
+            overload_info,
             inner: Arc::new(Mutex::new(Inner::Open(Pool {
                 user: UserLane::Open(PriorityAdmissionQueue::new(
                     max_pending_transactions,
@@ -366,6 +371,7 @@ impl ConsensusTransactionPool {
             max_pending_transactions,
             metrics,
             ConsensusAdapterMetrics::new_test(),
+            Arc::new(AuthorityOverloadInfo::default()),
         )
     }
 
@@ -991,13 +997,41 @@ impl TransactionPool for ConsensusTransactionPool {
         {
             let mut pending_count = transactions.len();
             let mut pending_bytes = total_bytes;
+            // The overload monitor's load shedding percentage throttles the user lane: only
+            // that fraction of the block budget left after the system lane is offered to
+            // user transactions, which are taken in gas price order.
+            let user_budget_percentage = 100usize.saturating_sub(
+                self.overload_info
+                    .load_shedding_percentage
+                    .load(Ordering::Relaxed)
+                    .min(100) as usize,
+            );
+            self.metrics
+                .pool_user_budget_percentage
+                .set(user_budget_percentage as i64);
+            let user_max_count = pending_count
+                + budget_share(
+                    max_count.saturating_sub(pending_count),
+                    user_budget_percentage,
+                );
+            let user_max_bytes = pending_bytes
+                + budget_share(
+                    max_bytes.saturating_sub(pending_bytes),
+                    user_budget_percentage,
+                );
             let popped;
             (popped, already_processed) = user.pop_batch_while(|entry| {
                 // An already-processed entry is excluded without consuming block budget.
                 if all_processed(&mut entry.processed).is_some() {
                     return PopAction::Exclude;
                 }
-                match entry_limit(entry, pending_count, pending_bytes, max_count, max_bytes) {
+                match entry_limit(
+                    entry,
+                    pending_count,
+                    pending_bytes,
+                    user_max_count,
+                    user_max_bytes,
+                ) {
                     Some(limit) => {
                         limit_reached = limit;
                         PopAction::Stop
@@ -1159,6 +1193,10 @@ impl ConsensusTransactionPool {
 
 /// Which block limit the entry would exceed, if any. Entries are all-or-nothing:
 /// a bundle that does not fit stays queued in full for the next proposal.
+fn budget_share(remaining: usize, percentage: usize) -> usize {
+    (remaining as u128 * percentage as u128 / 100) as usize
+}
+
 fn entry_limit(
     entry: &PoolEntry,
     current_count: usize,
@@ -1201,19 +1239,26 @@ pub struct TransactionPoolContext {
     state: watch::Sender<PoolState>,
     metrics: Arc<AdmissionQueueMetrics>,
     adapter_metrics: ConsensusAdapterMetrics,
+    overload_info: Arc<AuthorityOverloadInfo>,
 }
 
 impl TransactionPoolContext {
     pub fn new(
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
+        overload_info: Arc<AuthorityOverloadInfo>,
     ) -> Self {
         let (state, _) = watch::channel(PoolState::Absent);
         Self {
             state,
             metrics,
             adapter_metrics,
+            overload_info,
         }
+    }
+
+    pub fn overload_info(&self) -> &Arc<AuthorityOverloadInfo> {
+        &self.overload_info
     }
 
     pub fn set_active(&self, epoch: EpochId, pool: Arc<ConsensusTransactionPool>) {
@@ -1318,7 +1363,11 @@ impl TransactionPoolContext {
 
     #[cfg(test)]
     pub(crate) fn new_for_tests(metrics: Arc<AdmissionQueueMetrics>) -> Self {
-        Self::new(metrics, ConsensusAdapterMetrics::new_test())
+        Self::new(
+            metrics,
+            ConsensusAdapterMetrics::new_test(),
+            Arc::new(AuthorityOverloadInfo::default()),
+        )
     }
 }
 
@@ -1565,6 +1614,40 @@ mod tests {
         assert_eq!(transactions.len(), 1);
         ack(block(6));
         assert_eq!(low_receiver.await.unwrap().unwrap()[0].index, 0);
+    }
+
+    #[tokio::test]
+    async fn take_throttles_user_lane_by_load_shedding_percentage() {
+        let (_state, pool) = test_state_and_pool(10).await;
+        let epoch = pool.epoch();
+        let _system_receiver = pool.submit(epoch, &[transaction()]).unwrap();
+        for gas_price in [10, 20, 30, 40] {
+            pool.try_insert(epoch, gas_price, vec![transaction()])
+                .unwrap();
+        }
+
+        // Block budget 5: the system lane takes 1 and the user lane is offered half of the
+        // remaining 4.
+        pool.overload_info.set_overload(50);
+        let (transactions, ack, _) = pool.take(5, usize::MAX);
+        assert_eq!(transactions.len(), 3);
+        assert_eq!(pool.metrics.pool_user_budget_percentage.get(), 50);
+        assert_eq!(pool.queue_depth("user"), 2);
+        ack(block(1));
+
+        // Full load shedding offers nothing to the user lane; the system lane is unaffected.
+        pool.overload_info.set_overload(100);
+        let (transactions, ack, _) = pool.take(5, usize::MAX);
+        assert!(transactions.is_empty());
+        assert_eq!(pool.metrics.pool_user_budget_percentage.get(), 0);
+        drop(ack);
+
+        pool.overload_info.clear_overload();
+        let (transactions, ack, _) = pool.take(5, usize::MAX);
+        assert_eq!(transactions.len(), 2);
+        assert_eq!(pool.metrics.pool_user_budget_percentage.get(), 100);
+        ack(block(2));
+        pool.close();
     }
 
     #[tokio::test]
