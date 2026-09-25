@@ -43,6 +43,7 @@ fn load_linkage_packages_into_runtime<DataSource: ModuleResolver + Send + Sync>(
         &mut dummy_telemetry,
         &cache,
         &natives,
+        &crate::shared::TypeLimits::VM_DEFAULT,
         all_packages,
     )
 }

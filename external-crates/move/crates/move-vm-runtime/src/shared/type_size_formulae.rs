@@ -830,8 +830,9 @@ fn visit_field(
     value_depth_local: &mut MaxPlusForm,
     layout_size_local: &mut LinearForm,
     linearizer: &mut Linearizer,
+    type_limits: &TypeLimits,
 ) -> PartialVMResult<()> {
-    let mut remaining_nodes = TypeLimits::VM_DEFAULT.max_type_nodes();
+    let mut remaining_nodes = type_limits.max_type_nodes();
     loop {
         if remaining_nodes == 0 {
             return Err(partial_vm_error!(
@@ -909,6 +910,7 @@ impl ArenaTypeSizeFormula {
     pub(crate) fn from_datatype(
         datatype: &Datatype,
         arena: &ArenaBuilder,
+        type_limits: &TypeLimits,
     ) -> PartialVMResult<ArenaTypeSizeFormula> {
         // Build the formulae from a datatype's type-parameter count, its (flattened) field types,
         // and its `extra_layout_nodes` (one per variant for enums, zero for structs).
@@ -917,6 +919,7 @@ impl ArenaTypeSizeFormula {
             field_types: impl Iterator<Item = &'a ArenaType>,
             extra_layout_nodes: u64,
             arena: &ArenaBuilder,
+            type_limits: &TypeLimits,
         ) -> PartialVMResult<ArenaTypeSizeFormula> {
             // The datatype instantiated over its own parameters, `S<T0..Tn>`: one node plus each
             // parameter, one level deep.
@@ -949,6 +952,7 @@ impl ArenaTypeSizeFormula {
                     &mut value_depth_local,
                     &mut layout_size_local,
                     &mut linearizer,
+                    type_limits,
                 )?;
             }
             value_depth_local.canonicalize();
@@ -972,6 +976,7 @@ impl ArenaTypeSizeFormula {
                     struct_.fields.iter(),
                     0,
                     arena,
+                    type_limits,
                 )
             }
             Datatype::Enum(enum_) => {
@@ -984,6 +989,7 @@ impl ArenaTypeSizeFormula {
                         .flat_map(|variant| variant.fields.iter()),
                     enum_.variants.len() as u64,
                     arena,
+                    type_limits,
                 )
             }
         }
@@ -1000,7 +1006,11 @@ impl ArenaTypeSizeFormula {
     /// Example: for datatypes `R` and `S`, the term `vector<R<S<u64>>>` gets `type_size = 4`,
     /// `type_depth = max(4)`, locals `value_depth = max(1)` / `layout_size = 1` (the vector),
     /// and the application chain `[S<u64>, R<r0>]` with `R`'s entry folded at depth 1.
-    pub(crate) fn from_term(ty: &ArenaType, arena: &ArenaBuilder) -> PartialVMResult<Self> {
+    pub(crate) fn from_term(
+        ty: &ArenaType,
+        arena: &ArenaBuilder,
+        type_limits: &TypeLimits,
+    ) -> PartialVMResult<Self> {
         // The syntactic measures, computed structurally over a worklist: each node is one
         // `type_size` node at its `type_depth` level; parameters contribute their own measures
         // (coefficients sum, offsets max on repeated parameters).
@@ -1072,6 +1082,7 @@ impl ArenaTypeSizeFormula {
             &mut value_depth_local,
             &mut layout_size_local,
             &mut linearizer,
+            type_limits,
         )?;
         value_depth_local.canonicalize();
         layout_size_local.canonicalize();

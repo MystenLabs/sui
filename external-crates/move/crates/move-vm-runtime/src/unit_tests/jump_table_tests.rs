@@ -59,6 +59,7 @@ fn translate_test_package(
         &move_vm_config::runtime::VMConfig::new_for_test(
             /* allow_unpublishable_code_execution */ false, None,
         ),
+        &crate::shared::TypeLimits::VM_DEFAULT,
         &interner,
         &natives,
         &BTreeMap::new(),

@@ -966,7 +966,12 @@ fn test_term_formula_argument_order() {
     // T<u64, vector<u64>>: type 4 nodes / 3 deep; value depth max(2, 1+1, 2+2) = 4 (3 if the
     // arguments were swapped); layout 2 + 1 + 2 = 5.
     let sized = |ty: ArenaType| SizedArenaType {
-        size_formula: ArenaTypeSizeFormula::from_term(&ty, &arena).unwrap(),
+        size_formula: ArenaTypeSizeFormula::from_term(
+            &ty,
+            &arena,
+            &crate::shared::TypeLimits::VM_DEFAULT,
+        )
+        .unwrap(),
         ty,
     };
 
