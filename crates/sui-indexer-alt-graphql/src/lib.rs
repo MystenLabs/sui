@@ -45,7 +45,6 @@ use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
-use sui_indexer_alt_reader::fullnode_client::X_SUI_CLIENT_PROTOCOL_VERSION;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
@@ -84,6 +83,7 @@ use crate::extensions::logging::Logging;
 use crate::extensions::logging::Session;
 use crate::metrics::RpcMetrics;
 use crate::metrics::SubscriptionMetrics;
+use crate::middleware::client_protocol_version::ClientProtocolVersion;
 use crate::middleware::version::Version;
 
 const GRAPHQL_PATH: &str = "/graphql";
@@ -553,6 +553,7 @@ async fn graphql(
     Extension(logging): Extension<LoggingConfig>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
+    client_protocol_version: Option<TypedHeader<ClientProtocolVersion>>,
     headers: axum::http::HeaderMap,
     fullnode_client: Option<Extension<FullnodeClient>>,
     request: GraphQLRequest,
@@ -568,22 +569,21 @@ async fn graphql(
         request = request.data(show_usage);
     }
 
-    let request = with_fullnode_client(request, fullnode_client, &headers);
+    let request = with_fullnode_client(request, fullnode_client, client_protocol_version);
     schema.execute(request).await.into()
 }
 
 fn with_fullnode_client(
     request: async_graphql::Request,
     fullnode_client: Option<Extension<FullnodeClient>>,
-    headers: &axum::http::HeaderMap,
+    client_protocol_version: Option<TypedHeader<ClientProtocolVersion>>,
 ) -> async_graphql::Request {
     let Some(Extension(mut client)) = fullnode_client else {
         return request;
     };
 
-    if let Some(version) = headers
-        .get(X_SUI_CLIENT_PROTOCOL_VERSION)
-        .and_then(|value| MetadataValue::try_from(value.as_bytes()).ok())
+    if let Some(version) = client_protocol_version
+        .and_then(|TypedHeader(version)| MetadataValue::try_from(version.0.as_bytes()).ok())
     {
         client = client.with_client_protocol_version(version);
     }
@@ -616,7 +616,7 @@ async fn graphql_subscriptions(
     Extension(SubscriptionsEnabled(subscriptions_enabled)): Extension<SubscriptionsEnabled>,
     Extension(throttle_cfg): Extension<SubscriptionThrottle>,
     Extension(watermark): Extension<WatermarksLock>,
-    headers: axum::http::HeaderMap,
+    client_protocol_version: Option<TypedHeader<ClientProtocolVersion>>,
     fullnode_client: Option<Extension<FullnodeClient>>,
     request: GraphQLRequest,
 ) -> axum::response::Response {
@@ -640,7 +640,7 @@ async fn graphql_subscriptions(
         .data(rich::Meter::default())
         .data(query_depth.clone());
 
-    let req = with_fullnode_client(req, fullnode_client, &headers);
+    let req = with_fullnode_client(req, fullnode_client, client_protocol_version);
 
     // Pace delivery per subscriber, then serialize each payload into an SSE event.
     let stream = throttle
@@ -684,6 +684,7 @@ mod tests {
     use reqwest::Client;
     use serde_json::Value;
     use serde_json::json;
+    use sui_indexer_alt_reader::fullnode_client::X_SUI_CLIENT_PROTOCOL_VERSION;
     use sui_pg_db::temp::get_available_port;
     use sui_types::base_types::SuiAddress;
     use sui_types::transaction::ProgrammableTransaction;
