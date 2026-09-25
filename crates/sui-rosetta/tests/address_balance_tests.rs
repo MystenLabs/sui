@@ -599,11 +599,11 @@ const MAINNET_REFERENCE_GAS_PRICE: u64 = 100;
 ///
 /// The sender holds one large SUI coin plus 0.5 SUI of address balance, so PaySui picks Path A and
 /// `/construction/metadata` succeeds with an estimated budget. `/construction/submit` then
-/// simulates the signed transaction with `do_gas_selection = false`. The simulator injects a
-/// synthetic gas coin into any transaction with an empty gas payment and charges that coin's
-/// storage (~988_000 MIST), which the metadata budget estimate deliberately excludes. The only
-/// margin in the estimate is `1000 * RGP`: 1_000_000 MIST at the test-cluster default RGP of
-/// 1000, but 100_000 MIST at RGP 100, so submit's simulation fails with `InsufficientGas`.
+/// simulates the signed transaction with `do_gas_selection = false`, which must run it with
+/// address-balance gas, as it executes. The metadata budget estimate excludes the storage of the
+/// simulator's synthetic gas coin (~988_000 MIST) and keeps only `1000 * RGP` of margin (100_000
+/// MIST at RGP 100), so a submit simulation that charged a synthetic gas coin would fail with
+/// `InsufficientGas`. The test-cluster default RGP of 1000 leaves enough margin to hide that.
 #[tokio::test]
 async fn test_pay_sui_ab_gas_at_mainnet_reference_gas_price() {
     let validator = ValidatorGenesisConfigBuilder::new()
