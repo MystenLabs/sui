@@ -10,6 +10,7 @@ keywords:
   - deepbook predict
   - mint_exact_quantity
   - mint_exact_amount
+  - mint_exact_cost
   - redeem_live
   - redeem_settled
   - try_settle
@@ -45,16 +46,19 @@ questions:
   - Why does a DeepBook Predict mint abort with ETradeWindowClosed?
   - How does a DeepBook Predict market settle?
   - What is the minimum trade size on DeepBook Predict?
+  - How do I spend an exact total on a DeepBook Predict mint?
 answer: >-
   DeepBook Predict trading lives in the deepbook_predict::expiry_market module.
   One shared ExpiryMarket object holds each expiry's cash, exposure index, and
   pause flag. You load a transaction-local Pricer with load_live_pricer, size
   the trade with quote_mint, then call mint_exact_quantity, mint_exact_amount,
-  redeem_live, or redeem_settled with an account Auth. Live trades close in the
-  last no_trade_window_ms before expiry, and settlement is the permissionless
-  try_settle.
-last_verified: 2026-09-14
-verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
+  mint_exact_cost, redeem_live, or redeem_settled with an account Auth.
+  mint_exact_cost, new in package version 2 and now live on both networks,
+  sizes the fill inside an all-in budget so fees come out of the spend rather
+  than on top of it. Live trades close in the last no_trade_window_ms before expiry, and
+  settlement is the permissionless try_settle.
+last_verified: 2026-09-23
+verified_against: deepbookv3 abb4cfd9; predict protocol version 3 and sessions 2 on both networks
 ---
 
 Trading on DeepBook Predict runs through the `deepbook_predict::expiry_market` module. One shared `ExpiryMarket` object exists per underlying and expiry, and it owns that expiry's USDC custody, strike exposure index, congestion estimator, mint pause flag, and flush stamp. Every call on this page is a `public fun` that you invoke from a programmable transaction block with a `moveCall`. Several of them take values only another command in the same block can produce, a transaction-local `Pricer` and a single-use account `Auth`, so plan the whole flow as one block.
@@ -93,7 +97,7 @@ The field order in the table is declaration order, which is also the Binary Cano
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="ExpiryMarket,ValuationStamp"
 />
 
@@ -134,7 +138,7 @@ See [Oracle](/onchain-finance/deepbook/deepbook-predict/contract-information/ora
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="load_live_pricer"
 	noComments
 />
@@ -173,11 +177,27 @@ public fun quote_mint_for_account(
     clock: &Clock,
     ctx: &mut TxContext,
 ): MintQuote
+
+public fun quote_mint_exact_cost_for_account(
+    market: &ExpiryMarket,
+    wrapper: &AccountWrapper,
+    config: &ProtocolConfig,
+    pricer: &Pricer,
+    lower_tick: u64,
+    higher_tick: u64,
+    max_cost: u64,
+    min_quantity: u64,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): MintQuote
 ```
 
 The difference is whose terms the quote reflects. `quote_mint` prices an anonymous taker with no builder code. `quote_mint_for_account` reads the account's sticky builder code so the quoted builder fee matches what that account pays, and in budget mode it caps `max_premium` by the account's available USDC, including funds delivered through the accumulator but not yet settled.
 
 Set `exact_quantity` to `true` to price a fixed size, in which case `min_quantity` carries the requested quantity. Set it to `false` to size a lot-rounded fill under the `max_premium` budget. The congestion surcharge each quote reports uses the pre-update congestion estimate, which is the same estimate a mint in the same state charges.
+
+`quote_mint_exact_cost_for_account`, new in package version 2 and callable on both networks, is the read-only twin of [`mint_exact_cost`](#mint-a-position): it runs the same budget search against the same state and returns the fill that budget buys, along with that fill's cost decomposition. It takes the account for the same reasons `quote_mint_for_account` does, plus one more: the chain caps the budget at the account's available USDC before sizing, and the quote reproduces that cap. It is the natural source of a `min_quantity` floor for the mint that follows. Like the other 2 quotes, it does not preflight expiry cash backing or exposure-index capacity.
 
 Both quotes run the entry-probability band before they size anything. For a two-sided range the band applies 3 times: to the range probability, to the probability that settlement ends above the lower strike, and to the probability that it ends at or below the higher strike. An open end contributes no check, and the finite end of a directional position has the same probability as the position itself. The quoted `trading_fee` sums one fee for each finite boundary, as [Fee components](/onchain-finance/deepbook/deepbook-predict/design#fee-components) describes.
 
@@ -193,8 +213,8 @@ The SDK's `client.predict.read.quoteMint` is a different thing at a different la
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
-	fun="quote_mint,quote_mint_for_account"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
+	fun="quote_mint,quote_mint_for_account,quote_mint_exact_cost_for_account"
 	noComments
 />
 
@@ -228,7 +248,7 @@ The congestion surcharge is one mechanism with 2 names, `penalty_fee` onchain an
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="MintQuote"
 />
 
@@ -237,7 +257,7 @@ The congestion surcharge is one mechanism with 2 names, `penalty_fee` onchain an
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="quantity,entry_probability,premium,trading_fee,fee_incentive_subsidy,builder_fee,penalty_fee,inventory_impact_charge,all_in_cost"
 	noComments
 />
@@ -259,7 +279,7 @@ The SDK's `MintQuote.fees.referral` does report it, because that value comes fro
 
 ## Mint a position {#mint-a-position}
 
-Positions open through 2 functions. Both take the strike range as the tick pair `(lower_tick, higher_tick]`, both consume an account `Auth`, and both return the minted order ID as a `u256`. A `u256` has `drop`, so the transaction is free to ignore that return value; recover the ID from the `OrderMinted` event instead when you do not chain another command onto it:
+Positions open through 3 functions, one per sizing shape: an exact payout quantity, a premium budget, or an all-in budget. All 3 take the strike range as the tick pair `(lower_tick, higher_tick]`, consume an account `Auth`, and return the minted order ID as a `u256`. A `u256` has `drop`, so the transaction is free to ignore that return value; recover the ID from the `OrderMinted` event instead when you do not chain another command onto it:
 
 ```move title='packages/predict/sources/expiry_market.move'
 public fun mint_exact_quantity(
@@ -293,13 +313,46 @@ public fun mint_exact_amount(
     clock: &Clock,
     ctx: &mut TxContext,
 ): u256
+
+public fun mint_exact_cost(
+    market: &mut ExpiryMarket,
+    wrapper: &mut AccountWrapper,
+    auth: Auth,
+    config: &ProtocolConfig,
+    pricer: &Pricer,
+    lower_tick: u64,
+    higher_tick: u64,
+    max_cost: u64,
+    min_quantity: u64,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): u256
 ```
+
+:::info
+
+`mint_exact_cost` arrived in `predict` package version 2, which both networks now run or exceed. Call it against the network's current call target, not the original package ID, which has no such function. See [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#two-ids).
+
+:::
 
 `mint_exact_quantity` fixes the size. `max_cost` caps the all-in USDC withdrawal and `max_probability` caps the quoted per-contract probability before fees, and you can pass `std::u64::max_value!()` for either to leave it uncapped.
 
 `mint_exact_amount` fixes the premium budget instead. The market first caps `max_premium` by the account's available USDC, computes the largest lot-rounded quantity whose premium fits, and aborts when that quantity falls below `min_quantity`. The market charges fees, the builder add-on, and the congestion surcharge on top of the budget, so `max_cost` is the only bound on the total withdrawal. You must pass `max_cost` here: zero aborts with `EMintCostCapRequired`, and no value disables it. This variant has no `max_probability` argument, because `min_quantity` against a fixed budget already bounds the price paid per contract.
 
-Both calls run the same gates, in this order, before anything moves:
+`mint_exact_cost` fixes the **all-in** budget, which is the difference that matters. Where `mint_exact_amount` sizes on the pre-fee premium and then charges the trading fee, builder add-on, congestion surcharge, and inventory-impact charge on top of it, `mint_exact_cost` sizes inside the total: it caps `max_cost` at the account's available USDC, then searches for the largest lot-rounded quantity whose complete withdrawal fits that figure. The search probes the same cost computation the mint charges, against the fee, subsidy, congestion, and book state at execution, so the debit can never exceed `max_cost` and no off-chain fee estimate or padding is needed. Passing `std::u64::max_value!()` sizes against the whole balance. There is no `max_cost` requirement to satisfy here, because the budget *is* the sizing input; a budget too small to clear the minimum premium aborts with `EPremiumBelowMinimum`, and zero is such a budget.
+
+`min_quantity` is this shape's slippage guard. The spend is fixed, so an adverse move in price, congestion surcharge, sponsor subsidy, or inventory impact between building the transaction and executing it arrives as fewer contracts rather than a larger debit, and a fill below the floor aborts with `EMintQuantityBelowMin`. It bounds the all-in price per contract at `max_cost / min_quantity`, which is why this shape carries no `max_probability` either. Zero accepts any fill the budget buys.
+
+Three limits qualify the fill, and a caller sizing a spend should know all 3:
+
+- **The one-lot remainder holds only when the budget binds.** If the budget is what limits the fill, what goes unspent is less than the incremental all-in cost of one more lot. A fill limited by something else can leave much more.
+- **The maximum-payout bound can step the fill down.** The marginal inventory-impact rate rises with liability, so the largest fill a budget could pay for is sometimes one that would cost more than its own maximum payout. Sizing then falls back to a smaller fill. That fallback is conservative: integer rounding can make it miss a larger admissible fill, or abort on `min_quantity` or the minimum premium where another size would have succeeded. When no smaller fill clears the bound, the mint reports `EMintCostAboveMaxPayout`.
+- **Backing is not a sizing input.** Insufficient expiry cash backing aborts the mint rather than shrinking it, and the read-only quote does not preflight backing or exposure-index capacity.
+
+`quote_mint_exact_cost_for_account` is the read-only twin. It returns the fill the same budget would buy, and that fill's cost decomposition, which is the natural source for a `min_quantity` floor.
+
+All 3 calls run the same gates, in this order, before anything moves:
 
 1. The running package version must be at or above the protocol version watermark.
 1. No pool-flush snapshot stage can be open in this transaction.
@@ -320,14 +373,14 @@ You address positions by absolute integer ticks, with `0` as the open lower end 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
-	fun="mint_exact_quantity,mint_exact_amount"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
+	fun="mint_exact_quantity,mint_exact_amount,mint_exact_cost"
 	noComments
 />
 
 </details>
 
-The TypeScript SDK wraps both calls, resolves the market from an underlying and expiry, and converts raw strikes to ticks for you. `client.predict.tx.mint` builds `mint_exact_quantity` and `client.predict.tx.mintAmount` builds `mint_exact_amount`. Omitting the SDK's `maxCost` or `maxProbability` options sends `u64::MAX`, which caps nothing, so read a quote first and set a cap.
+The TypeScript SDK wraps all 3 calls, resolves the market from an underlying and expiry, and converts raw strikes to ticks for you. `client.predict.tx.mint` builds `mint_exact_quantity`, `client.predict.tx.mintAmount` builds `mint_exact_amount`, and `client.predict.tx.mintCost` builds `mint_exact_cost`, with `client.predict.read.quoteMintCost` as the matching dry run. Omitting the SDK's `maxCost` or `maxProbability` options sends `u64::MAX`, which caps nothing, so read a quote first and set a cap. `tx.mintCost` has no such hole, because its budget is required.
 
 <details>
 <summary>Quote and mint with the SDK</summary>
@@ -350,6 +403,8 @@ The gate applies to these functions and their `sessions` wrappers:
 - `quote_mint_for_account`
 - `mint_exact_quantity`
 - `mint_exact_amount`
+- `mint_exact_cost`
+- `quote_mint_exact_cost_for_account`
 - `redeem_live`
 
 It does not apply to these functions or to any read accessor:
@@ -423,7 +478,7 @@ Both settled paths run the version gate and refuse to run inside a pool flush's 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="redeem_live,redeem_settled,redeem_settled_permissionless"
 	noComments
 />
@@ -476,7 +531,7 @@ Settled redeems, pool rebalancing, and the flush's snapshot stage only read the 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="try_settle"
 	noComments
 />
@@ -504,7 +559,7 @@ The call always returns the resolved tick as a `u64`, but it emits `ReferenceTic
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="set_reference_tick,set_mint_paused"
 	noComments
 />
@@ -547,7 +602,7 @@ public fun settled_order_payout(market: &ExpiryMarket, order_id: u256): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="id,expiry,is_settled,try_settlement_price,cash_balance,required_cash,payout_liability,tick_size,admission_tick_size,reference_tick,mint_paused,is_pending_valuation"
 	noComments
 />
@@ -557,7 +612,7 @@ public fun settled_order_payout(market: &ExpiryMarket, order_id: u256): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="current_nav,live_order_value,settled_order_payout"
 	noComments
 />
@@ -581,9 +636,9 @@ The SDK's `client.predict.read.markets`, `read.market`, and `read.pricer` cover 
 | `6` | `EMintRedeemSameTimestamp` | A live redeem ran in the same onchain millisecond as the mint that opened the position. |
 | `7` | `ERedeemProbabilityBelowMin` | The quoted range probability fell below the `min_probability` floor. |
 | `8` | `ERedeemProceedsBelowMin` | The net credit fell below the `min_proceeds` floor. |
-| `9` | `EMintCostCapRequired` | A caller ran `mint_exact_amount` with `max_cost` set to zero. |
+| `9` | `EMintCostCapRequired` | A caller ran `mint_exact_amount` with `max_cost` set to zero. `mint_exact_cost` never raises it: there the budget is the sizing input, and a zero budget aborts `EPremiumBelowMinimum` instead. |
 | `10` | `EMarketNotPendingValuation` | The pool flush tried to value a market that carries no snapshot stamp. Package-internal, and unreachable through the public flush sequence. |
-| `11` | `EMintCostAboveMaxPayout` | The quoted `all_in_cost` exceeds `quantity`, the position's maximum payout. Both quotes and both mints raise it. |
+| `11` | `EMintCostAboveMaxPayout` | The quoted `all_in_cost` exceeds `quantity`, the position's maximum payout. Every quote and every mint raises it. On `mint_exact_cost` it means no admissible size cleared the bound, because that entrypoint first steps a breaching fill down. |
 
 Aborts from other modules reach these calls too. A mint can abort inside `strike_exposure_config` on entry-probability or premium policy, covered in the next section. A pricer load can abort inside `pricing` when an oracle object does not match the registry binding, when a contributing observation is stale or the same transaction wrote it, or with `ELivePricingExpired` at or after expiry. A gate can abort inside `protocol_config` with these codes:
 
@@ -702,7 +757,7 @@ The event carries the payout but not the settlement price. Read that from the `M
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="OrderMinted,LiveOrderRedeemed,SettledOrderRedeemed"
 />
 

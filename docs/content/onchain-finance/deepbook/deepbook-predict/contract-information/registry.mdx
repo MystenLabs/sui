@@ -18,7 +18,7 @@ keywords:
   - builder code
   - no_trade_window_ms
   - max_valuation_window_ms
-last_verified: 2026-09-14
+last_verified: 2026-09-23
 verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 goal:
   description: >-
@@ -66,7 +66,7 @@ The registry holds the market catalog inline rather than in a separate object:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="Registry"
 />
 
@@ -81,7 +81,7 @@ Each market is its own shared `ExpiryMarket` object, addressed by the underlying
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="id,expiry_market_id"
 	noComments
 />
@@ -110,7 +110,7 @@ A cadence ID above `5` aborts with `EInvalidCadence`. Read one cadence or all 6:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="cadence_config,cadence_configs"
 	noComments
 />
@@ -124,7 +124,7 @@ Both reads return `CadenceConfig` by value, and it carries the 5 terms a market 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="CadenceConfig"
 />
 
@@ -135,7 +135,7 @@ Read the terms with the accessors rather than by field:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="cadence_tick_size,cadence_admission_tick_size,cadence_max_expiry_allocation,cadence_initial_expiry_cash,cadence_window_size,cadence_enabled"
 	noComments
 />
@@ -166,7 +166,7 @@ Privileged functions sit behind 4 capability types, and each one is a distinct o
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="MarketLifecycleCap"
 />
 
@@ -175,7 +175,7 @@ Privileged functions sit behind 4 capability types, and each one is a distinct o
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="PoolValuationCap"
 />
 
@@ -190,7 +190,7 @@ Pause capabilities are deliberately not version-gated, so an emergency stop stil
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="mint_pause_cap,revoke_pause_cap"
 	noComments
 />
@@ -206,7 +206,7 @@ Lifecycle capabilities are version-gated, unlike pause capabilities:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="mint_lifecycle_cap,revoke_lifecycle_cap"
 	noComments
 />
@@ -222,7 +222,7 @@ Pool valuation capabilities follow the same version-gated mint and ungated revok
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="mint_pool_valuation_cap,revoke_pool_valuation_cap,generate_pool_valuation_proof"
 	noComments
 />
@@ -240,7 +240,7 @@ The registry has 3 emergency-stop functions, and each validates the capability I
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="pause_trading_pause_cap,freeze_protocol_pause_cap,pause_expiry_market_mint_pause_cap"
 	noComments
 />
@@ -262,7 +262,7 @@ An admin must register an underlying before any market on it can exist:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="register_underlying,set_template_cadence_config"
 	noComments
 />
@@ -282,7 +282,7 @@ Market creation is the only lifecycle-capability surface in the registry, and it
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="create_and_share_expiry_market"
 	noComments
 />
@@ -310,7 +310,7 @@ Builder-code creation is the only permissionless function in the registry that c
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="create_and_share_builder_code"
 	noComments
 />
@@ -328,7 +328,7 @@ An account attaches a code with `predict_account::set_builder_code` and detaches
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="set_no_trade_window_ms,set_max_valuation_window_ms"
 	noComments
 />
@@ -393,7 +393,7 @@ Registry activity surfaces through `deepbook_predict::config_events`:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="MarketCreated,CadenceConfigUpdated,NoTradeWindowUpdated"
 />
 

@@ -18,8 +18,8 @@ keywords:
   - cadence
   - Mainnet
   - Testnet
-last_verified: 2026-09-14
-verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
+last_verified: 2026-09-23
+verified_against: publication records at deepbookv3 abb4cfd9 (Mainnet predict publish 3, Testnet predict publish 4, sessions publish 2 on both; predict protocol version 3, sessions 2); '@mysten/deepbook-v3' 2.6.1 at ts-sdks 56d51645
 goal:
   description: >-
     Reader can identify every package ID, shared object ID, coin type, unit
@@ -46,6 +46,7 @@ questions:
   - What is the DeepBook Predict quote coin on Mainnet and on Testnet?
   - What units and market cadences do the DeepBook Predict deployments use?
   - Which servers return DeepBook Predict market, oracle, and account data?
+  - Which DeepBook Predict package version is live on each network?
 answer: >-
   DeepBook Predict runs as the deepbook-predict-mainnet deployment on Sui
   Mainnet and the deepbook-predict-testnet deployment on Sui Testnet. Each
@@ -53,17 +54,66 @@ answer: >-
   PoolVault, OracleRegistry, and AccountRegistry objects. Mainnet quotes in
   native USDC and Testnet in a mintable test USDC that displays as DUSDC. Both
   scale probabilities, prices, and rates by 1e9 and run BTC markets on the 1m
-  and 5m cadences. The @mysten/deepbook-v3 SDK ships both deployments and reads
-  every value without an indexer.
+  and 5m cadences. Every package has been upgraded at least once, so each one's
+  Move call target is its latest published address while its type tags keep its
+  original one. Both networks run the same code today: predict protocol version
+  3 and sessions protocol version 2. The @mysten/deepbook-v3 SDK ships both
+  deployments and reads every value without an indexer, though 2.6.1 predates
+  the latest predict publication on each network and still resolves the
+  superseded address for both.
 ---
 
-DeepBook Predict runs on Sui Mainnet and Sui Testnet as 2 separate deployments, `deepbook-predict-mainnet` and `deepbook-predict-testnet`. Version 2.5.0 or later of [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) carries both, so `getConfig` returns the identifiers on this page for either network. The Mainnet publish comes from DeepBookV3 source commit [`7b169bde`](https://github.com/MystenLabs/deepbookv3/tree/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict), and the Testnet publish from source commit [`4d752fb8`](https://github.com/MystenLabs/deepbookv3/tree/4d752fb82d909a821c85bcc5d3963725efb546f4/packages/predict). The 2 source commits carry byte-identical Move sources, so one source pin serves both networks.
+DeepBook Predict runs on Sui Mainnet and Sui Testnet as 2 separate deployments, `deepbook-predict-mainnet` and `deepbook-predict-testnet`. Version 2.6.1 or later of [`@mysten/deepbook-v3`](https://www.npmjs.com/package/@mysten/deepbook-v3) carries both, so `getConfig` returns the identifiers on this page for either network. The Mainnet publish comes from DeepBookV3 source commit [`7b169bde`](https://github.com/MystenLabs/deepbookv3/tree/7b169bde2c2a25fee3ac9aa4686e346309bfe570/packages/predict), and the original Testnet publish from source commit [`4d752fb8`](https://github.com/MystenLabs/deepbookv3/tree/4d752fb82d909a821c85bcc5d3963725efb546f4/packages/predict), whose Move sources are byte-identical to the Mainnet ones.
+
+Both networks have since upgraded `predict` and `sessions` to version 2 from source commit [`8d7d42a0`](https://github.com/MystenLabs/deepbookv3/tree/8d7d42a0f48bc6434bc282d45d2403809b4e492c/packages/predict), which adds the [`mint_exact_cost`](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#mint-a-position) all-in budget entrypoint and its session wrapper, callable on either network.
+
+Both have since taken a further `predict` upgrade, to protocol version 3, which adds [`plp::add_usdc_to_plp`](/onchain-finance/deepbook/deepbook-predict/contract-information/vault#add-usdc). So the 2 networks run the same code and expose the same entrypoints.
+
+Every upgrade kept its original ID, so the lineage is unchanged and every object, position, account, and session grant created before it stays valid.
+
+### Publish count is not protocol version {#version-numbers}
+
+Two different numbers get called "version", and they have come apart:
+
+| **Package** | **Publishes** | **Protocol version** |
+| --- | --- | --- |
+| Mainnet `predict` | 3 | 3 |
+| Testnet `predict` | 4 | 3 |
+| `sessions`, both networks | 2 | 2 |
+
+- **Publishes** is what `Published.toml` records: how many times that package has been published on that network. It only counts events, so a Testnet-only rehearsal of an upgrade leaves Testnet permanently a publish ahead.
+- **Protocol version** is `constants::current_version!()`, compiled into the code. It gates behavior: [`assert_version`](#version-gate) aborts unless it is at or above the `ProtocolConfig` watermark, and it is what determines whether an entrypoint exists.
+
+Testnet `predict` is on its 4th publish and Mainnet's on its 3rd, yet both run protocol version 3 and behave identically. Compare protocol versions, never publish counts, when you want to know what a network can do.
+
+### The version gate {#version-gate}
+
+Every version-gated call runs `assert_version`, which aborts with `EPackageVersionDisabled` unless `constants::current_version!() >= ProtocolConfig.version_watermark`. An older package therefore keeps working until an admin raises the watermark past it, at which point every call through it stops. That is what makes a stale call target in a client library a deferred failure rather than an immediate one.
+
+## Upgraded packages carry 2 IDs {#two-ids}
+
+A Move package upgrade publishes at a new address and keeps its original one. The 2 IDs are not interchangeable, and Testnet now needs both:
+
+- **Call target:** the latest published address. Every `moveCall` target, and every `Auth` or capability argument resolved against the package, uses it.
+- **Original ID:** the address the package was first published at. Every type tag keeps it forever, so struct types, event type prefixes, the PLP coin type, and dynamic-field keys are all built from the original ID, never from the call target.
+
+The SDK carries both: `packages.predict` and `sessionsPackageId` are the call targets, `packages.predictV1` and `sessionsPackageIdV1` the original IDs. All 4 now differ from their call targets, because every package is past version 1 on both networks.
+
+:::caution
+
+`@mysten/deepbook-v3` 2.6.1 predates the latest `predict` publication on both networks. It resolves `0x1cacb9bf…` on Mainnet and `0x30a03c33…` on Testnet, and both are superseded addresses running protocol version 2. Its `sessions` IDs are current on both.
+
+Those predict targets still work, because protocol version 2 is at or above each network's current watermark, but they cannot reach anything added at protocol version 3, so `plp::add_usdc_to_plp` is unreachable through the SDK on either network. They stop working outright once an admin raises a watermark to 3. Take the current call targets from the tables below until a release ships them.
+
+:::
+
+The distinction is easy to get wrong in the direction that fails silently rather than loudly. A call sent to an original ID still *works* for every function that existed at version 1, so nothing breaks until you reach for a version 2 entrypoint, and a type tag built from a call target names a type that does not exist at all.
 
 :::caution
 
 Every identifier on this page belongs to one of the 2 current deployments. The current deployments supersede every earlier Testnet deployment, and the accounts, positions, and markets on those earlier deployments are not visible on the current ones, so ignore identifiers from them in local configuration files and scripts.
 
-Both deployments went live on 2026-09-12. As of 2026-09-14 the 4 markets each network created at deployment have expired unsettled, no market has opened since, and no oracle update has landed since deployment. The Mainnet pool holds only the bootstrap minimum. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object rather than assuming either network's state.
+Both deployments went live on 2026-09-12, and Testnet was upgraded to package version 2 on 2026-09-17. As of the last chain read recorded in the deployment manifests, the 4 markets each network created at deployment have expired unsettled, no market has opened since, and no oracle update has landed since deployment. The Mainnet pool holds only the bootstrap minimum. Read `read.markets()`, `read.pool()`, and the `ProtocolConfig` object rather than assuming either network's state.
 
 :::
 
@@ -76,22 +126,27 @@ The deployment manifest is the stable identity record. It names the chain, the s
 | Deployment | `deepbook-predict-mainnet` |
 | Network | Mainnet |
 | Chain ID | `35834a8a` |
-| Source commit | `7b169bde2c2a25fee3ac9aa4686e346309bfe570` |
-| Indexing start checkpoint | `320360057` |
+| Deployment source commit | `7b169bde2c2a25fee3ac9aa4686e346309bfe570` |
+| Upgrade source commits | `8d7d42a0f48bc6434bc282d45d2403809b4e492c`, `9a32854c` |
+| `predict` publishes / protocol version | 3 / 3 |
+| `sessions` publishes / protocol version | 2 / 2 |
+| Indexing start checkpoint | `321804009` |
 
 ### Mainnet packages {#packages}
 
-Predict is 7 packages rather than one. Move call targets, event type prefixes, and the PLP coin type all derive from these IDs. On Mainnet the `usdc` entry is Circle's native USDC package, which Predict links against rather than publishes:
+Predict is 7 packages rather than one. Move call targets, event type prefixes, and the PLP coin type all derive from these IDs. `predict` and `sessions` have both been upgraded here, so each carries 2 addresses: call the **call target**, and build every type tag from the **original ID**. The other 5 packages have never been upgraded, so the 2 columns coincide. The `usdc` entry is Circle's native USDC package, which Predict links against rather than publishes:
 
-| **Package** | **ID** | **Contents** |
-| --- | --- | --- |
-| `predict` | `0x89aea622e7bb3bdd598bde87dde40ee31c9eed4971b9546e23ec83de3c48bbba` | Markets, trading, protocol configuration, registry, and the PLP pool |
-| `propbook` | `0xa6c8f32015b5b41d34ee09995a2e9d7a21cdecf0e1910a50b264fd252cd33831` | Oracle registry, Pyth feeds, and Block Scholes stores |
-| `account` | `0x4e1dd01465713c9d832313fed5f45c222a4d5c62a533d6da96764c8b2a245d58` | Account custody, balances, and the `Auth` authorization type |
-| `fixedMath` | `0x52ec2d263bb9ad545d1be1c00f6779cc577ed7c0408cdea8d589c2664adc22db` | Fixed-point arithmetic used by the pricing math |
-| `deepbookCoreAccount` | `0xd71b5a341dc8dc7e187517849edf61e54670b60fe496e07186c09a65fa7afdb7` | DeepBook core account app type |
-| `sessions` | `0x9a068beffa019ae756f4a6d2611e9899d3c6dd888812dd9eca87535d2ac55e2a` | Session support |
-| `usdc` | `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7` | Circle native USDC, linked as an existing dependency |
+| **Package** | **Call target** | **Original ID** | **Contents** |
+| --- | --- | --- | --- |
+| `predict` | `0x08fa3ef1b047d87b0b4ce1c7e5f8b42d8bfdea9a70547efe3cce5d8d6e47ee53` | `0x89aea622e7bb3bdd598bde87dde40ee31c9eed4971b9546e23ec83de3c48bbba` | Markets, trading, protocol configuration, registry, and the PLP pool |
+| `propbook` | `0xa6c8f32015b5b41d34ee09995a2e9d7a21cdecf0e1910a50b264fd252cd33831` | Same | Oracle registry, Pyth feeds, and Block Scholes stores |
+| `account` | `0x4e1dd01465713c9d832313fed5f45c222a4d5c62a533d6da96764c8b2a245d58` | Same | Account custody, balances, and the `Auth` authorization type |
+| `fixedMath` | `0x52ec2d263bb9ad545d1be1c00f6779cc577ed7c0408cdea8d589c2664adc22db` | Same | Fixed-point arithmetic used by the pricing math |
+| `deepbookCoreAccount` | `0xd71b5a341dc8dc7e187517849edf61e54670b60fe496e07186c09a65fa7afdb7` | Same | DeepBook core account app type |
+| `sessions` | `0xec678aee98cd161bdce62ff3dcf4893574df29d927dc8b573f6b4563ec960a1a` | `0x9a068beffa019ae756f4a6d2611e9899d3c6dd888812dd9eca87535d2ac55e2a` | Session support |
+| `usdc` | `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7` | Same | Circle native USDC, linked as an existing dependency |
+
+Both upgrades kept their original ID, so every object, position, account, and session grant created before them stays valid, and the PLP coin type below is unchanged.
 
 ### Mainnet shared objects {#shared-objects}
 
@@ -119,6 +174,8 @@ Predict has no single top-level object. It splits state across shared objects th
 | PLP | `0x89aea622e7bb3bdd598bde87dde40ee31c9eed4971b9546e23ec83de3c48bbba::plp::PLP` | 6 |
 | DEEP | `0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP` | 6 |
 
+The PLP type carries `predict`'s original ID, `0x89aea622…`, not its version 2 call target. The same holds on Testnet, and [Upgraded packages carry 2 IDs](#two-ids) explains why. Take it from `getConfig(network).coinTypes.plp` rather than building it from a package ID you have to hand.
+
 ## Testnet deployment {#testnet}
 
 | **Parameter** | **Value** |
@@ -126,22 +183,29 @@ Predict has no single top-level object. It splits state across shared objects th
 | Deployment | `deepbook-predict-testnet` |
 | Network | Testnet |
 | Chain ID | `4c78adac` |
-| Source commit | `4d752fb82d909a821c85bcc5d3963725efb546f4` |
-| Indexing start checkpoint | `381301489` |
+| Deployment source commit | `4d752fb82d909a821c85bcc5d3963725efb546f4` |
+| Upgrade source commits | `8d7d42a0f48bc6434bc282d45d2403809b4e492c`, `153fe3d6535cdfe79e34272baeec503c5eeda14e`, `9a32854c` |
+| `predict` publishes / protocol version | 4 / 3 |
+| `sessions` publishes / protocol version | 2 / 2 |
+| Indexing start checkpoint | `382843322` |
 
 ### Testnet packages
 
-On Testnet the `usdc` entry is a test coin that Predict publishes itself. It shares the `usdc::USDC` module path with native USDC, displays with the symbol DUSDC and the name `DeepBook USDC`, and is mintable:
+On Testnet the `usdc` entry is a test coin that Predict publishes itself. It shares the `usdc::USDC` module path with native USDC, displays with the symbol DUSDC and the name `DeepBook USDC`, and is mintable.
 
-| **Package** | **ID** | **Contents** |
-| --- | --- | --- |
-| `predict` | `0x59d71119e990573a738dd3ff9c4c7d28d6893af69c87c1a7f3a2e90e280ce2f4` | Markets, trading, protocol configuration, registry, and the PLP pool |
-| `propbook` | `0xa83f9d7651de09672a40cea371c387bf954e0f3092947670d71428d4fbc9edd9` | Oracle registry, Pyth feeds, and Block Scholes stores |
-| `account` | `0x1e57d6554b99e4ca68330322c3e5c409ba1b681642726b603bf1be92c1840ca9` | Account custody, balances, and the `Auth` authorization type |
-| `fixedMath` | `0xf3a38ba24fd40173af692cef151a43850f5935a3e026ae037fc19bb81974c6a8` | Fixed-point arithmetic used by the pricing math |
-| `deepbookCoreAccount` | `0x2a3a5f51e1c566e0a77c667596a8212d036b44aeac32790991c9eb97580fabb1` | DeepBook core account app type |
-| `sessions` | `0x1908eee49d7a08d74a537d7f23766b363a145517fe0d3e0d85635d1682831ffd` | Session support |
-| `usdc` | `0xc028557a1ed49e42ed091e115aedefd70a442b184c18fbec5c48d5b6c0b8c184` | Test USDC, which the deployment publishes |
+`predict` is on its 4th publish here and `sessions` on its 2nd, so each carries 2 addresses. Call the **call target**; build every type tag from the **original ID**. The other 5 packages have never been upgraded, so the 2 columns coincide:
+
+| **Package** | **Call target** | **Original ID** | **Contents** |
+| --- | --- | --- | --- |
+| `predict` | `0x6c2c2d3c2394cf282f4b8462a99c2e814bda0c223796de10b47b36d35fd878f5` | `0x59d71119e990573a738dd3ff9c4c7d28d6893af69c87c1a7f3a2e90e280ce2f4` | Markets, trading, protocol configuration, registry, and the PLP pool |
+| `propbook` | `0xa83f9d7651de09672a40cea371c387bf954e0f3092947670d71428d4fbc9edd9` | Same | Oracle registry, Pyth feeds, and Block Scholes stores |
+| `account` | `0x1e57d6554b99e4ca68330322c3e5c409ba1b681642726b603bf1be92c1840ca9` | Same | Account custody, balances, and the `Auth` authorization type |
+| `fixedMath` | `0xf3a38ba24fd40173af692cef151a43850f5935a3e026ae037fc19bb81974c6a8` | Same | Fixed-point arithmetic used by the pricing math |
+| `deepbookCoreAccount` | `0x2a3a5f51e1c566e0a77c667596a8212d036b44aeac32790991c9eb97580fabb1` | Same | DeepBook core account app type |
+| `sessions` | `0xe9daa1e3f98659f45f0e589c0367c7c13877af9a6a1bf1eda40e33e944816b40` | `0x1908eee49d7a08d74a537d7f23766b363a145517fe0d3e0d85635d1682831ffd` | Session support |
+| `usdc` | `0xc028557a1ed49e42ed091e115aedefd70a442b184c18fbec5c48d5b6c0b8c184` | Same | Test USDC, which the deployment publishes |
+
+Both upgrades kept their original ID, so the lineage is unchanged and every object, position, and account created before the upgrade stays valid.
 
 ### Testnet shared objects
 
@@ -167,9 +231,13 @@ On Testnet the `usdc` entry is a test coin that Predict publishes itself. It sha
 | PLP | `0x59d71119e990573a738dd3ff9c4c7d28d6893af69c87c1a7f3a2e90e280ce2f4::plp::PLP` | 6 |
 | DEEP | `0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8::deep::DEEP` | 6 |
 
+As on Mainnet, the PLP type carries `predict`'s original ID, `0x59d71119…`, not its current call target. Deriving a coin type by string-concatenating the call target produces a type that does not exist.
+
 ## Shared facts across both networks
 
-Each `ExpiryMarket` is its own shared object, one per underlying and expiry. Market IDs are not deployment configuration: read them from `registry::expiry_market_id` onchain or from `read.markets()` at runtime. Each network's Predict package defines the PLP type, so it differs per network and changes with every redeployment. The quote coin type differs per network too, so always take it from `getConfig(network).quoteCoinType` rather than from a symbol.
+Each `ExpiryMarket` is its own shared object, one per underlying and expiry. Market IDs are not deployment configuration: read them from `registry::expiry_market_id` onchain or from `read.markets()` at runtime. Each network's Predict package defines the PLP type, so it differs per network and changes with every redeployment; a package *upgrade* leaves it alone, because it stays at the original ID. The quote coin type differs per network too, so always take it from `getConfig(network).quoteCoinType` rather than from a symbol.
+
+The entrypoint surface is identical across the networks. `expiry_market::mint_exact_cost`, `expiry_market::quote_mint_exact_cost_for_account`, and the `sessions::mint_exact_cost` wrapper arrived at protocol version 2; `plp::add_usdc_to_plp` arrived at `predict` protocol version 3. Both networks run both versions, so every entrypoint is callable on either.
 
 ## Underlyings and oracle objects {#underlyings-and-oracle-objects}
 
@@ -192,9 +260,9 @@ Passing an oracle object that is not the current canonical binding aborts rather
 
 The `deepbookCoreAccount` package declares the `account_data::DeepbookCoreAccountApp` type under its own package ID on each network. App authorization is live registry state rather than deployment configuration: a manifest's `externalAuthorizations` entry records only whether the authorization was in place when the deployment ran, and an admin grants or revokes it in a separate transaction afterward.
 
-On both networks, the `AccountRegistry` authorizes `PredictApp`, `SessionsApp`, and `DeepbookCoreAccountApp` as of 2026-09-14. That is live registry state, so read it with `account_registry::is_app_authorized<App>` rather than assuming it.
+On both networks, the `AccountRegistry` authorizes `PredictApp`, `SessionsApp`, and `DeepbookCoreAccountApp`. That is live registry state, so read it with `account_registry::is_app_authorized<App>` rather than assuming it.
 
-The DeepBook core registry is a separate authorization, and it differs by network as of 2026-09-14. On Testnet, the DeepBook registry `0x7c256edbda983a2cd6f946655f4bf3f00a41043993781f8674a7046e8c0e11d1` authorizes `DeepbookCoreAccountApp`. On Mainnet, the DeepBook registry `0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d` does not, so the session spot wrappers cannot work there yet. Either state can change, and the authorization belongs to that registry's administrator rather than to Predict. Check it with `deepbook::registry::assert_app_is_authorized<DeepbookCoreAccountApp>`, which aborts when the app is not authorized. [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#spot-wrappers) covers what that authorization gates.
+The DeepBook core registry is a separate authorization, and it is the one that gates the session spot wrappers. Both deployment manifests record `externalAuthorizations.deepbookCoreAccount.authorized` as `false`: Testnet's DeepBook registry `0x7c256edbda983a2cd6f946655f4bf3f00a41043993781f8674a7046e8c0e11d1` and Mainnet's `0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d` had not authorized `DeepbookCoreAccountApp` when each deployment was verified, so treat the spot wrappers as unavailable on both networks until you have checked otherwise. A manifest records only the state at deployment time, the authorization belongs to that registry's administrator rather than to Predict, and it can be granted or revoked in a transaction of its own. Check it with `deepbook::registry::assert_app_is_authorized<DeepbookCoreAccountApp>`, which aborts when the app is not authorized. [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#spot-wrappers) covers what that authorization gates.
 
 ## Units and constants
 
@@ -406,7 +474,8 @@ The 2 deployments run the same contracts and the same initial configuration. Wha
 - **Quote asset and funding:** Testnet quotes in a test coin you can request for free, and Testnet SUI is free. Mainnet quotes in native USDC, there is no faucet, and any top-up path that assumes free replenishment needs replacing.
 - **Activity:** As of 2026-09-14 no market has opened or settled on either network since the markets created at deployment expired on 2026-09-12. The Mainnet pool holds only the bootstrap minimum. `read.markets()` lists live-and-unsettled markets, which includes an expired market nobody has settled, so check each entry's expiry before you quote against it.
 - **Read services:** None exists for either current deployment as of 2026-09-14.
-- **DeepBook core authorization:** The session spot wrappers work on Testnet and not yet on Mainnet, per [App authorization](#app-authorization).
+- **DeepBook core authorization:** Both deployment manifests record the DeepBook core registry as not having authorized `DeepbookCoreAccountApp`, so treat the session spot wrappers as unavailable on either network until you have read that registry, per [App authorization](#app-authorization).
+- **Package version:** the networks run the same protocol versions today, but they have not been upgraded in lockstep and need not be. Compare protocol versions rather than publish counts, as [Publish count is not protocol version](#version-numbers) explains, and remember that an older call target keeps working only until the `ProtocolConfig` watermark passes it.
 
 Structure your code so none of these become assumptions:
 
