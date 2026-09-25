@@ -37,7 +37,26 @@ answer: >-
   and SuiPlay.
 ---
 
-Learn about the different components and primitives of the Sui Stack.
+The Sui Stack is the full set of components, primitives, and services available to developers building on Sui. Each layer of the stack addresses a different need: onchain logic, data availability, identity, randomness, time, security, and gaming. Understanding which component fits your use case helps you build faster and avoid reinventing solutions that Sui already provides.
+
+## What is the Sui Stack?
+
+The Sui Stack groups related building blocks so you can find the right tool for your application. The components range from core protocol primitives built into the Sui framework to external services that integrate with Sui applications.
+
+Key areas the Sui Stack covers:
+
+- **Onchain randomness:** A verifiable random function (VRF) built into the Sui protocol. Use it when your application needs unpredictable, tamper-resistant random values onchain, for example, in games, lotteries, or fair selection mechanisms.
+- **Onchain time:** Access to the current epoch timestamp from within Move smart contracts. Use it to implement time-locked logic, expiration conditions, or scheduled releases without relying on offchain oracles.
+- **zkLogin:** A authentication primitive that lets users sign Sui transactions using existing OAuth providers (for example, Google or Facebook) without exposing a traditional key pair. zkLogin lowers onboarding friction for users unfamiliar with wallet management.
+- **Nautilus:** A framework for building trusted execution environment (TEE) applications on Sui. Use Nautilus when your application needs verifiable offchain computation with onchain attestation.
+- **Seal:** A decentralized access control and encryption service for Sui. Use Seal to encrypt data so that only authorized Sui objects or addresses can decrypt it, enabling private data sharing patterns onchain.
+- **Walrus:** A decentralized storage network built for the Sui ecosystem. Use Walrus to store large blobs of data (images, files, model weights) with cryptographic availability guarantees, referenced onchain through Sui objects.
+- **SuiPlay0X1:** The Sui gaming handheld device platform. Relevant if you are building games or interactive experiences targeting the SuiPlay0X1 hardware.
+- **DeepBook:** The native central limit order book (CLOB) protocol on Sui. Use DeepBook to build trading applications, DEXs, or any application that needs onchain order matching.
+
+## What is the Sui Stack?
+
+The components below are organized by the problem they solve. Browse the cards to find the one relevant to your application, then follow the link to the detailed documentation for that component.
 
 import DocCardList from '@theme/DocCardList';
 
