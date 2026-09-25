@@ -413,6 +413,7 @@ const MAINNET_USDB: &str =
 //              Enable allowances on mainnet.
 //              Merge colliding deferred-transaction entries in the consensus handler
 //              instead of overwriting (which stranded the displaced transactions).
+//              Shuffle the block order of each consensus commit by commit digest on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1306,6 +1307,12 @@ struct FeatureFlags {
     // silently dropped the displaced (finalized) transactions.
     #[serde(skip_serializing_if = "is_false")]
     merge_colliding_deferrals: bool,
+
+    // If true, the consensus handler processes the blocks of each commit in an order
+    // shuffled deterministically by the commit digest, instead of the order emitted by
+    // consensus. Transactions within a block keep their relative order.
+    #[serde(skip_serializing_if = "is_false")]
+    shuffle_consensus_commit_blocks: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4795,6 +4802,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.disable_effects_tx_dependencies = true;
                     }
                     cfg.feature_flags.merge_colliding_deferrals = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.shuffle_consensus_commit_blocks = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

@@ -34,7 +34,9 @@ use crate::consensus_handler::{
     SequencedConsensusTransactionKind,
 };
 use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
-use crate::consensus_types::consensus_output_api::{ConsensusCommitAPI, ParsedTransaction};
+use crate::consensus_types::consensus_output_api::{
+    ConsensusCommitAPI, ParsedTransaction, shuffle_blocks_by_commit_digest,
+};
 use crate::mock_consensus::with_block_status;
 
 pub(crate) type CapturedTransactions = Arc<Mutex<Vec<crate::consensus_handler::SchedulerMessage>>>;
@@ -158,6 +160,12 @@ impl ConsensusCommitAPI for TestConsensusCommit {
             .collect();
 
         vec![(block_ref, parsed_txs)]
+    }
+
+    fn shuffled_transactions(&self) -> Vec<(BlockRef, Vec<ParsedTransaction>)> {
+        let mut transactions = self.transactions();
+        shuffle_blocks_by_commit_digest(self.commit_ref().digest, &mut transactions);
+        transactions
     }
 
     fn rejected_transactions_digest(&self) -> Digest {
