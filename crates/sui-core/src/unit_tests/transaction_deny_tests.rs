@@ -4,6 +4,7 @@
 use crate::authority::auth_unit_test_utils::{
     publish_package_on_single_authority, upgrade_package_on_single_authority,
 };
+use crate::authority::authority_test_utils::dev_inspect_for_testing;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::test_utils::make_transfer_sui_transaction;
@@ -22,12 +23,14 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
+use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     CallArg, GasData, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction,
     TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration, TransactionKind,
     VerifiedTransaction,
 };
+use sui_types::transaction_executor::TransactionChecks;
 use sui_types::utils::get_zklogin_user_address;
 use sui_types::utils::{
     make_zklogin_tx, to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
@@ -70,20 +73,20 @@ async fn reload_state_with_new_deny_config(
 
 type Account = (SuiAddress, Ed25519KeyPair, Vec<ObjectRef>);
 
-fn get_accounts_and_coins(
-    network_config: &NetworkConfig,
-    state: &Arc<AuthorityState>,
-) -> Vec<Account> {
+/// Collect each account's gas coins from the genesis objects. Callers use this
+/// on a freshly built state, before any transaction has touched the coins.
+fn get_accounts_and_coins(network_config: &NetworkConfig) -> Vec<Account> {
     let accounts: Vec<_> = network_config
         .account_keys
         .iter()
         .map(|account| {
             let address: SuiAddress = account.public().into();
-            let objects: Vec<_> = state
-                .get_owner_objects(address, None, GAS_OBJECT_COUNT, None)
-                .unwrap()
-                .into_iter()
-                .map(|o| o.into())
+            let objects: Vec<_> = network_config
+                .genesis
+                .objects()
+                .iter()
+                .filter(|o| o.is_gas_coin() && o.owner == Owner::AddressOwner(address))
+                .map(|o| o.compute_object_reference())
                 .collect();
             assert_eq!(objects.len(), GAS_OBJECT_COUNT);
             (address, account.copy(), objects)
@@ -178,7 +181,7 @@ async fn test_user_transaction_disabled() {
             .build(),
     )
     .await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
     assert_denied(&transfer_with_account(&accounts[0], &accounts[0], &state));
 }
 
@@ -214,7 +217,7 @@ async fn test_gasless_transaction_disabled() {
             .build(),
     )
     .await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
     assert_denied(&submit_gasless_with_account(&accounts[0], &state));
     assert!(transfer_with_account(&accounts[0], &accounts[0], &state).is_ok());
 }
@@ -244,7 +247,7 @@ async fn test_zklogin_transaction_disabled() {
 async fn test_object_denied() {
     // We need to create the authority state once to get one of the gas coin object IDs.
     let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
     // Re-create the state such that we could specify a gas coin object to be denied.
     let obj_ref = accounts[0].2[0];
     let state = reload_state_with_new_deny_config(
@@ -262,7 +265,7 @@ async fn test_object_denied() {
 async fn test_signer_denied() {
     // We need to create the authority state once to get one of the account addresses.
     let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
 
     // Re-create the state such that we could specify an address to be denied.
     let state = reload_state_with_new_deny_config(
@@ -288,7 +291,7 @@ async fn test_shared_object_transaction_disabled() {
             .build(),
     )
     .await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
     let gas_price = state.reference_gas_price_for_testing().unwrap();
     let account = &accounts[0];
     let tx = TestTransactionBuilder::new(account.0, account.2[0], gas_price)
@@ -311,7 +314,7 @@ async fn test_package_publish_disabled() {
             .build(),
     )
     .await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
     let rgp = state.reference_gas_price_for_testing().unwrap();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
@@ -331,7 +334,7 @@ async fn test_package_publish_disabled() {
 #[tokio::test]
 async fn test_package_denied() {
     let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // Publish 3 packages, where b depends on c, and a depends on b.
     // Also upgrade c to c', and upgrade b to b' (which will start using c' instead of c as dependency).
@@ -485,9 +488,7 @@ async fn test_package_denied() {
 #[tokio::test]
 async fn test_certificate_deny() {
     let (network_config, state) = setup_test(TransactionDenyConfig::default()).await;
-    let (sender, key, gas_objects) = get_accounts_and_coins(&network_config, &state)
-        .pop()
-        .unwrap();
+    let (sender, key, gas_objects) = get_accounts_and_coins(&network_config).pop().unwrap();
     let tx = make_transfer_sui_transaction(
         gas_objects[0],
         sender,
@@ -534,7 +535,7 @@ async fn test_certificate_deny() {
 #[tokio::test]
 async fn test_actual_signer_denied_via_alias() {
     let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
 
     // accounts[0] is the declared sender, accounts[1] is the actual signer (alias).
     // Deny accounts[1]'s address (the actual signer), but NOT accounts[0] (the sender).
@@ -580,7 +581,7 @@ async fn test_actual_signer_denied_via_alias() {
 #[tokio::test]
 async fn test_non_denied_actual_signer_allowed() {
     let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
 
     // Deny accounts[2], but neither accounts[0] (sender) nor accounts[1] (signer).
     let state = reload_state_with_new_deny_config(
@@ -628,7 +629,7 @@ async fn test_user_transaction_disabled_dynamic_check() {
             .build(),
     )
     .await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
     assert_denied(&transfer_with_account(&accounts[0], &accounts[0], &state));
 }
 
@@ -636,7 +637,7 @@ async fn test_user_transaction_disabled_dynamic_check() {
 async fn test_object_denied_dynamic_check() {
     // We need to create the authority state once to get one of the gas coin object IDs.
     let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
     // Re-create the state such that we could specify a gas coin object to be denied.
     let obj_ref = accounts[0].2[0];
     let program = include_str!("data/dynamic_checks/object_denied.star")
@@ -663,7 +664,7 @@ async fn test_shared_object_transaction_disabled_dynamic_check() {
             .build(),
     )
     .await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
     let gas_price = state.reference_gas_price_for_testing().unwrap();
     let account = &accounts[0];
     let tx = TestTransactionBuilder::new(account.0, account.2[0], gas_price)
@@ -688,7 +689,7 @@ async fn test_package_publish_disabled_dynamic_check() {
             .build(),
     )
     .await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
     let rgp = state.reference_gas_price_for_testing().unwrap();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
@@ -708,7 +709,7 @@ async fn test_package_publish_disabled_dynamic_check() {
 #[tokio::test]
 async fn test_package_denied_dynamic_check() {
     let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
-    let accounts = get_accounts_and_coins(&network_config, &state);
+    let accounts = get_accounts_and_coins(&network_config);
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // Publish 3 packages, where b depends on c, and a depends on b.
     // Also upgrade c to c', and upgrade b to b' (which will start using c' instead of c as dependency).
@@ -881,19 +882,33 @@ async fn test_dev_inspect_disabled() {
     };
     let kind = TransactionKind::programmable(pt);
 
-    // With skip_checks=true (default), should be denied
-    let result = fullnode
-        .dev_inspect_transaction_block(sender, kind.clone(), None, None, None, None, None, None)
-        .await;
+    // With checks disabled (classic dev inspect), should be denied
+    let result = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        kind.clone(),
+        None,
+        None,
+        None,
+        None,
+        TransactionChecks::Disabled,
+    );
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err().as_inner(),
         SuiErrorKind::UnsupportedFeatureError { .. }
     ));
 
-    // With skip_checks=false, should pass our guard
-    let result = fullnode
-        .dev_inspect_transaction_block(sender, kind, None, None, None, None, None, Some(false))
-        .await;
+    // With checks enabled, should pass our guard
+    let result = dev_inspect_for_testing(
+        &fullnode,
+        sender,
+        kind,
+        None,
+        None,
+        None,
+        None,
+        TransactionChecks::Enabled,
+    );
     assert!(result.is_ok());
 }

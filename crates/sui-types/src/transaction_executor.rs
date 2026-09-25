@@ -45,6 +45,7 @@ pub trait ProposerSelector: Send + Sync {
     fn preferred_proposers(&self, max: usize) -> Option<AllowedProposers>;
 }
 
+#[derive(Debug)]
 pub struct SimulateTransactionResult {
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,

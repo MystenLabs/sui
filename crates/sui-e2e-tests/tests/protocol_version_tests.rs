@@ -56,7 +56,6 @@ fn test_protocol_overrides_2() {
 mod sim_only_tests {
 
     use super::*;
-    use fastcrypto::encoding::Base64;
     use move_binary_format::CompiledModule;
     use move_core_types::ident_str;
     use mysten_common::register_debug_fatal_handler;
@@ -66,9 +65,9 @@ mod sim_only_tests {
         atomic::{AtomicUsize, Ordering},
     };
     use std::{fs, io, path::Path};
+    use sui_core::authority::authority_test_utils::dev_inspect_for_testing;
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
-    use sui_json_rpc_api::WriteApiClient;
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::Chain;
@@ -87,6 +86,7 @@ mod sim_only_tests {
         CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
         TEST_ONLY_GAS_UNIT_FOR_GENERIC, TransactionData,
     };
+    use sui_types::transaction_executor::TransactionChecks;
     use sui_types::{
         MOVE_STDLIB_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
         SUI_SYSTEM_PACKAGE_ID,
@@ -597,7 +597,6 @@ mod sim_only_tests {
     }
 
     async fn dev_inspect_call(cluster: &TestCluster, call: ProgrammableMoveCall) -> u64 {
-        let client = cluster.rpc_client();
         let sender = cluster.get_address_0();
 
         let pt = {
@@ -607,21 +606,23 @@ mod sim_only_tests {
         };
         let txn = TransactionKind::programmable(pt);
 
-        let response = client
-            .dev_inspect_transaction_block(
-                sender,
-                Base64::from_bytes(&bcs::to_bytes(&txn).unwrap()),
-                /* gas_price */ None,
-                /* epoch_id */ None,
-                /* additional_args */ None,
-            )
-            .await
-            .unwrap();
+        let response = dev_inspect_for_testing(
+            &cluster.fullnode_handle.sui_node.state(),
+            sender,
+            txn,
+            None,
+            None,
+            None,
+            None,
+            TransactionChecks::Disabled,
+        )
+        .unwrap();
 
-        let results = response.results.unwrap();
-        let return_ = &results.first().unwrap().return_values.first().unwrap().0;
+        let results = response.execution_result.unwrap();
+        let (_, return_values) = results.first().unwrap();
+        let (return_, _) = return_values.first().unwrap();
 
-        bcs::from_bytes(&return_).unwrap()
+        bcs::from_bytes(return_).unwrap()
     }
 
     async fn execute_creating(

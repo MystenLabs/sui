@@ -130,27 +130,6 @@ async fn test_gasless_dryrun() {
 
     let coin_type = setup_custom_coin(&mut test_env, &[(initial_funding, sender)]).await;
 
-    // Verify dryrun works for gasless transactions.
-    let tx_data = test_env.create_gasless_transaction(
-        transfer_amount,
-        coin_type.clone(),
-        sender,
-        recipient,
-        0,
-        0,
-    );
-    let result = test_env
-        .cluster
-        .fullnode_handle
-        .sui_node
-        .with_async(|node| async move { node.state().dry_exec_transaction(tx_data).await })
-        .await;
-    assert!(
-        result.is_ok(),
-        "Expected gasless dryrun to succeed, got: {:?}",
-        result.unwrap_err()
-    );
-
     // Verify simulate works for gasless transactions.
     let tx_data = test_env.create_gasless_transaction(
         transfer_amount,

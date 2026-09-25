@@ -17,7 +17,6 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::RandomnessManager;
 use crate::execution_cache::build_execution_cache;
-use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::randomness_round_receiver::RandomnessRoundReceiverHandle;
@@ -62,7 +61,6 @@ pub struct TestAuthorityBuilder<'a> {
     network_config: Option<&'a NetworkConfig>,
     starting_objects: Option<&'a [Object]>,
     expensive_safety_checks: Option<ExpensiveSafetyCheckConfig>,
-    disable_indexer: bool,
     accounts: Vec<AccountConfig>,
     /// By default, we don't insert the genesis checkpoint, which isn't needed by most tests.
     insert_genesis_checkpoint: bool,
@@ -71,8 +69,6 @@ pub struct TestAuthorityBuilder<'a> {
     chain_override: Option<Chain>,
     dev_inspect_disabled: bool,
     recent_submission_dedup_window_ms: Option<u64>,
-    /// Skip genesis owner/dynamic-field indexing (use for tests that don't query owned objects)
-    skip_genesis_owner_index: bool,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -154,18 +150,6 @@ impl<'a> TestAuthorityBuilder<'a> {
     /// This is useful when creating multiple authorities that should share the same genesis.
     pub fn with_shared_network_config(mut self, config: &'a NetworkConfig) -> Self {
         assert!(self.network_config.replace(config).is_none());
-        self
-    }
-
-    pub fn disable_indexer(mut self) -> Self {
-        self.disable_indexer = true;
-        self
-    }
-
-    /// Skip genesis owner/dynamic-field indexing. This is much faster for tests
-    /// that don't query owned objects via RPC (e.g., get_owned_objects).
-    pub fn skip_genesis_owner_index(mut self) -> Self {
-        self.skip_genesis_owner_index = true;
         self
     }
 
@@ -345,19 +329,6 @@ impl<'a> TestAuthorityBuilder<'a> {
                 &epoch_store,
             );
         }
-        let index_store = if self.disable_indexer {
-            None
-        } else {
-            Some(Arc::new(IndexStore::new(
-                path.join("indexes"),
-                &registry,
-                epoch_store
-                    .protocol_config()
-                    .max_move_identifier_len_as_option(),
-                false,
-            )))
-        };
-
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
         let authority_overload_config = self.authority_overload_config.unwrap_or_default();
@@ -383,11 +354,6 @@ impl<'a> TestAuthorityBuilder<'a> {
         let policy_config = config.policy_config.clone();
         let firewall_config = config.firewall_config.clone();
 
-        let genesis_objects_for_index = if self.skip_genesis_owner_index {
-            &[][..]
-        } else {
-            genesis.objects()
-        };
         let state = AuthorityState::new(
             name,
             secret,
@@ -396,11 +362,9 @@ impl<'a> TestAuthorityBuilder<'a> {
             cache_traits,
             epoch_store.clone(),
             committee_store,
-            index_store,
             None,
             checkpoint_store,
             &registry,
-            genesis_objects_for_index,
             &DBCheckpointConfig::default(),
             config.clone(),
             chain_identifier,
