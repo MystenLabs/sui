@@ -43,6 +43,20 @@ module 0x1::references {
         assert!(y.pop_back() == 4);
     }
 
+    #[test]
+    fun test_vector_operations() {
+        let mut v = vector[];
+        v.push_back(0u64);
+        v.push_back(1);
+        assert!(v.length() == 2);
+        assert!(*v.borrow(0) == 0);
+        *v.borrow_mut(1) = 2;
+        v.swap(0, 1);
+        assert!(v.pop_back() == 0);
+        assert!(v.pop_back() == 2);
+        v.destroy_empty();
+    }
+
     public struct Y<T> {
         x: u64,
         y: T,
