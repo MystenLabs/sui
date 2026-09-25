@@ -56,21 +56,28 @@ For an end-to-end walkthrough that creates a manager, reads a pool's risk parame
 
 ## Setup
 
-Import the DeepBook Margin SDK and initialize the client before calling any margin manager functions.
+Margin manager functions live on the DeepBook client extension. Create a `SuiGrpcClient` and extend it with `deepbook()`, passing the margin managers you want to address by key.
 
 ```ts
-import { DeepBookMarginClient } from '@mysten/deepbook-v3';
-import { SuiClient } from '@mysten/sui/client';
+import { deepbook } from '@mysten/deepbook-v3';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 
-const suiClient = new SuiClient({ url: 'https://fullnode.testnet.sui.io' });
-
-const marginClient = new DeepBookMarginClient({
-  client: suiClient,
-  network: 'testnet',
-});
+const client = new SuiGrpcClient({
+	network: 'testnet',
+	baseUrl: 'https://fullnode.testnet.sui.io:443',
+}).$extend(
+	deepbook({
+		address: '<YOUR_ADDRESS>',
+		marginManagers: {
+			MARGIN_MANAGER_1: { address: '0x…', poolKey: 'SUI_DBUSDC' },
+		},
+	}),
+);
 ```
 
-After initializing the client, use `marginClient.marginContract` to access margin manager functions and add them to a `Transaction` object.
+After you extend the client, reach the functions on this page through `client.deepbook.marginManager`. Each one returns a function that takes a `Transaction` object, which you pass to `tx.add(...)`. Read-only state lives on the client itself, such as `client.deepbook.getMarginManagerState`.
+
+For the full client setup, including keypairs and margin manager keys, see [DeepBook Margin SDK](/onchain-finance/deepbook/deepbook-margin-sdk/deepbook-margin-sdk).
 
 ## Margin manager functions
 
@@ -110,7 +117,7 @@ Use `shareMarginManager` to share a margin manager created with `newMarginManage
 
 ### `depositDuringInitialization`
 
-Use `depositDuringInitialization` to deposit funds into a margin manager during its creation, before it is shared. This must be called in the same transaction as `newMarginManagerWithInitializer` and before `shareMarginManager`. The call returns a function that takes a `Transaction` object.
+Use `depositDuringInitialization` to deposit funds into a margin manager during its creation, before it is shared. Call this in the same transaction as `newMarginManagerWithInitializer` and before `shareMarginManager`. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -157,7 +164,7 @@ Use these functions to borrow assets from margin pools. Borrowing is subject to 
 
 ### `repayBase`, `repayQuote`
 
-Use these functions to repay borrowed assets. If no amount is specified, it repays the maximum available balance up to the total debt. The call returns a function that takes a `Transaction` object.
+Use these functions to repay borrowed assets. If you omit the amount, the function repays the maximum available balance up to the total debt. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -252,7 +259,7 @@ newMarginManager = (poolKey: string) => (tx: Transaction) => {};
 // Example usage
 createMarginManager = (tx: Transaction) => {
 	const poolKey = 'SUI_DBUSDC';
-	tx.add(this.marginContract.newMarginManager(poolKey));
+	tx.add(this.client.deepbook.marginManager.newMarginManager(poolKey));
 };
 ```
 
@@ -262,7 +269,7 @@ createMarginManager = (tx: Transaction) => {
 // Example: Deposit 100 SUI as collateral
 depositCollateral = (tx: Transaction) => {
 	const managerKey = 'MARGIN_MANAGER_1';
-	tx.add(this.marginContract.depositBase(managerKey, 100));
+	tx.add(this.client.deepbook.marginManager.depositBase(managerKey, 100));
 };
 ```
 
@@ -272,7 +279,7 @@ depositCollateral = (tx: Transaction) => {
 // Example: Borrow 500 USDC
 borrowFunds = (tx: Transaction) => {
 	const managerKey = 'MARGIN_MANAGER_1';
-	tx.add(this.marginContract.borrowQuote(managerKey, 500));
+	tx.add(this.client.deepbook.marginManager.borrowQuote(managerKey, 500));
 };
 ```
 
@@ -283,7 +290,7 @@ borrowFunds = (tx: Transaction) => {
 repayLoan = (tx: Transaction) => {
 	const managerKey = 'MARGIN_MANAGER_1';
 	// No amount specified = repay all
-	tx.add(this.marginContract.repayQuote(managerKey));
+	tx.add(this.client.deepbook.marginManager.repayQuote(managerKey));
 };
 ```
 
@@ -297,7 +304,7 @@ liquidatePosition = (tx: Transaction) => {
 	const debtIsBase = false; // Debt is in USDC (quote)
 	const debtCoinType = '0x...'; // Type of the pool's quote asset
 	const repayCoin = tx.coin({ balance: 500 * 1_000_000, type: debtCoinType }); // 500 USDC
-	tx.add(this.marginContract.liquidate(managerAddress, poolKey, debtIsBase, repayCoin));
+	tx.add(this.client.deepbook.marginManager.liquidate(managerAddress, poolKey, debtIsBase, repayCoin));
 };
 ```
 
@@ -308,16 +315,16 @@ Use `newMarginManagerWithInitializer` when you want to deposit collateral in the
 ```tsx
 import { Transaction } from '@mysten/sui/transactions';
 
-createManagerWithDeposit = async (tx: Transaction) => {
+createManagerWithDeposit = (tx: Transaction) => {
 	const poolKey = 'SUI_DBUSDC';
 
 	// Step 1: Create the manager and get the initializer
 	const { manager, initializer } =
-		this.marginContract.newMarginManagerWithInitializer(poolKey)(tx);
+		this.client.deepbook.marginManager.newMarginManagerWithInitializer(poolKey)(tx);
 
 	// Step 2: Deposit before sharing
 	tx.add(
-		this.marginContract.depositDuringInitialization({
+		this.client.deepbook.marginManager.depositDuringInitialization({
 			manager,
 			poolKey,
 			coinType: 'SUI',
@@ -326,24 +333,21 @@ createManagerWithDeposit = async (tx: Transaction) => {
 	);
 
 	// Step 3: Share the manager so others can interact with it
-	tx.add(this.marginContract.shareMarginManager({ poolKey, manager, initializer }));
+	tx.add(this.client.deepbook.marginManager.shareMarginManager(poolKey, manager, initializer));
 };
 ```
 
 ### Read manager state
 
-Use `managerState` to check a manager's current risk ratio, balances, and debt before executing trades or withdrawals.
+Use `getMarginManagerState` on the client to check a manager's current risk ratio, assets, and debt before executing trades or withdrawals. This is a query rather than a transaction, so it needs no `Transaction` object.
 
 ```tsx
-import { Transaction } from '@mysten/sui/transactions';
-
 readManagerState = async (managerKey: string) => {
-	const tx = new Transaction();
-	const state = await marginClient.marginContract.managerState(managerKey)(tx);
+	const state = await this.client.deepbook.getMarginManagerState(managerKey);
 	console.log('Risk ratio:', state.riskRatio);
-	console.log('Base balance:', state.baseBalance);
-	console.log('Quote balance:', state.quoteBalance);
-	console.log('Borrowed base shares:', state.borrowedBaseShares);
-	console.log('Borrowed quote shares:', state.borrowedQuoteShares);
+	console.log('Base asset:', state.baseAsset);
+	console.log('Quote asset:', state.quoteAsset);
+	console.log('Base debt:', state.baseDebt);
+	console.log('Quote debt:', state.quoteDebt);
 	return state;
 };
