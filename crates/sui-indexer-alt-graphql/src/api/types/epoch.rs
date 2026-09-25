@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::Context;
-use async_graphql::Object;
 use async_graphql::connection::Connection;
 use async_graphql::dataloader::DataLoader;
 use fastcrypto::encoding::Base58;
@@ -14,6 +13,7 @@ use futures::future::OptionFuture;
 use futures::join;
 use futures::try_join;
 use move_core_types::language_storage::StructTag;
+use sui_indexer_alt_graphql_macros::GatedObject;
 use sui_indexer_alt_reader::cp_sequence_numbers::CpSequenceNumberKey;
 use sui_indexer_alt_reader::epochs::CheckpointBoundedEpochStartKey;
 use sui_indexer_alt_reader::epochs::EpochEndKey;
@@ -87,7 +87,7 @@ struct SequenceNumbers {
 /// - reference gas price,
 /// - system package versions,
 /// - validators in the committee.
-#[Object]
+#[GatedObject]
 impl Epoch {
     /// The epoch's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {
@@ -671,5 +671,67 @@ impl Epoch {
         let native = start.system_state[1..].to_owned();
 
         Ok(Some(MoveValue { type_, native }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use async_graphql::EmptyMutation;
+    use async_graphql::EmptySubscription;
+    use async_graphql::Object;
+    use async_graphql::Request;
+    use async_graphql::Schema;
+
+    use crate::error::code;
+    use crate::error::error_codes;
+    use crate::scope::Scope;
+    use crate::task::watermark::Watermarks;
+
+    use super::*;
+
+    struct Root;
+
+    #[Object]
+    impl Root {
+        async fn epoch(&self) -> Epoch {
+            Epoch::with_id(Scope::for_tests(), 0)
+        }
+    }
+
+    fn schema() -> Schema<Root, EmptyMutation, EmptySubscription> {
+        Schema::build(Root, EmptyMutation, EmptySubscription).finish()
+    }
+
+    #[tokio::test]
+    async fn checkpoints_gated_when_pipeline_missing() {
+        let watermarks = Arc::new(Watermarks::for_test(&[]));
+        let request = Request::from("{ epoch { checkpoints { __typename } } }").data(watermarks);
+        let response = schema().execute(request).await;
+        assert_eq!(error_codes(&response), vec![code::FEATURE_UNAVAILABLE]);
+    }
+
+    #[tokio::test]
+    async fn checkpoints_not_gated_when_pipeline_present() {
+        let watermarks = Arc::new(Watermarks::for_test(&[("cp_sequence_numbers", 100)]));
+        let request = Request::from("{ epoch { checkpoints { __typename } } }").data(watermarks);
+        let response = schema().execute(request).await;
+        assert!(!error_codes(&response).contains(&code::FEATURE_UNAVAILABLE));
+    }
+
+    #[tokio::test]
+    async fn coin_deny_list_gated_when_pipeline_missing() {
+        let watermarks = Arc::new(Watermarks::for_test(&[]));
+        let request = Request::from("{ epoch { coinDenyList { __typename } } }").data(watermarks);
+        let response = schema().execute(request).await;
+        assert_eq!(error_codes(&response), vec![code::FEATURE_UNAVAILABLE]);
+    }
+
+    #[tokio::test]
+    async fn epoch_id_unaffected_by_missing_watermarks() {
+        let request = Request::from("{ epoch { epochId } }");
+        let response = schema().execute(request).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
     }
 }
