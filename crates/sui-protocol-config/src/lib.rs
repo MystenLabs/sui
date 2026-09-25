@@ -4795,6 +4795,10 @@ impl ProtocolConfig {
                         cfg.feature_flags.disable_effects_tx_dependencies = true;
                     }
                     cfg.feature_flags.merge_colliding_deferrals = true;
+
+                    // TODO/XXX(execution-version-cut): Move this execution version setting to the
+                    // current next protocol version at the time of merging into `main`.
+                    cfg.execution_version = Some(5);
                 }
                 // Use this template when making changes:
                 //

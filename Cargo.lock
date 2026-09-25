@@ -8470,6 +8470,10 @@ name = "move-abstract-interpreter-v3"
 version = "0.1.0"
 
 [[package]]
+name = "move-abstract-interpreter-v4"
+version = "0.1.0"
+
+[[package]]
 name = "move-abstract-stack"
 version = "0.0.1"
 
@@ -8619,6 +8623,22 @@ dependencies = [
 
 [[package]]
 name = "move-bytecode-verifier-v3"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-interpreter",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-regex-borrow-graph",
+ "move-vm-config",
+ "petgraph 0.8.1",
+ "serde",
+]
+
+[[package]]
+name = "move-bytecode-verifier-v4"
 version = "0.1.0"
 dependencies = [
  "move-abstract-interpreter",
@@ -9276,6 +9296,34 @@ dependencies = [
  "move-vm-config",
  "move-vm-types-v3",
  "parking_lot 0.11.2",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v4"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "better_any",
+ "bumpalo",
+ "dashmap 6.1.0",
+ "fail",
+ "hex",
+ "indexmap 2.8.0",
+ "lasso",
+ "move-abstract-interpreter",
+ "move-binary-format",
+ "move-bytecode-verifier-v4",
+ "move-core-types",
+ "move-trace-format",
+ "move-vm-config",
+ "parking_lot 0.11.2",
+ "quick_cache",
+ "serde",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
  "smallvec",
  "tracing",
 ]
@@ -13933,6 +13981,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-adapter-v4"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "either",
+ "indexmap 2.8.0",
+ "leb128",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v4",
+ "move-core-types",
+ "move-regex-borrow-graph",
+ "move-trace-format",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-runtime-v4",
+ "mysten-common",
+ "mysten-metrics",
+ "nonempty",
+ "parking_lot 0.12.3",
+ "quick_cache",
+ "serde",
+ "serde_json",
+ "sui-macros",
+ "sui-move-natives-v4",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-v4",
+ "tracing",
+]
+
+[[package]]
 name = "sui-analytics-indexer"
 version = "1.82.0"
 dependencies = [
@@ -14671,6 +14753,7 @@ dependencies = [
  "move-abstract-interpreter",
  "move-abstract-interpreter-v2",
  "move-abstract-interpreter-v3",
+ "move-abstract-interpreter-v4",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
@@ -14678,6 +14761,7 @@ dependencies = [
  "move-bytecode-verifier-v1",
  "move-bytecode-verifier-v2",
  "move-bytecode-verifier-v3",
+ "move-bytecode-verifier-v4",
  "move-trace-format",
  "move-vm-config",
  "move-vm-runtime",
@@ -14685,6 +14769,7 @@ dependencies = [
  "move-vm-runtime-v1",
  "move-vm-runtime-v2",
  "move-vm-runtime-v3",
+ "move-vm-runtime-v4",
  "move-vm-types-v0",
  "move-vm-types-v1",
  "move-vm-types-v2",
@@ -14697,11 +14782,13 @@ dependencies = [
  "sui-adapter-v1",
  "sui-adapter-v2",
  "sui-adapter-v3",
+ "sui-adapter-v4",
  "sui-move-natives-latest",
  "sui-move-natives-v0",
  "sui-move-natives-v1",
  "sui-move-natives-v2",
  "sui-move-natives-v3",
+ "sui-move-natives-v4",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
@@ -14709,6 +14796,7 @@ dependencies = [
  "sui-verifier-v1",
  "sui-verifier-v2",
  "sui-verifier-v3",
+ "sui-verifier-v4",
  "tracing",
 ]
 
@@ -16011,6 +16099,26 @@ dependencies = [
  "move-stdlib-natives-v3",
  "move-vm-runtime-v3",
  "move-vm-types-v3",
+ "rand 0.8.5",
+ "smallvec",
+ "sui-protocol-config",
+ "sui-types",
+ "tracing",
+]
+
+[[package]]
+name = "sui-move-natives-v4"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "better_any",
+ "fastcrypto",
+ "fastcrypto-vdf",
+ "fastcrypto-zkp",
+ "indexmap 2.8.0",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-runtime-v4",
  "rand 0.8.5",
  "smallvec",
  "sui-protocol-config",
@@ -17409,6 +17517,22 @@ dependencies = [
  "move-bytecode-verifier-v3",
  "move-core-types",
  "move-vm-config",
+ "sui-protocol-config",
+ "sui-types",
+]
+
+[[package]]
+name = "sui-verifier-v4"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v4",
+ "move-core-types",
+ "move-vm-config",
+ "mysten-common",
  "sui-protocol-config",
  "sui-types",
 ]
