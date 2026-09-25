@@ -1,0 +1,46 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+// `TxContext` is never a source of a returned reference: a reference obtained through a
+// `TxContext` parameter roots only in the other arguments, or in nothing.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-16:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5327600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 18-24:
+//# programmable
+// VALID: a reference into TxContext survives later mutable TxContext uses and stays consistent
+//> 0: sui::tx_context::digest();
+//> 1: test::m::fresh();
+//> 2: test::m::fresh();
+//> 3: sui::tx_context::digest();
+//> 4: test::m::eq_bytes(Result(0), Result(3));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 26-31:
+//# programmable --inputs 0
+// VALID: a laundered TxContext reference is attributed to the other argument, immutable uses are fine
+//> 0: test::m::digest_via(Input(0));
+//> 1: test::m::use_imm<u64>(Input(0));
+//> 2: test::m::fresh();
+//> 3: test::m::use_imm<vector<u8>>(Result(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 33-37:
+//# programmable --inputs 0
+// INVALID: InvalidReferenceArgument at arg 0 of command 1, the laundered reference blocks a `&mut` of the other argument
+//> 0: test::m::digest_via(Input(0));
+//> 1: test::m::use_mut<u64>(Input(0));
+//> 2: test::m::use_imm<vector<u8>>(Result(0));
+Error: Transaction Effects Status: Invalid command argument at 0. The argument specified cannot be used as a reference argument in the Move call. Either the argument is a mutable reference and it conflicts with another argument to the call, or the argument is mutable and another reference extends it and will be used in a later command.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidReferenceArgument }, source: None, command: Some(1) } }

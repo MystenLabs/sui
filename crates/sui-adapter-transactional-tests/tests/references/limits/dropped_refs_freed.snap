@@ -1,0 +1,85 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-25:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 17662400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 27-94:
+//# programmable --inputs 0
+// VALID: 65 commands each returning one unused reference
+//> 0: MakeMoveVec<u64>([Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0)]);
+//> 1: test::m::one(Result(0));
+//> 2: test::m::one(Result(0));
+//> 3: test::m::one(Result(0));
+//> 4: test::m::one(Result(0));
+//> 5: test::m::one(Result(0));
+//> 6: test::m::one(Result(0));
+//> 7: test::m::one(Result(0));
+//> 8: test::m::one(Result(0));
+//> 9: test::m::one(Result(0));
+//> 10: test::m::one(Result(0));
+//> 11: test::m::one(Result(0));
+//> 12: test::m::one(Result(0));
+//> 13: test::m::one(Result(0));
+//> 14: test::m::one(Result(0));
+//> 15: test::m::one(Result(0));
+//> 16: test::m::one(Result(0));
+//> 17: test::m::one(Result(0));
+//> 18: test::m::one(Result(0));
+//> 19: test::m::one(Result(0));
+//> 20: test::m::one(Result(0));
+//> 21: test::m::one(Result(0));
+//> 22: test::m::one(Result(0));
+//> 23: test::m::one(Result(0));
+//> 24: test::m::one(Result(0));
+//> 25: test::m::one(Result(0));
+//> 26: test::m::one(Result(0));
+//> 27: test::m::one(Result(0));
+//> 28: test::m::one(Result(0));
+//> 29: test::m::one(Result(0));
+//> 30: test::m::one(Result(0));
+//> 31: test::m::one(Result(0));
+//> 32: test::m::one(Result(0));
+//> 33: test::m::one(Result(0));
+//> 34: test::m::one(Result(0));
+//> 35: test::m::one(Result(0));
+//> 36: test::m::one(Result(0));
+//> 37: test::m::one(Result(0));
+//> 38: test::m::one(Result(0));
+//> 39: test::m::one(Result(0));
+//> 40: test::m::one(Result(0));
+//> 41: test::m::one(Result(0));
+//> 42: test::m::one(Result(0));
+//> 43: test::m::one(Result(0));
+//> 44: test::m::one(Result(0));
+//> 45: test::m::one(Result(0));
+//> 46: test::m::one(Result(0));
+//> 47: test::m::one(Result(0));
+//> 48: test::m::one(Result(0));
+//> 49: test::m::one(Result(0));
+//> 50: test::m::one(Result(0));
+//> 51: test::m::one(Result(0));
+//> 52: test::m::one(Result(0));
+//> 53: test::m::one(Result(0));
+//> 54: test::m::one(Result(0));
+//> 55: test::m::one(Result(0));
+//> 56: test::m::one(Result(0));
+//> 57: test::m::one(Result(0));
+//> 58: test::m::one(Result(0));
+//> 59: test::m::one(Result(0));
+//> 60: test::m::one(Result(0));
+//> 61: test::m::one(Result(0));
+//> 62: test::m::one(Result(0));
+//> 63: test::m::one(Result(0));
+//> 64: test::m::one(Result(0));
+//> 65: test::m::one(Result(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

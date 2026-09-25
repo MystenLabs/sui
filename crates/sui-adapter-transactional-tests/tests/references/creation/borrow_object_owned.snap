@@ -1,0 +1,119 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-21:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6870400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 23-25:
+//# programmable --sender A --inputs @A
+//> 0: test::m::new();
+//> 1: TransferObjects([Result(0)], Input(0));
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 27-31:
+//# programmable --sender A --inputs object(2,0) 7
+// VALID: `&mut Obj` input, `&mut Inner` result, written through
+//> 0: test::m::inner_mut(Input(0));
+//> 1: test::m::f_mut(Result(0));
+//> 2: test::m::write(Result(1), Input(1));
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2309868, non_refundable_storage_fee: 23332
+
+task 4, line 33:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    inner: test::m::Inner {
+        f: 7u64,
+        g: 0u64,
+    },
+}
+
+task 5, lines 35-39:
+//# programmable --sender A --inputs object(2,0) 7
+// VALID: `&Obj` input, `&Inner` result, read through
+//> 0: test::m::inner(Input(0));
+//> 1: test::m::f(Result(0));
+//> 2: test::m::check(Result(1), Input(1));
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2309868, non_refundable_storage_fee: 23332
+
+task 6, lines 41-46:
+//# programmable --sender A --inputs object(2,0)
+// VALID: two immutable references into the same input coexist
+//> 0: test::m::inner(Input(0));
+//> 1: test::m::inner(Input(0));
+//> 2: test::m::use_imm<test::m::Inner>(Result(0));
+//> 3: test::m::use_imm<test::m::Inner>(Result(1));
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2309868, non_refundable_storage_fee: 23332
+
+task 7, lines 48-55:
+//# programmable --sender A --inputs object(2,0) 8 9
+// VALID: a second `&mut` borrow once the first reference is dead
+//> 0: test::m::inner_mut(Input(0));
+//> 1: test::m::f_mut(Result(0));
+//> 2: test::m::write(Result(1), Input(1));
+//> 3: test::m::inner_mut(Input(0));
+//> 4: test::m::f_mut(Result(3));
+//> 5: test::m::write(Result(4), Input(2));
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2309868, non_refundable_storage_fee: 23332
+
+task 8, line 57:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 6
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    inner: test::m::Inner {
+        f: 9u64,
+        g: 0u64,
+    },
+}
+
+task 9, lines 59-64:
+//# programmable --sender A --inputs object(2,0) 10 @B
+// VALID: the input is transferred by value after the reference into it is dead
+//> 0: test::m::inner_mut(Input(0));
+//> 1: test::m::f_mut(Result(0));
+//> 2: test::m::write(Result(1), Input(1));
+//> 3: TransferObjects([Input(0)], Input(2));
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2309868, non_refundable_storage_fee: 23332
+
+task 10, line 66:
+//# view-object 2,0
+Owner: Account Address ( B )
+Version: 7
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    inner: test::m::Inner {
+        f: 10u64,
+        g: 0u64,
+    },
+}
