@@ -37,7 +37,7 @@ questions:
 answer: Learn how to create a pool permissionlessly.
 ---
 
-Permissionless pool creation in DeepBookV3 lets anyone create a trading market for any asset pair without requiring approval from a central authority. You define the tick size, lot size, and minimum size parameters, pay a 500 DEEP token creation fee, and the pool becomes available to all traders immediately. Once created, a pool is permanent and unique to its asset pair.
+Permissionless pool creation in DeepBookV3 lets anyone create a trading market for any asset pair without requiring approval from a central authority. You define the tick size, lot size, and minimum size parameters, pay a 500 DEEP token creation fee, and the pool becomes available to all traders immediately. Each asset pair maps to at most one pool, in either direction: if a SUI/USDC pool exists, both SUI/USDC and USDC/SUI are blocked.
 
 The `Pool` shared object represents a market, such as a SUI/USDC market. That `Pool` is the only one representing that unique pairing (SUI/USDC) and the pairing is the only member of that particular `Pool`. See [DeepBookV3 Design](/onchain-finance/deepbook/deepbookv3/design#pool) to learn more about the structure of pools.
 
@@ -53,18 +53,21 @@ For a SUI (9 decimals) / USDC (6 decimals) pool with a desired decimal of 3 (0.0
 
 `10^(9 - 9 + 6 - 3) = 10^3 = 1000`
 
-The decimal desired must be at most 1 basis point (0.01%) of the price between the base and quote asset. For a target of 3 decimals, `0.001 / price` must be less than or equal to `0.0001`. For pools where both assets are stablecoins, use a lower tick size.
+The contract requires the resulting tick size to be a positive power of 10 (`EInvalidTickSize`). The decimal desired should be at most 1 basis point (0.01%) of the price between the base and quote asset. For a target of 3 decimals, `0.001 / price` must be less than or equal to `0.0001`. For pools where both assets are stablecoins, use a lower tick size.
 
-**Lot size** sets the minimum quantity increment for orders. Express lot size in MIST of the base asset. Lot size must:
-- Represent approximately $0.01 to $0.10 nominal value of the base asset
-- Be a power of 10
-- Be less than or equal to minimum size
-- Be greater than or equal to 1,000
+**Lot size** sets the minimum quantity increment for orders. Express lot size in MIST of the base asset. The contract requires lot size to:
 
-**Min size** sets the minimum order quantity. Express minimum size in MIST of the base asset. Minimum size must:
-- Represent approximately $0.10 to $1.00 nominal value of the base asset
-- Be a power of 10
-- Be greater than or equal to lot size
+- Be a power of 10 (`EInvalidLotSize`)
+- Be greater than or equal to 1,000 (`EInvalidLotSize`)
+
+It should also represent approximately $0.01 to $0.10 nominal value of the base asset. That range is a recommendation rather than an onchain check.
+
+**Min size** sets the minimum order quantity. Express minimum size in MIST of the base asset. The contract requires minimum size to:
+
+- Be a power of 10 (`EInvalidMinSize`)
+- Be a multiple of lot size (`EInvalidMinSize`)
+
+It should also represent approximately $0.10 to $1.00 nominal value of the base asset, again as a recommendation rather than a check.
 
 ## How does fee payment work in a permissionless pool?
 
@@ -72,6 +75,8 @@ All pools support input token fees by default. To enable DEEP token fee payment,
 
 1. Either the base or quote asset must be `USDC` or `SUI`.
 2. You must run a cron job that calls `add_deep_price_point()` on the pool every 1 to 10 minutes to keep the DEEP price reference current.
+
+Until the pool has price points, there is no fallback: an order with `pay_with_deep = true` aborts with `ENoDataPoints`, so traders must pass `pay_with_deep = false`.
 
 ## API
 
@@ -86,15 +91,15 @@ Tick size should be 10^(9 - base_decimals + quote_decimals - decimal_desired). F
 
 Decimal desired should be at most 1bps, or 0.01%, of the price between base and quote asset. For example, if 3 decimals is the target, 0.001 (three decimals) / price should be less than or equal to 0.0001. Consider a lower tick size for pools where both base and quote assets are stablecoins.
 
-Lot size is in MIST of the base asset, and should be approximately &dollar;0.01 to &dollar;0.10 nominal of the base asset. Lot size must be a power of 10, and less than or equal to min size. Lot size should also be greater than or equal to 1,000.
+Lot size is in MIST of the base asset, and should be approximately &dollar;0.01 to &dollar;0.10 nominal of the base asset. Lot size must be a power of 10 and greater than or equal to 1,000.
 
-Min size is in MIST of the base asset, and should be approximately &dollar;0.10 to &dollar;1.00 nominal of the base asset. Min size must be a power of 10, and larger than or equal to lot size.
+Min size is in MIST of the base asset, and should be approximately &dollar;0.10 to &dollar;1.00 nominal of the base asset. Min size must be a power of 10 and a multiple of lot size.
 
 Creation fee is 500 DEEP tokens.
 
 :::info
 
-Pools can only be created if the asset pair has not already been created before.
+Pools can only be created if the asset pair has not already been created before, in either direction. If a SUI/USDC pool exists, creating USDC/SUI aborts with `EPoolAlreadyExists` as well.
 
 :::
 
@@ -128,54 +133,68 @@ This is very important after contract upgrades to ensure the newest contract can
 
 </details>
 
-## Example: create a SUI/USDC pool
+## Example: create a pool
 
-The following example shows how to create a SUI/USDC pool using the DeepBook TypeScript SDK. This assumes you have a `DeepBookClient` instance configured and a wallet with at least 500 DEEP tokens to cover the creation fee.
+The following example creates a `MYCOIN`/`USDC` pool using the DeepBook TypeScript SDK. It uses a made-up base asset because SUI/USDC and the other major pairs already exist on Mainnet, and creating a pair that is already registered aborts with `EPoolAlreadyExists`.
+
+The SDK takes human units, not MIST: tick size is a price, and lot size and min size are whole base coins. It converts them to onchain units for you. It also addresses assets by coin key rather than by full type, so register any coin the SDK does not already know about through the `coins` option.
 
 ```typescript
-import { DeepBookClient } from "@mysten/deepbook-v3";
-import { SuiClient } from "@mysten/sui/client";
-import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { deepbook } from '@mysten/deepbook-v3';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
 
 const keypair = Ed25519Keypair.fromSecretKey(YOUR_SECRET_KEY);
-const suiClient = new SuiClient({ url: "https://fullnode.mainnet.sui.io" });
 
-const dbClient = new DeepBookClient({
-  address: keypair.getPublicKey().toSuiAddress(),
-  env: "mainnet",
-  client: suiClient,
-  keypair,
+const client = new SuiGrpcClient({
+	network: 'mainnet',
+	baseUrl: 'https://fullnode.mainnet.sui.io:443',
+}).$extend(
+	deepbook({
+		address: keypair.toSuiAddress(),
+		coins: {
+			MYCOIN: {
+				address: '0x…',
+				type: '0x…::mycoin::MYCOIN',
+				scalar: 1_000_000_000, // 9 decimals
+			},
+		},
+	}),
+);
+
+const tx = new Transaction();
+
+// Human units: a 0.001 USDC price increment, 1 MYCOIN lots,
+// and a 10 MYCOIN minimum order.
+tx.add(
+	client.deepbook.deepBook.createPermissionlessPool({
+		baseCoinKey: 'MYCOIN',
+		quoteCoinKey: 'USDC',
+		tickSize: 0.001,
+		lotSize: 1,
+		minSize: 10,
+	}),
+);
+
+const result = await client.signAndExecuteTransaction({
+	signer: keypair,
+	transaction: tx,
 });
 
-// SUI has 9 decimals, USDC has 6 decimals.
-// Desired tick decimal = 3, so tick_size = 10^(9 - 9 + 6 - 3) = 1000
-// lot_size = 1_000_000 MIST (~$0.001 of SUI at $1 SUI price)
-// min_size = 100_000_000 MIST (~$0.10 of SUI at $1 SUI price)
-
-const txb = await dbClient.pools.createPermissionlessPool({
-  baseCoinType: "0x2::sui::SUI",
-  quoteCoinType: "USDC_COIN_TYPE",
-  tickSize: 1000n,
-  lotSize: 1_000_000n,
-  minSize: 100_000_000n,
-});
-
-const result = await suiClient.signAndExecuteTransaction({
-  signer: keypair,
-  transaction: txb,
-});
-
-console.log("Pool created:", result.digest);
+console.log('Pool created:', result.digest);
 ```
 
-After the transaction executes, the new pool appears in the DeepBook registry and is available for trading immediately.
+The SDK pulls the 500 DEEP creation fee from your address unless you pass a `deepCoin` argument. After the transaction executes, the new pool appears in the DeepBook registry and is available for trading immediately.
 
 ## Frequently asked questions
 
 **Can anyone create a pool?** Yes. Pool creation is open to any address that holds at least 500 DEEP tokens to pay the creation fee. No administrative approval is required.
 
-**What happens if the pool already exists?** The transaction fails. Each asset pair maps to exactly one pool. Check the DeepBook registry before calling `create_permissionless_pool()` to confirm the pair is not already listed.
+**What happens if the pool already exists?** The transaction aborts with `EPoolAlreadyExists`. Each asset pair maps to at most one pool, and the check covers the reversed pair too: if SUI/USDC exists, creating USDC/SUI fails as well. Check the DeepBook registry before calling `create_permissionless_pool()` to confirm neither direction is already listed.
 
-**Do I need to run a price oracle for my pool?** Only if you want traders to pay fees in DEEP. Without calling `add_deep_price_point()` regularly, the pool cannot calculate the DEEP equivalent fee, and all trades settle fees in the input token instead.
+**Is a pool permanent once created?** Not quite. An admin can unregister a pool, which frees the pair so someone can create it again.
+
+**Do I need to run a price oracle for my pool?** Only if you want traders to pay fees in DEEP. There is no fallback to input token fees: without price points, any order with `pay_with_deep = true` aborts with `ENoDataPoints`, and traders have to pass `pay_with_deep = false` explicitly. Call `add_deep_price_point()` regularly to keep DEEP fees available.
 
 **What reference pool address should I use for DEEP price points?** Use the `DEEP/USDC` pool at `0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce` for pools that include USDC. Use the `DEEP/SUI` pool at `0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22` for pools that include SUI.
