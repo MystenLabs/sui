@@ -7,7 +7,6 @@ use move_binary_format::{
     file_format::{CompiledModule, SignatureToken},
 };
 use move_core_types::account_address::AccountAddress;
-use move_core_types::signed_ints_todo;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use sui_types::{
@@ -212,7 +211,7 @@ impl MoveCallInfo {
             | TypeInput::I32
             | TypeInput::I64
             | TypeInput::I128
-            | TypeInput::I256 => signed_ints_todo!("replay type input {type_input:?}"),
+            | TypeInput::I256 => todo!("(signed-ints) replay type input {type_input:?}"),
             TypeInput::Address => MoveType::Address,
             TypeInput::Signer => MoveType::Address, // Signer is treated as Address
             TypeInput::Vector(element) => {
@@ -258,15 +257,6 @@ impl MoveCallInfo {
             SignatureToken::U64 => Ok(MoveType::U64),
             SignatureToken::U128 => Ok(MoveType::U128),
             SignatureToken::U256 => Ok(MoveType::U256),
-            // Signed integer types are not supported at the Sui layer.
-            SignatureToken::I8
-            | SignatureToken::I16
-            | SignatureToken::I32
-            | SignatureToken::I64
-            | SignatureToken::I128
-            | SignatureToken::I256 => Err(anyhow::anyhow!(
-                "signed integer types are not supported at the Sui layer"
-            )),
             SignatureToken::Address => Ok(MoveType::Address),
             SignatureToken::Signer => Ok(MoveType::Address), // Signer is treated as Address
             SignatureToken::Vector(element_type) => {
@@ -332,7 +322,7 @@ impl MoveCallInfo {
             | SignatureToken::I64
             | SignatureToken::I128
             | SignatureToken::I256 => {
-                anyhow::bail!("Signed integer types are not yet supported")
+                anyhow::bail!("signed integer types are not yet supported")
             }
         }
     }

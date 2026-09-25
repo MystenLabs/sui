@@ -14,7 +14,6 @@ use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::i256::I256;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
-use move_core_types::signed_ints_todo;
 use move_core_types::u256::U256;
 use serde::Serialize;
 use serde::ser::SerializeSeq as _;
@@ -893,7 +892,7 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
                 // No signed value can exist on-chain until enablement, and the
                 // display `Atom` has no variants for them yet.
                 L::I8 | L::I16 | L::I32 | L::I64 | L::I128 | L::I256 => {
-                    signed_ints_todo!("display v2 atom rendering")
+                    todo!("(signed-ints) display v2 atom rendering")
                 }
 
                 L::Vector(layout) if layout.as_ref() == &L::U8 => {

@@ -118,9 +118,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: i8,
     ) -> Result<Self::Value, Self::Error> {
-        // Signed integers mirror the unsigned convention: widths up to 32 bits render as
-        // native numbers, wider widths render as strings (to avoid loss of precision in
-        // consumers that read numbers as f64).
+        // REVIEW: i8/i16/i32 render as numbers; wider signed widths render as strings.
         Ok(F::signed_number(&mut self.meter, value as i32)?)
     }
 
@@ -324,7 +322,7 @@ mod tests {
 
     use move_core_types::annotated_value as A;
     use move_core_types::ident_str;
-    use move_core_types::language_storage::StructTag;
+    use move_core_types::language_storage::{StructTag, TypeTag};
     use serde::Serialize;
     use serde_json::Value;
     use serde_json::json;
@@ -409,6 +407,7 @@ mod tests {
 
     #[test]
     fn json_i8() {
+        assert_eq!(TypeTag::from(&L::I8), TypeTag::I8);
         let actual = json(L::I8, -42i8);
         let expect = json!(-42i8);
         assert_eq!(expect, actual);
@@ -420,6 +419,7 @@ mod tests {
 
     #[test]
     fn json_i16() {
+        assert_eq!(TypeTag::from(&L::I16), TypeTag::I16);
         let actual = json(L::I16, -424i16);
         let expect = json!(-424i16);
         assert_eq!(expect, actual);
@@ -427,6 +427,7 @@ mod tests {
 
     #[test]
     fn json_i32() {
+        assert_eq!(TypeTag::from(&L::I32), TypeTag::I32);
         let actual = json(L::I32, -432_432i32);
         let expect = json!(-432_432i32);
         assert_eq!(expect, actual);
@@ -434,6 +435,7 @@ mod tests {
 
     #[test]
     fn json_i64() {
+        assert_eq!(TypeTag::from(&L::I64), TypeTag::I64);
         let actual = json(L::I64, -432_432_432_432i64);
         let expect = json!((-432_432_432_432i64).to_string());
         assert_eq!(expect, actual);
@@ -441,6 +443,7 @@ mod tests {
 
     #[test]
     fn json_i128() {
+        assert_eq!(TypeTag::from(&L::I128), TypeTag::I128);
         let actual = json(L::I128, -424_242_424_242_424_242_424i128);
         let expect = json!((-424_242_424_242_424_242_424i128).to_string());
         assert_eq!(expect, actual);
@@ -449,6 +452,7 @@ mod tests {
     #[test]
     fn json_i256() {
         use move_core_types::i256::I256;
+        assert_eq!(TypeTag::from(&L::I256), TypeTag::I256);
         let value = I256::from_str("-42424242424242424242424242424242424242424").unwrap();
         let actual = json(L::I256, value);
         let expect = json!("-42424242424242424242424242424242424242424");

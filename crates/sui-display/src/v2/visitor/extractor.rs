@@ -96,7 +96,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
     /// variants for them. No signed value can exist on-chain yet, so these arms are dead
     /// code today — debug-fail so that tests scream if a signed value ever reaches display
     /// extraction unimplemented, but degrade to `Ok(None)` (field renders as empty) in
-    /// release. TODO [signed-ints]: implement signed display extraction in the enablement PR.
+    /// release. TODO (signed-ints): implement signed display extraction in the enablement PR.
     fn visit_i8(
         &mut self,
         _: &AV::ValueDriver<'_, 'v, 'v>,

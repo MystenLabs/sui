@@ -60,6 +60,12 @@ pub(crate) enum MoveTypeSignature {
     U64,
     U128,
     U256,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
     Vector(Box<MoveTypeSignature>),
     Datatype {
         package: String,
@@ -82,6 +88,12 @@ pub(crate) enum MoveTypeLayout {
     U64,
     U128,
     U256,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
     Vector(Box<MoveTypeLayout>),
     Struct(MoveStructLayout),
     Enum(MoveEnumLayout),
@@ -163,6 +175,7 @@ type MoveTypeSignature =
     \"address\"
   | \"bool\"
   | \"u8\" | \"u16\" | ... | \"u256\"
+  | \"i8\" | \"i16\" | ... | \"i256\"
   | { vector: MoveTypeSignature }
   | {
       datatype: {
@@ -184,6 +197,7 @@ type MoveTypeLayout =
     \"address\"
   | \"bool\"
   | \"u8\" | \"u16\" | ... | \"u256\"
+  | \"i8\" | \"i16\" | ... | \"i256\"
   | { vector: MoveTypeLayout }
   | {
       struct: {
@@ -369,11 +383,12 @@ impl TryFrom<TypeInput> for MoveTypeSignature {
             T::U64 => Self::U64,
             T::U128 => Self::U128,
             T::U256 => Self::U256,
-
-            // Signed integer types are not accepted on Sui.
-            T::I8 | T::I16 | T::I32 | T::I64 | T::I128 | T::I256 => {
-                return Err(anyhow!("Unexpected signed integer type").into());
-            }
+            T::I8 => Self::I8,
+            T::I16 => Self::I16,
+            T::I32 => Self::I32,
+            T::I64 => Self::I64,
+            T::I128 => Self::I128,
+            T::I256 => Self::I256,
 
             T::Bool => Self::Bool,
             T::Address => Self::Address,
@@ -409,11 +424,12 @@ impl TryFrom<A::MoveTypeLayout> for MoveTypeLayout {
             TL::U64 => Self::U64,
             TL::U128 => Self::U128,
             TL::U256 => Self::U256,
-
-            // Signed integer types are not accepted on Sui.
-            TL::I8 | TL::I16 | TL::I32 | TL::I64 | TL::I128 | TL::I256 => {
-                return Err(anyhow!("Unexpected signed integer type").into());
-            }
+            TL::I8 => Self::I8,
+            TL::I16 => Self::I16,
+            TL::I32 => Self::I32,
+            TL::I64 => Self::I64,
+            TL::I128 => Self::I128,
+            TL::I256 => Self::I256,
 
             TL::Bool => Self::Bool,
             TL::Address => Self::Address,

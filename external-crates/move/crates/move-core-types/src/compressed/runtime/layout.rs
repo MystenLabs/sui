@@ -457,9 +457,7 @@ impl MoveTypeLayoutBuilder {
             | RV::MoveTypeLayout::I64
             | RV::MoveTypeLayout::I128
             | RV::MoveTypeLayout::I256 => {
-                anyhow::bail!(crate::signed_ints_unsupported!(
-                    "compressed runtime layouts"
-                ))
+                anyhow::bail!("(signed-ints) compressed runtime layouts")
             }
             RV::MoveTypeLayout::Vector(inner) => {
                 let inner_h = self.from_tree(inner)?;
