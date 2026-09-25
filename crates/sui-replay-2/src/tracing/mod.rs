@@ -5,7 +5,7 @@
 //! Mostly deals with directory/file saving and what gets saved in the trace output.
 
 use crate::{
-    artifacts::{Artifact, ArtifactManager},
+    artifacts::{Artifact, ArtifactManager, BYTECODE_DIR},
     execution::TxnContextAndEffects,
 };
 use anyhow::{Context, Error};
@@ -18,7 +18,6 @@ use move_trace_format::format::MoveTraceBuilder;
 use std::fs;
 use sui_types::object::Data;
 
-const BCODE_DIR: &str = "bytecode";
 const SOURCE_DIR: &str = "source";
 
 /// Saves the trace and additional metadata needed to analyze the trace
@@ -67,7 +66,7 @@ pub fn save_trace_output(
         let pkg_addr = format!("{:?}", pkg.id());
         let pkg_dir = artifact_manager.base_path.join(&pkg_addr);
         // TODO: have this use the artifact manager as well.
-        let bcode_pkg_dir = pkg_dir.join(BCODE_DIR);
+        let bcode_pkg_dir = pkg_dir.join(BYTECODE_DIR);
         fs::create_dir_all(&bcode_pkg_dir).context(format!(
             "Failed to create bytecode output directory '{:?}'",
             bcode_pkg_dir,

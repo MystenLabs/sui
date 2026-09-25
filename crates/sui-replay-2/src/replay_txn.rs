@@ -55,6 +55,16 @@ pub struct ExecutorProvider {
     cache_enabled: bool,
 }
 
+/// Execution and artifact details needed by replay callers.
+pub(crate) struct ReplayRunOutcome {
+    /// Milliseconds spent in the versioned execution engine.
+    pub execution_ms: u128,
+    /// Whether replayed effects matched expected effects, or `None` when execution was skipped.
+    pub effects_match: Option<bool>,
+    /// Whether this replay run serialized a Move trace.
+    pub trace_generated: bool,
+}
+
 impl ExecutorProvider {
     pub fn new(cache_enabled: bool) -> Self {
         Self {
@@ -91,15 +101,19 @@ impl ExecutorProvider {
     }
 }
 
-// `ReplayTransaction` contains all the data needed to replay a transaction.
-// The `object_cache` will contain all the objects and packages touched by the transaction.
+/// Data and retained state needed to replay one historical or simulated transaction.
 pub struct ReplayTransaction {
+    /// Digest of the transaction executed by replay.
     pub digest: TransactionDigest,
-    pub checkpoint: u64, // used for object queries
+    /// Historical inclusion checkpoint or simulation fallback read bound for object queries.
+    pub checkpoint: u64,
+    /// Transaction executed by replay.
     pub txn_data: TransactionData,
+    /// Historical or fullnode simulation effects used as the expected result.
     pub effects: TransactionEffects,
+    /// Versioned executor selected from the effects epoch's protocol configuration.
     pub executor: ReplayExecutor,
-    // Objects and packages used by the transaction
+    /// Objects and packages retained while preparing the replay.
     pub object_cache: BTreeMap<ObjectID, BTreeMap<ObjectVersion, Object>>,
 }
 
@@ -114,6 +128,29 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     trace: bool,
     executor_provider: &mut ExecutorProvider,
 ) -> Result<u128> {
+    replay_transaction_from_store(
+        artifact_manager,
+        tx_digest,
+        data_store,
+        network,
+        trace,
+        executor_provider,
+    )
+    .map(|outcome| outcome.execution_ms)
+}
+
+/// Replay a transaction from an arbitrary data store and report artifact-relevant outcomes.
+///
+/// Historical replay uses this through the elapsed-time compatibility wrapper above. Simulation
+/// replay also consumes the effects comparison and trace status so it can report provenance.
+pub(crate) fn replay_transaction_from_store<S: ReadDataStore>(
+    artifact_manager: &ArtifactManager<'_>,
+    tx_digest: &str,
+    data_store: &S,
+    network: String,
+    trace: bool,
+    executor_provider: &mut ExecutorProvider,
+) -> Result<ReplayRunOutcome> {
     let _span = info_span!("replay_tx", tx_digest = %tx_digest).entered();
     // load a `ReplayTransaction`
     let replay_txn = match ReplayTransaction::load(
@@ -148,7 +185,11 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
             .serialize_artifact(&replay_txn.effects)
             .transpose()?
             .unwrap();
-        return Ok(0);
+        return Ok(ReplayRunOutcome {
+            execution_ms: 0,
+            effects_match: None,
+            trace_generated: false,
+        });
     }
 
     // replay the transaction
@@ -160,7 +201,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     let exec_ms = exec_t0.elapsed().as_millis();
 
     // TODO: make tracing better abstracted? different tracers?
-    if let Some(trace_builder) = trace_builder_opt {
+    let trace_generated = if let Some(trace_builder) = trace_builder_opt {
         save_trace_output(artifact_manager, trace_builder, &context_and_effects).map_err(|e| {
             anyhow!(
                 "transaction {} failed to build a trace output path -> {:?}",
@@ -168,7 +209,10 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
                 e
             )
         })?;
-    }
+        true
+    } else {
+        false
+    };
 
     // Save results
     debug!(
@@ -231,27 +275,32 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
         }
     }
 
-    verify_txn_and_save_effects(
+    let effects_match = verify_txn_and_save_effects(
         artifact_manager,
         &context_and_effects.expected_effects,
         &context_and_effects.execution_effects,
     )?;
 
-    Ok(exec_ms)
+    Ok(ReplayRunOutcome {
+        execution_ms: exec_ms,
+        effects_match: Some(effects_match),
+        trace_generated,
+    })
 }
 
 fn verify_txn_and_save_effects(
     artifact_manager: &ArtifactManager<'_>,
     expected_effects: &TransactionEffects,
     effects: &TransactionEffects,
-) -> Result<()> {
+) -> Result<bool> {
     // If replayed effects are different from the expected ones
     // (obtained from the chain), save the forked effects and the expected effects
     // so that they can be diffed in the output.
     // If replayed and expected effects are the same, save the replayed effects
     // and try removing the forked effects (if any) so that the output just shows
     // the replayed effects rather than (now spurious) effects diff.
-    if effects != expected_effects {
+    let tx_forked = effects != expected_effects;
+    if tx_forked {
         error!(
             tx_digest = %effects.transaction_digest(),
             "Transaction effects do not match expected effects for transaction {}; saving forked effects",
@@ -277,7 +326,7 @@ fn verify_txn_and_save_effects(
             .member(Artifact::ForkedTransactionEffects)
             .try_remove_artifact()?;
     }
-    Ok(())
+    Ok(!tx_forked)
 }
 
 impl ReplayTransaction {
