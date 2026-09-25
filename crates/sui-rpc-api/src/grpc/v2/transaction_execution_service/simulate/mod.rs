@@ -44,7 +44,7 @@ const GAS_COIN_SIZE_BYTES: u64 = 40;
 pub fn simulate_transaction(
     service: &RpcService,
     request: SimulateTransactionRequest,
-    _client_protocol_version: Option<ProtocolVersion>,
+    client_protocol_version: Option<ProtocolVersion>,
 ) -> Result<SimulateTransactionResponse> {
     let executor = service
         .executor
@@ -88,6 +88,8 @@ pub fn simulate_transaction(
 
         (system_state.reference_gas_price, protocol_config)
     };
+    let offer_allowed_proposers =
+        can_offer_allowed_proposers(&protocol_config, client_protocol_version);
 
     // Try to parse out a fully-formed transaction. If one wasn't provided then we will attempt to
     // perform transaction resolution.
@@ -136,7 +138,7 @@ pub fn simulate_transaction(
                 gasless_tx.gas_data_mut().budget = 0;
                 // All gasless txns must carry an epoch-scoped validity window for replay
                 // protection.
-                configure_transaction_validity(service, &protocol_config, &mut gasless_tx)?;
+                configure_transaction_validity(service, offer_allowed_proposers, &mut gasless_tx)?;
 
                 let simulation_result = executor
                     .simulate_transaction(gasless_tx.clone(), checks, false)
@@ -213,13 +215,14 @@ pub fn simulate_transaction(
                     // taken as-is.
                     budget_was_estimated.then_some(reference_gas_price),
                     &protocol_config,
+                    offer_allowed_proposers,
                 )?;
             }
 
             // Coin-paid transactions get a proposer restriction too, so that nobody else can
             // amplify them into consensus. A no-op on the address-balance paths, which already
             // set their expiration above.
-            restrict_transaction_proposers(service, &protocol_config, &mut transaction)?;
+            restrict_transaction_proposers(service, offer_allowed_proposers, &mut transaction)?;
         }
 
         executor
@@ -490,7 +493,7 @@ const MAX_ALLOWED_PROPOSERS: usize = MAX_UNPAID_ALLOWED_PROPOSERS as usize;
 /// transaction to them, so that nobody else can amplify it into consensus.
 fn configure_transaction_validity(
     service: &RpcService,
-    protocol_config: &ProtocolConfig,
+    offer_allowed_proposers: bool,
     transaction: &mut sui_types::transaction::TransactionData,
 ) -> Result<()> {
     // Early return if the caller already chose an expiration with a validity window.
@@ -508,7 +511,7 @@ fn configure_transaction_validity(
     let nonce = rand::random();
 
     *transaction.expiration_mut() =
-        match select_allowed_proposers(service, protocol_config, current_epoch) {
+        match select_allowed_proposers(service, offer_allowed_proposers, current_epoch) {
             Some(allowed_proposers) => TransactionExpiration::Validity {
                 min_epoch,
                 max_epoch,
@@ -538,7 +541,7 @@ fn configure_transaction_validity(
 /// otherwise the transaction is returned exactly as resolved.
 fn restrict_transaction_proposers(
     service: &RpcService,
-    protocol_config: &ProtocolConfig,
+    offer_allowed_proposers: bool,
     transaction: &mut sui_types::transaction::TransactionData,
 ) -> Result<()> {
     if !matches!(transaction.expiration(), TransactionExpiration::None) {
@@ -546,7 +549,8 @@ fn restrict_transaction_proposers(
     }
 
     let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
-    let Some(allowed_proposers) = select_allowed_proposers(service, protocol_config, current_epoch)
+    let Some(allowed_proposers) =
+        select_allowed_proposers(service, offer_allowed_proposers, current_epoch)
     else {
         return Ok(());
     };
@@ -563,21 +567,39 @@ fn restrict_transaction_proposers(
     Ok(())
 }
 
+/// The first protocol version at which every binary defines `TransactionExpiration::Validity`.
+/// Earlier versions include 135 as released from the 1.78 branch, which lacks it.
+const FIRST_PROTOCOL_VERSION_WITH_VALIDITY: u64 = 136;
+
+/// Whether simulate may restrict the transaction it returns to a set of allowed proposers.
+///
+/// The network must accept the `Validity` variant at all — otherwise validity_check would reject
+/// the very transaction simulate just handed back — and the client must be able to decode it,
+/// which it can if its protocol version defines the variant, whether or not that version enables
+/// it. Clients that don't report a version are assumed not to.
+fn can_offer_allowed_proposers(
+    protocol_config: &ProtocolConfig,
+    client_protocol_version: Option<ProtocolVersion>,
+) -> bool {
+    protocol_config.allowed_proposers()
+        && client_protocol_version
+            .is_some_and(|v| v.as_u64() >= FIRST_PROTOCOL_VERSION_WITH_VALIDITY)
+}
+
 /// The proposer set this node would restrict a transaction to, if one can be formed.
 ///
-/// Only offered where the network accepts the `Validity` variant at all — otherwise
-/// validity_check would reject the very transaction simulate just handed back. `None` on nodes
-/// without a transaction driver, or before the driver has observed validator latencies.
+/// `None` unless `offer_allowed_proposers`, on nodes without a transaction driver, or before the
+/// driver has observed validator latencies.
 ///
 /// Proposer sets are resolved against the committee of the epoch they name, so one selected now
 /// is only usable while this epoch lasts; a set naming any other epoch is not emitted, and the
 /// transaction simply stays unrestricted rather than becoming unproposable.
 fn select_allowed_proposers(
     service: &RpcService,
-    protocol_config: &ProtocolConfig,
+    offer_allowed_proposers: bool,
     current_epoch: u64,
 ) -> Option<AllowedProposers> {
-    if !protocol_config.allowed_proposers() {
+    if !offer_allowed_proposers {
         return None;
     }
     service
@@ -592,6 +614,7 @@ fn select_gas(
     transaction: &mut sui_types::transaction::TransactionData,
     incremental_loading_rgp: Option<u64>,
     protocol_config: &ProtocolConfig,
+    offer_allowed_proposers: bool,
 ) -> Result<()> {
     use sui_types::accumulator_root::AccumulatorValue;
     use sui_types::balance::Balance;
@@ -649,7 +672,7 @@ fn select_gas(
         transaction.gas_data_mut().payment.clear();
 
         if matches!(transaction.expiration(), TransactionExpiration::None) {
-            configure_transaction_validity(service, protocol_config, transaction)?;
+            configure_transaction_validity(service, offer_allowed_proposers, transaction)?;
         }
 
         budget
@@ -723,7 +746,7 @@ fn select_gas(
             selected_gas_value += ab_value;
 
             if matches!(transaction.expiration(), TransactionExpiration::None) {
-                configure_transaction_validity(service, protocol_config, transaction)?;
+                configure_transaction_validity(service, offer_allowed_proposers, transaction)?;
             }
         }
 
@@ -900,5 +923,24 @@ mod tests {
         let status = simulation_error_to_rpc_error(error).into_status_proto();
 
         assert_eq!(status.code, tonic::Code::Internal as i32);
+    }
+
+    #[test]
+    fn allowed_proposers_offered_only_to_clients_that_can_decode_them() {
+        use sui_protocol_config::Chain;
+
+        let v = ProtocolVersion::new;
+        let offer = |chain, network: u64, client: Option<u64>| {
+            let config = ProtocolConfig::get_for_version(v(network), chain);
+            can_offer_allowed_proposers(&config, client.map(v))
+        };
+
+        assert!(!offer(Chain::Mainnet, 138, None));
+        assert!(!offer(Chain::Mainnet, 138, Some(135)));
+        // 136 defines `Validity` even though mainnet only enables it at 137.
+        assert!(offer(Chain::Mainnet, 138, Some(136)));
+        assert!(offer(Chain::Mainnet, 138, Some(u64::MAX)));
+        // Never offered where the network doesn't accept it.
+        assert!(!offer(Chain::Mainnet, 136, Some(138)));
     }
 }
