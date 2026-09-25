@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 141;
+const MAX_PROTOCOL_VERSION: u64 = 142;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -430,6 +430,7 @@ const MAINNET_USDB: &str =
 //              prepared verifying key length does not match the number of public inputs.
 //              Add `sui::clock::borrow`, which references the Clock without a Clock input.
 //              Add the `object::is_shared_input_impl` native and its cost.
+// Version 142: Enable execution version 5 and raise the package arena size.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4966,6 +4967,10 @@ impl ProtocolConfig {
                     cfg.clock_borrow_cost_base = Some(52);
                     cfg.feature_flags.check_groth16_pvk_length = true;
                     cfg.object_is_shared_input_cost_base = Some(52);
+                }
+                142 => {
+                    cfg.execution_version = Some(5);
+                    cfg.package_arena_size_in_bytes = Some(20_000_000);
                 }
                 // Use this template when making changes:
                 //
