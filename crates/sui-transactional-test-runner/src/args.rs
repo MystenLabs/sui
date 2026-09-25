@@ -20,7 +20,7 @@ use move_core_types::runtime_value::{MoveStruct, MoveValue};
 use move_core_types::u256::U256;
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::tasks::{RunCommand, SyntaxChoice};
-use sui_protocol_config::Chain;
+use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::balance::Balance;
 use sui_types::base_types::{SequenceNumber, SuiAddress};
@@ -256,6 +256,8 @@ pub struct CreateCheckpointCommand {
 #[derive(Debug, clap::Parser)]
 pub struct AdvanceEpochCommand {
     pub count: Option<u64>,
+    #[clap(long = "protocol-version")]
+    pub protocol_version: Option<u64>,
     #[clap(long = "create-random-state")]
     pub create_random_state: bool,
     #[clap(long = "create-authenticator-state")]
@@ -275,6 +277,7 @@ pub struct AdvanceEpochCommand {
 impl From<&AdvanceEpochCommand> for simulacrum::AdvanceEpochConfig {
     fn from(cmd: &AdvanceEpochCommand) -> Self {
         Self {
+            protocol_version: cmd.protocol_version.map(ProtocolVersion::from),
             create_random_state: cmd.create_random_state,
             create_authenticator_state: cmd.create_authenticator_state,
             create_authenticator_state_expire: cmd.create_authenticator_state_expire,
