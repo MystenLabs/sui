@@ -8,7 +8,7 @@ pub(crate) mod checked {
 
     use crate::adapter::new_move_runtime;
     use crate::execution_mode::{self, ExecutionMode};
-    use crate::gas_charger::{PaymentKind, PaymentMethod};
+    use crate::gas_payment::{PaymentKind, PaymentMethod};
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
@@ -24,7 +24,6 @@ pub(crate) mod checked {
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
     };
-    use sui_types::coin_reservation::ParsedDigest;
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
     use sui_types::gas_model::gas_predicates::bump_only_enabled;
@@ -81,7 +80,7 @@ pub(crate) mod checked {
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
         ProgrammableTransaction, Reservation, StoredExecutionTimeObservations, TransactionKind,
-        WithdrawFrom, WriteAccumulatorStorageCost, is_gasless_transaction,
+        WithdrawFrom, WriteAccumulatorStorageCost,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
@@ -122,87 +121,6 @@ pub(crate) mod checked {
         any_error_is_insufficient_funds_for_withdraw(execution_params)
     }
 
-    fn payment_kind(
-        gas_data: &GasData,
-        transaction_kind: &TransactionKind,
-    ) -> Result<PaymentKind, ExecutionError> {
-        Ok(
-            if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
-                PaymentKind::unmetered()
-            } else if is_gasless_transaction(gas_data, transaction_kind) {
-                PaymentKind::gasless()
-            } else if gas_data.payment.is_empty() {
-                PaymentKind::smash(vec![PaymentMethod::AddressBalance(
-                    gas_data.owner,
-                    gas_data.budget,
-                )])
-                .ok_or_else(|| {
-                    ExecutionError::invariant_violation(
-                        "unable to create a payment kind with a single address balance",
-                    )
-                })?
-            } else {
-                let payment_methods = gas_data
-                    .payment
-                    .iter()
-                    .map(|entry| {
-                        if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
-                            PaymentMethod::AddressBalance(
-                                gas_data.owner,
-                                parsed.reservation_amount(),
-                            )
-                        } else {
-                            PaymentMethod::Coin(*entry)
-                        }
-                    })
-                    .collect();
-                PaymentKind::smash(payment_methods).ok_or_else(|| {
-                    ExecutionError::invariant_violation(
-                        "unable to create a payment kind from the gas payment: \
-                     duplicate gas coin or reservation overflow",
-                    )
-                })?
-            },
-        )
-    }
-
-    // Legacy (gas_model < 15) payment classification (delete at execution version cut)
-    fn legacy_payment_kind(
-        gas_data: &GasData,
-        transaction_kind: &TransactionKind,
-        protocol_config: &ProtocolConfig,
-    ) -> PaymentKind {
-        if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
-            PaymentKind::unmetered()
-        } else if protocol_config.enable_gasless()
-            && is_gasless_transaction(gas_data, transaction_kind)
-        {
-            PaymentKind::gasless()
-        } else if gas_data.payment.is_empty() {
-            PaymentKind::smash(vec![PaymentMethod::AddressBalance(
-                gas_data.owner,
-                gas_data.budget,
-            )])
-            .expect("unable to create a payment kind with a single address balance")
-        } else {
-            let payment_methods = gas_data
-                .payment
-                .iter()
-                .map(|entry| {
-                    if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
-                        PaymentMethod::AddressBalance(gas_data.owner, parsed.reservation_amount())
-                    } else {
-                        PaymentMethod::Coin(*entry)
-                    }
-                })
-                .collect();
-            PaymentKind::smash(payment_methods).expect(
-                "unable to create a payment kind from payment methods. \
-                 Should not be possible wit ha non-empty vector",
-            )
-        }
-    }
-
     /// Everything `execute_transaction_to_effects` hands back to the executor layer.
     pub struct ExecutionOutput<Mode: ExecutionMode> {
         pub inner_store: InnerTemporaryStore,
@@ -224,7 +142,7 @@ pub(crate) mod checked {
         input_objects: CheckedInputObjects,
         system_object_versions: SystemObjectVersions,
         unsettled_object_funds: &dyn UnsettledObjectFundsRead,
-        mut gas_data: GasData,
+        gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
@@ -248,11 +166,13 @@ pub(crate) mod checked {
             input_objects.transaction_dependencies()
         };
 
+        let mut payment_kind =
+            PaymentKind::from_transaction(&gas_data, &transaction_kind, protocol_config);
         // Apply the legacy gas-payment recovery before constructing the store so the gas charger
-        // and transaction-derived reservation inputs see the same final payment list.
+        // and transaction-derived reservation inputs see the same final payment sources.
         if !bump_only_enabled(protocol_config.gas_model_version()) {
             legacy::iffw_filter_address_balance_gas_payments(
-                &mut gas_data,
+                &mut payment_kind,
                 &execution_params,
                 protocol_config,
             );
@@ -267,6 +187,7 @@ pub(crate) mod checked {
             *epoch_id,
             system_object_versions,
             (&transaction_kind, &gas_data, transaction_signer),
+            &payment_kind,
             unsettled_object_funds,
         );
 
@@ -280,6 +201,7 @@ pub(crate) mod checked {
                 store,
                 &mut temporary_store,
                 gas_data,
+                payment_kind,
                 gas_status,
                 transaction_kind,
                 rewritten_inputs,
@@ -381,6 +303,7 @@ pub(crate) mod checked {
                 store,
                 temporary_store,
                 gas_data,
+                payment_kind,
                 gas_status,
                 transaction_kind,
                 rewritten_inputs,
@@ -647,6 +570,7 @@ pub(crate) mod checked {
         store: &dyn BackingStore,
         temporary_store: &mut TemporaryStore<'_>,
         gas_data: GasData,
+        payment_kind: PaymentKind,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
@@ -698,7 +622,7 @@ pub(crate) mod checked {
         );
         let tx_ctx = Rc::new(RefCell::new(tx_ctx));
 
-        let payment_kind = match payment_kind(&gas_data, &transaction_kind) {
+        let payment_kind = match payment_kind.check() {
             Ok(payment_kind) => payment_kind,
             Err(error) => {
                 return Outcome::BumpOnly {
@@ -1010,24 +934,26 @@ pub(crate) mod checked {
                     }))
         }
 
-        /// On the legacy IFFW recovery path, discard address-balance payments while keeping real
-        /// gas coins. The caller runs this before constructing the temporary store so its input
-        /// reservations are derived from the same payment list used for gas smashing.
+        /// On the legacy IFFW recovery path, when the smash target is a real gas coin, discard
+        /// the address-balance sources while keeping the other gas coins. The caller runs this
+        /// before constructing the temporary store so its input reservations are derived from the
+        /// same payment sources used for gas smashing.
         pub(crate) fn iffw_filter_address_balance_gas_payments(
-            gas_data: &mut GasData,
+            payment_kind: &mut PaymentKind,
             execution_params: &ExecutionOrEarlyError,
             protocol_config: &ProtocolConfig,
         ) {
             if should_short_circuit_insufficient_funds(execution_params, protocol_config) {
                 return;
             }
-            if should_filter_address_balance_gas_smash(execution_params, protocol_config)
-                && gas_data.payment.len() > 1
-                && ParsedDigest::try_from(gas_data.payment[0].2).is_err()
+            if !should_filter_address_balance_gas_smash(execution_params, protocol_config) {
+                return;
+            }
+            if let PaymentKind::Metered(methods) = payment_kind
+                && methods.head.is_coin()
+                && !methods.tail.is_empty()
             {
-                gas_data
-                    .payment
-                    .retain(|entry| ParsedDigest::try_from(entry.2).is_err());
+                methods.tail.retain(PaymentMethod::is_coin);
             }
         }
 
@@ -1037,6 +963,7 @@ pub(crate) mod checked {
             store: &dyn BackingStore,
             mut temporary_store: TemporaryStore<'_>,
             gas_data: GasData,
+            payment_kind: PaymentKind,
             gas_status: SuiGasStatus,
             transaction_kind: TransactionKind,
             rewritten_inputs: Option<Vec<bool>>,
@@ -1070,7 +997,9 @@ pub(crate) mod checked {
                 let status = ExecutionStatus::new_failure(execution_error.to_execution_failure());
                 let gas_meter = GasCharger::new(
                     transaction_digest,
-                    PaymentKind::gasless(),
+                    PaymentKind::Gasless
+                        .check()
+                        .unwrap_or_else(|_| unreachable!("gasless payment always checks")),
                     gas_status,
                     &mut temporary_store,
                     protocol_config,
@@ -1107,9 +1036,13 @@ pub(crate) mod checked {
             let gas_price = gas_status.gas_price();
             let rgp = gas_status.reference_gas_price();
 
+            let is_gasless = payment_kind.is_gasless();
+            let payment_kind = payment_kind.check().unwrap_or_else(|error| {
+                panic!("invalid gas payment for transaction {transaction_digest}: {error}")
+            });
             let mut gas_charger = GasCharger::new(
                 transaction_digest,
-                legacy_payment_kind(&gas_data, &transaction_kind, protocol_config),
+                payment_kind,
                 gas_status,
                 &mut temporary_store,
                 protocol_config,
@@ -1128,8 +1061,6 @@ pub(crate) mod checked {
             );
             let tx_ctx = Rc::new(RefCell::new(tx_ctx));
 
-            let is_gasless = protocol_config.enable_gasless()
-                && is_gasless_transaction(&gas_data, &transaction_kind);
             let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
             let ExecutionOutcome {
