@@ -180,6 +180,7 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
+    enable-staggered-submission-signal: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -369,6 +370,7 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
+    enable-staggered-submission-signal: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -558,6 +560,7 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
+    enable-staggered-submission-signal: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -747,6 +750,7 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
+    enable-staggered-submission-signal: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -936,6 +940,7 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
+    enable-staggered-submission-signal: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -1125,6 +1130,7 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
+    enable-staggered-submission-signal: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -1314,6 +1320,7 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-simulate-allowed-proposers: true
+    enable-staggered-submission-signal: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~

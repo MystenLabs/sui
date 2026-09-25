@@ -1217,6 +1217,17 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     allowed_proposers: bool,
 
+    // If true, validators derive the staggered-submission activation signal from commit
+    // output: unpaid duplication of transactions without allowed proposers arms staggered
+    // consensus submission in lockstep across honest validators. Requires
+    // `allowed_proposers` (accessed through the hand-written getter that asserts it).
+    // Staggering is node-local policy, not consensus-critical, so each validator can
+    // additionally veto it via `NodeConfig::enable_staggered_submission_signal`
+    // (default enabled); it engages only when both are enabled.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    staggered_submission_signal: bool,
+
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
 
@@ -2341,6 +2352,16 @@ impl ProtocolConfig {
         if ret {
             // jwk updates required end-of-epoch transactions
             assert!(self.feature_flags.end_of_epoch_transaction_supported);
+        }
+        ret
+    }
+
+    pub fn staggered_submission_signal(&self) -> bool {
+        let ret = self.feature_flags.staggered_submission_signal;
+        if ret {
+            // The signal arms staggering of transactions without allowed proposers,
+            // which only exist when the allowed_proposers feature is enabled.
+            assert!(self.feature_flags.allowed_proposers);
         }
         ret
     }
