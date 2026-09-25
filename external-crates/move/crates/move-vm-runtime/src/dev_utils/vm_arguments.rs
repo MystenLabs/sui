@@ -8,7 +8,7 @@ use crate::{
         vm::MoveVM,
     },
     jit::execution::ast::Type,
-    shared::gas::GasMeter,
+    shared::{TypeLimits, gas::GasMeter},
 };
 use move_binary_format::{
     errors::{Location, PartialVMResult, VMResult},
@@ -63,7 +63,7 @@ impl ValueFrame {
         bypass_declared_entry_check: bool,
     ) -> VMResult<Self> {
         let mut frame = Self::empty();
-        let fun = vm.find_function(original_id, function_name, &ty_args)?;
+        let fun = vm.find_function(original_id, function_name, &ty_args, TypeLimits::VM_DEFAULT)?;
         // `find_function` already substitutes `ty_args` into the parameter types, so they are
         // concrete here — no second substitution is needed (and runtime types cannot carry
         // free type parameters).

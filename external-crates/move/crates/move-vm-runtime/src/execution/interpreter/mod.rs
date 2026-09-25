@@ -76,7 +76,7 @@ pub(crate) fn run(
         } else {
             // Size every entry-point type argument once; every limit check against them during
             // execution is pure arithmetic from here on.
-            let ty_args = TypeArguments::new(vtables, ty_args).map_err(|e| {
+            let ty_args = TypeArguments::new(vtables, ty_args, &type_limits).map_err(|e| {
                 e.at_code_offset(fun_ref.index(), 0)
                     .finish(Location::Module(
                         fun_ref.module_id(&vtables.interner).clone(),
@@ -88,8 +88,7 @@ pub(crate) fn run(
                         fun_ref.module_id(&vtables.interner).clone(),
                     ))
             })?;
-            let state =
-                MachineState::new(Arc::clone(&vtables.interner), type_limits, call_stack);
+            let state = MachineState::new(Arc::clone(&vtables.interner), type_limits, call_stack);
             eval::run(state, vtables, telemetry, vm_config, extensions, tracer, gas_meter)
         }
     };
