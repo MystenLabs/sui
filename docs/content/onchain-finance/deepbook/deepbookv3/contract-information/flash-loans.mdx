@@ -52,9 +52,15 @@ The quantity borrowed can be the maximum amount that the pool owns. Borrowing fr
 
 DeepBookV3 flash loans follow a borrow-use-return pattern enforced by Move's hot potato mechanism:
 
-1. **Borrow** — call `borrow_flashloan_base` or `borrow_flashloan_quote` on a pool. The function returns the requested assets and a `FlashLoan` hot potato object.
-2. **Use** — use the borrowed assets within the same PTB. Common use cases include arbitrage between pools, collateral swaps, and liquidations.
-3. **Return** — call `return_flashloan_base` or `return_flashloan_quote` before the PTB completes. The pool unwraps the `FlashLoan` hot potato only if you return at least the borrowed amount. If you do not return the assets, the entire transaction reverts.
+1. **Borrow**: call `borrow_flashloan_base` or `borrow_flashloan_quote` on a pool. The function returns the requested assets and a `FlashLoan` hot potato object.
+2. **Use**: use the borrowed assets within the same PTB. Common use cases include arbitrage between pools, collateral swaps, and liquidations.
+3. **Return**: call `return_flashloan_base` or `return_flashloan_quote` before the PTB completes. The pool unwraps the `FlashLoan` hot potato only if all three of its checks pass. If you do not return the assets, the entire transaction reverts.
+
+DeepBook charges no fee on flash loans, and the return call takes no amount parameter. It reads the amount off the `FlashLoan` itself and enforces three conditions:
+
+- The returned coin holds **exactly** the borrowed amount, otherwise the call aborts with `EIncorrectQuantityReturned`. If your strategy leaves you holding more than you borrowed, split the repayment amount off first and keep the remainder.
+- The loan goes back to the pool it came from (`EIncorrectLoanPool`).
+- The loan goes back in the asset it was borrowed in (`EIncorrectTypeReturned`).
 
 Because every step executes within a single PTB, flash loans carry no default risk. Either the full borrow-and-repay cycle completes, or nothing happens.
 
@@ -62,9 +68,9 @@ Because every step executes within a single PTB, flash loans carry no default ri
 
 Flash loans are useful in any scenario where you need temporary capital within a single transaction:
 
-- **Arbitrage** — borrow assets, trade across pools to capture a price difference, return the loan, and keep the profit.
-- **Collateral swaps** — replace one collateral type with another in a lending protocol without requiring upfront capital.
-- **Liquidations** — liquidate an undercollateralized position using borrowed funds, then repay from the liquidation proceeds.
+- **Arbitrage**: borrow assets, trade across pools to capture a price difference, return the loan, and keep the profit.
+- **Collateral swaps**: replace one collateral type with another in a lending protocol without requiring upfront capital.
+- **Liquidations**: liquidate an undercollateralized position using borrowed funds, then repay from the liquidation proceeds.
 
 ## Example: borrow and return base assets in a PTB
 
@@ -85,16 +91,20 @@ const [baseCoin, flashLoan] = tx.moveCall({
   typeArguments: [BASE_TYPE, QUOTE_TYPE],
 });
 
-// 2. Use baseCoin here — for example, pass it to an arbitrage function
+// 2. Use baseCoin here, for example by passing it to an arbitrage function
 // ...
 
-// 3. Return the base assets and the FlashLoan hot potato
+// 3. Split the exact borrowed amount back out, keeping any profit
+const [repayment] = tx.splitCoins(baseCoin, [tx.pure.u64(BORROW_AMOUNT)]);
+
+// 4. Return the base assets and the FlashLoan hot potato.
+//    return_flashloan_base takes no amount: the coin must hold exactly
+//    what you borrowed.
 tx.moveCall({
   target: `${DEEPBOOK_PACKAGE_ID}::pool::return_flashloan_base`,
   arguments: [
     tx.object(POOL_ID),
-    tx.pure.u64(BORROW_AMOUNT),
-    baseCoin,
+    repayment,
     flashLoan,
   ],
   typeArguments: [BASE_TYPE, QUOTE_TYPE],
