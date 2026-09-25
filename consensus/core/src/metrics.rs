@@ -196,6 +196,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) leader_timeout_total: IntCounterVec,
     pub(crate) smart_selection_wait: IntCounter,
     pub(crate) ancestor_state_change_by_authority: IntCounterVec,
+    pub(crate) ancestor_exclusion_suppressed_by_stake_threshold: IntGauge,
     pub(crate) excluded_proposal_ancestors_count_by_authority: IntCounterVec,
     pub(crate) included_excluded_proposal_ancestors_count_by_authority: IntCounterVec,
     pub(crate) missing_blocks_total: IntCounter,
@@ -676,6 +677,11 @@ impl NodeMetrics {
                 "ancestor_state_change_by_authority",
                 "The total number of times an ancestor state changed to EXCLUDE or INCLUDE.",
                 &["authority", "state"],
+                registry,
+            ).unwrap(),
+            ancestor_exclusion_suppressed_by_stake_threshold: register_int_gauge_with_registry!(
+                "ancestor_exclusion_suppressed_by_stake_threshold",
+                "Number of authorities that should have moved to EXCLUDE state but could not because the excluded nodes stake threshold would have been exceeded.",
                 registry,
             ).unwrap(),
             excluded_proposal_ancestors_count_by_authority: register_int_counter_vec_with_registry!(
