@@ -35,10 +35,8 @@ impl Processor for SystemPackagesPipeline {
                     continue;
                 };
 
-                let original_id = package.original_package_id().to_vec();
-
                 let entry = tables::make_entry(
-                    tables::system_packages::encode_key(&original_id),
+                    tables::system_packages::encode_key(package.original_package_id().as_ref()),
                     tables::system_packages::encode(cp_sequence_number),
                     Some(timestamp_ms),
                 );

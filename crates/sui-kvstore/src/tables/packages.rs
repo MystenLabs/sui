@@ -54,11 +54,11 @@ pub fn encode(
 pub fn decode(key: &[u8], row: &[(Bytes, Bytes)]) -> Result<PackageData> {
     anyhow::ensure!(key.len() == 40, "expected 40-byte key, got {}", key.len());
 
-    let original_id = key[..32].to_vec();
+    let original_id: [u8; 32] = key[..32].try_into()?;
     let package_version = u64::from_be_bytes(key[32..40].try_into()?);
 
     let mut data = PackageData {
-        package_id: Vec::new(),
+        package_id: [0; 32],
         package_version,
         original_id,
         is_system_package: false,
@@ -76,7 +76,7 @@ pub fn decode(key: &[u8], row: &[(Bytes, Bytes)]) -> Result<PackageData> {
                 );
             }
             b"pi" => {
-                data.package_id = value.to_vec();
+                data.package_id = value.as_ref().try_into().context("invalid package_id")?;
             }
             b"sp" => {
                 data.is_system_package = value.as_ref().first().copied().unwrap_or(0) != 0;

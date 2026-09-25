@@ -13,8 +13,9 @@ use crate::tables::DEFAULT_COLUMN;
 pub const NAME: &str = "objects";
 
 pub fn encode_key(object_key: &ObjectKey) -> Vec<u8> {
-    let mut raw_key = object_key.0.to_vec();
-    raw_key.extend(object_key.1.value().to_be_bytes());
+    let mut raw_key = Vec::with_capacity(40);
+    raw_key.extend_from_slice(object_key.0.as_ref());
+    raw_key.extend_from_slice(&object_key.1.value().to_be_bytes());
     raw_key
 }
 
