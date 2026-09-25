@@ -68,7 +68,7 @@ pub use block::{TestBlock, Transaction, VerifiedBlock};
 pub use commit::{
     CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, CommittedSubDag, TrustedCommit,
 };
-pub use commit_consumer::{CommitConsumerArgs, CommitConsumerMonitor};
+pub use commit_consumer::{CommitConsumerArgs, CommitConsumerMonitor, CommitProgress};
 pub use context::Clock;
 pub use metrics::Metrics;
 pub use network::RandomnessSignatureHandler;
