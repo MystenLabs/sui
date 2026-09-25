@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    dependency::{Pinned, PinnedDependency},
+    dependency::{Pinned, PinnedDependency, SystemDepCache},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     logging::user_note,
@@ -63,6 +63,10 @@ struct PackageCache<F: MoveFlavor> {
 pub struct PackageGraphBuilder<'a, F: MoveFlavor> {
     cache: PackageCache<F>,
     config: &'a PackageConfig<F>,
+
+    /// The system dependencies for the environment being built, shared by every package in the
+    /// graph so that the flavor is consulted at most once.
+    system_deps: SystemDepCache,
 }
 
 impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
@@ -70,6 +74,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
         Self {
             cache: PackageCache::new(),
             config,
+            system_deps: SystemDepCache::new(),
         }
     }
 
@@ -300,6 +305,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
             package.direct_deps().clone(),
             env,
             &*self.config.flavor,
+            &self.system_deps,
         )
         .await
         .map_err(|err| PackageError::DepError {

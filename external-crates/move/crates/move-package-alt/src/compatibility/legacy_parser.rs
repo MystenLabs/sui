@@ -203,10 +203,8 @@ async fn parse_source_manifest<F: MoveFlavor>(
                 display_warnings,
                 &dependencies,
                 metadata.implicit_deps,
-                env,
                 flavor,
-            )
-            .await;
+            );
 
             // We create a normalized legacy name, to make sure we can always use a package
             // as an Identifier.
@@ -261,20 +259,18 @@ async fn parse_source_manifest<F: MoveFlavor>(
 ///
 /// When `display_warnings` is set and the package redundantly declares an implicit dependency, an
 /// advisory note is printed suggesting its removal.
-async fn check_implicits<F: MoveFlavor>(
+fn check_implicits<F: MoveFlavor>(
     name: &str,
     display_warnings: bool,
     deps: &BTreeMap<Identifier, DefaultDependency>,
     implicit_deps_flag: bool,
-    env: &Environment,
     flavor: &F,
 ) -> bool {
     if !implicit_deps_flag {
         return false;
     }
 
-    let system_deps = flavor.system_deps(env.id()).await;
-    let system_deps_names = system_deps.keys().collect::<BTreeSet<_>>();
+    let system_deps_names = flavor.system_dep_names();
 
     if is_legacy_system_dep_name(name, &system_deps_names) {
         return false;
@@ -809,7 +805,7 @@ fn derive_modern_name(
     }
 }
 
-fn is_legacy_system_dep_name(name: &str, system_deps_names: &BTreeSet<&SystemDepName>) -> bool {
+fn is_legacy_system_dep_name(name: &str, system_deps_names: &BTreeSet<SystemDepName>) -> bool {
     LEGACY_SYSTEM_DEPS_NAMES.contains(&name)
         && system_deps_names.contains(&to_modern_system_dep_name(name))
 }

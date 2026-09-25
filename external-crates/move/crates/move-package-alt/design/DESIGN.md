@@ -311,6 +311,17 @@ the philosophy is that pinning is a mechanism for reliable rebuilding and not fo
 management - if a user cares about the exact version of a dependency then they can indicate that by
 referring to that version in their manifest.
 
+Because both situations produce the same result - a fresh pin for every dependency in the
+environment - repinning behaves identically whether the user asked for it or the manifest triggered
+it. Nothing needs to know which one happened.
+
+Pins are only ever written by repinning, so a pin that was correct when it was made stays correct:
+nothing revalidates existing pins, and a stale lockfile is not by itself a problem. A flavor that
+derives a pin from external state (see `MoveFlavor::system_deps`, which pins the system
+dependencies to the version the target chain is running) is responsible for making sure this holds
+- in particular, it must fail rather than guess when it cannot determine that state, since a wrong
+pin is written into a checked-in lockfile and inherited by everyone who builds the package.
+
 ## Environment-Specific Dependency Replacements
 
 In addition to the main set of dependencies, the user can also override dependencies in specific

@@ -6,7 +6,10 @@ pub mod vanilla;
 
 pub use vanilla::Vanilla;
 
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+};
 
 use async_trait::async_trait;
 use serde::{Serialize, de::DeserializeOwned};
@@ -54,11 +57,30 @@ pub trait MoveFlavor: Debug + Send + Sync {
         a == b
     }
 
+    /// The names of every system dependency this flavor recognizes, e.g. `sui` and `std`.
+    ///
+    /// Unlike [Self::system_deps], this does not depend on the environment and cannot fail, so it
+    /// is safe to call while parsing manifests. Callers that only need to recognize a name should
+    /// use this rather than resolving the dependencies themselves.
+    ///
+    /// Must agree with the keys of a successful [Self::system_deps].
+    fn system_dep_names(&self) -> BTreeSet<SystemDepName>;
+
     /// Return ALL the system dependencies for the requested `environment`.
+    ///
+    /// System dependencies are pinned as a set: the returned map describes one coherent version of
+    /// the system packages, since every package in a graph links against the same on-chain
+    /// addresses. A flavor therefore either knows which version `environment` requires and returns
+    /// all of them, or knows nothing and fails — it must never return a partial map, and must never
+    /// guess a version it cannot justify.
+    ///
+    /// The error is reported to the user verbatim, so it should say what could not be determined
+    /// and what the user can do about it. Callers treat every error as fatal for the whole package
+    /// graph; a flavor must not use it to signal a condition it expects the caller to recover from.
     async fn system_deps(
         &self,
         environment: &EnvironmentID,
-    ) -> BTreeMap<SystemDepName, LockfileDependencyInfo>;
+    ) -> Result<BTreeMap<SystemDepName, LockfileDependencyInfo>, String>;
 
     /// Return the default system dependencies for the requested `environment`.
     async fn implicit_dependencies(
