@@ -55,7 +55,7 @@ Interest accrues based on the pool's utilization rate, which is the ratio of tot
 
 Suppliers do not receive interest as direct token transfers. Instead, the value of each supply share increases over time. When you withdraw, you receive more tokens than you originally deposited because your shares are worth more.
 
-The protocol captures a portion of the interest income as fees. These fees accumulate separately and are withdrawn by authorized maintainers and the protocol.
+The protocol captures a portion of the interest income as fees, set by the pool's protocol spread. These fees accumulate separately and split between the protocol, the pool maintainer, and supply referrals: 25% to the protocol, 25% to the maintainer, and 50% to supply referrals pro rata to referred shares. When a pool has no referred shares, that last half goes to the protocol and the maintainer instead.
 
 ## How do borrowers access a margin pool?
 
@@ -68,7 +68,9 @@ The typical workflow for a lender interacting with a margin pool:
 1. Mint a `SupplierCap` using `mint_supplier_cap`. One cap works across multiple pools.
 2. Call `supply` with your `SupplierCap` and the assets you want to deposit. The pool records your shares.
 3. Monitor the pool's interest rate and utilization rate using the read endpoints.
-4. Call `withdraw` when you want to reclaim your assets plus accrued interest. Specify an exact token amount or pass all your shares to withdraw everything.
+4. Call `withdraw` when you want to reclaim your assets plus accrued interest. The `amount` parameter is an `Option<u64>` denominated in tokens, not shares. Pass `some(amount)` to take a specific amount, or `none` to withdraw everything the cap holds.
+
+Two things can cap a withdrawal below what your shares are worth. The pool's withdrawal rate limiter aborts with `ERateLimitExceeded` when recent withdrawals have drained the bucket, so check `get_available_withdrawal` before you submit. The pool's vault also has to hold the assets: if borrowers have drawn them down, the call aborts with `ENotEnoughAssetInPool` until utilization falls.
 
 ## API
 
