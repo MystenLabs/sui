@@ -13,6 +13,7 @@ use crate::{
     natives::functions::NativeFunctions,
     runtime::telemetry::TransactionTelemetryContext,
     shared::{
+        TypeLimits,
         logging::expect_no_verification_errors,
         safe_ops::SafeIndex as _,
         types::{OriginalId, VersionId},
@@ -38,6 +39,7 @@ pub(crate) fn resolve_package(
     telemetry: &mut TransactionTelemetryContext,
     cache: &MoveCache,
     natives: &NativeFunctions,
+    type_limits: &TypeLimits,
     package_to_read: VersionId,
 ) -> VMResult<ResolvedPackageResult> {
     let mut packages = resolve_packages(
@@ -45,6 +47,7 @@ pub(crate) fn resolve_package(
         telemetry,
         cache,
         natives,
+        type_limits,
         BTreeSet::from([package_to_read]),
     )?;
 
@@ -86,6 +89,7 @@ pub(crate) fn resolve_packages(
     telemetry: &mut TransactionTelemetryContext,
     cache: &MoveCache,
     natives: &NativeFunctions,
+    type_limits: &TypeLimits,
     packages_to_read: BTreeSet<VersionId>,
 ) -> VMResult<BTreeMap<VersionId, Arc<move_cache::Package>>> {
     dbg_println!("loading {packages_to_read:#?}");
@@ -110,7 +114,8 @@ pub(crate) fn resolve_packages(
     for pkg in load_and_verify_packages(store, telemetry, &cache.vm_config, natives, &pkgs_to_cache)
         .map_err(expect_no_verification_errors)?
     {
-        let pkg = jit_and_cache_package(telemetry, cache, natives, system_packages, pkg)?;
+        let pkg =
+            jit_and_cache_package(telemetry, cache, natives, type_limits, system_packages, pkg)?;
         cached_packages.insert(pkg.verified.version_id, pkg);
     }
 
@@ -205,6 +210,7 @@ pub(crate) fn jit_package_for_publish(
     telemetry: &mut TransactionTelemetryContext,
     cache: &MoveCache,
     natives: &NativeFunctions,
+    type_limits: &TypeLimits,
     system_packages: &BTreeMap<OriginalId, Arc<move_cache::Package>>,
     verified_pkg: verification::ast::Package,
 ) -> VMResult<Arc<move_cache::Package>> {
@@ -217,6 +223,7 @@ pub(crate) fn jit_package_for_publish(
     let timer = telemetry.make_timer_with_count(crate::runtime::telemetry::TimerKind::JIT, 1);
     let runtime_pkg = jit::translate_package(
         &cache.vm_config,
+        type_limits,
         &cache.interner,
         natives,
         &effective,
@@ -241,6 +248,7 @@ pub(crate) fn jit_and_cache_package(
     telemetry: &mut TransactionTelemetryContext,
     cache: &MoveCache,
     natives: &NativeFunctions,
+    type_limits: &TypeLimits,
     system_packages: &BTreeMap<OriginalId, Arc<move_cache::Package>>,
     verified_pkg: verification::ast::Package,
 ) -> VMResult<Arc<move_cache::Package>> {
@@ -255,6 +263,7 @@ pub(crate) fn jit_and_cache_package(
     let timer = telemetry.make_timer_with_count(crate::runtime::telemetry::TimerKind::JIT, 1);
     let runtime_pkg = jit::translate_package(
         &cache.vm_config,
+        type_limits,
         &cache.interner,
         natives,
         &effective,

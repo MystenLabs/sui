@@ -58,7 +58,14 @@ fn translate_without_optimization() {
     let natives = NativeFunctions::empty_for_testing().unwrap();
     let interner = IdentifierInterner::new();
 
-    let result = translate_package(&vm_config, &interner, &natives, &BTreeMap::new(), verified);
+    let result = translate_package(
+        &vm_config,
+        &crate::shared::TypeLimits::VM_DEFAULT,
+        &interner,
+        &natives,
+        &BTreeMap::new(),
+        verified,
+    );
     let runtime_pkg = result.expect("translate_package should succeed for minimal package");
     assert_basic_runtime_pkg(&runtime_pkg, original_id, version_id);
 }
@@ -79,7 +86,14 @@ fn translate_without_optimization() {
 //     let natives = NativeFunctions::empty_for_testing().unwrap();
 //     let interner = IdentifierInterner::new();
 //
-//     let result = translate_package(&vm_config, &interner, &natives, &BTreeMap::new(), verified);
+//     let result = translate_package(
+//         &vm_config,
+//         &crate::shared::TypeLimits::VM_DEFAULT,
+//         &interner,
+//         &natives,
+//         &BTreeMap::new(),
+//         verified,
+//     );
 //     let runtime_pkg = result.expect("translate_package should succeed for minimal package");
 //     assert_basic_runtime_pkg(&runtime_pkg, original_id, version_id);
 // }
@@ -147,7 +161,14 @@ fn translate_and_verify(
     let natives = NativeFunctions::empty_for_testing().unwrap();
     let interner = IdentifierInterner::new();
 
-    let result = translate_package(&vm_config, &interner, &natives, &BTreeMap::new(), verified);
+    let result = translate_package(
+        &vm_config,
+        &crate::shared::TypeLimits::VM_DEFAULT,
+        &interner,
+        &natives,
+        &BTreeMap::new(),
+        verified,
+    );
     let runtime_pkg = result.expect("translate_package should succeed");
     assert_eq!(runtime_pkg.loaded_modules.len(), expected_module_count);
     runtime_pkg

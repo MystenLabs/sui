@@ -102,12 +102,6 @@ pub struct TypeTraversalBudget {
 }
 
 impl TypeTraversalBudget {
-    /// Standard limits for normal type traversal (i.e., not factoring in field types or
-    /// "values"/layouts of that type): `TYPE_DEPTH_MAX` depth, `MAX_TYPE_INSTANTIATION_NODES` nodes.
-    pub fn for_type_traversal() -> Self {
-        TypeLimits::VM_DEFAULT.traversal()
-    }
-
     /// Check both depth and node count against limits.
     pub fn check(&self) -> PartialVMResult<()> {
         if self.depth > self.max_depth {

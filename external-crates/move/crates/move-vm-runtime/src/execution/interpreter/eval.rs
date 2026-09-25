@@ -563,7 +563,7 @@ fn op_step_impl(
         Bytecode::Pack(struct_ptr) => {
             let field_count = checked_as!(struct_ptr.field_count(), u16)?;
             let struct_type = struct_ptr.datatype();
-            check_value_depth_of_type(run_context, &struct_type)?;
+            check_value_depth_of_type(run_context, &struct_type, &state.type_limits)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
             state.push_operand(Value::make_struct(args))?;
@@ -825,7 +825,7 @@ fn op_step_impl(
         Bytecode::PackVariant(variant_def_ptr) => {
             let enum_type = variant_def_ptr.datatype();
             let field_count = variant_def_ptr.field_count();
-            check_value_depth_of_type(run_context, &enum_type)?;
+            check_value_depth_of_type(run_context, &enum_type, &state.type_limits)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count)?)?;
             let args = state.pop_n_operands(checked_as!(field_count, u16)?)?;
             state.push_operand(Value::make_variant(variant_def_ptr.variant_tag, args))?;
@@ -1182,18 +1182,18 @@ fn vector_spec(elem: &ArenaType, ty_args: &TypeArguments) -> PartialVMResult<Vec
 /// value of it is created (`Pack`/`PackVariant`). Solved from the type's resolved formula -- the
 /// type is never walked field by field. `ty` is depth-bounded by construction, so `type_size_of`'s
 /// recursion over it is safe.
-fn check_value_depth_of_type(run_context: &mut RunContext, ty: &Type) -> PartialVMResult<()> {
+fn check_value_depth_of_type(
+    run_context: &mut RunContext,
+    ty: &Type,
+    type_limits: &TypeLimits,
+) -> PartialVMResult<()> {
     let max_depth = safe_unwrap!(
         run_context
             .vm_config
             .runtime_limits_config
             .max_value_nest_depth
     );
-    if run_context
-        .vtables
-        .value_depth_of(ty, &TypeLimits::VM_DEFAULT)?
-        > max_depth
-    {
+    if run_context.vtables.value_depth_of(ty, type_limits)? > max_depth {
         return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
     }
     Ok(())
