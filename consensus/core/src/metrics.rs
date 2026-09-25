@@ -1039,7 +1039,7 @@ impl NodeMetrics {
                 "finalizer_v3_commit_wait_seconds",
                 "V3 commit wait from entry into the pending queue to decision, from decision to ordered release, and in total. Excludes input channel wait and storage writes.",
                 &["stage"],
-                LATENCY_SEC_BUCKETS.to_vec(),
+                FINE_GRAINED_LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
             finalizer_v3_phase_duration_seconds: register_histogram_vec_with_registry!(

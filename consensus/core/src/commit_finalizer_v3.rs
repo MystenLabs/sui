@@ -899,7 +899,11 @@ fn collect_first_votes(
     block_ref: BlockRef,
     last_voting_round: Round,
 ) -> Vec<VotingBlock> {
-    let mut to_visit: BTreeSet<_> = graph.children(&block_ref).into_iter().collect();
+    let mut to_visit: BTreeSet<_> = graph
+        .children(&block_ref)
+        .into_iter()
+        .filter(|child| child.round <= last_voting_round)
+        .collect();
     let mut visited = BTreeSet::new();
     let mut ignored = BTreeSet::new();
     let mut first_votes = vec![];
@@ -919,11 +923,15 @@ fn collect_first_votes(
             ignored.insert(current_ref);
             ignore_origin_descendants(graph, current_ref, last_voting_round, &mut ignored);
         }
+        // Children are in later rounds. Reading them at the boundary adds no eligible votes.
+        if current_ref.round == last_voting_round {
+            continue;
+        }
         to_visit.extend(
             graph
                 .children(&current_ref)
                 .into_iter()
-                .filter(|child| !visited.contains(child)),
+                .filter(|child| child.round <= last_voting_round && !visited.contains(child)),
         );
     }
 
@@ -936,10 +944,13 @@ fn ignore_origin_descendants(
     last_voting_round: Round,
     ignored: &mut BTreeSet<BlockRef>,
 ) {
+    if block_ref.round >= last_voting_round {
+        return;
+    }
     let mut to_visit: BTreeSet<_> = graph
         .children(&block_ref)
         .into_iter()
-        .filter(|child| child.author == block_ref.author)
+        .filter(|child| child.round <= last_voting_round && child.author == block_ref.author)
         .collect();
     let mut visited = BTreeSet::new();
     while let Some(current_ref) = to_visit.pop_first() {
@@ -947,12 +958,14 @@ fn ignore_origin_descendants(
             continue;
         }
         ignored.insert(current_ref);
-        to_visit.extend(
-            graph
-                .children(&current_ref)
-                .into_iter()
-                .filter(|child| child.author == block_ref.author && !visited.contains(child)),
-        );
+        if current_ref.round == last_voting_round {
+            continue;
+        }
+        to_visit.extend(graph.children(&current_ref).into_iter().filter(|child| {
+            child.round <= last_voting_round
+                && child.author == block_ref.author
+                && !visited.contains(child)
+        }));
     }
 }
 
@@ -1366,6 +1379,59 @@ mod tests {
             0,
             CommitRef::new(index, CommitDigest::default()),
         )
+    }
+
+    #[tokio::test]
+    async fn first_votes_stop_at_voting_window() {
+        struct CountingGraph<'a> {
+            dag: &'a DagState,
+            last_voting_round: Round,
+            boundary_reads: std::cell::Cell<usize>,
+        }
+
+        impl ReverseBlockGraph for CountingGraph<'_> {
+            fn block(&self, block_ref: &BlockRef) -> Option<VerifiedBlock> {
+                self.dag.get_block(block_ref)
+            }
+
+            fn children(&self, block_ref: &BlockRef) -> Vec<BlockRef> {
+                if block_ref.round >= self.last_voting_round {
+                    self.boundary_reads.set(self.boundary_reads.get() + 1);
+                }
+                self.dag.get_block_children(block_ref).unwrap_or_default()
+            }
+        }
+
+        let fixture = Fixture::with_fault_budget(127, 21, 0, |_| {});
+        let targets = fixture.make_round_one_blocks(&[]);
+        let mut parents: Vec<_> = targets.iter().map(|block| block.reference()).collect();
+        let mut voting_refs = vec![];
+        for round in 2..=4 {
+            let blocks: Vec<_> = (0..127)
+                .map(|author| fixture.make_graph_block(round, author, parents.clone(), vec![], 0))
+                .collect();
+            fixture.add_blocks(&blocks);
+            parents = blocks.iter().map(|block| block.reference()).collect();
+            if round == 2 {
+                voting_refs = parents.clone();
+            }
+        }
+        let dag = fixture.dag_state.read();
+        for last_voting_round in [2, 3] {
+            let graph = CountingGraph {
+                dag: &dag,
+                last_voting_round,
+                boundary_reads: std::cell::Cell::new(0),
+            };
+            for target in &targets {
+                let votes = collect_first_votes(&graph, target.reference(), last_voting_round);
+                assert_eq!(
+                    votes.iter().map(|vote| vote.block_ref).collect::<Vec<_>>(),
+                    voting_refs,
+                );
+            }
+            assert_eq!(graph.boundary_reads.get(), 0);
+        }
     }
 
     #[tokio::test]
