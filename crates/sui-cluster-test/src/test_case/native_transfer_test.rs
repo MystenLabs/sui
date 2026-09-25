@@ -35,7 +35,7 @@ impl TestCaseImpl for NativeTransferTest {
 
         let signer = ctx.get_wallet_address();
         let (recipient_addr, _): (_, AccountKeyPair) = get_key_pair();
-        let gas_budget = 2_000_000;
+        let gas_budget = 20_000_000;
 
         // Test transfer object: move a whole SUI coin object to the recipient,
         // paying for gas with a separate, explicitly-supplied gas coin so
