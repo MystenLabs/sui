@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 138;
+const MAX_PROTOCOL_VERSION: u64 = 139;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -4795,7 +4795,8 @@ impl ProtocolConfig {
                         cfg.feature_flags.disable_effects_tx_dependencies = true;
                     }
                     cfg.feature_flags.merge_colliding_deferrals = true;
-
+                }
+                139 => {
                     // TODO/XXX(execution-version-cut): Move this execution version setting to the
                     // current next protocol version at the time of merging into `main`.
                     cfg.execution_version = Some(5);
