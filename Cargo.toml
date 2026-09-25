@@ -74,6 +74,10 @@ exclude = [
   "external-crates/move/historical-versions/v3/crates/move-stdlib-natives",
   "external-crates/move/historical-versions/v3/crates/move-vm-runtime",
   "external-crates/move/historical-versions/v3/crates/move-vm-types",
+  "external-crates/move/historical-versions/v4/crates/bytecode-verifier-tests",
+  "external-crates/move/historical-versions/v4/crates/move-abstract-interpreter",
+  "external-crates/move/historical-versions/v4/crates/move-bytecode-verifier",
+  "external-crates/move/historical-versions/v4/crates/move-vm-runtime",
 ]
 
 members = [
