@@ -521,29 +521,21 @@ fun share_new<T>(settings: Settings, ctx: &mut TxContext) {
 
 /// Test stand-in for the withdrawal that the protocol mints from a transaction's
 /// allowance-backed withdrawal input. Outside of tests, these only enter Move as PTB inputs.
+/// `withdrawal` stands in for the funds that input reserves from the funder, e.g. one from
+/// `sui::test_scenario::withdraw_balance_from_address`.
 #[test_only]
 public fun new_withdrawal_for_testing<T: store>(
     allowance: ID,
-    funder: address,
-    amount: u256,
+    withdrawal: Withdrawal<T>,
 ): AllowanceWithdrawal<T> {
-    AllowanceWithdrawal {
-        allowance,
-        is_sponsor: false,
-        inner: sui::funds_accumulator::create_withdrawal<T>(funder, amount),
-    }
+    AllowanceWithdrawal { allowance, is_sponsor: false, inner: withdrawal }
 }
 
 /// Sponsor-bound variant; no protocol path mints these yet.
 #[test_only]
 public fun new_sponsor_withdrawal_for_testing<T: store>(
     allowance: ID,
-    funder: address,
-    amount: u256,
+    withdrawal: Withdrawal<T>,
 ): AllowanceWithdrawal<T> {
-    AllowanceWithdrawal {
-        allowance,
-        is_sponsor: true,
-        inner: sui::funds_accumulator::create_withdrawal<T>(funder, amount),
-    }
+    AllowanceWithdrawal { allowance, is_sponsor: true, inner: withdrawal }
 }
