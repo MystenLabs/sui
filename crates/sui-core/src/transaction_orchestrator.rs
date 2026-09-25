@@ -23,7 +23,7 @@ use sui_config::NodeConfig;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{ErrorCategory, SuiError, SuiErrorKind, SuiResult};
+use sui_types::error::{ErrorCategory, SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::messages_grpc::{SubmitTxRequest, TxType};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{Transaction, TransactionData, VerifiedTransaction};
@@ -476,6 +476,31 @@ where
         })
     }
 
+    /// True if the version that failed early validation was produced by `tx_digest` itself,
+    /// meaning the transaction has already executed. Reads the exact conflicting version so the
+    /// check is unaffected by any later advancement of the object.
+    fn was_conflicting_version_produced_by_tx(
+        &self,
+        e: &SuiError,
+        tx_digest: &TransactionDigest,
+    ) -> bool {
+        let SuiErrorKind::UserInputError {
+            error:
+                UserInputError::ObjectVersionUnavailableForConsumption {
+                    provided_obj_ref,
+                    current_version,
+                },
+        } = e.as_inner()
+        else {
+            return false;
+        };
+
+        self.validator_state
+            .get_object_cache_reader()
+            .get_object_by_key(&provided_obj_ref.0, *current_version)
+            .is_some_and(|obj| obj.previous_transaction == *tx_digest)
+    }
+
     /// Shared implementation for executing transactions with parallel local effects waiting
     async fn execute_transaction_with_effects_waiting(
         &self,
@@ -501,9 +526,22 @@ where
             )
         {
             let error_category = e.categorize();
-            if !error_category.is_submission_retriable() {
-                // Skip early validation rejection if transaction has already been executed (allows retries to return cached results)
-                if !self.validator_state.is_tx_already_executed(&tx_digest) {
+            if !error_category.is_submission_retriable()
+                && !self.validator_state.is_tx_already_executed(&tx_digest)
+            {
+                // A tx's output objects can be written before its effects marker, so a concurrent
+                // execution of *this* tx can make validation see the advanced input version while
+                // is_tx_already_executed still returns false. If this tx produced the conflicting
+                // version, wait for the marker and return cached effects instead of rejecting.
+                if self.was_conflicting_version_produced_by_tx(&e, &tx_digest) {
+                    self.validator_state
+                        .get_transaction_cache_reader()
+                        .notify_read_executed_effects_digests(
+                            "TransactionOrchestrator::early_validation_race",
+                            &[tx_digest],
+                        )
+                        .await;
+                } else {
                     self.metrics
                         .early_validation_rejections
                         .with_label_values(&[e.to_variant_name()])
