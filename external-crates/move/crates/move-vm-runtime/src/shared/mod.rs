@@ -2,23 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::shared::{
-    constants::{
-        HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX,
-        VALUE_DEPTH_MAX,
-    },
+    constants::{MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_MAX},
     safe_ops::SafeArithmetic as _,
 };
 use move_binary_format::{errors::PartialVMResult, partial_vm_error};
-use move_vm_config::runtime::VMConfig;
 use std::{collections::HashMap, hash::Hash};
 
 pub mod binary_cache;
+pub(crate) mod bounded_map;
 pub mod constants;
 pub mod gas;
 pub mod linkage_context;
 pub mod logging;
 pub mod safe_ops;
 pub mod system_packages;
+pub(crate) mod type_size_formulae;
 pub mod types;
 pub mod views;
 pub mod vm_pointer;
@@ -74,8 +72,18 @@ impl TypeLimits {
         self.max_type_nodes
     }
 
-    pub fn traversal(&self) -> TypeSize {
-        TypeSize {
+    pub fn check_syntactic_limits(&self, type_size: u64, type_depth: u64) -> PartialVMResult<()> {
+        if type_depth > self.max_type_depth {
+            return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
+        }
+        if type_size > self.max_type_nodes {
+            return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
+        }
+        Ok(())
+    }
+
+    pub fn traversal(&self) -> TypeTraversalBudget {
+        TypeTraversalBudget {
             depth: 0,
             node_count: 0,
             max_depth: self.max_type_depth,
@@ -86,33 +94,18 @@ impl TypeLimits {
 
 /// Tracks depth and node count during recursive type traversal, enforcing configurable
 /// limits on both.
-pub struct TypeSize {
+pub struct TypeTraversalBudget {
     depth: u64,
     node_count: u64,
     max_depth: u64,
     max_nodes: u64,
 }
 
-impl TypeSize {
+impl TypeTraversalBudget {
     /// Standard limits for normal type traversal (i.e., not factoring in field types or
     /// "values"/layouts of that type): `TYPE_DEPTH_MAX` depth, `MAX_TYPE_INSTANTIATION_NODES` nodes.
     pub fn for_type_traversal() -> Self {
         TypeLimits::VM_DEFAULT.traversal()
-    }
-
-    /// Custom limits for "value"/layout traversal.
-    pub fn from_vm_config_for_value_depth(vm_config: &VMConfig) -> Self {
-        Self {
-            depth: 0,
-            node_count: 0,
-            max_depth: vm_config
-                .runtime_limits_config
-                .max_value_nest_depth
-                .unwrap_or(VALUE_DEPTH_MAX),
-            max_nodes: vm_config
-                .max_type_to_layout_nodes
-                .unwrap_or(HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES),
-        }
     }
 
     /// Check both depth and node count against limits.

@@ -7,12 +7,8 @@ use crate::{
     execution::{
         dispatch_tables::VMDispatchTables,
         interpreter::{
-            helpers::{
-                instantiate_enum_type, instantiate_generic_function, instantiate_single_type,
-                instantiate_struct_type,
-            },
             set_err_info,
-            state::{CallStack, MachineState},
+            state::{CallStack, MachineState, TypeArguments},
         },
         tracing::{trace, tracer::VMTracer},
         values::{
@@ -20,17 +16,18 @@ use crate::{
             Vector, VectorRef, VectorSpecialization,
         },
     },
-    jit::execution::ast::{Bytecode, CallType, Function, Type},
+    jit::execution::ast::{ArenaType, Bytecode, CallType, Function, Type},
     natives::{extensions::NativeContextExtensions, functions::NativeContext},
     runtime::telemetry::TransactionTelemetryContext,
     shared::{
+        TypeLimits,
         gas::{GasMeter, SimpleInstruction},
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         vm_pointer::VMPointer,
     },
 };
 
-use move_binary_format::{checked_as, errors::*, partial_vm_error};
+use move_binary_format::{checked_as, errors::*, partial_vm_error, safe_unwrap};
 use move_core_types::{
     gas_algebra::{NumArgs, NumBytes},
     vm_status::StatusType,
@@ -242,14 +239,16 @@ fn step(
                     None,
                 )
             });
-            let ty_args = instantiate_generic_function(
-                &state.type_limits,
-                fun_inst_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )
-            .map_err(|e| {
-                set_err_info!(run_context.interner(), state.call_stack.current_frame, e)
-            })?;
+            let ty_args = run_context
+                .vtables
+                .instantiate_generic_function(
+                    fun_inst_ptr,
+                    state.call_stack.current_frame.ty_args(),
+                    &state.type_limits,
+                )
+                .map_err(|e| {
+                    set_err_info!(run_context.interner(), state.call_stack.current_frame, e)
+                })?;
             let call_type = &fun_inst_ptr.handle;
             let function = call_type_to_function(run_context, call_type).map_err(|err| {
                 set_err_info!(run_context.interner(), state.call_stack.current_frame, err)
@@ -272,7 +271,13 @@ fn step(
                 .map_err(|err| {
                     set_err_info!(run_context.interner(), state.call_stack.current_frame, err)
                 })?;
-            call_function(state, run_context, gas_meter, function, vec![])?;
+            call_function(
+                state,
+                run_context,
+                gas_meter,
+                function,
+                TypeArguments::empty(),
+            )?;
             Ok(StepStatus::Running)
         }
         Bytecode::DirectCall(function) => {
@@ -284,7 +289,13 @@ fn step(
                     None,
                 )
             });
-            call_function(state, run_context, gas_meter, function.ptr_clone(), vec![])?;
+            call_function(
+                state,
+                run_context,
+                gas_meter,
+                function.ptr_clone(),
+                TypeArguments::empty(),
+            )?;
             Ok(StepStatus::Running)
         }
         _ => {
@@ -468,10 +479,6 @@ fn op_step_impl(
             state.push_operand(Value::u256(**int_const))?;
         }
         Bytecode::LdConst(const_ptr) => {
-            // TODO(Gas): `const_ptr.size` is the constant's abstract value size when
-            // `VMConfig::charge_ld_const_abstract_size` is set (its serialized byte length
-            // otherwise). On the next version cut, rename `charge_ld_const` and change it to
-            // take an abstract size instead of `NumBytes`.
             gas_meter.charge_ld_const(NumBytes::new(const_ptr.size))?;
             let val = const_ptr.value.to_value();
             gas_meter.charge_ld_const_after_deserialization(&val)?;
@@ -556,19 +563,18 @@ fn op_step_impl(
         Bytecode::Pack(struct_ptr) => {
             let field_count = checked_as!(struct_ptr.field_count(), u16)?;
             let struct_type = struct_ptr.datatype();
-            check_depth_of_type(run_context, &struct_type)?;
+            check_value_depth_of_type(run_context, &struct_type)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
             state.push_operand(Value::make_struct(args))?;
         }
         Bytecode::PackGeneric(struct_inst_ptr) => {
             let field_count = struct_inst_ptr.field_count;
-            let ty = instantiate_struct_type(
-                &state.type_limits,
+            run_context.vtables.check_struct_instantiation(
                 struct_inst_ptr,
                 state.call_stack.current_frame.ty_args(),
+                &state.type_limits,
             )?;
-            check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
             state.push_operand(Value::make_struct(args))?;
@@ -745,88 +751,65 @@ fn op_step_impl(
         }
         Bytecode::VecPack(ty_ptr, num) => {
             let num = checked_as!(*num, u16)?;
-            let ty = instantiate_single_type(
-                &state.type_limits,
+            // A vector value of this element type is created here; validate the element type's
+            // limits and the created value's depth before doing anything else.
+            run_context.vtables.check_vector_element(
                 ty_ptr,
                 state.call_stack.current_frame.ty_args(),
+                &state.type_limits,
             )?;
-            check_depth_of_type(run_context, &ty)?;
+            let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_pack(state.last_n_operands(num as usize)?)?;
             let elements = state.pop_n_operands(num)?;
-            let specialization: VectorSpecialization = (&ty).try_into()?;
             let value = Vector::pack(specialization, elements)?;
             state.push_operand(value)?;
         }
         Bytecode::VecLen(ty_ptr) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = instantiate_single_type(
-                &state.type_limits,
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_len()?;
-            let value = vec_ref.len(&ty)?;
+            let value = vec_ref.len_specialized(specialization)?;
             state.push_operand(value)?;
         }
         Bytecode::VecImmBorrow(ty_ptr) => {
             let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = instantiate_single_type(
-                &state.type_limits,
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
-            let res = vec_ref.borrow_elem(idx, &ty);
+            let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
+            let res = vec_ref.borrow_elem_specialized(idx, specialization);
             gas_meter.charge_vec_borrow(false, res.is_ok())?;
             state.push_operand(res?)?;
         }
         Bytecode::VecMutBorrow(ty_ptr) => {
             let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = instantiate_single_type(
-                &state.type_limits,
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
-            let res = vec_ref.borrow_elem(idx, &ty);
+            let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
+            let res = vec_ref.borrow_elem_specialized(idx, specialization);
             gas_meter.charge_vec_borrow(true, res.is_ok())?;
             state.push_operand(res?)?;
         }
         Bytecode::VecPushBack(ty_ptr) => {
             let elem = state.pop_operand()?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = instantiate_single_type(
-                &state.type_limits,
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_push_back(&elem)?;
-            vec_ref.push_back(
+            vec_ref.push_back_specialized(
                 elem,
-                &ty,
+                specialization,
                 run_context.vm_config.runtime_limits_config.vector_len_max,
             )?;
         }
         Bytecode::VecPopBack(ty_ptr) => {
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = instantiate_single_type(
-                &state.type_limits,
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
-            let res = vec_ref.pop(&ty);
+            let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
+            let res = vec_ref.pop_specialized(specialization);
             gas_meter.charge_vec_pop_back(res.as_ref().ok())?;
             state.push_operand(res?)?;
         }
         Bytecode::VecUnpack(ty_ptr, num) => {
             let vec_val = state.pop_operand_as::<Vector>()?;
-            let ty = instantiate_single_type(
-                &state.type_limits,
-                ty_ptr,
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views()?)?;
-            let elements = vec_val.unpack(&ty, *num)?;
+            let elements = vec_val.unpack_specialized(specialization, *num)?;
             for value in elements {
                 state.push_operand(value)?;
             }
@@ -835,18 +818,14 @@ fn op_step_impl(
             let idx2 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let idx1 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
             let vec_ref = state.pop_operand_as::<VectorRef>()?;
-            let ty = instantiate_single_type(
-                &state.type_limits,
-                ty_ptr.to_ref(),
-                state.call_stack.current_frame.ty_args(),
-            )?;
+            let specialization = vector_spec(&ty_ptr.ty, state.call_stack.current_frame.ty_args())?;
             gas_meter.charge_vec_swap()?;
-            vec_ref.swap(idx1, idx2, &ty)?;
+            vec_ref.swap_specialized(idx1, idx2, specialization)?;
         }
         Bytecode::PackVariant(variant_def_ptr) => {
             let enum_type = variant_def_ptr.datatype();
             let field_count = variant_def_ptr.field_count();
-            check_depth_of_type(run_context, &enum_type)?;
+            check_value_depth_of_type(run_context, &enum_type)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count)?)?;
             let args = state.pop_n_operands(checked_as!(field_count, u16)?)?;
             state.push_operand(Value::make_variant(variant_def_ptr.variant_tag, args))?;
@@ -854,12 +833,11 @@ fn op_step_impl(
         Bytecode::PackVariantGeneric(vinst_ptr) => {
             let variant = &vinst_ptr.variant;
             let (field_count, variant_tag) = (variant.field_count(), variant.variant_tag);
-            let ty = instantiate_enum_type(
-                &state.type_limits,
+            run_context.vtables.check_variant_instantiation(
                 vinst_ptr,
                 state.call_stack.current_frame.ty_args(),
+                &state.type_limits,
             )?;
-            check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count)?)?;
             let args = state.pop_n_operands(checked_as!(field_count, u16)?)?;
             state.push_operand(Value::make_variant(variant_tag, args))?;
@@ -936,7 +914,7 @@ fn call_function(
     run_context: &mut RunContext,
     gas_meter: &mut impl GasMeter,
     function: VMPointer<Function>,
-    ty_args: Vec<Type>,
+    ty_args: TypeArguments,
 ) -> VMResult<()> {
     trace!(run_context.tracer, |tracer| {
         tracer.enter_frame(
@@ -944,7 +922,7 @@ fn call_function(
             state,
             &gas_meter.remaining_gas().into(),
             &function,
-            &ty_args,
+            ty_args.types(),
         )
     });
 
@@ -970,7 +948,7 @@ fn call_function(
     }
 
     if function.is_native() {
-        let native_result = call_native(state, run_context, gas_meter, &function, ty_args);
+        let native_result = call_native(state, run_context, gas_meter, &function, ty_args.types());
 
         // NB: Pass any error into the tracer before raising it.
         trace!(run_context.tracer, |tracer| {
@@ -1011,7 +989,7 @@ fn call_native(
     run_context: &mut RunContext,
     gas_meter: &mut impl GasMeter,
     function: &Function,
-    ty_args: Vec<Type>,
+    ty_args: &[Type],
 ) -> VMResult<StepStatus> {
     // Note: refactor if native functions push a frame on the stack
     call_native_impl(state, run_context, gas_meter, function, ty_args).map_err(|e| {
@@ -1032,7 +1010,7 @@ fn call_native_impl(
     run_context: &mut RunContext,
     gas_meter: &mut impl GasMeter,
     function: &Function,
-    ty_args: Vec<Type>,
+    ty_args: &[Type],
 ) -> PartialVMResult<()> {
     let expected_args = function.arg_count();
     let arg_count: u16 = match expected_args.try_into() {
@@ -1058,7 +1036,7 @@ fn call_native_impl(
         &vm_config.runtime_limits_config,
         extensions,
         function,
-        &ty_args,
+        ty_args,
         args,
     )?;
     // Put return values on the top of the operand stack, where the caller will find them.
@@ -1166,7 +1144,7 @@ fn push_call_frame(
     state: &mut MachineState,
     run_context: &mut RunContext,
     function: VMPointer<Function>,
-    ty_args: Vec<Type>,
+    ty_args: TypeArguments,
 ) -> VMResult<()> {
     let fun_ref = function.ptr_clone().to_ref();
     let args = checked_as!(fun_ref.arg_count(), u16)
@@ -1194,76 +1172,31 @@ fn partial_error_to_error<T>(
     })
 }
 
-fn check_depth_of_type(run_context: &mut RunContext, ty: &Type) -> PartialVMResult<u64> {
-    let Some(max_depth) = run_context
-        .vm_config
-        .runtime_limits_config
-        .max_value_nest_depth
-    else {
-        return Ok(1);
-    };
-    check_depth_of_type_impl(run_context, ty, 0, max_depth)
+/// The vector specialization of an element type term, resolved against the frame's type
+/// arguments. No realized element type is built.
+fn vector_spec(elem: &ArenaType, ty_args: &TypeArguments) -> PartialVMResult<VectorSpecialization> {
+    VectorSpecialization::from_element(elem, ty_args.types())
 }
 
-fn check_depth_of_type_impl(
-    run_context: &mut RunContext,
-    ty: &Type,
-    current_depth: u64,
-    max_depth: u64,
-) -> PartialVMResult<u64> {
-    macro_rules! check_depth {
-        ($additional_depth:expr) => {
-            if current_depth.saturating_add($additional_depth) > max_depth {
-                return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
-            } else {
-                current_depth.saturating_add($additional_depth)
-            }
-        };
+/// Check that a concrete value type's nesting depth is within the configured limit before a
+/// value of it is created (`Pack`/`PackVariant`). Solved from the type's resolved formula -- the
+/// type is never walked field by field. `ty` is depth-bounded by construction, so `type_size_of`'s
+/// recursion over it is safe.
+fn check_value_depth_of_type(run_context: &mut RunContext, ty: &Type) -> PartialVMResult<()> {
+    let max_depth = safe_unwrap!(
+        run_context
+            .vm_config
+            .runtime_limits_config
+            .max_value_nest_depth
+    );
+    if run_context
+        .vtables
+        .value_depth_of(ty, &TypeLimits::VM_DEFAULT)?
+        > max_depth
+    {
+        return Err(partial_vm_error!(VM_MAX_VALUE_DEPTH_REACHED));
     }
-
-    // Calculate depth of the type itself
-    let ty_depth = match ty {
-        Type::Bool
-        | Type::U8
-        | Type::U16
-        | Type::U32
-        | Type::U64
-        | Type::U128
-        | Type::U256
-        | Type::Address
-        | Type::Signer => check_depth!(1),
-        // Even though this is recursive this is OK since the depth of this recursion is
-        // bounded by the depth of the type arguments, which we have already checked.
-        Type::Reference(ty) | Type::MutableReference(ty) | Type::Vector(ty) => {
-            check_depth_of_type_impl(run_context, ty, check_depth!(1), max_depth)?
-        }
-        Type::Datatype(si) => {
-            let depth_formula = run_context.vtables.calculate_depth_of_type(si)?;
-            check_depth!(depth_formula.solve(&[])?)
-        }
-        Type::DatatypeInstantiation(inst) => {
-            let (si, ty_args) = &**inst;
-            // Calculate depth of all type arguments, and make sure they themselves are not too deep.
-            let ty_arg_depths = ty_args
-                .iter()
-                .map(|ty| {
-                    // Ty args should be fully resolved and not need any type arguments
-                    check_depth_of_type_impl(run_context, ty, check_depth!(0), max_depth)
-                })
-                .collect::<PartialVMResult<Vec<_>>>()?;
-            let depth_formula = run_context.vtables.calculate_depth_of_type(si)?;
-            check_depth!(depth_formula.solve(&ty_arg_depths)?)
-        }
-        // NB: substitution must be performed before calling this function
-        Type::TyParam(_) => {
-            return Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "Type parameter should be fully resolved"
-            ));
-        }
-    };
-
-    Ok(ty_depth)
+    Ok(())
 }
 
 /// Given an `VMStatus`, rewrite a `Verification` into an `InvariantViolation` before returning.

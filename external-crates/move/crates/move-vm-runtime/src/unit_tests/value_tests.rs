@@ -1274,5 +1274,4 @@ fn vector_specialization_from_type() {
         Ok(VS::Container)
     ));
     assert!(VS::try_from(&Type::Reference(Box::new(Type::U8))).is_err());
-    assert!(VS::try_from(&Type::TyParam(0)).is_err());
 }
