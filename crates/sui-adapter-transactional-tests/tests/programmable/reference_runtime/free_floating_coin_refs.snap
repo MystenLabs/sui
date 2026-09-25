@@ -1,0 +1,32 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 960
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-12:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4043200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 14-18:
+//# programmable --sender A --inputs 100 @A
+// ABORTS: a free-floating `&mut Coin` is writable, the write goes through `is_writable` with no borrowers; the callee aborts at runtime
+//> 0: test::m::new_mut();
+//> 1: SplitCoins(Result(0), [Input(0)]);
+//> 2: TransferObjects([Result(1)], Input(1));
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m::new_mut (function index 0) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("new_mut") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m::new_mut at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
+
+task 3, lines 20-24:
+//# programmable --sender A --inputs 100 @A
+// ABORTS: the same through MergeCoins
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::m::new_mut();
+//> 2: MergeCoins(Result(1), [Result(0)]);
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m::new_mut (function index 0) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("new_mut") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m::new_mut at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(1) } }
