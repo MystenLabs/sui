@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 140;
+const MAX_PROTOCOL_VERSION: u64 = 141;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -423,6 +423,7 @@ const MAINNET_USDB: &str =
 //              and reverse) and their gas costs.
 //              Shuffle the block order within each round of a consensus commit on devnet.
 //              Disable the ID leak verifier.
+// Version 141: Enable execution version 5 and raise the package arena size.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4895,6 +4896,10 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.allow_references_in_ptbs = true;
                     cfg.feature_flags.disable_id_leak_verifier = true;
+                }
+                141 => {
+                    cfg.execution_version = Some(5);
+                    cfg.package_arena_size_in_bytes = Some(20_000_000);
                 }
                 // Use this template when making changes:
                 //
