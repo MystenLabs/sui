@@ -43,7 +43,7 @@ impl TestCaseImpl for CoinIndexTest {
         //    is already counted in the initial snapshot; the transfer splits a
         //    small amount off it (as gas coin) to a fresh recipient, leaving the
         //    account's coin count unchanged.
-        let coins = ctx.get_sui_from_faucet(Some(1)).await;
+        let coins = ctx.get_sui(Some(1)).await;
         let gas_coin_id = *coins[0].id();
 
         // Record initial SUI balance + coin count (StateService).

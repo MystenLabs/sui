@@ -30,16 +30,16 @@ impl TestCaseImpl for NativeTransferTest {
 
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
         info!("Testing gas coin transfer");
-        let mut sui_objs = ctx.get_sui_from_faucet(Some(1)).await;
-        let gas_obj = ctx.get_sui_from_faucet(Some(1)).await.swap_remove(0);
+        let mut sui_objs = ctx.get_sui(Some(1)).await;
+        let gas_obj = ctx.get_sui(Some(1)).await.swap_remove(0);
 
         let signer = ctx.get_wallet_address();
         let (recipient_addr, _): (_, AccountKeyPair) = get_key_pair();
         let gas_budget = 2_000_000;
 
         // Test transfer object: move a whole SUI coin object to the recipient,
-        // paying for gas with a separate, explicitly-supplied gas coin (from the
-        // faucet response) so transaction construction is deterministic.
+        // paying for gas with a separate, explicitly-supplied gas coin so
+        // transaction construction is deterministic.
         let obj_to_transfer: ObjectID = *sui_objs.swap_remove(0).id();
         let gas_ref = ctx.current_object_ref(*gas_obj.id()).await;
         let builder = ctx.get_grpc_client().transaction_builder();
@@ -56,7 +56,7 @@ impl TestCaseImpl for NativeTransferTest {
         Self::examine_response(ctx, &response, signer, recipient_addr, obj_to_transfer).await;
 
         // Test transfer of a second, distinct SUI coin object.
-        let mut sui_objs_2 = ctx.get_sui_from_faucet(Some(1)).await;
+        let mut sui_objs_2 = ctx.get_sui(Some(1)).await;
         let obj_to_transfer_2 = *sui_objs_2.swap_remove(0).id();
         // Refresh the gas ref: its version/digest changed after the first tx.
         let gas_ref = ctx.current_object_ref(*gas_obj.id()).await;

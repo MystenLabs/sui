@@ -26,10 +26,9 @@ impl TestCaseImpl for StakingTest {
         info!("Testing staking workflow");
 
         let sender = ctx.get_wallet_address();
-        // Fund two coins: one to stake, one to pay for gas. Both object refs are
-        // supplied explicitly (from the faucet response), keeping transaction
-        // construction deterministic.
-        let coins = ctx.get_sui_from_faucet(Some(2)).await;
+        // Select two coins: one to stake, one to pay for gas. Supplying both
+        // object refs explicitly keeps transaction construction deterministic.
+        let coins = ctx.get_sui(Some(2)).await;
         let stake_coin_id = *coins[0].id();
         let gas_coin_id = *coins[1].id();
 
