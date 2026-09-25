@@ -14,6 +14,7 @@ use std::task::{Context, Poll};
 use std::time::Instant;
 
 use once_cell::sync::OnceCell;
+use pin_project_lite::pin_project;
 use prometheus::{
     Histogram, IntCounterVec, IntGaugeVec, Registry, TextEncoder, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry,
@@ -379,7 +380,7 @@ pub trait MonitoredFutureExt: Future + Sized {
 impl<F: Future> MonitoredFutureExt for F {
     fn in_monitored_scope(self, name: &'static str) -> MonitoredScopeFuture<Self> {
         MonitoredScopeFuture {
-            f: Box::pin(self),
+            f: self,
             active_duration_metric: get_metrics()
                 .map(|m| m.future_active_duration_ns.with_label_values(&[name])),
             _scope: monitored_scope(name),
@@ -387,19 +388,23 @@ impl<F: Future> MonitoredFutureExt for F {
     }
 }
 
-pub struct MonitoredScopeFuture<F: Sized> {
-    f: Pin<Box<F>>,
-    active_duration_metric: Option<GenericGauge<AtomicI64>>,
-    _scope: Option<MonitoredScopeGuard>,
+pin_project! {
+    pub struct MonitoredScopeFuture<F: Sized> {
+        #[pin]
+        f: F,
+        active_duration_metric: Option<GenericGauge<AtomicI64>>,
+        _scope: Option<MonitoredScopeGuard>,
+    }
 }
 
 impl<F: Future> Future for MonitoredScopeFuture<F> {
     type Output = F::Output;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
         let active_timer = Instant::now();
-        let ret = self.f.as_mut().poll(cx);
-        if let Some(m) = &self.active_duration_metric {
+        let ret = this.f.poll(cx);
+        if let Some(m) = this.active_duration_metric.as_ref() {
             m.add(active_timer.elapsed().as_nanos() as i64);
         }
         ret
