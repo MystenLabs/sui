@@ -8,7 +8,7 @@
 # this checkout with rooms for the rewriter, make the genesis once, and run
 # run.yaml under the supervisor.
 #
-#   scripts/derp/run.sh [--regenesis] [rewrite run options...]
+#   scripts/derp/run.sh [--regenesis] [derp run options...]
 #
 # DERP_DIR is the DERP checkout (default ~/repos/derp), SCRATCH the run's
 # directory (default scripts/derp/scratch: host directories, stdout.N and
@@ -32,7 +32,7 @@ if [[ ${1:-} == --regenesis ]]; then
 fi
 
 (cd "$derp" && cargo build --release --workspace)
-rewrite=$derp/target/release/rewrite
+derp_bin=$derp/target/release/derp
 
 target=$sui_dir/target
 flags=${SUI_CARGO_FLAGS:-}
@@ -42,7 +42,7 @@ if [[ ${TIDEHUNTER:-} == 1 ]]; then
     flags="$flags --features typed-store/tidehunter"
 fi
 # shellcheck disable=SC2086
-(cd "$sui_dir" && CARGO_TARGET_DIR=$target "$rewrite" cargo build --release $flags \
+(cd "$sui_dir" && CARGO_TARGET_DIR=$target "$derp_bin" cargo build --release $flags \
     --bin sui-node --bin stress --bin sui)
 mkdir -p "$here/bin"
 for prog in sui-node stress sui; do
@@ -61,5 +61,5 @@ if [[ $regenesis == 1 || ! -f $here/cluster/genesis.blob ]]; then
     "$venv/bin/python" "$here/genesis.py" "$here/bin/sui" "$here/cluster"
 fi
 
-exec "$rewrite" run --manifest "$here/run.yaml" --capture --capture-stderr \
+exec "$derp_bin" run --manifest "$here/run.yaml" --capture --capture-stderr \
     --scratch "$scratch" "$@"
