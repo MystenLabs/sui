@@ -15,12 +15,9 @@ use crate::{
         SizedArenaType, StructInstantiation, Type, VariantInstantiation,
     },
     shared::{
-        TypeTraversalBudget,
+        TypeLimits, TypeTraversalBudget,
         bounded_map::BoundedMap,
-        constants::{
-            HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES,
-            SIZE_FORMULA_CACHE_CAPACITY,
-        },
+        constants::{HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, SIZE_FORMULA_CACHE_CAPACITY},
         linkage_context::LinkageContext,
         type_size_formulae::{PartialTypeSizeFormula, TypeSize, check_syntactic_limits},
         types::{DefiningTypeId, OriginalId},
@@ -663,8 +660,8 @@ impl VMDispatchTables {
 
     /// The four sizes of a concrete runtime type, assuming no free parameters. Datatype nodes
     /// resolve through the cache.
-    pub(crate) fn type_size_of(&self, ty: &Type) -> PartialVMResult<TypeSize> {
-        self.type_size_of_impl(ty, &mut TypeTraversalBudget::for_type_traversal())
+    pub(crate) fn type_size_of(&self, ty: &Type, limits: &TypeLimits) -> PartialVMResult<TypeSize> {
+        self.type_size_of_impl(ty, &mut limits.traversal())
     }
 
     fn type_size_of_impl(
@@ -701,8 +698,8 @@ impl VMDispatchTables {
 
     /// The `value_depth` of a concrete type -- the single measure `Pack`/`PackVariant` need,
     /// computed without the other three.
-    pub(crate) fn value_depth_of(&self, ty: &Type) -> PartialVMResult<u64> {
-        self.value_depth_of_impl(ty, &mut TypeTraversalBudget::for_type_traversal())
+    pub(crate) fn value_depth_of(&self, ty: &Type, limits: &TypeLimits) -> PartialVMResult<u64> {
+        self.value_depth_of_impl(ty, &mut limits.traversal())
     }
 
     fn value_depth_of_impl(
@@ -759,10 +756,12 @@ impl VMDispatchTables {
         &self,
         elem: &SizedArenaType,
         ty_args: &TypeArguments,
+        limits: &TypeLimits,
     ) -> PartialVMResult<()> {
         let formula = self.term_size_formula(elem)?;
         let sizes = ty_args.sizes();
         check_syntactic_limits(
+            limits,
             formula.solve_type_size(sizes)?,
             formula.solve_type_depth(sizes)?,
         )?;
@@ -878,7 +877,7 @@ impl VMDispatchTables {
     /// before any layout generation -- pure arithmetic over the descriptor formulas; nothing of
     /// an oversized layout is ever built. The error codes mirror the legacy cursor's.
     fn check_layout_limits(&self, ty: &Type) -> PartialVMResult<()> {
-        let size = self.type_size_of(ty)?;
+        let size = self.type_size_of(ty, &TypeLimits::VM_DEFAULT)?;
         if size.value_depth
             > safe_unwrap!(self.vm_config.runtime_limits_config.max_value_nest_depth)
         {
@@ -1147,10 +1146,15 @@ impl VMDispatchTables {
         &self,
         term: &SizedArenaType,
         ty_args: &TypeArguments,
+        limits: &TypeLimits,
     ) -> PartialVMResult<(Type, u64)> {
         let sizes = ty_args.sizes();
         let type_size = term.size_formula.solve_type_size(sizes)?;
-        check_syntactic_limits(type_size, term.size_formula.solve_type_depth(sizes)?)?;
+        check_syntactic_limits(
+            limits,
+            type_size,
+            term.size_formula.solve_type_depth(sizes)?,
+        )?;
         Ok((term.ty.subst_unchecked(ty_args.types())?, type_size))
     }
 
@@ -1159,15 +1163,14 @@ impl VMDispatchTables {
         &self,
         fun_inst: &FunctionInstantiation,
         ty_args: &TypeArguments,
+        limits: &TypeLimits,
     ) -> PartialVMResult<TypeArguments> {
         // The whole instantiation (caller arguments plus the callee arguments realized below)
         // must fit within the instantiation-node budget. Pure arithmetic over the sizes.
         let mut sum_nodes = 1u64;
-        let mut charge_nodes = |type_size: u64| {
+        let mut charge_nodes = |type_size: u64| -> PartialVMResult<()> {
             sum_nodes = sum_nodes.saturating_add(type_size);
-            if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
-                return Err(partial_vm_error!(VM_MAX_TYPE_NODES_REACHED));
-            }
+            limits.check_syntactic_limits(sum_nodes, 1)?;
             Ok(())
         };
         for size in ty_args.sizes() {
@@ -1178,12 +1181,12 @@ impl VMDispatchTables {
             .to_ref()
             .iter()
             .map(|term| {
-                let (ty, type_size) = self.realize_type(term, ty_args)?;
+                let (ty, type_size) = self.realize_type(term, ty_args, limits)?;
                 charge_nodes(type_size)?;
                 Ok(ty)
             })
             .collect::<PartialVMResult<Vec<_>>>()?;
-        TypeArguments::new(self, types)
+        TypeArguments::new(self, types, limits)
     }
 
     /// Realize a single term with `ty_args`, checking its predicted syntactic sizes against the
@@ -1192,8 +1195,9 @@ impl VMDispatchTables {
         &self,
         term: &SizedArenaType,
         ty_args: &TypeArguments,
+        limits: &TypeLimits,
     ) -> PartialVMResult<Type> {
-        Ok(self.realize_type(term, ty_args)?.0)
+        Ok(self.realize_type(term, ty_args, limits)?.0)
     }
 
     /// Check a struct instantiation (the `Pack` family of instructions) against the limits
@@ -1202,11 +1206,13 @@ impl VMDispatchTables {
         &self,
         struct_inst: &StructInstantiation,
         ty_args: &TypeArguments,
+        limits: &TypeLimits,
     ) -> PartialVMResult<()> {
         self.check_instantiation(
             &struct_inst.def_vtable_key,
             struct_inst.type_params.to_ref(),
             ty_args,
+            limits,
         )
     }
 
@@ -1216,12 +1222,14 @@ impl VMDispatchTables {
         &self,
         variant_inst: &VariantInstantiation,
         ty_args: &TypeArguments,
+        limits: &TypeLimits,
     ) -> PartialVMResult<()> {
         let enum_inst = variant_inst.enum_inst.to_ref();
         self.check_instantiation(
             &enum_inst.def_vtable_key,
             enum_inst.type_params.to_ref(),
             ty_args,
+            limits,
         )
     }
 
@@ -1231,12 +1239,14 @@ impl VMDispatchTables {
         &self,
         struct_inst: &StructInstantiation,
         ty_args: &TypeArguments,
+        limits: &TypeLimits,
     ) -> PartialVMResult<Type> {
-        self.check_struct_instantiation(struct_inst, ty_args)?;
+        self.check_struct_instantiation(struct_inst, ty_args, limits)?;
         self.instantiate_datatype_type(
             &struct_inst.def_vtable_key,
             struct_inst.type_params.to_ref(),
             ty_args,
+            limits,
         )
     }
 
@@ -1246,13 +1256,15 @@ impl VMDispatchTables {
         &self,
         variant_inst: &VariantInstantiation,
         ty_args: &TypeArguments,
+        limits: &TypeLimits,
     ) -> PartialVMResult<Type> {
-        self.check_variant_instantiation(variant_inst, ty_args)?;
+        self.check_variant_instantiation(variant_inst, ty_args, limits)?;
         let enum_inst = variant_inst.enum_inst.to_ref();
         self.instantiate_datatype_type(
             &enum_inst.def_vtable_key,
             enum_inst.type_params.to_ref(),
             ty_args,
+            limits,
         )
     }
 
@@ -1261,10 +1273,11 @@ impl VMDispatchTables {
         datatype_key: &VirtualTableKey,
         type_params: &[SizedArenaType],
         ty_args: &TypeArguments,
+        limits: &TypeLimits,
     ) -> PartialVMResult<Type> {
         let instantiation = type_params
             .iter()
-            .map(|term| self.subst_type(term, ty_args))
+            .map(|term| self.subst_type(term, ty_args, limits))
             .collect::<PartialVMResult<Vec<_>>>()?;
         Ok(Type::DatatypeInstantiation(Box::new((
             datatype_key.clone(),
@@ -1281,13 +1294,14 @@ impl VMDispatchTables {
         datatype_key: &VirtualTableKey,
         type_params: &[SizedArenaType],
         ty_args: &TypeArguments,
+        limits: &TypeLimits,
     ) -> PartialVMResult<()> {
         // Realize each type-parameter term's size against the frame's argument sizes, checking
         // each against the syntactic limits as it is computed. Nothing is built.
         let mut param_sizes = Vec::with_capacity(type_params.len());
         for term in type_params.iter() {
             let size = self.term_size_formula(term)?.solve(ty_args.sizes())?;
-            check_syntactic_limits(size.type_size, size.type_depth)?;
+            check_syntactic_limits(limits, size.type_size, size.type_depth)?;
             param_sizes.push(size);
         }
 
@@ -1300,6 +1314,7 @@ impl VMDispatchTables {
         // it (the `S<T×32>` blow-up: 128 arguments-plus-parameters, but 3041 realized nodes).
         let result = self.virtual_key_size_formula(datatype_key)?;
         check_syntactic_limits(
+            limits,
             result.solve_type_size(&param_sizes)?,
             result.solve_type_depth(&param_sizes)?,
         )?;
