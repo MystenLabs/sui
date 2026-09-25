@@ -966,6 +966,7 @@ impl SuiNode {
                         ConsensusAdapterMetrics::new(&registry_service.default_registry())
                     })
                     .clone(),
+                state.overload_info.clone(),
             ))
         });
         let node_role = epoch_store.node_role();

@@ -177,6 +177,10 @@ pub async fn execution_process(
                             .metrics
                             .execution_driver_executed_transactions
                             .inc();
+                        authority
+                            .overload_info
+                            .executed_transactions
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     }
                     ExecutionOutput::EpochEnded => {
                         warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");

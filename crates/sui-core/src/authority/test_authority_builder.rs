@@ -67,6 +67,7 @@ pub struct TestAuthorityBuilder<'a> {
     /// By default, we don't insert the genesis checkpoint, which isn't needed by most tests.
     insert_genesis_checkpoint: bool,
     authority_overload_config: Option<AuthorityOverloadConfig>,
+    consensus_transaction_pool_enabled: Option<bool>,
     cache_config: Option<ExecutionCacheConfig>,
     chain_override: Option<Chain>,
     dev_inspect_disabled: bool,
@@ -186,6 +187,11 @@ impl<'a> TestAuthorityBuilder<'a> {
 
     pub fn with_authority_overload_config(mut self, config: AuthorityOverloadConfig) -> Self {
         assert!(self.authority_overload_config.replace(config).is_none());
+        self
+    }
+
+    pub fn with_consensus_transaction_pool_enabled(mut self, enabled: bool) -> Self {
+        self.consensus_transaction_pool_enabled = Some(enabled);
         self
     }
 
@@ -373,6 +379,9 @@ impl<'a> TestAuthorityBuilder<'a> {
         config.transaction_deny_config = transaction_deny_config;
         config.certificate_deny_config = certificate_deny_config;
         config.authority_overload_config = authority_overload_config;
+        if let Some(enabled) = self.consensus_transaction_pool_enabled {
+            config.consensus_transaction_pool.enabled = enabled;
+        }
         config.authority_store_pruning_config = pruning_config;
         config.dev_inspect_disabled = self.dev_inspect_disabled;
         if let Some(window_ms) = self.recent_submission_dedup_window_ms {

@@ -776,8 +776,11 @@ async fn test_authority_txn_validation_pushback() {
         max_load_shedding_percentage: 0,
         ..Default::default()
     };
+    // Load shedding at signing only applies without the consensus transaction pool, which
+    // otherwise paces admission itself.
     let authority_state = TestAuthorityBuilder::new()
         .with_authority_overload_config(overload_config)
+        .with_consensus_transaction_pool_enabled(false)
         .build()
         .await;
     authority_state.insert_genesis_objects(&[gas_object1.clone(), gas_object2.clone()]);

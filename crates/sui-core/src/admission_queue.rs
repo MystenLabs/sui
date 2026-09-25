@@ -187,6 +187,8 @@ pub struct AdmissionQueueMetrics {
     pub pool_already_processed: IntCounterVec,
     pub pool_commit_latency: HistogramVec,
     pub pool_abandoned: IntCounterVec,
+    pub pool_user_budget_percentage: IntGauge,
+    pub pool_user_take_budget: IntGauge,
 }
 
 impl AdmissionQueueMetrics {
@@ -282,6 +284,18 @@ impl AdmissionQueueMetrics {
                 "consensus_transaction_pool_abandoned",
                 "Pool entries dropped at proposal time because their submitter stopped waiting",
                 &["lane"],
+                registry,
+            )
+            .unwrap(),
+            pool_user_budget_percentage: register_int_gauge_with_registry!(
+                "consensus_transaction_pool_user_budget_percentage",
+                "Share of executed transactions credited to user lane admission in the latest take, 100 when not load shedding",
+                registry,
+            )
+            .unwrap(),
+            pool_user_take_budget: register_int_gauge_with_registry!(
+                "consensus_transaction_pool_user_take_budget",
+                "Number of user transactions the latest take was allowed to include",
                 registry,
             )
             .unwrap(),

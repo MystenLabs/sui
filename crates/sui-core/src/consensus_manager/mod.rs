@@ -311,6 +311,7 @@ impl ConsensusManager {
                 config.max_pending_transactions(&self.consensus_config),
                 context.metrics().clone(),
                 context.adapter_metrics().clone(),
+                context.overload_info().clone(),
             ));
             context.set_active(epoch, pool.clone());
             self.transaction_pool.store(Some(pool.clone()));

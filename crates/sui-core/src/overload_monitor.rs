@@ -6,7 +6,7 @@ use mysten_metrics::monitored_scope;
 use std::cmp::{max, min};
 use std::hash::Hasher;
 use std::sync::Weak;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI8, AtomicU32, AtomicU64, Ordering};
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use sui_config::node::AuthorityOverloadConfig;
@@ -25,6 +25,17 @@ pub struct AuthorityOverloadInfo {
 
     /// The calculated percentage of transactions to drop.
     pub load_shedding_percentage: AtomicU32,
+
+    /// Transactions executed by this authority, used by the consensus transaction pool to
+    /// pace user transaction admission.
+    pub executed_transactions: AtomicU64,
+
+    /// Where execution queueing latency sits relative to the configured limits at the last
+    /// monitor tick: -1 below the soft limit, 0 between, 1 above the hard limit.
+    pub queue_pressure: AtomicI8,
+
+    /// Incremented on every monitor tick so consumers can react once per tick.
+    pub monitor_tick: AtomicU64,
 }
 
 impl AuthorityOverloadInfo {
@@ -112,6 +123,21 @@ fn check_authority_overload(
     } else {
         authority.overload_info.clear_overload();
     }
+    let queue_pressure = if queueing_latency > config.execution_queue_latency_hard_limit {
+        1
+    } else if queueing_latency > config.execution_queue_latency_soft_limit {
+        0
+    } else {
+        -1
+    };
+    authority
+        .overload_info
+        .queue_pressure
+        .store(queue_pressure, Ordering::Relaxed);
+    authority
+        .overload_info
+        .monitor_tick
+        .fetch_add(1, Ordering::Relaxed);
 
     authority
         .metrics

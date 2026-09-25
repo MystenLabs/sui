@@ -1038,7 +1038,7 @@ pub struct AuthorityState {
     pub config: NodeConfig,
 
     /// Current overload status in this authority. Updated periodically.
-    pub overload_info: AuthorityOverloadInfo,
+    pub overload_info: Arc<AuthorityOverloadInfo>,
 
     /// The chain identifier is derived from the digest of the genesis checkpoint.
     chain_identifier: ChainIdentifier,
@@ -1366,7 +1366,11 @@ impl AuthorityState {
         tx_data: &SenderSignedData,
         do_authority_overload_check: bool,
     ) -> SuiResult {
-        if do_authority_overload_check {
+        // With the consensus transaction pool enabled, the overload monitor's load shedding
+        // percentage throttles the user lane of block proposals instead of rejecting
+        // transactions here, so admitted transactions wait in the pool in gas price order
+        // rather than being retried.
+        if do_authority_overload_check && !self.config.consensus_transaction_pool.enabled {
             self.check_authority_overload(tx_data).tap_err(|_| {
                 self.update_overload_metrics("execution_queue");
             })?;
@@ -3521,7 +3525,7 @@ impl AuthorityState {
             _authority_per_epoch_pruner,
             db_checkpoint_config: db_checkpoint_config.clone(),
             config,
-            overload_info: AuthorityOverloadInfo::default(),
+            overload_info: Arc::new(AuthorityOverloadInfo::default()),
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
             consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
