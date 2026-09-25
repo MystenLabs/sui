@@ -7,13 +7,17 @@ use std::{
     time::Duration,
 };
 
+use consensus_config::{AuthorityIndex, Stake};
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use mysten_metrics::{
     monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
     monitored_scope, spawn_logged_monitored_task,
 };
 use parking_lot::RwLock;
-use tokio::sync::watch;
+use tokio::{
+    sync::watch,
+    time::{Instant, MissedTickBehavior, interval_at},
+};
 
 use crate::{
     BlockAPI, CommitIndex, CommittedSubDag, VerifiedBlock,
@@ -26,6 +30,9 @@ use crate::{
     },
     transaction_vote_tracker::TransactionVoteTracker,
 };
+
+const STATUS_INTERVAL: Duration = Duration::from_secs(1);
+const SLOW_FINALIZATION: Duration = Duration::from_millis(200);
 
 /// Finalizes transactions in committed sub-DAGs under the Mysticeti v3 transaction voting rules.
 ///
@@ -58,6 +65,8 @@ pub(crate) struct CommitFinalizerV3 {
 
     last_processed_commit: Option<CommitIndex>,
     pending_commits: VecDeque<CommitStateV3>,
+    last_attempt_at: Instant,
+    last_trigger: &'static str,
 }
 
 impl CommitFinalizerV3 {
@@ -84,6 +93,8 @@ impl CommitFinalizerV3 {
             commit_sender,
             last_processed_commit: None,
             pending_commits: VecDeque::new(),
+            last_attempt_at: Instant::now(),
+            last_trigger: "none",
         }
     }
 
@@ -108,6 +119,8 @@ impl CommitFinalizerV3 {
         mut receiver: UnboundedReceiver<CommittedSubDag>,
         mut block_updates: watch::Receiver<()>,
     ) {
+        let mut status_interval = interval_at(Instant::now() + STATUS_INTERVAL, STATUS_INTERVAL);
+        status_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
         loop {
             let (committed_sub_dag, shutting_down) = tokio::select! {
                 biased;
@@ -117,6 +130,11 @@ impl CommitFinalizerV3 {
                 }
                 Ok(()) = block_updates.changed(), if !self.pending_commits.is_empty() => {
                     (None, false)
+                }
+                _ = status_interval.tick(), if !self.pending_commits.is_empty() => {
+                    // Report saved evidence without retrying finalization or consuming block updates.
+                    self.report_pending_status();
+                    continue;
                 }
             };
             // A commit also retries pending work, so consume all preceding block notifications
@@ -132,14 +150,39 @@ impl CommitFinalizerV3 {
                 }
                 Some(commit) => (self.process_commit(commit), false),
                 None if self.pending_commits.is_empty() => (vec![], false),
-                None => (self.try_finalize_commits(), false),
+                None => (
+                    self.try_finalize_commits(if shutting_down {
+                        "shutdown"
+                    } else {
+                        "block_update"
+                    }),
+                    false,
+                ),
             };
+            let persist_started = Instant::now();
             persist_finalized_commits(
                 &self.dag_state,
                 &self.transaction_vote_tracker,
                 &finalized_commits,
                 !already_finalized,
             );
+            if !finalized_commits.is_empty() {
+                let elapsed = persist_started.elapsed();
+                self.context
+                    .metrics
+                    .node_metrics
+                    .finalizer_v3_phase_duration_seconds
+                    .with_label_values(&["persist"])
+                    .observe(elapsed.as_secs_f64());
+                if elapsed >= SLOW_FINALIZATION {
+                    tracing::info!(
+                        first_commit = finalized_commits.first().unwrap().commit_ref.index,
+                        last_commit = finalized_commits.last().unwrap().commit_ref.index,
+                        persist_ms = elapsed.as_secs_f64() * 1000.0,
+                        "V3 finalizer storage write was slow"
+                    );
+                }
+            }
             for commit in finalized_commits {
                 if let Err(error) = self.commit_sender.send(commit) {
                     tracing::warn!(
@@ -169,10 +212,18 @@ impl CommitFinalizerV3 {
         self.report_gc_guarded_blocks(&commit_state);
         self.pending_commits.push_back(commit_state);
 
-        self.try_finalize_commits()
+        self.try_finalize_commits("commit")
     }
 
-    fn try_finalize_commits(&mut self) -> Vec<CommittedSubDag> {
+    fn try_finalize_commits(&mut self, trigger: &'static str) -> Vec<CommittedSubDag> {
+        self.last_attempt_at = Instant::now();
+        self.last_trigger = trigger;
+        self.context
+            .metrics
+            .node_metrics
+            .finalizer_v3_attempts
+            .with_label_values(&[trigger])
+            .inc();
         let _scope = monitored_scope("CommitFinalizer::process_commit");
         let _timer = self
             .context
@@ -199,11 +250,19 @@ impl CommitFinalizerV3 {
         //    pending.
         //
         // DagState keeps the direct child links for local blocks.
+        let direct_timer = self
+            .context
+            .metrics
+            .node_metrics
+            .finalizer_v3_phase_duration_seconds
+            .with_label_values(&["direct"])
+            .start_timer();
         for index in 0..self.pending_commits.len() {
             self.try_direct_finalize_commit(index);
         }
 
-        let mut finalized_commits = self.pop_finalized_commits();
+        let mut finalized_commits = self.pop_finalized_commits("direct");
+        drop(direct_timer);
         self.context
             .metrics
             .node_metrics
@@ -226,6 +285,13 @@ impl CommitFinalizerV3 {
         // INDIRECT_COMMIT_DEPTH rounds above its leader. At that point, any direct accept quorum
         // must leave an accept certificate in the committed prefix. The validator rejects every
         // transaction that is still pending after the certificate check.
+        let indirect_timer = self
+            .context
+            .metrics
+            .node_metrics
+            .finalizer_v3_phase_duration_seconds
+            .with_label_values(&["indirect"])
+            .start_timer();
         if self.pending_commits.len() > 1 {
             let committed_voting_graph = CommittedBlockGraph::new(
                 self.pending_commits
@@ -239,7 +305,7 @@ impl CommitFinalizerV3 {
                     first_leader_round.saturating_add(INDIRECT_COMMIT_DEPTH) <= anchor_round;
 
                 self.try_indirect_finalize_first_commit(&committed_voting_graph, reject_remaining);
-                let indirect_finalized_commits = self.pop_finalized_commits();
+                let indirect_finalized_commits = self.pop_finalized_commits("indirect");
                 if indirect_finalized_commits.is_empty() {
                     break;
                 }
@@ -252,6 +318,7 @@ impl CommitFinalizerV3 {
                 finalized_commits.extend(indirect_finalized_commits);
             }
         }
+        drop(indirect_timer);
 
         self.report_finalization_latency(&finalized_commits);
         self.context
@@ -259,11 +326,14 @@ impl CommitFinalizerV3 {
             .node_metrics
             .finalizer_buffered_commits
             .set(self.pending_commits.len() as i64);
+        self.report_pending_status();
 
         finalized_commits
     }
 
     fn try_direct_finalize_commit(&mut self, commit_index: usize) {
+        self.pending_commits[commit_index].pending_direct_vote = None;
+        self.pending_commits[commit_index].attempts += 1;
         let leader_round = self.pending_commits[commit_index].commit.leader.round;
         let last_voting_round = leader_round.saturating_add(1);
         let pending_transactions = self.pending_commits[commit_index]
@@ -273,12 +343,22 @@ impl CommitFinalizerV3 {
             // First votes come from the earliest blocks on each authority chain that include
             // block_ref in their causal history. Only rounds through leader_round + 1 are eligible;
             // DagState returns no children for targets at or below its current GC round.
-            let first_votes = {
+            let (first_votes, gc_round) = {
                 let dag_state = self.dag_state.read();
-                collect_first_votes(&*dag_state, block_ref, last_voting_round)
+                (
+                    collect_first_votes(&*dag_state, block_ref, last_voting_round),
+                    dag_state.gc_round(),
+                )
             };
-            let decisions =
+            let mut decisions =
                 self.compute_direct_decisions(block_ref, &transaction_indices, &first_votes);
+            if self.pending_commits[commit_index]
+                .pending_direct_vote
+                .is_none()
+            {
+                self.pending_commits[commit_index].pending_direct_vote =
+                    decisions.pending.take().map(|vote| (gc_round, vote));
+            }
             self.apply_decisions(
                 commit_index,
                 block_ref,
@@ -352,6 +432,14 @@ impl CommitFinalizerV3 {
                 decisions.accepted.push(*transaction_index);
             } else if rejected {
                 decisions.rejected.push(*transaction_index);
+            } else if decisions.pending.is_none() {
+                decisions.pending = Some(PendingVoteStatus::new(
+                    block_ref,
+                    *transaction_index,
+                    transaction_accept_votes,
+                    transaction_reject_votes,
+                    first_votes,
+                ));
             }
         }
         decisions
@@ -362,6 +450,7 @@ impl CommitFinalizerV3 {
         committed_voting_graph: &CommittedBlockGraph,
         reject_remaining: bool,
     ) {
+        self.pending_commits[0].pending_indirect_vote = None;
         let pending_transactions = self.pending_commits[0].pending_transactions.clone();
         let leader_round = self.pending_commits[0].commit.leader.round;
         let last_voting_round = leader_round.saturating_add(1);
@@ -382,12 +471,15 @@ impl CommitFinalizerV3 {
             } else {
                 vec![]
             };
-            let decisions = self.compute_indirect_decisions(
+            let mut decisions = self.compute_indirect_decisions(
                 block_ref,
                 &transaction_indices,
                 &first_votes,
                 reject_remaining,
             );
+            if self.pending_commits[0].pending_indirect_vote.is_none() {
+                self.pending_commits[0].pending_indirect_vote = decisions.pending.take();
+            }
             self.apply_decisions(
                 0,
                 block_ref,
@@ -433,6 +525,14 @@ impl CommitFinalizerV3 {
                 // quorum, no accept certificate means that rejection is safe: any direct accept
                 // quorum must leave an accept certificate in the committed prefix.
                 decisions.rejected.push(*transaction_index);
+            } else if decisions.pending.is_none() {
+                decisions.pending = Some(PendingVoteStatus::new(
+                    block_ref,
+                    *transaction_index,
+                    transaction_accept_votes,
+                    transaction_reject_votes,
+                    first_votes,
+                ));
             }
         }
         decisions
@@ -553,7 +653,7 @@ impl CommitFinalizerV3 {
         }
     }
 
-    fn pop_finalized_commits(&mut self) -> Vec<CommittedSubDag> {
+    fn pop_finalized_commits(&mut self, release_path: &'static str) -> Vec<CommittedSubDag> {
         let mut finalized_commits = vec![];
         while self
             .pending_commits
@@ -561,6 +661,39 @@ impl CommitFinalizerV3 {
             .is_some_and(|state| state.pending_transactions.is_empty())
         {
             let commit_state = self.pending_commits.pop_front().unwrap();
+            let now = Instant::now();
+            let ready_at = commit_state
+                .ready_at
+                .expect("All transactions have a decision");
+            let decision_wait = ready_at.duration_since(commit_state.received_at);
+            let ordered_release_wait = now.duration_since(ready_at);
+            let total_wait = now.duration_since(commit_state.received_at);
+            for (stage, wait) in [
+                ("decision", decision_wait),
+                ("ordered_release", ordered_release_wait),
+                ("total", total_wait),
+            ] {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .finalizer_v3_commit_wait_seconds
+                    .with_label_values(&[stage])
+                    .observe(wait.as_secs_f64());
+            }
+            if total_wait >= SLOW_FINALIZATION {
+                tracing::info!(
+                    commit_index = commit_state.commit.commit_ref.index,
+                    leader_round = commit_state.commit.leader.round,
+                    decided_with_local_blocks = commit_state.commit.decided_with_local_blocks,
+                    release_path,
+                    trigger = self.last_trigger,
+                    attempts = commit_state.attempts,
+                    decision_wait_ms = decision_wait.as_secs_f64() * 1000.0,
+                    ordered_release_wait_ms = ordered_release_wait.as_secs_f64() * 1000.0,
+                    total_wait_ms = total_wait.as_secs_f64() * 1000.0,
+                    "V3 finalizer released a slow commit"
+                );
+            }
             let mut commit = commit_state.commit;
             for (block_ref, rejected_transactions) in commit_state.rejected_transactions {
                 commit
@@ -581,6 +714,107 @@ impl CommitFinalizerV3 {
             finalized_commits.push(commit);
         }
         finalized_commits
+    }
+
+    fn report_pending_status(&mut self) {
+        let metrics = &self.context.metrics.node_metrics;
+        let pending_transactions: usize = self
+            .pending_commits
+            .iter()
+            .flat_map(|state| state.pending_transactions.values())
+            .map(BTreeSet::len)
+            .sum();
+        let ready_commits = self
+            .pending_commits
+            .iter()
+            .filter(|state| state.pending_transactions.is_empty())
+            .count();
+        metrics
+            .finalizer_v3_pending_transactions
+            .set(pending_transactions as i64);
+        metrics.finalizer_v3_ready_commits.set(ready_commits as i64);
+        let buffered_commits = self.pending_commits.len();
+        let newest_leader_round = self
+            .pending_commits
+            .back()
+            .map(|state| state.commit.leader.round)
+            .unwrap_or_default();
+        let Some(first) = self.pending_commits.front_mut() else {
+            metrics.finalizer_v3_oldest_pending_seconds.set(0.0);
+            metrics.finalizer_v3_anchor_round_gap.set(0);
+            return;
+        };
+        let now = Instant::now();
+        let age = now.duration_since(first.received_at);
+        let anchor_round_gap = first
+            .commit
+            .leader
+            .round
+            .saturating_add(INDIRECT_COMMIT_DEPTH)
+            .saturating_sub(newest_leader_round);
+        metrics
+            .finalizer_v3_oldest_pending_seconds
+            .set(age.as_secs_f64());
+        metrics
+            .finalizer_v3_anchor_round_gap
+            .set(i64::from(anchor_round_gap));
+        if first
+            .last_status_log_at
+            .is_some_and(|last| now.duration_since(last) < STATUS_INTERVAL)
+        {
+            return;
+        }
+        first.last_status_log_at = Some(now);
+        let (local_gc_round, highest_accepted_round) = {
+            let dag_state = self.dag_state.read();
+            (dag_state.gc_round(), dag_state.highest_accepted_round())
+        };
+        tracing::info!(
+            commit_index = first.commit.commit_ref.index,
+            leader_round = first.commit.leader.round,
+            decided_with_local_blocks = first.commit.decided_with_local_blocks,
+            age_ms = age.as_secs_f64() * 1000.0,
+            attempts = first.attempts,
+            trigger = self.last_trigger,
+            since_last_attempt_ms = now.duration_since(self.last_attempt_at).as_secs_f64() * 1000.0,
+            buffered_commits,
+            ready_commits,
+            pending_transactions,
+            first_pending_blocks = first.pending_transactions.len(),
+            newest_leader_round,
+            anchor_round_gap,
+            local_gc_round,
+            highest_accepted_round,
+            last_voting_round = first.commit.leader.round.saturating_add(1),
+            "V3 finalizer is waiting for transaction decisions"
+        );
+        if let Some((gc_round, vote)) = &first.pending_direct_vote
+            && first
+                .pending_transactions
+                .get(&vote.block_ref)
+                .is_some_and(|pending| pending.contains(&vote.transaction_index))
+        {
+            vote.report(
+                first.commit.commit_ref.index,
+                "direct",
+                *gc_round,
+                self.context.committee.quorum_threshold(),
+                self.context.committee.quorum_threshold(),
+            );
+        }
+        if let Some(vote) = &first.pending_indirect_vote {
+            vote.report(
+                first.commit.commit_ref.index,
+                "indirect",
+                first
+                    .commit
+                    .leader
+                    .round
+                    .saturating_sub(self.context.protocol_config.gc_depth()),
+                self.context.committee.certification_threshold(),
+                self.context.committee.quorum_threshold(),
+            );
+        }
     }
 
     fn report_finalization_latency(&self, finalized_commits: &[CommittedSubDag]) {
@@ -780,17 +1014,84 @@ impl<T> TransactionVotes<T> {
 struct TransactionDecisions {
     accepted: Vec<TransactionIndex>,
     rejected: Vec<TransactionIndex>,
+    pending: Option<PendingVoteStatus>,
+}
+
+// Keep one pending transaction per vote check. The status timer must not traverse the DAG again.
+struct PendingVoteStatus {
+    block_ref: BlockRef,
+    transaction_index: TransactionIndex,
+    accept_stake: Stake,
+    reject_stake: Stake,
+    accept_voters: Vec<AuthorityIndex>,
+    reject_voters: Vec<AuthorityIndex>,
+    first_votes: Vec<(BlockRef, Round)>,
+}
+
+impl PendingVoteStatus {
+    fn new<T: CommitteeThreshold>(
+        block_ref: BlockRef,
+        transaction_index: TransactionIndex,
+        accept_votes: &StakeAggregator<T>,
+        reject_votes: &StakeAggregator<QuorumThreshold>,
+        first_votes: &[VotingBlock],
+    ) -> Self {
+        Self {
+            block_ref,
+            transaction_index,
+            accept_stake: accept_votes.stake(),
+            reject_stake: reject_votes.stake(),
+            accept_voters: accept_votes.authorities().iter().copied().collect(),
+            reject_voters: reject_votes.authorities().iter().copied().collect(),
+            first_votes: first_votes
+                .iter()
+                .map(|vote| (vote.block_ref, vote.cutoff_round))
+                .collect(),
+        }
+    }
+
+    fn report(
+        &self,
+        commit_index: CommitIndex,
+        path: &str,
+        gc_round: Round,
+        accept_threshold: Stake,
+        reject_threshold: Stake,
+    ) {
+        tracing::info!(
+            commit_index, path,
+            block = %self.block_ref,
+            transaction_index = self.transaction_index,
+            vote_gc_round = gc_round,
+            target_at_or_below_gc = self.block_ref.round <= gc_round,
+            accept_stake = self.accept_stake,
+            reject_stake = self.reject_stake,
+            accept_threshold, reject_threshold,
+            accept_stake_gap = accept_threshold.saturating_sub(self.accept_stake),
+            reject_stake_gap = reject_threshold.saturating_sub(self.reject_stake),
+            accept_voters = ?self.accept_voters,
+            reject_voters = ?self.reject_voters,
+            first_votes_and_cutoffs = ?self.first_votes,
+            "V3 finalizer pending vote sample from the last attempt"
+        );
+    }
 }
 
 struct CommitStateV3 {
     commit: CommittedSubDag,
     pending_transactions: BTreeMap<BlockRef, BTreeSet<TransactionIndex>>,
     rejected_transactions: BTreeMap<BlockRef, BTreeSet<TransactionIndex>>,
+    received_at: Instant,
+    ready_at: Option<Instant>,
+    attempts: u64,
+    last_status_log_at: Option<Instant>,
+    pending_direct_vote: Option<(Round, PendingVoteStatus)>,
+    pending_indirect_vote: Option<PendingVoteStatus>,
 }
 
 impl CommitStateV3 {
     fn new(commit: CommittedSubDag) -> Self {
-        let pending_transactions = commit
+        let pending_transactions: BTreeMap<_, BTreeSet<_>> = commit
             .blocks
             .iter()
             .filter(|block| !block.transactions().is_empty())
@@ -801,10 +1102,18 @@ impl CommitStateV3 {
                 )
             })
             .collect();
+        let received_at = Instant::now();
+        let ready_at = pending_transactions.is_empty().then_some(received_at);
         Self {
             commit,
             pending_transactions,
             rejected_transactions: BTreeMap::new(),
+            received_at,
+            ready_at,
+            attempts: 0,
+            last_status_log_at: None,
+            pending_direct_vote: None,
+            pending_indirect_vote: None,
         }
     }
 
@@ -824,6 +1133,9 @@ impl CommitStateV3 {
         }
         if pending_transactions.is_empty() {
             self.pending_transactions.remove(block_ref);
+        }
+        if self.pending_transactions.is_empty() {
+            self.ready_at.get_or_insert_with(Instant::now);
         }
     }
 }
@@ -2384,6 +2696,150 @@ mod tests {
         fixture
             .finalizer
             .process_commit(make_commit(1, &target, vec![target.clone()]));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn diagnostics_separate_vote_wait_from_ordered_release() {
+        let mut fixture = Fixture::new();
+        let (target, round_one_refs) = fixture.make_round_one(1);
+        let later_leader = fixture.make_voter(
+            5,
+            &round_one_refs,
+            target.reference(),
+            false,
+            vec![],
+            0,
+            None,
+        );
+        fixture.add_blocks(std::slice::from_ref(&later_leader));
+        assert!(
+            fixture
+                .finalizer
+                .process_commit(make_commit(1, &target, vec![target.clone()]))
+                .is_empty()
+        );
+        tokio::time::advance(Duration::from_millis(100)).await;
+        assert!(
+            fixture
+                .finalizer
+                .process_commit(make_commit(2, &later_leader, vec![later_leader.clone()]))
+                .is_empty()
+        );
+
+        let metrics = &fixture.context.metrics.node_metrics;
+        assert_eq!(metrics.finalizer_v3_pending_transactions.get(), 1);
+        assert_eq!(metrics.finalizer_v3_ready_commits.get(), 1);
+        assert_eq!(metrics.finalizer_v3_anchor_round_gap.get(), 1);
+        let (_, sample) = fixture.finalizer.pending_commits[0]
+            .pending_direct_vote
+            .as_ref()
+            .unwrap();
+        assert_eq!(sample.block_ref, target.reference());
+        assert_eq!((sample.accept_stake, sample.reject_stake), (0, 0));
+
+        tokio::time::advance(Duration::from_millis(400)).await;
+        let voters: Vec<_> = (0..5)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    true,
+                    vec![],
+                    0,
+                    None,
+                )
+            })
+            .collect();
+        fixture.add_blocks(&voters);
+        let finalized = fixture.finalizer.try_finalize_commits("block_update");
+        assert_eq!(
+            finalized
+                .iter()
+                .map(|commit| commit.commit_ref.index)
+                .collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        for (stage, expected) in [("decision", 0.5), ("ordered_release", 0.4), ("total", 0.9)] {
+            let histogram = metrics
+                .finalizer_v3_commit_wait_seconds
+                .with_label_values(&[stage]);
+            assert_eq!(histogram.get_sample_count(), 2);
+            assert!((histogram.get_sample_sum() - expected).abs() < 1e-9);
+        }
+        assert_eq!(metrics.finalizer_v3_pending_transactions.get(), 0);
+        assert_eq!(metrics.finalizer_v3_ready_commits.get(), 0);
+        assert_eq!(metrics.finalizer_v3_oldest_pending_seconds.get(), 0.0);
+        assert_eq!(metrics.finalizer_v3_anchor_round_gap.get(), 0);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn status_timer_reports_age_without_retrying_or_consuming_notifications() {
+        let mut fixture = Fixture::new();
+        let (target, round_one_refs) = fixture.make_round_one(1);
+        let voters: Vec<_> = (0..5)
+            .map(|author| {
+                fixture.make_voter(
+                    author,
+                    &round_one_refs,
+                    target.reference(),
+                    true,
+                    vec![],
+                    0,
+                    None,
+                )
+            })
+            .collect();
+        let metrics = &fixture.context.metrics.node_metrics;
+        let (commit_sender, mut commit_receiver) = unbounded_channel("finalizer_v3_status_output");
+        fixture.finalizer.commit_sender = commit_sender;
+        let (sender, receiver) = unbounded_channel("finalizer_v3_status_input");
+        let (block_sender, block_updates) = watch::channel(());
+        let run = fixture.finalizer.run(receiver, block_updates);
+        tokio::pin!(run);
+        sender
+            .send(make_commit(1, &target, vec![target.clone()]))
+            .unwrap();
+        assert!(futures::poll!(&mut run).is_pending());
+
+        // Evidence alone must not make the status timer run a finalization pass.
+        fixture.dag_state.write().accept_blocks(voters.clone());
+        fixture
+            .transaction_vote_tracker
+            .add_voted_blocks(voters.into_iter().map(|block| (block, vec![])).collect());
+        tokio::time::advance(STATUS_INTERVAL).await;
+        assert!(futures::poll!(&mut run).is_pending());
+        assert_eq!(metrics.finalizer_v3_oldest_pending_seconds.get(), 1.0);
+        assert_eq!(metrics.finalizer_v3_pending_transactions.get(), 1);
+        assert!(commit_receiver.try_recv().is_err());
+        assert_eq!(
+            metrics
+                .finalizer_v3_attempts
+                .with_label_values(&["commit"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .finalizer_v3_attempts
+                .with_label_values(&["block_update"])
+                .get(),
+            0
+        );
+
+        block_sender.send_replace(());
+        assert!(futures::poll!(&mut run).is_pending());
+        assert_eq!(commit_receiver.try_recv().unwrap().commit_ref.index, 1);
+        assert_eq!(
+            metrics
+                .finalizer_v3_attempts
+                .with_label_values(&["block_update"])
+                .get(),
+            1
+        );
+        assert_eq!(metrics.finalizer_v3_oldest_pending_seconds.get(), 0.0);
+        drop(sender);
+        assert!(futures::poll!(&mut run).is_ready());
     }
 
     #[tokio::test]
