@@ -46,6 +46,27 @@ An upgradeable package's `UpgradeCap` controls all of its future behavior, so tr
 
 :::
 
+Move packages on Sui are immutable objects. Once published, a package's bytecode never changes. Upgrading a package publishes a new object at a new address and links it to the original through the upgrade chain. This means every version of your package coexists onchain, and any package can call any version.
+
+Managing packages correctly requires you to:
+
+- Track which package address corresponds to which network (Devnet, Testnet, Mainnet).
+- Pin dependency versions so your builds stay reproducible.
+- Decide who controls upgrades and under what conditions.
+- Verify that a deployed package matches its source code.
+
+## What does the `UpgradeCap` control?
+
+When you publish an upgradeable package, Sui returns an `UpgradeCap` object to the publisher. Whoever holds that object can upgrade the package. The `UpgradeCap` is the sole source of upgrade authority by default, so its ownership determines who controls the package's future behavior.
+
+You have several options for handling the `UpgradeCap`:
+
+- **Keep it in a wallet.** The simplest option. One key pair controls upgrades.
+- **Transfer it to a multisig address.** Requires multiple signers to approve upgrades.
+- **Wrap it in a custom upgrade policy.** Lets you enforce on-chain rules such as time locks or governance votes before an upgrade proceeds.
+- **Destroy it.** Makes the package permanently immutable. No further upgrades are possible.
+
+Choosing an upgrade policy is a one-time decision with long-term consequences. Consider your security model before publishing.
 
 import DocCardList from '@theme/DocCardList';
 
