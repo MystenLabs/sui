@@ -34,6 +34,14 @@ answer: Reference these examples to learn common asset patterns on Sui.
 
 Reference these examples to learn common asset patterns on Sui, including loyalty tokens, regulated coins, closed-loop tokens, and other digital asset designs.
 
+## What are asset patterns on Sui?
+
+Sui supports several standard patterns for creating and managing digital assets onchain. Each pattern defines how an asset is minted, transferred, spent, or restricted. Choosing the right pattern depends on your use case: whether the asset is freely tradeable, restricted to specific actions, or tied to a particular platform or ecosystem.
+
+Asset patterns on Sui are implemented as Move modules. Each pattern uses Sui's object model to represent the asset and its associated policy. The Move type system enforces the rules of the pattern at compile time, so invalid operations are rejected before they reach the network.
+
+For example, a Closed-Loop Token requires a `TokenPolicy` object that lists approved services. When a user tries to spend the token, the policy checks whether the target service is registered. If it is not, the transaction fails.
+
 import DocCardList from '@theme/DocCardList';
 
 <DocCardList />
