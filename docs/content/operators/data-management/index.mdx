@@ -33,9 +33,31 @@ answer: >-
   for Sui network nodes, with links to detailed setup guides.
 ---
 
-Learn how to set up and manage data indexing, archival storage, and remote data stores for Sui network nodes.
+A full node keeps only as much history as its pruning settings allow. Full history lives outside the node: archival indexers ingest every checkpoint as the network produces it and write it to long-term storage. This section covers configuring pruning on your node, the archival stores that hold full history, and running indexers that turn checkpoint data into queryable databases.
 
-Learn how to set up and manage data indexing, archival storage, and remote data stores for your Sui network nodes.
+## What data management options are available for Sui nodes?
+
+- **Pruning:** A full node deletes old object versions and old checkpoints, including their transactions, effects, and events, from its local database after a retention window you configure.
+- **Archival stores:** Archival indexers write the full chain history to long-term storage, independently of any full node's pruning. `sui-checkpoint-blob-indexer` writes checkpoint blobs to an object store (S3 or GCS), and `sui-kvstore-alt` writes checkpoints, transactions, effects, events, and objects to Bigtable, which the [Archival Service](/develop/accessing-data/archival-store) serves over gRPC. Mysten Labs runs public instances of both; see [Available Data Stores](/operators/data-management/available-data-stores).
+- **Indexing:** An indexer reads checkpoints from a full node or a checkpoint store and writes the data your application needs into a database you can query. The [general-purpose indexer](/operators/data-management/indexer-stack-setup) backs GraphQL RPC, and you can build a [custom indexer](/develop/accessing-data/custom-indexer/custom-indexers) for your own schema.
+
+## How do I manage disk usage on a Sui full node?
+
+Configure pruning in the `authority-store-pruning-config` section of your node configuration. `num-epochs-to-retain` sets how many epochs of old object versions the node keeps, and `num-epochs-to-retain-for-checkpoints` sets how many epochs of checkpoints, transactions, effects, and events it keeps. See [Managing Data](/operators/data-management/managing-data) for recommended values.
+
+Pruning does not depend on any archive. The node does not wait for data to be archived before pruning it, and it does not serve pruned data from an archive.
+
+## What is the difference between archival and pruned data?
+
+**Pruned data** is deleted from the node's local database, and the node no longer serves it.
+
+**Archived data** is the complete checkpoint history held in an archival store. Archival indexers write each checkpoint when the network produces it, not when a node prunes it, so the archive is complete regardless of how any individual node is configured.
+
+Where to go for each need:
+
+- **Historical reads:** Query the [Archival Service](/develop/accessing-data/archival-store) or an indexer.
+- **Catching up after falling behind:** A full node can fetch missing checkpoints from a checkpoint store when its peers have already pruned them. See [Archives](/operators/data-management/archives).
+- **Starting a new node:** Restore from a [snapshot](/operators/snapshots).
 
 import DocCardList from '@theme/DocCardList';
 
