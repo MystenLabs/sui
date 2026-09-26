@@ -49,7 +49,7 @@ A wallet address on Sui can hold 2 kinds of balances:
 
 - **PAS balances:** Managed by PAS on behalf of the wallet address
 
-From your perspective, both belong to the same address. PAS balances are held in a derived Account object, but transfers always target the wallet address, not the Account address. The SDK resolves the underlying Account transparently.
+From your perspective, both belong to the same address. PAS balances are held in a derived Account object, but transfers always target the Account address, not the wallet address. The SDK resolves the underlying Account transparently.
 
 ## Query PAS balances
 
@@ -117,6 +117,6 @@ An Account can hold asset types that a PAS policy does not govern. For example, 
 ## Key points
 
 - **Wallet-centric:** PAS balances belong to the wallet address. The Account is an internal detail that the SDK handles.
-- **Deterministic:** The same wallet address always resolves to the same Account.
+- **Deterministic:** The same wallet address always resolves to the same derived Account address.
 - **Standard RPC:** `getBalance` and `listBalances` work on the derived address. No custom endpoints are needed.
 - **No indexing needed:** Derivation is client-side. No event subscriptions or custom indexers are required.
