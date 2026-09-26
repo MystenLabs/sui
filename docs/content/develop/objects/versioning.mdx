@@ -41,9 +41,9 @@ questions:
   - How does object versioning work on Sui?
   - Why should I use object versioning?
 answer: >-
-  Sui provides `Table` and `Bag` collections built using dynamic fields, but
-  with additional support to count the number of entries they contain to protect
-  against accidental deletion when non-empty.
+  Sui versions every onchain object by (ID, version) pair using Lamport
+  timestamps, with objects versioned either through the fastpath or through
+  consensus depending on their ownership type.
 ---
 
 Every object stored onchain is referenced by an ID and version. When a transaction modifies an object, it writes the new contents to an onchain reference with the same ID but a new version. Despite appearing multiple times in the store, only the latest version of an object is available to transactions. Only one transaction can modify an object at a given version, guaranteeing a linear history.
@@ -95,3 +95,12 @@ Consensus is a good fit for applications that require coordination between multi
 Wrapped objects can be unwrapped, after which they are accessible by their ID again. An object retains its ID across all wrap and unwrap events. Lamport timestamp versioning ensures the version at unwrap is always greater than the version at wrap.
 
 [Dynamic fields](/develop/objects/dynamic-fields) behave similarly: they are only accessible through their parent object and do not need to be supplied as transaction inputs. However, unlike wrapped objects, if a transaction modifies a dynamic object field, its version is incremented in that transaction. Lamport versioning also ensures that when a field is removed and re-added with the same name, the new `Field` object's version is strictly greater than the deleted one's, so (`ID`, `version`) pairs are never reused.
+
+## Why does object versioning matter?
+
+Understanding object versioning helps you design applications correctly and avoid common mistakes:
+
+- **Avoid stale version references.** If your client code caches an object version and another transaction modifies that object before yours executes, validators reject your transaction. Always fetch the latest version before submitting.
+- **Choose the right versioning path.** Fastpath reduces latency for single-owner workflows. Consensus handles multi-party coordination without requiring offchain locking.
+- **Prune safely.** Because (ID, version) pairs are never reused, node operators can safely prune old versions without risking collision with future writes.
+- **Reason about history.** The strictly increasing version sequence gives every object a linear, auditable history. Archival nodes can serve any historical version to clients that need it.
