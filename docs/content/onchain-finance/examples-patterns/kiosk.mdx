@@ -41,6 +41,25 @@ answer: >-
   separated admin capabilities.
 ---
 
+The Kiosk standard lets you enforce transfer policies on tokenized assets, such as royalties and commissions. When you join two tokenized assets inside a Kiosk, the purchase-and-join flow confirms the transfer policy request before the assets merge. This page describes how to implement that pattern and how to extend it for advanced use cases like user-initiated burns.
+
+## What is the Kiosk joining pattern?
+
+The Kiosk joining pattern combines two tokenized assets of the same type into one, while ensuring that the transfer policy defined for those assets is enforced at every step. Instead of transferring assets freely, participants transact through a Kiosk, which gates asset movement behind policy rules. This is the recommended approach when your tokenized asset requires compliance with on-chain rules like creator royalties or marketplace fees.
+
+## How does the Kiosk joining pattern work on Sui?
+
+When you join two tokenized assets inside a Kiosk, the flow works as follows:
+
+1. List the second asset for sale at a price of zero.
+2. Borrow the first asset using a mutable borrow.
+3. Purchase the second asset, which generates a transfer policy request.
+4. Confirm the transfer policy request using the protected transfer policy reference.
+5. Join the second asset into the first.
+6. Return the first (now combined) asset to the Kiosk.
+
+The `ProtectedTP<TokenizedAsset<T>>` object provides access to the transfer policy without exposing the `TransferPolicyCap`. This prevents unauthorized bypasses of the policy.
+
 This reference implementation uses the [Kiosk standard](/onchain-finance/kiosk) to ensure that tokenized assets operate within their defined policy. Use the implementation as presented to have marketable tokenized assets that support rules like royalties and commissions.
 
 If Kiosk is not a requirement, you can exclude the unlock module and the proxy methods related to transfer policies.
@@ -73,6 +92,16 @@ public fun kiosk_join<T>(
 	kiosk::return_val(kiosk, ta1, promise_ta1);
 }
 ```
+
+## Why should you use the Kiosk joining pattern?
+
+Use this pattern when your tokenized asset type requires policy enforcement on every transfer. Without Kiosk, asset joins can bypass creator-defined rules. The Kiosk joining pattern guarantees that:
+
+- Transfer policy rules run on every asset movement, including joins.
+- The `ProtectedTP` object controls policy access without exposing the cap.
+- Creators retain enforcement guarantees even when users combine their holdings.
+
+If your use case does not require policy enforcement, you can call `tokenized_asset::join` directly without the Kiosk wrapping logic.
 
 ### Example alteration for use case
 
@@ -133,5 +162,3 @@ public fun burn_with_ticket<T>(
 	treasury: &mut Treasury<T>,
 	self: TokenizedAsset<T>,
 	ticket: BurnTicket<T>)
-```
-
