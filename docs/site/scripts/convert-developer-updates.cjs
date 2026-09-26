@@ -1,0 +1,199 @@
+/*
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+*/
+
+// Builds the Developer Updates page from the standalone posts in
+// release-notes/updates/. Posts are not tied to a release version, so they are
+// ordered by the date in their frontmatter, newest first.
+//
+// The release notes generator only reads directories matching /^\d+_\d+$/, so
+// the updates directory is invisible to it and the two pages stay separate.
+
+const fs = require('fs');
+const path = require('path');
+
+const updatesDir = '../../release-notes/updates/';
+const outputPath = '../../docs/content/developer-updates.mdx';
+
+const PAGE_TITLE = 'Developer Updates';
+const PAGE_DESCRIPTION =
+  'Focused posts about new Sui primitives, migrations to plan for, and changes ' +
+  'in recommended practice, newest first.';
+
+function parseFrontmatter(content, fileName) {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n?/);
+  if (!match) {
+    throw new Error(`${fileName}: missing frontmatter`);
+  }
+
+  const meta = {};
+  for (const line of match[1].split('\n')) {
+    const kv = line.match(/^([A-Za-z_]+):\s*(.*)$/);
+    if (kv) {
+      meta[kv[1]] = kv[2].trim().replace(/^['"]|['"]$/g, '');
+    }
+  }
+
+  if (!meta.title) throw new Error(`${fileName}: frontmatter is missing 'title'`);
+  if (!meta.date) throw new Error(`${fileName}: frontmatter is missing 'date'`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(meta.date)) {
+    throw new Error(`${fileName}: 'date' must be YYYY-MM-DD, got '${meta.date}'`);
+  }
+
+  return { meta, body: content.slice(match[0].length).trim() };
+}
+
+// Escape the bare angle brackets and email-style addresses that MDX would
+// otherwise read as JSX, leaving code spans and fences untouched.
+function sanitizeForMDX(content) {
+  content = content.replace(/<([^>\s]+@[^>]+)>/g, '&lt;$1&gt;');
+
+  const codeBlocks = [];
+  content = content.replace(/(```[\s\S]*?```|`[^`]+`)/g, (match) => {
+    codeBlocks.push(match);
+    return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+  });
+
+  content = content.replace(/(\s|^)<(\s)/g, '$1&lt;$2');
+  content = content.replace(/(\s)>(\s|$)/g, '$1&gt;$2');
+
+  codeBlocks.forEach((block, index) => {
+    content = content.replace(`__CODE_BLOCK_${index}__`, block);
+  });
+
+  return content;
+}
+
+// Posts start their headings at ##, which would collide with the ## the page
+// uses for each post title. Push them down one level.
+function demoteHeadings(content) {
+  return content.replace(/^(#{2,5})\s+/gm, (match, hashes) => `#${hashes} `);
+}
+
+function formatDate(iso) {
+  const [year, month, day] = iso.split('-').map(Number);
+  const monthName = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ][month - 1];
+  return `${monthName} ${day}, ${year}`;
+}
+
+function readPosts() {
+  if (!fs.existsSync(updatesDir)) {
+    console.log(`✓ No ${updatesDir} directory, skipping Developer Updates`);
+    return [];
+  }
+
+  const files = fs
+    .readdirSync(updatesDir)
+    .filter((f) => f.endsWith('.md') && f.toLowerCase() !== 'readme.md');
+
+  const posts = files
+    .map((file) => {
+      const raw = fs.readFileSync(path.join(updatesDir, file), 'utf8');
+      const { meta, body } = parseFrontmatter(raw, file);
+      return { file, meta, body };
+    })
+    // Posts marked draft stay in the repo but off the page, so a post can be
+    // written and reviewed before the thing it describes ships.
+    .filter((post) => {
+      if (String(post.meta.draft).toLowerCase() === 'true') {
+        console.log(`  skipping draft: ${post.file}`);
+        return false;
+      }
+      return true;
+    });
+
+  // Newest first. Ties fall back to the filename so the order is stable.
+  posts.sort((a, b) =>
+    a.meta.date === b.meta.date
+      ? a.file.localeCompare(b.file)
+      : b.meta.date.localeCompare(a.meta.date),
+  );
+
+  return posts;
+}
+
+function buildPage(posts) {
+  let content = `---
+title: ${PAGE_TITLE}
+description: >-
+  ${PAGE_DESCRIPTION}
+keywords:
+  - developer updates
+  - announcements
+  - sui primitives
+  - changelog
+goal:
+  description: Reader can catch up on recent Sui developer announcements.
+  requires:
+    - has_frontmatter:
+        - title
+        - description
+        - keywords
+      label: Has required frontmatter fields
+    - has_questions: true
+      label: Needs questions for AI search visibility
+    - has_answer: true
+      label: Needs answer summary for AI citation
+questions:
+  - What is new for Sui developers?
+  - Where are Sui developer announcements published?
+  - How is Developer Updates different from Release Notes?
+answer: >-
+  Developer Updates collects focused posts about new Sui primitives, migrations
+  to plan for, and changes in recommended practice, newest first. Release Notes
+  covers what changed in each protocol release.
+---
+
+{/* This page is generated by docs/site/scripts/convert-developer-updates.cjs. */}
+{/* Edit the posts in release-notes/updates/ instead of editing this file. */}
+
+Focused posts for Sui developers, newest first. For what changed in a specific protocol release, see [Release Notes](/references/release-notes).
+
+`;
+
+  if (posts.length === 0) {
+    content += 'No updates yet.\n';
+    return content;
+  }
+
+  posts.forEach((post) => {
+    content += `---\n\n## ${post.meta.title}\n\n`;
+
+    const byline = post.meta.author
+      ? `**${formatDate(post.meta.date)}** | *${post.meta.author}*`
+      : `**${formatDate(post.meta.date)}**`;
+    content += `${byline}\n\n`;
+
+    if (post.meta.summary) {
+      content += `${sanitizeForMDX(post.meta.summary)}\n\n`;
+    }
+
+    content += `${demoteHeadings(sanitizeForMDX(post.body))}\n\n`;
+  });
+
+  return content;
+}
+
+function main() {
+  let posts;
+  try {
+    posts = readPosts();
+  } catch (error) {
+    console.error(`⚠️ Developer Updates: ${error.message}`);
+    process.exit(1);
+  }
+
+  const page = buildPage(posts);
+  const outputDir = path.dirname(outputPath);
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  fs.writeFileSync(outputPath, page, 'utf8');
+  console.log(`✓ Wrote ${posts.length} developer update(s) to: ${outputPath}`);
+}
+
+main();
