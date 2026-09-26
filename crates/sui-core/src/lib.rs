@@ -45,6 +45,7 @@ mod rpc_store_test_utils;
 pub mod runtime;
 pub mod safe_client;
 pub mod signature_verifier;
+pub mod staggered_submission;
 mod stake_aggregator;
 mod status_aggregator;
 pub mod storage;
