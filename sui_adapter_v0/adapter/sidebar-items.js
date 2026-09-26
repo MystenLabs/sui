@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["missing_unwrapped_msg","new_move_vm","new_native_extensions","run_metered_move_bytecode_verifier","substitute_package_id"]};

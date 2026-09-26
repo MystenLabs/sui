@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ReduceOutput"],"fn":["quorum_map_then_reduce_with_timeout","quorum_map_then_reduce_with_timeout_and_prefs"],"struct":["SigRequestPrefs"],"type":["AsyncResult"]};

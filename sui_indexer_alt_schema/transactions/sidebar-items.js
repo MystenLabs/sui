@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BalanceChange","StoredKind"],"struct":["StoredTransaction","StoredTxAffectedAddress","StoredTxAffectedObject","StoredTxBalanceChange","StoredTxCalls","StoredTxDigest","StoredTxKind"]};

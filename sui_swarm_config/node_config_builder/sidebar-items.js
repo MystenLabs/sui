@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["observer_peer_record"],"struct":["FullnodeConfigBuilder","ValidatorConfigBuilder"]};
