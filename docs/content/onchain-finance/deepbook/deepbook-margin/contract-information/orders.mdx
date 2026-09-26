@@ -66,7 +66,7 @@ Place limit and market orders through a margin manager. Orders can only be place
 <details>
 <summary>Place reduce-only orders</summary>
 
-Place reduce-only orders that can only decrease your debt position. These orders are useful when margin trading is disabled and you need to close existing positions.
+Place reduce-only orders that can only decrease your debt position. Regular limit and market orders can only be placed if margin trading is enabled for the pool, but reduce-only orders remain available when margin trading is disabled, so you can still close existing positions.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/pool_proxy.move"
