@@ -2764,7 +2764,7 @@ async fn test_idempotent_reversed_confirmation() {
 
 #[tokio::test]
 async fn test_forwarding_registry_input_requires_feature() {
-    for (version, enabled) in [(137, false), (138, false), (138, true)] {
+    for (version, enabled) in [(138, false), (139, false), (139, true)] {
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas = Object::with_owner_for_testing(sender);
         let mut config = ProtocolConfig::get_for_version(version.into(), Chain::Unknown);
