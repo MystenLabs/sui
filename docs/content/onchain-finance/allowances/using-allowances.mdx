@@ -73,6 +73,12 @@ An allowance is a shared object of type `sui::allowance::Allowance<Balance<T>>` 
 </TabItem>
 </Tabs>
 
+## Try it
+
+The allowances demo issues an allowance, spends against it, and revokes it with a connected wallet, so you can see the whole lifecycle before writing any code. It runs on Testnet and opens in a new tab.
+
+<a href="https://mystenlabs.github.io/allowances-app/" target="_blank" rel="noreferrer">Open the allowances demo</a>
+
 ## Issue an allowance
 
 The funder issues a direct allowance with `sui::allowance::new`. It is an `entry` function, so only a [programmable transaction block](/develop/transactions/ptbs/prog-txn-blocks) (PTB) signed by the funder can call it. A Move contract cannot issue an allowance over a caller's balance from inside another call.
