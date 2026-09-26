@@ -7,6 +7,8 @@ mod client;
 mod queries;
 
 pub use client::GraphQLClient;
+#[cfg(test)]
+pub(crate) use client::MAX_ATTEMPTS;
 pub(crate) use queries::address_owned_objects_query::AddressOwnedObject;
 pub(crate) use queries::object_seed_query::ObjectSeedMetadata;
 

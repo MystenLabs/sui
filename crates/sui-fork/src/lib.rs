@@ -22,6 +22,9 @@ pub mod store;
 #[cfg(test)]
 #[path = "tests/support.rs"]
 mod test_support;
+#[cfg(test)]
+#[path = "tests/upstream_mock.rs"]
+mod upstream_mock;
 
 pub use args::DEFAULT_RPC_ADDR;
 pub use args::StartArgs;

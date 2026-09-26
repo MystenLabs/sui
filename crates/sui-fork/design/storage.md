@@ -49,6 +49,39 @@ round-trips are pinned at the fork checkpoint wherever the request allows it, so
 see what the live network did afterwards. Everything above the fork point is the fork's
 own and comes from the local store.
 
+A GraphQL response counts as an answer only if its HTTP status is 2xx, its body decodes, it
+reports no GraphQL errors, and it carries data. Anything else is an error that starts with
+`upstream GraphQL request failed`, adds `after N attempts` when the request was resent, and says
+why the last attempt failed: `no response` when none arrived, the HTTP status and why its body
+could not be read, the HTTP status and the start of the body, or the HTTP status and the errors
+the response reports with their codes, such as `REQUEST_TIMEOUT`. Quoted text is cut to its
+first 120 bytes, and at most three errors are quoted. A response that reports errors is not an
+answer even when it carries data, because GraphQL returns a field or list entry that failed to
+resolve as `null` next to the error, and that `null` must not read as a missing object or
+checkpoint.
+
+Latest, exact-version and bounded child object reads, and the checkpoint-scoped version lookups,
+are sent again after any failure, up to ten attempts, waiting 100 ms before the first resend and
+doubling up to 1 s. The upstream cannot be relied on to say which failures are transient: it
+reports most of them, including backend failures, as HTTP 200 with a GraphQL error such as
+`INTERNAL_SERVER_ERROR`. Each resend is logged at WARN with the problem and timing. Other
+queries, such as checkpoint, transaction, service-range, seed-metadata and object-ref lookups,
+are sent once.
+
+A failed object read through a trait that cannot return the error panics with a message naming
+the failure. That covers the `ObjectStore` and `SimulatorStore` object reads, including the
+clock, which answer with `Option`, and the child and received-object reads the Move VM makes,
+whose errors the VM turns into an invariant violation that drops the message. Read as "not
+found", or as that invariant violation, the failure would let simulate estimate a budget from a
+failed pass and execute commit a failed transaction. A read the Move VM makes panics before its
+transaction is staged. A release build, which sets `panic = "abort"`, exits the fork, and the
+fork can be restarted on the same data directory. A build that unwinds fails only the request
+that made the read and keeps serving; if that read came while a checkpoint was being built,
+after the transaction was staged, the next checkpoint still includes it. `ObjectStore` also
+serves `sui-rpc-api`'s object RPCs, such as `GetObject`, so a read-only request can exit a
+release fork too. Checkpoint and transaction lookups through those traits read a failure as
+absent.
+
 ## The object live state
 
 Object live state is recorded in `object_version_by_checkpoint`, which maps `(ObjectID, checkpoint)`

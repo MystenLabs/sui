@@ -5,154 +5,44 @@
 //! (forking admin RPCs plus the canonical sui-rpc-api streaming RPC), drive checkpoint-producing
 //! admin calls, and assert subscribers see each checkpoint on the stream.
 
-use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::anyhow;
-use prometheus::Registry;
 use rand::rngs::OsRng;
-use simulacrum::Simulacrum;
-use simulacrum::SimulatorStore;
-use simulacrum::store::in_mem_store::KeyStore;
-use sui_rpc_api::RpcService;
-use sui_rpc_api::ServerVersion;
 use sui_rpc_api::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc_api::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
-use sui_rpc_api::subscription::SubscriptionService;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::base_types::ObjectID;
-use sui_types::object::Object;
-use sui_types::storage::RpcStateReader;
 
 use crate::AdvanceCheckpointRequest;
 use crate::AdvanceClockRequest;
 use crate::ForkingServiceClient;
 use crate::GetStatusRequest;
-use crate::context::Context;
-use crate::proto::forking::forking_service_server::ForkingServiceServer;
-use crate::rpc::executor::ForkedTransactionExecutor;
-use crate::rpc::forking_service::ForkingServiceImpl;
-use crate::services::ServiceManager;
-use crate::store::ForkStore;
+use crate::test_support::ForkServer;
+use crate::test_support::absent_objects_gql_server;
 
-/// In-process gRPC harness. It builds a fresh Simulacrum from a genesis `NetworkConfig`, wires up
-/// the subscription broker, and starts a tonic server on an ephemeral port. The server task is
-/// aborted when the harness is dropped.
+/// In-process gRPC fork built from a fresh genesis, whose upstream reports every object absent.
 struct ServerHarness {
-    server_task: tokio::task::JoinHandle<()>,
     grpc_endpoint: String,
-    // Held to keep the RPC store alive for the lifetime of the server.
-    // Held to keep the metadata and RPC store directory alive for the server lifetime.
-    _temp: tempfile::TempDir,
+    _fork: ForkServer,
     // Held so remote object probes keep resolving to "not found".
     _gql_server: wiremock::MockServer,
 }
 
 impl ServerHarness {
     async fn start() -> Result<Self> {
-        let temp = tempfile::tempdir()?;
-        let mut rng = OsRng;
         let config = ConfigBuilder::new_with_temp_dir()
-            .rng(&mut rng)
+            .rng(&mut OsRng)
             .deterministic_committee_size(NonZeroUsize::MIN)
             .build();
-
-        let genesis_checkpoint = config.genesis.checkpoint();
-        let genesis_contents = config.genesis.checkpoint_contents().clone();
-        let forked_at_checkpoint = genesis_checkpoint.data().sequence_number;
-        let chain_identifier = (*genesis_checkpoint.digest()).into();
-        let services = ServiceManager::open(
-            temp.path(),
-            "localnet".to_owned(),
-            forked_at_checkpoint,
-            chain_identifier,
-        )?;
-        let gql_server = crate::test_support::absent_objects_gql_server().await;
-        let mut store = ForkStore::new_for_testing_with_remote(
-            temp.path().to_path_buf(),
-            gql_server.uri(),
-            forked_at_checkpoint,
-            services.local_store(),
-        );
-        store.save_checkpoint(&genesis_checkpoint, &genesis_contents)?;
-        let written: BTreeMap<ObjectID, Object> = config
-            .genesis
-            .objects()
-            .iter()
-            .map(|o| (o.id(), o.clone()))
-            .collect();
-        store.update_objects(written, vec![]);
-
-        let keystore = KeyStore::from_network_config(&config);
-        let sim = Simulacrum::new_from_custom_state(
-            keystore,
-            genesis_checkpoint,
-            config.genesis.sui_system_object(),
-            chain_identifier,
-            &config,
-            store.clone(),
-            rng,
-        );
-
-        let registry = Registry::new();
-        let (checkpoint_sender, subscription_handle) =
-            SubscriptionService::build(&registry, None, None, None, None);
-
-        // Service-backed on purpose: subscribers are published to by the
-        // indexer's broadcast pipeline, so a service-less context would
-        // exercise a publication path production never takes.
-        let context = Arc::new(
-            Context::new(sim, services, checkpoint_sender, &registry)
-                .await
-                .expect("service-backed context should initialize"),
-        );
-
-        let reader: Arc<dyn RpcStateReader> = Arc::new(store);
-        let mut service = RpcService::new(reader);
-        service.with_server_version(ServerVersion::new("sui-fork", "test"));
-        service.with_subscription_service(subscription_handle);
-        service.with_executor(Arc::new(ForkedTransactionExecutor::new(context.clone())));
-        service.with_custom_service(ForkingServiceServer::new(ForkingServiceImpl::new(
-            context.clone(),
-        )));
-        service.with_file_descriptor_set(crate::proto::FILE_DESCRIPTOR_SET);
-
-        // Bind to ephemeral port via a probe listener, then drop and let
-        // `start_service` rebind. The window between is short enough not to
-        // matter for in-process tests.
-        let probe = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-        let addr = probe.local_addr()?;
-        drop(probe);
-
-        let server_task = tokio::spawn(async move { service.start_service(addr).await });
-
-        let grpc_endpoint = format!("http://{addr}");
-
-        // Wait for the server to come up by polling a connect.
-        for _ in 0..50 {
-            if ForkingServiceClient::connect(grpc_endpoint.clone())
-                .await
-                .is_ok()
-            {
-                return Ok(Self {
-                    server_task,
-                    grpc_endpoint,
-                    _temp: temp,
-                    _gql_server: gql_server,
-                });
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-        Err(anyhow!("timed out waiting for gRPC server to bind"))
-    }
-}
-
-impl Drop for ServerHarness {
-    fn drop(&mut self) {
-        self.server_task.abort();
+        let gql_server = absent_objects_gql_server().await;
+        let fork = ForkServer::start(&config, gql_server.uri()).await?;
+        Ok(Self {
+            grpc_endpoint: fork.grpc_endpoint.clone(),
+            _fork: fork,
+            _gql_server: gql_server,
+        })
     }
 }
 

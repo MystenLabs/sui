@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::RwLockWriteGuard;
@@ -381,40 +382,6 @@ impl ForkStore {
         Ok(object)
     }
 
-    pub(crate) fn read_child_object_fallible(
-        &self,
-        parent: &ObjectID,
-        child: &ObjectID,
-        child_version_upper_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
-        let Some(child_object) = self
-            .get_object_lt_or_eq_version(child, child_version_upper_bound)
-            .map_err(|err| format!("failed to read child object {child}: {err:#}"))?
-        else {
-            return Ok(None);
-        };
-        check_child_object_owner(parent, child, child_object).map(Some)
-    }
-
-    pub(crate) fn get_object_received_at_version_fallible(
-        &self,
-        owner: &ObjectID,
-        receiving_object_id: &ObjectID,
-        receive_object_at_version: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
-        let Some(recv_object) = self.get_object(receiving_object_id).map_err(|err| {
-            format!("failed to read received object {receiving_object_id}: {err:#}")
-        })?
-        else {
-            return Ok(None);
-        };
-        Ok(check_received_object(
-            owner,
-            receive_object_at_version,
-            recv_object,
-        ))
-    }
-
     /// Get a signed transaction by digest from the RPC store, fetching pre-fork misses from GraphQL
     /// and persisting them there.
     pub(crate) fn get_transaction(
@@ -536,7 +503,8 @@ impl ForkStore {
     }
 
     /// Test-only constructor that lets callers point the GraphQL client at an arbitrary URL (e.g.,
-    /// a wiremock `MockServer`) and pin `forked_at_checkpoint` explicitly.
+    /// a wiremock `MockServer`) and pin `forked_at_checkpoint` explicitly. Resends start after 1 ms,
+    /// so a read that uses up every attempt fails quickly.
     #[cfg(test)]
     pub(crate) fn new_for_testing_with_remote(
         root: std::path::PathBuf,
@@ -545,7 +513,8 @@ impl ForkStore {
         local_store: LocalStore,
     ) -> Self {
         let gql = GraphQLClient::new(crate::Node::Custom(gql_url), "test")
-            .expect("graphql store with custom url should construct");
+            .expect("graphql store with custom url should construct")
+            .with_first_retry_delay(std::time::Duration::from_millis(1));
         let metadata = MetadataStore::new_with_root(root);
         Self::from_parts(forked_at_checkpoint, gql, metadata, local_store)
     }
@@ -652,21 +621,22 @@ impl ForkStore {
 
 /// Object reads delegate to the inherent `ForkStore::get_object` / `get_object_at_version`, which
 /// provide local-first lookups with remote fallback. The trait signature cannot propagate errors,
-/// so failures are logged before being surfaced as `None`.
+/// so a failed read panics (see [`unwrap_object_read`]). These reads serve execution, including
+/// package loads through [`BackingPackageStore`], and the `sui-rpc-api` object RPCs, such as
+/// `GetObject`.
 impl ObjectStore for ForkStore {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
-        self.get_object(object_id).unwrap_or_else(|err| {
-            tracing::warn!(%object_id, "latest-object read failed: {err:#}");
-            None
-        })
+        unwrap_object_read(
+            format_args!("latest read of object {object_id}"),
+            self.get_object(object_id),
+        )
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
-        self.get_object_at_version(object_id, version.value())
-            .unwrap_or_else(|err| {
-                tracing::warn!(%object_id, ?version, "versioned object read failed: {err:#}");
-                None
-            })
+        unwrap_object_read(
+            format_args!("read of object {object_id} at version {version}"),
+            self.get_object_at_version(object_id, version.value()),
+        )
     }
 }
 
@@ -686,9 +656,9 @@ impl ParentSync for ForkStore {
     }
 }
 
-/// Both methods go through the fallible helpers, because a store or remote failure must surface as
-/// an error rather than read as "object not found", which execution would otherwise durably commit
-/// as a wrong result.
+/// A failed read panics (see [`unwrap_object_read`]). Returning the error would not reach the
+/// client: the Move VM turns it into an invariant violation that drops its message, and execute
+/// commits that as a failed transaction.
 impl RuntimeObjectResolver for ForkStore {
     fn read_child_object(
         &self,
@@ -696,7 +666,13 @@ impl RuntimeObjectResolver for ForkStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        self.read_child_object_fallible(parent, child, child_version_upper_bound)
+        let child_object = unwrap_object_read(
+            format_args!("read of child object {child}"),
+            self.get_object_lt_or_eq_version(child, child_version_upper_bound),
+        );
+        child_object
+            .map(|child_object| check_child_object_owner(parent, child, child_object))
+            .transpose()
     }
 
     fn get_object_received_at_version(
@@ -706,11 +682,13 @@ impl RuntimeObjectResolver for ForkStore {
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        self.get_object_received_at_version_fallible(
-            owner,
-            receiving_object_id,
-            receive_object_at_version,
-        )
+        let recv_object = unwrap_object_read(
+            format_args!("read of received object {receiving_object_id}"),
+            self.get_object(receiving_object_id),
+        );
+        Ok(recv_object.and_then(|recv_object| {
+            check_received_object(owner, receive_object_at_version, recv_object)
+        }))
     }
 }
 
@@ -772,13 +750,17 @@ impl SimulatorStore for ForkStore {
     }
 
     fn get_object(&self, id: &ObjectID) -> Option<Object> {
-        self.get_object(id).ok().flatten()
+        unwrap_object_read(
+            format_args!("latest read of object {id}"),
+            self.get_object(id),
+        )
     }
 
     fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Object> {
-        self.get_object_at_version(id, version.value())
-            .ok()
-            .flatten()
+        unwrap_object_read(
+            format_args!("read of object {id} at version {version}"),
+            self.get_object_at_version(id, version.value()),
+        )
     }
 
     fn get_system_state(&self) -> SuiSystemState {
@@ -786,12 +768,13 @@ impl SimulatorStore for ForkStore {
     }
 
     fn get_clock(&self) -> Clock {
-        self.get_object(&sui_types::SUI_CLOCK_OBJECT_ID)
-            .ok()
-            .flatten()
-            .expect("clock should exist")
-            .to_rust()
-            .expect("clock object should deserialize")
+        unwrap_object_read(
+            format_args!("latest read of the clock object"),
+            self.get_object(&sui_types::SUI_CLOCK_OBJECT_ID),
+        )
+        .expect("clock should exist")
+        .to_rust()
+        .expect("clock object should deserialize")
     }
 
     fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
@@ -799,10 +782,11 @@ impl SimulatorStore for ForkStore {
             infos
                 .into_iter()
                 .filter_map(|info| {
-                    self.get_object(&info.object_id)
-                        .ok()
-                        .flatten()
-                        .filter(|object| object.version() == info.version)
+                    unwrap_object_read(
+                        format_args!("latest read of object {}", info.object_id),
+                        self.get_object(&info.object_id),
+                    )
+                    .filter(|object| object.version() == info.version)
                 })
                 .collect()
         }) {
@@ -1095,9 +1079,6 @@ fn to_storage_error(err: anyhow::Error) -> StorageError {
 }
 
 /// Validate that a child object loaded for `parent` is actually owned by it.
-///
-/// Shared by the fallible child read (RPC path) and the `RuntimeObjectResolver` impl (execution
-/// path), which differ only in how lookup errors surface.
 fn check_child_object_owner(
     parent: &ObjectID,
     child: &ObjectID,
@@ -1189,6 +1170,18 @@ fn optional_store_read<T>(context: &'static str, result: anyhow::Result<Option<T
     }
 }
 
+/// Unwrap an object read made through a trait that cannot return the error, panicking if it
+/// failed. Read as "not found", the failure would let a transaction run on missing data and commit
+/// the result. A read from the upstream has had all of [`GraphQLClient`]'s attempts by now. A
+/// release build (`panic = "abort"`) exits the fork; a build that unwinds fails only the request
+/// that made the read, and the fork keeps serving. A read the Move VM makes while a user
+/// transaction executes panics before that transaction is staged. A read made while building its
+/// checkpoint (settlement, barrier, clock) comes after it is staged in `pending`, so in a build
+/// that unwinds a later checkpoint still includes it.
+fn unwrap_object_read<T>(what: fmt::Arguments<'_>, result: anyhow::Result<T>) -> T {
+    result.unwrap_or_else(|err| panic!("{what} failed: {err:#}"))
+}
+
 #[cfg(test)]
 #[path = "tests/store_checkpoint_persistence.rs"]
 mod checkpoint_persistence_tests;
@@ -1204,3 +1197,7 @@ mod transaction_fallback_tests;
 #[cfg(test)]
 #[path = "tests/store_rpc_traits.rs"]
 mod rpc_traits_tests;
+
+#[cfg(test)]
+#[path = "tests/upstream_read_faults.rs"]
+mod upstream_read_fault_tests;

@@ -86,12 +86,12 @@ pub(crate) mod txn_query {
         let query = Query::build(TransactionDataArgs {
             digest: digest.clone(),
         });
-        let response = client
+        let data = client
             .run_query(&query)
             .await
             .context("Failed to run transaction query")?;
 
-        let Some(transaction) = response.data.and_then(|txn| txn.transaction) else {
+        let Some(transaction) = data.transaction else {
             return Ok(None);
         };
 
@@ -208,13 +208,10 @@ pub(crate) mod available_range_query {
         let operation = Query::build(AvailableRangeArgs {
             type_name: type_name.to_owned(),
         });
-        let response = client.run_query(&operation).await.context(format!(
+        let data = client.run_query(&operation).await.context(format!(
             "Failed to query availableRange for type '{}'",
             type_name,
         ))?;
-        let data = response
-            .data
-            .ok_or_else(|| anyhow!("No data in availableRange response for '{}'", type_name))?;
         Ok(data
             .service_config
             .available_range
@@ -341,17 +338,11 @@ pub(crate) mod address_owned_objects_query {
                 first: Some(PAGE_SIZE),
                 after: cursor,
             });
-            let response = client
+            let data = client
                 .run_query(&operation)
                 .await
                 .with_context(|| format!("failed to query owned objects for {address}"))?;
 
-            let data = response.data.ok_or_else(|| {
-                anyhow!(
-                    "missing data in address objects query response for {address}: {:?}",
-                    response.errors,
-                )
-            })?;
             let checkpoint_data = data
                 .checkpoint
                 .ok_or_else(|| anyhow!("checkpoint {checkpoint} not found for address seeding"))?;
@@ -708,17 +699,11 @@ pub(crate) mod address_balances_query {
                 first: Some(PAGE_SIZE),
                 after: cursor,
             });
-            let response = client
+            let data = client
                 .run_query(&operation)
                 .await
                 .with_context(|| format!("failed to query address balances for {address}"))?;
 
-            let data = response.data.ok_or_else(|| {
-                anyhow!(
-                    "missing data in address balances response for {address}: {:?}",
-                    response.errors,
-                )
-            })?;
             let Some(checkpoint_data) = data.checkpoint else {
                 return Err(anyhow!(
                     "checkpoint {checkpoint} not found for address balance seeding"
@@ -870,14 +855,8 @@ pub(crate) mod object_seed_query {
                 })
                 .collect();
             let operation = Query::build(ObjectSeedArgs { keys });
-            let response = client.run_query(&operation).await.with_context(|| {
+            let data = client.run_query(&operation).await.with_context(|| {
                 format!("failed to query object seeds at checkpoint {checkpoint}")
-            })?;
-            let data = response.data.with_context(|| {
-                format!(
-                    "missing data in object seed query response at checkpoint {checkpoint}: {:?}",
-                    response.errors,
-                )
             })?;
 
             if data.multi_get_objects.len() != object_ids.len() {
@@ -922,14 +901,8 @@ pub(crate) mod object_seed_query {
                 })
                 .collect();
             let operation = Query::build(ObjectSeedArgs { keys });
-            let response = client.run_query(&operation).await.with_context(|| {
+            let data = client.run_query(&operation).await.with_context(|| {
                 format!("failed to query object refs at checkpoint {checkpoint}")
-            })?;
-            let data = response.data.with_context(|| {
-                format!(
-                    "missing data in object ref query response at checkpoint {checkpoint}: {:?}",
-                    response.errors,
-                )
             })?;
 
             if data.multi_get_objects.len() != object_ids.len() {
@@ -1301,14 +1274,13 @@ pub(crate) mod events_query {
                 first: Some(PAGE_SIZE),
                 after: cursor,
             });
-            let response = client
+            let data = client
                 .run_query(&operation)
                 .await
                 .context("Failed to run events query")?;
 
-            let Some(connection) = response
-                .data
-                .and_then(|q| q.transaction)
+            let Some(connection) = data
+                .transaction
                 .and_then(|tx| tx.effects)
                 .and_then(|fx| fx.events)
             else {
@@ -1482,16 +1454,11 @@ pub(crate) mod object_query {
         for keys in key_chunks {
             let query: cynic::Operation<MultiGetObjectsQuery, MultiGetObjectsVars> =
                 MultiGetObjectsQuery::build(MultiGetObjectsVars { keys });
-            let response = data_store.run_query(&query).await?;
-
-            let list = if let Some(data) = response.data {
-                data.multi_get_objects
-            } else {
-                return Err(anyhow!(
-                    "Missing data in transaction query response. Errors: {:?}",
-                    response.errors,
-                ));
-            };
+            // Object reads decide what a transaction sees, so a failed request is sent again.
+            let list = data_store
+                .run_query_with_retries(&query)
+                .await?
+                .multi_get_objects;
 
             standard_results.extend(
                 list.into_iter()
@@ -1530,10 +1497,10 @@ pub(crate) mod object_query {
                 sequence_number: Some(checkpoint),
                 keys: chunk.to_vec(),
             });
-            let response = data_store.run_query(&query).await?;
-            let checkpoint_data = response
-                .data
-                .and_then(|data| data.checkpoint)
+            let checkpoint_data = data_store
+                .run_query_with_retries(&query)
+                .await?
+                .checkpoint
                 .ok_or_else(|| anyhow!("Missing checkpoint in object query response"))?;
             let scoped_query = checkpoint_data
                 .query
@@ -1663,16 +1630,8 @@ pub(crate) mod latest_checkpoint_query {
 
     pub(crate) async fn query(data_store: &GraphQLClient) -> Result<Option<u64>, Error> {
         let query = Query::build(());
-        let response = data_store.run_query(&query).await?;
-        let Some(checkpoint) = response
-            .data
-            .and_then(|data| data.checkpoint)
-            .map(|c| c.sequence_number)
-        else {
-            return Ok(None);
-        };
-
-        Ok(Some(checkpoint))
+        let data = data_store.run_query(&query).await?;
+        Ok(data.checkpoint.map(|c| c.sequence_number))
     }
 }
 
@@ -1724,8 +1683,7 @@ pub(crate) mod checkpoint_query {
         data_store: &GraphQLClient,
     ) -> Result<Option<(VerifiedCheckpoint, CheckpointContents)>, Error> {
         let query = Query::build(CheckpointArgs { sequence_number });
-        let response = data_store.run_query(&query).await?;
-        let Some(checkpoint) = response.data.and_then(|data| data.checkpoint) else {
+        let Some(checkpoint) = data_store.run_query(&query).await?.checkpoint else {
             return Ok(None);
         };
         Ok(Some(decode_checkpoint(checkpoint)?))
@@ -1906,8 +1864,7 @@ pub(crate) mod chain_id_query {
 
     pub(crate) async fn query(data_store: &GraphQLClient) -> Result<String, Error> {
         let query = Query::build(());
-        let response = data_store.run_query(&query).await?;
-        let Some(chain_id) = response.data.and_then(|data| data.chain_identifier) else {
+        let Some(chain_id) = data_store.run_query(&query).await?.chain_identifier else {
             return Err(anyhow!("Missing chain identifier"));
         };
         Ok(chain_id)

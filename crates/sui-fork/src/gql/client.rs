@@ -1,14 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::borrow::Cow;
 use std::str::FromStr;
+use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Error;
 use anyhow::Result;
+use anyhow::anyhow;
 use cynic::GraphQlResponse;
 use cynic::Operation;
 use reqwest::header::USER_AGENT;
+use tracing::warn;
 
 use sui_protocol_config::Chain;
 use sui_types::base_types::ObjectID;
@@ -36,6 +41,29 @@ use crate::gql::queries;
 /// blocking caller, so this only has to cover hyper's connection dispatch tasks running
 /// concurrently with the request being awaited.
 const GQL_RUNTIME_WORKER_THREADS: usize = 2;
+
+/// Most attempts [`GraphQLClient::run_query_with_retries`] makes for one query. With the wait
+/// between attempts starting at [`FIRST_RETRY_DELAY`] and doubling up to [`MAX_RETRY_DELAY`], the
+/// waits add up to at most 6.5 s per query (100 + 200 + 400 + 800 ms, then 5 × 1 s), on top of the
+/// requests themselves; a caller holding a lock, as simulate and execute hold the simulacrum lock
+/// around object reads, holds it that much longer.
+pub(crate) const MAX_ATTEMPTS: u32 = 10;
+
+/// Wait before the first resend of a failed query. Each further resend waits twice as long as the
+/// one before, up to [`MAX_RETRY_DELAY`].
+const FIRST_RETRY_DELAY: Duration = Duration::from_millis(100);
+
+/// Longest wait before a resend.
+const MAX_RETRY_DELAY: Duration = Duration::from_secs(1);
+
+/// Most bytes of upstream text quoted in a warning or error: the start of a response body that
+/// is not an answer, or of one GraphQL error message. It only bounds the size of the quote,
+/// because a body can be a whole HTML page and the quote ends up in log lines and in gRPC status
+/// messages sent to clients; nothing interprets the quoted text.
+const EXCERPT_BYTES: usize = 120;
+
+/// Most GraphQL errors quoted in one warning or error; any beyond these are only counted.
+const QUOTED_GRAPHQL_ERRORS: usize = 3;
 
 /// The runtime every GraphQL request runs on, for the life of the process.
 ///
@@ -105,6 +133,8 @@ pub struct GraphQLClient {
     node: Node,
     rpc: reqwest::Url,
     version: String,
+    /// Wait before the first resend; [`FIRST_RETRY_DELAY`] except in tests.
+    first_retry_delay: Duration,
 }
 
 impl GraphQLClient {
@@ -117,7 +147,15 @@ impl GraphQLClient {
             node,
             rpc,
             version: version.to_string(),
+            first_retry_delay: FIRST_RETRY_DELAY,
         })
+    }
+
+    /// Wait `delay` before the first resend, so tests that use up every attempt run quickly.
+    #[cfg(test)]
+    pub(crate) fn with_first_retry_delay(mut self, delay: Duration) -> Self {
+        self.first_retry_delay = delay;
+        self
     }
 
     /// Return the chain identifier of the live network, which is the digest of its genesis
@@ -131,37 +169,113 @@ impl GraphQLClient {
         Ok(ChainIdentifier::from(digest))
     }
 
-    pub(crate) async fn run_query<T, V>(
-        &self,
-        operation: &Operation<T, V>,
-    ) -> Result<GraphQlResponse<T>, Error>
+    /// Send `operation` once and return the data of the GraphQL response. The response is an
+    /// answer only if its HTTP status is 2xx, it decodes, it reports no GraphQL errors and it
+    /// carries data. Anything else is an error that says the upstream GraphQL request failed and
+    /// why, so a failure never reads as data that is missing: a field or list entry that failed to
+    /// resolve comes back `null` next to the error that explains it.
+    pub(crate) async fn run_query<T, V>(&self, operation: &Operation<T, V>) -> Result<T, Error>
     where
         T: serde::de::DeserializeOwned,
         V: serde::Serialize,
     {
-        Self::run_query_internal(&self.client, &self.rpc, &self.version, operation).await
+        self.run_query_internal(operation, 1).await
+    }
+
+    /// Like [`Self::run_query`], but a failed attempt is sent again, up to [`MAX_ATTEMPTS`]
+    /// attempts in all, whatever the failure: the upstream cannot be relied on to say which
+    /// failures are transient, because it reports most of them, including backend failures, as
+    /// HTTP 200 with a GraphQL error. Every query this client sends is a read, so sending one again
+    /// is safe. Each resend is logged at WARN with the problem and timing.
+    pub(crate) async fn run_query_with_retries<T, V>(
+        &self,
+        operation: &Operation<T, V>,
+    ) -> Result<T, Error>
+    where
+        T: serde::de::DeserializeOwned,
+        V: serde::Serialize,
+    {
+        self.run_query_internal(operation, MAX_ATTEMPTS).await
     }
 
     async fn run_query_internal<T, V>(
-        client: &reqwest::Client,
-        rpc: &reqwest::Url,
-        version: &str,
+        &self,
         operation: &Operation<T, V>,
-    ) -> Result<GraphQlResponse<T>, Error>
+        max_attempts: u32,
+    ) -> Result<T, Error>
     where
         T: serde::de::DeserializeOwned,
         V: serde::Serialize,
     {
-        client
-            .post(rpc.clone())
-            .header(USER_AGENT, format!("sui-fork-v{}", version))
+        let mut attempt = 1;
+        let mut retry_delay = self.first_retry_delay;
+        loop {
+            let started = Instant::now();
+            let problem = match self.send_once(operation).await {
+                Ok(data) => return Ok(data),
+                Err(problem) => problem,
+            };
+            if attempt < max_attempts {
+                warn!(
+                    attempt,
+                    elapsed_ms = started.elapsed().as_millis() as u64,
+                    "upstream GraphQL request failed ({problem}); sending it again in \
+                     {retry_delay:?}",
+                );
+                tokio::time::sleep(retry_delay).await;
+                attempt += 1;
+                retry_delay = (retry_delay * 2).min(MAX_RETRY_DELAY);
+                continue;
+            }
+            let attempts = if attempt > 1 {
+                format!(" after {attempt} attempts")
+            } else {
+                String::new()
+            };
+            return Err(anyhow!(
+                "upstream GraphQL request failed{attempts}: {problem}"
+            ));
+        }
+    }
+
+    /// Send `operation` once and return the data of the response if it is an answer, or what
+    /// went wrong.
+    async fn send_once<T, V>(&self, operation: &Operation<T, V>) -> Result<T, String>
+    where
+        T: serde::de::DeserializeOwned,
+        V: serde::Serialize,
+    {
+        let response = self
+            .client
+            .post(self.rpc.clone())
+            .header(USER_AGENT, format!("sui-fork-v{}", self.version))
             .json(operation)
             .send()
             .await
-            .context("Failed to send GQL query")?
-            .json::<GraphQlResponse<T>>()
-            .await
-            .context("Failed to read response in GQL query")
+            .map_err(|err| format!("no response: {:#}", Error::from(err.without_url())))?;
+        let status = response.status();
+        let body = response.bytes().await.map_err(|err| {
+            format!(
+                "HTTP {status}, could not read the response body: {:#}",
+                Error::from(err.without_url())
+            )
+        })?;
+
+        let body_start = excerpt(&body);
+        Err(
+            match serde_json::from_slice::<GraphQlResponse<T, serde_json::Value>>(&body) {
+                Err(err) => format!(
+                    "HTTP {status}, response does not decode ({err}), body starts {body_start:?}"
+                ),
+                Ok(response) => match (graphql_errors(&response), response.data) {
+                    (Some(errors), _) => {
+                        format!("HTTP {status}, the response reports errors: {errors}")
+                    }
+                    (None, Some(data)) if status.is_success() => return Ok(data),
+                    (None, _) => format!("HTTP {status}, body starts {body_start:?}"),
+                },
+            },
+        )
     }
 
     pub(crate) fn chain(&self) -> Chain {
@@ -172,6 +286,45 @@ impl GraphQLClient {
             Node::Custom(_) => Chain::Unknown,
         }
     }
+}
+
+/// The `extensions.code` of a GraphQL error, if it has one.
+fn error_code(error: &cynic::GraphQlError<serde_json::Value>) -> Option<&str> {
+    error
+        .extensions
+        .as_ref()
+        .and_then(|extensions| extensions.get("code"))
+        .and_then(serde_json::Value::as_str)
+}
+
+/// The errors a GraphQL response reports, or `None` if it reports none. The first
+/// [`QUOTED_GRAPHQL_ERRORS`] are quoted, each followed by its `extensions.code` when it has one,
+/// and the rest are counted.
+fn graphql_errors<T>(response: &GraphQlResponse<T, serde_json::Value>) -> Option<String> {
+    let errors = response
+        .errors
+        .as_deref()
+        .filter(|errors| !errors.is_empty())?;
+    let mut described: Vec<String> = errors
+        .iter()
+        .take(QUOTED_GRAPHQL_ERRORS)
+        .map(|error| {
+            let message = excerpt(error.message.as_bytes());
+            match error_code(error) {
+                Some(code) => format!("{message:?} ({code})"),
+                None => format!("{message:?}"),
+            }
+        })
+        .collect();
+    if errors.len() > QUOTED_GRAPHQL_ERRORS {
+        described.push(format!("and {} more", errors.len() - QUOTED_GRAPHQL_ERRORS));
+    }
+    Some(described.join("; "))
+}
+
+/// The first [`EXCERPT_BYTES`] of `text`, for quoting in warnings and errors.
+fn excerpt(text: &[u8]) -> Cow<'_, str> {
+    String::from_utf8_lossy(&text[..text.len().min(EXCERPT_BYTES)])
 }
 
 impl TransactionRead for GraphQLClient {
@@ -399,11 +552,10 @@ mod tests {
             sequence_number: Some(7),
         });
 
-        let response = store
+        store
             .run_query(&operation)
             .await
-            .expect("query should succeed");
-        assert!(response.data.is_some());
+            .expect("a response carrying data should be an answer");
 
         let requests = server
             .received_requests()

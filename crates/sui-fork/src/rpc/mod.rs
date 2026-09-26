@@ -13,3 +13,7 @@ mod executor_tests;
 #[cfg(test)]
 #[path = "../tests/subscription_e2e.rs"]
 mod subscription_tests;
+
+#[cfg(test)]
+#[path = "../tests/grpc_upstream_faults.rs"]
+mod grpc_upstream_fault_tests;

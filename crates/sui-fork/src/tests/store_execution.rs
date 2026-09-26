@@ -806,16 +806,16 @@ fn test_read_child_object_sees_staged_versions_within_bound() {
     store.update_objects(BTreeMap::from([(child_id, child_v7.clone())]), vec![]);
 
     // Both bounds resolve from the overlay alone — the dummy remote would
-    // surface as an error if either read fell through.
+    // panic if either read fell through.
     assert_eq!(
         store
-            .read_child_object_fallible(&parent, &child_id, SequenceNumber::from_u64(6))
+            .read_child_object(&parent, &child_id, SequenceNumber::from_u64(6))
             .expect("bounded read between staged versions should not error"),
         Some(child_v5),
     );
     assert_eq!(
         store
-            .read_child_object_fallible(&parent, &child_id, SequenceNumber::from_u64(7))
+            .read_child_object(&parent, &child_id, SequenceNumber::from_u64(7))
             .expect("bounded read at the staged tip should not error"),
         Some(child_v7),
     );
@@ -1180,26 +1180,4 @@ fn test_cloned_store_shares_owned_object_snapshot_guard() {
             .collect();
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].object_id, object_id);
-}
-
-/// A store or remote failure during a child read must surface as an error: swallowed into
-/// `Ok(None)`, it would reach Move execution as "child not found" and be durably committed as a
-/// wrong result.
-#[tokio::test]
-async fn test_read_child_object_propagates_store_errors() {
-    let (_temp, store) = data_store();
-    let parent = ObjectID::random();
-    let child = ObjectID::random();
-
-    let err = RuntimeObjectResolver::read_child_object(
-        &store,
-        &parent,
-        &child,
-        SequenceNumber::from_u64(5),
-    )
-    .expect_err("an unreachable remote must surface as an error, not as a missing child");
-    assert!(
-        err.to_string().contains(&child.to_string()),
-        "error should name the child object: {err}",
-    );
 }
