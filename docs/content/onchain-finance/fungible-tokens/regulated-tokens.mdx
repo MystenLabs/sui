@@ -56,7 +56,7 @@ To create regulated currencies on Sui, the Currency Standard's Coin Registry pro
 Advantages of these regulatory features include:
 
 - **Centralized tracking:** Regulatory status is stored in the registry for easy discovery.
-- **Global pause support:** Pause or unpause functionality for emergency situations.
+- **Global pause support:** Regulated currencies include an `allow_global_pause` Boolean field. When set to `true`, the bearer of the `DenyCapV2` object for the coin type can pause coin activity indefinitely for emergency situations.
 - **Compliance tooling:** Integration with wallets, exchanges, and compliance systems.
 - **Migration support:** Seamless migration from legacy regulated coins.
 

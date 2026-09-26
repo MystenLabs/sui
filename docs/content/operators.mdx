@@ -39,7 +39,7 @@ answer: >-
 
 Sui has several node types, each with a different role:
 
-- **Full node**: Stores the full chain state and serves read requests. 
+- **Full node**: Stores the full chain state, answers queries and serves read requests, and submits transactions to validators. 
 - **Validator**: Participates in consensus and produces certified transaction effects. Validators must meet staking and hardware requirements.
 - **Bridge node**: Supports cross-chain asset transfers between Sui and other networks.
 
@@ -51,7 +51,7 @@ Running Sui infrastructure involves more than launching a binary. Operators are 
 - Keeping software up to date across network upgrades
 - Managing chain data, snapshots, and archival storage
 - Monitoring node health and setting up observability tooling
-- Handling key management and operational security
+- Handling key management and operational security, and following the exchange integration guides when connecting an exchange to Sui
 
 ## Frequently asked questions
 

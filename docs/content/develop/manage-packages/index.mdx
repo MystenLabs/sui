@@ -42,7 +42,7 @@ Package management on Sui covers the tools and workflows for maintaining Move pa
 
 :::caution Package security
 
-An upgradeable package's `UpgradeCap` controls all of its future behavior, so treat package management as a security-sensitive activity. Verify the exact package IDs of your dependencies, and deliberately choose between an immutable package and a [custom upgrade policy](/develop/publish-upgrade-packages/custom-policies) rather than defaulting to single-key upgrade authority. See [Security Best Practices](/develop/security/best-practices) for guidance.
+An upgradeable package's `UpgradeCap` controls all of its future behavior, so treat package management as a security-sensitive activity. Verify the exact package IDs of your dependencies, and deliberately choose between an immutable package and a [custom upgrade policy](/develop/publish-upgrade-packages/custom-policies) rather than defaulting to single-key upgrade authority. Making a package immutable is irreversible: it permanently freezes the package, and you can never upgrade it again. See [Security Best Practices](/develop/security/best-practices) for guidance.
 
 :::
 
