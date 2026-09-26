@@ -159,6 +159,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
     /// The addresses for the names that are available to this package. For modern packages, this
     /// contains only the package and its dependencies, but legacy packages may define additional
     /// addresses as well
+    // TODO: can we validate this earlier to just return a `BTreeMap`?
     pub fn named_addresses(&self) -> PackageResult<BTreeMap<PackageName, NamedAddress>> {
         if self.package().is_legacy() {
             return self.legacy_named_addresses();
@@ -182,6 +183,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
 
     /// For legacy packages, our named addresses need to include all transitive deps too.
     /// An example of that is depending on "sui", but also keeping it possible to use "std".
+    // TODO: can we validate this earlier to just return a `BTreeMap`?
     fn legacy_named_addresses(&self) -> PackageResult<BTreeMap<PackageName, NamedAddress>> {
         let mut result: BTreeMap<PackageName, NamedAddress> = BTreeMap::new();
 
