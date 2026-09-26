@@ -150,6 +150,13 @@ This will generate a `validator.info` file and key pair files. The output of thi
     a. If you follow this guide thoroughly, this key pair is actually copied from your `sui.keystore` file.
   2. `validator.info` file that contains your validator info. **Double check all information is correct**.
 
+    **Note for Multisig/Offline Accounts:**
+    If you are setting up a validator with a multisig account or an account where the private key is not available on this machine, you can use the `--account-address` flag to specify the validator address. This will generate the `validator.info` (including Proof of Possession signed by the protocol key) but will **skip** generating the `account.key` file.
+    
+    ```bash
+    $SUI_BINARY validator make-validator-info <name> <description> <image-url> <project-url> <host-name> <gas_price> --account-address <MULTISIG_ADDRESS>
+    ```
+
 Then run 
 
 ``` bash
