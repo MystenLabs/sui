@@ -811,39 +811,34 @@ fn address_balance_pays_gas(
             .is_some_and(|balance| balance >= transaction.gas_data().budget)
 }
 
-/// Whether `transaction` passes the replay-protection check in `sui-transaction-checks` without
-/// counting a gas coin: it has a replay-protected expiration, or an address-owned input or coin
-/// reservation. Before `relax_valid_during_for_owned_inputs`, address-balance gas requires the
-/// expiration regardless of inputs.
+/// Whether `transaction` passes the signing-time replay-protection checks with no gas coin in its
+/// payment. Owned inputs are read at their latest version; a stale object reference fails signing
+/// regardless.
 fn is_replay_protected_without_gas_coin(
     service: &RpcService,
     protocol_config: &ProtocolConfig,
     transaction: &sui_types::transaction::TransactionData,
 ) -> bool {
-    use sui_types::coin_reservation::ParsedDigest;
-
-    if transaction.expiration().is_replay_protected() {
-        return true;
-    }
-    if !protocol_config.relax_valid_during_for_owned_inputs() {
+    if transaction
+        .expiration()
+        .check_for_address_balance_gas(protocol_config)
+        .is_err()
+    {
         return false;
     }
-    let Ok(input_object_kinds) = transaction.input_objects() else {
-        return false;
-    };
-    input_object_kinds.into_iter().any(|kind| match kind {
-        InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-            ParsedDigest::is_coin_reservation_digest(&object_ref.2)
-                || service
-                    .reader
-                    .inner()
-                    .get_object(&object_ref.0)
-                    .is_some_and(|object| {
-                        ObjectReadResult::new(kind, object.into()).is_replay_protected_input()
-                    })
-        }
-        InputObjectKind::MovePackage(_) | InputObjectKind::SharedMoveObject { .. } => false,
-    })
+    let owned_inputs = transaction
+        .input_objects()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|kind| match kind {
+            InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => service
+                .reader
+                .inner()
+                .get_object(&id)
+                .map(|object| ObjectReadResult::new(kind, object.into())),
+            InputObjectKind::MovePackage(_) | InputObjectKind::SharedMoveObject { .. } => None,
+        });
+    transaction.has_replay_protection(owned_inputs)
 }
 
 /// Returns true if the simulate request is eligible for auto gas_price=0 handling.
