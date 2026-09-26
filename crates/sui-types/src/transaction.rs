@@ -2565,6 +2565,21 @@ impl TransactionData {
             TransactionData::V1(v1) => v1,
         }
     }
+
+    /// Whether the transaction is protected against replay, given its loaded `input_objects`:
+    /// it has a `ValidDuring` expiration of at most two epochs, a gas payment object, or an
+    /// address-owned input or coin reservation among `input_objects`. `input_objects` is only
+    /// consumed when the expiration and gas payment do not already protect the transaction.
+    pub fn has_replay_protection(
+        &self,
+        input_objects: impl IntoIterator<Item = impl std::borrow::Borrow<ObjectReadResult>>,
+    ) -> bool {
+        self.expiration().is_replay_protected()
+            || !self.gas_data().payment.is_empty()
+            || input_objects
+                .into_iter()
+                .any(|object| object.borrow().is_replay_protected_input())
+    }
     fn new_system_transaction(kind: TransactionKind) -> Self {
         // assert transaction kind if a system transaction
         assert!(kind.is_system_tx());
@@ -3662,8 +3677,8 @@ impl TransactionDataAPI for TransactionDataV1 {
 
             // Legacy behavior: when paying gas from address balance, we require ValidDuring expiration
             // even if the transaction has other replay-protected inputs.
-            // New behavior: the check is done in `check_address_balance_replay_protection`, which only
-            // requires two-epoch ValidDuring if there are no replay-protected inputs.
+            // New behavior: the check is done in `check_replay_protection` in sui-transaction-checks,
+            // which only requires two-epoch ValidDuring if there are no replay-protected inputs.
             if !config.relax_valid_during_for_owned_inputs() {
                 if matches!(self.expiration(), TransactionExpiration::None) {
                     // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
