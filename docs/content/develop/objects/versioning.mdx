@@ -86,6 +86,24 @@ Transactions accessing multiple consensus objects or particularly popular object
 
 You reference [shared](/develop/objects/object-ownership/shared) transaction inputs by ID, the version the object was shared at, and a flag indicating whether it is accessed mutably. You don't specify the precise access version because consensus determines that during scheduling, one transaction's output version becomes the next transaction's input version. Immutably referenced shared objects participate in scheduling but don't increment the object's version.
 
+## Read-only inputs and transaction effects
+
+:::caution
+
+Do not use `effects.changedObjects` as a general list of objects involved in a transaction. An object that a transaction only reads through an immutable reference (`&T`) is still an input, but its version is not incremented, so it does not appear in `changedObjects`. Use the transaction's input objects (or, where appropriate, `effects.dependencies`) to determine whether an object was an input. Use `changedObjects` to identify objects that were mutated, created, or deleted.
+
+For example, a transaction that reads an immutable object and mutates a separate object can have effects like this:
+
+```text
+Inputs:         [ImmutableObject (read as &T), MutableObject (read as &mut T)]
+changedObjects: [MutableObject (new version)]
+dependencies:   [..., ImmutableObject, ...]
+```
+
+The immutable object is a meaningful input, but it is absent from `changedObjects` because the transaction did not change it.
+
+:::
+
 Consensus is a good fit for applications that require coordination between multiple parties.
 
 ## Wrapped and dynamic field objects
