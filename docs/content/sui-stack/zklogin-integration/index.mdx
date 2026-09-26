@@ -33,7 +33,7 @@ zkLogin is a Sui primitive that lets users send transactions from a Sui address 
 
 - **Familiar onboarding:** Users transact on Sui through the OAuth login flow they already know. No mnemonics, no key management.
 - **Self-custody:** A zkLogin transaction requires the user to approve through OAuth. The OAuth provider cannot transact on the user's behalf.
-- **Two-factor security:** Signing a transaction requires both a recent OAuth credential and a per-user salt. Compromising one factor alone is not enough to move funds.
+- **Two-factor security:** Deriving a Sui address requires both an OAuth credential and a per-user salt. Compromising one factor alone is not enough to move funds.
 - **Privacy by default:** Zero-knowledge proofs prevent third parties from linking a Sui address to its OAuth identity.
 - **Native to Sui:** zkLogin is a protocol-level primitive, not a third-party service. It composes with [multisig](/develop/transactions/transaction-auth/multisig), [sponsored transactions](/develop/transaction-payment/sponsor-txn), and other Sui features.
 - **Audited and verified:** The zkLogin circuits have been [audited](https://github.com/sui-foundation/security-audits/blob/main/docs/zksecurity_zklogin-circuits.pdf) by two firms specializing in zero-knowledge proofs. The trusted setup [ceremony](/sui-stack/zklogin-integration/zklogin#ceremony) included more than 100 participants.
@@ -82,7 +82,7 @@ If the user signs in with a different OAuth provider or a different application,
 
 ### What happens if the salt is lost?
 
-The user permanently loses access to that zkLogin address. Even with a valid OAuth login, you cannot derive the address without the correct salt. Plan salt persistence, backup, and recovery accordingly. See [Salt management](/sui-stack/zklogin-integration/integration-guide#step-4-manage-user-salt) in the integration guide.
+The user permanently loses access to that zkLogin address. Even with a valid OAuth login, you cannot derive the address without the correct salt. The same credential always produces the same address for a given app and salt. Plan salt persistence, backup, and recovery accordingly. See [Salt management](/sui-stack/zklogin-integration/integration-guide#step-4-manage-user-salt) in the integration guide.
 
 ### Is a zkLogin wallet custodial?
 

@@ -64,7 +64,7 @@ It uses the `DEEP_SUI` pool, which you can fund by finishing the [Fees and Fundi
 
 ## Set up the client
 
-The client references pools and coins by SDK key. Read-only calls work without a manager; trading needs one.
+The client references pools and coins by SDK key. Read-only calls work without a manager; all trading operations require the manager to be associated with the correct DeepBook pool.
 
 <ImportContent source="examples/deepbook-spot/src/client.ts" mode="code" tag="client" />
 
