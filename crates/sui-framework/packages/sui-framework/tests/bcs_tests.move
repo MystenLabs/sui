@@ -30,6 +30,11 @@ public struct Info has copy, drop {
     s: address,
 }
 
+public struct BytesAndNumber has copy, drop {
+    bytes: vector<u8>,
+    number: u64,
+}
+
 #[test]
 #[expected_failure(abort_code = bcs::ELenOutOfRange)]
 fun test_uleb_len_fail() {
@@ -141,6 +146,29 @@ fun test_vec() {
     let address_cases = vector[vector[], vector[@0x0], vector[@0x1, @0x2, @0x3]];
     cases!(address_cases, |bytes| bytes.peel_vec_address());
     cases!(address_cases, |bytes| bytes.peel_vec!(|bytes| bytes.peel_address()));
+}
+
+#[test]
+fun test_vec_u8_preserves_remainder() {
+    let value = BytesAndNumber { bytes: vector[3, 1, 4, 1, 5], number: 42 };
+    let mut bytes = new(to_bytes(&value));
+    assert_eq!(bytes.peel_vec_u8(), vector[3, 1, 4, 1, 5]);
+    assert_eq!(bytes.peel_u64(), 42);
+    assert!(bytes.into_remainder_bytes().is_empty());
+
+    let value = BytesAndNumber { bytes: vector[], number: U64_MAX };
+    let mut bytes = new(to_bytes(&value));
+    assert_eq!(bytes.peel_vec_u8(), vector[]);
+    assert_eq!(bytes.peel_u64(), U64_MAX);
+    assert!(bytes.into_remainder_bytes().is_empty());
+}
+
+#[test]
+#[expected_failure(abort_code = bcs::EOutOfRange)]
+fun test_vec_u8_length_exceeds_remainder() {
+    // A length prefix of three followed by only two payload bytes.
+    let mut bytes = new(vector[3, 1, 2]);
+    let _fail = bytes.peel_vec_u8();
 }
 
 #[test]
