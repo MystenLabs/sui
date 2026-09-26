@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 anemo.workspace = true
 anyhow.workspace = true
+argon2.workspace = true
 async-recursion.workspace = true
 async-trait.workspace = true
 aws-config.workspace = true

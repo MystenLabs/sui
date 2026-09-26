@@ -5,6 +5,7 @@ use crate::{
     clever_error_rendering::render_clever_error_opt,
     client_ptb::ptb::PTB,
     displays::Pretty,
+    faucet::{self, FaucetEndpoint},
     upgrade_compatibility::check_compatibility,
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
@@ -242,14 +243,16 @@ pub enum SuiClientCommands {
         signed_tx_bytes: String,
     },
 
-    /// Request gas coin from faucet. By default, it will use the active address and the active network.
+    /// Request SUI from a faucet. By default, it will use the active address and the active network.
     #[clap[name = "faucet"]]
     Faucet {
         /// Address (or its alias)
         #[clap(long)]
         #[arg(value_parser)]
         address: Option<KeyIdentity>,
-        /// The url to the faucet
+        /// The url to the faucet: its base URL for a faucet that requires proof of work, such as
+        /// https://faucet.testnet.sui.io, or its full /v2/gas URL for one that does not, such as
+        /// the local faucet of `sui start --with-faucet`
         #[clap(long)]
         url: Option<String>,
     },
@@ -1586,15 +1589,11 @@ impl SuiClientCommands {
             SuiClientCommands::Faucet { address, url } => {
                 let address = context.get_identity_address(address)?;
                 let url = if let Some(url) = url {
-                    ensure!(
-                        !url.starts_with("https://faucet.testnet.sui.io"),
-                        "For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}"
-                    );
                     url
                 } else {
                     let active_env = context.get_active_env();
                     if let Ok(env) = active_env {
-                        find_faucet_url(address, &env.rpc)?
+                        find_faucet_url(&env.rpc)?
                     } else {
                         bail!("No URL for faucet was provided and there is no active network.")
                     }
@@ -3076,6 +3075,23 @@ pub async fn request_tokens_from_faucet(
     address: SuiAddress,
     url: String,
 ) -> Result<(), anyhow::Error> {
+    match FaucetEndpoint::parse(&url)? {
+        FaucetEndpoint::Pow(base) => {
+            let payout = faucet::request_gas(&base, address).await?;
+            println!(
+                "Request successful. The faucet sent {} to the address balance of {} in transaction {}.",
+                payout.amount(),
+                payout.recipient,
+                payout.digest,
+            );
+            Ok(())
+        }
+        FaucetEndpoint::NoPow(url) => request_tokens_without_pow(address, url).await,
+    }
+}
+
+/// Request tokens from a faucet endpoint that pays without proof of work.
+async fn request_tokens_without_pow(address: SuiAddress, url: String) -> Result<(), anyhow::Error> {
     let address_str = address.to_string();
     let json_body = json![{
         "FixedAmountRequest": {
@@ -3118,6 +3134,12 @@ pub async fn request_tokens_from_faucet(
         }
         StatusCode::SERVICE_UNAVAILABLE => {
             bail!("Faucet service is currently overloaded or unavailable. Please try again later.");
+        }
+        StatusCode::NOT_FOUND => {
+            bail!(
+                "Faucet request was unsuccessful: {}. If this faucet requires proof of work, pass its base URL instead of {url}.",
+                StatusCode::NOT_FOUND
+            );
         }
         status_code => {
             bail!("Faucet request was unsuccessful: {status_code}");
@@ -4526,9 +4548,9 @@ fn url_to_host(url: &str) -> anyhow::Result<String> {
         .ok_or_else(|| anyhow!("Cannot extract host from url: {}", url))
 }
 
-/// Find the faucet URL based on the RPC URL. It maps the public networks to their faucet URLs, for
-/// devnet and localnet. For testnet, it instructs the user to use the web UI.
-fn find_faucet_url(address: SuiAddress, rpc: &str) -> anyhow::Result<String> {
+/// Find the faucet URL based on the RPC URL. Devnet and testnet map to their public faucets, which
+/// require proof of work, and localnet maps to the local faucet's `/v2/gas` endpoint.
+fn find_faucet_url(rpc: &str) -> anyhow::Result<String> {
     let host = url_to_host(rpc)?;
     let devnet_host = url_to_host(SUI_DEVNET_URL)?;
     let testnet_host = url_to_host(SUI_TESTNET_URL)?;
@@ -4536,13 +4558,11 @@ fn find_faucet_url(address: SuiAddress, rpc: &str) -> anyhow::Result<String> {
     let localhost_0 = url_to_host(SUI_LOCAL_NETWORK_URL_0)?;
 
     if host == devnet_host {
-        return Ok("https://faucet.devnet.sui.io/v2/gas".to_string());
+        return Ok("https://faucet.devnet.sui.io".to_string());
     }
 
     if host == testnet_host {
-        bail!(
-            "For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}"
-        );
+        return Ok("https://faucet.testnet.sui.io".to_string());
     }
 
     if host == localhost || host == localhost_0 {
