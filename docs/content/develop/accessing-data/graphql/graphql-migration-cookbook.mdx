@@ -248,7 +248,7 @@ query {
 
 **Key differences:**
 - JSON-RPC uses `showEffects`, `showEvents` booleans. GraphQL uses field selection: request `effects`, `events`, `gasInput`, or any combination.
-- GraphQL returns structured, typed data. For example, `effects.checkpoint` gives you the checkpoint directly without needing a separate lookup.
+- GraphQL returns structured, typed data. For example, `effects.checkpoint.sequenceNumber` gives you the checkpoint directly without needing a separate lookup.
 
 ## Multi-get transactions
 
@@ -925,7 +925,7 @@ mutation ($tx: Base64!, $sigs: [Base64!]!) {
 **Key differences:**
 - GraphQL uses a mutation, not a query.
 - The `transactionDataBcs` parameter takes the serialized unsigned transaction data. Use the [Sui Client CLI](/references/cli/client) `--serialize-unsigned-transaction` flag or the TypeScript SDK to generate it.
-- Select fields from `effects` in the same mutation to read execution results immediately without waiting for a separate indexed query.
+- Select fields from `executionResult` in the same mutation to read execution results immediately without waiting for a separate indexed query.
 - The JSON-RPC `unsafe_*` builder methods (`unsafe_moveCall`, `unsafe_transferObject`, and others) have no GraphQL equivalent. Build transactions with [programmable transaction blocks (PTBs)](/develop/transactions/ptbs/prog-txn-blocks) using the SDK, then submit the bytes.
 
 ## Simulate a transaction (dry run)
