@@ -4,8 +4,9 @@ use crate::faucet::{FaucetClient, FaucetClientFactory};
 use async_trait::async_trait;
 use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
-use futures::future::join_all;
+use futures::{TryStreamExt, future::join_all};
 use helper::ObjectChecker;
+use std::collections::HashSet;
 use std::sync::Arc;
 use sui_faucet::{CoinInfo, RequestStatus};
 use sui_rpc_api::Client as GrpcClient;
@@ -38,33 +39,85 @@ pub mod helper;
 pub mod test_case;
 pub mod wallet_client;
 
+enum GasSource {
+    Faucet(Arc<dyn FaucetClient + Sync + Send>),
+    Prefunded {
+        reserved_coin_ids: HashSet<sui_types::base_types::ObjectID>,
+    },
+}
+
 #[allow(unused)]
 pub struct TestContext {
     /// Cluster handle that allows access to various components in a cluster
     cluster: Box<dyn Cluster + Sync + Send>,
     /// Client that provides wallet context and gRPC fullnode access
     client: WalletClient,
-    /// Facuet client that provides faucet access to a test
-    faucet: Arc<dyn FaucetClient + Sync + Send>,
+    /// Source of SUI coins used by the tests.
+    gas_source: GasSource,
 }
 
 impl TestContext {
+    async fn get_sui(&mut self, minimum_coins: Option<usize>) -> Vec<GasCoin> {
+        let minimum_coins = minimum_coins.unwrap_or(1);
+
+        if let GasSource::Faucet(faucet) = &self.gas_source {
+            return self
+                .get_sui_from_faucet(faucet.clone(), minimum_coins)
+                .await;
+        }
+
+        let addr = self.get_wallet_address();
+        let client = self.get_grpc_client();
+        let mut objects: Vec<_> = client
+            .list_owned_objects(addr, Some(GasCoin::type_()))
+            .try_collect()
+            .await
+            .unwrap_or_else(|e| panic!("Failed to enumerate prefunded SUI coins: {e}"));
+        objects.sort_by_key(|object| object.id());
+
+        let GasSource::Prefunded { reserved_coin_ids } = &mut self.gas_source else {
+            unreachable!("faucet funding returned above")
+        };
+        let available = objects
+            .into_iter()
+            .filter(|object| !reserved_coin_ids.contains(&object.id()))
+            .take(minimum_coins)
+            .collect::<Vec<_>>();
+
+        if available.len() < minimum_coins {
+            panic!(
+                "Expected at least {minimum_coins} unreserved prefunded SUI coins for address {addr}, but only found {}",
+                available.len()
+            );
+        }
+
+        available
+            .into_iter()
+            .map(|object| {
+                reserved_coin_ids.insert(object.id());
+                GasCoin::try_from(&object).unwrap_or_else(|e| {
+                    panic!("Prefunded object {} is not a SUI coin: {e}", object.id())
+                })
+            })
+            .collect()
+    }
+
     /// Request coins from the faucet, wait for every faucet transfer to be
     /// visible over gRPC (`LedgerService`), then read each funded coin object by
-    /// ID and verify ownership. Gas/coin object IDs come straight from the faucet
-    /// response (which returns the exact IDs), so we never depend on owner
-    /// enumeration to fund a transaction — good practice for determinism, not a
-    /// workaround for any missing service.
-    async fn get_sui_from_faucet(&self, minimum_coins: Option<usize>) -> Vec<GasCoin> {
+    /// ID and verify ownership.
+    async fn get_sui_from_faucet(
+        &self,
+        faucet: Arc<dyn FaucetClient + Sync + Send>,
+        minimum_coins: usize,
+    ) -> Vec<GasCoin> {
         let addr = self.get_wallet_address();
-        let minimum_coins = minimum_coins.unwrap_or(1);
 
         // Coins-per-request varies by faucet (the local test faucet sends
         // several; gas-station-backed remote faucets send exactly one), so
         // accumulate requests until the minimum is met.
         let mut coin_info = Vec::new();
         for _ in 0..minimum_coins {
-            let faucet_response = self.faucet.request_sui_coins(addr).await;
+            let faucet_response = faucet.request_sui_coins(addr).await;
             if let RequestStatus::Failure(e) = faucet_response.status {
                 panic!("Failed to get coins from faucet: {e}");
             }
@@ -143,13 +196,13 @@ impl TestContext {
 
     /// Build up to `max_txn_num` simple transfer-SUI transactions, each paying a
     /// tiny amount to a fresh recipient. Gas is sourced explicitly from the
-    /// faucet-funded coins (one coin per transaction), keeping construction
-    /// deterministic without relying on gas enumeration.
-    pub async fn make_transactions(&self, max_txn_num: usize) -> Vec<Transaction> {
+    /// selected coins (one coin per transaction), keeping construction
+    /// deterministic.
+    pub async fn make_transactions(&mut self, max_txn_num: usize) -> Vec<Transaction> {
         let sender = self.get_wallet_address();
         let gas_price = self.get_reference_gas_price().await;
         // Fund enough coins so each transaction has its own gas coin.
-        let coins = self.get_sui_from_faucet(Some(max_txn_num)).await;
+        let coins = self.get_sui(Some(max_txn_num)).await;
 
         let mut txns = Vec::with_capacity(max_txn_num);
         for coin in coins.into_iter().take(max_txn_num) {
@@ -177,12 +230,24 @@ impl TestContext {
     pub async fn setup(options: ClusterTestOpt) -> Result<Self, anyhow::Error> {
         let cluster = ClusterFactory::start(&options).await?;
         let wallet_client = WalletClient::new_from_cluster(&cluster).await;
-        let faucet = FaucetClientFactory::new_from_cluster(&cluster).await;
+        let gas_source = if cluster.uses_prefunded_account() {
+            GasSource::Prefunded {
+                reserved_coin_ids: HashSet::new(),
+            }
+        } else {
+            GasSource::Faucet(FaucetClientFactory::new_from_cluster(&cluster).await)
+        };
         Ok(Self {
             cluster,
             client: wallet_client,
-            faucet,
+            gas_source,
         })
+    }
+
+    fn reset_coin_reservations(&mut self) {
+        if let GasSource::Prefunded { reserved_coin_ids } = &mut self.gas_source {
+            reserved_coin_ids.clear();
+        }
     }
 
     /// Wait (concurrently) for each transaction digest to be indexed into a
@@ -235,10 +300,13 @@ impl<'a> TestCase<'a> {
     pub async fn run(self, ctx: &mut TestContext) -> bool {
         let test_name = self.test_case.name();
         info!("Running test {}.", test_name);
+        ctx.reset_coin_reservations();
 
         // TODO: unwind panic and fail gracefully?
 
-        match self.test_case.run(ctx).await {
+        let result = self.test_case.run(ctx).await;
+        ctx.reset_coin_reservations();
+        match result {
             Ok(()) => {
                 info!("Test {test_name} succeeded.");
                 true

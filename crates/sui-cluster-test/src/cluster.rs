@@ -3,6 +3,7 @@
 
 use super::config::{ClusterTestOpt, Env};
 use async_trait::async_trait;
+use fastcrypto::traits::ToFromBytes;
 use std::path::Path;
 use sui_config::Config;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
@@ -31,6 +32,17 @@ const CONTINUOUS_FULLNODE_ADDR: &str = "https://fullnode.ci.sui.io:443";
 const CONTINUOUS_NOMAD_FULLNODE_ADDR: &str = "https://fullnode.nomad.ci.sui.io:443";
 const TESTNET_FULLNODE_ADDR: &str = "https://fullnode.testnet.sui.io:443";
 
+pub const CLUSTER_TEST_ACCOUNT_ADDRESS: &str =
+    "0x7bd7e177baf86fb745b5270cf6c391cbd1998a759904d5f27cdd2b6e1b32f99e";
+const CLUSTER_TEST_ACCOUNT_KEY_BYTES: [u8; 32] = [0x42; 32];
+
+fn cluster_test_account_key() -> AccountKeyPair {
+    // This deliberately public key is only for ephemeral test networks whose
+    // genesis config explicitly funds the matching account.
+    AccountKeyPair::from_bytes(&CLUSTER_TEST_ACCOUNT_KEY_BYTES)
+        .expect("the fixed cluster-test account key must be valid")
+}
+
 pub struct ClusterFactory;
 
 impl ClusterFactory {
@@ -53,6 +65,7 @@ pub trait Cluster {
 
     fn fullnode_url(&self) -> &str;
     fn user_key(&self) -> AccountKeyPair;
+    fn uses_prefunded_account(&self) -> bool;
 
     /// Returns faucet url in a remote cluster.
     fn remote_faucet_url(&self) -> Option<&str>;
@@ -68,6 +81,8 @@ pub trait Cluster {
 pub struct RemoteRunningCluster {
     fullnode_url: String,
     faucet_url: String,
+    user_key: AccountKeyPair,
+    uses_prefunded_account: bool,
     config_directory: tempfile::TempDir,
 }
 
@@ -110,9 +125,18 @@ impl Cluster for RemoteRunningCluster {
 
         // TODO: test connectivity before proceeding?
 
+        let uses_prefunded_account = options.use_prefunded_account();
+        let user_key = if uses_prefunded_account {
+            cluster_test_account_key()
+        } else {
+            get_key_pair().1
+        };
+
         Ok(Self {
             fullnode_url,
             faucet_url,
+            user_key,
+            uses_prefunded_account,
             config_directory: tempfile::tempdir()?,
         })
     }
@@ -122,7 +146,11 @@ impl Cluster for RemoteRunningCluster {
     }
 
     fn user_key(&self) -> AccountKeyPair {
-        get_key_pair().1
+        self.user_key.copy()
+    }
+
+    fn uses_prefunded_account(&self) -> bool {
+        self.uses_prefunded_account
     }
 
     fn remote_faucet_url(&self) -> Option<&str> {
@@ -220,6 +248,10 @@ impl Cluster for LocalNewCluster {
         get_key_pair().1
     }
 
+    fn uses_prefunded_account(&self) -> bool {
+        false
+    }
+
     fn remote_faucet_url(&self) -> Option<&str> {
         None
     }
@@ -247,6 +279,10 @@ impl Cluster for Box<dyn Cluster + Send + Sync> {
 
     fn user_key(&self) -> AccountKeyPair {
         (**self).user_key()
+    }
+
+    fn uses_prefunded_account(&self) -> bool {
+        (**self).uses_prefunded_account()
     }
 
     fn remote_faucet_url(&self) -> Option<&str> {
@@ -305,4 +341,15 @@ pub async fn new_wallet_context_from_cluster(
             wallet_config_path
         )
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fixed_cluster_test_key_matches_funded_address() {
+        let address = SuiAddress::from(cluster_test_account_key().public());
+        assert_eq!(address.to_string(), CLUSTER_TEST_ACCOUNT_ADDRESS);
+    }
 }

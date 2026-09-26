@@ -23,6 +23,10 @@ pub struct ClusterTestOpt {
     pub env: Env,
     #[clap(long)]
     pub faucet_address: Option<String>,
+    /// Use the deterministic cluster-test account funded at genesis instead of
+    /// requesting coins from a remote faucet.
+    #[clap(long)]
+    pub use_prefunded_account: bool,
     #[clap(long)]
     pub fullnode_address: Option<String>,
     #[clap(long)]
@@ -47,10 +51,17 @@ pub struct ClusterTestOpt {
 }
 
 impl ClusterTestOpt {
+    pub fn use_prefunded_account(&self) -> bool {
+        self.use_prefunded_account
+            || std::env::var("SUI_CLUSTER_TEST_USE_PREFUNDED_ACCOUNT")
+                .is_ok_and(|value| value.eq_ignore_ascii_case("true") || value == "1")
+    }
+
     pub fn new_local() -> Self {
         Self {
             env: Env::NewLocal,
             faucet_address: None,
+            use_prefunded_account: false,
             fullnode_address: None,
             epoch_duration_ms: None,
             indexer_address: None,
