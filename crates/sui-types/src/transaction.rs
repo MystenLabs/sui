@@ -2541,27 +2541,6 @@ impl TransactionExpiration {
                 .is_some_and(|p| *p == proposer)
         })
     }
-
-    /// Checks the expiration of a transaction that pays for gas from address balance. Before
-    /// `relax_valid_during_for_owned_inputs`, such a transaction needs a replay-protected
-    /// expiration even when its inputs already protect it against replay. With the flag on,
-    /// `TransactionData::has_replay_protection` alone decides.
-    pub fn check_for_address_balance_gas(&self, config: &ProtocolConfig) -> UserInputResult {
-        if config.relax_valid_during_for_owned_inputs() {
-            return Ok(());
-        }
-        if matches!(self, TransactionExpiration::None) {
-            // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment
-            // error instead of a missing expiration error.
-            return Err(UserInputError::MissingGasPayment);
-        }
-        if !self.is_replay_protected() {
-            return Err(UserInputError::InvalidExpiration {
-                error: "Address balance gas payments require ValidDuring expiration".to_string(),
-            });
-        }
-        Ok(())
-    }
 }
 
 #[enum_dispatch(TransactionDataAPI)]
@@ -3696,11 +3675,25 @@ impl TransactionDataAPI for TransactionDataV1 {
                 );
             }
 
-            // Before `relax_valid_during_for_owned_inputs`, address-balance gas requires a
-            // replay-protected expiration even if the transaction has replay-protected inputs.
-            // With the flag on, `TransactionData::has_replay_protection` at signing only requires
-            // it when the transaction has no replay-protected inputs.
-            self.expiration().check_for_address_balance_gas(config)?;
+            // Legacy behavior: when paying gas from address balance, we require ValidDuring expiration
+            // even if the transaction has other replay-protected inputs.
+            // New behavior: the check is done in `check_replay_protection` in sui-transaction-checks,
+            // which only requires two-epoch ValidDuring if there are no replay-protected inputs.
+            if !config.relax_valid_during_for_owned_inputs() {
+                if matches!(self.expiration(), TransactionExpiration::None) {
+                    // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
+                    // instead of a missing expiration error.
+                    return Err(UserInputError::MissingGasPayment.into());
+                }
+
+                if !self.expiration().is_replay_protected() {
+                    return Err(UserInputError::InvalidExpiration {
+                        error: "Address balance gas payments require ValidDuring expiration"
+                            .to_string(),
+                    }
+                    .into());
+                }
+            }
         } else {
             fp_ensure!(
                 !self.gas().is_empty(),

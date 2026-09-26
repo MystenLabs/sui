@@ -806,26 +806,20 @@ fn address_balance_pays_gas(
             .kind()
             .iter_commands()
             .any(Command::is_gas_coin_used)
-        && is_replay_protected_without_gas_coin(service, protocol_config, transaction)
+        && is_replay_protected_without_gas_coin(service, transaction)
         && address_balance_available_for_gas(service, transaction)
             .is_some_and(|balance| balance >= transaction.gas_data().budget)
 }
 
-/// Whether `transaction` passes the signing-time replay-protection checks with no gas coin in its
+/// Whether `transaction` passes the signing-time replay-protection check with no gas coin in its
 /// payment. Owned inputs are read at their latest version; a stale object reference fails signing
 /// regardless.
 fn is_replay_protected_without_gas_coin(
     service: &RpcService,
-    protocol_config: &ProtocolConfig,
     transaction: &sui_types::transaction::TransactionData,
 ) -> bool {
-    if transaction
-        .expiration()
-        .check_for_address_balance_gas(protocol_config)
-        .is_err()
-    {
-        return false;
-    }
+    // Lazy: objects are read only if the expiration doesn't already protect the transaction, and
+    // reading stops at the first replay-protected input.
     let owned_inputs = transaction
         .input_objects()
         .unwrap_or_default()
