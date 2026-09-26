@@ -100,6 +100,7 @@ public fun destroy_zero<T>(balance: Balance<T>) {
 
 /// Send a `Balance` to an address's funds accumulator.
 public fun send_funds<T>(balance: Balance<T>, recipient: address) {
+    let recipient = sui::forwarding_address::resolve<T>(recipient, balance.value());
     sui::funds_accumulator::add_impl(balance, recipient);
 }
 
