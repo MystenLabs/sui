@@ -29,7 +29,9 @@ use crate::{
         },
         request_retrier::{RequestRetrier, StaggerTargets},
     },
-    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
+    validator_client_monitor::{
+        OperationFeedback, OperationType, TransactionClass, ValidatorClientMonitor,
+    },
 };
 
 #[cfg(test)]
@@ -77,6 +79,13 @@ impl TransactionSubmitter {
         });
 
         // Pings carry no transaction, so they are neither restricted nor unrestricted.
+        let tx_class = request.transaction.as_ref().map(|_| {
+            if allowed_proposers.is_some() {
+                TransactionClass::Restricted
+            } else {
+                TransactionClass::Unrestricted
+            }
+        });
         if request.transaction.is_some() {
             self.metrics
                 .submitted_txns_with_allowed_proposers
@@ -174,6 +183,7 @@ impl TransactionSubmitter {
                             &request,
                             options,
                             client_monitor,
+                            tx_class,
                             name,
                             display_name.clone(),
                         );
@@ -282,6 +292,7 @@ impl TransactionSubmitter {
         request: &SubmitTxRequest,
         options: &SubmitTransactionOptions,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
+        tx_class: Option<TransactionClass>,
         validator: AuthorityName,
         display_name: String,
     ) -> Result<SubmitTxResult, TransactionRequestError>
@@ -300,6 +311,7 @@ impl TransactionSubmitter {
                 authority_name: validator,
                 display_name: display_name.clone(),
                 operation: OperationType::Submit,
+                tx_class,
                 ping_type: request.ping_type,
                 result: Err(()),
             });
@@ -315,6 +327,7 @@ impl TransactionSubmitter {
                     authority_name: validator,
                     display_name: display_name.clone(),
                     operation: OperationType::Submit,
+                    tx_class,
                     ping_type: request.ping_type,
                     result: Err(()),
                 });
@@ -337,6 +350,7 @@ impl TransactionSubmitter {
                     authority_name: validator,
                     display_name,
                     operation: OperationType::Submit,
+                    tx_class,
                     ping_type: request.ping_type,
                     result: Err(()),
                 });
@@ -349,6 +363,7 @@ impl TransactionSubmitter {
             authority_name: validator,
             display_name,
             operation: OperationType::Submit,
+            tx_class,
             ping_type: request.ping_type,
             result: Ok(latency),
         });
