@@ -22,7 +22,7 @@ use sui_core::{
     transaction_driver::{
         ReconfigObserver, SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics,
     },
-    validator_client_monitor::ValidatorClientMetrics,
+    validator_client_monitor::{TransactionClass, ValidatorClientMetrics},
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc_api::{Client, client::ExecutedTransaction};
@@ -566,7 +566,10 @@ impl LocalValidatorAggregatorProxy {
             }
             ValidatorSelection::HighestPerformance => self
                 .td
-                .select_preferred_validators(preferred_validator_latency_delta)
+                .select_preferred_validators(
+                    preferred_validator_latency_delta,
+                    TransactionClass::Unrestricted,
+                )
                 .into_iter()
                 .filter(|name| self.clients.contains_key(name))
                 .take(num_validators)

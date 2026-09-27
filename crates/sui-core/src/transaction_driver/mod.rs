@@ -47,7 +47,8 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     validator_client_monitor::{
-        OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
+        OperationFeedback, OperationType, TransactionClass, ValidatorClientMetrics,
+        ValidatorClientMonitor,
     },
 };
 
@@ -149,10 +150,17 @@ where
         &self.authority_aggregator
     }
 
-    pub fn select_preferred_validators(&self, delta: f64) -> Vec<AuthorityName> {
+    pub fn select_preferred_validators(
+        &self,
+        delta: f64,
+        tx_class: TransactionClass,
+    ) -> Vec<AuthorityName> {
         let authority_aggregator = self.authority_aggregator.load();
-        self.client_monitor
-            .select_shuffled_preferred_validators(&authority_aggregator.committee, delta)
+        self.client_monitor.select_shuffled_preferred_validators(
+            &authority_aggregator.committee,
+            delta,
+            tx_class,
+        )
     }
 
     /// The validators this node would prefer to submit to, as committee indices.
@@ -168,9 +176,15 @@ where
 
         let authority_aggregator = self.authority_aggregator.load();
         let committee = &authority_aggregator.committee;
+        // The set restricts the transaction, so it is chosen from restricted-class
+        // stats — the view staggering holds cannot pollute.
         let mut proposers: Vec<u32> = self
             .client_monitor
-            .select_shuffled_preferred_validators(committee, SELECT_LATENCY_DELTA)
+            .select_shuffled_preferred_validators(
+                committee,
+                SELECT_LATENCY_DELTA,
+                TransactionClass::Restricted,
+            )
             .into_iter()
             .filter_map(|name| committee.authority_index(&name))
             .take(max)
@@ -365,6 +379,18 @@ where
         let tx_type = request.tx_type();
         let tx_digest = request.tx_digest();
         let ping_type = request.ping_type;
+        // Pings carry no transaction, so they are neither restricted nor unrestricted.
+        let tx_class = request.transaction.as_ref().map(|tx| {
+            if tx
+                .transaction_data()
+                .expiration()
+                .restricts_proposers(auth_agg.committee.epoch())
+            {
+                TransactionClass::Restricted
+            } else {
+                TransactionClass::Unrestricted
+            }
+        });
 
         let (name, submit_txn_result) = self
             .submitter
@@ -410,6 +436,7 @@ where
                     } else {
                         OperationType::SharedObjectFinality
                     },
+                    tx_class,
                     ping_type,
                     result: Ok(start_time.elapsed()),
                 });
