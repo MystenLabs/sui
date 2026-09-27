@@ -479,8 +479,9 @@ impl EffectsCertifier {
                 Ok(WaitForEffectsResponse::Executed {
                     effects_digest,
                     details: _,
-                    ..
+                    staggering_active,
                 }) => {
+                    client_monitor.record_staggering_report(name, staggering_active);
                     // Notify that this validator has successfully executed the transaction.
                     // This allows get_full_effects_with_fallback to use this validator as a
                     // fallback if the initial validator is slow.
