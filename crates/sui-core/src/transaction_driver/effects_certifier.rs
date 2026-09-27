@@ -194,6 +194,7 @@ impl EffectsCertifier {
                             authority_name: current_target,
                             display_name,
                             operation: OperationType::Effects,
+                            tx_class: None,
                             ping_type,
                             result: Err(()),
                         });
@@ -204,6 +205,7 @@ impl EffectsCertifier {
                                 authority_name: current_target,
                                 display_name,
                                 operation: OperationType::Effects,
+                                tx_class: None,
                                 ping_type,
                                 result: Ok(latency),
                             });
@@ -219,6 +221,7 @@ impl EffectsCertifier {
                         authority_name: current_target,
                         display_name,
                         operation: OperationType::Effects,
+                        tx_class: None,
                         ping_type,
                         result: Err(()),
                     });
@@ -451,6 +454,7 @@ impl EffectsCertifier {
                             authority_name: name,
                             display_name,
                             operation: OperationType::Effects,
+                            tx_class: None,
                             ping_type,
                             result: Err(()),
                         });
@@ -707,6 +711,7 @@ impl EffectsCertifier {
                         authority_name: name,
                         display_name: display_name.clone(),
                         operation: OperationType::Effects,
+                        tx_class: None,
                         ping_type,
                         result: Ok(latency),
                     });
@@ -717,6 +722,7 @@ impl EffectsCertifier {
                         authority_name: name,
                         display_name: display_name.clone(),
                         operation: OperationType::Effects,
+                        tx_class: None,
                         ping_type,
                         result: Err(()),
                     });

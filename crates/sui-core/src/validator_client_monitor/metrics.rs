@@ -57,9 +57,9 @@ impl ValidatorClientMetrics {
 
             performance: register_gauge_vec_with_registry!(
                 "validator_client_observed_performance",
-                "Current client-observed performance per validator. The performance is the average latency of the validator
+                "Current client-observed performance per validator and transaction class. The performance is the average latency of the validator
                 weighted by the reliability of the validator.",
-                &["validator"],
+                &["validator", "tx_class"],
                 registry,
             )
             .unwrap(),
