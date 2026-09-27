@@ -267,6 +267,7 @@ impl EffectsCertifier {
                 WaitForEffectsResponse::Executed {
                     effects_digest,
                     details,
+                    ..
                 } => {
                     if let Some(details) = details {
                         tracing::Span::current()
@@ -478,6 +479,7 @@ impl EffectsCertifier {
                 Ok(WaitForEffectsResponse::Executed {
                     effects_digest,
                     details: _,
+                    ..
                 }) => {
                     // Notify that this validator has successfully executed the transaction.
                     // This allows get_full_effects_with_fallback to use this validator as a
