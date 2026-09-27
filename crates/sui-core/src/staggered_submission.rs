@@ -33,7 +33,7 @@ use prometheus::IntGauge;
 use rand::Rng as _;
 use rand::SeedableRng as _;
 use rand::rngs::StdRng;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::committee::{Committee, CommitteeTrait as _, EpochId};
 use sui_types::crypto::DefaultHash;
 use sui_types::digests::TransactionDigest;
@@ -569,7 +569,7 @@ impl Default for StaggeredSubmission {
 /// Gas object ids (and, in the fallback, digests) are sorted before hashing: their order
 /// inside a transaction or bundle is signer-controlled, and must not offer another
 /// grinding dimension.
-fn stagger_seed(
+pub(crate) fn stagger_seed(
     gas_payment: &[ObjectID],
     tx_digests: &[&TransactionDigest],
     epoch: EpochId,
@@ -593,20 +593,28 @@ fn stagger_seed(
     hasher.finalize().into()
 }
 
-/// This validator's slot in a stake-weighted permutation of the committee derived from
-/// `seed`: members are drawn without replacement with probability proportional to voting
-/// power, the same primitive as `Committee::shuffle_by_stake_from_tx_digest` and the
-/// consensus leader schedule. Weighting by stake makes early-slot honesty track honest
-/// *stake* (the BFT assumption) rather than validator count, makes splitting stake across
-/// seats buy no extra slot-0 share, and lands the implied submission load on validators in
+/// The stake-weighted permutation of the committee derived from `seed`: members are
+/// drawn without replacement with probability proportional to voting power, the same
+/// primitive as `Committee::shuffle_by_stake_from_tx_digest` and the consensus leader
+/// schedule. Weighting by stake makes early-slot honesty track honest *stake* (the BFT
+/// assumption) rather than validator count, makes splitting stake across seats buy no
+/// extra slot-0 share, and lands the implied submission load on validators in
 /// proportion to their stake.
+///
+/// Validators read their own slot out of this order and the transaction driver reads
+/// which validators hold the leading slots; defining both against the same function
+/// keeps the two sides of the schedule from ever diverging.
+pub(crate) fn stagger_order(seed: &[u8; 32], committee: &Committee) -> Vec<AuthorityName> {
+    let mut rng = StdRng::from_seed(*seed);
+    committee.shuffle_by_stake_with_rng(None, None, &mut rng)
+}
+
+/// This validator's slot in the [`stagger_order`] permutation.
 fn stagger_slot(seed: &[u8; 32], committee: &Committee, own_index: u32) -> u64 {
     let own_name = committee
         .authority_by_index(own_index)
         .expect("own_index is a committee member");
-    let mut rng = StdRng::from_seed(*seed);
-    let shuffled = committee.shuffle_by_stake_with_rng(None, None, &mut rng);
-    shuffled
+    stagger_order(seed, committee)
         .iter()
         .position(|name| name == own_name)
         .expect("every committee member appears in the shuffle") as u64
@@ -636,6 +644,20 @@ mod tests {
                 slots.sort();
                 assert_eq!(slots, (0..committee_size as u64).collect::<Vec<_>>());
             }
+        }
+    }
+
+    #[test]
+    fn order_and_slots_agree() {
+        let seed = test_seed(7);
+        let (committee, _) = Committee::new_simple_test_committee_of_size(7);
+        let order = stagger_order(&seed, &committee);
+        for index in 0..committee.num_members() as u32 {
+            let name = committee.authority_by_index(index).unwrap();
+            assert_eq!(
+                order[stagger_slot(&seed, &committee, index) as usize],
+                *name
+            );
         }
     }
 
