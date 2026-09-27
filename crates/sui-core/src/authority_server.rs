@@ -1868,6 +1868,7 @@ impl ValidatorService {
                 Ok(WaitForEffectsResponse::Executed {
                     effects_digest,
                     details,
+                    staggering_active: Some(epoch_store.staggered_submission().is_active()),
                 })
             }
             status_response = consensus_status_future => {
@@ -1926,6 +1927,7 @@ impl ValidatorService {
                 ConsensusTxStatus::Finalized => Ok(WaitForEffectsResponse::Executed {
                     effects_digest: TransactionEffectsDigest::ZERO,
                     details,
+                    staggering_active: Some(epoch_store.staggered_submission().is_active()),
                 }),
             },
             NotifyReadConsensusTxStatusResult::Expired(round) => {
@@ -2038,6 +2040,7 @@ impl ValidatorService {
             num_inflight_execution_transactions,
             last_locally_built_checkpoint,
             last_committed_leader_round,
+            staggering_active: Some(epoch_store.staggered_submission().is_active()),
         };
 
         let raw_response = typed_response

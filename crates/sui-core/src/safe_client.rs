@@ -318,6 +318,7 @@ where
             WaitForEffectsResponse::Executed {
                 effects_digest: _,
                 details: Some(details),
+                ..
             } => {
                 self.verify_executed_data((**details).clone())?;
             }
