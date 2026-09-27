@@ -49,7 +49,7 @@ async fn submit_and_wait_for_effects(
 
     let WaitForEffectsResponse::Executed {
         details: Some(details),
-        effects_digest: _,
+        ..
     } = effects
     else {
         panic!("Expected Executed response, got {effects:?}");
