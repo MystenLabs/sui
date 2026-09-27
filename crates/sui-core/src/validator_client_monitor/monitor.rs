@@ -5,7 +5,7 @@ use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use crate::validator_client_monitor::stats::ClientObservedStats;
 use crate::validator_client_monitor::{
-    OperationFeedback, OperationType, metrics::ValidatorClientMetrics,
+    OperationFeedback, OperationType, TransactionClass, metrics::ValidatorClientMetrics,
 };
 use arc_swap::ArcSwap;
 use parking_lot::RwLock;
@@ -40,7 +40,7 @@ pub struct ValidatorClientMonitor<A: Clone> {
     metrics: Arc<ValidatorClientMetrics>,
     client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
-    cached_latencies: RwLock<HashMap<AuthorityName, Duration>>,
+    cached_latencies: RwLock<HashMap<(AuthorityName, TransactionClass), Duration>>,
     /// Latest staggering state each validator self-reported (via health-check and
     /// wait-for-effects responses), with the local receipt time for freshness.
     staggering_reports: RwLock<HashMap<AuthorityName, (bool, Instant)>>,
@@ -133,6 +133,7 @@ where
                                 authority_name: name,
                                 display_name: display_name.clone(),
                                 operation: OperationType::HealthCheck,
+                                tx_class: None,
                                 ping_type: None,
                                 result: Ok(latency),
                             });
@@ -143,6 +144,7 @@ where
                                 authority_name: name,
                                 display_name: display_name.clone(),
                                 operation: OperationType::HealthCheck,
+                                tx_class: None,
                                 ping_type: None,
                                 result: Err(()),
                             });
@@ -152,6 +154,7 @@ where
                                 authority_name: name,
                                 display_name,
                                 operation: OperationType::HealthCheck,
+                                tx_class: None,
                                 ping_type: None,
                                 result: Err(()),
                             });
@@ -181,16 +184,26 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         let committee = &authority_agg.committee;
         let mut cached_latencies = self.cached_latencies.write();
 
-        let latencies_map = self.client_stats.read().get_all_validator_stats(committee);
+        for tx_class in [TransactionClass::Restricted, TransactionClass::Unrestricted] {
+            let latencies_map = self
+                .client_stats
+                .read()
+                .get_all_validator_stats(committee, tx_class);
 
-        for (validator, latency) in latencies_map.iter() {
-            debug!("Validator {}, latency {}", validator, latency.as_secs_f64());
-            let display_name = authority_agg.get_display_name(validator);
-            self.metrics
-                .performance
-                .with_label_values(&[display_name.as_str()])
-                .set(latency.as_secs_f64());
-            cached_latencies.insert(*validator, *latency);
+            for (validator, latency) in latencies_map.iter() {
+                debug!(
+                    "Validator {}, class {:?}, latency {}",
+                    validator,
+                    tx_class,
+                    latency.as_secs_f64()
+                );
+                let display_name = authority_agg.get_display_name(validator);
+                self.metrics
+                    .performance
+                    .with_label_values(&[display_name.as_str(), tx_class.as_str()])
+                    .set(latency.as_secs_f64());
+                cached_latencies.insert((*validator, tx_class), *latency);
+            }
         }
     }
 
@@ -307,6 +320,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         &self,
         committee: &Committee,
         delta: f64,
+        tx_class: TransactionClass,
     ) -> Vec<AuthorityName> {
         let mut rng = rand::thread_rng();
 
@@ -324,7 +338,10 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             .map(|v| {
                 (
                     *v,
-                    cached_latencies.get(v).cloned().unwrap_or(Duration::ZERO),
+                    cached_latencies
+                        .get(&(*v, tx_class))
+                        .cloned()
+                        .unwrap_or(Duration::ZERO),
                 )
             })
             .collect();
@@ -357,6 +374,19 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     #[cfg(test)]
     pub fn force_update_cached_latencies(&self, authority_agg: &AuthorityAggregator<A>) {
         self.update_cached_latencies(authority_agg);
+    }
+
+    #[cfg(test)]
+    pub fn get_client_stats_for_test(
+        &self,
+        validator: &AuthorityName,
+    ) -> crate::validator_client_monitor::stats::ValidatorClientStats {
+        self.client_stats
+            .read()
+            .validator_stats
+            .get(validator)
+            .cloned()
+            .unwrap()
     }
 
     #[cfg(test)]
