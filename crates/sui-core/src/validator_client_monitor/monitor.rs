@@ -16,7 +16,7 @@ use std::{
     time::{Duration, Instant},
 };
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
-use sui_types::committee::Committee;
+use sui_types::committee::{Committee, CommitteeTrait as _};
 use sui_types::{base_types::AuthorityName, messages_grpc::ValidatorHealthRequest};
 use tokio::{
     task::JoinSet,
@@ -41,6 +41,9 @@ pub struct ValidatorClientMonitor<A: Clone> {
     client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     cached_latencies: RwLock<HashMap<AuthorityName, Duration>>,
+    /// Latest staggering state each validator self-reported (via health-check and
+    /// wait-for-effects responses), with the local receipt time for freshness.
+    staggering_reports: RwLock<HashMap<AuthorityName, (bool, Instant)>>,
 }
 
 impl<A> ValidatorClientMonitor<A>
@@ -63,6 +66,7 @@ where
             client_stats: RwLock::new(ClientObservedStats::new(config)),
             authority_aggregator,
             cached_latencies: RwLock::new(HashMap::new()),
+            staggering_reports: RwLock::new(HashMap::new()),
         });
 
         let monitor_clone = monitor.clone();
@@ -101,6 +105,9 @@ where
             self.client_stats
                 .write()
                 .retain_validators(&current_validators);
+            self.staggering_reports
+                .write()
+                .retain(|name, _| current_validators.contains(name));
 
             let mut tasks = JoinSet::new();
 
@@ -119,8 +126,8 @@ where
                     )
                     .await
                     {
-                        // TODO: Actually use the response details.
-                        Ok(Ok(_response)) => {
+                        Ok(Ok(response)) => {
+                            monitor.record_staggering_report(name, response.staggering_active);
                             let latency = start.elapsed();
                             monitor.record_interaction_result(OperationFeedback {
                                 authority_name: name,
@@ -236,6 +243,51 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     /// preference.
     pub fn has_observed_latencies(&self) -> bool {
         !self.cached_latencies.read().is_empty()
+    }
+
+    /// Record a validator's self-reported staggering state, carried on health-check
+    /// and wait-for-effects responses. `None` (a validator predating the field)
+    /// carries no information and is ignored.
+    pub fn record_staggering_report(
+        &self,
+        validator: AuthorityName,
+        staggering_active: Option<bool>,
+    ) {
+        let Some(active) = staggering_active else {
+            return;
+        };
+        self.staggering_reports
+            .write()
+            .insert(validator, (active, Instant::now()));
+    }
+
+    /// Whether staggered submission is currently considered active on the validator
+    /// network: validators reporting active within the freshness window must total
+    /// at least f+1 by stake, so at least one of them is honest — and honest
+    /// validators flip in lockstep, so one honest report reflects the network state.
+    /// A fresh report counts immediately (flipping on is cheap to believe: the cost
+    /// of a wrong belief in either direction is only bounded latency) and decays by
+    /// aging out of the window.
+    pub fn staggering_active(&self) -> bool {
+        let authority_agg = self.authority_aggregator.load();
+        let committee = &authority_agg.committee;
+        // Two intervals so a single missed health check does not flap the view.
+        let freshness = self.config.health_check_interval * 2;
+        let now = Instant::now();
+        let reports = self.staggering_reports.read();
+        let active_stake: u64 = reports
+            .iter()
+            .filter(|(_, (active, at))| *active && now.saturating_duration_since(*at) < freshness)
+            .map(|(name, _)| committee.weight(name))
+            .sum();
+        active_stake >= committee.validity_threshold()
+    }
+
+    #[cfg(test)]
+    pub fn record_staggering_report_at(&self, validator: AuthorityName, active: bool, at: Instant) {
+        self.staggering_reports
+            .write()
+            .insert(validator, (active, at));
     }
 
     /// Select validators based on client-observed performance for the given transaction type.
