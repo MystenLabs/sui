@@ -36,6 +36,28 @@ impl OperationType {
     }
 }
 
+/// Transaction class for latency tracking. Staggering holds can only ever delay
+/// unrestricted transactions, so the two classes keep separate latency windows:
+/// consumers on the restricted path (routing restricted transactions, choosing
+/// proposer sets) read stats that holds cannot pollute, while the unrestricted view
+/// reflects what unrestricted traffic actually experiences.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum TransactionClass {
+    /// The transaction names its allowed proposers.
+    Restricted,
+    /// The transaction does not restrict its proposers.
+    Unrestricted,
+}
+
+impl TransactionClass {
+    pub fn as_str(&self) -> &str {
+        match self {
+            TransactionClass::Restricted => "restricted",
+            TransactionClass::Unrestricted => "unrestricted",
+        }
+    }
+}
+
 /// Feedback from TransactionDriver operations
 #[derive(Debug, Clone)]
 pub struct OperationFeedback {
@@ -45,6 +67,10 @@ pub struct OperationFeedback {
     pub display_name: String,
     /// The operation type
     pub operation: OperationType,
+    /// The transaction class the observation belongs to; `None` (pings, health
+    /// checks, operations without the transaction at hand) counts toward both
+    /// classes.
+    pub tx_class: Option<TransactionClass>,
     /// The ping type. If it's not a ping request, then this is None.
     pub ping_type: Option<PingType>,
     /// Result of the operation: Ok(latency) if successful, Err(()) if failed.
