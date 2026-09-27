@@ -799,7 +799,7 @@ fn compute_delay(
 /// Gas object ids (and, in the fallback, digests) are sorted before hashing: their order
 /// inside a transaction or bundle is signer-controlled, and must not offer another
 /// grinding dimension.
-fn stagger_seed(
+pub(crate) fn stagger_seed(
     gas_payment: &[ObjectID],
     tx_digests: &[&TransactionDigest],
     epoch: EpochId,
@@ -823,14 +823,18 @@ fn stagger_seed(
     hasher.finalize().into()
 }
 
-/// This validator's slot in a stake-weighted permutation of the committee derived from
-/// `seed`: members are drawn without replacement with probability proportional to voting
-/// power, the same primitive as `Committee::shuffle_by_stake_from_tx_digest` and the
-/// consensus leader schedule. Weighting by stake makes early-slot honesty track honest
-/// *stake* (the BFT assumption) rather than validator count, makes splitting stake across
-/// seats buy no extra slot-0 share, and lands the implied submission load on validators in
+/// The stake-weighted permutation of the committee derived from `seed`: members are
+/// drawn without replacement with probability proportional to voting power, the same
+/// primitive as `Committee::shuffle_by_stake_from_tx_digest` and the consensus leader
+/// schedule. Weighting by stake makes early-slot honesty track honest *stake* (the BFT
+/// assumption) rather than validator count, makes splitting stake across seats buy no
+/// extra slot-0 share, and lands the implied submission load on validators in
 /// proportion to their stake.
-fn stagger_order(seed: &[u8; 32], committee: &Committee) -> Vec<AuthorityName> {
+///
+/// Validators read their own slot out of this order and the transaction driver reads
+/// which validators hold the leading slots; defining both against the same function
+/// keeps the two sides of the schedule from ever diverging.
+pub(crate) fn stagger_order(seed: &[u8; 32], committee: &Committee) -> Vec<AuthorityName> {
     let mut rng = StdRng::from_seed(*seed);
     committee.shuffle_by_stake_with_rng(None, None, &mut rng)
 }
@@ -854,7 +858,7 @@ fn slot_in_order(order: &[AuthorityName], committee: &Committee, own_index: u32)
 /// Size of a transaction's proposer set: the shortest prefix of its [`stagger_order`]
 /// whose cumulative voting power reaches [`STAGGER_PROPOSER_STAKE_BPS`] of the total.
 /// Slots at or past this index reject the submission.
-fn stagger_proposer_slots(order: &[AuthorityName], committee: &Committee) -> u64 {
+pub(crate) fn stagger_proposer_slots(order: &[AuthorityName], committee: &Committee) -> u64 {
     let target = committee.total_votes() * STAGGER_PROPOSER_STAKE_BPS / 10_000;
     let mut stake = 0;
     for (index, name) in order.iter().enumerate() {
@@ -995,6 +999,20 @@ mod tests {
                 slots.sort();
                 assert_eq!(slots, (0..committee_size as u64).collect::<Vec<_>>());
             }
+        }
+    }
+
+    #[test]
+    fn order_and_slots_agree() {
+        let seed = test_seed(7);
+        let (committee, _) = Committee::new_simple_test_committee_of_size(7);
+        let order = stagger_order(&seed, &committee);
+        for index in 0..committee.num_members() as u32 {
+            let name = committee.authority_by_index(index).unwrap();
+            assert_eq!(
+                order[stagger_slot(&seed, &committee, index) as usize],
+                *name
+            );
         }
     }
 
