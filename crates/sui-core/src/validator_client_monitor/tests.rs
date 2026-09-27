@@ -4,7 +4,7 @@
 use super::*;
 use crate::validator_client_monitor::stats::{ClientObservedStats, ValidatorClientStats};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::base_types::{AuthorityName, ConciseableName};
 use sui_types::committee::Committee;
@@ -891,5 +891,52 @@ mod client_monitor_tests {
             selected[3], validators[0],
             "validator known to be failing health checks should rank last"
         );
+    }
+
+    #[tokio::test]
+    async fn test_staggering_active_requires_f_plus_one_stake() {
+        let auth_agg = get_authority_aggregator(4);
+        let monitor = ValidatorClientMonitor::new_for_test(auth_agg.clone());
+        let validators: Vec<_> = auth_agg.committee.names().cloned().collect();
+
+        assert!(!monitor.staggering_active());
+
+        // One of four equal-stake validators is below the validity threshold.
+        monitor.record_staggering_report(validators[0], Some(true));
+        assert!(!monitor.staggering_active());
+
+        // A second fresh report reaches f+1 stake: flips on immediately.
+        monitor.record_staggering_report(validators[1], Some(true));
+        assert!(monitor.staggering_active());
+
+        // A validator revising its report to inactive withdraws its stake.
+        monitor.record_staggering_report(validators[1], Some(false));
+        assert!(!monitor.staggering_active());
+
+        // Reports without the field carry no information and change nothing.
+        monitor.record_staggering_report(validators[0], None);
+        monitor.record_staggering_report(validators[1], Some(true));
+        assert!(monitor.staggering_active());
+        monitor.record_staggering_report(validators[0], None);
+        assert!(monitor.staggering_active());
+    }
+
+    #[tokio::test]
+    async fn test_staggering_active_reports_age_out() {
+        let auth_agg = get_authority_aggregator(4);
+        let monitor = ValidatorClientMonitor::new_for_test(auth_agg.clone());
+        let validators: Vec<_> = auth_agg.committee.names().cloned().collect();
+        let config = ValidatorClientMonitorConfig::default();
+
+        let stale = Instant::now() - (config.health_check_interval * 2 + Duration::from_secs(1));
+        monitor.record_staggering_report_at(validators[0], true, stale);
+        monitor.record_staggering_report_at(validators[1], true, stale);
+        assert!(!monitor.staggering_active(), "stale reports must not count");
+
+        // Fresh reports count again once enough stake refreshes.
+        monitor.record_staggering_report(validators[0], Some(true));
+        assert!(!monitor.staggering_active());
+        monitor.record_staggering_report(validators[1], Some(true));
+        assert!(monitor.staggering_active());
     }
 }
