@@ -53,6 +53,7 @@ fn observe_latencies(driver: &TransactionDriver<MockAuthorityApi>) {
                 authority_name: *validator,
                 display_name: auth_agg.get_display_name(validator),
                 operation: OperationType::SharedObjectFinality,
+                tx_class: None,
                 ping_type: None,
                 result: Ok(Duration::from_millis((i as u64 + 1) * 100)),
             });
