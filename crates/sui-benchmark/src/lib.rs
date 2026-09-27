@@ -810,6 +810,7 @@ async fn execute_soft_bundle_with_retries(
                         WaitForEffectsResponse::Executed {
                             effects_digest,
                             details,
+                            staggering_active: None,
                         },
                     ));
                 }

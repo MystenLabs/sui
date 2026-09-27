@@ -136,6 +136,7 @@ async fn test_wait_for_effects_position_mismatch() {
         WaitForEffectsResponse::Executed {
             effects_digest,
             details,
+            ..
         } => {
             assert!(details.is_some());
             assert_eq!(effects_digest, exec_effects.digest());
@@ -336,6 +337,7 @@ async fn test_wait_for_effects_finalized() {
         WaitForEffectsResponse::Executed {
             details,
             effects_digest,
+            ..
         } => {
             assert!(details.is_none());
             assert_eq!(effects_digest, exec_effects.digest());
@@ -362,6 +364,7 @@ async fn test_wait_for_effects_finalized() {
         WaitForEffectsResponse::Executed {
             details,
             effects_digest,
+            ..
         } => {
             let details = details.unwrap();
             assert_eq!(effects_digest, exec_effects.digest());
@@ -456,6 +459,7 @@ async fn test_wait_for_effects_ping() {
             WaitForEffectsResponse::Executed {
                 effects_digest,
                 details,
+                ..
             } => {
                 assert!(details.is_none());
                 assert_eq!(effects_digest, TransactionEffectsDigest::ZERO);
@@ -501,6 +505,7 @@ async fn test_wait_for_effects_ping() {
             WaitForEffectsResponse::Executed {
                 effects_digest,
                 details,
+                ..
             } => {
                 assert!(details.is_none());
                 assert_eq!(effects_digest, TransactionEffectsDigest::ZERO);

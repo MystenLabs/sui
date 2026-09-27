@@ -501,6 +501,10 @@ pub enum WaitForEffectsResponse {
     Executed {
         effects_digest: crate::digests::TransactionEffectsDigest,
         details: Option<Box<ExecutedData>>,
+        /// Whether the validator is currently staggering consensus submission of
+        /// transactions without allowed proposers. `None` from validators predating
+        /// the field.
+        staggering_active: Option<bool>,
     },
     // The transaction was rejected by consensus.
     Rejected {
@@ -588,6 +592,10 @@ pub struct RawExecutedStatus {
     pub effects_digest: Bytes,
     #[prost(message, optional, tag = "2")]
     pub details: Option<RawExecutedData>,
+    /// Whether the validator is currently staggering consensus submission of
+    /// transactions without allowed proposers.
+    #[prost(bool, optional, tag = "3")]
+    pub staggering_active: Option<bool>,
 }
 
 #[derive(Clone, prost::Message)]
@@ -623,6 +631,10 @@ pub struct ValidatorHealthResponse {
     pub last_committed_leader_round: u32,
     /// Last locally built checkpoint sequence number
     pub last_locally_built_checkpoint: u64,
+    /// Whether the validator is currently staggering consensus submission of
+    /// transactions without allowed proposers. `None` from validators predating
+    /// the field.
+    pub staggering_active: Option<bool>,
 }
 
 /// Raw protobuf request for validator health information (evolvable)
@@ -644,6 +656,10 @@ pub struct RawValidatorHealthResponse {
     /// Current checkpoint sequence number
     #[prost(uint64, optional, tag = "4")]
     pub checkpoint_sequence: Option<u64>,
+    /// Whether the validator is currently staggering consensus submission of
+    /// transactions without allowed proposers.
+    #[prost(bool, optional, tag = "5")]
+    pub staggering_active: Option<bool>,
 }
 
 // =========== Parse helpers ===========
@@ -769,7 +785,10 @@ impl TryFrom<SubmitTxResult> for RawSubmitTxResult {
                 effects_digest,
                 details,
             } => {
-                let raw_executed = try_from_response_executed(effects_digest, details)?;
+                // The submit path shares RawExecutedStatus but does not report the
+                // staggering state; the driver learns it from wait-for-effects and
+                // health responses.
+                let raw_executed = try_from_response_executed(effects_digest, details, None)?;
                 RawValidatorSubmitStatus::Executed(raw_executed)
             }
             SubmitTxResult::Rejected { error } => {
@@ -901,6 +920,7 @@ fn try_from_response_rejected(
 fn try_from_response_executed(
     effects_digest: crate::digests::TransactionEffectsDigest,
     details: Option<Box<ExecutedData>>,
+    staggering_active: Option<bool>,
 ) -> Result<RawExecutedStatus, crate::error::SuiError> {
     let effects_digest = bcs::to_bytes(&effects_digest)
         .map_err(
@@ -918,6 +938,7 @@ fn try_from_response_executed(
     Ok(RawExecutedStatus {
         effects_digest,
         details,
+        staggering_active,
     })
 }
 
@@ -993,10 +1014,12 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
     fn try_from(value: RawWaitForEffectsResponse) -> Result<Self, Self::Error> {
         match value.inner {
             Some(RawValidatorTransactionStatus::Executed(executed)) => {
+                let staggering_active = executed.staggering_active;
                 let (effects_digest, details) = try_from_raw_executed_status(executed)?;
                 Ok(Self::Executed {
                     effects_digest,
                     details,
+                    staggering_active,
                 })
             }
             Some(RawValidatorTransactionStatus::Rejected(rejected)) => {
@@ -1024,8 +1047,10 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
             WaitForEffectsResponse::Executed {
                 effects_digest,
                 details,
+                staggering_active,
             } => {
-                let raw_executed = try_from_response_executed(effects_digest, details)?;
+                let raw_executed =
+                    try_from_response_executed(effects_digest, details, staggering_active)?;
                 RawValidatorTransactionStatus::Executed(raw_executed)
             }
             WaitForEffectsResponse::Rejected { error } => {
@@ -1066,6 +1091,7 @@ impl TryFrom<ValidatorHealthResponse> for RawValidatorHealthResponse {
             inflight_consensus_messages: Some(value.num_inflight_consensus_transactions),
             consensus_round: Some(value.last_committed_leader_round as u64),
             checkpoint_sequence: Some(value.last_locally_built_checkpoint),
+            staggering_active: value.staggering_active,
         })
     }
 }
@@ -1079,6 +1105,7 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
             num_inflight_execution_transactions: value.pending_certificates.unwrap_or(0),
             last_locally_built_checkpoint: value.checkpoint_sequence.unwrap_or(0),
             last_committed_leader_round: value.consensus_round.unwrap_or(0) as u32,
+            staggering_active: value.staggering_active,
         })
     }
 }
@@ -1086,9 +1113,51 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
 #[cfg(test)]
 mod tests {
     use crate::{
-        messages_grpc::{SubmitTxRequest, SubmitTxType},
+        messages_grpc::{
+            RawValidatorHealthResponse, RawWaitForEffectsResponse, SubmitTxRequest, SubmitTxType,
+            ValidatorHealthResponse, WaitForEffectsResponse,
+        },
         transaction::{Transaction, TransactionData},
     };
+    use prost::Message as _;
+
+    #[test]
+    fn test_wait_for_effects_response_staggering_active_roundtrip() {
+        for staggering_active in [Some(true), Some(false), None] {
+            let response = WaitForEffectsResponse::Executed {
+                effects_digest: crate::digests::TransactionEffectsDigest::ZERO,
+                details: None,
+                staggering_active,
+            };
+            let raw: RawWaitForEffectsResponse = response.try_into().unwrap();
+            // Through wire bytes, as an old/new peer would see them.
+            let decoded =
+                RawWaitForEffectsResponse::decode(raw.encode_to_vec().as_slice()).unwrap();
+            let typed: WaitForEffectsResponse = decoded.try_into().unwrap();
+            match typed {
+                WaitForEffectsResponse::Executed {
+                    staggering_active: actual,
+                    ..
+                } => assert_eq!(actual, staggering_active),
+                other => panic!("Expected Executed response, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_validator_health_response_staggering_active_roundtrip() {
+        for staggering_active in [Some(true), Some(false), None] {
+            let response = ValidatorHealthResponse {
+                staggering_active,
+                ..Default::default()
+            };
+            let raw: RawValidatorHealthResponse = response.try_into().unwrap();
+            let decoded =
+                RawValidatorHealthResponse::decode(raw.encode_to_vec().as_slice()).unwrap();
+            let typed: ValidatorHealthResponse = decoded.try_into().unwrap();
+            assert_eq!(typed.staggering_active, staggering_active);
+        }
+    }
 
     #[tokio::test]
     async fn test_submit_tx_request_into_raw() {
