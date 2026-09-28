@@ -31,6 +31,7 @@ pub struct RpcMetrics {
 }
 
 const GRPC_STATUS: http::HeaderName = http::HeaderName::from_static("grpc-status");
+const GRPC_WEB_CONTENT_TYPE: &str = "application/grpc-web";
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
@@ -248,6 +249,15 @@ pub fn grpc_method_paths_from_file_descriptor_sets(
     Ok(paths)
 }
 
+/// Builds the per-request metrics handlers for [`sui_http::middleware::callback::CallbackLayer`].
+///
+/// The layer must be installed outside any layer that wraps the request body
+/// with its own failure modes (body-size limits, request decompression,
+/// body-read timeouts). A request whose body errors is counted `canceled`,
+/// which is only correct while the body this layer observes is the
+/// transport's: then an error means the client reset the stream, the
+/// connection failed, or the client broke the protocol. Errors from an outer
+/// body-wrapping layer would be counted `canceled` and hide real rejections.
 #[derive(Clone)]
 pub struct RpcMetricsMakeCallbackHandler {
     metrics: Arc<RpcMetrics>,
@@ -354,12 +364,15 @@ fn is_grpc_content_type(content_type: &http::HeaderValue) -> bool {
 }
 
 fn is_grpc_web_content_type(content_type: &http::HeaderValue) -> bool {
-    content_type.as_bytes().starts_with(b"application/grpc-web")
+    content_type
+        .as_bytes()
+        .starts_with(GRPC_WEB_CONTENT_TYPE.as_bytes())
 }
 
 /// Observes the request body so that a request the client abandoned is
 /// counted as `canceled` rather than with whatever status the service
-/// produced for the truncated request.
+/// produced for the truncated request. This relies on the placement described
+/// on [`RpcMetricsMakeCallbackHandler`].
 pub struct RpcMetricsRequestHandler {
     request_body_failed: Arc<AtomicBool>,
 }
