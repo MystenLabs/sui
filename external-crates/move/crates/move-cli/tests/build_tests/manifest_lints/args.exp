@@ -40,6 +40,8 @@ External Command `cp fixtures/lint.move sources/m.move`:
 External Command `cp Move.lint_allow.ok.toml Move.toml`:
 Command `build`:
 BUILDING manifest_lints
+Command `build --lint`:
+BUILDING manifest_lints
 External Command `cp Move.lint_warn.ok.toml Move.toml`:
 Command `build`:
 BUILDING manifest_lints
@@ -70,8 +72,26 @@ warning[WSL01011]: unnecessary `entry` on a `public` function
   │
   = `public` functions can be called from PTBs. `entry` can be used to allow non-`public` (private or `public(package)`) functions to be called from PTBs, although there will be additional restrictions on the input arguments to such functions.
 
+External Command `cp fixtures/clean.move sources/m.move`:
+External Command `cp Move.dependency_lints.ok.toml Move.toml`:
+Command `build`:
+INCLUDING DEPENDENCY dep
+BUILDING manifest_lints
+External Command `cp fixtures/lint.move sources/m.move`:
+External Command `cp Move.no_lint.ok.toml Move.toml`:
+Command `build --no-lint`:
+BUILDING manifest_lints
 External Command `cp fixtures/compiler.move sources/m.move`:
 External Command `cp Move.compiler_deny.error.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+error[EC09002]: unused variable
+  ┌─ ./sources/m.move:3:13
+  │
+3 │         let unused = 0u64;
+  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+
+External Command `cp Move.compiler_conflict.error.toml Move.toml`:
 Command `build`:
 BUILDING manifest_lints
 error[EC09002]: unused variable
@@ -118,6 +138,9 @@ error[ESL01011]: unnecessary `entry` on a `public` function
   = `public` functions can be called from PTBs. `entry` can be used to allow non-`public` (private or `public(package)`) functions to be called from PTBs, although there will be additional restrictions on the input arguments to such functions.
 
 External Command `cp fixtures/clean.move sources/m.move`:
+External Command `cp Move.sui_lint_core.error.toml Move.toml`:
+Command `build --default-move-flavor core`:
+Error: unknown warning filter 'lint(public_entry)' in Move.toml
 External Command `cp Move.unknown.error.toml Move.toml`:
 Command `build`:
 Error: unknown warning filter 'not_a_warning' in Move.toml
