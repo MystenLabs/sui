@@ -27,6 +27,13 @@ use tokio::{
 };
 use tracing::{debug, info, warn};
 
+/// How long a computed staggering view is served before being recomputed. Zero in
+/// unit tests, which mutate reports and assert the view in the same instant.
+#[cfg(not(test))]
+const STAGGERING_VIEW_TTL: Duration = Duration::from_millis(250);
+#[cfg(test)]
+const STAGGERING_VIEW_TTL: Duration = Duration::ZERO;
+
 /// A validator's latest self-reported staggering state, as tracked by the driver.
 struct TrackedStaggeringReport {
     /// The report as received on the wire.
@@ -55,6 +62,11 @@ pub struct ValidatorClientMonitor<A: Clone> {
     /// Latest staggering state each validator self-reported (via health-check and
     /// wait-for-effects responses).
     staggering_reports: RwLock<HashMap<AuthorityName, TrackedStaggeringReport>>,
+    /// Memoized [`Self::staggering_active`] result: the stake-weighted scan costs
+    /// ~microseconds per call and runs on every submitted transaction, while the
+    /// view changes on the mode's phase timescale (tens of seconds) — a TTL of
+    /// staleness is noise against the report freshness window.
+    staggering_view: RwLock<Option<(bool, Instant)>>,
 }
 
 impl<A> ValidatorClientMonitor<A>
@@ -78,6 +90,7 @@ where
             authority_aggregator,
             cached_latencies: RwLock::new(HashMap::new()),
             staggering_reports: RwLock::new(HashMap::new()),
+            staggering_view: RwLock::new(None),
         });
 
         let monitor_clone = monitor.clone();
@@ -326,6 +339,18 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     /// aging out of the window. Freshness runs on the driver's receipt clock only;
     /// the validator-local timestamps merely order each validator's own reports.
     pub fn staggering_active(&self) -> bool {
+        if let Some((active, computed_at)) = *self.staggering_view.read()
+            && computed_at.elapsed() < STAGGERING_VIEW_TTL
+        {
+            return active;
+        }
+        // Concurrent recomputes race benignly: both derive the same view.
+        let active = self.compute_staggering_active();
+        *self.staggering_view.write() = Some((active, Instant::now()));
+        active
+    }
+
+    fn compute_staggering_active(&self) -> bool {
         let authority_agg = self.authority_aggregator.load();
         let committee = &authority_agg.committee;
         let freshness = self.report_freshness();
