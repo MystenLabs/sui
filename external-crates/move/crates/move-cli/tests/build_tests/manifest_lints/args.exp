@@ -1,3 +1,5 @@
+External Command `echo "Successful cases"`:
+Successful cases
 External Command `cp Move.compiler_allow.ok.toml Move.toml`:
 Command `build`:
 BUILDING manifest_lints
@@ -81,6 +83,8 @@ External Command `cp fixtures/lint.move sources/m.move`:
 External Command `cp Move.no_lint.ok.toml Move.toml`:
 Command `build --no-lint`:
 BUILDING manifest_lints
+External Command `echo "Failing cases"`:
+Failing cases
 External Command `cp fixtures/compiler.move sources/m.move`:
 External Command `cp Move.compiler_deny.error.toml Move.toml`:
 Command `build`:
