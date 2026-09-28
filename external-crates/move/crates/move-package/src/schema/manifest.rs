@@ -4,7 +4,10 @@ use anyhow::ensure;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_spanned::Spanned;
 
-use move_compiler::{diagnostics::filter::WarningFilterConfig, editions::Edition};
+use move_compiler::{
+    diagnostics::filter::{FILTER_ALL, FilterKind, FilterName, FilterPrefix},
+    editions::Edition,
+};
 
 use crate::compatibility::legacy::LegacyData;
 
@@ -23,6 +26,67 @@ pub type ModeName = String;
 /// The identifier for a system dependency (in `{system = "dep_id"}` dependencies
 pub type SystemDepName = String;
 
+#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
+pub struct LintConfig(pub BTreeMap<String, LintValue>);
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum LintValue {
+    Level(LintLevel),
+    Group(BTreeMap<String, LintLevel>),
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LintLevel {
+    Allow,
+    Warn,
+    Deny,
+}
+
+impl LintConfig {
+    pub fn configured_filters(&self) -> Vec<(FilterPrefix, FilterName, FilterKind)> {
+        self.0
+            .iter()
+            .flat_map(|(config_name, value)| match value {
+                LintValue::Level(level) => vec![(
+                    None,
+                    if config_name == "warnings" {
+                        FILTER_ALL.into()
+                    } else {
+                        config_name.as_str().into()
+                    },
+                    level.filter_kind(),
+                )],
+                LintValue::Group(group) => group
+                    .iter()
+                    .map(|(name, level)| {
+                        (
+                            Some(config_name.as_str().into()),
+                            name.as_str().into(),
+                            level.filter_kind(),
+                        )
+                    })
+                    .collect(),
+            })
+            .collect()
+    }
+
+    pub fn enables_linters(&self) -> bool {
+        self.0.contains_key("lint")
+    }
+}
+
+impl LintLevel {
+    fn filter_kind(self) -> FilterKind {
+        match self {
+            Self::Allow => FilterKind::Allow,
+            Self::Warn => FilterKind::Warn,
+            Self::Deny => FilterKind::Deny,
+        }
+    }
+}
+
 // Note: [Manifest] objects should not be mutated or serialized; they are user-defined files so
 // tools that write them should use [toml_edit] to set / preserve the formatting. However, we do
 // implement [Serialize] and provide [render_as_toml], primarily for generating tests
@@ -32,7 +96,7 @@ pub struct ParsedManifest {
     pub package: PackageMetadata,
 
     #[serde(default)]
-    pub lints: WarningFilterConfig,
+    pub lints: LintConfig,
 
     #[serde(default)]
     pub environments: BTreeMap<Spanned<EnvironmentName>, Spanned<EnvironmentID>>,
@@ -267,13 +331,10 @@ mod tests {
     use insta::assert_snapshot;
 
     use super::{
-        DefaultDependency, ExternalDependency, ManifestDependencyInfo, ManifestGitDependency,
-        ParsedManifest, ReplacementDependency,
+        DefaultDependency, ExternalDependency, LintLevel, LintValue, ManifestDependencyInfo,
+        ManifestGitDependency, ParsedManifest, ReplacementDependency,
     };
-    use move_compiler::{
-        diagnostics::filter::{WarningFilterValue, WarningLevel},
-        editions::Edition,
-    };
+    use move_compiler::editions::Edition;
     use std::{collections::BTreeMap, str::FromStr};
 
     impl ParsedManifest {
@@ -347,13 +408,13 @@ mod tests {
 
         assert_eq!(
             manifest.lints.0.get("unused"),
-            Some(&WarningFilterValue::Level(WarningLevel::Deny))
+            Some(&LintValue::Level(LintLevel::Deny))
         );
         assert_eq!(
             manifest.lints.0.get("lint"),
-            Some(&WarningFilterValue::Group(BTreeMap::from([(
+            Some(&LintValue::Group(BTreeMap::from([(
                 "abort_without_constant".to_owned(),
-                WarningLevel::Allow,
+                LintLevel::Allow,
             )])))
         );
     }
