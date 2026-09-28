@@ -10,7 +10,7 @@ error[EC04003]: built-in operation not supported
   │
 8 │         let _y = (x as bool);
   │                   ^    ---- Found: 'bool'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
-  │                   │     
+  │                   │
   │                   Invalid argument to 'as'
 
 error[EC04003]: built-in operation not supported
@@ -26,7 +26,7 @@ error[EC04003]: built-in operation not supported
    │
 20 │         let _y = (x as address);
    │                   ^    ------- Found: 'address'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
-   │                   │     
+   │                   │
    │                   Invalid argument to 'as'
 
 error[EC04003]: built-in operation not supported
@@ -42,5 +42,5 @@ error[EC04003]: built-in operation not supported
    │
 32 │         let _y = (x as vector<u8>);
    │                   ^    ---------- Found: 'vector<u8>'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
-   │                   │     
+   │                   │
    │                   Invalid argument to 'as'

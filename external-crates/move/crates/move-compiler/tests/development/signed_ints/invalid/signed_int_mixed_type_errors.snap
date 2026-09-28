@@ -10,7 +10,7 @@ error[EC04007]: incompatible types
   │
 7 │         let _x = 1i8 + 1u8;
   │                  --- ^ --- Found: 'u8'. It is not compatible with the other type.
-  │                  │   │  
+  │                  │   │
   │                  │   Incompatible arguments to '+'
   │                  Found: 'i8'. It is not compatible with the other type.
 
@@ -19,7 +19,7 @@ error[EC04007]: incompatible types
    │
 11 │         let _x = 1i16 - 1u16;
    │                  ---- ^ ---- Found: 'u16'. It is not compatible with the other type.
-   │                  │    │  
+   │                  │    │
    │                  │    Incompatible arguments to '-'
    │                  Found: 'i16'. It is not compatible with the other type.
 
@@ -28,7 +28,7 @@ error[EC04007]: incompatible types
    │
 15 │         let _x = 1i32 * 1u32;
    │                  ---- ^ ---- Found: 'u32'. It is not compatible with the other type.
-   │                  │    │  
+   │                  │    │
    │                  │    Incompatible arguments to '*'
    │                  Found: 'i32'. It is not compatible with the other type.
 
@@ -37,7 +37,7 @@ error[EC04007]: incompatible types
    │
 19 │         let _x = 1i64 / 1u64;
    │                  ---- ^ ---- Found: 'u64'. It is not compatible with the other type.
-   │                  │    │  
+   │                  │    │
    │                  │    Incompatible arguments to '/'
    │                  Found: 'i64'. It is not compatible with the other type.
 
@@ -46,7 +46,7 @@ error[EC04007]: incompatible types
    │
 23 │         let _x = 1i128 % 1u128;
    │                  ----- ^ ----- Found: 'u128'. It is not compatible with the other type.
-   │                  │     │  
+   │                  │     │
    │                  │     Incompatible arguments to '%'
    │                  Found: 'i128'. It is not compatible with the other type.
 
@@ -55,7 +55,7 @@ error[EC04007]: incompatible types
    │
 28 │         let _x = 1i8 + 1i16;
    │                  --- ^ ---- Found: 'i16'. It is not compatible with the other type.
-   │                  │   │  
+   │                  │   │
    │                  │   Incompatible arguments to '+'
    │                  Found: 'i8'. It is not compatible with the other type.
 
@@ -64,7 +64,7 @@ error[EC04007]: incompatible types
    │
 32 │         let _x = 1i32 - 1i64;
    │                  ---- ^ ---- Found: 'i64'. It is not compatible with the other type.
-   │                  │    │  
+   │                  │    │
    │                  │    Incompatible arguments to '-'
    │                  Found: 'i32'. It is not compatible with the other type.
 
@@ -73,7 +73,7 @@ error[EC04007]: incompatible types
    │
 37 │         let _x = 1i64 < 1u64;
    │                  ---- ^ ---- Found: 'u64'. It is not compatible with the other type.
-   │                  │    │  
+   │                  │    │
    │                  │    Incompatible arguments to '<'
    │                  Found: 'i64'. It is not compatible with the other type.
 
@@ -82,7 +82,7 @@ error[EC04007]: incompatible types
    │
 41 │         let _x = 1i32 == 1u32;
    │                  ---- ^^ ---- Found: 'u32'. It is not compatible with the other type.
-   │                  │    │   
+   │                  │    │
    │                  │    Incompatible arguments to '=='
    │                  Found: 'i32'. It is not compatible with the other type.
 
@@ -91,7 +91,7 @@ error[EC04007]: incompatible types
    │
 45 │         let _x = 1i8 != 1u8;
    │                  --- ^^ --- Found: 'u8'. It is not compatible with the other type.
-   │                  │   │   
+   │                  │   │
    │                  │   Incompatible arguments to '!='
    │                  Found: 'i8'. It is not compatible with the other type.
 
@@ -100,7 +100,7 @@ error[EC04007]: incompatible types
    │
 50 │         let _x = 1i64 & 1u64;
    │                  ---- ^ ---- Found: 'u64'. It is not compatible with the other type.
-   │                  │    │  
+   │                  │    │
    │                  │    Incompatible arguments to '&'
    │                  Found: 'i64'. It is not compatible with the other type.
 
@@ -109,7 +109,7 @@ error[EC04007]: incompatible types
    │
 54 │         let _x = 1i32 | 1u32;
    │                  ---- ^ ---- Found: 'u32'. It is not compatible with the other type.
-   │                  │    │  
+   │                  │    │
    │                  │    Incompatible arguments to '|'
    │                  Found: 'i32'. It is not compatible with the other type.
 
@@ -118,6 +118,6 @@ error[EC04007]: incompatible types
    │
 58 │         let _x = 1i16 ^ 1u16;
    │                  ---- ^ ---- Found: 'u16'. It is not compatible with the other type.
-   │                  │    │  
+   │                  │    │
    │                  │    Incompatible arguments to '^'
    │                  Found: 'i16'. It is not compatible with the other type.

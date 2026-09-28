@@ -10,7 +10,7 @@ error[EC04007]: incompatible types
   │
 7 │         let _x: u64 = 1i64;
   │                 ^^^   ---- Given: 'i64'
-  │                 │      
+  │                 │
   │                 Invalid type annotation
   │                 Expected: 'u64'
 
@@ -19,7 +19,7 @@ error[EC04007]: incompatible types
    │
 11 │         let _x: i64 = 1u64;
    │                 ^^^   ---- Given: 'u64'
-   │                 │      
+   │                 │
    │                 Invalid type annotation
    │                 Expected: 'i64'
 
@@ -28,7 +28,7 @@ error[EC04007]: incompatible types
    │
 16 │         let _x: i64 = 1i8;
    │                 ^^^   --- Given: 'i8'
-   │                 │      
+   │                 │
    │                 Invalid type annotation
    │                 Expected: 'i64'
 
@@ -37,7 +37,7 @@ error[EC04007]: incompatible types
    │
 20 │         let _x: i8 = 1i64;
    │                 ^^   ---- Given: 'i64'
-   │                 │     
+   │                 │
    │                 Invalid type annotation
    │                 Expected: 'i8'
 
@@ -48,5 +48,5 @@ error[EC04007]: incompatible types
    │                    --- Expected: 'i32'
 26 │         x = 2u32;
    │         ^   ---- Given: 'u32'
-   │         │    
+   │         │
    │         Invalid assignment to variable 'x'

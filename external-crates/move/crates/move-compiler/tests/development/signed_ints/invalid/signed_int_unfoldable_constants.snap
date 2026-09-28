@@ -55,7 +55,7 @@ error[EC08001]: cannot compute constant value
 
 error[EC08001]: cannot compute constant value
    ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:20:9
-   │  
+   │
 20 │ ╭         -57896044618658097711785492504343953926634992332820282019728792003956564819968i256
 21 │ │             / -1i256;
    │ ╰────────────────────^ Invalid expression in 'const'. This expression could not be evaluated to a value
@@ -74,7 +74,7 @@ error[EC08001]: cannot compute constant value
 
 error[EC08001]: cannot compute constant value
    ┌─ tests/development/signed_ints/invalid/signed_int_unfoldable_constants.move:25:9
-   │  
+   │
 25 │ ╭         -57896044618658097711785492504343953926634992332820282019728792003956564819968i256
 26 │ │             % -1i256;
    │ ╰────────────────────^ Invalid expression in 'const'. This expression could not be evaluated to a value

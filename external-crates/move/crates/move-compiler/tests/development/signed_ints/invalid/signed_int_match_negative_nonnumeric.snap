@@ -10,5 +10,5 @@ error[EC01002]: unexpected token
   │
 8 │             -true => 0,
   │             ^---- Expected a numeric literal after '-' in a pattern
-  │             │ 
+  │             │
   │             Invalid pattern
