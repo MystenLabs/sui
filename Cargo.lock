@@ -14725,6 +14725,7 @@ version = "1.82.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "backoff",
  "bcs",
  "bin-version",
  "chrono",
