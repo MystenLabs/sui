@@ -19,7 +19,7 @@ use sui_types::event::Event;
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionErrorKind, ExecutionFailure, ExecutionStatus,
 };
-use sui_types::messages_grpc::WaitForEffectsResponse;
+use sui_types::messages_grpc::WaitForEffectsStatus;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
@@ -863,12 +863,12 @@ async fn test_conflicting_owned_transactions() {
     info!("tx2 response: {:?}", response2);
 
     // One should be Executed, one should be Rejected
-    let (executed_response, rejected_response) = match (response1, response2) {
-        (WaitForEffectsResponse::Executed { .. }, WaitForEffectsResponse::Rejected { .. }) => {
+    let (executed_response, rejected_response) = match (&response1.status, &response2.status) {
+        (WaitForEffectsStatus::Executed { .. }, WaitForEffectsStatus::Rejected { .. }) => {
             info!("tx1 executed, tx2 rejected");
             (response1, response2)
         }
-        (WaitForEffectsResponse::Rejected { .. }, WaitForEffectsResponse::Executed { .. }) => {
+        (WaitForEffectsStatus::Rejected { .. }, WaitForEffectsStatus::Executed { .. }) => {
             info!("tx1 rejected, tx2 executed");
             (response2, response1)
         }
@@ -881,16 +881,16 @@ async fn test_conflicting_owned_transactions() {
     };
 
     // Verify the executed transaction succeeded
-    match executed_response {
-        WaitForEffectsResponse::Executed { effects_digest, .. } => {
+    match &executed_response.status {
+        WaitForEffectsStatus::Executed { effects_digest, .. } => {
             info!("Executed transaction effects digest: {:?}", effects_digest);
         }
         _ => unreachable!(),
     }
 
     // Verify the rejected transaction has ObjectLockConflict error
-    match rejected_response {
-        WaitForEffectsResponse::Rejected { error } => {
+    match &rejected_response.status {
+        WaitForEffectsStatus::Rejected { error } => {
             let error_str = error
                 .as_ref()
                 .map(|e| e.to_string())

@@ -496,15 +496,36 @@ pub struct WaitForEffectsRequest {
     pub ping_type: Option<PingType>,
 }
 
+/// A validator's self-reported staggering state, carried on wait-for-effects and
+/// validator-health responses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StaggeringReport {
+    /// Whether the validator is currently staggering consensus submission of
+    /// transactions without allowed proposers.
+    pub active: bool,
+    /// Validator-local unix-millis timestamp taken alongside `active`, so the driver
+    /// can order reports from the same validator (in-flight responses can be
+    /// processed out of order — wait-for-effects long-polls). Never compared across
+    /// validators or against the driver's clock, so clock skew is irrelevant.
+    pub report_ms: Option<u64>,
+}
+
+/// The transaction's outcome plus the responding validator's staggering state:
+/// the report describes the validator, not the transaction, so it rides the
+/// envelope and is present on every outcome — including the held-then-expired
+/// case where the driver most needs to learn that staggering is on.
+#[derive(Clone, Debug)]
+pub struct WaitForEffectsResponse {
+    /// `None` from validators predating the field.
+    pub staggering: Option<StaggeringReport>,
+    pub status: WaitForEffectsStatus,
+}
+
 #[derive(Clone)]
-pub enum WaitForEffectsResponse {
+pub enum WaitForEffectsStatus {
     Executed {
         effects_digest: crate::digests::TransactionEffectsDigest,
         details: Option<Box<ExecutedData>>,
-        /// Whether the validator is currently staggering consensus submission of
-        /// transactions without allowed proposers. `None` from validators predating
-        /// the field.
-        staggering_active: Option<bool>,
     },
     // The transaction was rejected by consensus.
     Rejected {
@@ -520,7 +541,7 @@ pub enum WaitForEffectsResponse {
     },
 }
 
-impl std::fmt::Debug for WaitForEffectsResponse {
+impl std::fmt::Debug for WaitForEffectsStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Executed { effects_digest, .. } => f
@@ -574,6 +595,9 @@ pub struct RawWaitForEffectsResponse {
     // We expect the value to be set in a valid response.
     #[prost(oneof = "RawValidatorTransactionStatus", tags = "1, 2, 3")]
     pub inner: Option<RawValidatorTransactionStatus>,
+    /// The validator's self-reported staggering state, carried on every outcome.
+    #[prost(message, optional, tag = "4")]
+    pub staggering: Option<RawStaggeringReport>,
 }
 
 #[derive(Clone, prost::Oneof)]
@@ -586,16 +610,23 @@ pub enum RawValidatorTransactionStatus {
     Expired(RawExpiredStatus),
 }
 
+/// The validator's self-reported staggering state; see [`StaggeringReport`].
+#[derive(Clone, Copy, prost::Message)]
+pub struct RawStaggeringReport {
+    #[prost(bool, tag = "1")]
+    pub active: bool,
+    /// Validator-local unix-millis timestamp taken alongside `active`; orders
+    /// reports from the same validator at the driver.
+    #[prost(uint64, optional, tag = "2")]
+    pub report_ms: Option<u64>,
+}
+
 #[derive(Clone, prost::Message)]
 pub struct RawExecutedStatus {
     #[prost(bytes = "bytes", tag = "1")]
     pub effects_digest: Bytes,
     #[prost(message, optional, tag = "2")]
     pub details: Option<RawExecutedData>,
-    /// Whether the validator is currently staggering consensus submission of
-    /// transactions without allowed proposers.
-    #[prost(bool, optional, tag = "3")]
-    pub staggering_active: Option<bool>,
 }
 
 #[derive(Clone, prost::Message)]
@@ -631,10 +662,9 @@ pub struct ValidatorHealthResponse {
     pub last_committed_leader_round: u32,
     /// Last locally built checkpoint sequence number
     pub last_locally_built_checkpoint: u64,
-    /// Whether the validator is currently staggering consensus submission of
-    /// transactions without allowed proposers. `None` from validators predating
-    /// the field.
-    pub staggering_active: Option<bool>,
+    /// The validator's self-reported staggering state; `None` from validators
+    /// predating the field.
+    pub staggering: Option<StaggeringReport>,
 }
 
 /// Raw protobuf request for validator health information (evolvable)
@@ -656,10 +686,9 @@ pub struct RawValidatorHealthResponse {
     /// Current checkpoint sequence number
     #[prost(uint64, optional, tag = "4")]
     pub checkpoint_sequence: Option<u64>,
-    /// Whether the validator is currently staggering consensus submission of
-    /// transactions without allowed proposers.
-    #[prost(bool, optional, tag = "5")]
-    pub staggering_active: Option<bool>,
+    /// The validator's self-reported staggering state; see [`StaggeringReport`].
+    #[prost(message, optional, tag = "5")]
+    pub staggering: Option<RawStaggeringReport>,
 }
 
 // =========== Parse helpers ===========
@@ -785,10 +814,7 @@ impl TryFrom<SubmitTxResult> for RawSubmitTxResult {
                 effects_digest,
                 details,
             } => {
-                // The submit path shares RawExecutedStatus but does not report the
-                // staggering state; the driver learns it from wait-for-effects and
-                // health responses.
-                let raw_executed = try_from_response_executed(effects_digest, details, None)?;
+                let raw_executed = try_from_response_executed(effects_digest, details)?;
                 RawValidatorSubmitStatus::Executed(raw_executed)
             }
             SubmitTxResult::Rejected { error } => {
@@ -917,10 +943,27 @@ fn try_from_response_rejected(
     Ok(RawRejectedStatus { error })
 }
 
+impl From<StaggeringReport> for RawStaggeringReport {
+    fn from(value: StaggeringReport) -> Self {
+        Self {
+            active: value.active,
+            report_ms: value.report_ms,
+        }
+    }
+}
+
+impl From<RawStaggeringReport> for StaggeringReport {
+    fn from(value: RawStaggeringReport) -> Self {
+        Self {
+            active: value.active,
+            report_ms: value.report_ms,
+        }
+    }
+}
+
 fn try_from_response_executed(
     effects_digest: crate::digests::TransactionEffectsDigest,
     details: Option<Box<ExecutedData>>,
-    staggering_active: Option<bool>,
 ) -> Result<RawExecutedStatus, crate::error::SuiError> {
     let effects_digest = bcs::to_bytes(&effects_digest)
         .map_err(
@@ -938,7 +981,6 @@ fn try_from_response_executed(
     Ok(RawExecutedStatus {
         effects_digest,
         details,
-        staggering_active,
     })
 }
 
@@ -1012,30 +1054,34 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
     type Error = crate::error::SuiError;
 
     fn try_from(value: RawWaitForEffectsResponse) -> Result<Self, Self::Error> {
-        match value.inner {
+        let staggering = value.staggering.map(Into::into);
+        let status = match value.inner {
             Some(RawValidatorTransactionStatus::Executed(executed)) => {
-                let staggering_active = executed.staggering_active;
                 let (effects_digest, details) = try_from_raw_executed_status(executed)?;
-                Ok(Self::Executed {
+                WaitForEffectsStatus::Executed {
                     effects_digest,
                     details,
-                    staggering_active,
-                })
+                }
             }
             Some(RawValidatorTransactionStatus::Rejected(rejected)) => {
                 let error = try_from_raw_rejected_status(rejected)?;
-                Ok(Self::Rejected { error })
+                WaitForEffectsStatus::Rejected { error }
             }
-            Some(RawValidatorTransactionStatus::Expired(expired)) => Ok(Self::Expired {
-                epoch: expired.epoch,
-                round: expired.round,
-            }),
-            None => Err(crate::error::SuiErrorKind::GrpcMessageDeserializeError {
-                type_info: "RawWaitForEffectsResponse.inner".to_string(),
-                error: "RawWaitForEffectsResponse.inner is None".to_string(),
+            Some(RawValidatorTransactionStatus::Expired(expired)) => {
+                WaitForEffectsStatus::Expired {
+                    epoch: expired.epoch,
+                    round: expired.round,
+                }
             }
-            .into()),
-        }
+            None => {
+                return Err(crate::error::SuiErrorKind::GrpcMessageDeserializeError {
+                    type_info: "RawWaitForEffectsResponse.inner".to_string(),
+                    error: "RawWaitForEffectsResponse.inner is None".to_string(),
+                }
+                .into());
+            }
+        };
+        Ok(Self { staggering, status })
     }
 }
 
@@ -1043,25 +1089,26 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
     type Error = crate::error::SuiError;
 
     fn try_from(value: WaitForEffectsResponse) -> Result<Self, Self::Error> {
-        let inner = match value {
-            WaitForEffectsResponse::Executed {
+        let inner = match value.status {
+            WaitForEffectsStatus::Executed {
                 effects_digest,
                 details,
-                staggering_active,
             } => {
-                let raw_executed =
-                    try_from_response_executed(effects_digest, details, staggering_active)?;
+                let raw_executed = try_from_response_executed(effects_digest, details)?;
                 RawValidatorTransactionStatus::Executed(raw_executed)
             }
-            WaitForEffectsResponse::Rejected { error } => {
+            WaitForEffectsStatus::Rejected { error } => {
                 let raw_rejected = try_from_response_rejected(error)?;
                 RawValidatorTransactionStatus::Rejected(raw_rejected)
             }
-            WaitForEffectsResponse::Expired { epoch, round } => {
+            WaitForEffectsStatus::Expired { epoch, round } => {
                 RawValidatorTransactionStatus::Expired(RawExpiredStatus { epoch, round })
             }
         };
-        Ok(RawWaitForEffectsResponse { inner: Some(inner) })
+        Ok(RawWaitForEffectsResponse {
+            inner: Some(inner),
+            staggering: value.staggering.map(Into::into),
+        })
     }
 }
 
@@ -1091,7 +1138,7 @@ impl TryFrom<ValidatorHealthResponse> for RawValidatorHealthResponse {
             inflight_consensus_messages: Some(value.num_inflight_consensus_transactions),
             consensus_round: Some(value.last_committed_leader_round as u64),
             checkpoint_sequence: Some(value.last_locally_built_checkpoint),
-            staggering_active: value.staggering_active,
+            staggering: value.staggering.map(Into::into),
         })
     }
 }
@@ -1105,7 +1152,7 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
             num_inflight_execution_transactions: value.pending_certificates.unwrap_or(0),
             last_locally_built_checkpoint: value.checkpoint_sequence.unwrap_or(0),
             last_committed_leader_round: value.consensus_round.unwrap_or(0) as u32,
-            staggering_active: value.staggering_active,
+            staggering: value.staggering.map(Into::into),
         })
     }
 }
@@ -1114,48 +1161,78 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
 mod tests {
     use crate::{
         messages_grpc::{
-            RawValidatorHealthResponse, RawWaitForEffectsResponse, SubmitTxRequest, SubmitTxType,
-            ValidatorHealthResponse, WaitForEffectsResponse,
+            RawValidatorHealthResponse, RawWaitForEffectsResponse, StaggeringReport,
+            SubmitTxRequest, SubmitTxType, ValidatorHealthResponse, WaitForEffectsResponse,
+            WaitForEffectsStatus,
         },
         transaction::{Transaction, TransactionData},
     };
     use prost::Message as _;
 
+    fn staggering_report_cases() -> [Option<StaggeringReport>; 4] {
+        [
+            Some(StaggeringReport {
+                active: true,
+                report_ms: Some(123_456_789),
+            }),
+            Some(StaggeringReport {
+                active: false,
+                report_ms: Some(0),
+            }),
+            Some(StaggeringReport {
+                active: true,
+                report_ms: None,
+            }),
+            None,
+        ]
+    }
+
     #[test]
-    fn test_wait_for_effects_response_staggering_active_roundtrip() {
-        for staggering_active in [Some(true), Some(false), None] {
-            let response = WaitForEffectsResponse::Executed {
+    fn test_wait_for_effects_response_staggering_roundtrip() {
+        // The report rides the envelope, so it must survive every outcome.
+        let statuses = [
+            WaitForEffectsStatus::Executed {
                 effects_digest: crate::digests::TransactionEffectsDigest::ZERO,
                 details: None,
-                staggering_active,
-            };
-            let raw: RawWaitForEffectsResponse = response.try_into().unwrap();
-            // Through wire bytes, as an old/new peer would see them.
-            let decoded =
-                RawWaitForEffectsResponse::decode(raw.encode_to_vec().as_slice()).unwrap();
-            let typed: WaitForEffectsResponse = decoded.try_into().unwrap();
-            match typed {
-                WaitForEffectsResponse::Executed {
-                    staggering_active: actual,
-                    ..
-                } => assert_eq!(actual, staggering_active),
-                other => panic!("Expected Executed response, got {other:?}"),
+            },
+            WaitForEffectsStatus::Rejected { error: None },
+            WaitForEffectsStatus::Expired {
+                epoch: 7,
+                round: Some(42),
+            },
+        ];
+        for status in statuses {
+            for staggering in staggering_report_cases() {
+                let response = WaitForEffectsResponse {
+                    staggering,
+                    status: status.clone(),
+                };
+                let raw: RawWaitForEffectsResponse = response.try_into().unwrap();
+                // Through wire bytes, as an old/new peer would see them.
+                let decoded =
+                    RawWaitForEffectsResponse::decode(raw.encode_to_vec().as_slice()).unwrap();
+                let typed: WaitForEffectsResponse = decoded.try_into().unwrap();
+                assert_eq!(typed.staggering, staggering);
+                assert_eq!(
+                    std::mem::discriminant(&typed.status),
+                    std::mem::discriminant(&status)
+                );
             }
         }
     }
 
     #[test]
-    fn test_validator_health_response_staggering_active_roundtrip() {
-        for staggering_active in [Some(true), Some(false), None] {
+    fn test_validator_health_response_staggering_roundtrip() {
+        for staggering in staggering_report_cases() {
             let response = ValidatorHealthResponse {
-                staggering_active,
+                staggering,
                 ..Default::default()
             };
             let raw: RawValidatorHealthResponse = response.try_into().unwrap();
             let decoded =
                 RawValidatorHealthResponse::decode(raw.encode_to_vec().as_slice()).unwrap();
             let typed: ValidatorHealthResponse = decoded.try_into().unwrap();
-            assert_eq!(typed.staggering_active, staggering_active);
+            assert_eq!(typed.staggering, staggering);
         }
     }
 

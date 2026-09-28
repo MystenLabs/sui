@@ -22,7 +22,7 @@ use sui_types::messages_grpc::{
     ExecutedData, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest, SubmitTxResponse,
     SystemStateRequest, TransactionInfoRequest, TransactionStatus, ValidatorHealthRequest,
     ValidatorHealthResponse, VerifiedObjectInfoResponse, WaitForEffectsRequest,
-    WaitForEffectsResponse,
+    WaitForEffectsResponse, WaitForEffectsStatus,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::object::Object;
@@ -314,11 +314,10 @@ where
             .wait_for_effects(request, client_addr)
             .await?;
 
-        match &wait_for_effects_resp {
-            WaitForEffectsResponse::Executed {
+        match &wait_for_effects_resp.status {
+            WaitForEffectsStatus::Executed {
                 effects_digest: _,
                 details: Some(details),
-                ..
             } => {
                 self.verify_executed_data((**details).clone())?;
             }
