@@ -1303,23 +1303,10 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                             sp(loc, IR::Type_::Bool) // placeholder while bailing after ICE
                         }
                     };
-                    match crate::cfgir::translate::move_value_from_value(
-                        context.env,
-                        context.current_package(),
-                        sp(loc, v_),
-                    ) {
-                        Some(mv) => B::LdConst(ty, mv),
-                        None => {
-                            let reporter = context.env.diagnostic_reporter_at_top_level();
-                            ice_assert!(
-                                reporter,
-                                context.env.has_errors(),
-                                loc,
-                                "Failed to translate value into bytecode value"
-                            );
-                            B::LdU64(0)
-                        }
-                    }
+                    B::LdConst(
+                        ty,
+                        crate::cfgir::translate::move_value_from_value(sp(loc, v_)),
+                    )
                 }
             };
             code.push(sp(loc, ld_value));

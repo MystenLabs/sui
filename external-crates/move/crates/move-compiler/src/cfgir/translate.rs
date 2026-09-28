@@ -284,6 +284,9 @@ pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
         V::U256(u) => MV::U256(u),
         V::Bool(b) => MV::Bool(b),
         V::Vector(_, vs) => MV::Vector(vs.into_iter().map(move_value_from_value).collect()),
+        V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) | V::I256(_) => {
+            todo!("(signed-ints) folded signed value in constant")
+        }
     }
 }
 
