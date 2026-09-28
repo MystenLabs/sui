@@ -4,10 +4,7 @@
 use std::ops::DerefMut;
 
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::{
-    gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, NumBytes},
-    language_storage::ModuleId,
-};
+use move_core_types::gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, NumBytes};
 use move_vm_runtime::{
     execution::Type,
     shared::{
@@ -16,7 +13,10 @@ use move_vm_runtime::{
     },
 };
 use sui_types::gas_model::{
-    gas_predicates::{native_function_threshold_exceeded, use_legacy_abstract_size},
+    gas_predicates::{
+        legacy_charge_native_pops_args, native_function_threshold_exceeded,
+        use_legacy_abstract_size,
+    },
     tables::{GasStatus, REFERENCE_SIZE, STRUCT_SIZE, VEC_SIZE},
 };
 
@@ -25,27 +25,21 @@ pub struct SuiGasMeter<G: DerefMut<Target = GasStatus>>(pub G);
 /// Returns a tuple of (<pops>, <pushes>, <stack_size_decrease>, <stack_size_increase>)
 fn get_simple_instruction_stack_change(
     instr: SimpleInstruction,
-) -> (u64, u64, AbstractMemorySize, AbstractMemorySize) {
+) -> PartialVMResult<(u64, u64, AbstractMemorySize, AbstractMemorySize)> {
     use SimpleInstruction::*;
 
-    match instr {
+    Ok(match instr {
         // NB: The `Ret` pops are accounted for in `Call` instructions, so we say `Ret` has no pops.
         Nop | Ret => (0, 0, 0.into(), 0.into()),
-        BrTrue | BrFalse => (1, 0, Type::Bool.size(), 0.into()),
+        BrTrue | BrFalse => (1, 0, Type::Bool.size()?, 0.into()),
         Branch => (0, 0, 0.into(), 0.into()),
-        LdU8 => (0, 1, 0.into(), Type::U8.size()),
-        LdU16 => (0, 1, 0.into(), Type::U16.size()),
-        LdU32 => (0, 1, 0.into(), Type::U32.size()),
-        LdU64 => (0, 1, 0.into(), Type::U64.size()),
-        LdU128 => (0, 1, 0.into(), Type::U128.size()),
-        LdU256 => (0, 1, 0.into(), Type::U256.size()),
-        LdI8 => (0, 1, 0.into(), Type::I8.size()),
-        LdI16 => (0, 1, 0.into(), Type::I16.size()),
-        LdI32 => (0, 1, 0.into(), Type::I32.size()),
-        LdI64 => (0, 1, 0.into(), Type::I64.size()),
-        LdI128 => (0, 1, 0.into(), Type::I128.size()),
-        LdI256 => (0, 1, 0.into(), Type::I256.size()),
-        LdTrue | LdFalse => (0, 1, 0.into(), Type::Bool.size()),
+        LdU8 => (0, 1, 0.into(), Type::U8.size()?),
+        LdU16 => (0, 1, 0.into(), Type::U16.size()?),
+        LdU32 => (0, 1, 0.into(), Type::U32.size()?),
+        LdU64 => (0, 1, 0.into(), Type::U64.size()?),
+        LdU128 => (0, 1, 0.into(), Type::U128.size()?),
+        LdU256 => (0, 1, 0.into(), Type::U256.size()?),
+        LdTrue | LdFalse => (0, 1, 0.into(), Type::Bool.size()?),
         FreezeRef => (1, 1, REFERENCE_SIZE, REFERENCE_SIZE),
         ImmBorrowLoc | MutBorrowLoc => (0, 1, 0.into(), REFERENCE_SIZE),
         ImmBorrowField | MutBorrowField | ImmBorrowFieldGeneric | MutBorrowFieldGeneric => {
@@ -53,40 +47,66 @@ fn get_simple_instruction_stack_change(
         }
         // Since we don't have the size of the value being cast here we take a conservative
         // over-approximation: it is _always_ getting cast from the smallest integer type.
-        CastU8 => (1, 1, Type::U8.size(), Type::U8.size()),
-        CastU16 => (1, 1, Type::U8.size(), Type::U16.size()),
-        CastU32 => (1, 1, Type::U8.size(), Type::U32.size()),
-        CastU64 => (1, 1, Type::U8.size(), Type::U64.size()),
-        CastU128 => (1, 1, Type::U8.size(), Type::U128.size()),
-        CastU256 => (1, 1, Type::U8.size(), Type::U256.size()),
-        CastI8 => (1, 1, Type::U8.size(), Type::I8.size()),
-        CastI16 => (1, 1, Type::U8.size(), Type::I16.size()),
-        CastI32 => (1, 1, Type::U8.size(), Type::I32.size()),
-        CastI64 => (1, 1, Type::U8.size(), Type::I64.size()),
-        CastI128 => (1, 1, Type::U8.size(), Type::I128.size()),
-        CastI256 => (1, 1, Type::U8.size(), Type::I256.size()),
-        Neg => (1, 1, Type::U8.size(), Type::I256.size()),
+        CastU8 => (1, 1, Type::U8.size()?, Type::U8.size()?),
+        CastU16 => (1, 1, Type::U8.size()?, Type::U16.size()?),
+        CastU32 => (1, 1, Type::U8.size()?, Type::U32.size()?),
+        CastU64 => (1, 1, Type::U8.size()?, Type::U64.size()?),
+        CastU128 => (1, 1, Type::U8.size()?, Type::U128.size()?),
+        CastU256 => (1, 1, Type::U8.size()?, Type::U256.size()?),
+        LdI8 => (0, 1, 0.into(), Type::I8.size()?),
+        LdI16 => (0, 1, 0.into(), Type::I16.size()?),
+        LdI32 => (0, 1, 0.into(), Type::I32.size()?),
+        LdI64 => (0, 1, 0.into(), Type::I64.size()?),
+        LdI128 => (0, 1, 0.into(), Type::I128.size()?),
+        LdI256 => (0, 1, 0.into(), Type::I256.size()?),
+        CastI8 => (1, 1, Type::I8.size()?, Type::I8.size()?),
+        CastI16 => (1, 1, Type::I8.size()?, Type::I16.size()?),
+        CastI32 => (1, 1, Type::I8.size()?, Type::I32.size()?),
+        CastI64 => (1, 1, Type::I8.size()?, Type::I64.size()?),
+        CastI128 => (1, 1, Type::I8.size()?, Type::I128.size()?),
+        CastI256 => (1, 1, Type::I8.size()?, Type::I256.size()?),
+        Neg => (1, 1, Type::I8.size()?, Type::I256.size()?),
         // NB: We don't know the size of what integers we're dealing with, so we conservatively
         // over-approximate by popping the smallest integers, and push the largest.
-        Add | Sub | Mul | Mod | Div => (2, 1, Type::U8.size() + Type::U8.size(), Type::U256.size()),
-        BitOr | BitAnd | Xor => (2, 1, Type::U8.size() + Type::U8.size(), Type::U256.size()),
-        Shl | Shr => (2, 1, Type::U8.size() + Type::U8.size(), Type::U256.size()),
+        Add | Sub | Mul | Mod | Div => (
+            2,
+            1,
+            Type::U8.size()? + Type::U8.size()?,
+            Type::U256.size()?,
+        ),
+        BitOr | BitAnd | Xor => (
+            2,
+            1,
+            Type::U8.size()? + Type::U8.size()?,
+            Type::U256.size()?,
+        ),
+        Shl | Shr => (
+            2,
+            1,
+            Type::U8.size()? + Type::U8.size()?,
+            Type::U256.size()?,
+        ),
         Or | And => (
             2,
             1,
-            Type::Bool.size() + Type::Bool.size(),
-            Type::Bool.size(),
+            Type::Bool.size()? + Type::Bool.size()?,
+            Type::Bool.size()?,
         ),
-        Lt | Gt | Le | Ge => (2, 1, Type::U8.size() + Type::U8.size(), Type::Bool.size()),
-        Not => (1, 1, Type::Bool.size(), Type::Bool.size()),
-        Abort => (1, 0, Type::U64.size(), 0.into()),
-    }
+        Lt | Gt | Le | Ge => (
+            2,
+            1,
+            Type::U8.size()? + Type::U8.size()?,
+            Type::Bool.size()?,
+        ),
+        Not => (1, 1, Type::Bool.size()?, Type::Bool.size()?),
+        Abort => (1, 0, Type::U64.size()?, 0.into()),
+    })
 }
 
 impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
     /// Charge an instruction and fail if not enough gas units are left.
     fn charge_simple_instr(&mut self, instr: SimpleInstruction) -> PartialVMResult<()> {
-        let (pops, pushes, pop_size, push_size) = get_simple_instruction_stack_change(instr);
+        let (pops, pushes, pop_size, push_size) = get_simple_instruction_stack_change(instr)?;
         self.0
             .charge(1, pushes, pops, push_size.into(), pop_size.into())
     }
@@ -141,31 +161,32 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         &mut self,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
-        // Determine the number of pops that are going to be needed for this function call, and
-        // charge for them.
-        let pops = args.len() as u64;
-        // Calculate the size decrease of the stack from the above pops.
-        let stack_reduction_size = args.try_fold(
-            AbstractMemorySize::new(pops),
-            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(&self.0, elem)?) },
-        )?;
-        // Track that this is going to be popping from the operand stack. We also increment the
-        // instruction count as we need to account for the `Call` bytecode that initiated this
-        // native call.
-        self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
+        if legacy_charge_native_pops_args(self.0.gas_model_version) {
+            // Legacy: pop args again (double-pop, masked by saturating_sub).
+            let pops = args.len() as u64;
+            let stack_reduction_size = args.try_fold(
+                AbstractMemorySize::new(pops),
+                |acc, elem| -> PartialVMResult<_> {
+                    Ok(acc + abstract_memory_size(&self.0, elem)?)
+                },
+            )?;
+            self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
+        } else {
+            // The args were already popped by charge_call/charge_call_generic.
+            // Only charge the instruction cost, not the pops.
+            self.0.charge(1, 0, 0, 0, 0)
+        }
     }
 
     fn charge_call(
         &mut self,
-        _module_id: &ModuleId,
-        _func_name: &str,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
         // We will have to perform this many pops for the call.
         let pops = args.len() as u64;
         // Size stays the same -- we're just moving it from the operand stack to the locals. But
-        // the size on the operand stack is reduced by sum_{args} arg.size().
+        // the size on the operand stack is reduced by sum_{args} arg.size()?.
         let stack_reduction_size = args.try_fold(
             AbstractMemorySize::new(0),
             |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(&self.0, elem)?) },
@@ -175,8 +196,6 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
 
     fn charge_call_generic(
         &mut self,
-        _module_id: &ModuleId,
-        _func_name: &str,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
@@ -297,7 +316,7 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
             1,
             1,
             2,
-            (Type::Bool.size() + size_reduction).into(),
+            (Type::Bool.size()? + size_reduction).into(),
             size_reduction.into(),
         )
     }
@@ -306,9 +325,9 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         let size_reduction = abstract_memory_size_with_traversal(&self.0, lhs)?
             + abstract_memory_size_with_traversal(&self.0, rhs)?;
         let size_increase = if enable_traverse_refs(self.0.gas_model_version) {
-            Type::Bool.size() + size_reduction
+            Type::Bool.size()? + size_reduction
         } else {
-            Type::Bool.size()
+            Type::Bool.size()?
         };
         self.0
             .charge(1, 1, 2, size_increase.into(), size_reduction.into())
@@ -327,7 +346,7 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
 
     fn charge_vec_len(&mut self) -> PartialVMResult<()> {
         self.0
-            .charge(1, 1, 1, Type::U64.size().into(), REFERENCE_SIZE.into())
+            .charge(1, 1, 1, Type::U64.size()?.into(), REFERENCE_SIZE.into())
     }
 
     fn charge_vec_borrow(&mut self, _is_mut: bool, _is_success: bool) -> PartialVMResult<()> {
@@ -336,7 +355,7 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
             1,
             2,
             REFERENCE_SIZE.into(),
-            (REFERENCE_SIZE + Type::U64.size()).into(),
+            (REFERENCE_SIZE + Type::U64.size()?).into(),
         )
     }
 
@@ -361,7 +380,7 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
     }
 
     fn charge_vec_swap(&mut self) -> PartialVMResult<()> {
-        let size_decrease = REFERENCE_SIZE + Type::U64.size() + Type::U64.size();
+        let size_decrease = REFERENCE_SIZE + Type::U64.size()? + Type::U64.size()?;
         let (pushes, pops) = if reduce_stack_size(self.0.gas_model_version) {
             (0, 3)
         } else {
