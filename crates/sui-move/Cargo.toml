@@ -25,8 +25,8 @@ move-cli.workspace = true
 move-compiler.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
-move-package-alt.workspace = true
-move-package-alt-compilation.workspace = true
+move-package.workspace = true
+move-package-compilation.workspace = true
 move-bytecode-source-map.workspace = true
 move-unit-test.workspace = true
 move-vm-config.workspace = true
@@ -53,7 +53,7 @@ tempfile.workspace = true
 walkdir.workspace = true
 insta.workspace = true
 
-move-package-alt.workspace = true
+move-package.workspace = true
 
 mysten-metrics.workspace = true
 sui-macros.workspace = true

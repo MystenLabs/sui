@@ -168,8 +168,8 @@ move-ir-to-bytecode = { path = "crates/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "crates/move-ir-to-bytecode-syntax" }
 move-ir-types = { path = "crates/move-ir-types" }
 move-model-2 = { path = "crates/move-model-2" }
-move-package-alt = { path = "crates/move-package-alt" }
-move-package-alt-compilation = { path = "crates/move-package-alt-compilation" }
+move-package = { path = "crates/move-package" }
+move-package-compilation = { path = "crates/move-package-compilation" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-regex-borrow-graph = { path = "crates/move-regex-borrow-graph" }
 move-stackless-bytecode-2 = { path = "crates/move-stackless-bytecode-2" }

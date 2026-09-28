@@ -6,7 +6,7 @@ use move_cli::base::{
     self,
     test::{self, UnitTestResult},
 };
-use move_package_alt_compilation::build_config::BuildConfig;
+use move_package_compilation::build_config::BuildConfig;
 use move_unit_test::{UnitTestingConfig, vm_test_setup::VMTestSetup};
 use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::natives::extensions::NativeContextExtensions;

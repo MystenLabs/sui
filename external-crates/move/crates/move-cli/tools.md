@@ -13,7 +13,7 @@ that are used by the [`move-cli`](./move-cli) `package` subcommand:
 - `move-bytecode-viewer`
 - `move-disassembler`
 - `move-unit-test`
-- `move-package-alt`
+- `move-package`
 - `move-coverage`
 
 In this sense each of these crates defines the core logic for a specific
@@ -21,7 +21,7 @@ package command, e.g., how to run and report unit tests, or collect and
 display test coverage information. However, the Move CLI is responsible for
 stitching these commands together, e.g., when running a move unit test the
 Move CLI is responsible for first making sure the package was built in
-`test` mode (using the `move-package-alt` library), collecting the test plan
+`test` mode (using the `move-package` library), collecting the test plan
 to feed to the `move-unit-test` library, and returning a non-zero error
 code if a test fails.
 

@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use move_cli::base::test::UnitTestResult;
-use move_package_alt_compilation::lint_flag::LintFlag;
+use move_package_compilation::lint_flag::LintFlag;
 use move_unit_test::UnitTestingConfig;
 use sui_framework_tests::setup_examples;
 use sui_move::unit_test::{MAX_UNIT_TEST_INSTRUCTIONS, run_move_unit_tests};

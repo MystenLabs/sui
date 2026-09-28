@@ -2376,8 +2376,8 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-ir-types",
- "move-package-alt",
- "move-package-alt-compilation",
+ "move-package",
+ "move-package-compilation",
  "move-symbol-pool",
  "serde",
  "serde_json",
@@ -2565,8 +2565,8 @@ dependencies = [
  "move-docgen",
  "move-ir-types",
  "move-model-2",
- "move-package-alt",
- "move-package-alt-compilation",
+ "move-package",
+ "move-package-compilation",
  "move-stdlib",
  "move-symbol-pool",
  "move-trace-format",
@@ -2716,8 +2716,8 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-model-2",
- "move-package-alt",
- "move-package-alt-compilation",
+ "move-package",
+ "move-package-compilation",
  "move-stackless-bytecode-2",
  "move-stdlib",
  "move-symbol-pool",
@@ -2770,8 +2770,8 @@ dependencies = [
  "datatest-stable",
  "move-command-line-common",
  "move-docgen",
- "move-package-alt",
- "move-package-alt-compilation",
+ "move-package",
+ "move-package-compilation",
  "tempfile",
 ]
 
@@ -2858,7 +2858,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-package-alt"
+name = "move-package"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2902,7 +2902,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-package-alt-compilation"
+name = "move-package-compilation"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2918,7 +2918,7 @@ dependencies = [
  "move-disassembler",
  "move-docgen",
  "move-model-2",
- "move-package-alt",
+ "move-package",
  "move-symbol-pool",
  "serde",
  "serde_yaml",
@@ -2961,8 +2961,8 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-model-2",
- "move-package-alt",
- "move-package-alt-compilation",
+ "move-package",
+ "move-package-compilation",
  "move-stdlib",
  "move-symbol-pool",
  "tempfile",
@@ -2980,8 +2980,8 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
- "move-package-alt",
- "move-package-alt-compilation",
+ "move-package",
+ "move-package-compilation",
  "move-unit-test",
  "tempfile",
  "tokio",

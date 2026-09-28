@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use move_package_alt::SourcePackageLayout;
+use move_package::SourcePackageLayout;
 
 /// A dependency pinned to a revision that can move, such as a branch or a tag.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
