@@ -15463,6 +15463,7 @@ dependencies = [
  "clap",
  "dashmap 5.5.3",
  "futures",
+ "http 1.3.1",
  "move-binary-format",
  "move-core-types",
  "mysten-common",
@@ -15492,6 +15493,7 @@ dependencies = [
  "tonic 0.14.6",
  "tonic-prost",
  "tonic-reflection",
+ "tower 0.5.3",
  "tracing",
 ]
 
