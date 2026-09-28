@@ -6,5 +6,4 @@ edition = "2024"
 test = "0x0"
 
 [lints]
-all = "allow"
-warnings = "deny"
+unused_variable = "deny"

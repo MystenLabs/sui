@@ -6,5 +6,4 @@ edition = "2024"
 test = "0x0"
 
 [warnings]
-all = "deny"
-unused_variable = "allow"
+abort_without_constant = "deny"

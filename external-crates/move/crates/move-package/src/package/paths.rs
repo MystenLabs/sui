@@ -483,7 +483,7 @@ mod tests {
           |
         1 | [not-package]
           |  ^^^^^^^^^^^
-        unknown field `not-package`, expected one of `package`, `lints`, `environments`, `dependencies`, `dep-replacements`
+        unknown field `not-package`, expected one of `package`, `warnings`, `lints`, `environments`, `dependencies`, `dep-replacements`
         "#
         );
     }
