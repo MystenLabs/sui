@@ -11,6 +11,7 @@ use crate::{
     natives::extensions::NativeExtensions,
     runtime::telemetry::{TelemetryContext, TransactionTelemetryContext},
     shared::{
+        TypeLimits,
         gas::GasMeter,
         linkage_context::LinkageContext,
         types::{DefiningTypeId, OriginalId},
@@ -55,6 +56,8 @@ pub struct MoveVM<'extensions> {
     pub(crate) native_extensions: NativeExtensions<'extensions>,
     /// The Move VM's configuration.
     pub(crate) vm_config: Arc<VMConfig>,
+    /// The type traversal limits used for execution in this VM.
+    pub(crate) type_limits: Arc<TypeLimits>,
     /// The Move VM's interner.
     pub(crate) interner: Arc<IdentifierInterner>,
     /// The Move Runtime telemetry
@@ -143,6 +146,7 @@ impl<'extensions> MoveVM<'extensions> {
             None,
             gas_meter,
             bypass_declared_entry_check,
+            self.type_limits.clone(),
         )
     }
 
@@ -179,6 +183,7 @@ impl<'extensions> MoveVM<'extensions> {
             tracer,
             gas_meter,
             bypass_declared_entry_check,
+            self.type_limits.clone(),
         )
     }
 
@@ -337,6 +342,7 @@ impl<'extensions> MoveVM<'extensions> {
         tracer: Option<&mut MoveTraceBuilder>,
         gas_meter: &mut impl GasMeter,
         bypass_declared_entry_check: bool,
+        type_limits: Arc<TypeLimits>,
     ) -> VMResult<Vec<Value>> {
         let telemetry = Arc::clone(&self.telemetry);
         telemetry.with_transaction_telemetry(|txn_telemetry| {
@@ -386,6 +392,7 @@ impl<'extensions> MoveVM<'extensions> {
                     function,
                     type_arguments,
                     args,
+                    type_limits,
                 )
             };
 
@@ -455,11 +462,13 @@ impl<'extensions> MoveVM<'extensions> {
         func: VMPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
+        type_limits: Arc<TypeLimits>,
     ) -> VMResult<Vec<Value>> {
         interpreter::run(
             &mut self.virtual_tables,
             txn_telemetry,
             self.vm_config.clone(),
+            type_limits,
             &mut *self.native_extensions.try_borrow_mut().map_err(|e| {
                 partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
@@ -490,6 +499,7 @@ impl std::fmt::Debug for MoveVM<'_> {
             .field("virtual_tables", &self.virtual_tables)
             .field("link_context", &self.link_context)
             .field("vm_config", &self.vm_config)
+            .field("type_limits", &self.type_limits)
             // Note: native_extensions is intentionally omitted
             .finish()
     }
