@@ -301,6 +301,12 @@ pub(crate) enum ArenaType {
     U16,
     U32,
     U256,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
 }
 
 #[derive(Debug)]
@@ -347,6 +353,12 @@ pub enum Type {
     U16,
     U32,
     U256,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -430,6 +442,19 @@ pub(crate) enum Bytecode {
     ///
     /// ```..., integer_value -> ..., u128_value```
     CastU128,
+    LdI8(i8),
+    LdI16(i16),
+    LdI32(i32),
+    LdI64(i64),
+    LdI128(ArenaBox<i128>),
+    LdI256(ArenaBox<move_core_types::i256::I256>),
+    CastI8,
+    CastI16,
+    CastI32,
+    CastI64,
+    CastI128,
+    CastI256,
+    Neg,
     /// Push a `Constant` onto the stack. The value is loaded and deserialized (according to its
     /// type) from the `ConstantPool` via `ConstantPoolIndex`
     ///
@@ -1005,6 +1030,12 @@ impl ArenaType {
                 ArenaType::U64 => Type::U64,
                 ArenaType::U128 => Type::U128,
                 ArenaType::U256 => Type::U256,
+                ArenaType::I8 => Type::I8,
+                ArenaType::I16 => Type::I16,
+                ArenaType::I32 => Type::I32,
+                ArenaType::I64 => Type::I64,
+                ArenaType::I128 => Type::I128,
+                ArenaType::I256 => Type::I256,
                 ArenaType::Address => Type::Address,
                 ArenaType::Signer => Type::Signer,
                 ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type_impl(type_size)?)),
@@ -1111,9 +1142,8 @@ impl Type {
 
         type_size.enter_type(|type_size| {
             Ok(match self {
-                TyParam(_) | Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer => {
-                    Self::LEGACY_BASE_MEMORY_SIZE
-                }
+                TyParam(_) | Bool | U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64
+                | I128 | I256 | Address | Signer => Self::LEGACY_BASE_MEMORY_SIZE,
                 Vector(ty) | Reference(ty) | MutableReference(ty) => {
                     Self::LEGACY_BASE_MEMORY_SIZE + ty.size_impl(type_size)?
                 }
@@ -1150,6 +1180,12 @@ impl Type {
                 S::U64 => L::U64,
                 S::U128 => L::U128,
                 S::U256 => L::U256,
+                S::I8 => L::I8,
+                S::I16 => L::I16,
+                S::I32 => L::I32,
+                S::I64 => L::I64,
+                S::I128 => L::I128,
+                S::I256 => L::I256,
                 S::Address => L::Address,
                 S::Vector(inner) => {
                     L::Vector(Box::new(Self::from_const_signature_impl(inner, type_size)?))
@@ -1160,9 +1196,6 @@ impl Type {
                         UNKNOWN_INVARIANT_VIOLATION_ERROR,
                         "Unable to load const type signature"
                     ));
-                }
-                S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => {
-                    todo!("[signed-ints] signed integer constants in the VM runtime")
                 }
                 // Not allowed/Not meaningful
                 S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
@@ -1289,6 +1322,12 @@ macro_rules! impl_deep_subst {
                         $ty::U64 => Type::U64,
                         $ty::U128 => Type::U128,
                         $ty::U256 => Type::U256,
+                        $ty::I8 => Type::I8,
+                        $ty::I16 => Type::I16,
+                        $ty::I32 => Type::I32,
+                        $ty::I64 => Type::I64,
+                        $ty::I128 => Type::I128,
+                        $ty::I256 => Type::I256,
                         $ty::Address => Type::Address,
                         $ty::Signer => Type::Signer,
                         $ty::Vector(ty) => {
@@ -1403,6 +1442,19 @@ impl From<&Bytecode> for Opcodes {
             Bytecode::CastU8 => Opcodes::CAST_U8,
             Bytecode::CastU64 => Opcodes::CAST_U64,
             Bytecode::CastU128 => Opcodes::CAST_U128,
+            Bytecode::LdI8(_) => Opcodes::LD_I8,
+            Bytecode::LdI16(_) => Opcodes::LD_I16,
+            Bytecode::LdI32(_) => Opcodes::LD_I32,
+            Bytecode::LdI64(_) => Opcodes::LD_I64,
+            Bytecode::LdI128(_) => Opcodes::LD_I128,
+            Bytecode::LdI256(_) => Opcodes::LD_I256,
+            Bytecode::CastI8 => Opcodes::CAST_I8,
+            Bytecode::CastI16 => Opcodes::CAST_I16,
+            Bytecode::CastI32 => Opcodes::CAST_I32,
+            Bytecode::CastI64 => Opcodes::CAST_I64,
+            Bytecode::CastI128 => Opcodes::CAST_I128,
+            Bytecode::CastI256 => Opcodes::CAST_I256,
+            Bytecode::Neg => Opcodes::NEG,
             Bytecode::LdConst(_) => Opcodes::LD_CONST,
             Bytecode::LdTrue => Opcodes::LD_TRUE,
             Bytecode::LdFalse => Opcodes::LD_FALSE,
@@ -1503,6 +1555,19 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CastU64 => write!(f, "CastU64"),
             Bytecode::CastU128 => write!(f, "CastU128"),
             Bytecode::CastU256 => write!(f, "CastU256"),
+            Bytecode::LdI8(a) => write!(f, "LdI8({})", a),
+            Bytecode::LdI16(a) => write!(f, "LdI16({})", a),
+            Bytecode::LdI32(a) => write!(f, "LdI32({})", a),
+            Bytecode::LdI64(a) => write!(f, "LdI64({})", a),
+            Bytecode::LdI128(a) => write!(f, "LdI128({})", **a),
+            Bytecode::LdI256(a) => write!(f, "LdI256({})", **a),
+            Bytecode::CastI8 => write!(f, "CastI8"),
+            Bytecode::CastI16 => write!(f, "CastI16"),
+            Bytecode::CastI32 => write!(f, "CastI32"),
+            Bytecode::CastI64 => write!(f, "CastI64"),
+            Bytecode::CastI128 => write!(f, "CastI128"),
+            Bytecode::CastI256 => write!(f, "CastI256"),
+            Bytecode::Neg => write!(f, "Neg"),
             Bytecode::LdConst(a) => write!(f, "LdConst({})", a.to_ref().value),
             Bytecode::LdTrue => write!(f, "LdTrue"),
             Bytecode::LdFalse => write!(f, "LdFalse"),
@@ -1631,6 +1696,12 @@ impl std::fmt::Debug for ArenaType {
             ArenaType::U16 => write!(f, "u16"),
             ArenaType::U32 => write!(f, "u32"),
             ArenaType::U256 => write!(f, "u256"),
+            ArenaType::I8 => write!(f, "i8"),
+            ArenaType::I16 => write!(f, "i16"),
+            ArenaType::I32 => write!(f, "i32"),
+            ArenaType::I64 => write!(f, "i64"),
+            ArenaType::I128 => write!(f, "i128"),
+            ArenaType::I256 => write!(f, "i256"),
         }
     }
 }
@@ -1855,6 +1926,19 @@ impl<B: std::fmt::Write> InternedDisplay<B> for Bytecode {
             Bytecode::CastU64 => write!(f, "CastU64"),
             Bytecode::CastU128 => write!(f, "CastU128"),
             Bytecode::CastU256 => write!(f, "CastU256"),
+            Bytecode::LdI8(a) => write!(f, "LdI8({})", a),
+            Bytecode::LdI16(a) => write!(f, "LdI16({})", a),
+            Bytecode::LdI32(a) => write!(f, "LdI32({})", a),
+            Bytecode::LdI64(a) => write!(f, "LdI64({})", a),
+            Bytecode::LdI128(a) => write!(f, "LdI128({})", **a),
+            Bytecode::LdI256(a) => write!(f, "LdI256({})", **a),
+            Bytecode::CastI8 => write!(f, "CastI8"),
+            Bytecode::CastI16 => write!(f, "CastI16"),
+            Bytecode::CastI32 => write!(f, "CastI32"),
+            Bytecode::CastI64 => write!(f, "CastI64"),
+            Bytecode::CastI128 => write!(f, "CastI128"),
+            Bytecode::CastI256 => write!(f, "CastI256"),
+            Bytecode::Neg => write!(f, "Neg"),
 
             Bytecode::LdConst(a) => write!(f, "LdConst({})", a.to_ref().value),
 
@@ -2068,6 +2152,12 @@ impl<B: std::fmt::Write> InternedDisplay<B> for ArenaType {
             ArenaType::U64 => write!(f, "u64"),
             ArenaType::U128 => write!(f, "u128"),
             ArenaType::U256 => write!(f, "u256"),
+            ArenaType::I8 => write!(f, "i8"),
+            ArenaType::I16 => write!(f, "i16"),
+            ArenaType::I32 => write!(f, "i32"),
+            ArenaType::I64 => write!(f, "i64"),
+            ArenaType::I128 => write!(f, "i128"),
+            ArenaType::I256 => write!(f, "i256"),
             ArenaType::Address => write!(f, "address"),
             ArenaType::Signer => write!(f, "signer"),
             ArenaType::Vector(ty) => {
