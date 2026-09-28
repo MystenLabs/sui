@@ -21,11 +21,11 @@ use colored::Colorize;
 use move_compiler::{
     Compiler, Flags,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::filter::empty_filter_scope,
+    diagnostics::filter::{empty_filter_scope, resolve_filter_names},
     editions::{Edition, Flavor},
     linters,
     shared::{
-        PackageConfig, PackagePaths, SaveFlag, SaveHook, files::MappedFiles,
+        PackageConfig, PackagePaths, SaveFlag, SaveHook, files::MappedFiles, format_allow_attr,
         known_attributes::ModeAttribute,
     },
     sui_mode,
@@ -233,7 +233,7 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     )?;
 
     let lint_level = match build_config.lint_flag.get() {
-        linters::LintLevel::Default if root_pkg.package_info().lints().0.contains_key("lint") => {
+        linters::LintLevel::Default if root_pkg.package_info().lints().enables_linters() => {
             linters::LintLevel::All
         }
         level => level,
@@ -389,15 +389,31 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
         let addresses = build_config.addresses_for_config(pkg.named_addresses()?);
 
         // TODO: better default handling for edition and flavor
+        let flavor = Flavor::from_str(pkg.flavor().unwrap_or("sui"))?;
+        let warning_filter = if pkg.is_root() {
+            let mut custom_known = vec![linters::known_filters()];
+            if flavor == Flavor::Sui {
+                custom_known.push(sui_mode::linters::known_filters());
+            }
+            resolve_filter_names(pkg.lints().configured_filters(), custom_known).map_err(
+                |(prefix, name)| {
+                    anyhow::anyhow!(
+                        "unknown warning filter '{}' in Move.toml",
+                        format_allow_attr(prefix, name)
+                    )
+                },
+            )?
+        } else {
+            empty_filter_scope()
+        };
         let config = PackageConfig {
             is_dependency: !pkg.is_root(),
             edition: pkg
                 .edition()
                 .or(build_config.default_edition)
                 .unwrap_or(Edition::LEGACY), // TODO require edition
-            flavor: Flavor::from_str(pkg.flavor().unwrap_or("sui"))?,
-            warning_filter: empty_filter_scope(),
-            warning_filter_config: pkg.lints().clone(),
+            flavor,
+            warning_filter,
         };
 
         // Assign a unique name for the compiler for each package.

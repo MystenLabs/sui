@@ -170,7 +170,6 @@ fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
         edition,
         is_dependency: false,
         warning_filter,
-        ..Default::default()
     };
     // test info
     let test_info = TestInfo {

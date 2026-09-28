@@ -8,11 +8,11 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{Package, paths::PackagePath},
-    schema::{OriginalID, PackageID, PackageName, PublishAddresses},
+    schema::{LintConfig, OriginalID, PackageID, PackageName, PublishAddresses},
 };
 
 use super::PackageGraph;
-use move_compiler::{diagnostics::filter::WarningFilterConfig, editions::Edition};
+use move_compiler::editions::Edition;
 
 /// A narrow interface for representing packages outside of `move-package`. Note that
 /// at different points in the package system we use graphs that have been filtered in different
@@ -100,7 +100,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
         self.package().metadata().edition
     }
 
-    pub fn lints(&self) -> &WarningFilterConfig {
+    pub fn lints(&self) -> &LintConfig {
         self.package().lints()
     }
 

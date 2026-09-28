@@ -5,7 +5,6 @@
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use derive_where::derive_where;
-use move_compiler::diagnostics::filter::WarningFilterConfig;
 use sha2::{Digest as _, Sha256};
 use tempfile::tempdir;
 use tracing::debug;
@@ -19,7 +18,8 @@ use crate::{
     dependency::Pinned,
     package::{manifest::ManifestError, package_loader::PackageConfig},
     schema::{
-        CachedPackageInfo, DefaultDependency, ManifestDependencyInfo, ParsedManifest, Publication,
+        CachedPackageInfo, DefaultDependency, LintConfig, ManifestDependencyInfo, ParsedManifest,
+        Publication,
     },
 };
 use crate::{dependency::fetch, schema::ReplacementDependency};
@@ -46,7 +46,7 @@ pub struct Package<F: MoveFlavor> {
     /// The metadata of the package.
     metadata: PackageMetadata,
 
-    lints: WarningFilterConfig,
+    lints: LintConfig,
 
     /// A [`PackagePath`] representing the canonical path to the package directory.
     path: PackagePath,
@@ -229,7 +229,7 @@ impl<F: MoveFlavor> Package<F> {
         &self.metadata
     }
 
-    pub fn lints(&self) -> &WarningFilterConfig {
+    pub fn lints(&self) -> &LintConfig {
         &self.lints
     }
 
