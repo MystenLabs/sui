@@ -15,6 +15,7 @@ use crate::{
     identifier::Identifier,
     language_storage::StructTag,
     u256::U256,
+    visitor_default,
 };
 use std::{fmt::Write, str::FromStr};
 
@@ -192,6 +193,60 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
     ) -> Result<Self::Value, Self::Error> {
         write!(self.output, "\n[{}] {value}: u256", self.depth).unwrap();
         Ok(MoveValue::U256(value))
+    }
+
+    fn visit_i8(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i8,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: i8", self.depth).unwrap();
+        Ok(MoveValue::I8(value))
+    }
+
+    fn visit_i16(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i16,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: i16", self.depth).unwrap();
+        Ok(MoveValue::I16(value))
+    }
+
+    fn visit_i32(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i32,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: i32", self.depth).unwrap();
+        Ok(MoveValue::I32(value))
+    }
+
+    fn visit_i64(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i64,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: i64", self.depth).unwrap();
+        Ok(MoveValue::I64(value))
+    }
+
+    fn visit_i128(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i128,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: i128", self.depth).unwrap();
+        Ok(MoveValue::I128(value))
+    }
+
+    fn visit_i256(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: crate::i256::I256,
+    ) -> Result<Self::Value, Self::Error> {
+        write!(self.output, "\n[{}] {value}: i256", self.depth).unwrap();
+        Ok(MoveValue::I256(value))
     }
 
     fn visit_bool(
@@ -617,69 +672,7 @@ fn peek_field_test() {
 
         // === Empty/default cases ===
 
-        fn visit_u8(
-            &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
-            _: u8,
-        ) -> Result<Self::Value, Self::Error> {
-            Ok(None)
-        }
-
-        fn visit_u16(
-            &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
-            _: u16,
-        ) -> Result<Self::Value, Self::Error> {
-            Ok(None)
-        }
-
-        fn visit_u32(
-            &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
-            _: u32,
-        ) -> Result<Self::Value, Self::Error> {
-            Ok(None)
-        }
-
-        fn visit_u128(
-            &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
-            _: u128,
-        ) -> Result<Self::Value, Self::Error> {
-            Ok(None)
-        }
-
-        fn visit_u256(
-            &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
-            _: U256,
-        ) -> Result<Self::Value, Self::Error> {
-            Ok(None)
-        }
-
-        fn visit_bool(
-            &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
-            _: bool,
-        ) -> Result<Self::Value, Self::Error> {
-            Ok(None)
-        }
-
-        fn visit_address(
-            &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
-            _: AccountAddress,
-        ) -> Result<Self::Value, Self::Error> {
-            Ok(None)
-        }
-
-        fn visit_signer(
-            &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
-            _: AccountAddress,
-        ) -> Result<Self::Value, Self::Error> {
-            Ok(None)
-        }
+        visitor_default! { <'b, 'l> u8, u16, u32, u128, u256, i8, i16, i32, i64, i128, i256, bool, address, signer = Ok(None) }
 
         /// Field specifier doesn't support vectors, so we know we won't find the field we want
         /// under here.

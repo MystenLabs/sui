@@ -694,11 +694,31 @@ impl From<MoveObjectType> for TypeTag {
 }
 
 /// Whether this type is valid as a primitive (pure) transaction input.
+///
+/// Note: this returns `true` for the signed integer tags (`i8`..`i256`) even though pure-input
+/// support for signed values does not exist yet — signed type inputs are rejected earlier, by
+/// `type_input_validity_check`, until the `enable_signed_integers` protocol feature flips.
+///
+/// TODO (signed-ints): audit this predicate's callers (e.g. `client_ptb/builder.rs`'s `ToPure`
+/// routing) and flip them together in the enablement PR, when signed pure inputs become real.
 pub fn is_primitive_type_tag(t: &TypeTag) -> bool {
     use TypeTag as T;
 
     match t {
-        T::Bool | T::U8 | T::U16 | T::U32 | T::U64 | T::U128 | T::U256 | T::Address => true,
+        T::Bool
+        | T::U8
+        | T::U16
+        | T::U32
+        | T::U64
+        | T::U128
+        | T::U256
+        | T::I8
+        | T::I16
+        | T::I32
+        | T::I64
+        | T::I128
+        | T::I256
+        | T::Address => true,
         T::Vector(inner) => is_primitive_type_tag(inner),
         T::Struct(st) => {
             let StructTag {

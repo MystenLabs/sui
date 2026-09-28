@@ -48,6 +48,12 @@ pub enum ParsedValue<Extra: ParsableValue = ()> {
     U64(u64),
     U128(u128),
     U256(crate::u256::U256),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    I256(crate::i256::I256),
     Bool(bool),
     Vector(Vec<ParsedValue<Extra>>),
     Struct(Vec<ParsedValue<Extra>>),
@@ -132,12 +138,21 @@ impl Token for ValueToken {
     fn next_token(s: &str) -> anyhow::Result<Option<(Self, usize)>> {
         fn number_maybe_with_suffix(text: &str, num_text_len: usize) -> (ValueToken, usize) {
             let rest = &text[num_text_len..];
-            if rest.starts_with("u8") {
+            if rest.starts_with("u8") || rest.starts_with("i8") {
                 (ValueToken::NumberTyped, num_text_len + 2)
-            } else if rest.starts_with("u64") || rest.starts_with("u16") || rest.starts_with("u32")
+            } else if rest.starts_with("u64")
+                || rest.starts_with("u16")
+                || rest.starts_with("u32")
+                || rest.starts_with("i64")
+                || rest.starts_with("i16")
+                || rest.starts_with("i32")
             {
                 (ValueToken::NumberTyped, num_text_len + 3)
-            } else if rest.starts_with("u128") || rest.starts_with("u256") {
+            } else if rest.starts_with("u128")
+                || rest.starts_with("u256")
+                || rest.starts_with("i128")
+                || rest.starts_with("i256")
+            {
                 (ValueToken::NumberTyped, num_text_len + 4)
             } else {
                 // No typed suffix
@@ -263,6 +278,34 @@ impl Token for ValueToken {
                     .count();
                 number_maybe_with_suffix(s, len)
             }
+            // A leading `-` belongs to the following typed signed literal.
+            // Untyped or unsigned negatives fail during parsing.
+            '-' => {
+                let tail = &s[1..];
+                let mut tail_chars = tail.chars().peekable();
+                let (tok, len) = match tail_chars.next() {
+                    Some('0') if matches!(tail_chars.peek(), Some('x')) => {
+                        tail_chars.next().unwrap();
+                        match tail_chars.next() {
+                            Some(c) if c.is_ascii_hexdigit() => {
+                                let len = 3 + tail_chars
+                                    .take_while(|c| char::is_ascii_hexdigit(c) || *c == '_')
+                                    .count();
+                                number_maybe_with_suffix(tail, len)
+                            }
+                            _ => bail!("unrecognized token: {}", s),
+                        }
+                    }
+                    Some(c) if c.is_ascii_digit() => {
+                        let len = 1 + tail_chars
+                            .take_while(|c| char::is_ascii_digit(c) || *c == '_')
+                            .count();
+                        number_maybe_with_suffix(tail, len)
+                    }
+                    _ => bail!("unrecognized token: {}", s),
+                };
+                (tok, len + 1)
+            }
             c if c.is_ascii_whitespace() => {
                 // c + remaining
                 let len = 1 + chars.take_while(char::is_ascii_whitespace).count();
@@ -301,6 +344,12 @@ impl<Extra: ParsableValue> ParsedValue<Extra> {
             ParsedValue::InferredNum(u) | ParsedValue::U256(u) => {
                 Extra::move_value_into_concrete(MoveValue::U256(u))
             }
+            ParsedValue::I8(i) => Extra::move_value_into_concrete(MoveValue::I8(i)),
+            ParsedValue::I16(i) => Extra::move_value_into_concrete(MoveValue::I16(i)),
+            ParsedValue::I32(i) => Extra::move_value_into_concrete(MoveValue::I32(i)),
+            ParsedValue::I64(i) => Extra::move_value_into_concrete(MoveValue::I64(i)),
+            ParsedValue::I128(i) => Extra::move_value_into_concrete(MoveValue::I128(i)),
+            ParsedValue::I256(i) => Extra::move_value_into_concrete(MoveValue::I256(i)),
             ParsedValue::Bool(b) => Extra::move_value_into_concrete(MoveValue::Bool(b)),
             ParsedValue::Vector(values) => Extra::concrete_vector(
                 values

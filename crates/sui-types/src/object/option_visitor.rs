@@ -28,6 +28,7 @@ where
     type Error = E;
 
     visitor_default! { <'b, 'l> u8, u16, u32, u64, u128, u256 = Err(Error.into()) }
+    visitor_default! { <'b, 'l> i8, i16, i32, i64, i128, i256 = Err(Error.into()) }
     visitor_default! { <'b, 'l> bool, address, signer, variant = Err(Error.into()) }
 
     fn visit_vector(

@@ -112,7 +112,13 @@ fn native_id(
         | TypeTag::Vector(_)
         | TypeTag::U16
         | TypeTag::U32
-        | TypeTag::U256 => NativeResult::err(context.gas_used(), E_NON_MODULE_TYPE),
+        | TypeTag::U256
+        | TypeTag::I8
+        | TypeTag::I16
+        | TypeTag::I32
+        | TypeTag::I64
+        | TypeTag::I128
+        | TypeTag::I256 => NativeResult::err(context.gas_used(), E_NON_MODULE_TYPE),
         TypeTag::Struct(struct_tag) => {
             let address = struct_tag.address;
             NativeResult::ok(context.gas_used(), smallvec![Value::address(address)])

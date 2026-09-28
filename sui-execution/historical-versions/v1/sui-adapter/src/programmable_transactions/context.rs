@@ -1045,6 +1045,14 @@ mod checked {
             TypeTag::U64 => Type::U64,
             TypeTag::U128 => Type::U128,
             TypeTag::U256 => Type::U256,
+            TypeTag::I8
+            | TypeTag::I16
+            | TypeTag::I32
+            | TypeTag::I64
+            | TypeTag::I128
+            | TypeTag::I256 => {
+                unreachable!("Impossible to hit signed integer types in v1")
+            }
             TypeTag::Address => Type::Address,
             TypeTag::Signer => Type::Signer,
 

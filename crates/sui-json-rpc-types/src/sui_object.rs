@@ -963,6 +963,7 @@ pub fn type_and_fields_from_move_event_data(
         SuiMoveValue::Variant(v) => Ok((v.type_.clone(), v.clone().to_json_value())),
         SuiMoveValue::Vector(_)
         | SuiMoveValue::Number(_)
+        | SuiMoveValue::SignedNumber(_)
         | SuiMoveValue::Bool(_)
         | SuiMoveValue::Address(_)
         | SuiMoveValue::String(_)

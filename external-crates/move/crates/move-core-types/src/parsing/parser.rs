@@ -8,6 +8,7 @@ use crate::parsing::{
 };
 use crate::{
     account_address::AccountAddress,
+    i256::{I256, I256FromStrError},
     u256::{U256, U256FromStrError},
 };
 use anyhow::{Result, anyhow, bail};
@@ -270,6 +271,12 @@ where
             (TypeToken::Ident, "u64") => ParsedType::U64,
             (TypeToken::Ident, "u128") => ParsedType::U128,
             (TypeToken::Ident, "u256") => ParsedType::U256,
+            (TypeToken::Ident, "i8") => ParsedType::I8,
+            (TypeToken::Ident, "i16") => ParsedType::I16,
+            (TypeToken::Ident, "i32") => ParsedType::I32,
+            (TypeToken::Ident, "i64") => ParsedType::I64,
+            (TypeToken::Ident, "i128") => ParsedType::I128,
+            (TypeToken::Ident, "i256") => ParsedType::I256,
             (TypeToken::Ident, "bool") => ParsedType::Bool,
             (TypeToken::Ident, "address") => ParsedType::Address,
             (TypeToken::Ident, "signer") => ParsedType::Signer,
@@ -322,6 +329,14 @@ impl<'a, I: Iterator<Item = (ValueToken, &'a str)>> Parser<'a, ValueToken, I> {
         let (tok, contents) = self.advance_any()?;
         Ok(match tok {
             ValueToken::Number if !matches!(self.peek_tok(), Some(ValueToken::ColonColon)) => {
+                // Untyped numbers are inferred as unsigned; a negative literal must carry an
+                // explicit signed suffix (e.g. `-1i8`) to be representable.
+                if contents.starts_with('-') {
+                    bail!(
+                        "untyped negative number '{}' requires a signed integer suffix (e.g. 'i64')",
+                        contents
+                    )
+                }
                 let (u, _) = parse_u256(contents)?;
                 ParsedValue::InferredNum(u)
             }
@@ -341,9 +356,28 @@ impl<'a, I: Iterator<Item = (ValueToken, &'a str)>> Parser<'a, ValueToken, I> {
                 } else if let Some(s) = contents.strip_suffix("u128") {
                     let (u, _) = parse_u128(s)?;
                     ParsedValue::U128(u)
-                } else {
-                    let (u, _) = parse_u256(contents.strip_suffix("u256").unwrap())?;
+                } else if let Some(s) = contents.strip_suffix("u256") {
+                    let (u, _) = parse_u256(s)?;
                     ParsedValue::U256(u)
+                } else if let Some(s) = contents.strip_suffix("i8") {
+                    let (i, _) = parse_i8(s)?;
+                    ParsedValue::I8(i)
+                } else if let Some(s) = contents.strip_suffix("i16") {
+                    let (i, _) = parse_i16(s)?;
+                    ParsedValue::I16(i)
+                } else if let Some(s) = contents.strip_suffix("i32") {
+                    let (i, _) = parse_i32(s)?;
+                    ParsedValue::I32(i)
+                } else if let Some(s) = contents.strip_suffix("i64") {
+                    let (i, _) = parse_i64(s)?;
+                    ParsedValue::I64(i)
+                } else if let Some(s) = contents.strip_suffix("i128") {
+                    let (i, _) = parse_i128(s)?;
+                    ParsedValue::I128(i)
+                } else {
+                    let s = contents.strip_suffix("i256").unwrap();
+                    let (i, _) = parse_i256(s)?;
+                    ParsedValue::I256(i)
                 }
             }
             ValueToken::True => ParsedValue::Bool(true),
@@ -516,6 +550,31 @@ pub fn parse_u256(s: &str) -> Result<(U256, NumberFormat), U256FromStrError> {
         base,
     ))
 }
+
+// Parse a signed integer from a decimal or hex encoding.
+macro_rules! parse_signed_int {
+    ($name:ident, $ty:ty, $err:ty) => {
+        pub fn $name(s: &str) -> Result<($ty, NumberFormat), $err> {
+            let (negated, magnitude) = match s.strip_prefix('-') {
+                Some(rest) => (true, rest),
+                None => (false, s),
+            };
+            let (txt, base) = determine_num_text_and_base(magnitude);
+            let mut txt = txt.replace('_', "");
+            if negated {
+                txt.insert(0, '-');
+            }
+            Ok((<$ty>::from_str_radix(&txt, base as u32)?, base))
+        }
+    };
+}
+
+parse_signed_int!(parse_i8, i8, ParseIntError);
+parse_signed_int!(parse_i16, i16, ParseIntError);
+parse_signed_int!(parse_i32, i32, ParseIntError);
+parse_signed_int!(parse_i64, i64, ParseIntError);
+parse_signed_int!(parse_i128, i128, ParseIntError);
+parse_signed_int!(parse_i256, I256, I256FromStrError);
 
 // Parse an address from a decimal or hex encoding
 pub fn parse_address_number(s: &str) -> Option<(AccountAddress, NumberFormat)> {

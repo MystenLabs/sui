@@ -13,6 +13,7 @@ use std::marker::PhantomData;
 
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_visitor as AV;
+use move_core_types::i256::I256;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::u256::U256;
 
@@ -108,6 +109,55 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
         &mut self,
         _: &AV::ValueDriver<'_, 'b, 'l>,
         value: U256,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(F::string(&mut self.meter, value.to_string())?)
+    }
+
+    fn visit_i8(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i8,
+    ) -> Result<Self::Value, Self::Error> {
+        // REVIEW: i8/i16/i32 render as numbers; wider signed widths render as strings.
+        Ok(F::signed_number(&mut self.meter, value as i32)?)
+    }
+
+    fn visit_i16(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i16,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(F::signed_number(&mut self.meter, value as i32)?)
+    }
+
+    fn visit_i32(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i32,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(F::signed_number(&mut self.meter, value)?)
+    }
+
+    fn visit_i64(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i64,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(F::string(&mut self.meter, value.to_string())?)
+    }
+
+    fn visit_i128(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
+        value: i128,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(F::string(&mut self.meter, value.to_string())?)
+    }
+
+    fn visit_i256(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'b, 'l>,
+        value: I256,
     ) -> Result<Self::Value, Self::Error> {
         Ok(F::string(&mut self.meter, value.to_string())?)
     }
@@ -272,7 +322,7 @@ mod tests {
 
     use move_core_types::annotated_value as A;
     use move_core_types::ident_str;
-    use move_core_types::language_storage::StructTag;
+    use move_core_types::language_storage::{StructTag, TypeTag};
     use serde::Serialize;
     use serde_json::Value;
     use serde_json::json;
@@ -352,6 +402,60 @@ mod tests {
     fn json_u128() {
         let actual = json(L::U128, 424_242_424_242_424_242_424u128);
         let expect = json!(424_242_424_242_424_242_424u128.to_string());
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn json_i8() {
+        assert_eq!(TypeTag::from(&L::I8), TypeTag::I8);
+        let actual = json(L::I8, -42i8);
+        let expect = json!(-42i8);
+        assert_eq!(expect, actual);
+
+        let actual = json(L::I8, i8::MIN);
+        let expect = json!(-128);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn json_i16() {
+        assert_eq!(TypeTag::from(&L::I16), TypeTag::I16);
+        let actual = json(L::I16, -424i16);
+        let expect = json!(-424i16);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn json_i32() {
+        assert_eq!(TypeTag::from(&L::I32), TypeTag::I32);
+        let actual = json(L::I32, -432_432i32);
+        let expect = json!(-432_432i32);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn json_i64() {
+        assert_eq!(TypeTag::from(&L::I64), TypeTag::I64);
+        let actual = json(L::I64, -432_432_432_432i64);
+        let expect = json!((-432_432_432_432i64).to_string());
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn json_i128() {
+        assert_eq!(TypeTag::from(&L::I128), TypeTag::I128);
+        let actual = json(L::I128, -424_242_424_242_424_242_424i128);
+        let expect = json!((-424_242_424_242_424_242_424i128).to_string());
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn json_i256() {
+        use move_core_types::i256::I256;
+        assert_eq!(TypeTag::from(&L::I256), TypeTag::I256);
+        let value = I256::from_str("-42424242424242424242424242424242424242424").unwrap();
+        let actual = json(L::I256, value);
+        let expect = json!("-42424242424242424242424242424242424242424");
         assert_eq!(expect, actual);
     }
 

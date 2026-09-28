@@ -789,3 +789,38 @@ fn test_string_vec_df_name_child_id_eq() {
         child_id.to_string()
     );
 }
+
+#[test]
+fn test_signed_move_value_to_json() {
+    use move_core_types::i256::I256;
+
+    // Signed integers mirror the unsigned convention: i8/i16/i32 are native JSON numbers,
+    // i64/i128/i256 are strings.
+    use super::move_value_to_json;
+    use move_core_types::annotated_value::MoveValue;
+
+    assert_eq!(move_value_to_json(&MoveValue::I8(-1)), Some(json!(-1)));
+    assert_eq!(
+        move_value_to_json(&MoveValue::I8(i8::MIN)),
+        Some(json!(-128))
+    );
+    assert_eq!(move_value_to_json(&MoveValue::I16(-424)), Some(json!(-424)));
+    assert_eq!(
+        move_value_to_json(&MoveValue::I32(-432_432)),
+        Some(json!(-432_432))
+    );
+    assert_eq!(
+        move_value_to_json(&MoveValue::I64(-432_432_432_432)),
+        Some(json!("-432432432432"))
+    );
+    assert_eq!(
+        move_value_to_json(&MoveValue::I128(-424_242_424_242_424_242_424)),
+        Some(json!("-424242424242424242424"))
+    );
+    assert_eq!(
+        move_value_to_json(&MoveValue::I256(
+            I256::from_str("-42424242424242424242424242424242424242424").unwrap()
+        )),
+        Some(json!("-42424242424242424242424242424242424242424"))
+    );
+}

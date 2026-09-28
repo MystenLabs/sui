@@ -6,6 +6,7 @@ use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
     annotated_visitor::{self, StructDriver, ValueDriver, VecDriver, Visitor},
+    i256::I256,
     language_storage::TypeTag,
     u256::U256,
 };
@@ -131,6 +132,12 @@ impl BoundedVisitor {
                 | TT::U64
                 | TT::U128
                 | TT::U256
+                | TT::I8
+                | TT::I16
+                | TT::I32
+                | TT::I64
+                | TT::I128
+                | TT::I256
                 | TT::Address
                 | TT::Signer => self.debit(8)?,
 
@@ -200,6 +207,54 @@ impl<'b, 'l> Visitor<'b, 'l> for BoundedVisitor {
         value: U256,
     ) -> Result<Self::Value, Self::Error> {
         Ok(A::MoveValue::U256(value))
+    }
+
+    fn visit_i8(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i8,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(A::MoveValue::I8(value))
+    }
+
+    fn visit_i16(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i16,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(A::MoveValue::I16(value))
+    }
+
+    fn visit_i32(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i32,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(A::MoveValue::I32(value))
+    }
+
+    fn visit_i64(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i64,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(A::MoveValue::I64(value))
+    }
+
+    fn visit_i128(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: i128,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(A::MoveValue::I128(value))
+    }
+
+    fn visit_i256(
+        &mut self,
+        _driver: &ValueDriver<'_, 'b, 'l>,
+        value: I256,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(A::MoveValue::I256(value))
     }
 
     fn visit_bool(

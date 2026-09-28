@@ -204,6 +204,14 @@ impl MoveCallInfo {
             TypeInput::U64 => MoveType::U64,
             TypeInput::U128 => MoveType::U128,
             TypeInput::U256 => MoveType::U256,
+            // Signed TypeInputs are rejected at the transaction input boundary, so replay can
+            // never see one before the Sui-layer enablement PR fills this in.
+            TypeInput::I8
+            | TypeInput::I16
+            | TypeInput::I32
+            | TypeInput::I64
+            | TypeInput::I128
+            | TypeInput::I256 => todo!("(signed-ints) replay type input {type_input:?}"),
             TypeInput::Address => MoveType::Address,
             TypeInput::Signer => MoveType::Address, // Signer is treated as Address
             TypeInput::Vector(element) => {
@@ -307,14 +315,14 @@ impl MoveCallInfo {
                     Ok(MoveType::TypeParameter(*idx))
                 }
             }
-            // Signed integer types are not yet supported in replay MoveType
+            // TODO (signed-ints): not yet supported in replay MoveType.
             SignatureToken::I8
             | SignatureToken::I16
             | SignatureToken::I32
             | SignatureToken::I64
             | SignatureToken::I128
             | SignatureToken::I256 => {
-                anyhow::bail!("Signed integer types are not yet supported")
+                anyhow::bail!("signed integer types are not yet supported")
             }
         }
     }

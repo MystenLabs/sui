@@ -1405,3 +1405,46 @@ fn named_empty_module(address: OriginalId, name: String) -> CompiledModule {
     module.identifiers[0] = Identifier::new(name).unwrap();
     module
 }
+
+#[test]
+fn load_signed_type_tags_fail() {
+    // Signed integer `TypeTag`s cannot be loaded by the VM runtime yet. Callers (the Sui
+    // adapter) are responsible for rejecting user-supplied signed types with a user-facing
+    // error before calling `load_type`; if one reaches the VM anyway, it must fail rather
+    // than load. The dispatch tables answer signed tags with
+    // `UNKNOWN_INVARIANT_VIOLATION_ERROR`, which the `MoveVM::load_type` wrapper folds into
+    // its uniform `EXTERNAL_RESOLUTION_REQUEST_ERROR` like every other invariant-class
+    // resolution failure. Pin that behavior here, including for signed tags nested in
+    // vectors.
+    let data_store = InMemoryStorage::new();
+    let mut adapter =
+        Adapter::new(data_store).with_linkage(BTreeMap::from([(ADDR2, ADDR2)]), vec![]);
+    let pkg = get_loader_tests_modules();
+    adapter.publish_package(pkg);
+
+    let signed_tags = [
+        TypeTag::I8,
+        TypeTag::I16,
+        TypeTag::I32,
+        TypeTag::I64,
+        TypeTag::I128,
+        TypeTag::I256,
+        TypeTag::Vector(Box::new(TypeTag::I8)),
+    ];
+    for tag in signed_tags {
+        let err = adapter
+            .load_type_can_fail(&tag)
+            .expect_err("loading signed type must fail");
+        assert_eq!(
+            err.major_status(),
+            StatusCode::EXTERNAL_RESOLUTION_REQUEST_ERROR,
+            "unexpected status for {tag:?}"
+        );
+        assert!(
+            err.message()
+                .is_some_and(|m| m.contains("signed integer types not yet supported")),
+            "unexpected message for {tag:?}: {:?}",
+            err.message()
+        );
+    }
+}

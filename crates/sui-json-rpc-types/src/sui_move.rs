@@ -104,6 +104,13 @@ pub enum SuiMoveNormalizedType {
     TypeParameter(SuiMoveTypeParameterIndex),
     Reference(Box<SuiMoveNormalizedType>),
     MutableReference(Box<SuiMoveNormalizedType>),
+    // New variants are appended at the end (uniform append-only convention).
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
@@ -310,6 +317,12 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
             NormalizedType::U64 => SuiMoveNormalizedType::U64,
             NormalizedType::U128 => SuiMoveNormalizedType::U128,
             NormalizedType::U256 => SuiMoveNormalizedType::U256,
+            NormalizedType::I8 => SuiMoveNormalizedType::I8,
+            NormalizedType::I16 => SuiMoveNormalizedType::I16,
+            NormalizedType::I32 => SuiMoveNormalizedType::I32,
+            NormalizedType::I64 => SuiMoveNormalizedType::I64,
+            NormalizedType::I128 => SuiMoveNormalizedType::I128,
+            NormalizedType::I256 => SuiMoveNormalizedType::I256,
             NormalizedType::Address => SuiMoveNormalizedType::Address,
             NormalizedType::Signer => SuiMoveNormalizedType::Signer,
             NormalizedType::Datatype(dt) => {
@@ -338,14 +351,6 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
             NormalizedType::Reference(true, mr) => SuiMoveNormalizedType::MutableReference(
                 Box::new(SuiMoveNormalizedType::from(&**mr)),
             ),
-            NormalizedType::I8
-            | NormalizedType::I16
-            | NormalizedType::I32
-            | NormalizedType::I64
-            | NormalizedType::I128
-            | NormalizedType::I256 => {
-                todo!("[signed-ints] signed integer types in sui-json-rpc-types")
-            }
         }
     }
 }
@@ -411,6 +416,8 @@ pub enum SuiMoveValue {
     Struct(SuiMoveStruct),
     Option(Box<Option<SuiMoveValue>>),
     Variant(SuiMoveVariant),
+    // i64, i128, and i256 are converted to String to avoid overflow
+    SignedNumber(i32),
 }
 
 impl SuiMoveValue {
@@ -420,6 +427,7 @@ impl SuiMoveValue {
             SuiMoveValue::Struct(move_struct) => move_struct.to_json_value(),
             SuiMoveValue::Vector(values) => SuiMoveStruct::Runtime(values).to_json_value(),
             SuiMoveValue::Number(v) => json!(v),
+            SuiMoveValue::SignedNumber(v) => json!(v),
             SuiMoveValue::Bool(v) => json!(v),
             SuiMoveValue::Address(v) => json!(v),
             SuiMoveValue::String(v) => json!(v),
@@ -435,6 +443,7 @@ impl Display for SuiMoveValue {
         let mut writer = String::new();
         match self {
             SuiMoveValue::Number(value) => write!(writer, "{}", value)?,
+            SuiMoveValue::SignedNumber(value) => write!(writer, "{}", value)?,
             SuiMoveValue::Bool(value) => write!(writer, "{}", value)?,
             SuiMoveValue::Address(value) => write!(writer, "{}", value)?,
             SuiMoveValue::String(value) => write!(writer, "{}", value)?,
@@ -463,6 +472,13 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::U64(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U256(value) => SuiMoveValue::String(format!("{value}")),
+            // REVIEW: i8/i16/i32 render as numbers; wider signed widths render as strings.
+            MoveValue::I8(value) => SuiMoveValue::SignedNumber(value.into()),
+            MoveValue::I16(value) => SuiMoveValue::SignedNumber(value.into()),
+            MoveValue::I32(value) => SuiMoveValue::SignedNumber(value),
+            MoveValue::I64(value) => SuiMoveValue::String(format!("{value}")),
+            MoveValue::I128(value) => SuiMoveValue::String(format!("{value}")),
+            MoveValue::I256(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
             MoveValue::Vector(values) => {
                 SuiMoveValue::Vector(values.into_iter().map(|value| value.into()).collect())

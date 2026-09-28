@@ -36,6 +36,7 @@ impl<'v> AV::Visitor<'v, 'v> for VecMapVisitor<'v, '_> {
     type Error = FormatError;
 
     visitor_default! { <'v, 'v> u8, u16, u32, u64, u128, u256 = Ok(None) }
+    visitor_default! { <'v, 'v> i8, i16, i32, i64, i128, i256 = Ok(None) }
     visitor_default! { <'v, 'v> bool, address, signer, variant = Ok(None) }
 
     /// Expect to visit the content vector of the VecMap first. Look through each entry for one

@@ -347,6 +347,26 @@ impl VMDispatchTables {
                 TypeTag::Vector(tt) => {
                     Type::Vector(Box::new(self.load_type_impl(tt, type_size)?))
                 }
+                // Signed integer types are not supported by the VM runtime yet. User-supplied
+                // type arguments never reach this arm: the adapter rejects signed types with a
+                // user-facing `TypeArgumentError` when loading `TypeInput`s and raw `TypeTag`s
+                // (see `load_vm_type_from_type_input` / `load_vm_type_from_type_tag` in the
+                // static PTB env). Tags synthesized from on-chain state (object types, layout
+                // requests) cannot mention signed types either, because no publishable module
+                // can name them until the binary format reaches VERSION_8. Reaching this arm
+                // therefore means a signed tag was synthesized internally, which is an
+                // invariant violation rather than a user-facing error.
+                TypeTag::I8
+                | TypeTag::I16
+                | TypeTag::I32
+                | TypeTag::I64
+                | TypeTag::I128
+                | TypeTag::I256 => {
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "signed integer types not yet supported in VM runtime"
+                    ));
+                }
                 // NB: Note that this tag is slightly misnamed and used for all Datatypes.
                 TypeTag::Struct(struct_tag) => {
                     let defining_id = struct_tag.address;
