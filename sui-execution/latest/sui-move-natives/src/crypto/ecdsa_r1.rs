@@ -11,6 +11,7 @@ use fastcrypto::{
     traits::ToFromBytes,
 };
 use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{safe_assert, safe_assert_eq};
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
@@ -66,8 +67,8 @@ pub fn ecrecover(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     let hash = pop_arg!(args, u8);
 
@@ -173,8 +174,8 @@ pub fn secp256r1_verify(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 4);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 4);
     // Load the cost parameters from the protocol config
     let (ecdsa_r1_secp256_r1_verify_cost_params, crypto_invalid_arguments_cost) = {
         let cost_table: &NativesCostTable = get_extension!(context)?;

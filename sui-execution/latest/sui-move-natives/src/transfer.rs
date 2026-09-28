@@ -7,7 +7,7 @@ use crate::{
     get_tag_and_layouts, object_runtime::object_store::ObjectResult,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::{safe_assert, safe_unwrap};
+use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
@@ -50,8 +50,8 @@ pub fn receive_object_internal(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 3);
     let transfer_receive_object_internal_cost_params = get_extension!(context, NativesCostTable)?
         .transfer_receive_object_internal_cost_params
         .clone();
@@ -138,8 +138,8 @@ pub fn transfer_internal(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 2);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 2);
 
     let transfer_transfer_internal_cost_params = get_extension!(context, NativesCostTable)?
         .transfer_transfer_internal_cost_params
@@ -196,8 +196,8 @@ pub fn party_transfer_internal(
     const TRANSFER: u64 = 0b1000;
     const ALL: u64 = READ | WRITE | DELETE | TRANSFER;
 
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 4);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 4);
 
     let is_supported = get_extension!(context, ObjectRuntime)?
         .protocol_config
@@ -267,8 +267,8 @@ pub fn freeze_object(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     let transfer_freeze_object_cost_params = get_extension!(context, NativesCostTable)?
         .transfer_freeze_object_cost_params
@@ -301,8 +301,8 @@ pub fn share_object(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     let transfer_share_object_cost_params = get_extension!(context, NativesCostTable)?
         .transfer_share_object_cost_params

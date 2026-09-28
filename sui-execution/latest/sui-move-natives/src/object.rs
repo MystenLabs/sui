@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{NativesCostTable, get_extension, get_extension_mut, object_runtime::ObjectRuntime};
-use move_binary_format::safe_unwrap;
 use move_binary_format::{errors::PartialVMResult, safe_assert};
+use move_binary_format::{safe_assert_eq, safe_unwrap};
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use move_vm_runtime::{
     execution::{
@@ -31,8 +31,8 @@ pub fn borrow_uid(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     let borrow_uid_cost_params = get_extension!(context, NativesCostTable)?
         .borrow_uid_cost_params
@@ -61,8 +61,8 @@ pub fn delete_impl(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 1);
 
     let delete_impl_cost_params = get_extension!(context, NativesCostTable)?
         .delete_impl_cost_params
@@ -97,8 +97,8 @@ pub fn record_new_uid(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 1);
 
     let record_new_id_cost_params = get_extension!(context, NativesCostTable)?
         .record_new_id_cost_params
