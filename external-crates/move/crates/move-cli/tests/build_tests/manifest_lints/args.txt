@@ -1,14 +1,41 @@
-> cp Move.allow.toml Move.toml
+> cp Move.compiler_allow.toml Move.toml
 build
-> cp Move.warn.toml Move.toml
+> cp Move.compiler_warn.toml Move.toml
 build
-> cp Move.deny.toml Move.toml
+> cp Move.compiler_deny.toml Move.toml
 build
-> cp fixtures/override.move sources/m.move
+> cp fixtures/compiler_specificity.move sources/m.move
+> cp Move.compiler_specificity.toml Move.toml
+build
+> cp fixtures/source_allow.move sources/m.move
+> cp Move.source_deny.toml Move.toml
+build
+> cp fixtures/source_warn.move sources/m.move
+build
+> cp fixtures/source_deny.move sources/m.move
+> cp Move.source_allow.toml Move.toml
 build
 > cp fixtures/lint.move sources/m.move
-> cp Move.lint.toml Move.toml
+> cp Move.lint_allow.toml Move.toml
 build
+> cp Move.lint_warn.toml Move.toml
+build
+> cp Move.lint_deny.toml Move.toml
+build
+> cp fixtures/lint_allow.move sources/m.move
+> cp Move.lint_source.toml Move.toml
+build
+> cp fixtures/sui_lint.move sources/m.move
+> cp Move.sui_lint_allow.toml Move.toml
+build --default-move-flavor sui
+> cp Move.sui_lint_warn.toml Move.toml
+build --default-move-flavor sui
+> cp Move.sui_lint_deny.toml Move.toml
+build --default-move-flavor sui
 > cp fixtures/clean.move sources/m.move
 > cp Move.unknown.toml Move.toml
+build
+> cp Move.unknown_lint.toml Move.toml
+build
+> cp Move.invalid_level.toml Move.toml
 build
