@@ -1,7 +1,7 @@
-External Command `cp Move.compiler_allow.toml Move.toml`:
+External Command `cp Move.compiler_allow.ok.toml Move.toml`:
 Command `build`:
 BUILDING manifest_lints
-External Command `cp Move.compiler_warn.toml Move.toml`:
+External Command `cp Move.compiler_warn.ok.toml Move.toml`:
 Command `build`:
 BUILDING manifest_lints
 warning[WC09002]: unused variable
@@ -10,17 +10,8 @@ warning[WC09002]: unused variable
 3 │         let unused = 0u64;
   │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
 
-External Command `cp Move.compiler_deny.toml Move.toml`:
-Command `build`:
-BUILDING manifest_lints
-error[EC09002]: unused variable
-  ┌─ ./sources/m.move:3:13
-  │
-3 │         let unused = 0u64;
-  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
-
 External Command `cp fixtures/compiler_specificity.move sources/m.move`:
-External Command `cp Move.compiler_specificity.toml Move.toml`:
+External Command `cp Move.compiler_specificity.ok.toml Move.toml`:
 Command `build`:
 BUILDING manifest_lints
 warning[WC09002]: unused variable
@@ -30,7 +21,7 @@ warning[WC09002]: unused variable
   │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
 
 External Command `cp fixtures/source_allow.move sources/m.move`:
-External Command `cp Move.source_deny.toml Move.toml`:
+External Command `cp Move.source_override.ok.toml Move.toml`:
 Command `build`:
 BUILDING manifest_lints
 External Command `cp fixtures/source_warn.move sources/m.move`:
@@ -45,8 +36,52 @@ warning[WC09002]: unused variable
 4 │         let unused = 0u64;
   │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
 
+External Command `cp fixtures/lint.move sources/m.move`:
+External Command `cp Move.lint_allow.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+External Command `cp Move.lint_warn.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+warning[WL04005]: 'abort' or 'assert' without named constant
+  ┌─ ./sources/m.move:3:15
+  │
+3 │         abort 1
+  │               ^ Prefer using a named constant.
+  │
+  = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+
+External Command `cp fixtures/lint_allow.move sources/m.move`:
+External Command `cp Move.lint_source_allow.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+External Command `cp fixtures/sui_lint.move sources/m.move`:
+External Command `cp Move.sui_lint_allow.ok.toml Move.toml`:
+Command `build --default-move-flavor sui`:
+BUILDING manifest_lints
+External Command `cp Move.sui_lint_warn.ok.toml Move.toml`:
+Command `build --default-move-flavor sui`:
+BUILDING manifest_lints
+warning[WSL01011]: unnecessary `entry` on a `public` function
+  ┌─ ./sources/m.move:2:12
+  │
+2 │     public entry fun entry_function() {}
+  │            ^^^^^ `entry` on `public` is meaningless. In conjunction with `public`, `entry` adds no additional permissions or restrictions.
+  │
+  = `public` functions can be called from PTBs. `entry` can be used to allow non-`public` (private or `public(package)`) functions to be called from PTBs, although there will be additional restrictions on the input arguments to such functions.
+
+External Command `cp fixtures/compiler.move sources/m.move`:
+External Command `cp Move.compiler_deny.error.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+error[EC09002]: unused variable
+  ┌─ ./sources/m.move:3:13
+  │
+3 │         let unused = 0u64;
+  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+
 External Command `cp fixtures/source_deny.move sources/m.move`:
-External Command `cp Move.source_allow.toml Move.toml`:
+External Command `cp Move.source_deny.error.toml Move.toml`:
 Command `build`:
 BUILDING manifest_lints
 error[EC09002]: unused variable
@@ -59,21 +94,7 @@ error[EC09002]: unused variable
   │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
 
 External Command `cp fixtures/lint.move sources/m.move`:
-External Command `cp Move.lint_allow.toml Move.toml`:
-Command `build`:
-BUILDING manifest_lints
-External Command `cp Move.lint_warn.toml Move.toml`:
-Command `build`:
-BUILDING manifest_lints
-warning[WL04005]: 'abort' or 'assert' without named constant
-  ┌─ ./sources/m.move:3:15
-  │
-3 │         abort 1
-  │               ^ Prefer using a named constant.
-  │
-  = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
-
-External Command `cp Move.lint_deny.toml Move.toml`:
+External Command `cp Move.lint_deny.error.toml Move.toml`:
 Command `build`:
 BUILDING manifest_lints
 error[EL04005]: 'abort' or 'assert' without named constant
@@ -84,26 +105,8 @@ error[EL04005]: 'abort' or 'assert' without named constant
   │
   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
 
-External Command `cp fixtures/lint_allow.move sources/m.move`:
-External Command `cp Move.lint_source.toml Move.toml`:
-Command `build`:
-BUILDING manifest_lints
 External Command `cp fixtures/sui_lint.move sources/m.move`:
-External Command `cp Move.sui_lint_allow.toml Move.toml`:
-Command `build --default-move-flavor sui`:
-BUILDING manifest_lints
-External Command `cp Move.sui_lint_warn.toml Move.toml`:
-Command `build --default-move-flavor sui`:
-BUILDING manifest_lints
-warning[WSL01011]: unnecessary `entry` on a `public` function
-  ┌─ ./sources/m.move:2:12
-  │
-2 │     public entry fun entry_function() {}
-  │            ^^^^^ `entry` on `public` is meaningless. In conjunction with `public`, `entry` adds no additional permissions or restrictions.
-  │
-  = `public` functions can be called from PTBs. `entry` can be used to allow non-`public` (private or `public(package)`) functions to be called from PTBs, although there will be additional restrictions on the input arguments to such functions.
-
-External Command `cp Move.sui_lint_deny.toml Move.toml`:
+External Command `cp Move.sui_lint_deny.error.toml Move.toml`:
 Command `build --default-move-flavor sui`:
 BUILDING manifest_lints
 error[ESL01011]: unnecessary `entry` on a `public` function
@@ -115,12 +118,12 @@ error[ESL01011]: unnecessary `entry` on a `public` function
   = `public` functions can be called from PTBs. `entry` can be used to allow non-`public` (private or `public(package)`) functions to be called from PTBs, although there will be additional restrictions on the input arguments to such functions.
 
 External Command `cp fixtures/clean.move sources/m.move`:
-External Command `cp Move.unknown.toml Move.toml`:
+External Command `cp Move.unknown.error.toml Move.toml`:
 Command `build`:
 Error: unknown warning filter 'not_a_warning' in Move.toml
-External Command `cp Move.unknown_lint.toml Move.toml`:
+External Command `cp Move.unknown_lint.error.toml Move.toml`:
 Command `build`:
 Error: unknown warning filter 'lint(not_a_lint)' in Move.toml
-External Command `cp Move.invalid_level.toml Move.toml`:
+External Command `cp Move.invalid_level.error.toml Move.toml`:
 Command `build`:
 Error: Error while loading dependency .: error while loading legacy manifest "./Move.toml": Error parsing '[lints]' section of manifest

@@ -1,41 +1,45 @@
-> cp Move.compiler_allow.toml Move.toml
+> cp Move.compiler_allow.ok.toml Move.toml
 build
-> cp Move.compiler_warn.toml Move.toml
-build
-> cp Move.compiler_deny.toml Move.toml
+> cp Move.compiler_warn.ok.toml Move.toml
 build
 > cp fixtures/compiler_specificity.move sources/m.move
-> cp Move.compiler_specificity.toml Move.toml
+> cp Move.compiler_specificity.ok.toml Move.toml
 build
 > cp fixtures/source_allow.move sources/m.move
-> cp Move.source_deny.toml Move.toml
+> cp Move.source_override.ok.toml Move.toml
 build
 > cp fixtures/source_warn.move sources/m.move
 build
-> cp fixtures/source_deny.move sources/m.move
-> cp Move.source_allow.toml Move.toml
-build
 > cp fixtures/lint.move sources/m.move
-> cp Move.lint_allow.toml Move.toml
+> cp Move.lint_allow.ok.toml Move.toml
 build
-> cp Move.lint_warn.toml Move.toml
-build
-> cp Move.lint_deny.toml Move.toml
+> cp Move.lint_warn.ok.toml Move.toml
 build
 > cp fixtures/lint_allow.move sources/m.move
-> cp Move.lint_source.toml Move.toml
+> cp Move.lint_source_allow.ok.toml Move.toml
 build
 > cp fixtures/sui_lint.move sources/m.move
-> cp Move.sui_lint_allow.toml Move.toml
+> cp Move.sui_lint_allow.ok.toml Move.toml
 build --default-move-flavor sui
-> cp Move.sui_lint_warn.toml Move.toml
+> cp Move.sui_lint_warn.ok.toml Move.toml
 build --default-move-flavor sui
-> cp Move.sui_lint_deny.toml Move.toml
+
+> cp fixtures/compiler.move sources/m.move
+> cp Move.compiler_deny.error.toml Move.toml
+build
+> cp fixtures/source_deny.move sources/m.move
+> cp Move.source_deny.error.toml Move.toml
+build
+> cp fixtures/lint.move sources/m.move
+> cp Move.lint_deny.error.toml Move.toml
+build
+> cp fixtures/sui_lint.move sources/m.move
+> cp Move.sui_lint_deny.error.toml Move.toml
 build --default-move-flavor sui
 > cp fixtures/clean.move sources/m.move
-> cp Move.unknown.toml Move.toml
+> cp Move.unknown.error.toml Move.toml
 build
-> cp Move.unknown_lint.toml Move.toml
+> cp Move.unknown_lint.error.toml Move.toml
 build
-> cp Move.invalid_level.toml Move.toml
+> cp Move.invalid_level.error.toml Move.toml
 build
