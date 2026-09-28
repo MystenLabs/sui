@@ -9,6 +9,7 @@ use crate::{
     natives::{extensions::NativeExtensions, functions::NativeFunctions},
     runtime::telemetry::{MoveRuntimeTelemetry, TelemetryContext},
     shared::{
+        TypeLimits,
         gas::GasMeter,
         linkage_context::LinkageContext,
         system_packages::SystemPackages,
@@ -37,6 +38,8 @@ pub struct MoveRuntime {
     natives: Arc<NativeFunctions>,
     /// The Move VM's configuration.
     vm_config: Arc<VMConfig>,
+    /// The type traversal limits used by sessions from this runtime.
+    type_limits: Arc<TypeLimits>,
     /// Telemetry
     telemetry: Arc<TelemetryContext>,
 }
@@ -74,10 +77,12 @@ impl MoveRuntime {
         let vm_config = Arc::new(vm_config);
         let telemetry = Arc::new(TelemetryContext::new());
         let cache = Arc::new(MoveCache::new(vm_config.clone()));
+        let type_limits = Arc::new(TypeLimits::VM_DEFAULT);
         let mut runtime = Self {
             cache,
             natives,
             vm_config,
+            type_limits,
             telemetry,
         };
         runtime.install_system_packages(system_packages);
@@ -326,6 +331,7 @@ impl MoveRuntime {
                 let instance = MoveVM {
                     virtual_tables,
                     vm_config: self.vm_config.clone(),
+                    type_limits: self.type_limits.clone(),
                     interner: self.cache.interner.clone(),
                     link_context,
                     native_extensions: native_extensions.clone(),
@@ -479,6 +485,7 @@ impl MoveRuntime {
                     virtual_tables,
                     telemetry: vm_telemetry,
                     vm_config: self.vm_config.clone(),
+                    type_limits: self.type_limits.clone(),
                     interner: self.cache.interner.clone(),
                     link_context,
                     native_extensions: native_extensions.clone(),
