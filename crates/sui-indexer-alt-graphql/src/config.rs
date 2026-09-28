@@ -134,6 +134,10 @@ pub struct Limits {
     /// `max_batch_get_transactions`.
     pub max_batch_get_objects: u32,
 
+    /// Number of HTTP/2 connections each ledger gRPC (kv-rpc) reader spreads its requests over, so
+    /// concurrent calls are not capped by one connection's flow-control window.
+    pub ledger_grpc_num_connections: usize,
+
     /// Maximum (and default) number of object changes that can be returned in a single page of
     /// `TransactionEffects.objectChanges`.
     pub page_size_override_fx_object_changes: u32,
@@ -194,6 +198,7 @@ pub struct LimitsLayer {
     pub max_multi_get_size: Option<u32>,
     pub max_batch_get_transactions: Option<u32>,
     pub max_batch_get_objects: Option<u32>,
+    pub ledger_grpc_num_connections: Option<usize>,
     pub page_size_override_fx_object_changes: Option<u32>,
     pub page_size_override_packages: Option<u32>,
     pub max_type_argument_depth: Option<usize>,
@@ -503,6 +508,9 @@ impl LimitsLayer {
             max_batch_get_objects: self
                 .max_batch_get_objects
                 .unwrap_or(base.max_batch_get_objects),
+            ledger_grpc_num_connections: self
+                .ledger_grpc_num_connections
+                .unwrap_or(base.ledger_grpc_num_connections),
             page_size_override_fx_object_changes: self
                 .page_size_override_fx_object_changes
                 .unwrap_or(base.page_size_override_fx_object_changes),
@@ -597,6 +605,7 @@ impl From<Limits> for LimitsLayer {
             max_multi_get_size: Some(value.max_multi_get_size),
             max_batch_get_transactions: Some(value.max_batch_get_transactions),
             max_batch_get_objects: Some(value.max_batch_get_objects),
+            ledger_grpc_num_connections: Some(value.ledger_grpc_num_connections),
             page_size_override_fx_object_changes: Some(value.page_size_override_fx_object_changes),
             page_size_override_packages: Some(value.page_size_override_packages),
             max_type_argument_depth: Some(value.max_type_argument_depth),
@@ -705,6 +714,7 @@ impl Default for Limits {
             max_multi_get_size: 200,
             max_batch_get_transactions: MAX_BATCH_GET_TRANSACTIONS as u32,
             max_batch_get_objects: MAX_BATCH_GET_OBJECTS as u32,
+            ledger_grpc_num_connections: 4,
             // A much larger page size than the default, to make it unlikely that users need to
             // fetch a second page.
             page_size_override_fx_object_changes: 1024,

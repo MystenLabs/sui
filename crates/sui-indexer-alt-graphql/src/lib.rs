@@ -356,11 +356,16 @@ pub async fn start_rpc(
             registry,
             Some(config.limits.max_batch_get_transactions as usize),
             Some(config.limits.max_batch_get_objects as usize),
+            config.limits.ledger_grpc_num_connections,
         )
         .await?;
 
     let alpha_ledger_grpc_reader = kv_args
-        .alpha_ledger_grpc_reader(Some("graphql_alpha_ledger_grpc"), registry)
+        .alpha_ledger_grpc_reader(
+            Some("graphql_alpha_ledger_grpc"),
+            registry,
+            config.limits.ledger_grpc_num_connections,
+        )
         .await?;
 
     let pg_reader =
