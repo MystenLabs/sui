@@ -5,7 +5,10 @@ use axum::http;
 use std::{
     borrow::Cow,
     collections::HashSet,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -16,7 +19,7 @@ use prometheus::{
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use prost::Message;
-use sui_http::middleware::callback::{MakeCallbackHandler, ResponseHandler};
+use sui_http::middleware::callback::{MakeCallbackHandler, RequestHandler, ResponseHandler};
 
 #[derive(Clone)]
 pub struct RpcMetrics {
@@ -26,6 +29,8 @@ pub struct RpcMetrics {
     request_handler_latency: HistogramVec,
     first_chunk_latency: HistogramVec,
 }
+
+const GRPC_STATUS: http::HeaderName = http::HeaderName::from_static("grpc-status");
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
@@ -272,7 +277,7 @@ impl RpcMetricsMakeCallbackHandler {
 }
 
 impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
-    type RequestHandler = ();
+    type RequestHandler = RpcMetricsRequestHandler;
     type ResponseHandler = RpcMetricsCallbackHandler;
 
     fn make_handler(
@@ -303,13 +308,18 @@ impl MakeCallbackHandler for RpcMetricsMakeCallbackHandler {
             .with_label_values(&[path.as_ref()])
             .inc();
 
+        let request_body_failed = Arc::new(AtomicBool::new(false));
+
         (
-            (),
+            RpcMetricsRequestHandler {
+                request_body_failed: request_body_failed.clone(),
+            },
             RpcMetricsCallbackHandler {
                 metrics,
                 path,
                 start,
-                counted_response: false,
+                request_body_failed,
+                counting: CountingState::AwaitingResponse,
                 counted_first_chunk: false,
             },
         )
@@ -343,20 +353,71 @@ fn is_grpc_content_type(content_type: &http::HeaderValue) -> bool {
         .starts_with(tonic::metadata::GRPC_CONTENT_TYPE.as_bytes())
 }
 
+fn is_grpc_web_content_type(content_type: &http::HeaderValue) -> bool {
+    content_type.as_bytes().starts_with(b"application/grpc-web")
+}
+
+/// Observes the request body so that a request the client abandoned is
+/// counted as `canceled` rather than with whatever status the service
+/// produced for the truncated request.
+pub struct RpcMetricsRequestHandler {
+    request_body_failed: Arc<AtomicBool>,
+}
+
+impl RequestHandler for RpcMetricsRequestHandler {
+    fn on_body_error<E>(&mut self, _error: &E)
+    where
+        E: std::fmt::Display + 'static,
+    {
+        self.request_body_failed.store(true, Ordering::Release);
+    }
+}
+
+/// Progress of a request towards its single `rpc_requests` increment.
+enum CountingState {
+    /// The service has not produced a response yet.
+    AwaitingResponse,
+    /// The response is a native gRPC stream whose status arrives in the
+    /// trailers that end the response body.
+    AwaitingTrailers,
+    Counted,
+}
+
 pub struct RpcMetricsCallbackHandler {
     metrics: Arc<RpcMetrics>,
     path: Cow<'static, str>,
     start: Instant,
-    // Indicates if we successfully counted the response. In some cases when a request is
-    // prematurely canceled this will remain false
-    counted_response: bool,
+    request_body_failed: Arc<AtomicBool>,
+    // Requests that end before reaching `Counted` (the service future or the
+    // response body is dropped first) are counted as `canceled` on drop.
+    counting: CountingState,
     counted_first_chunk: bool,
+}
+
+impl RpcMetricsCallbackHandler {
+    fn count(&mut self, status: &str) {
+        // A request body that errors means the client reset the stream or the
+        // connection failed while the request was arriving, so no response
+        // reaches the client. The service's answer to the truncated request is
+        // not the outcome: tonic, for example, answers a request whose message
+        // never arrived with `internal`.
+        let status = if self.request_body_failed.load(Ordering::Acquire) {
+            "canceled"
+        } else {
+            status
+        };
+
+        self.metrics
+            .num_requests
+            .with_label_values(&[self.path.as_ref(), status])
+            .inc();
+
+        self.counting = CountingState::Counted;
+    }
 }
 
 impl ResponseHandler for RpcMetricsCallbackHandler {
     fn on_response(&mut self, response: &http::response::Parts) {
-        const GRPC_STATUS: http::HeaderName = http::HeaderName::from_static("grpc-status");
-
         // Unlike `request_latency` (observed in `Drop`, after the response
         // body finished streaming), this fires as soon as the handler
         // produced a response, so it excludes client-side network latency.
@@ -365,29 +426,27 @@ impl ResponseHandler for RpcMetricsCallbackHandler {
             .with_label_values(&[self.path.as_ref()])
             .observe(self.start.elapsed().as_secs_f64());
 
-        let status = if response
-            .headers
-            .get(&http::header::CONTENT_TYPE)
-            .is_some_and(is_grpc_content_type)
-        {
-            let code = response
-                .headers
-                .get(&GRPC_STATUS)
-                .map(http::HeaderValue::as_bytes)
-                .map(tonic::Code::from_bytes)
-                .unwrap_or(tonic::Code::Ok);
-
-            code_as_str(code)
+        let content_type = response.headers.get(&http::header::CONTENT_TYPE);
+        let status = if content_type.is_some_and(is_grpc_content_type) {
+            match response.headers.get(&GRPC_STATUS) {
+                // Trailers-only response: the status is final, and the empty
+                // body may never be polled.
+                Some(grpc_status) => code_as_str(tonic::Code::from_bytes(grpc_status.as_bytes())),
+                // grpc-web encodes the trailers into the response body, which
+                // is not parsed here.
+                None if content_type.is_some_and(is_grpc_web_content_type) => {
+                    code_as_str(tonic::Code::Ok)
+                }
+                None => {
+                    self.counting = CountingState::AwaitingTrailers;
+                    return;
+                }
+            }
         } else {
             response.status.as_str()
         };
 
-        self.metrics
-            .num_requests
-            .with_label_values(&[self.path.as_ref(), status])
-            .inc();
-
-        self.counted_response = true;
+        self.count(status);
     }
 
     fn on_body_chunk<B>(&mut self, _chunk: &B)
@@ -400,6 +459,31 @@ impl ResponseHandler for RpcMetricsCallbackHandler {
                 .with_label_values(&[self.path.as_ref()])
                 .observe(self.start.elapsed().as_secs_f64());
             self.counted_first_chunk = true;
+        }
+    }
+
+    fn on_end_of_stream(&mut self, trailers: Option<&http::HeaderMap>) {
+        if let CountingState::AwaitingTrailers = self.counting {
+            // gRPC requires `grpc-status` in the trailers; clients report a
+            // stream that ends without it as `unknown`.
+            let code = trailers
+                .and_then(|trailers| trailers.get(&GRPC_STATUS))
+                .map(|grpc_status| tonic::Code::from_bytes(grpc_status.as_bytes()))
+                .unwrap_or(tonic::Code::Unknown);
+
+            self.count(code_as_str(code));
+        }
+    }
+
+    fn on_body_error<E>(&mut self, _error: &E)
+    where
+        E: std::fmt::Display + 'static,
+    {
+        // The stream ends without trailers: hyper resets it (with
+        // `INTERNAL_ERROR` unless the error carries an HTTP/2 reason), which
+        // gRPC clients report as `internal`.
+        if let CountingState::AwaitingTrailers = self.counting {
+            self.count(code_as_str(tonic::Code::Internal));
         }
     }
 
@@ -427,7 +511,7 @@ impl Drop for RpcMetricsCallbackHandler {
             .with_label_values(&[self.path.as_ref()])
             .observe(latency);
 
-        if !self.counted_response {
+        if !matches!(self.counting, CountingState::Counted) {
             self.metrics
                 .num_requests
                 .with_label_values(&[self.path.as_ref(), "canceled"])
@@ -721,7 +805,7 @@ impl SubscriptionMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
 
     use prost_types::{
         FileDescriptorProto, FileDescriptorSet, MethodDescriptorProto, ServiceDescriptorProto,
@@ -862,8 +946,53 @@ mod tests {
     fn make_test_handler(metrics: &Arc<RpcMetrics>) -> RpcMetricsCallbackHandler {
         let make = RpcMetricsMakeCallbackHandler::new(metrics.clone());
         let (parts, _) = http::Request::new(()).into_parts();
-        let ((), handler) = make.make_handler(&parts);
+        let (_, handler) = make.make_handler(&parts);
         handler
+    }
+
+    const TEST_GRPC_PATH: &str = "/test.Service/Method";
+
+    /// Builds a handler for a native gRPC request to `TEST_GRPC_PATH`.
+    fn make_grpc_test_handler(metrics: &Arc<RpcMetrics>) -> RpcMetricsCallbackHandler {
+        let make = RpcMetricsMakeCallbackHandler::with_grpc_method_allowlist(
+            metrics.clone(),
+            Arc::new(HashSet::from([TEST_GRPC_PATH.to_owned()])),
+        );
+        let (parts, _) = http::Request::builder()
+            .method(http::Method::POST)
+            .uri(TEST_GRPC_PATH)
+            .header(http::header::CONTENT_TYPE, "application/grpc")
+            .body(())
+            .unwrap()
+            .into_parts();
+        let (_, handler) = make.make_handler(&parts);
+        handler
+    }
+
+    /// Headers of a native gRPC response that streams its body and reports its
+    /// status in the trailers.
+    fn grpc_streaming_response_parts() -> http::response::Parts {
+        let (parts, _) = http::Response::builder()
+            .header(http::header::CONTENT_TYPE, "application/grpc")
+            .body(())
+            .unwrap()
+            .into_parts();
+        parts
+    }
+
+    /// The non-zero `rpc_requests` counts for `path`, keyed by gRPC status.
+    fn grpc_status_counts(metrics: &RpcMetrics, path: &str) -> BTreeMap<&'static str, u64> {
+        (0..=16)
+            .map(|code| code_as_str(tonic::Code::from_i32(code)))
+            .map(|status| {
+                let count = metrics
+                    .num_requests
+                    .with_label_values(&[path, status])
+                    .get();
+                (status, count)
+            })
+            .filter(|(_, count)| *count > 0)
+            .collect()
     }
 
     // The handler latency is observed as soon as the handler produces a
@@ -949,6 +1078,44 @@ mod tests {
             1
         );
     }
+
+    // gRPC requires a stream to end with `grpc-status` in its trailers. A
+    // stream that ends without one was truncated, which clients report as
+    // `unknown`.
+    #[test]
+    fn grpc_stream_ending_without_grpc_status_is_counted_unknown() {
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let mut handler = make_grpc_test_handler(&metrics);
+
+        handler.on_response(&grpc_streaming_response_parts());
+        handler.on_body_chunk(&bytes::Bytes::from_static(b"message"));
+        handler.on_end_of_stream(Some(&http::HeaderMap::new()));
+        drop(handler);
+
+        assert_eq!(
+            grpc_status_counts(&metrics, TEST_GRPC_PATH),
+            BTreeMap::from([("unknown", 1)])
+        );
+    }
+
+    // A response body that fails ends the stream without trailers; the client
+    // sees the stream reset and reports `internal`.
+    #[test]
+    fn grpc_stream_whose_body_fails_is_counted_internal() {
+        let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+        let mut handler = make_grpc_test_handler(&metrics);
+
+        handler.on_response(&grpc_streaming_response_parts());
+        handler.on_body_chunk(&bytes::Bytes::from_static(b"message"));
+        handler.on_body_error(&"response encoding failed");
+        drop(handler);
+
+        assert_eq!(
+            grpc_status_counts(&metrics, TEST_GRPC_PATH),
+            BTreeMap::from([("internal", 1)])
+        );
+    }
+
     fn metric_label_sets(
         family: &prometheus::proto::MetricFamily,
     ) -> BTreeSet<Vec<(String, String)>> {
@@ -1283,5 +1450,404 @@ mod tests {
         let mut event_watermark = SubscribeEventsResponse::default();
         event_watermark.watermark = Some(Watermark::default());
         assert_subscription_response_metrics(&metrics, "event", &event_payload, &event_watermark);
+    }
+
+    /// Runs the metrics layer inside real servers wired like `sui-kv-rpc` and
+    /// the fullnode, driven by a raw HTTP/2 client so that client resets land
+    /// on exact frames.
+    ///
+    /// These tests use the default current-thread runtime, so the servers'
+    /// tasks never run concurrently with an assertion: once a request's
+    /// `request_latency` sample is visible, the handler's `Drop` has finished
+    /// and its `rpc_requests` count is final.
+    mod end_to_end {
+        use super::*;
+        use std::{convert::Infallible, net::SocketAddr};
+
+        use bytes::Bytes;
+        use futures::{StreamExt, future::BoxFuture, stream};
+        use mysten_network::request_log::GrpcRequestLogLayer;
+        use sui_http::middleware::callback::CallbackLayer;
+        use tonic::codegen::{Body, StdError};
+
+        /// Server-streaming method that sends two messages and ends with OK.
+        const STREAM_OK: &str = "/test.Service/StreamOk";
+        /// Server-streaming method that sends two messages and then fails with
+        /// `DEADLINE_EXCEEDED`.
+        const STREAM_DEADLINE_EXCEEDED: &str = "/test.Service/StreamDeadlineExceeded";
+        /// Server-streaming method that sends one message and then stalls.
+        const STREAM_STALL: &str = "/test.Service/StreamStall";
+        /// Unary method whose handler fails with `INTERNAL`.
+        const UNARY_INTERNAL: &str = "/test.Service/UnaryInternal";
+
+        /// A length-prefixed gRPC frame carrying an empty message.
+        const EMPTY_MESSAGE_FRAME: &[u8] = &[0, 0, 0, 0, 0];
+
+        #[derive(Clone, Copy, Debug)]
+        enum ServerStack {
+            /// `tonic::transport::Server` with the metrics layer, as in `sui-kv-rpc`.
+            KvRpc,
+            /// The `grpc::Services` router with the metrics layer, served by
+            /// `sui_http`, as in the fullnode.
+            Fullnode,
+        }
+
+        struct TestServer {
+            address: SocketAddr,
+            metrics: Arc<RpcMetrics>,
+            // Keeps the fullnode stack's server running.
+            _handle: Option<sui_http::ServerHandle>,
+        }
+
+        #[derive(Clone)]
+        struct TestService;
+
+        impl tonic::server::NamedService for TestService {
+            const NAME: &'static str = "test.Service";
+        }
+
+        impl<B> tower::Service<http::Request<B>> for TestService
+        where
+            B: Body + Send + 'static,
+            B::Error: Into<StdError> + Send + 'static,
+        {
+            type Response = http::Response<tonic::body::Body>;
+            type Error = Infallible;
+            type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+            fn poll_ready(
+                &mut self,
+                _cx: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<Result<(), Self::Error>> {
+                std::task::Poll::Ready(Ok(()))
+            }
+
+            fn call(&mut self, request: http::Request<B>) -> Self::Future {
+                Box::pin(async move {
+                    let response = match request.uri().path() {
+                        STREAM_OK => serve_stream(request, stream::iter([Ok(()), Ok(())])).await,
+                        STREAM_DEADLINE_EXCEEDED => {
+                            let messages = stream::iter([
+                                Ok(()),
+                                Ok(()),
+                                Err(tonic::Status::deadline_exceeded(
+                                    "request deadline exceeded",
+                                )),
+                            ]);
+                            serve_stream(request, messages).await
+                        }
+                        STREAM_STALL => {
+                            let messages = stream::iter([Ok(())]).chain(stream::pending());
+                            serve_stream(request, messages).await
+                        }
+                        UNARY_INTERNAL => {
+                            let handler = tower::service_fn(|_: tonic::Request<()>| async {
+                                Err::<tonic::Response<()>, _>(tonic::Status::internal(
+                                    "handler failed",
+                                ))
+                            });
+                            tonic::server::Grpc::new(tonic_prost::ProstCodec::<(), ()>::default())
+                                .unary(handler, request)
+                                .await
+                        }
+                        path => panic!("unexpected method {path}"),
+                    };
+                    Ok(response)
+                })
+            }
+        }
+
+        /// Answers a server-streaming request with `messages`.
+        async fn serve_stream<B, S>(
+            request: http::Request<B>,
+            messages: S,
+        ) -> http::Response<tonic::body::Body>
+        where
+            B: Body + Send + 'static,
+            B::Error: Into<StdError> + Send,
+            S: futures::Stream<Item = Result<(), tonic::Status>> + Send + 'static,
+        {
+            let mut messages = Some(messages);
+            let handler = tower::service_fn(move |_: tonic::Request<()>| {
+                let messages = messages.take().expect("one handler call per request");
+                async move { Ok::<_, tonic::Status>(tonic::Response::new(messages)) }
+            });
+            tonic::server::Grpc::new(tonic_prost::ProstCodec::<(), ()>::default())
+                .server_streaming(handler, request)
+                .await
+        }
+
+        async fn start(stack: ServerStack) -> TestServer {
+            let metrics = Arc::new(RpcMetrics::new(&Registry::new()));
+            let allowlist = [
+                STREAM_OK,
+                STREAM_DEADLINE_EXCEEDED,
+                STREAM_STALL,
+                UNARY_INTERNAL,
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+            let metrics_layer =
+                CallbackLayer::new(RpcMetricsMakeCallbackHandler::with_grpc_method_allowlist(
+                    metrics.clone(),
+                    Arc::new(allowlist),
+                ));
+
+            match stack {
+                ServerStack::KvRpc => {
+                    let incoming =
+                        tonic::transport::server::TcpIncoming::bind("127.0.0.1:0".parse().unwrap())
+                            .unwrap();
+                    let address = incoming.local_addr().unwrap();
+                    tokio::spawn(
+                        tonic::transport::Server::builder()
+                            .layer(metrics_layer)
+                            .add_service(TestService)
+                            .serve_with_incoming(incoming),
+                    );
+                    TestServer {
+                        address,
+                        metrics,
+                        _handle: None,
+                    }
+                }
+                ServerStack::Fullnode => {
+                    let router = crate::grpc::Services::new()
+                        .add_service(TestService)
+                        .into_router(
+                            GrpcRequestLogLayer::from_encoded_file_descriptor_sets([]).unwrap(),
+                        )
+                        .layer(metrics_layer);
+                    let handle = sui_http::Builder::new()
+                        .serve("127.0.0.1:0", router)
+                        .unwrap();
+                    TestServer {
+                        address: *handle.local_addr(),
+                        metrics,
+                        _handle: Some(handle),
+                    }
+                }
+            }
+        }
+
+        async fn connect(address: SocketAddr) -> h2::client::SendRequest<Bytes> {
+            let tcp = tokio::net::TcpStream::connect(address).await.unwrap();
+            let (client, connection) = h2::client::handshake(tcp).await.unwrap();
+            tokio::spawn(connection);
+            client.ready().await.unwrap()
+        }
+
+        /// Opens a request stream with the given `content-type` on a fresh
+        /// connection without sending any request body.
+        async fn open_request(
+            server: &TestServer,
+            path: &str,
+            content_type: &str,
+        ) -> (h2::client::ResponseFuture, h2::SendStream<Bytes>) {
+            let request = http::Request::builder()
+                .method(http::Method::POST)
+                .uri(format!("http://{}{path}", server.address))
+                .header(http::header::CONTENT_TYPE, content_type)
+                .header(http::header::TE, "trailers")
+                .body(())
+                .unwrap();
+            connect(server.address)
+                .await
+                .send_request(request, false)
+                .unwrap()
+        }
+
+        /// Sends a native gRPC request carrying one empty message.
+        async fn send_request(
+            server: &TestServer,
+            path: &str,
+        ) -> (h2::client::ResponseFuture, h2::SendStream<Bytes>) {
+            let (response, mut request_body) = open_request(server, path, "application/grpc").await;
+            request_body
+                .send_data(Bytes::from_static(EMPTY_MESSAGE_FRAME), true)
+                .unwrap();
+            (response, request_body)
+        }
+
+        /// The gRPC status the client receives: from the headers of a
+        /// trailers-only response, otherwise from the trailers after the body.
+        async fn client_grpc_status(response: http::Response<h2::RecvStream>) -> tonic::Code {
+            let (parts, mut body) = response.into_parts();
+            let grpc_status = match parts.headers.get(&GRPC_STATUS) {
+                Some(grpc_status) => grpc_status.clone(),
+                None => {
+                    while let Some(chunk) = body.data().await {
+                        let chunk = chunk.unwrap();
+                        body.flow_control().release_capacity(chunk.len()).unwrap();
+                    }
+                    let trailers = body.trailers().await.unwrap().expect("missing trailers");
+                    trailers
+                        .get(&GRPC_STATUS)
+                        .expect("missing grpc-status")
+                        .clone()
+                }
+            };
+            tonic::Code::from_bytes(grpc_status.as_bytes())
+        }
+
+        /// Waits for the server to drop the metrics handler of the one request
+        /// sent to `path`, then returns that path's `rpc_requests` counts.
+        async fn settled_grpc_status_counts(
+            server: &TestServer,
+            path: &str,
+        ) -> BTreeMap<&'static str, u64> {
+            let request_latency = server.metrics.request_latency.with_label_values(&[path]);
+            tokio::time::timeout(Duration::from_secs(10), async {
+                while request_latency.get_sample_count() == 0 {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            })
+            .await
+            .expect("the server never finished the request");
+            grpc_status_counts(&server.metrics, path)
+        }
+
+        // The incident's `internal` population: a client resets its stream
+        // before the request message arrives, tonic answers the truncated
+        // request with `internal` ("Missing request message."), and the client
+        // never receives that answer.
+        #[tokio::test]
+        async fn client_reset_before_request_message_is_counted_canceled() {
+            for stack in [ServerStack::KvRpc, ServerStack::Fullnode] {
+                let server = start(stack).await;
+                let (_response, mut request_body) =
+                    open_request(&server, STREAM_OK, "application/grpc").await;
+                request_body.send_reset(h2::Reason::CANCEL);
+
+                assert_eq!(
+                    settled_grpc_status_counts(&server, STREAM_OK).await,
+                    BTreeMap::from([("canceled", 1)]),
+                    "{stack:?}"
+                );
+                // The service answered the truncated request, so the count
+                // comes from that answer being reclassified rather than from
+                // the request being dropped before any answer.
+                assert_eq!(
+                    server
+                        .metrics
+                        .request_handler_latency
+                        .with_label_values(&[STREAM_OK])
+                        .get_sample_count(),
+                    1,
+                    "{stack:?}"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn handler_internal_error_is_counted_internal() {
+            for stack in [ServerStack::KvRpc, ServerStack::Fullnode] {
+                let server = start(stack).await;
+                let (response, _request_body) = send_request(&server, UNARY_INTERNAL).await;
+
+                assert_eq!(
+                    client_grpc_status(response.await.unwrap()).await,
+                    tonic::Code::Internal,
+                    "{stack:?}"
+                );
+                assert_eq!(
+                    settled_grpc_status_counts(&server, UNARY_INTERNAL).await,
+                    BTreeMap::from([("internal", 1)]),
+                    "{stack:?}"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn stream_ending_with_error_trailers_is_counted_with_trailer_status() {
+            for stack in [ServerStack::KvRpc, ServerStack::Fullnode] {
+                let server = start(stack).await;
+                let (response, _request_body) =
+                    send_request(&server, STREAM_DEADLINE_EXCEEDED).await;
+
+                assert_eq!(
+                    client_grpc_status(response.await.unwrap()).await,
+                    tonic::Code::DeadlineExceeded,
+                    "{stack:?}"
+                );
+                assert_eq!(
+                    settled_grpc_status_counts(&server, STREAM_DEADLINE_EXCEEDED).await,
+                    BTreeMap::from([("deadline-exceeded", 1)]),
+                    "{stack:?}"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn stream_ending_with_ok_trailers_is_counted_ok() {
+            for stack in [ServerStack::KvRpc, ServerStack::Fullnode] {
+                let server = start(stack).await;
+                let (response, _request_body) = send_request(&server, STREAM_OK).await;
+
+                assert_eq!(
+                    client_grpc_status(response.await.unwrap()).await,
+                    tonic::Code::Ok,
+                    "{stack:?}"
+                );
+                assert_eq!(
+                    settled_grpc_status_counts(&server, STREAM_OK).await,
+                    BTreeMap::from([("ok", 1)]),
+                    "{stack:?}"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn stream_abandoned_by_client_mid_stream_is_counted_canceled() {
+            for stack in [ServerStack::KvRpc, ServerStack::Fullnode] {
+                let server = start(stack).await;
+                let (response, mut request_body) = send_request(&server, STREAM_STALL).await;
+
+                let mut response_body = response.await.unwrap().into_body();
+                let first_message = response_body.data().await.unwrap().unwrap();
+                assert_eq!(first_message.as_ref(), EMPTY_MESSAGE_FRAME, "{stack:?}");
+                request_body.send_reset(h2::Reason::CANCEL);
+
+                assert_eq!(
+                    settled_grpc_status_counts(&server, STREAM_STALL).await,
+                    BTreeMap::from([("canceled", 1)]),
+                    "{stack:?}"
+                );
+            }
+        }
+
+        // grpc-web encodes its trailers into the response body, so even a
+        // successful grpc-web stream ends its HTTP body without trailers. Only
+        // the fullnode serves grpc-web.
+        #[tokio::test]
+        async fn successful_grpc_web_stream_is_counted_ok() {
+            let server = start(ServerStack::Fullnode).await;
+            let (response, mut request_body) =
+                open_request(&server, STREAM_OK, "application/grpc-web+proto").await;
+            request_body
+                .send_data(Bytes::from_static(EMPTY_MESSAGE_FRAME), true)
+                .unwrap();
+
+            let response = response.await.unwrap();
+            assert_eq!(
+                response.headers()[http::header::CONTENT_TYPE],
+                "application/grpc-web+proto"
+            );
+            let mut response_body = response.into_body();
+            while let Some(chunk) = response_body.data().await {
+                let chunk = chunk.unwrap();
+                response_body
+                    .flow_control()
+                    .release_capacity(chunk.len())
+                    .unwrap();
+            }
+            assert!(response_body.trailers().await.unwrap().is_none());
+
+            assert_eq!(
+                settled_grpc_status_counts(&server, STREAM_OK).await,
+                BTreeMap::from([("ok", 1)])
+            );
+        }
     }
 }
