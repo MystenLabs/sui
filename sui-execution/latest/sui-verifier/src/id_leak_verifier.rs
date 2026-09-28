@@ -13,6 +13,7 @@
 //! 3. Added to a vector
 //! 4. Passed to a function cal::;
 use move_abstract_stack::AbstractStack;
+use move_binary_format::partial_vm_error;
 use move_binary_format::{
     errors::PartialVMError,
     file_format::{
@@ -24,7 +25,7 @@ use move_bytecode_verifier::absint::{
     AbstractDomain, FunctionContext, JoinResult, TransferFunctions, analyze_function,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
-use move_core_types::{ident_str, vm_status::StatusCode};
+use move_core_types::ident_str;
 use std::{collections::BTreeMap, error::Error, num::NonZeroU64};
 use sui_types::bridge::BRIDGE_MODULE_NAME;
 use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
@@ -265,22 +266,28 @@ impl<'a> IDLeakAnalysis<'a> {
             return Ok(());
         };
         self.stack.pop_any_n(n).map_err(|e| {
-            PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
-                .with_message(format!("Unexpected stack error on pop_n: {e}"))
+            partial_vm_error!(
+                VERIFIER_INVARIANT_VIOLATION,
+                "Unexpected stack error on pop_n: {e}"
+            )
         })
     }
 
     fn stack_push(&mut self, val: AbstractValue) -> Result<(), PartialVMError> {
         self.stack.push(val).map_err(|e| {
-            PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
-                .with_message(format!("Unexpected stack error on push: {e}"))
+            partial_vm_error!(
+                VERIFIER_INVARIANT_VIOLATION,
+                "Unexpected stack error on push: {e}"
+            )
         })
     }
 
     fn stack_pushn(&mut self, n: u64, val: AbstractValue) -> Result<(), PartialVMError> {
         self.stack.push_n(val, n).map_err(|e| {
-            PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
-                .with_message(format!("Unexpected stack error on push_n: {e}"))
+            partial_vm_error!(
+                VERIFIER_INVARIANT_VIOLATION,
+                "Unexpected stack error on push_n: {e}"
+            )
         })
     }
 
@@ -320,9 +327,7 @@ impl TransferFunctions for IDLeakAnalysis<'_> {
             let msg = "Invalid stack transitions. Non-zero stack size at the end of the block"
                 .to_string();
             debug_assert!(false, "{msg}",);
-            return Err(
-                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(msg),
-            );
+            return Err(partial_vm_error!(VERIFIER_INVARIANT_VIOLATION, "{}", msg));
         }
         Ok(())
     }
@@ -342,11 +347,13 @@ fn call(
     if FRESH_ID_FUNCTIONS.contains(&function) {
         if return_.0.len() != 1 {
             debug_assert!(false, "{:?} should have a single return value", function);
-            return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)
-                .with_message("Should have a single return value".to_string())
-                .with_sub_status(
-                    VMMVerifierErrorSubStatusCode::MULTIPLE_RETURN_VALUES_NOT_ALLOWED as u64,
-                ));
+            return Err(partial_vm_error!(
+                UNKNOWN_VERIFICATION_ERROR,
+                "Should have a single return value"
+            )
+            .with_sub_status(
+                VMMVerifierErrorSubStatusCode::MULTIPLE_RETURN_VALUES_NOT_ALLOWED as u64,
+            ));
         }
         verifier.stack_push(AbstractValue::Fresh)?;
     } else {
@@ -389,8 +396,7 @@ fn pack(
             TS_NEW_OBJECT.2
         );
 
-        return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)
-            .with_message(msg)
+        return Err(partial_vm_error!(UNKNOWN_VERIFICATION_ERROR, "{}", msg)
             .with_sub_status(VMMVerifierErrorSubStatusCode::INVALID_OBJECT_CREATION as u64));
     }
     verifier.stack_push(AbstractValue::Other)?;
