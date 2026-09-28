@@ -1,60 +1,104 @@
-> echo "Successful cases"
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == Compiler allow suppresses a warning"
 > cp Move.compiler_allow.ok.toml Move.toml
 build
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == Compiler warn emits a warning"
 > cp Move.compiler_warn.ok.toml Move.toml
 build
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == Specific compiler levels override broader levels"
 > cp fixtures/compiler_specificity.move sources/m.move
 > cp Move.compiler_specificity.ok.toml Move.toml
 build
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == Source allow overrides manifest deny"
 > cp fixtures/source_allow.move sources/m.move
 > cp Move.source_override.ok.toml Move.toml
 build
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == Source warn overrides manifest deny"
 > cp fixtures/source_warn.move sources/m.move
 build
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == Lint allow suppresses a lint"
 > cp fixtures/lint.move sources/m.move
 > cp Move.lint_allow.ok.toml Move.toml
 build
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == The lint flag respects manifest levels"
 build --lint
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == Lint warn emits a warning"
 > cp Move.lint_warn.ok.toml Move.toml
 build
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == Source lint allow overrides manifest deny"
 > cp fixtures/lint_allow.move sources/m.move
 > cp Move.lint_source_allow.ok.toml Move.toml
 build
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == Sui lint allow suppresses a lint"
 > cp fixtures/sui_lint.move sources/m.move
 > cp Move.sui_lint_allow.ok.toml Move.toml
 build --default-move-flavor sui
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == Sui lint warn emits a warning"
 > cp Move.sui_lint_warn.ok.toml Move.toml
 build --default-move-flavor sui
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == Dependency lint settings do not affect the root"
 > cp fixtures/clean.move sources/m.move
 > cp Move.dependency_lints.ok.toml Move.toml
 build
+> echo "# ===== [SUCCESS] ======================================"
+> echo "# == The no-lint flag disables configured lints"
 > cp fixtures/lint.move sources/m.move
 > cp Move.no_lint.ok.toml Move.toml
 build --no-lint
 
-> echo "Failing cases"
+> echo "# ===== [FAILURE] ======================================"
+> echo "# == Compiler deny produces an error"
 > cp fixtures/compiler.move sources/m.move
 > cp Move.compiler_deny.error.toml Move.toml
 build
+> echo "# ===== [FAILURE] ======================================"
+> echo "# == The stricter level wins for equivalent filters"
 > cp Move.compiler_conflict.error.toml Move.toml
 build
+> echo "# ===== [FAILURE] ======================================"
+> echo "# == Source deny overrides manifest allow"
 > cp fixtures/source_deny.move sources/m.move
 > cp Move.source_deny.error.toml Move.toml
 build
+> echo "# ===== [FAILURE] ======================================"
+> echo "# == Lint deny produces an error"
 > cp fixtures/lint.move sources/m.move
 > cp Move.lint_deny.error.toml Move.toml
 build
+> echo "# ===== [FAILURE] ======================================"
+> echo "# == Sui lint deny produces an error"
 > cp fixtures/sui_lint.move sources/m.move
 > cp Move.sui_lint_deny.error.toml Move.toml
 build --default-move-flavor sui
+> echo "# ===== [FAILURE] ======================================"
+> echo "# == Sui-only lints are rejected in Core"
 > cp fixtures/clean.move sources/m.move
 > cp Move.sui_lint_core.error.toml Move.toml
 build --default-move-flavor core
+> echo "# ===== [FAILURE] ======================================"
+> echo "# == Unknown compiler filters are rejected"
 > cp Move.unknown.error.toml Move.toml
 build
+> echo "# ===== [FAILURE] ======================================"
+> echo "# == Unknown lints are rejected"
 > cp Move.unknown_lint.error.toml Move.toml
 build
+> echo "# ===== [FAILURE] ======================================"
+> echo "# == Duplicate lint keys are rejected"
 > cp Move.duplicate_key.error.toml Move.toml
 build
+> echo "# ===== [FAILURE] ======================================"
+> echo "# == Invalid lint levels are rejected"
 > cp Move.invalid_level.error.toml Move.toml
 build
