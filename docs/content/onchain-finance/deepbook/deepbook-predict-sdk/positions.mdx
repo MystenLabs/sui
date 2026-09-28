@@ -111,7 +111,7 @@ It takes these parameters:
 - `subsidy`: The sponsor-funded part of the trading fee, which you do not pay.
 - `builder`: The builder add-on, 0 when the account carries no builder code.
 - `penalty`: The congestion surcharge.
-- `referral`: The portion of the trading fee and congestion surcharge that the protocol routes to a referrer. It is already inside those amounts, not an extra debit.
+- `referral`: The portion of the trading fee and congestion surcharge that the protocol routes to a referrer. It is already inside those amounts, not an extra debit, and it is 0 unless the account was created with a referrer; see [Referrals](/onchain-finance/deepbook/deepbook-predict/design#referrals).
 - `inventoryImpact`: The inventory-impact charge, a separate charge that `cost` includes.
 
 `cost` is `premium + (trading - subsidy) + builder + penalty + inventoryImpact`, the same total the contract withdraws, so pass `cost` plus a buffer as `maxCost`, never `premium`. [Design](/onchain-finance/deepbook/deepbook-predict/design#fee-components) explains each fee component. `raw` carries no fee amounts, so read exact fees from `decode.mint(result).raw` after execution.
