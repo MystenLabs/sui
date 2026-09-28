@@ -9,7 +9,7 @@ use crate::{
         object_store::{CacheInfo, ObjectResult},
     },
 };
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::errors::PartialVMResult;
 use move_binary_format::{partial_vm_error, safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::{
     account_address::AccountAddress,
@@ -223,10 +223,10 @@ pub fn add_child_object(
     let tag = match context.type_to_type_tag(&child_ty)? {
         TypeTag::Struct(s) => *s,
         _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Sui verifier guarantees this is a struct"
+            ));
         }
     };
 
@@ -522,10 +522,10 @@ pub fn has_child_object_with_ty(
     let tag: StructTag = match context.type_to_type_tag(&ty)? {
         TypeTag::Struct(s) => *s,
         _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Sui verifier guarantees this is a struct"
+            ));
         }
     };
 

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::object_runtime::{fingerprint::ObjectFingerprint, get_all_uids};
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{annotated_value as A, runtime_value as R, vm_status::StatusCode};
+use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
+use move_core_types::{annotated_value as A, runtime_value as R};
 use move_vm_runtime::execution::values::{GlobalValue, StructRef, Value};
 use std::{
     collections::{BTreeMap, btree_map},
@@ -117,30 +118,29 @@ macro_rules! fetch_child_object_unbounded {
         let child_opt = $inner
             .resolver
             .read_child_object(&$parent, &$child, $parents_root_version)
-            .map_err(|msg| {
-                PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
-            })?;
+            .map_err(|msg| partial_vm_error!(STORAGE_ERROR, "{msg}"))?;
         if let Some(object) = child_opt {
             // if there was no root version, guard against reading a child object. A newly
             // created parent should not have a child in storage
             if !$had_parent_root_version {
-                return Err(
-                    PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
-                        "A new parent {} should not have a child object {}.",
-                        $parent, $child
-                    )),
-                );
+                return Err(partial_vm_error!(
+                    STORAGE_ERROR,
+                    "A new parent {} should not have a child object {}.",
+                    $parent,
+                    $child
+                ));
             }
             // guard against bugs in `read_child_object`: if it returns a child object such that
             // C.parent != parent, we raise an invariant violation
             match &object.owner {
                 Owner::ObjectOwner(id) => {
                     if ObjectID::from(*id) != $parent {
-                        return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
-                            format!(
-                                "Bad owner for {}. Expected owner {} but found owner {}",
-                                $child, $parent, id
-                            ),
+                        return Err(partial_vm_error!(
+                            STORAGE_ERROR,
+                            "Bad owner for {}. Expected owner {} but found owner {}",
+                            $child,
+                            $parent,
+                            id
                         ));
                     }
                 }
@@ -149,24 +149,23 @@ macro_rules! fetch_child_object_unbounded {
                 | Owner::Shared { .. }
                 | Owner::ConsensusAddressOwner { .. }
                 | Owner::Party { .. } => {
-                    return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
-                        format!(
-                            "Bad owner for {}. \
+                    return Err(partial_vm_error!(
+                        STORAGE_ERROR,
+                        "Bad owner for {}. \
                             Expected an id owner {} but found an address, \
                             immutable, or shared owner",
-                            $child, $parent
-                        ),
+                        $child,
+                        $parent
                     ));
                 }
             };
             match &object.data {
                 Data::Package(_) => {
-                    return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
-                        format!(
-                            "Mismatched object type for {}. \
+                    return Err(partial_vm_error!(
+                        STORAGE_ERROR,
+                        "Mismatched object type for {}. \
                             Expected a Move object but found a Move package",
-                            $child
-                        ),
+                        $child
                     ));
                 }
                 Data::Move(_) => Some(object),
@@ -187,21 +186,18 @@ impl Inner<'_> {
         let child_opt = self
             .resolver
             .get_object_received_at_version(&owner, &child, version, self.current_epoch_id)
-            .map_err(|msg| {
-                PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
-            })?;
+            .map_err(|msg| partial_vm_error!(STORAGE_ERROR, "{msg}"))?;
         let (cache_info, obj_opt) = if let Some(object) = child_opt {
             // guard against bugs in `receive_object_at_version`: if it returns a child object such that
             // C.parent != parent, we raise an invariant violation since that should be checked by
             // `receive_object_at_version`.
             if object.owner != Owner::AddressOwner(owner.into()) {
-                return Err(
-                    PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
-                        "Bad owner for {child}. \
+                return Err(partial_vm_error!(
+                    STORAGE_ERROR,
+                    "Bad owner for {child}. \
                         Expected owner {owner} but found owner {}",
-                        object.owner
-                    )),
-                );
+                    object.owner
+                ));
             }
             let loaded_metadata = DynamicallyLoadedObjectMetadata {
                 version,
@@ -216,21 +212,19 @@ impl Inner<'_> {
             // should raise an invariant violation since it should be checked by
             // `receive_object_at_version`.
             if object.version() != version {
-                return Err(
-                    PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
-                        "Bad version for {child}. \
+                return Err(partial_vm_error!(
+                    STORAGE_ERROR,
+                    "Bad version for {child}. \
                         Expected version {version} but found version {}",
-                        object.version()
-                    )),
-                );
+                    object.version()
+                ));
             }
             match object.into_inner().data {
                 Data::Package(_) => {
-                    return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
-                        format!(
-                            "Mismatched object type for {child}. \
+                    return Err(partial_vm_error!(
+                        STORAGE_ERROR,
+                        "Mismatched object type for {child}. \
                                 Expected a Move object but found a Move package"
-                        ),
                     ));
                 }
                 Data::Move(mo @ MoveObject { .. }) => (
@@ -275,15 +269,14 @@ impl Inner<'_> {
                     .limits_metrics
                     .excessive_object_runtime_cached_objects
             ) {
-                return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                    .with_message(format!(
-                        "Object runtime cached objects limit ({} entries) reached",
-                        lim
-                    ))
-                    .with_sub_status(
-                        VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_CACHE_LIMIT_EXCEEDED
-                            as u64,
-                    ));
+                return Err(partial_vm_error!(
+                    MEMORY_LIMIT_EXCEEDED,
+                    "Object runtime cached objects limit ({} entries) reached",
+                    lim
+                )
+                .with_sub_status(
+                    VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_CACHE_LIMIT_EXCEEDED as u64,
+                ));
             };
             let num_bytes_opt = match &obj_opt {
                 Some(obj) => {
@@ -339,34 +332,38 @@ impl Inner<'_> {
         let obj_contents = obj.contents();
         let v = match Value::simple_deserialize(obj_contents, child_ty_layout) {
             Some(v) => v,
-            None => return Err(
-                PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE).with_message(
-                    format!("Failed to deserialize object {child} with type {child_move_type}",),
-                ),
-            ),
+            None => {
+                return Err(partial_vm_error!(
+                    FAILED_TO_DESERIALIZE_RESOURCE,
+                    "Failed to deserialize object {child} with type {child_move_type}",
+                ));
+            }
         };
         // save a fingerprint
         let fingerprint =
             ObjectFingerprint::preexisting(&parent, child_move_type, &v).map_err(|e| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!("Failed to fingerprint value for object {child}. Error: {e}"),
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Failed to fingerprint value for object {child}. Error: {e}"
                 )
             })?;
         // generate a global value
-        let global_value =
-            match GlobalValue::create(v) {
-                Ok(gv) => gv,
-                Err(e) => {
-                    return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
-                        format!("Object {child} did not deserialize to a struct Value. Error: {e}"),
-                    ));
-                }
-            };
+        let global_value = match GlobalValue::create(v) {
+            Ok(gv) => gv,
+            Err(e) => {
+                return Err(partial_vm_error!(
+                    STORAGE_ERROR,
+                    "Object {child} did not deserialize to a struct Value. Error: {e}"
+                ));
+            }
+        };
         // Find all UIDs inside of the value and update the object parent maps
         let contained_uids =
             get_all_uids(child_ty_fully_annotated_layout, obj_contents).map_err(|e| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Failed to find UIDs. ERROR: {e}"))
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Failed to find UIDs. ERROR: {e}"
+                )
             })?;
         let parents_root_version = self.root_version.get(&parent).copied();
         if let Some(v) = parents_root_version {
@@ -399,11 +396,10 @@ fn deserialize_move_object(
     let value = match Value::simple_deserialize(obj.contents(), child_ty_layout) {
         Some(v) => v,
         None => {
-            return Err(
-                PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE).with_message(
-                    format!("Failed to deserialize object {child_id} with type {child_move_type}",),
-                ),
-            );
+            return Err(partial_vm_error!(
+                FAILED_TO_DESERIALIZE_RESOURCE,
+                "Failed to deserialize object {child_id} with type {child_move_type}",
+            ));
         }
     };
     Ok(ObjectResult::Loaded((child_move_type, value)))
@@ -449,12 +445,10 @@ impl<'a> ChildObjectStore<'a> {
             if let Some(prev_v) = prev_v_opt
                 && prev_v != v
             {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!(
-                            "Root version for {parent} changed from {prev_v} to {v}"
-                        )),
-                );
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Root version for {parent} changed from {prev_v} to {v}"
+                ));
             }
         }
         Ok(())
@@ -485,10 +479,10 @@ impl<'a> ChildObjectStore<'a> {
                     // Only do this if we successfully load the object though.
                     let contained_uids = get_all_uids(child_fully_annotated_layout, obj.contents())
                         .map_err(|e| {
-                            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                                .with_message(format!(
-                                    "Failed to find UIDs for receiving object. ERROR: {e}"
-                                ))
+                            partial_vm_error!(
+                                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                                "Failed to find UIDs for receiving object. ERROR: {e}"
+                            )
                         })?;
                     for id in contained_uids {
                         self.inner.root_version.insert(id, child_version);
@@ -574,15 +568,15 @@ impl<'a> ChildObjectStore<'a> {
                         .limits_metrics
                         .excessive_object_runtime_store_entries
                 ) {
-                    return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                        .with_message(format!(
-                            "Object runtime store limit ({} entries) reached",
-                            lim
-                        ))
-                        .with_sub_status(
-                            VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED
-                                as u64,
-                        ));
+                    return Err(partial_vm_error!(
+                        MEMORY_LIMIT_EXCEEDED,
+                        "Object runtime store limit ({} entries) reached",
+                        lim
+                    )
+                    .with_sub_status(
+                        VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED
+                            as u64,
+                    ));
                 };
 
                 debug_assert_eq!(
@@ -632,14 +626,14 @@ impl<'a> ChildObjectStore<'a> {
                 .limits_metrics
                 .excessive_object_runtime_store_entries
         ) {
-            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                .with_message(format!(
-                    "Object runtime store limit ({} entries) reached",
-                    lim
-                ))
-                .with_sub_status(
-                    VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED as u64,
-                ));
+            return Err(partial_vm_error!(
+                MEMORY_LIMIT_EXCEEDED,
+                "Object runtime store limit ({} entries) reached",
+                lim
+            )
+            .with_sub_status(
+                VMMemoryLimitExceededSubStatusCode::OBJECT_RUNTIME_STORE_LIMIT_EXCEEDED as u64,
+            ));
         };
 
         let (mut value, fingerprint) = if let Some(ChildObject {
@@ -647,16 +641,13 @@ impl<'a> ChildObjectStore<'a> {
         }) = self.store.remove(&child)
         {
             if value.exists()? {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(
-                            "Duplicate addition of a child object. \
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Duplicate addition of a child object. \
                             The previous value cannot be dropped. Indicates possible duplication \
                             of objects as an object was fetched more than once from two different \
                             parents, yet was not removed from one first"
-                                .to_string(),
-                        ),
-                );
+                ));
             }
             (value, fingerprint)
         } else {
@@ -664,11 +655,10 @@ impl<'a> ChildObjectStore<'a> {
             (GlobalValue::empty(), fingerprint)
         };
         if let Err((e, _)) = value.move_to(child_value) {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!("Unable to set value for child {child}, with error {e}",),
-                ),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Unable to set value for child {child}, with error {e}",
+            ));
         }
         let child_object = ChildObject {
             owner: parent,
@@ -703,12 +693,10 @@ impl<'a> ChildObjectStore<'a> {
                 let Some(value) =
                     Value::simple_deserialize(move_obj.contents(), field_setting_layout)
                 else {
-                    return Err(
-                        PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE)
-                            .with_message(format!(
-                            "Failed to deserialize object {child} with type {field_setting_layout}",
-                        )),
-                    );
+                    return Err(partial_vm_error!(
+                        FAILED_TO_DESERIALIZE_RESOURCE,
+                        "Failed to deserialize object {child} with type {field_setting_layout}",
+                    ));
                 };
                 e.insert(ConfigSetting {
                     config: parent,
@@ -722,16 +710,14 @@ impl<'a> ChildObjectStore<'a> {
                     return Ok(ObjectResult::MismatchedType);
                 }
                 if setting.config != parent {
-                    return Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(format!(
-                                "Parent for config setting changed. Potential hash collision?
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Parent for config setting changed. Potential hash collision?
                                 parent: {parent},
                                 child: {child},
                                 setting_value_object_type: {field_setting_object_type},
                                 setting: {setting:#?}"
-                            )),
-                    );
+                    ));
                 }
                 setting
             }

@@ -6,11 +6,11 @@ use crate::{
     NativesCostTable, get_extension, get_extension_mut, get_receiver_object_id,
     get_tag_and_layouts, object_runtime::object_store::ObjectResult,
 };
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
 use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
-    vm_status::StatusCode,
 };
 use move_vm_runtime::shared::views::{SizeConfig, ValueView};
 use move_vm_runtime::{
@@ -167,13 +167,13 @@ pub struct PartyTransferInternalCostParams {
 
 macro_rules! native_charge_gas_early_exit_option {
     ($native_context:ident, $cost:expr) => {{
-        use move_binary_format::errors::PartialVMError;
-        use move_core_types::vm_status::StatusCode;
         native_charge_gas_early_exit!(
             $native_context,
             $cost.ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for party is missing".to_string())
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Gas cost for party is missing"
+                )
             })?
         );
     }};
@@ -222,23 +222,22 @@ pub fn party_transfer_internal(
     let default_permissions = pop_arg!(args, u64);
     let obj = safe_unwrap!(args.pop_back());
     let Ok([permissions]): Result<[u64; 1], _> = permissions.try_into() else {
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Party transfer only supports one party member".to_string()),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Party transfer only supports one party member"
+        ));
     };
     if permissions != ALL || default_permissions != NONE {
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                "Party transfer only supports one party member with all permissions".to_string(),
-            ),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Party transfer only supports one party member with all permissions"
+        ));
     }
     let Ok([address]): Result<[AccountAddress; 1], _> = addresses.try_into() else {
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Party transfer only supports one party member".to_string()),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Party transfer only supports one party member"
+        ));
     };
 
     // Dummy version, to be filled with the correct initial version when the effects of the
@@ -344,10 +343,10 @@ fn object_runtime_transfer(
     let object_type = match context.type_to_type_tag(&ty)? {
         TypeTag::Struct(s) => MoveObjectType::from(*s),
         _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Sui verifier guarantees this is a struct"
+            ));
         }
     };
 

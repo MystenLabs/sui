@@ -4,15 +4,15 @@ use crate::object_runtime::ObjectRuntime;
 use crate::{NativesCostTable, get_extension};
 use fastcrypto_zkp::bn254::poseidon::poseidon_bytes;
 use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
 use move_binary_format::{safe_assert, safe_assert_eq};
 use move_core_types::gas_algebra::InternalGas;
-use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::{
     execution::{
         Type,
         values::{Value, VectorRef},
     },
-    natives::functions::{NativeResult, PartialVMError},
+    natives::functions::NativeResult,
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
@@ -66,10 +66,10 @@ pub fn poseidon_bn254_internal(
         context,
         cost_params
             .poseidon_bn254_cost_base
-            .ok_or_else(
-                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for poseidon_bn254 not available".to_string())
-            )?
+            .ok_or_else(|| partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Gas cost for poseidon_bn254 not available"
+            ))?
     );
 
     safe_assert!(ty_args.is_empty());
@@ -91,10 +91,10 @@ pub fn poseidon_bn254_internal(
         context,
         cost_params
             .poseidon_bn254_data_cost_per_block
-            .ok_or_else(
-                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for poseidon_bn254 not available".to_string())
-            )?
+            .ok_or_else(|| partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Gas cost for poseidon_bn254 not available"
+            ))?
             .mul(length.into())
     );
 
