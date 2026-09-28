@@ -124,6 +124,14 @@ Error: unknown warning filter 'not_a_warning' in Move.toml
 External Command `cp Move.unknown_lint.error.toml Move.toml`:
 Command `build`:
 Error: unknown warning filter 'lint(not_a_lint)' in Move.toml
+External Command `cp Move.duplicate_key.error.toml Move.toml`:
+Command `build`:
+Error: Error while loading dependency .: error while parsing "./Move.toml": TOML parse error at line 10, column 1
+   |
+10 | unused = "deny"
+   | ^
+duplicate key `unused` in table `lints`
+
 External Command `cp Move.invalid_level.error.toml Move.toml`:
 Command `build`:
 Error: Error while loading dependency .: error while loading legacy manifest "./Move.toml": Error parsing '[lints]' section of manifest
