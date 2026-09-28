@@ -31,7 +31,7 @@ use sui_types::{
         ExecutedData, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest, SubmitTxResponse,
         SubmitTxResult, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
         TxType, ValidatorHealthRequest, ValidatorHealthResponse, WaitForEffectsRequest,
-        WaitForEffectsResponse,
+        WaitForEffectsResponse, WaitForEffectsStatus,
     },
     sui_system_state::SuiSystemState,
     transaction_driver_types::EffectsFinalityInfo,
@@ -43,8 +43,8 @@ use tokio::time::{Duration, sleep};
 struct MockAuthority {
     _name: AuthorityName,
     response_delays: Arc<StdMutex<Option<Duration>>>,
-    ack_responses: Arc<StdMutex<HashMap<TransactionDigest, WaitForEffectsResponse>>>,
-    full_responses: Arc<StdMutex<HashMap<TransactionDigest, WaitForEffectsResponse>>>,
+    ack_responses: Arc<StdMutex<HashMap<TransactionDigest, WaitForEffectsStatus>>>,
+    full_responses: Arc<StdMutex<HashMap<TransactionDigest, WaitForEffectsStatus>>>,
 }
 
 impl MockAuthority {
@@ -61,14 +61,14 @@ impl MockAuthority {
         *self.response_delays.lock().unwrap() = Some(delay);
     }
 
-    fn set_ack_response(&self, tx_digest: TransactionDigest, response: WaitForEffectsResponse) {
+    fn set_ack_response(&self, tx_digest: TransactionDigest, response: WaitForEffectsStatus) {
         self.ack_responses
             .lock()
             .unwrap()
             .insert(tx_digest, response);
     }
 
-    fn set_full_response(&self, tx_digest: TransactionDigest, response: WaitForEffectsResponse) {
+    fn set_full_response(&self, tx_digest: TransactionDigest, response: WaitForEffectsStatus) {
         self.full_responses
             .lock()
             .unwrap()
@@ -108,8 +108,12 @@ impl AuthorityAPI for MockAuthority {
             responses.get(&request.transaction_digest.unwrap()).cloned()
         };
 
-        if let Some(response) = maybe_response {
-            Ok(response)
+        if let Some(status) = maybe_response {
+            // The mock does not exercise report recording; the monitor suite does.
+            Ok(WaitForEffectsResponse {
+                staggering: None,
+                status,
+            })
         } else {
             // No response configured - this simulates a scenario where effects are not available.
             // Since the actual timeout in effects_certifier is 10 seconds, we sleep longer
@@ -210,16 +214,14 @@ async fn test_successful_certified_effects() {
     let executed_data = create_test_executed_data();
 
     // Set up successful responses from all authorities
-    let executed_response_full = WaitForEffectsResponse::Executed {
+    let executed_response_full = WaitForEffectsStatus::Executed {
         effects_digest,
         details: Some(Box::new(executed_data.clone())),
-        staggering_active: None,
     };
 
-    let executed_response_ack = WaitForEffectsResponse::Executed {
+    let executed_response_ack = WaitForEffectsStatus::Executed {
         effects_digest,
         details: None,
-        staggering_active: None,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -265,10 +267,9 @@ async fn test_successful_certified_effects() {
     }
 
     // Get certified effects for tx when executed effects are returned.
-    let executed_response_ack = WaitForEffectsResponse::Executed {
+    let executed_response_ack = WaitForEffectsStatus::Executed {
         effects_digest,
         details: None,
-        staggering_active: None,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -321,7 +322,7 @@ async fn test_transaction_rejected_non_retriable() {
         .unwrap();
 
     // Set up rejected responses from all authorities
-    let non_retriable_rejected_response = WaitForEffectsResponse::Rejected {
+    let non_retriable_rejected_response = WaitForEffectsStatus::Rejected {
         error: Some(
             SuiErrorKind::UserInputError {
                 error: UserInputError::ObjectVersionUnavailableForConsumption {
@@ -397,7 +398,7 @@ async fn test_transaction_rejected_retriable() {
     };
     let options = SubmitTransactionOptions::default();
 
-    let retriable_rejected_response = WaitForEffectsResponse::Rejected {
+    let retriable_rejected_response = WaitForEffectsStatus::Rejected {
         error: Some(
             SuiErrorKind::UserInputError {
                 error: UserInputError::ObjectNotFound {
@@ -467,7 +468,7 @@ async fn test_transaction_rejected_with_conflicts() {
     };
     let options = SubmitTransactionOptions::default();
 
-    let lock_conflict_rejected_response = WaitForEffectsResponse::Rejected {
+    let lock_conflict_rejected_response = WaitForEffectsStatus::Rejected {
         error: Some(
             SuiErrorKind::ObjectLockConflict {
                 obj_ref: random_object_ref(),
@@ -476,7 +477,7 @@ async fn test_transaction_rejected_with_conflicts() {
             .into(),
         ),
     };
-    let consensus_rejected_response = WaitForEffectsResponse::Rejected { error: None };
+    let consensus_rejected_response = WaitForEffectsStatus::Rejected { error: None };
 
     for (i, (_, safe_client)) in authority_aggregator.authority_clients.iter().enumerate() {
         let client = safe_client.authority_client();
@@ -539,7 +540,7 @@ async fn test_transaction_expired() {
     };
     let options = SubmitTransactionOptions::default();
 
-    let expired_response = WaitForEffectsResponse::Expired {
+    let expired_response = WaitForEffectsStatus::Expired {
         epoch: 42,
         round: Some(100),
     };
@@ -602,12 +603,12 @@ async fn test_mixed_rejected_and_expired() {
     };
     let options = SubmitTransactionOptions::default();
 
-    let expired_response = WaitForEffectsResponse::Expired {
+    let expired_response = WaitForEffectsStatus::Expired {
         epoch: 42,
         round: Some(100),
     };
 
-    let non_retriable_rejected_response = WaitForEffectsResponse::Rejected {
+    let non_retriable_rejected_response = WaitForEffectsStatus::Rejected {
         error: Some(
             SuiErrorKind::UserInputError {
                 error: UserInputError::ObjectVersionUnavailableForConsumption {
@@ -729,7 +730,7 @@ async fn test_mixed_rejected_reasons() {
     };
     let options = SubmitTransactionOptions::default();
 
-    let retriable_rejected_response = WaitForEffectsResponse::Rejected {
+    let retriable_rejected_response = WaitForEffectsStatus::Rejected {
         error: Some(
             SuiErrorKind::UserInputError {
                 error: UserInputError::ObjectNotFound {
@@ -740,7 +741,7 @@ async fn test_mixed_rejected_reasons() {
             .into(),
         ),
     };
-    let non_retriable_rejected_response = WaitForEffectsResponse::Rejected {
+    let non_retriable_rejected_response = WaitForEffectsStatus::Rejected {
         error: Some(
             SuiErrorKind::UserInputError {
                 error: UserInputError::ObjectVersionUnavailableForConsumption {
@@ -751,7 +752,7 @@ async fn test_mixed_rejected_reasons() {
             .into(),
         ),
     };
-    let reason_not_found_response = WaitForEffectsResponse::Rejected { error: None };
+    let reason_not_found_response = WaitForEffectsStatus::Rejected { error: None };
 
     {
         tracing::debug!("Case #1: Test 2 retriable and 2 non-retriable reasons that arrive later");
@@ -1044,17 +1045,15 @@ async fn test_forked_execution() {
         } else {
             effects_digest_2
         };
-        let response = WaitForEffectsResponse::Executed {
+        let response = WaitForEffectsStatus::Executed {
             effects_digest: digest,
             details: None,
-            staggering_active: None,
         };
         client.set_ack_response(tx_digest, response);
 
-        let executed_response_full = WaitForEffectsResponse::Executed {
+        let executed_response_full = WaitForEffectsStatus::Executed {
             effects_digest: digest,
             details: Some(Box::new(executed_data.clone())),
-            staggering_active: None,
         };
         client.set_full_response(tx_digest, executed_response_full.clone());
     }
@@ -1126,17 +1125,15 @@ async fn test_aborted_with_multiple_effects() {
             .unwrap()
             .authority_client();
         let response = match i {
-            0 => WaitForEffectsResponse::Executed {
+            0 => WaitForEffectsStatus::Executed {
                 effects_digest: effects_digest_1, // from fastpath
                 details: None,
-                staggering_active: None,
             },
-            1 => WaitForEffectsResponse::Executed {
+            1 => WaitForEffectsStatus::Executed {
                 effects_digest: effects_digest_2, // from fastpath
                 details: None,
-                staggering_active: None,
             },
-            2 => WaitForEffectsResponse::Rejected {
+            2 => WaitForEffectsStatus::Rejected {
                 error: Some(
                     SuiErrorKind::ValidatorOverloadedRetryAfter {
                         retry_after_secs: 5,
@@ -1144,7 +1141,7 @@ async fn test_aborted_with_multiple_effects() {
                     .into(),
                 ),
             },
-            3 => WaitForEffectsResponse::Rejected {
+            3 => WaitForEffectsStatus::Rejected {
                 error: None, // rejected by consensus
             },
             _ => panic!("Unexpected authority index: {}", i),
@@ -1196,10 +1193,9 @@ async fn test_full_effects_retry_loop() {
     let executed_data = create_test_executed_data();
 
     // Set up successful acknowledgments from all authorities
-    let executed_response_ack = WaitForEffectsResponse::Executed {
+    let executed_response_ack = WaitForEffectsStatus::Executed {
         effects_digest,
         details: None,
-        staggering_active: None,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -1218,7 +1214,7 @@ async fn test_full_effects_retry_loop() {
 
         if i == 0 {
             // First authority fails to get full effects
-            let failed_response = WaitForEffectsResponse::Rejected {
+            let failed_response = WaitForEffectsStatus::Rejected {
                 error: Some(
                     SuiErrorKind::UserInputError {
                         error: UserInputError::ObjectNotFound {
@@ -1232,10 +1228,9 @@ async fn test_full_effects_retry_loop() {
             client.set_full_response(tx_digest, failed_response);
         } else {
             // Other authorities succeed
-            let successful_response = WaitForEffectsResponse::Executed {
+            let successful_response = WaitForEffectsStatus::Executed {
                 effects_digest,
                 details: Some(Box::new(executed_data.clone())),
-                staggering_active: None,
             };
             client.set_full_response(tx_digest, successful_response);
         }
@@ -1289,10 +1284,9 @@ async fn test_full_effects_digest_mismatch() {
     let executed_data = create_test_executed_data();
 
     // Set up successful acknowledgments from all authorities
-    let executed_response_ack = WaitForEffectsResponse::Executed {
+    let executed_response_ack = WaitForEffectsStatus::Executed {
         effects_digest: certified_digest,
         details: None,
-        staggering_active: None,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -1311,18 +1305,16 @@ async fn test_full_effects_digest_mismatch() {
 
         if i == 0 {
             // First authority returns mismatched digest
-            let mismatched_response = WaitForEffectsResponse::Executed {
+            let mismatched_response = WaitForEffectsStatus::Executed {
                 effects_digest: mismatched_digest,
                 details: Some(Box::new(executed_data.clone())),
-                staggering_active: None,
             };
             client.set_full_response(tx_digest, mismatched_response);
         } else {
             // Other authorities return correct digest
-            let correct_response = WaitForEffectsResponse::Executed {
+            let correct_response = WaitForEffectsStatus::Executed {
                 effects_digest: certified_digest,
                 details: Some(Box::new(executed_data.clone())),
-                staggering_active: None,
             };
             client.set_full_response(tx_digest, correct_response);
         }
@@ -1374,10 +1366,9 @@ async fn test_request_retrier_exhaustion() {
     let effects_digest = create_test_effects_digest(1);
 
     // Set up successful acknowledgments from all authorities
-    let executed_response_ack = WaitForEffectsResponse::Executed {
+    let executed_response_ack = WaitForEffectsStatus::Executed {
         effects_digest,
         details: None,
-        staggering_active: None,
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -1388,7 +1379,7 @@ async fn test_request_retrier_exhaustion() {
     // Set up all authorities to fail getting full effects
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
         let client = safe_client.authority_client();
-        let failed_response = WaitForEffectsResponse::Rejected {
+        let failed_response = WaitForEffectsStatus::Rejected {
             error: Some(
                 SuiErrorKind::UserInputError {
                     error: UserInputError::ObjectNotFound {
