@@ -228,13 +228,7 @@ mod checked {
         transaction: &TransactionData,
         input_objects: &InputObjects,
     ) -> UserInputResult<()> {
-        let has_replay_protection = transaction.expiration().is_replay_protected()
-            || !transaction.gas_data().payment.is_empty()
-            || input_objects
-                .iter()
-                .any(|obj| obj.is_replay_protected_input());
-
-        if !has_replay_protection {
+        if !transaction.has_replay_protection(input_objects.iter()) {
             return Err(UserInputError::InvalidExpiration {
                 error: "Transactions must either have address-owned inputs, or a ValidDuring expiration with at most two epochs of validity"
                     .to_string(),
