@@ -8,7 +8,7 @@ use crate::{
     natives::functions::{NativeContext, NativeFunction, NativeResult},
     shared::safe_ops::SafeIndex as _,
 };
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, safe_assert, safe_assert_eq};
 use move_core_types::{
     gas_algebra::{InternalGas, InternalGasPerByte, NumBytes},
     language_storage::TypeTag,
@@ -48,8 +48,8 @@ fn native_get(
     ty_args: Vec<Type>,
     arguments: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert_eq!(ty_args.len(), 1);
-    debug_assert!(arguments.is_empty());
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert!(arguments.is_empty());
 
     // Charge base fee
     native_charge_gas_early_exit!(context, gas_params.base);
@@ -87,8 +87,8 @@ fn native_id(
     arguments: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     let gas_params = super::inner_gas_params!(gas_params)?;
-    debug_assert_eq!(ty_args.len(), 1);
-    debug_assert!(arguments.is_empty());
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert!(arguments.is_empty());
 
     // Charge base fee
     native_charge_gas_early_exit!(context, gas_params.base);
