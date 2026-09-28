@@ -481,6 +481,63 @@ impl CompilationEnv {
         }
     }
 
+    pub fn resolve_package_warning_filters(&mut self) -> anyhow::Result<()> {
+        fn resolve(
+            known_filters: &BTreeMap<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>>,
+            config: &PackageConfig,
+        ) -> anyhow::Result<FilterScope> {
+            let mut entries = config
+                .warning_filter
+                .filter_entries()
+                .collect::<BTreeMap<_, _>>();
+            for (config_name, value) in &config.warning_filter_config.0 {
+                let filters = match value {
+                    filter::WarningFilterValue::Level(level) => {
+                        vec![(None, config_name.as_str(), *level)]
+                    }
+                    filter::WarningFilterValue::Group(group) => group
+                        .iter()
+                        .map(|(name, level)| (Some(config_name.as_str()), name.as_str(), *level))
+                        .collect(),
+                };
+                for (prefix, name, level) in filters {
+                    let prefix = prefix.map(Symbol::from);
+                    let name = if prefix.is_none() && name == filter::FILTER_WARNINGS {
+                        Symbol::from(filter::FILTER_ALL)
+                    } else {
+                        Symbol::from(name)
+                    };
+                    let ids = known_filters
+                        .get(&prefix)
+                        .and_then(|filters| filters.get(&name))
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "unknown warning filter '{}' in Move.toml",
+                                format_allow_attr(prefix, name)
+                            )
+                        })?;
+                    for id in ids {
+                        let kind = filter::FilterKind::from(level);
+                        entries
+                            .entry(*id)
+                            .and_modify(|entry| {
+                                entry.value = entry.value.resolve_conflict(kind);
+                            })
+                            .or_insert(sp(Loc::invalid(), kind));
+                    }
+                }
+            }
+            Ok(FilterScope::new(entries))
+        }
+
+        let known_filters = &self.known_filters;
+        for config in self.package_configs.values_mut() {
+            config.warning_filter = resolve(known_filters, config)?;
+        }
+        self.default_config.warning_filter = resolve(known_filters, &self.default_config)?;
+        Ok(())
+    }
+
     pub fn visitors(&self) -> &Visitors {
         &self.visitors
     }
@@ -906,6 +963,7 @@ fn parse_symbol(s: &str) -> Result<Symbol, String> {
 pub struct PackageConfig {
     pub is_dependency: bool,
     pub warning_filter: FilterScope,
+    pub warning_filter_config: filter::WarningFilterConfig,
     pub flavor: Flavor,
     pub edition: Edition,
 }
@@ -915,6 +973,7 @@ impl Default for PackageConfig {
         Self {
             is_dependency: false,
             warning_filter: filter::empty_filter_scope(),
+            warning_filter_config: filter::WarningFilterConfig::default(),
             flavor: Flavor::default(),
             edition: Edition::default(),
         }

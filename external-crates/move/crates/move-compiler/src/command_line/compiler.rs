@@ -410,6 +410,7 @@ impl Compiler {
         for (prefix, filters) in known_warning_filters {
             compilation_env.add_custom_known_filters(prefix, filters);
         }
+        compilation_env.resolve_package_warning_filters()?;
 
         let (source_text, pprog) = parse_program(&compilation_env, maps, targets, deps)?;
 

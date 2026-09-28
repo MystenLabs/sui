@@ -21,14 +21,17 @@
 //! `#[deny]` secondary labels and `#[expect]` unfulfilled diagnostics) and avoids the
 //! complexity of an interning table.
 
-use std::collections::BTreeMap;
-use std::sync::{
-    Arc, LazyLock,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    collections::BTreeMap,
+    sync::{
+        Arc, LazyLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
+use serde::{Deserialize, Serialize};
 
 use crate::diagnostics::{
     Diagnostic,
@@ -43,11 +46,44 @@ use crate::shared::{format_allow_attr, known_attributes};
 pub type FilterPrefix = Option<Symbol>;
 pub type FilterName = Symbol;
 
+/// Package-level warning configuration, keyed by filter name or filter prefix.
+///
+/// Direct entries correspond to `#[allow(name)]`, while grouped entries correspond to
+/// `#[allow(prefix(name))]`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WarningFilterConfig(pub BTreeMap<String, WarningFilterValue>);
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum WarningFilterValue {
+    Level(WarningLevel),
+    Group(BTreeMap<String, WarningLevel>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WarningLevel {
+    Allow,
+    Warn,
+    Deny,
+}
+
+impl From<WarningLevel> for FilterKind {
+    fn from(level: WarningLevel) -> Self {
+        match level {
+            WarningLevel::Allow => Self::Allow,
+            WarningLevel::Warn => Self::Warn,
+            WarningLevel::Deny => Self::Deny,
+        }
+    }
+}
+
 //**************************************************************************************************
 // Filter name constants
 //**************************************************************************************************
 
 pub const FILTER_ALL: &str = "all";
+pub const FILTER_WARNINGS: &str = "warnings";
 pub const FILTER_UNUSED: &str = "unused";
 pub const FILTER_MISSING_PHANTOM: &str = "missing_phantom";
 pub const FILTER_UNUSED_USE: &str = "unused_use";

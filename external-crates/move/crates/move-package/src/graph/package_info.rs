@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::PackageGraph;
-use move_compiler::editions::Edition;
+use move_compiler::{diagnostics::filter::WarningFilterConfig, editions::Edition};
 
 /// A narrow interface for representing packages outside of `move-package`. Note that
 /// at different points in the package system we use graphs that have been filtered in different
@@ -98,6 +98,10 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
     /// The compiler edition for the package
     pub fn edition(&self) -> Option<Edition> {
         self.package().metadata().edition
+    }
+
+    pub fn lints(&self) -> &WarningFilterConfig {
+        self.package().lints()
     }
 
     /// The flavor for the package
