@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// Case: successful call through delegated public function
+
 task 1, lines 8-23:
 //# publish
 created: object(1,0)

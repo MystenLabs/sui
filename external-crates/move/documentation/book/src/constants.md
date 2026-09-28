@@ -46,9 +46,54 @@ language features.
 
 ## Visibility
 
-`public` or `public(package)` constants are not currently supported. `const` values can be used only
-in the declaring module. However, as a convenience, they can be used across modules in
-[unit tests attributes](./unit-testing.md).
+By default, `const` values can be used only in the declaring module. However, as a convenience,
+they can be used across modules in [unit tests attributes](./unit-testing.md).
+
+With the `2024.alpha` edition, a constant can be declared `public(package)`, which makes it
+usable from any module in the *same package* as its declaring module. No other visibility
+modifier is valid on a constant.
+
+### Cross-Module Usage
+
+A `public(package)` constant can be used from any module of its package, both in code and in
+the definitions of other constants:
+
+```move
+module a::config {
+    public(package) const MAX_SUPPLY: u64 = 1_000_000;
+}
+
+module a::mint {
+    use a::config;
+
+    // folded to a value at compile time
+    const HALF_SUPPLY: u64 = config::MAX_SUPPLY / 2;
+
+    public fun mint(amount: u64) {
+        // compiled as a copy of the constant in `a::mint`
+        assert!(amount <= config::MAX_SUPPLY, 0);
+        // ...
+    }
+}
+```
+
+Even with `public(package)`, constants remain internal to their package: using a constant from
+another package is an error.
+
+Every cross-module constant use is resolved at compile time:
+
+- A cross-module use in a *constant definition* (like `HALF_SUPPLY` above) is resolved by the
+  compiler, which folds the referenced constant's value into the new constant at compile time.
+- A cross-module use in a *function body* compiles to a copy of the constant that the compiler
+  synthesizes in the using module.
+
+In both cases the value is baked into the using module when it is compiled: upgrading the
+defining package does not change the values already compiled into modules that use them, and no
+runtime call is made.
+
+One combination is restricted: an [`#[error]` constant](./abort-and-assert.md) cannot be
+declared `public(package)`, since its name and value are encoded against the tables of the
+module that aborts with it, so it cannot be used outside its defining module.
 
 ## Valid Expressions
 
@@ -95,14 +140,19 @@ const SHIFT_BY_A_LOT: u64 = 1 << 100; // ERROR!
 const NEGATIVE_U64: u64 = 0 - 1; // ERROR!
 ```
 
-Additionally, constants can refer to other constants within the same module.
+Additionally, constants can refer to other constants within the same module (or, with the
+`2024.alpha` edition, to `public(package)` constants of other modules in the same package, as
+described in [Cross-Module Usage](#cross-module-usage)).
 
 ```move
 const BASE: u8 = 4;
 const SQUARE: u8 = BASE * BASE;
 ```
 
-Note though, that any cycle in the constant definitions results in an error.
+Note though, that any cycle in the constant definitions results in an error. This includes
+cycles formed across modules. Only genuine constant cycles are errors: because constant values
+are fully resolved at compile time, constant references do not create module dependencies, so
+modules whose only mutual references are through constants are fine.
 
 ```move
 const A: u16 = B + 1;

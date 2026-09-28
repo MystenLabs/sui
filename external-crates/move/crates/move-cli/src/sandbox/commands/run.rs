@@ -56,7 +56,7 @@ pub fn run<V: VMTestSetup>(
     let bytecode = fs::read(module_file)?;
 
     let natives = NativeFunctions::new(vm_test_setup.native_function_table())?;
-    let runtime = MoveRuntime::new_with_default_config(natives);
+    let runtime = MoveRuntime::new_with_test_config(natives);
 
     let mut gas_status = vm_test_setup.new_meter(gas_budget);
 

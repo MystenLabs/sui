@@ -1,8 +1,9 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 2 tasks
+
+// Modules with infinite loops to stress the ID leak verifier
 
 task 0, lines 6-28:
 //# publish

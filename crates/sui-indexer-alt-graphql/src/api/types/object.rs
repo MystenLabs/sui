@@ -58,6 +58,7 @@ use crate::api::types::balance;
 use crate::api::types::balance::Balance;
 use crate::api::types::coin_metadata::CoinMetadata;
 use crate::api::types::dynamic_field;
+use crate::api::types::dynamic_field::DerivedObjectKey;
 use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::dynamic_field::DynamicFieldName;
 use crate::api::types::move_object::MoveObject;
@@ -367,6 +368,25 @@ impl Object {
         self.super_.default_name_record(ctx).await.ok()?
     }
 
+    /// Access a derived object using its key.
+    ///
+    /// The object can be bounded by at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`.
+    ///
+    /// Returns `null` if the derived object has not been claimed, has been deleted, or is not available in the store.
+    pub(crate) async fn derived_object(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+        version: Option<UInt53>,
+        root_version: Option<UInt53>,
+        at_checkpoint: Option<UInt53>,
+    ) -> Option<Result<MoveObject, RpcError<dynamic_field::Error>>> {
+        self.super_
+            .derived_object(ctx, name, version, root_version, at_checkpoint)
+            .await
+            .ok()?
+    }
+
     /// Access a dynamic field on an object using its type and BCS-encoded name.
     ///
     /// Returns `null` if a dynamic field with that name could not be found attached to this object.
@@ -425,6 +445,17 @@ impl Object {
             name,
         )
         .await
+    }
+
+    /// Access derived objects using their keys and optional version bounds.
+    ///
+    /// Each key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.
+    pub(crate) async fn multi_get_derived_objects(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<DerivedObjectKey>,
+    ) -> Result<Vec<Option<MoveObject>>, RpcError<dynamic_field::Error>> {
+        self.super_.multi_get_derived_objects(ctx, keys).await
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
@@ -1224,13 +1255,19 @@ impl Object {
                     return Ok(None);
                 };
 
-                // Check execution context cache first and return if available
-                if let Some(cached_object) = self
-                    .super_
-                    .scope
-                    .execution_output_object(self.super_.address.into(), version.into())
+                // Serve from in-memory sources before the KV backend: the execution output cache
+                // (mutation/simulation output), then the streamed object store (a live subscription
+                // may reach an object from an earlier streamed checkpoint, still ahead of the index).
+                let scope = &self.super_.scope;
+                if let Some(executed) =
+                    scope.execution_output_object(self.super_.address.into(), version.into())
                 {
-                    Ok(Some(cached_object.clone()))
+                    Ok(Some(executed.clone()))
+                } else if let Some(streamed) = scope
+                    .streamed_object_store()
+                    .and_then(|store| store.get(self.super_.address.into(), version.into()))
+                {
+                    Ok(Some(streamed))
                 } else {
                     Ok(kv_loader
                         .load_one_object(self.super_.address.into(), version.into())

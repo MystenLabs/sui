@@ -247,7 +247,7 @@ public entry fun add_to_deny_list(l0: &mut CollectionCap, l1: vector<address>, l
     assert!(l9 == l0.creator, C1);
     assert!(l0.has_deny_list_authority, C8);
     let l6 = object::uid_to_inner(&l0.id);
-    let l8 = 0u64;
+    let mut l8 = 0u64;
     while (l8 < l5) {
         let l4 = (&l1)[l8];
         let l7 = dynamic_field::borrow_mut(&mut l0.id, DenyListKey { dummy_field: false });
@@ -259,11 +259,11 @@ public entry fun add_to_deny_list(l0: &mut CollectionCap, l1: vector<address>, l
     }
 }
 
-public entry fun batch_burn_art20(l0: vector<NFT>, l1: &mut CollectionCap, l2: vector<UserBalance>, l3: &mut TxContext) {
+public entry fun batch_burn_art20(mut l0: vector<NFT>, l1: &mut CollectionCap, mut l2: vector<UserBalance>, l3: &mut TxContext) {
     let l9 = l0.length();
     assert!(l9 <= C29, C14);
-    let l16 = 0u64;
-    let l10 = 0u64;
+    let mut l16 = 0u64;
+    let mut l10 = 0u64;
     let l13 = l2.length();
     while (l10 < l13) {
         let l5 = &(&l2)[l10];
@@ -273,12 +273,12 @@ public entry fun batch_burn_art20(l0: vector<NFT>, l1: &mut CollectionCap, l2: v
     assert!(l16 >= l9, C6);
     assert!(l1.current_supply >= l9, C4);
     let l14 = tx_context::sender(freeze(l3));
-    let l11 = 0u64;
+    let mut l11 = 0u64;
     while (l11 < l9) {
         let l15 = l0.pop_back();
         assert!((&l15).collection_id == object::uid_to_inner(&l1.id), C5);
-        let l8 = false;
-        let l12 = 0u64;
+        let mut l8 = false;
+        let mut l12 = 0u64;
         loop {
             if (l12 < l2.length()) {
                 let l6 = &mut (&mut l2)[l12];
@@ -301,22 +301,22 @@ public entry fun batch_burn_art20(l0: vector<NFT>, l1: &mut CollectionCap, l2: v
             transfer::transfer(l7, l14)
         } else {
             let UserBalance { id: reg_122, collection_id: reg_123, balance: reg_124 } = l7;
-            object::delete(reg_122 : 0x2::object::UID)
+            object::delete(reg_122)
         }
     };
     std::vector::destroy_empty(l0);
     std::vector::destroy_empty(l2)
 }
 
-public entry fun batch_burn_art20_by_asset_ids(l0: &mut CollectionCap, l1: vector<NFT>, l2: vector<UserBalance>, l3: vector<u64>, l4: &mut TxContext) {
+public entry fun batch_burn_art20_by_asset_ids(l0: &mut CollectionCap, mut l1: vector<NFT>, mut l2: vector<UserBalance>, l3: vector<u64>, l4: &mut TxContext) {
     let l22 = tx_context::sender(freeze(l4));
     let l13 = xf_ART20::get_collection_cap_id(freeze(l0));
     let l8 = l3.length();
     assert!(l8 > 0u64 && l8 <= C29, C11);
     assert!(l0.current_supply >= l8, C4);
-    let l21 = table::new(l4);
-    let l23 = 0u64;
-    let l15 = 0u64;
+    let mut l21 = table::new(l4);
+    let mut l23 = 0u64;
+    let mut l15 = 0u64;
     let l19 = l2.length();
     while (l15 < l19) {
         let l10 = &(&l2)[l15];
@@ -324,8 +324,8 @@ public entry fun batch_burn_art20_by_asset_ids(l0: &mut CollectionCap, l1: vecto
         l15 = l15 + 1u64;
     };
     assert!(l23 >= l8, C6);
-    let l16 = 0u64;
-    let l18;
+    let mut l16 = 0u64;
+    let mut l18;
     loop {
         if (l16 >= l8) {
             table::drop(l21);
@@ -335,14 +335,14 @@ public entry fun batch_burn_art20_by_asset_ids(l0: &mut CollectionCap, l1: vecto
         let l9 = (&l3)[l16];
         assert!(!(table::contains(&l21, l9)), C20);
         table::add(&mut l21, l9, true);
-        let l14 = false;
-        let l24 = vector[];
+        let mut l14 = false;
+        let mut l24 = vector[];
         while (!(vector::is_empty(&l1))) {
             let l20 = l1.pop_back();
             if (!(l14) && ((&l20).collection_id == l13 && (&l20).asset_id == l9)) {
                 assert!(l22 == (&l20).creator, C3);
-                let l12 = false;
-                let l17 = 0u64;
+                let mut l12 = false;
+                let mut l17 = 0u64;
                 loop {
                     if (l17 < l2.length()) {
                         let l11 = &mut (&mut l2)[l17];
@@ -359,7 +359,7 @@ public entry fun batch_burn_art20_by_asset_ids(l0: &mut CollectionCap, l1: vecto
                 *(&mut l0.current_supply) = xf_ART20::safe_sub(l0.current_supply, 1u64);
                 event::emit(BurnEvent { owner: l22, id: object::uid_to_inner(&(&l20).id) });
                 let NFT { id: reg_147, artinals_id: reg_148, creator: reg_149, name: reg_150, description: reg_151, uri: reg_152, logo_uri: reg_153, asset_id: reg_154, max_supply: reg_155, collection_id: reg_156, category: reg_157 } = l20;
-                object::delete(reg_147 : 0x2::object::UID);
+                object::delete(reg_147);
                 l14 = true;
             } else {
                 l24.push_back(l20)
@@ -389,7 +389,7 @@ public entry fun batch_burn_art20_by_asset_ids(l0: &mut CollectionCap, l1: vecto
     std::vector::destroy_empty(l2)
 }
 
-public entry fun batch_update_art20_image_uri_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>, l2: vector<u64>, l3: vector<vector<u8>>, l4: &mut TxContext) {
+public entry fun batch_update_art20_image_uri_by_asset_ids(l0: &CollectionCap, mut l1: vector<NFT>, l2: vector<u64>, l3: vector<vector<u8>>, l4: &mut TxContext) {
     let l17 = tx_context::sender(freeze(l4));
     let l9 = xf_ART20::get_collection_cap_id(l0);
     assert!(l0.is_mutable, C2);
@@ -397,8 +397,8 @@ public entry fun batch_update_art20_image_uri_by_asset_ids(l0: &CollectionCap, l
     let l7 = l2.length();
     assert!(l7 == l3.length(), C0);
     assert!(l7 > 0u64 && l7 <= C29, C11);
-    let l11 = 0u64;
-    let (l12, l16);
+    let mut l11 = 0u64;
+    let (mut l12, mut l16);
     loop {
         if (l11 >= l3.length()) {
             l16 = table::new(l4);
@@ -419,10 +419,10 @@ public entry fun batch_update_art20_image_uri_by_asset_ids(l0: &CollectionCap, l
         let l14 = &(&l3)[l12];
         assert!(!(table::contains(&l16, l8)), C20);
         table::add(&mut l16, l8, true);
-        let l10 = false;
-        let l18 = vector[];
+        let mut l10 = false;
+        let mut l18 = vector[];
         while (!(vector::is_empty(&l1))) {
-            let l15 = l1.pop_back();
+            let mut l15 = l1.pop_back();
             if (!(l10) && ((&l15).collection_id == l9 && (&l15).asset_id == l8)) {
                 assert!(l17 == (&l15).creator, C1);
                 *(&mut (&mut l15).logo_uri) = url::new_unsafe_from_bytes(*l14);
@@ -444,7 +444,7 @@ public entry fun batch_update_art20_image_uri_by_asset_ids(l0: &CollectionCap, l
     std::vector::destroy_empty(l1)
 }
 
-public entry fun batch_update_metadata(l0: &CollectionCap, l1: vector<NFT>, l2: Option<String>, l3: Option<String>, l4: Option<vector<u8>>, l5: Option<vector<u8>>, l6: &mut TxContext) {
+public entry fun batch_update_metadata(l0: &CollectionCap, mut l1: vector<NFT>, l2: Option<String>, l3: Option<String>, l4: Option<vector<u8>>, l5: Option<vector<u8>>, l6: &mut TxContext) {
     let l7 = l1.length();
     let l10 = tx_context::sender(freeze(l6));
     let l8 = xf_ART20::get_collection_cap_id(l0);
@@ -460,7 +460,7 @@ public entry fun batch_update_metadata(l0: &CollectionCap, l1: vector<NFT>, l2: 
     if (option::is_some(&l5)) {
         assert!((option::borrow(&l5)).length() <= 256u64, C10)
     };
-    let l9 = 0u64;
+    let mut l9 = 0u64;
     while (l9 < l7) {
         let l11 = &mut (&mut l1)[l9];
         assert!(l11.collection_id == l8, C5);
@@ -487,7 +487,7 @@ public entry fun batch_update_metadata(l0: &CollectionCap, l1: vector<NFT>, l2: 
     std::vector::destroy_empty(l1)
 }
 
-public entry fun batch_update_metadata_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>, l2: vector<u64>, l3: Option<String>, l4: Option<String>, l5: Option<vector<u8>>, l6: Option<vector<u8>>, l7: &mut TxContext) {
+public entry fun batch_update_metadata_by_asset_ids(l0: &CollectionCap, mut l1: vector<NFT>, l2: vector<u64>, l3: Option<String>, l4: Option<String>, l5: Option<vector<u8>>, l6: Option<vector<u8>>, l7: &mut TxContext) {
     let l22 = tx_context::sender(freeze(l7));
     let l14 = xf_ART20::get_collection_cap_id(l0);
     let l10 = l2.length();
@@ -516,8 +516,8 @@ public entry fun batch_update_metadata_by_asset_ids(l0: &CollectionCap, l1: vect
         assert!(l18.length() <= 256u64, C10);
         assert!(l18.length() > 0u64, C10)
     };
-    let l21 = table::new(l7);
-    let l17 = 0u64;
+    let mut l21 = table::new(l7);
+    let mut l17 = 0u64;
     loop {
         if (l17 >= l10) {
             table::drop(l21);
@@ -526,10 +526,10 @@ public entry fun batch_update_metadata_by_asset_ids(l0: &CollectionCap, l1: vect
         let l11 = (&l2)[l17];
         assert!(!(table::contains(&l21, l11)), C20);
         table::add(&mut l21, l11, true);
-        let l16 = false;
-        let l23 = vector[];
+        let mut l16 = false;
+        let mut l23 = vector[];
         while (!(vector::is_empty(&l1))) {
-            let l20 = l1.pop_back();
+            let mut l20 = l1.pop_back();
             if (!(l16) && ((&l20).collection_id == l14 && (&l20).asset_id == l11)) {
                 assert!(l0.is_mutable, C2);
                 assert!(l22 == (&l20).creator, C1);
@@ -563,7 +563,7 @@ public entry fun batch_update_metadata_by_asset_ids(l0: &CollectionCap, l1: vect
     std::vector::destroy_empty(l1)
 }
 
-public entry fun batch_update_token_logo_uri(l0: vector<NFT>, l1: vector<vector<u8>>, l2: &CollectionCap, l3: &mut TxContext) {
+public entry fun batch_update_token_logo_uri(mut l0: vector<NFT>, l1: vector<vector<u8>>, l2: &CollectionCap, l3: &mut TxContext) {
     let l10 = tx_context::sender(freeze(l3));
     let l5 = xf_ART20::get_collection_cap_id(l2);
     let l9 = l0.length();
@@ -571,8 +571,8 @@ public entry fun batch_update_token_logo_uri(l0: vector<NFT>, l1: vector<vector<
     assert!(l9 == l1.length(), C0);
     assert!(l9 > 0u64 && l9 <= C29, C11);
     xf_ART20::check_deny_list_restrictions(l2, l10);
-    let l6 = 0u64;
-    let (l13, l7);
+    let mut l6 = 0u64;
+    let (mut l13, mut l7);
     loop {
         if (l6 >= l1.length()) {
             l13 = vector[];
@@ -585,7 +585,7 @@ public entry fun batch_update_token_logo_uri(l0: vector<NFT>, l1: vector<vector<
         l6 = l6 + 1u64;
     };
     while (l7 < l9) {
-        let l11 = l0.pop_back();
+        let mut l11 = l0.pop_back();
         assert!((&l11).collection_id == l5, C5);
         assert!(l10 == (&l11).creator, C1);
         *(&mut (&mut l11).logo_uri) = url::new_unsafe_from_bytes((&l1)[l7]);
@@ -608,20 +608,20 @@ public entry fun burn_art20(l0: NFT, l1: &mut CollectionCap, l2: vector<UserBala
     assert!(l1.current_supply > 0u64, C4);
     assert!((&l0).collection_id == object::uid_to_inner(&l1.id), C5);
     let l9 = tx_context::sender(freeze(l3));
-    let l7 = l2;
-    let l8 = false;
-    let l10 = vector[];
+    let mut l7 = l2;
+    let mut l8 = false;
+    let mut l10 = vector[];
     loop {
         if (!(!(vector::is_empty(&l7)))) {
             assert!(l8, C6);
             break
         };
-        let l5 = l7.pop_back();
+        let mut l5 = l7.pop_back();
         assert!((&l5).collection_id == object::uid_to_inner(&l1.id), C5);
         if (!(l8) && (&l5).balance > 0u64) {
             if ((&l5).balance == 1u64) {
                 let UserBalance { id: reg_53, collection_id: reg_54, balance: reg_55 } = l5;
-                object::delete(reg_53 : 0x2::object::UID)
+                object::delete(reg_53)
             } else {
                 *(&mut (&mut l5).balance) = (&l5).balance - 1u64;
                 l10.push_back(l5)
@@ -637,7 +637,7 @@ public entry fun burn_art20(l0: NFT, l1: &mut CollectionCap, l2: vector<UserBala
             transfer::transfer(l6, l9)
         } else {
             let UserBalance { id: reg_84, collection_id: reg_85, balance: reg_86 } = l6;
-            object::delete(reg_84 : 0x2::object::UID)
+            object::delete(reg_84)
         }
     };
     std::vector::destroy_empty(l7);
@@ -645,7 +645,7 @@ public entry fun burn_art20(l0: NFT, l1: &mut CollectionCap, l2: vector<UserBala
     *(&mut l1.current_supply) = xf_ART20::safe_sub(l1.current_supply, 1u64);
     event::emit(BurnEvent { owner: l9, id: object::uid_to_inner(&(&l0).id) });
     let NFT { id: reg_102, artinals_id: reg_103, creator: reg_104, name: reg_105, description: reg_106, uri: reg_107, logo_uri: reg_108, asset_id: reg_109, max_supply: reg_110, collection_id: reg_111, category: reg_112 } = l0;
-    object::delete(reg_102 : 0x2::object::UID)
+    object::delete(reg_102)
 }
 
 fun burn_single_art20(l0: NFT, l1: &mut CollectionCap, l2: &TxContext) {
@@ -653,7 +653,7 @@ fun burn_single_art20(l0: NFT, l1: &mut CollectionCap, l2: &TxContext) {
     *(&mut l1.current_supply) = xf_ART20::safe_sub(l1.current_supply, 1u64);
     event::emit(BurnEvent { owner: l3, id: object::uid_to_inner(&(&l0).id) });
     let NFT { id: reg_15, artinals_id: reg_16, creator: reg_17, name: reg_18, description: reg_19, uri: reg_20, logo_uri: reg_21, asset_id: reg_22, max_supply: reg_23, collection_id: reg_24, category: reg_25 } = l0;
-    object::delete(reg_15 : 0x2::object::UID)
+    object::delete(reg_15)
 }
 
 public fun can_receive_art20(l0: &CollectionCap, l1: address): bool {
@@ -667,12 +667,12 @@ public fun check_deny_list_restrictions(l0: &CollectionCap, l1: address) {
 public fun cleanup_empty_balance(l0: UserBalance) {
     assert!(xf_ART20::get_user_balance_amount(&l0) == 0u64, C6);
     let UserBalance { id: reg_6, collection_id: reg_7, balance: reg_8 } = l0;
-    object::delete(reg_6 : 0x2::object::UID)
+    object::delete(reg_6)
 }
 
 public fun collection_exists(l0: &vector<CollectionCap>, l1: ID): bool {
     let l2 = l0.length();
-    let l3 = 0u64;
+    let mut l3 = 0u64;
     loop {
         if (l3 >= l2) {
             return false
@@ -708,7 +708,7 @@ public fun drop_collection_cap(l0: CollectionCap, l1: &mut TxContext) {
     assert!(tx_context::sender(freeze(l1)) == (&l0).creator, C1);
     assert!((&l0).current_supply == 0u64, C26);
     let CollectionCap { id: reg_15, max_supply: reg_16, current_supply: reg_17, creator: reg_18, name: reg_19, description: reg_20, uri: reg_21, logo_uri: reg_22, is_mutable: reg_23, is_mintable: reg_24, has_deny_list_authority: reg_25, value_source: reg_26, is_api_source: reg_27 } = l0;
-    let l2 = reg_15 : 0x2::object::UID;
+    let mut l2 = reg_15;
     if (dynamic_field::exists_(&l2, DenyListKey { dummy_field: false })) {
         table::drop(dynamic_field::remove(&mut l2, DenyListKey { dummy_field: false }))
     };
@@ -732,16 +732,16 @@ public entry fun freeze_minting(l0: &mut CollectionCap, l1: &mut TxContext) {
 }
 
 public fun get_all_categories(l0: &CategoryRegistry): vector<String> {
-    let l2 = vector[];
+    let mut l2 = vector[];
     let l1 = table::borrow(&l0.categories, string::utf8(C41));
     l2.push_back(l1.name);
     return l2
 }
 
 public fun get_all_collection_ids(l0: &vector<CollectionCap>): vector<ID> {
-    let l3 = vector[];
+    let mut l3 = vector[];
     let l2 = l0.length();
-    let l4 = 0u64;
+    let mut l4 = 0u64;
     while (l4 < l2) {
         let l1 = &l0[l4];
         l3.push_back(xf_ART20::get_collection_cap_id(l1));
@@ -798,18 +798,18 @@ public fun get_collections_info(l0: &vector<CollectionCap>): (
     vector<ID>,
     vector<address>,
     vector<String>, vector<String>, vector<Url>, vector<Url>, vector<u64>, vector<u64>, vector<bool>, vector<bool>) {
-    let l3 = vector[];
-    let l4 = vector[];
-    let l12 = vector[];
-    let l7 = vector[];
-    let l13 = vector[];
-    let l9 = vector[];
-    let l5 = vector[];
-    let l10 = vector[];
-    let l11 = vector[];
-    let l6 = vector[];
+    let mut l3 = vector[];
+    let mut l4 = vector[];
+    let mut l12 = vector[];
+    let mut l7 = vector[];
+    let mut l13 = vector[];
+    let mut l9 = vector[];
+    let mut l5 = vector[];
+    let mut l10 = vector[];
+    let mut l11 = vector[];
+    let mut l6 = vector[];
     let l2 = l0.length();
-    let l8 = 0u64;
+    let mut l8 = 0u64;
     while (l8 < l2) {
         let l1 = &l0[l8];
         l3.push_back(xf_ART20::get_collection_cap_id(l1));
@@ -869,8 +869,8 @@ public fun get_holder_info(l0: &vector<NFT>, l1: &CollectionCap, l2: &vector<Use
     bool,
     bool, bool, u64, vector<ID>, vector<u64>, vector<String>, vector<String>, vector<Url>, vector<Url>) {
     let l7 = xf_ART20::get_collection_cap_id(l1);
-    let l22 = 0u64;
-    let l11 = 0u64;
+    let mut l22 = 0u64;
+    let mut l11 = 0u64;
     let l14 = l2.length();
     while (l11 < l14) {
         let l6 = &l2[l11];
@@ -887,13 +887,13 @@ public fun get_holder_info(l0: &vector<NFT>, l1: &CollectionCap, l2: &vector<Use
     } else {
         0u64
     };
-    let l18 = vector[];
-    let l5 = vector[];
-    let l20 = vector[];
-    let l17 = vector[];
-    let l21 = vector[];
-    let l19 = vector[];
-    let l13 = 0u64;
+    let mut l18 = vector[];
+    let mut l5 = vector[];
+    let mut l20 = vector[];
+    let mut l17 = vector[];
+    let mut l21 = vector[];
+    let mut l19 = vector[];
+    let mut l13 = 0u64;
     let l16 = l0.length();
     while (l13 < l16) {
         let l15 = &l0[l13];
@@ -921,7 +921,7 @@ public fun get_nft_asset_id(l0: &NFT): u64 {
 public fun get_nft_by_asset_id(l0: &CollectionCap, l1: &vector<NFT>, l2: u64): ( Option<ID>, Option<address>) {
     let l4 = xf_ART20::get_collection_cap_id(l0);
     let l7 = l1.length();
-    let l5 = 0u64;
+    let mut l5 = 0u64;
     loop {
         if (l5 >= l7) {
             return (option::none(), option::none())
@@ -948,17 +948,17 @@ public fun get_nft_id(l0: &NFT): ID {
 
 public fun get_nfts_by_asset_ids(l0: &CollectionCap, l1: &vector<NFT>, l2: vector<u64>): ( vector<ID>, vector<address>, vector<u64>, vector<u64>) {
     let l6 = xf_ART20::get_collection_cap_id(l0);
-    let l13 = vector[];
-    let l15 = vector[];
-    let l8 = vector[];
-    let l14 = vector[];
+    let mut l13 = vector[];
+    let mut l15 = vector[];
+    let mut l8 = vector[];
+    let mut l14 = vector[];
     let l4 = l2.length();
-    let l9 = 0u64;
+    let mut l9 = 0u64;
     while (l9 < l4) {
         let l5 = (&l2)[l9];
-        let l7 = false;
+        let mut l7 = false;
         let l12 = l1.length();
-        let l10 = 0u64;
+        let mut l10 = 0u64;
         loop {
             if (l10 < l12) {
                 let l11 = &l1[l10];
@@ -1009,7 +1009,7 @@ fun init(l0: ART20, l1: &mut TxContext) {
     let l4 = package::claim(l0, l1);
     let l3 = vector[string::utf8(C31), string::utf8(C32), string::utf8(C33), string::utf8(C34), string::utf8(C35)];
     let l5 = vector[string::utf8(C36), string::utf8(C37), string::utf8(C38), string::utf8(C39), string::utf8(C40)];
-    let l2 = display::new_with_fields(&l4, l3, l5, l1);
+    let mut l2 = display::new_with_fields(&l4, l3, l5, l1);
     display::update_version(&mut l2);
     transfer::public_transfer(l4, tx_context::sender(freeze(l1)));
     transfer::public_transfer(l2, tx_context::sender(freeze(l1)));
@@ -1033,7 +1033,7 @@ public fun is_denied(l0: &CollectionCap, l1: address): bool {
     return table::contains(dynamic_field::borrow(&l0.id, DenyListKey { dummy_field: false }), l1)
 }
 
-public entry fun mint_additional_art20(l0: &mut CollectionCap, l1: u64, l2: &mut TokenIdCounter, l3: vector<UserBalance>, l4: &Clock, l5: &mut TxContext) {
+public entry fun mint_additional_art20(l0: &mut CollectionCap, l1: u64, l2: &mut TokenIdCounter, mut l3: vector<UserBalance>, l4: &Clock, l5: &mut TxContext) {
     assert!(l0.is_mutable, C21);
     assert!(tx_context::sender(freeze(l5)) == l0.creator, C1);
     assert!(l0.max_supply == 0u64 || l0.current_supply + l1 <= l0.max_supply, C13);
@@ -1042,8 +1042,8 @@ public entry fun mint_additional_art20(l0: &mut CollectionCap, l1: u64, l2: &mut
     if (vector::is_empty(&l3)) {
         transfer::transfer(UserBalance { id: object::new(l5), collection_id: l11, balance: l1 }, l14)
     } else {
-        let l10 = false;
-        let l12 = 0u64;
+        let mut l10 = false;
+        let mut l12 = 0u64;
         loop {
             if (l12 < l3.length()) {
                 let l8 = &mut (&mut l3)[l12];
@@ -1060,7 +1060,7 @@ public entry fun mint_additional_art20(l0: &mut CollectionCap, l1: u64, l2: &mut
             break
         }
     };
-    let l13 = 0u64;
+    let mut l13 = 0u64;
     while (l13 < l1) {
         *(&mut l2.last_id) = l2.last_id + 1u64;
         let l7 = l2.last_id;
@@ -1083,7 +1083,7 @@ public entry fun mint_additional_art20(l0: &mut CollectionCap, l1: u64, l2: &mut
     event::emit(AdditionalMintEvent { collection_id: l11, amount: l1, new_supply: l0.current_supply, max_supply: l0.max_supply, creator: l0.creator, timestamp: clock::timestamp_ms(l4) })
 }
 
-public entry fun mint_art20<T0>(l0: vector<u8>, l1: vector<u8>, l2: u64, l3: u64, l4: vector<u8>, l5: vector<u8>, l6: String, l7: &CategoryRegistry, l8: bool, l9: bool, l10: &mut TokenIdCounter, l11: &FeeConfig, l12: Coin<T0>, l13: &Clock, l14: &mut TxContext) {
+public entry fun mint_art20<T0>(l0: vector<u8>, l1: vector<u8>, l2: u64, l3: u64, l4: vector<u8>, l5: vector<u8>, l6: String, l7: &CategoryRegistry, l8: bool, l9: bool, l10: &mut TokenIdCounter, l11: &FeeConfig, mut l12: Coin<T0>, l13: &Clock, l14: &mut TxContext) {
     assert!(table::contains(&l7.categories, l6), C24);
     assert!((table::borrow(&l7.categories, l6)).is_active, C23);
     assert!(l2 >= 0u64, C11);
@@ -1104,14 +1104,14 @@ public entry fun mint_art20<T0>(l0: vector<u8>, l1: vector<u8>, l2: u64, l3: u64
     assert!(l2 <= C28, C13);
     assert!(l3 == 0u64 || l2 <= l3, C19);
     assert!(l10.last_id <= C27 - l2, C12);
-    let l17 = CollectionCap { id: object::new(l14), max_supply: l3, current_supply: l2, creator: tx_context::sender(freeze(l14)), name: string::utf8(l0), description: string::utf8(l1), uri: url::new_unsafe_from_bytes(l4), logo_uri: url::new_unsafe_from_bytes(l5), is_mutable: l8, is_mintable: true, has_deny_list_authority: l9, value_source: option::none(), is_api_source: false };
+    let mut l17 = CollectionCap { id: object::new(l14), max_supply: l3, current_supply: l2, creator: tx_context::sender(freeze(l14)), name: string::utf8(l0), description: string::utf8(l1), uri: url::new_unsafe_from_bytes(l4), logo_uri: url::new_unsafe_from_bytes(l5), is_mutable: l8, is_mintable: true, has_deny_list_authority: l9, value_source: option::none(), is_api_source: false };
     let l18 = object::uid_to_inner(&(&l17).id);
     event::emit(CollectionCreatedEvent { collection_id: l18, creator: tx_context::sender(freeze(l14)), name: string::utf8(l0), description: string::utf8(l1), initial_supply: l2, max_supply: l3, is_mutable: l8, has_deny_list_authority: l9, timestamp: clock::timestamp_ms(l13) });
     event::emit(CollectionMintEvent { collection_id: l18, amount: l2, current_supply: l2, max_supply: l3, creator: tx_context::sender(freeze(l14)), timestamp: clock::timestamp_ms(l13) });
     dynamic_field::add(&mut (&mut l17).id, DenyListKey { dummy_field: false }, xf_ART20::create_deny_list(l14));
     let l24 = UserBalance { id: object::new(l14), collection_id: l18, balance: l2 };
-    let l23 = vector[];
-    let l19 = 0u64;
+    let mut l23 = vector[];
+    let mut l19 = 0u64;
     while (l19 < l2) {
         *(&mut l10.last_id) = l10.last_id + 1u64;
         let l16 = l10.last_id;
@@ -1136,7 +1136,7 @@ public entry fun remove_from_deny_list(l0: &mut CollectionCap, l1: vector<addres
     assert!(l9 == l0.creator, C1);
     assert!(l0.has_deny_list_authority, C8);
     let l6 = object::uid_to_inner(&l0.id);
-    let l8 = 0u64;
+    let mut l8 = 0u64;
     while (l8 < l5) {
         let l4 = (&l1)[l8];
         if (table::contains(freeze(dynamic_field::borrow_mut(&mut l0.id, DenyListKey { dummy_field: false })), l4)) {
@@ -1172,8 +1172,8 @@ public entry fun set_collection_value_source(l0: &mut CollectionCap, l1: vector<
         let l5 = C42;
         let l7 = l5.length();
         assert!(l8.length() >= l7, C16);
-        let l6 = 0u64;
-        let l10 = true;
+        let mut l6 = 0u64;
+        let mut l10 = true;
         loop {
             if (l6 < l7) {
                 if (l8[l6] == (&l5)[l6]) {
@@ -1212,15 +1212,15 @@ public entry fun transfer_admin_cap(l0: &mut AdminCap, l1: address, l2: &mut TxC
     *(&mut l0.owner) = l1
 }
 
-public entry fun transfer_art20(l0: vector<NFT>, l1: vector<address>, l2: &CollectionCap, l3: vector<UserBalance>, l4: &Clock, l5: &mut TxContext) {
+public entry fun transfer_art20(mut l0: vector<NFT>, l1: vector<address>, l2: &CollectionCap, mut l3: vector<UserBalance>, l4: &Clock, l5: &mut TxContext) {
     let l20 = tx_context::sender(freeze(l5));
     let l22 = l0.length();
     let l19 = l1.length();
     assert!(l22 == l19, C10);
     assert!(l22 <= C29, C14);
     assert!(l22 > 0u64, C11);
-    let l24 = 0u64;
-    let l13 = 0u64;
+    let mut l24 = 0u64;
+    let mut l13 = 0u64;
     let l16 = l3.length();
     while (l13 < l16) {
         let l8 = &(&l3)[l13];
@@ -1229,18 +1229,18 @@ public entry fun transfer_art20(l0: vector<NFT>, l1: vector<address>, l2: &Colle
     };
     assert!(l24 >= l22, C6);
     xf_ART20::check_deny_list_restrictions(l2, l20);
-    let l23 = vector[];
-    let l7 = vector[];
+    let mut l23 = vector[];
+    let mut l7 = vector[];
     let l12 = object::uid_to_inner(&l2.id);
-    let l14 = 0u64;
+    let mut l14 = 0u64;
     while (l14 < l19) {
         let l17 = (&l1)[l14];
         xf_ART20::check_deny_list_restrictions(l2, l17);
         let l18 = UserBalance { id: object::new(l5), collection_id: l12, balance: 1u64 };
         let l21 = l0.pop_back();
         assert!((&l21).collection_id == l12, C5);
-        let l11 = false;
-        let l15 = 0u64;
+        let mut l11 = false;
+        let mut l15 = 0u64;
         loop {
             if (l15 < l3.length()) {
                 let l9 = &mut (&mut l3)[l15];
@@ -1267,7 +1267,7 @@ public entry fun transfer_art20(l0: vector<NFT>, l1: vector<address>, l2: &Colle
             transfer::transfer(l10, l20)
         } else {
             let UserBalance { id: reg_164, collection_id: reg_165, balance: reg_166 } = l10;
-            object::delete(reg_164 : 0x2::object::UID)
+            object::delete(reg_164)
         }
     };
     std::vector::destroy_empty(l0);
@@ -1275,16 +1275,16 @@ public entry fun transfer_art20(l0: vector<NFT>, l1: vector<address>, l2: &Colle
     event::emit(BatchTransferEvent { from: l20, recipients: l1, token_ids: l23, amounts: l7, collection_id: l12, timestamp: clock::timestamp_ms(l4) })
 }
 
-public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>, l2: vector<UserBalance>, l3: vector<u64>, l4: address, l5: &Clock, l6: &mut TxContext) {
+public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, mut l1: vector<NFT>, mut l2: vector<UserBalance>, l3: vector<u64>, l4: address, l5: &Clock, l6: &mut TxContext) {
     let l24 = tx_context::sender(freeze(l6));
     let l14 = xf_ART20::get_collection_cap_id(l0);
     let l10 = l3.length();
     xf_ART20::validate_transfer(l0, l24, l4);
     xf_ART20::check_deny_list_restrictions(l0, l4);
-    let l26 = vector[];
-    let l9 = vector[];
-    let l16 = 0u64;
-    let l19;
+    let mut l26 = vector[];
+    let mut l9 = vector[];
+    let mut l16 = 0u64;
+    let mut l19;
     loop {
         if (l16 >= l10) {
             event::emit(BatchTransferEvent { from: l24, recipients: vector[l4], token_ids: l26, amounts: l9, collection_id: l14, timestamp: clock::timestamp_ms(l5) });
@@ -1293,16 +1293,16 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
         };
         let l11 = (&l3)[l16];
         let (reg_25, reg_26) = xf_ART20::get_nft_by_asset_id(l0, &l1, l11);
-        let l23 = reg_26;
-        let l22 = reg_25;
+        let mut l23 = reg_26;
+        let mut l22 = reg_25;
         assert!(option::is_some(&l22), C15);
         assert!(option::is_some(&l23), C3);
         let l21 = option::extract(&mut l22);
         assert!(option::extract(&mut l23) == l24, C3);
         let l20 = l1.length();
-        let l17 = 0u64;
-        let l15 = false;
-        let (__c112, __c81, __c85, __c95, l13, l18);
+        let mut l17 = 0u64;
+        let mut l15 = false;
+        let (mut __c112, mut __c81, mut __c85, mut __c95, mut l13, mut l18);
         loop {
             __c81 = l17 < l20;
             if (!(__c81)) {
@@ -1361,14 +1361,14 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
     std::vector::destroy_empty(l9)
 }
 
-public entry fun transfer_art20_in_quantity(l0: vector<NFT>, l1: address, l2: u64, l3: &CollectionCap, l4: vector<UserBalance>, l5: &Clock, l6: &mut TxContext) {
+public entry fun transfer_art20_in_quantity(mut l0: vector<NFT>, l1: address, l2: u64, l3: &CollectionCap, l4: vector<UserBalance>, l5: &Clock, l6: &mut TxContext) {
     assert!(l2 > 0u64, C11);
     let l19 = tx_context::sender(freeze(l6));
     xf_ART20::validate_transfer(l3, l19, l1);
     let l12 = object::uid_to_inner(&l3.id);
     assert!(l0.length() >= l2, C22);
-    let l23 = 0u64;
-    let l14 = 0u64;
+    let mut l23 = 0u64;
+    let mut l14 = 0u64;
     let l16 = l4.length();
     while (l14 < l16) {
         let l8 = &(&l4)[l14];
@@ -1377,16 +1377,16 @@ public entry fun transfer_art20_in_quantity(l0: vector<NFT>, l1: address, l2: u6
     };
     assert!(l23 >= l2, C6);
     let l17 = UserBalance { id: object::new(l6), collection_id: object::uid_to_inner(&l3.id), balance: l2 };
-    let l20 = l4;
-    let l18 = l2;
-    let l24 = vector[];
+    let mut l20 = l4;
+    let mut l18 = l2;
+    let mut l24 = vector[];
     while (l18 > 0u64) {
-        let l9 = l20.pop_back();
+        let mut l9 = l20.pop_back();
         assert!((&l9).collection_id == l12, C5);
         if ((&l9).balance <= l18) {
             l18 = l18 - (&l9).balance;
             let UserBalance { id: reg_83, collection_id: reg_84, balance: reg_85 } = l9;
-            object::delete(reg_83 : 0x2::object::UID)
+            object::delete(reg_83)
         } else {
             *(&mut (&mut l9).balance) = (&l9).balance - l18;
             l18 = 0u64;
@@ -1404,14 +1404,14 @@ public entry fun transfer_art20_in_quantity(l0: vector<NFT>, l1: address, l2: u6
             transfer::transfer(l11, l19)
         } else {
             let UserBalance { id: reg_124, collection_id: reg_125, balance: reg_126 } = l11;
-            object::delete(reg_124 : 0x2::object::UID)
+            object::delete(reg_124)
         }
     };
     transfer::transfer(l17, l1);
-    let l22 = vector[];
-    let l7 = vector[];
+    let mut l22 = vector[];
+    let mut l7 = vector[];
     let l13 = object::uid_to_inner(&l3.id);
-    let l15 = 0u64;
+    let mut l15 = 0u64;
     while (l15 < l2) {
         let l21 = l0.pop_back();
         assert!(l13 == (&l21).collection_id, C5);
@@ -1438,23 +1438,23 @@ public fun update_art20_image_uri(l0: &mut NFT, l1: &CollectionCap, l2: vector<u
     event::emit(LogoURIUpdateEvent { id: object::uid_to_inner(&l0.id), artinals_id: l0.artinals_id, new_logo_uri: l0.logo_uri })
 }
 
-public entry fun update_art20_image_uri_by_asset_id(l0: &CollectionCap, l1: vector<NFT>, l2: u64, l3: vector<u8>, l4: &mut TxContext) {
+public entry fun update_art20_image_uri_by_asset_id(l0: &CollectionCap, mut l1: vector<NFT>, l2: u64, l3: vector<u8>, l4: &mut TxContext) {
     let l10 = tx_context::sender(freeze(l4));
     let l6 = xf_ART20::get_collection_cap_id(l0);
     assert!(l0.is_mutable, C2);
     xf_ART20::check_deny_list_restrictions(l0, l10);
     assert!(l3.length() <= 256u64, C10);
     assert!(l3.length() > 0u64, C10);
-    let l12 = vector[];
+    let mut l12 = vector[];
     let l9 = l1.length();
-    let l8 = 0u64;
-    let l7 = false;
+    let mut l8 = 0u64;
+    let mut l7 = false;
     loop {
         if (l8 >= l9) {
             assert!(l7, C15);
             break
         };
-        let l11 = l1.pop_back();
+        let mut l11 = l1.pop_back();
         if ((&l11).collection_id == l6 && ((&l11).asset_id == l2 && !(l7))) {
             assert!(l10 == (&l11).creator, C1);
             *(&mut (&mut l11).logo_uri) = url::new_unsafe_from_bytes(l3);
@@ -1475,7 +1475,7 @@ public fun update_collection_supply(l0: &mut CollectionCap, l1: u64) {
     *(&mut l0.current_supply) = l1
 }
 
-public entry fun update_metadata_by_asset_id(l0: &CollectionCap, l1: vector<NFT>, l2: u64, l3: Option<String>, l4: Option<String>, l5: Option<vector<u8>>, l6: Option<vector<u8>>, l7: &mut TxContext) {
+public entry fun update_metadata_by_asset_id(l0: &CollectionCap, mut l1: vector<NFT>, l2: u64, mut l3: Option<String>, mut l4: Option<String>, mut l5: Option<vector<u8>>, mut l6: Option<vector<u8>>, l7: &mut TxContext) {
     let l18 = tx_context::sender(freeze(l7));
     let l10 = xf_ART20::get_collection_cap_id(l0);
     if (option::is_some(&l3)) {
@@ -1502,10 +1502,10 @@ public entry fun update_metadata_by_asset_id(l0: &CollectionCap, l1: vector<NFT>
         assert!(l14.length() <= 256u64, C10);
         assert!(l14.length() > 0u64, C10)
     };
-    let l19 = vector[];
-    let l13 = false;
+    let mut l19 = vector[];
+    let mut l13 = false;
     while (!(vector::is_empty(&l1)) && !(l13)) {
-        let l17 = l1.pop_back();
+        let mut l17 = l1.pop_back();
         if ((&l17).collection_id == l10 && (&l17).asset_id == l2) {
             assert!(l0.is_mutable, C2);
             assert!(l18 == (&l17).creator, C1);
@@ -1537,7 +1537,7 @@ public entry fun update_metadata_by_asset_id(l0: &CollectionCap, l1: vector<NFT>
     std::vector::destroy_empty(l19)
 }
 
-public entry fun update_metadata_by_object(l0: &mut NFT, l1: &CollectionCap, l2: Option<String>, l3: Option<String>, l4: Option<vector<u8>>, l5: Option<vector<u8>>, l6: &mut TxContext) {
+public entry fun update_metadata_by_object(l0: &mut NFT, l1: &CollectionCap, mut l2: Option<String>, mut l3: Option<String>, mut l4: Option<vector<u8>>, mut l5: Option<vector<u8>>, l6: &mut TxContext) {
     assert!(l0.collection_id == xf_ART20::get_collection_cap_id(l1), C5);
     assert!(l1.is_mutable, C2);
     assert!(tx_context::sender(freeze(l6)) == l0.creator, C1);

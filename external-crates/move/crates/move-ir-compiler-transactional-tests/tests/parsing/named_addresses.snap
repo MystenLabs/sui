@@ -4,7 +4,7 @@ source: crates/move-transactional-test-runner/src/framework.rs
 processed 3 tasks
 
 task 2, lines 16-36:
-//# print-bytecode 
+//# print-bytecode
 // Move bytecode v7
 module 1.M {
 use 0000000000000000000000000000000000000000000000000000000000000001::T;

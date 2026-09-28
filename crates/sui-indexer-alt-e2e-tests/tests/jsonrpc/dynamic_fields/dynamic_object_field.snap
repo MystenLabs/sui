@@ -6,6 +6,9 @@ processed 7 tasks
 init:
 A: object(0,0)
 
+// 1. Look for a dynamic field with a simple key
+// 2. Look for a dynamic field with a struct-based key
+
 task 1, lines 9-28:
 //# publish
 created: object(1,0)

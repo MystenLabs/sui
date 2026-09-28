@@ -90,7 +90,7 @@ Enoki implements the [Wallet Standard](/onchain-finance/asset-custody/wallets/wa
 
 ### Wallet Standard account fields
 
-When using Enoki with `@mystenlabs/dapp-kit`, the `useCurrentAccount` hook returns a Wallet Standard account populated by the Enoki wallet. The account exposes `address`, `chains`, `features`, `publicKey`, and `icon` (the standard fields defined by the Wallet Standard, not OAuth-specific identity fields).
+When using Enoki with `@mysten/dapp-kit-react`, the `useCurrentAccount` hook returns a Wallet Standard account populated by the Enoki wallet. The account exposes `address`, `chains`, `features`, `publicKey`, and `icon` (the standard fields defined by the Wallet Standard, not OAuth-specific identity fields).
 
 ```typescript
 import { useCurrentAccount } from '@mysten/dapp-kit-react';
@@ -180,7 +180,7 @@ If you compute the address seed yourself (outside the SDK) and pass it to `compu
 
 :::caution
 
-If you call `genAddressSeed` and `computeZkLoginAddressFromSeed` separately, pass the raw `iss` from the JWT to both functions. Do not strip or add a protocol prefix. The SDK normalizes the value internally. Mismatched `iss` values between the address seed and the address computation produce a different address, and transactions signed for that address fail with `InvalidSignature` ([Security Best Practices](https://docs.sui.io/develop/security/best-practices)).
+If you call `genAddressSeed` and `computeZkLoginAddressFromSeed` separately, pass the raw `iss` from the JWT to both functions. Do not strip or add a protocol prefix. The SDK normalizes the value internally. Mismatched `iss` values between the address seed and the address computation produce a different address, and transactions signed for that address fail with `InvalidSignature` ([Security Best Practices](/develop/security/best-practices)).
 
 :::
 

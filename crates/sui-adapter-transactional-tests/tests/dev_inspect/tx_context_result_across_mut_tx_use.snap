@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// Dev-inspect twin of programmable/tx_context_mut_result_across_mut_tx_use; see the
+// flag-off twin tx_context_result_across_mut_tx_use_invalid for what the flag changes.
+
 init:
 A: object(0,0)
 

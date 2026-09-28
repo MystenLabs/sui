@@ -24,7 +24,7 @@ impl TestCaseImpl for SharedCounterTest {
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
         info!("Testing shared object transactions.");
 
-        let sui_objs = ctx.get_sui_from_faucet(Some(1)).await;
+        let sui_objs = ctx.get_sui(Some(1)).await;
         assert!(!sui_objs.is_empty());
 
         let wallet_context: &WalletContext = ctx.get_wallet();
@@ -48,7 +48,7 @@ impl TestCaseImpl for SharedCounterTest {
 
         response
             .effects
-            .input_consensus_objects()
+            .accessed_consensus_objects()
             .iter()
             .find(|o| o.id_and_version().0 == counter_id)
             .expect("Expect obj {counter_id} in shared_objects");

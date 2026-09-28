@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 8 tasks
 
+// tests that shared objects can have dynamic fields added
+// dynamic fields can be added and removed in the same transaction
+
 init:
 A: object(0,0)
 

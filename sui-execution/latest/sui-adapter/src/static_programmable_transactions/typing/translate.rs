@@ -5,8 +5,9 @@ use super::{ast as T, env::Env};
 use crate::{
     execution_mode::ExecutionMode,
     gas_charger::GasPayment,
-    static_programmable_transactions::execution::context::EitherError,
     static_programmable_transactions::{
+        execution::context::EitherError,
+        linkage::resolved_linkage::ExecutableLinkage,
         loading::ast::{self as L, Type},
         spanned::sp,
         typing::ast::BytesConstraint,
@@ -57,6 +58,7 @@ struct Context {
         IndexMap<T::Location, T::WithdrawalCompatibilityConversion>,
     original_command_len: usize,
     commands: Vec<T::Command>,
+    unified_linkage: Option<ExecutableLinkage>,
 }
 
 impl Context {
@@ -64,6 +66,7 @@ impl Context {
         gas_payment: Option<GasPayment>,
         original_command_len: usize,
         linputs: L::Inputs,
+        unified_linkage: Option<ExecutableLinkage>,
     ) -> Result<Self, ExecutionError> {
         let mut context = Context {
             current_command: 0,
@@ -79,6 +82,7 @@ impl Context {
             withdrawal_compatibility_conversions: IndexMap::new(),
             receiving: IndexMap::new(),
             commands: vec![],
+            unified_linkage,
         };
         // clone inputs for debug assertions
         #[cfg(debug_assertions)]
@@ -113,14 +117,14 @@ impl Context {
                     let L::FundsWithdrawalArg {
                         from_compatibility_object: _,
                         ty,
-                        owner,
+                        source,
                         amount,
                     } = withdrawal;
                     debug_assert!(ty == input_ty);
                     let withdrawal = T::WithdrawalInput {
                         original_input_index: idx,
                         ty,
-                        owner,
+                        source,
                         amount,
                     };
                     context.withdrawals.insert(idx, withdrawal);
@@ -164,9 +168,10 @@ impl Context {
             withdrawals,
             pure,
             receiving,
-            commands,
             withdrawal_compatibility_conversions,
             original_command_len,
+            commands,
+            unified_linkage,
             ..
         } = self;
         let objects = objects.into_iter().map(|(_, o)| o).collect();
@@ -183,6 +188,7 @@ impl Context {
             withdrawal_compatibility_conversions,
             original_command_len,
             commands,
+            unified_linkage,
         }
     }
 
@@ -342,10 +348,11 @@ pub fn transaction<Mode: ExecutionMode>(
         mut inputs,
         original_command_len,
         mut commands,
+        unified_linkage,
     } = lt;
     let withdrawal_compatability_inputs =
         determine_withdrawal_compatibility_inputs(env, &mut inputs)?;
-    let mut context = Context::new(gas_payment, original_command_len, inputs)?;
+    let mut context = Context::new(gas_payment, original_command_len, inputs, unified_linkage)?;
     withdrawal_compatibility_conversion(
         env,
         &mut context,
@@ -369,7 +376,7 @@ pub fn transaction<Mode: ExecutionMode>(
     }
     let mut ast = context.finish();
     // mark the last usage of references as Move instead of Copy
-    scope_references::transaction(&mut ast);
+    scope_references::transaction(env.protocol_config, &mut ast);
     // mark unused results to be dropped
     unused_results::transaction(&mut ast)?;
     // track shared object IDs
@@ -936,7 +943,7 @@ fn determine_withdrawal_compatibility_inputs<Mode: ExecutionMode>(
             if let L::InputArg::FundsWithdrawal(withdrawal) = input_arg
                 && withdrawal.from_compatibility_object
             {
-                Some((i, withdrawal.owner))
+                Some((i, withdrawal.source.source_account()))
             } else {
                 None
             }
@@ -1037,6 +1044,7 @@ fn convert_withdrawal_to_coin<Mode: ExecutionMode>(
             COIN_MODULE_NAME,
             REDEEM_FUNDS_FUNC_NAME,
             vec![inner_ty.clone()],
+            context.unified_linkage.as_ref(),
         )?,
         arguments: vec![withdrawal_arg, ctx_arg],
     }));
@@ -1134,44 +1142,92 @@ mod scope_references {
         static_programmable_transactions::typing::ast::{self as T, Type},
     };
     use std::collections::BTreeSet;
+    use sui_protocol_config::ProtocolConfig;
+
+    struct Context<'pc> {
+        protocol_config: &'pc ProtocolConfig,
+        used: BTreeSet<(u16, u16)>,
+    }
 
     /// To mimic proper scoping of references, the last usage of a reference is made a Move instead
     /// of a Copy.
-    pub fn transaction(ast: &mut T::Transaction) {
-        let mut used: BTreeSet<(u16, u16)> = BTreeSet::new();
+    pub fn transaction(protocol_config: &ProtocolConfig, ast: &mut T::Transaction) {
+        let mut context = Context {
+            protocol_config,
+            used: BTreeSet::new(),
+        };
         for c in ast.commands.iter_mut().rev() {
-            command(&mut used, c);
+            command(&mut context, c);
         }
     }
 
-    fn command(used: &mut BTreeSet<(u16, u16)>, sp!(_, c): &mut T::Command) {
+    fn command(context: &mut Context, sp!(_, c): &mut T::Command) {
         match &mut c.command {
-            T::Command__::MoveCall(mc) => arguments(used, &mut mc.arguments),
+            T::Command__::MoveCall(mc) => arguments(context, &mut mc.arguments),
             T::Command__::TransferObjects(objects, recipient) => {
-                argument(used, recipient);
-                arguments(used, objects);
+                argument(context, recipient);
+                arguments(context, objects);
             }
             T::Command__::SplitCoins(_, coin, amounts) => {
-                arguments(used, amounts);
-                argument(used, coin);
+                arguments(context, amounts);
+                argument(context, coin);
             }
             T::Command__::MergeCoins(_, target, coins) => {
-                arguments(used, coins);
-                argument(used, target);
+                arguments(context, coins);
+                argument(context, target);
             }
-            T::Command__::MakeMoveVec(_, xs) => arguments(used, xs),
+            T::Command__::MakeMoveVec(_, xs) => arguments(context, xs),
             T::Command__::Publish(_, _, _) => (),
-            T::Command__::Upgrade(_, _, _, x, _) => argument(used, x),
+            T::Command__::Upgrade(_, _, _, x, _) => argument(context, x),
         }
     }
 
-    fn arguments(used: &mut BTreeSet<(u16, u16)>, args: &mut [T::Argument]) {
+    fn arguments(context: &mut Context, args: &mut [T::Argument]) {
         for arg in args.iter_mut().rev() {
-            argument(used, arg)
+            argument(context, arg)
         }
     }
 
-    fn argument(used: &mut BTreeSet<(u16, u16)>, sp!(_, (arg_, ty)): &mut T::Argument) {
+    fn argument(context: &mut Context, arg: &mut T::Argument) {
+        if context.protocol_config.fix_ptb_generated_reads() {
+            argument_v2(context, arg)
+        } else {
+            argument_v1(context, arg)
+        }
+    }
+
+    fn argument_v2(context: &mut Context, sp!(_, (arg_, ty)): &mut T::Argument) {
+        use T::Argument__ as TArg;
+        let usage = match arg_ {
+            // `Read` has the referenced value's type, while its usage location has a reference type
+            TArg::Read(u) => u,
+            TArg::Use(_) | TArg::Freeze(_) if !ty.is_reference() => return,
+            TArg::Use(u) | TArg::Freeze(u) => u,
+            // Cannot borrow a reference
+            TArg::Borrow(_, _) => return,
+        };
+        match usage {
+            T::Usage::Move(T::Location::Result(i, j)) => {
+                debug_assert!(false, "No reference should be moved at this point");
+                context.used.insert((*i, *j));
+            }
+            T::Usage::Copy {
+                location: T::Location::Result(i, j),
+                ..
+            } => {
+                // we are at the last usage of a reference result if it was not yet added to the set
+                let last_usage = context.used.insert((*i, *j));
+                if last_usage {
+                    // if it was the last usage, we need to change the Copy to a Move
+                    let loc = T::Location::Result(*i, *j);
+                    *usage = T::Usage::Move(loc);
+                }
+            }
+            _ => (),
+        }
+    }
+
+    fn argument_v1(context: &mut Context, sp!(_, (arg_, ty)): &mut T::Argument) {
         let usage = match arg_ {
             T::Argument__::Use(u) | T::Argument__::Read(u) | T::Argument__::Freeze(u) => u,
             T::Argument__::Borrow(_, _) => return,
@@ -1179,7 +1235,7 @@ mod scope_references {
         match (&usage, ty) {
             (T::Usage::Move(T::Location::Result(i, j)), Type::Reference(_, _)) => {
                 debug_assert!(false, "No reference should be moved at this point");
-                used.insert((*i, *j));
+                context.used.insert((*i, *j));
             }
             (
                 T::Usage::Copy {
@@ -1189,7 +1245,7 @@ mod scope_references {
                 Type::Reference(_, _),
             ) => {
                 // we are at the last usage of a reference result if it was not yet added to the set
-                let last_usage = used.insert((*i, *j));
+                let last_usage = context.used.insert((*i, *j));
                 if last_usage {
                     // if it was the last usage, we need to change the Copy to a Move
                     let loc = T::Location::Result(*i, *j);
@@ -1305,6 +1361,7 @@ mod post_execution_checks {
                 withdrawal_compatibility_conversions: _,
                 original_command_len: _,
                 commands: _,
+                unified_linkage: _,
             } = ast;
             // Find inputs with post execution checks
             let inputs = objects

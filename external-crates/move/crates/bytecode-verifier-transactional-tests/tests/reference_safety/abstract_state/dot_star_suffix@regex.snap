@@ -3,7 +3,7 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 4 tasks
 
-task 1, lines 36-38:
+task 1, line 36:
 //# view-abstract-state 0x71::zzds_suffix::shape
 {
   "b0": {
@@ -99,7 +99,8 @@ task 1, lines 36-38:
   }
 }
 
-task 2, lines 39-69:
+task 2, lines 38-67:
+// write through the deep ref while the dot-star result is live
 //# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000072::zzds_suffix_write'. Got VMError: {
     major_status: WRITEREF_EXISTS_BORROW_ERROR,

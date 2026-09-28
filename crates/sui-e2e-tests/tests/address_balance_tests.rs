@@ -11,7 +11,6 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
-use sui_core::accumulators::balances::get_all_balances_for_owner;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
@@ -29,11 +28,10 @@ use sui_types::{
     error::UserInputResult,
     gas::GasCostSummary,
     gas_coin::GAS,
-    object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     supported_protocol_versions::SupportedProtocolVersions,
     transaction::{
-        Argument, CallArg, Command, FundsWithdrawalArg, GasData, ObjectArg, SharedObjectMutability,
+        Argument, Command, FundsWithdrawalArg, GasData, ObjectArg, SharedObjectMutability,
         Transaction, TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
         TransactionKind, VerifiedTransaction, WithdrawalTypeArg,
     },
@@ -335,8 +333,8 @@ async fn test_deposits() {
             .get_transaction_cache_reader()
             .get_executed_effects(&settlement_digest)
             .expect("settlement digest should exist");
-        let input_consensus_objects = settlement_effects.input_consensus_objects();
-        input_consensus_objects.iter().find(|input_consensus_object| {
+        let accessed_consensus_objects = settlement_effects.accessed_consensus_objects();
+        accessed_consensus_objects.iter().find(|input_consensus_object| {
             matches!(input_consensus_object, InputConsensusObject::ReadOnly(obj_ref) if obj_ref.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
         }).expect("settlement should have accumulator root object as read-only input consensus object");
     });
@@ -2162,23 +2160,73 @@ async fn test_multiple_deposits_merged_in_effects() {
     test_env.trigger_reconfiguration().await;
 }
 
-/// A single transaction produces two Merge accumulator events to the same `(sender, Balance<SUI>)`
-/// key whose amounts sum past `u64::MAX`:
-///
-///   1. A Move-native Merge of exactly `u64::MAX` (an object-sourced withdrawal redeemed and
-///      deposited back to the sender). This is accepted by the object-runtime per-key cap, which
-///      rejects only totals strictly greater than `u64::MAX`.
-///   2. An uncapped Merge of `coin.value >= 1` emitted by the gas charger during gas smashing,
-///      because the gas payment mixes an address-balance reservation (the smash target) with a gas
-///      coin, so `deposit = total_smashed - reservation = coin.value` is merged into the same key.
-///
-/// The combined gross Merge total `u64::MAX + coin.value` is not representable in `u64`. This test
-/// asserts that such a transaction is aborted as a recoverable `CoinBalanceOverflow` before gas is
-/// charged, rather than reaching the per-key merge fold in `AccumulatorWriteV1::merge` or the
-/// SUI-conservation sum.
+fn assert_object_funds_check_rejected_poison_writes(
+    effects: &impl TransactionEffectsAPI,
+    poison_amounts: &[u64],
+) {
+    let status = effects.status();
+    assert!(
+        matches!(
+            status,
+            sui_types::execution_status::ExecutionStatus::Failure(failure)
+                if sui_types::funds_accumulator::is_object_funds_insufficient_abort(&failure.error)
+        ),
+        "expected in-execution object-funds insufficiency abort, got: {status:?}"
+    );
+
+    let accumulator_events = effects.accumulator_events();
+    assert!(
+        accumulator_events.iter().all(|event| {
+            !matches!(
+                &event.write.value,
+                sui_types::effects::AccumulatorValue::Integer(value)
+                    if poison_amounts.contains(value)
+            )
+        }),
+        "in-execution object-funds check should abort before poison accumulator writes are emitted: {accumulator_events:?}"
+    );
+}
+
+fn assert_coin_balance_overflow(effects: &impl TransactionEffectsAPI) {
+    let status = effects.status();
+    assert!(
+        matches!(
+            status,
+            sui_types::execution_status::ExecutionStatus::Failure(failure)
+                if failure.error == sui_types::execution_status::ExecutionFailureStatus::CoinBalanceOverflow
+        ),
+        "expected CoinBalanceOverflow, got: {status:?}"
+    );
+}
+
+// Mainnet and testnet still depend on the overflow guards in the flag-off path.
+fn object_funds_test_env(check_in_execution: bool) -> TestEnvBuilder {
+    TestEnvBuilder::new().with_proto_override_cb(Box::new(move |_, mut cfg| {
+        cfg.set_enable_object_funds_withdraw_for_testing(true);
+        cfg.set_check_object_funds_withdraw_in_execution_for_testing(check_in_execution);
+        cfg
+    }))
+}
+
+/// Regression shape for an old accumulator overflow bug: an unbacked object-sourced `u64::MAX`
+/// withdrawal would be redeemed and then combined with an address-balance gas-smash Merge to the
+/// same `(sender, Balance<SUI>)` key. With in-execution object-funds checking, the native withdraw
+/// aborts before the poison accumulator write is emitted.
 #[sim_test]
-async fn test_accumulator_merge_overflow_poison_pill() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+async fn test_accumulator_merge_overflow_poison_pill_blocked_by_object_funds_check() {
+    accumulator_merge_overflow_poison_pill(true).await;
+}
+
+#[sim_test]
+async fn test_accumulator_merge_overflow_poison_pill_legacy() {
+    accumulator_merge_overflow_poison_pill(false).await;
+}
+
+async fn accumulator_merge_overflow_poison_pill(check_in_execution: bool) {
+    let mut test_env = object_funds_test_env(check_in_execution)
+        .with_num_validators(1)
+        .build()
+        .await;
 
     // Publish the test package and fund the sender's SUI address balance so that the gas-payment
     // reservation (the smash target) is backed at signing time.
@@ -2229,40 +2277,39 @@ async fn test_accumulator_merge_overflow_poison_pill() {
         },
     });
 
-    // The transaction is aborted cleanly with CoinBalanceOverflow.
     let (_, effects) = test_env
         .exec_tx_directly(poison_tx)
         .await
         .expect("execution must not panic the node");
-
-    let status = effects.status();
-    assert!(
-        matches!(
-            status,
-            sui_types::execution_status::ExecutionStatus::Failure(failure)
-                if failure.error == sui_types::execution_status::ExecutionFailureStatus::CoinBalanceOverflow
-        ),
-        "expected CoinBalanceOverflow abort, got: {status:?}"
-    );
+    if check_in_execution {
+        assert_object_funds_check_rejected_poison_writes(&effects, &[u64::MAX]);
+    } else {
+        assert_coin_balance_overflow(&effects);
+    }
 
     // The sender's balance is untouched (only gas was charged) and a subsequent reconfiguration
     // succeeds.
     test_env.trigger_reconfiguration().await;
 }
 
-/// Per-key overflow for a *custom* coin type.
-///
-/// Gas is always paid in SUI, so the uncapped gas-smash deposit Merge that can defeat the
-/// object-runtime cap for `Balance<SUI>` has no analogue for an arbitrary `Balance<T>`. The only
-/// way to merge to a `Balance<COIN_A>` key is a Move-native deposit, every one of which is counted
-/// by the object-runtime per-key cap. So an attempt to merge past `u64::MAX` is rejected during
-/// execution (an arithmetic error from the native) and the transaction aborts cleanly.
-/// (Conservation checking does not apply to non-SUI types.) The
-/// `check_accumulator_amounts_representable` guard is also type-agnostic, so it backstops this even
-/// if the cap were ever bypassed.
+/// Regression shape for custom-coin accumulator overflow: two unbacked object-sourced `u64::MAX`
+/// withdrawals used to reach the per-key merge cap. The first withdrawal is now rejected by the
+/// in-execution object-funds check.
 #[sim_test]
-async fn test_accumulator_merge_overflow_custom_coin_capped() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+async fn test_accumulator_merge_overflow_custom_coin_blocked_by_object_funds_check() {
+    accumulator_merge_overflow_custom_coin(true).await;
+}
+
+#[sim_test]
+async fn test_accumulator_merge_overflow_custom_coin_legacy() {
+    accumulator_merge_overflow_custom_coin(false).await;
+}
+
+async fn accumulator_merge_overflow_custom_coin(check_in_execution: bool) {
+    let mut test_env = object_funds_test_env(check_in_execution)
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let pkg = test_env.setup_test_package(move_test_code_path()).await;
     let (_publisher, coin_a_type) = test_env.setup_custom_coin().await;
@@ -2288,25 +2335,26 @@ async fn test_accumulator_merge_overflow_custom_coin_capped() {
         test_env.rgp,
     );
 
-    // The second merge pushes the per-key total past u64::MAX and is rejected by the object-runtime
-    // cap; the tx aborts.
     let (_, effects) = test_env
         .exec_tx_directly(tx)
         .await
         .expect("execution must not panic the node");
-    let status = effects.status();
-    assert!(
-        matches!(
-            status,
-            sui_types::execution_status::ExecutionStatus::Failure(failure)
-                if matches!(
-                    failure.error,
-                    sui_types::execution_status::ExecutionFailureStatus::MovePrimitiveRuntimeError(_)
-                )
-        ),
-        "expected the over-cap custom-coin merge to abort with an arithmetic (merge-cap) error, \
-         got: {status:?}"
-    );
+    if check_in_execution {
+        assert_object_funds_check_rejected_poison_writes(&effects, &[u64::MAX]);
+    } else {
+        let status = effects.status();
+        assert!(
+            matches!(
+                status,
+                sui_types::execution_status::ExecutionStatus::Failure(failure)
+                    if matches!(
+                        failure.error,
+                        sui_types::execution_status::ExecutionFailureStatus::MovePrimitiveRuntimeError(_)
+                    )
+            ),
+            "expected the custom-coin merge cap to reject the overflow, got: {status:?}"
+        );
+    }
 
     // Nothing was credited to the sender's COIN_A balance.
     assert_eq!(
@@ -2317,22 +2365,28 @@ async fn test_accumulator_merge_overflow_custom_coin_capped() {
     test_env.trigger_reconfiguration().await;
 }
 
-/// A single object-sourced `u64::MAX` SUI withdrawal redeemed and deposited to the sender. The
-/// per-key representability guard bounds SUI accumulator totals to the total supply, so this
-/// `u64::MAX` (both the input-side `Split` and the deposit `Merge`) exceeds the supply and is
-/// rejected as `CoinBalanceOverflow` *before* gas is charged — well before the SUI-conservation sum
-/// or the withdrawal-backing check run. (The conservation sum still accumulates in `u128` as
-/// defense-in-depth for multi-key totals that individually stay within supply but jointly exceed
-/// `u64::MAX`.)
+/// Regression shape for a single unbacked object-sourced `u64::MAX` SUI withdrawal. The
+/// in-execution object-funds check rejects it at withdrawal time, before accumulator
+/// representability or SUI-conservation checks need to reason about the oversized event.
 #[sim_test]
-async fn test_accumulator_conservation_overflow_single_withdrawal() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+async fn test_accumulator_conservation_overflow_single_withdrawal_blocked_by_object_funds_check() {
+    accumulator_conservation_overflow_single_withdrawal(true).await;
+}
+
+#[sim_test]
+async fn test_accumulator_conservation_overflow_single_withdrawal_legacy() {
+    accumulator_conservation_overflow_single_withdrawal(false).await;
+}
+
+async fn accumulator_conservation_overflow_single_withdrawal(check_in_execution: bool) {
+    let mut test_env = object_funds_test_env(check_in_execution)
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let pkg = test_env.setup_test_package(move_test_code_path()).await;
 
-    // A single u64::MAX SUI withdrawal deposited to the sender, paid with a normal gas coin (no
-    // address-balance reservation). u64::MAX exceeds the total SUI supply, so the per-key guard
-    // rejects it before gas charging / conservation.
+    // A single u64::MAX SUI withdrawal deposited to the sender, paid with a normal gas coin.
     let (sender, gas) = test_env.get_sender_and_gas(0);
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.programmable_move_call(
@@ -2350,39 +2404,37 @@ async fn test_accumulator_conservation_overflow_single_withdrawal() {
         test_env.rgp,
     );
 
-    // The u64::MAX deposit exceeds the total SUI supply, so the per-key representability guard
-    // aborts the transaction with CoinBalanceOverflow before gas is charged.
     let (_, effects) = test_env
         .exec_tx_directly(tx)
         .await
         .expect("execution must not panic the node");
-    let status = effects.status();
-    assert!(
-        matches!(
-            status,
-            sui_types::execution_status::ExecutionStatus::Failure(failure)
-                if failure.error
-                    == sui_types::execution_status::ExecutionFailureStatus::CoinBalanceOverflow
-        ),
-        "expected CoinBalanceOverflow, got: {status:?}"
-    );
+    if check_in_execution {
+        assert_object_funds_check_rejected_poison_writes(&effects, &[u64::MAX]);
+    } else {
+        assert_coin_balance_overflow(&effects);
+    }
     test_env.trigger_reconfiguration().await;
 }
 
-/// A gas-refund Merge to a key already at `u64::MAX`. Bounding the per-key guard to `u64::MAX` alone
-/// would let a Move-native Merge of exactly `u64::MAX` to `(sender, Balance<SUI>)` pass; `charge_gas`
-/// then emits a refund Merge (`net_gas_usage() < 0`, gas paid from the sender's SUI address balance)
-/// to that same key *after* the guard, and the fold in `AccumulatorWriteV1::merge` would compute
-/// `u64::MAX + refund`, which is not representable.
-///
-/// This test sets up that shape: a single address-balance gas reservation (empty `payment` +
-/// `ValidDuring`, so no smash-time deposit Merge) plus a net refund produced by deleting a large
-/// pre-existing owned object. Because the supply bound makes the `u64::MAX` Merge exceed
-/// `TOTAL_SUPPLY_MIST`, it is rejected as `CoinBalanceOverflow` before gas is charged, so the refund
-/// is never emitted.
+/// Regression shape for a gas-refund Merge to a key already at `u64::MAX`. The transaction deletes a
+/// large object to create a net gas refund, then attempts an unbacked object-sourced `u64::MAX`
+/// withdrawal to the sender's SUI address balance. The in-execution object-funds check aborts before
+/// that withdrawal can put the accumulator fold or gas refund path at risk.
 #[sim_test]
-async fn test_accumulator_merge_overflow_gas_refund_poison_pill() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+async fn test_accumulator_merge_overflow_gas_refund_blocked_by_object_funds_check() {
+    accumulator_merge_overflow_gas_refund(true).await;
+}
+
+#[sim_test]
+async fn test_accumulator_merge_overflow_gas_refund_legacy() {
+    accumulator_merge_overflow_gas_refund(false).await;
+}
+
+async fn accumulator_merge_overflow_gas_refund(check_in_execution: bool) {
+    let mut test_env = object_funds_test_env(check_in_execution)
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let pkg = test_env.setup_test_package(move_test_code_path()).await;
 
@@ -2449,10 +2501,7 @@ async fn test_accumulator_merge_overflow_gas_refund_poison_pill() {
     let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
 
     // Empty gas payment + ValidDuring expiration => gas is paid from the sender's SUI address
-    // balance (a single reservation, the smash target). No smash-time deposit Merge is emitted, so
-    // the only over-limit event would be the final (refund) Merge emitted inside charge_gas, after
-    // the guard — which is why the guard must reject the u64::MAX deposit (above the supply) up
-    // front, before that refund is ever computed.
+    // balance. The old overflow shape relied on a refund Merge to the same accumulator key.
     let poison_tx = create_address_balance_transaction(
         tx_kind,
         sender,
@@ -2461,43 +2510,37 @@ async fn test_accumulator_merge_overflow_gas_refund_poison_pill() {
         test_env.chain_id,
     );
 
-    // The over-supply deposit is rejected as CoinBalanceOverflow before gas is charged.
     let (_, effects) = test_env
         .exec_tx_directly(poison_tx)
         .await
         .expect("execution must not panic the node");
-    let status = effects.status();
-    assert!(
-        matches!(
-            status,
-            sui_types::execution_status::ExecutionStatus::Failure(failure)
-                if failure.error
-                    == sui_types::execution_status::ExecutionFailureStatus::CoinBalanceOverflow
-        ),
-        "expected CoinBalanceOverflow, got: {status:?}"
-    );
+    if check_in_execution {
+        assert_object_funds_check_rejected_poison_writes(&effects, &[u64::MAX]);
+    } else {
+        assert_coin_balance_overflow(&effects);
+    }
 
     test_env.trigger_reconfiguration().await;
 }
 
-/// Gas-coin overflow via `Argument::GasCoin`. The per-key supply guard bounds SUI *accumulator*
-/// amounts, but merging SUI into the PTB gas coin via a `MergeCoins` command is an object mutation,
-/// not an accumulator event, so it escapes that guard. `MergeCoins` only rejects sums strictly
-/// greater than `u64::MAX`, so it permits driving the gas coin's raw value up to exactly `u64::MAX`.
-/// If the transaction then nets a gas *refund* (`net_gas_usage() < 0`), `deduct_gas` would compute
-/// `u64::MAX + refund`, which is not representable.
-///
-/// The gas coin is driven to `u64::MAX` with two object-sourced SUI withdrawals — each
-/// `< TOTAL_SUPPLY_MIST`, so each passes the per-key supply guard — redeemed to `Coin<SUI>` and
-/// merged into the gas coin; the refund is produced by deleting a large pre-existing object.
-/// Reaching this requires ~`u64::MAX` MIST of SUI in one coin, more than the total supply.
-///
-/// The cross-key total-SUI-withdraw bound covers this: the two withdrawals sum to ~`u64::MAX`, which
-/// exceeds the total supply, so the transaction is rejected as `CoinBalanceOverflow` before gas is
-/// charged. (The per-key supply guard alone does not catch this — each withdrawal is under supply.)
+/// Regression shape for gas-coin overflow via `Argument::GasCoin`: two object-sourced SUI
+/// withdrawals were redeemed to `Coin<SUI>` and merged into the gas coin before a net gas refund.
+/// The first unbacked object withdrawal now aborts in execution, before those coins can exist.
 #[sim_test]
-async fn test_gas_coin_overflow_via_merge_into_gas_coin() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
+async fn test_gas_coin_overflow_via_merge_into_gas_coin_blocked_by_object_funds_check() {
+    gas_coin_overflow_via_merge_into_gas_coin(true).await;
+}
+
+#[sim_test]
+async fn test_gas_coin_overflow_via_merge_into_gas_coin_legacy() {
+    gas_coin_overflow_via_merge_into_gas_coin(false).await;
+}
+
+async fn gas_coin_overflow_via_merge_into_gas_coin(check_in_execution: bool) {
+    let mut test_env = object_funds_test_env(check_in_execution)
+        .with_num_validators(1)
+        .build()
+        .await;
 
     let pkg = test_env.setup_test_package(move_test_code_path()).await;
 
@@ -2530,8 +2573,8 @@ async fn test_gas_coin_overflow_via_merge_into_gas_coin() {
     );
     let large_obj = create_effects.created()[0].0;
 
-    // Drive the gas coin to exactly u64::MAX: gas_coin_value + amount1 + amount2 == u64::MAX, with
-    // each withdrawal kept under total supply so the per-key supply guard passes.
+    // This is the old overflow shape: gas_coin_value + amount1 + amount2 == u64::MAX, with each
+    // withdrawal kept under total supply so the old per-key supply guard would not catch it alone.
     let (sender, gas) = test_env.get_sender_and_gas(0);
     let gas_value = test_env.get_coin_balance(gas.0).await;
     let needed = u64::MAX - gas_value;
@@ -2582,21 +2625,15 @@ async fn test_gas_coin_overflow_via_merge_into_gas_coin() {
         test_env.rgp,
     );
 
-    // The over-supply aggregate withdraw is rejected as CoinBalanceOverflow before gas is charged.
     let (_, effects) = test_env
         .exec_tx_directly(poison_tx)
         .await
         .expect("execution must not panic the node");
-    let status = effects.status();
-    assert!(
-        matches!(
-            status,
-            sui_types::execution_status::ExecutionStatus::Failure(failure)
-                if failure.error
-                    == sui_types::execution_status::ExecutionFailureStatus::CoinBalanceOverflow
-        ),
-        "expected CoinBalanceOverflow, got: {status:?}"
-    );
+    if check_in_execution {
+        assert_object_funds_check_rejected_poison_writes(&effects, &[amount1, amount2]);
+    } else {
+        assert_coin_balance_overflow(&effects);
+    }
 
     test_env.trigger_reconfiguration().await;
 }
@@ -2974,129 +3011,6 @@ async fn test_sponsored_address_balance_storage_oog() {
     );
 
     test_env.cluster.trigger_reconfiguration().await;
-}
-
-#[sim_test]
-async fn test_get_all_balances() {
-    let mut test_env = TestEnvBuilder::new().with_num_validators(1).build().await;
-
-    let sender = test_env.get_sender(0);
-
-    publish_and_mint_trusted_coin(&mut test_env, sender).await;
-
-    let (_, gas) = test_env.get_sender_and_gas(0);
-    // send 1000 gas from the gas coins to ourselves
-    let tx = test_env
-        .tx_builder(sender)
-        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1000, sender)])
-        .build();
-
-    test_env.exec_tx_directly(tx).await.unwrap();
-
-    let recipient = SuiAddress::random_for_testing_only();
-    // send 1000 gas from the gas coins to the other recipient
-    let (_, gas) = test_env.get_sender_and_gas(0);
-    let tx = test_env
-        .tx_builder(sender)
-        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1001, recipient)])
-        .build();
-
-    test_env.exec_tx_directly(tx).await.unwrap();
-
-    test_env.cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let indexes = state.indexes.clone().unwrap();
-        let runtime_object_resolver = state.get_runtime_object_resolver().as_ref();
-
-        let balances =
-            get_all_balances_for_owner(sender, runtime_object_resolver, &indexes).unwrap();
-
-        assert_eq!(balances.len(), 2);
-        assert!(
-            balances
-                .iter()
-                .any(|(t, _)| t.to_canonical_string(true).contains("::sui::SUI"))
-        );
-        assert!(balances.iter().any(|(t, _)| {
-            t.to_canonical_string(true)
-                .contains("::trusted_coin::TRUSTED_COIN")
-        }));
-    });
-}
-
-// publishes trusted_coin, mints a coin with balance 1000000, transfers some to the sender's
-// address balance, and returns the updated gas object ref
-async fn publish_and_mint_trusted_coin(test_env: &mut TestEnv, sender: SuiAddress) {
-    let test_tx_builder = test_env.tx_builder(sender);
-
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend(["tests", "rpc", "data", "trusted_coin"]);
-    let coin_publish = test_tx_builder.publish_async(path).await.build();
-
-    let (_, effects) = test_env.exec_tx_directly(coin_publish).await.unwrap();
-
-    // Find the treasury cap object
-    let treasury_cap = {
-        let mut treasury_cap = None;
-        for (obj_ref, owner) in effects.created() {
-            if owner.is_address_owned() {
-                let object = test_env
-                    .cluster
-                    .fullnode_handle
-                    .sui_node
-                    .with_async(|node| async move { node.state().get_object(&obj_ref.0).unwrap() })
-                    .await;
-                if object.type_().unwrap().name().as_str() == "TreasuryCap" {
-                    treasury_cap = Some(obj_ref);
-                    break;
-                }
-            }
-        }
-        treasury_cap.expect("Treasury cap not found")
-    };
-
-    // extract the newly published package id.
-    let package_id = effects.published_packages().into_iter().next().unwrap();
-
-    // call my_coin::mint to mint a coin with balance 1000000
-    let test_tx_builder = test_env.tx_builder(sender);
-    let mint_tx = test_tx_builder
-        .move_call(
-            package_id,
-            "trusted_coin",
-            "mint",
-            vec![
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury_cap)),
-                CallArg::Pure(bcs::to_bytes(&1000000u64).unwrap()),
-            ],
-        )
-        .build();
-    let (_, mint_effects) = test_env.exec_tx_directly(mint_tx).await.unwrap();
-
-    // the trusted coin is the only address-owned object created.
-    let trusted_coin_ref = mint_effects
-        .created()
-        .iter()
-        .find(|(_, owner)| owner.is_address_owned())
-        .unwrap()
-        .0;
-
-    let send_tx = test_env
-        .tx_builder(sender)
-        .transfer_funds_to_address_balance(
-            FundSource::Coin(trusted_coin_ref),
-            vec![(1000, sender)],
-            format!("{}::trusted_coin::TRUSTED_COIN", package_id)
-                .parse()
-                .unwrap(),
-        )
-        .build();
-    let (_, send_effects) = test_env.exec_tx_directly(send_tx).await.unwrap();
-    assert!(
-        send_effects.status().is_ok(),
-        "Transaction should succeed, got: {:?}",
-        send_effects.status()
-    );
 }
 
 #[sim_test]
@@ -4075,181 +3989,6 @@ async fn test_two_large_reservations_overflow() {
 /// Test that JSON-RPC sui_executeTransactionBlock returns correct balance changes
 /// when using address balance withdrawals (FundsWithdrawal).
 ///
-/// This test reproduces a bug where sui_executeTransactionBlock returns balanceChanges: []
-/// despite the transaction producing balance changes that are visible when querying
-/// the same digest via sui_getTransactionBlock.
-#[sim_test]
-async fn test_json_rpc_balance_changes_with_address_balance_withdrawal() {
-    use sui_json_rpc_api::{ReadApiClient, WriteApiClient};
-    use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions};
-    use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
-
-    let mut test_env = TestEnvBuilder::new().build().await;
-
-    let (sender, gas_coin) = test_env.get_sender_and_gas(0);
-    let receiver = SuiAddress::random_for_testing_only();
-
-    // Fund sender's address balance with enough for gas + withdrawal
-    let deposit_amount = 100_000_000u64;
-    let deposit_tx = test_env
-        .tx_builder(sender)
-        .transfer_sui_to_address_balance(FundSource::coin(gas_coin), vec![(deposit_amount, sender)])
-        .build();
-    test_env.exec_tx_directly(deposit_tx).await.unwrap();
-    test_env.verify_accumulator_exists(sender, deposit_amount);
-
-    // Create a transaction that withdraws from address balance and transfers to receiver
-    let withdraw_amount = 1_000_000u64;
-    let tx = create_redeem_and_transfer_transaction(
-        sender,
-        receiver,
-        withdraw_amount,
-        test_env.rgp,
-        test_env.chain_id,
-        0,
-    );
-
-    // Sign the transaction
-    let signed_tx = test_env.cluster.sign_transaction(&tx).await;
-    let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
-    let tx_digest = *signed_tx.digest();
-
-    // Execute via JSON-RPC with show_balance_changes and show_effects
-    #[allow(deprecated)]
-    let rpc_client = test_env.cluster.rpc_client();
-    let execute_response = rpc_client
-        .execute_transaction_block(
-            tx_bytes,
-            signatures,
-            Some(
-                SuiTransactionBlockResponseOptions::new()
-                    .with_balance_changes()
-                    .with_effects(),
-            ),
-            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-        )
-        .await
-        .expect("Transaction execution should succeed");
-
-    // Now get the same transaction by digest
-    let get_response = rpc_client
-        .get_transaction_block(
-            tx_digest,
-            Some(
-                SuiTransactionBlockResponseOptions::new()
-                    .with_balance_changes()
-                    .with_effects(),
-            ),
-        )
-        .await
-        .expect("Get transaction should succeed");
-
-    // Get gas used from effects to verify exact amounts
-    let effects = execute_response
-        .effects
-        .as_ref()
-        .expect("effects should be present");
-    let gas_used = effects.gas_cost_summary();
-    let net_gas_cost = gas_used.computation_cost + gas_used.storage_cost - gas_used.storage_rebate;
-
-    let execute_balance_changes = execute_response
-        .balance_changes
-        .as_ref()
-        .expect("execute_transaction_block should return balance_changes");
-
-    let get_balance_changes = get_response
-        .balance_changes
-        .as_ref()
-        .expect("get_transaction_block should return balance_changes");
-
-    // Verify transaction succeeded
-    assert!(
-        effects.status().is_ok(),
-        "Transaction should succeed, got: {:?}",
-        effects.status()
-    );
-
-    // There should be exactly 2 balance changes: sender (negative) and receiver (positive)
-    assert_eq!(
-        execute_balance_changes.len(),
-        2,
-        "Expected 2 balance changes (sender and receiver), got: {:?}",
-        execute_balance_changes
-    );
-
-    // Find sender's and receiver's balance changes from execute_transaction_block
-    let sender_change = execute_balance_changes
-        .iter()
-        .find(|bc| bc.owner == Owner::AddressOwner(sender))
-        .expect("Should have balance change for sender");
-    let receiver_change = execute_balance_changes
-        .iter()
-        .find(|bc| bc.owner == Owner::AddressOwner(receiver))
-        .expect("Should have balance change for receiver");
-
-    // Verify coin type is SUI for both
-    assert_eq!(
-        sender_change.coin_type,
-        GAS::type_tag(),
-        "Sender balance change should be SUI"
-    );
-    assert_eq!(
-        receiver_change.coin_type,
-        GAS::type_tag(),
-        "Receiver balance change should be SUI"
-    );
-
-    // Verify receiver gets exactly the withdraw amount
-    assert_eq!(
-        receiver_change.amount, withdraw_amount as i128,
-        "Receiver should receive exactly the withdraw amount"
-    );
-
-    // Verify sender's exact balance change: -(withdraw_amount + net_gas_cost)
-    let expected_sender_change = -((withdraw_amount as i128) + (net_gas_cost as i128));
-    assert_eq!(
-        sender_change.amount, expected_sender_change,
-        "Sender should spend exactly withdraw_amount ({}) + net_gas_cost ({})",
-        withdraw_amount, net_gas_cost
-    );
-
-    // Verify the total balance change equals exactly the negative net gas cost
-    // (receiver gains withdraw_amount, sender loses withdraw_amount + gas, net = -gas)
-    let total_change: i128 = execute_balance_changes.iter().map(|bc| bc.amount).sum();
-    assert_eq!(
-        total_change,
-        -(net_gas_cost as i128),
-        "Total balance change should equal negative net gas cost"
-    );
-
-    // Verify get_transaction_block returns identical balance changes
-    assert_eq!(
-        execute_balance_changes.len(),
-        get_balance_changes.len(),
-        "execute_transaction_block and get_transaction_block should return same number of balance changes"
-    );
-    let get_sender_change = get_balance_changes
-        .iter()
-        .find(|bc| bc.owner == Owner::AddressOwner(sender))
-        .expect("get_transaction_block should have balance change for sender");
-    let get_receiver_change = get_balance_changes
-        .iter()
-        .find(|bc| bc.owner == Owner::AddressOwner(receiver))
-        .expect("get_transaction_block should have balance change for receiver");
-    assert_eq!(
-        sender_change.amount, get_sender_change.amount,
-        "Sender balance change should match between execute and get"
-    );
-    assert_eq!(
-        receiver_change.amount, get_receiver_change.amount,
-        "Receiver balance change should match between execute and get"
-    );
-
-    // Verify sender's address balance was correctly decremented
-    let expected_remaining_balance = deposit_amount - withdraw_amount - net_gas_cost;
-    test_env.verify_accumulator_exists(sender, expected_remaining_balance);
-}
-
 fn create_redeem_and_transfer_transaction(
     sender: SuiAddress,
     receiver: SuiAddress,

@@ -1,8 +1,9 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 2 tasks
+
+// invalid, type parameters with key are not valid when nested as no primitive has key
 
 task 0, lines 6-16:
 //# publish

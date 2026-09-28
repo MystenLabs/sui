@@ -6,6 +6,9 @@ processed 8 tasks
 init:
 A: object(0,0)
 
+// "created and wrapped" as well as "unwrapped and deleted" objects do not show
+// up in object changes at all.
+
 task 1, lines 9-36:
 //# publish
 created: object(1,0)

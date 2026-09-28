@@ -3,20 +3,32 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 16 tasks
 
+// Storage rebate exceeds storage cost plus computation, so net gas usage is
+// negative (a refund). Smash `[AB, Coin, Coin, Coin]` with a trivial workload
+// (one SplitCoins + TransferObjects, creating one new coin):
+//   - 3 secondary coins deleted -> ~3 coins' worth of storage rebate
+//   - 1 new coin created        -> ~1 coin's worth of storage cost
+//   - small computation cost
+// With AB as the smash target, the surplus is credited back to A's address
+// balance via an accumulator event on top of the coin-value deposit-back
+// (3 coins' balance values folded into AB, minus the 100 MIST routed out to
+// B as a new coin).
+
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 18-23:
+task 1, lines 17-21:
+// Seed A's address balance.
 //# programmable --sender A --inputs 100000000000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
 //> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
-// Create three identical 1_000_000_000 coins for A (will be smashed/deleted).
 mutated: object(0,0)
 accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100000000000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 24-26:
+task 2, lines 23-26:
+// Create three identical 1_000_000_000 coins for A (will be smashed/deleted).
 //# programmable --sender A --inputs 1000000000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
@@ -78,7 +90,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 9, lines 44-47:
+task 9, line 44:
 //# view-object 4,0
 Owner: Account Address ( A )
 Version: 5
@@ -93,7 +105,9 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 10, lines 48-50:
+task 10, lines 46-50:
+// Smash [AB(5M), Coin(1B), Coin(1B), Coin(1B)] with trivial workload. AB is
+// the smash target so net gas refund + coin-value deposit both land in AB.
 //# programmable --sender A --gas-budget 5000000 --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(5000000) --gas-payment object(2,0) --gas-payment object(3,0) --gas-payment object(4,0) --inputs 100 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
@@ -102,11 +116,13 @@ deleted: object(2,0), object(3,0), object(4,0)
 accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 3000946260)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2934360, non_refundable_storage_fee: 29640
 
-task 11, lines 52-55:
+task 11, line 52:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 12, line 56:
+task 12, lines 54-56:
+// After: A's AB should be ~ 100B + 3B (coin values) + |net_gas_refund|.
+// The three coins are gone.
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 103000946260
 

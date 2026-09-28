@@ -3,6 +3,10 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// A generic reference parameter whose type parameter unifies to TxContext is
+// auto-injected like a concrete TxContext parameter, so zero-argument calls
+// succeed. A non-TxContext instantiation takes the normal user-argument path.
+
 task 1, lines 10-17:
 //# publish
 created: object(1,0)

@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 11 tasks
 
+// Tests that reach receiving usage by type has a different logical value/local in PTB execution
+
 task 1, lines 8-56:
 //# publish
 created: object(1,0)
@@ -39,7 +41,7 @@ Contents: tto::m1::B {
     },
 }
 
-task 5, lines 64-66:
+task 5, line 64:
 //# view-object 2,2
 Owner: Account Address ( fake(2,0) )
 Version: 3
@@ -51,44 +53,45 @@ Contents: tto::m1::B {
     },
 }
 
-task 6, lines 67-73:
+task 6, lines 66-71:
+// Can use receiving multiple times with different types
 //# programmable --inputs receiving(2,1) --dev-inspect
 //> 0: tto::m1::borrow_mut<tto::m1::A>(Input(0));
 //> tto::m1::id<tto::m1::B>(Input(0));
 //> tto::m1::id<tto::m1::C>(Input(0));
 //> tto::m1::borrow_mut<tto::m1::A>(Result(0));
-// But we cannot use them multiple times (by value) with the same type
 mutated: object(_)
 gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 7, lines 74-80:
+task 7, lines 73-78:
+// But we cannot use them multiple times (by value) with the same type
 //# programmable --inputs receiving(2,1)
 //> tto::m1::id<tto::m1::A>(Input(0));
 //> tto::m1::id<tto::m1::B>(Input(0));
 //> tto::m1::id<tto::m1::C>(Input(0));
 //> tto::m1::id<tto::m1::A>(Input(0));
-// And can receive one of them
 Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue }, source: None, command: Some(3) } }
 
-task 8, lines 81-87:
+task 8, lines 80-85:
+// And can receive one of them
 //# programmable --inputs object(2,0) receiving(2,1)
 //> tto::m1::id<tto::m1::A>(Input(1));
 //> 1: tto::m1::id<tto::m1::B>(Input(1));
 //> tto::m1::id<tto::m1::C>(Input(1));
 //> tto::m1::receive(Input(0), Result(1));
-// Cannot double take the same receiving input twice at the same type
 mutated: object(0,0), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 3385800, non_refundable_storage_fee: 34200
 
-task 9, lines 88-91:
+task 9, lines 87-89:
+// Cannot double take the same receiving input twice at the same type
 //# programmable --inputs object(2,0) receiving(2,2)
 //> tto::m1::take_two_b(Input(0), Input(1), Input(1))
-// But can use receiving multiple times with different types all at once
 Error: Transaction Effects Status: Invalid command argument at 2. Specified argument location does not have a value and cannot be used
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 2, kind: ArgumentWithoutValue }, source: None, command: Some(0) } }
 
-task 10, lines 92-93:
+task 10, lines 91-93:
+// But can use receiving multiple times with different types all at once
 //# programmable --inputs object(2,0) receiving(2,2)
 //> tto::m1::take_all(Input(0), Input(1), Input(1), Input(1))
 mutated: object(0,0), object(2,0), object(2,2)

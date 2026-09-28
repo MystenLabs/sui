@@ -1,8 +1,10 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 18 tasks
+
+// Tests gas payment using withdrawals (drawing from address balance) combined
+// with real coin objects.
 
 init:
 A: object(0,0), B: object(0,1)

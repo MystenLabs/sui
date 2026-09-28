@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// Flag-off twin of tx_context_result_across_mut_tx_use: without the flag every TxContext
+// injection shares one borrow root, so the held `&mut Y` conflicts with the later use.
+
 init:
 A: object(0,0)
 

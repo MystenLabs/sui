@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// tests the that the OTW witness verifier is run for new modules on
+// upgrades
+
 init:
 A: object(0,0)
 

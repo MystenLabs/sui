@@ -6,6 +6,12 @@ processed 21 tasks
 init:
 A: object(0,0)
 
+// 1. Pick transactions based on the package they have called into
+// 2. ...the module...
+// 3. ...the function...
+// 4. Try and pass a bad query (function but no module)
+// 5. Try and pass a bad query (No package)
+
 task 1, lines 12-25:
 //# publish
 created: object(1,0)

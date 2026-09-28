@@ -1,0 +1,333 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 18 tasks
+
+// App-bound allowances through a published third-party module: proposal-based
+// issuance, spends gated on the app's permit, plain spends rejected, spender
+// rotation flipping the sign-time check, and a withdrawal composed through an
+// ordinary public function.
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 11-51:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 9530400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 53-56:
+//# programmable --sender A --inputs 5000 @A
+// Fund A's (the funder) address balance.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 5000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 58:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 60-64:
+//# programmable --sender A --inputs b"app" @B vector[1000u256] vector[] vector[99999999999999]
+// A proposes an app-bound allowance to B and the app issues it.
+//> 0: std::option::none<sui::allowance::RateLimit>();
+//> 1: sui::allowance::propose_for_app<sui::balance::Balance<sui::sui::SUI>, test::app::APP>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
+//> 2: test::app::issue<sui::balance::Balance<sui::sui::SUI>>(Result(1));
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6992000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 66-69:
+//# programmable --sender A --inputs b"plain" @B vector[1000u256] vector[] vector[99999999999999]
+// A issues a plain allowance to B, for the composed spend below.
+//> 0: std::option::none<sui::allowance::RateLimit>();
+//> 1: sui::allowance::new<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1), Input(2), Input(3), Input(4), Result(0));
+created: object(5,0), object(5,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6437200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 71-73:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(400,@A,object(4,0)) mutshared(4,0) immshared(6) @B
+// B spends the app-bound allowance through the app.
+//> 0: test::app::app_pay<sui::sui::SUI>(Input(1), Input(0), Input(2), Input(3));
+mutated: object(0,1), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 400), (object(6,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 400)
+gas summary: computation_cost: 1000000, storage_cost: 4696800,  storage_rebate: 3671712, non_refundable_storage_fee: 37088
+
+task 7, lines 75-78:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@A,object(4,0)) mutshared(4,0) immshared(6) @B
+// A plain spend on the app-bound allowance: aborts.
+//> 0: sui::allowance::balance_spend<sui::sui::SUI>(Input(1), Input(0), Input(2));
+//> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(3));
+Error: Transaction Effects Status: Move Abort in sui::allowance::balance_spend (function index 10) at offset 13 at line 266 with clever code 9
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("allowance") }, function: 10, instruction: 13, function_name: Some("balance_spend") }, 13837592472535040019) at command Some(0)
+
+task 8, lines 80-82:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(250,@A,object(5,0)) mutshared(5,0) immshared(6) @B
+// B spends the plain allowance through the third-party function.
+//> 0: test::app::forward_plain<sui::sui::SUI>(Input(1), Input(0), Input(2), Input(3));
+mutated: object(0,1), object(5,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 250), (object(6,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 250)
+gas summary: computation_cost: 1000000, storage_cost: 4142000,  storage_rebate: 4100580, non_refundable_storage_fee: 41420
+
+task 9, lines 84-86:
+//# programmable --sender A --inputs mutshared(4,0) @C
+// The app rotates the spender to C.
+//> 0: test::app::rotate<sui::balance::Balance<sui::sui::SUI>>(Input(0), Input(1));
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 4696800,  storage_rebate: 4649832, non_refundable_storage_fee: 46968
+
+task 10, lines 88-90:
+//# programmable --sender B --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(100,@A,object(4,0)) mutshared(4,0) immshared(6) @B
+// The old spender after the rotation: rejected at signing.
+//> 0: test::app::app_pay<sui::sui::SUI>(Input(1), Input(0), Input(2), Input(3));
+Error: Error checking transaction input objects: Invalid withdraw reservation: Transaction sender is not the spender of allowance object(4,0)
+
+task 11, lines 92-94:
+//# programmable --sender C --inputs allowance_withdraw<sui::balance::Balance<sui::sui::SUI>>(300,@A,object(4,0)) mutshared(4,0) immshared(6) @C
+// The new spender works.
+//> 0: test::app::app_pay<sui::sui::SUI>(Input(1), Input(0), Input(2), Input(3));
+mutated: object(0,2), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000006
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 300), (object(11,0), C, sui::balance::Balance<sui::sui::SUI>, Merge, 300)
+gas summary: computation_cost: 1000000, storage_cost: 4696800,  storage_rebate: 3671712, non_refundable_storage_fee: 37088
+
+task 12, lines 96-97:
+//# view-object 4,0
+Owner: Shared( 4 )
+Version: 8
+Contents: sui::allowance::Allowance<sui::balance::Balance<sui::sui::SUI>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    settings: sui::allowance::Settings {
+        funder: A,
+        spender: std::option::Option<address> {
+            vec: vector[
+                C,
+            ],
+        },
+        app: std::option::Option<std::type_name::TypeName> {
+            vec: vector[
+                std::type_name::TypeName {
+                    name: std::ascii::String {
+                        bytes: vector[
+                            50u8,
+                            50u8,
+                            53u8,
+                            50u8,
+                            100u8,
+                            101u8,
+                            48u8,
+                            101u8,
+                            56u8,
+                            57u8,
+                            51u8,
+                            99u8,
+                            48u8,
+                            54u8,
+                            57u8,
+                            101u8,
+                            98u8,
+                            99u8,
+                            54u8,
+                            50u8,
+                            53u8,
+                            52u8,
+                            48u8,
+                            53u8,
+                            101u8,
+                            54u8,
+                            57u8,
+                            51u8,
+                            55u8,
+                            50u8,
+                            50u8,
+                            57u8,
+                            50u8,
+                            50u8,
+                            56u8,
+                            53u8,
+                            55u8,
+                            48u8,
+                            50u8,
+                            98u8,
+                            102u8,
+                            99u8,
+                            55u8,
+                            51u8,
+                            56u8,
+                            55u8,
+                            49u8,
+                            102u8,
+                            48u8,
+                            52u8,
+                            51u8,
+                            52u8,
+                            98u8,
+                            51u8,
+                            101u8,
+                            49u8,
+                            100u8,
+                            98u8,
+                            54u8,
+                            49u8,
+                            98u8,
+                            51u8,
+                            48u8,
+                            55u8,
+                            58u8,
+                            58u8,
+                            97u8,
+                            112u8,
+                            112u8,
+                            58u8,
+                            58u8,
+                            65u8,
+                            80u8,
+                            80u8,
+                        ],
+                    },
+                },
+            ],
+        },
+        lifetime_cap: std::option::Option<u256> {
+            vec: vector[
+                1000u256,
+            ],
+        },
+        start_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        expiration_timestamp_ms: std::option::Option<u64> {
+            vec: vector[
+                99999999999999u64,
+            ],
+        },
+        rate_limit: std::option::Option<sui::allowance::RateLimit> {
+            vec: vector[],
+        },
+        name: std::string::String {
+            bytes: vector[
+                97u8,
+                112u8,
+                112u8,
+            ],
+        },
+    },
+    current_spend: 700u256,
+}
+
+task 13, lines 99-100:
+//# view-object 5,0
+Owner: Shared( 5 )
+Version: 7
+Contents: sui::allowance::Allowance<sui::balance::Balance<sui::sui::SUI>> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    settings: sui::allowance::Settings {
+        funder: A,
+        spender: std::option::Option<address> {
+            vec: vector[
+                B,
+            ],
+        },
+        app: std::option::Option<std::type_name::TypeName> {
+            vec: vector[],
+        },
+        lifetime_cap: std::option::Option<u256> {
+            vec: vector[
+                1000u256,
+            ],
+        },
+        start_timestamp_ms: std::option::Option<u64> {
+            vec: vector[],
+        },
+        expiration_timestamp_ms: std::option::Option<u64> {
+            vec: vector[
+                99999999999999u64,
+            ],
+        },
+        rate_limit: std::option::Option<sui::allowance::RateLimit> {
+            vec: vector[],
+        },
+        name: std::string::String {
+            bytes: vector[
+                112u8,
+                108u8,
+                97u8,
+                105u8,
+                110u8,
+            ],
+        },
+    },
+    current_spend: 250u256,
+}
+
+task 14, line 102:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 15, lines 104-105:
+//# view-object 2,0
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000acc )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::balance::Balance<sui::sui::SUI>>, sui::accumulator::U128> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::accumulator::Key<sui::balance::Balance<sui::sui::SUI>> {
+        address: A,
+    },
+    value: sui::accumulator::U128 {
+        value: 4050u128,
+    },
+}
+
+task 16, lines 107-108:
+//# view-object 6,0
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000acc )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::balance::Balance<sui::sui::SUI>>, sui::accumulator::U128> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+    name: sui::accumulator::Key<sui::balance::Balance<sui::sui::SUI>> {
+        address: B,
+    },
+    value: sui::accumulator::U128 {
+        value: 650u128,
+    },
+}
+
+task 17, lines 110-111:
+//# view-object 11,0
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000acc )
+Version: 3
+Contents: sui::dynamic_field::Field<sui::accumulator::Key<sui::balance::Balance<sui::sui::SUI>>, sui::accumulator::U128> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(11,0),
+        },
+    },
+    name: sui::accumulator::Key<sui::balance::Balance<sui::sui::SUI>> {
+        address: C,
+    },
+    value: sui::accumulator::U128 {
+        value: 300u128,
+    },
+}

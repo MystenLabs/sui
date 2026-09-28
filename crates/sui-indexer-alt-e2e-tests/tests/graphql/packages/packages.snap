@@ -3,6 +3,13 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 25 tasks
 
+// P1 is obj(1,0)
+// P2 is obj(3,0)
+// P3 is obj(6,0)
+// Q1 is obj(4,0)
+// Q2 is obj(8,0)
+// Q3 is obj(9,0)
+
 init:
 A: object(0,0)
 

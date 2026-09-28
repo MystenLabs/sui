@@ -6,6 +6,12 @@ processed 9 tasks
 init:
 A: object(0,0)
 
+// 1. Publish a package that includes a Display format.
+// 2. Create some objects from this package.
+// 3. View the Display format of those objects.
+// 4. Edit the Display format of the object.
+// 5. View the updated Display format of the object.
+
 task 1, lines 12-70:
 //# publish --sender A
 events: Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [6, 29, 223, 71, 222, 118, 197, 79, 145, 178, 105, 126, 105, 155, 137, 69, 87, 231, 120, 39, 196, 57, 47, 60, 200, 17, 139, 204, 65, 207, 250, 200] }, Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [6, 29, 223, 71, 222, 118, 197, 79, 145, 178, 105, 126, 105, 155, 137, 69, 87, 231, 120, 39, 196, 57, 47, 60, 200, 17, 139, 204, 65, 207, 250, 200, 1, 0, 4, 3, 98, 97, 114, 17, 98, 97, 114, 32, 105, 115, 32, 123, 98, 97, 114, 46, 118, 97, 108, 125, 33, 3, 98, 97, 122, 21, 98, 97, 122, 32, 105, 115, 32, 123, 98, 97, 114, 46, 98, 97, 122, 46, 118, 97, 108, 125, 63, 3, 113, 117, 121, 25, 113, 117, 121, 32, 105, 115, 32, 123, 98, 97, 114, 46, 98, 97, 122, 46, 113, 117, 120, 46, 113, 117, 121, 125, 46, 3, 113, 117, 95, 77, 120, 40, 123, 98, 97, 114, 46, 98, 97, 122, 46, 113, 117, 120, 46, 118, 97, 108, 125, 41, 32, 121, 40, 123, 98, 97, 114, 46, 98, 97, 122, 46, 113, 117, 120, 46, 113, 117, 121, 46, 118, 97, 108, 125, 41, 44, 32, 122, 40, 123, 98, 97, 114, 46, 98, 97, 122, 46, 113, 117, 120, 46, 113, 117, 121, 46, 113, 117, 122, 46, 118, 97, 108, 125, 41, 63, 33] }

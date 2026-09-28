@@ -1,0 +1,10 @@
+[package]
+name = "CrossModuleConsts"
+edition = "2024.alpha"
+
+[dependencies]
+MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+ConstDeps = { local = "./deps" }
+
+[addresses]
+CrossModuleConsts = "0x9"

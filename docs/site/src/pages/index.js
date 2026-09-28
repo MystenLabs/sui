@@ -76,7 +76,7 @@ export default function Home() {
       title: "Digital Assets",
       description:
         "Build NFTs and composable digital collectibles with the object model.",
-      to: "/getting-started/examples/lootbox-ctf",
+      to: "/onchain-finance/types-of-assets",
     },
   ];
 

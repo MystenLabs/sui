@@ -7,9 +7,11 @@ task 1, line 33:
 //# view-abstract-state 0x71::shapes::mut_elem
 view-abstract-state subcommand is only available with regex reference safety
 
-task 2, lines 35-37:
+task 2, line 35:
 //# view-abstract-state 0x71::shapes::nested
 view-abstract-state subcommand is only available with regex reference safety
+
+// two element refs of one vector become mutual dot-star extensions
 
 task 3, lines 39-56:
 //# publish

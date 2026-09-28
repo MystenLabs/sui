@@ -3,26 +3,39 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 20 tasks
 
+// Lamport-timestamp rule on `[AddressBalance, Coin]` smash: mutable inputs
+// end up at max(input versions) + 1 across the full input set, including
+// the secondary Coin (which is deleted during smashing).
+// Setup:
+//   - three W mutable inputs created early at low versions (call them K),
+//   - one Coin X created and then bumped (via being the gas object in
+//     several minimal txs) to a high version C >> K,
+//   - final tx smashes `[withdraw, X]` and force-mutates W1, W2, W3.
+// Expected: post-tx versions of W1, W2, W3 all equal C + 1 (not K + 1),
+// confirming X's pre-tx version is folded into the tx's lamport timestamp
+// even though X itself is deleted.
+
 init:
 A: object(0,0)
 
-task 1, lines 18-25:
+task 1, lines 18-23:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5152800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 26-31:
+task 2, lines 25-29:
+// Seed A's AB so we have funds for the final tx.
 //# programmable --sender A --inputs 100000000000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
 //> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
-// Create three small W mutable inputs early so they end up at low versions.
 mutated: object(0,0)
 accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100000000000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 32:
+task 3, lines 31-32:
+// Create three small W mutable inputs early so they end up at low versions.
 //# run test::obj::make --sender A
 created: object(3,0)
 mutated: object(0,0)
@@ -34,22 +47,23 @@ created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5, lines 36-38:
+task 5, line 36:
 //# run test::obj::make --sender A
 created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, lines 39-43:
+task 6, lines 38-41:
+// Create Coin X (split off from A's default gas coin).
 //# programmable --sender A --inputs 1000000000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
-// Bump X's version by using it as the gas object in three minimal txs.
 created: object(6,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7, lines 44-46:
+task 7, lines 43-46:
+// Bump X's version by using it as the gas object in three minimal txs.
 //# programmable --sender A --gas-budget 5000000 --gas-payment object(6,0) --inputs 1 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
@@ -73,11 +87,13 @@ created: object(9,0)
 mutated: object(6,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 10, lines 56-59:
+task 10, line 56:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 11, line 60:
+task 11, lines 58-60:
+// Pre-state: W1, W2, W3 are at low versions; X is at a higher version due to
+// the bumping above.
 //# view-object 3,0 --hide-contents
 Owner: Account Address ( A )
 Version: 3
@@ -95,13 +111,17 @@ Owner: Account Address ( A )
 Version: 5
 Type: test::obj::W
 
-task 14, lines 66-71:
+task 14, line 66:
 //# view-object 6,0 --hide-contents
 Owner: Account Address ( A )
 Version: 9
 Type: sui::coin::Coin<sui::sui::SUI>
 
-task 15, lines 72-73:
+task 15, lines 68-73:
+// Final tx: smash `[withdraw, X]` with W1, W2, W3 as mutable inputs.
+// X is the secondary and gets deleted during smashing. Lamport timestamp
+// for this tx = max(W*, X, AB accumulator) + 1 = X.version + 1 (since X is
+// the highest).
 //# programmable --sender A --gas-budget 5000000 --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(5000000) --gas-payment object(6,0) --inputs object(3,0) object(4,0) object(5,0) @A
 //> TransferObjects([Input(0), Input(1), Input(2)], Input(3))
 mutated: object(3,0), object(4,0), object(5,0)
@@ -109,11 +129,13 @@ deleted: object(6,0)
 accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 993947769)
 gas summary: computation_cost: 1000000, storage_cost: 3670800,  storage_rebate: 4612212, non_refundable_storage_fee: 46588
 
-task 16, lines 75-78:
+task 16, line 75:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 17, line 79:
+task 17, lines 77-79:
+// Post-state: W1, W2, W3 should all be at the same post-tx version, which
+// equals (X's pre-tx version) + 1 -- not (W's pre-tx version + 1).
 //# view-object 3,0 --hide-contents
 Owner: Account Address ( A )
 Version: 10

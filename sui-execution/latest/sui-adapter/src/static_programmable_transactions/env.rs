@@ -39,6 +39,7 @@ use std::{cell::OnceCell, marker::PhantomData, rc::Rc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
+    allowance::RESOLVED_ALLOWANCE_WITHDRAWAL_STRUCT,
     balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectID, TxContext},
     coin::RESOLVED_COIN_STRUCT,
@@ -190,13 +191,32 @@ where
         module: &IdentStr,
         function: &IdentStr,
         type_arguments: Vec<Type>,
+        unified_linkage: Option<&ExecutableLinkage>,
     ) -> Result<LoadedFunction, Mode::Error> {
-        self.load_function(
+        let mut loaded = self.load_function(
             SUI_FRAMEWORK_PACKAGE_ID,
             module.to_string(),
             function.to_string(),
             type_arguments,
-        )
+        )?;
+        if self.protocol_config.harden_linkage_consistency() {
+            let Some(unified_linkage) = unified_linkage else {
+                invariant_violation!(
+                    "Unified linkage is required when hardened linkage consistency is enabled"
+                )
+            };
+            assert_invariant!(
+                loaded
+                    .linkage
+                    .0
+                    .linkage
+                    .keys()
+                    .all(|original_id| unified_linkage.0.linkage.contains_key(original_id)),
+                "transaction linkage drops a package resolved by a framework MoveCall"
+            );
+            loaded.linkage = unified_linkage.clone();
+        }
+        Ok(loaded)
     }
 
     pub fn load_function(
@@ -363,6 +383,30 @@ where
             name: n.to_owned(),
             type_arguments: vec![inner_type],
         })))
+    }
+
+    pub fn allowance_withdrawal_type(&self, inner_type: Type) -> Result<Type, Mode::Error> {
+        const ALLOWANCE_WITHDRAWAL_ABILITIES: AbilitySet = AbilitySet::singleton(Ability::Drop);
+        let (a, m, n) = RESOLVED_ALLOWANCE_WITHDRAWAL_STRUCT;
+        let module = ModuleId::new(*a, m.to_owned());
+        Ok(Type::Datatype(Rc::new(Datatype {
+            abilities: ALLOWANCE_WITHDRAWAL_ABILITIES,
+            module,
+            name: n.to_owned(),
+            type_arguments: vec![inner_type],
+        })))
+    }
+
+    /// Either `Withdrawal` or `AllowanceWithdrawal` depending on the source
+    pub fn withdrawal_type_for_source(
+        &self,
+        source: &L::WithdrawalSource,
+        funds_type: Type,
+    ) -> Result<Type, Mode::Error> {
+        match source {
+            L::WithdrawalSource::Direct { .. } => self.withdrawal_type(funds_type),
+            L::WithdrawalSource::Allowance { .. } => self.allowance_withdrawal_type(funds_type),
+        }
     }
 
     pub fn vector_type(&self, element_type: Type) -> Result<Type, Mode::Error> {
@@ -631,11 +675,11 @@ where
             dep_ids,
             /* hash_modules */ true,
         );
-        Ok(DeserializedPackage {
+        Ok(DeserializedPackage::new(
             deserialized_modules,
             total_bytes,
             computed_digest,
-        })
+        ))
     }
 }
 

@@ -345,9 +345,6 @@ type-keyed lookup against the live network when something asks, and cache the re
 object like any other. This is not a limit of forking — unlike the ledger range below — just
 work not done.
 
-`simulate_transaction` is stubbed; there is no Simulacrum entrypoint for it yet. It is
-planned as a follow-up.
-
 The remote leg of a bounded read is not pinned at the fork point. Where the latest and
 exact-version object queries carry the fork checkpoint explicitly, the bounded query carries
 only its version bound, so it resolves against the live network's *current* state.

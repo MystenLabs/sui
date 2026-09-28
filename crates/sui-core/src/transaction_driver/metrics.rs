@@ -34,6 +34,7 @@ pub struct TransactionDriverMetrics {
     pub(crate) certified_effects_ack_successes: IntCounterVec,
     pub(crate) validator_selections: IntCounterVec,
     pub(crate) submit_amplification_factor: Histogram,
+    pub(crate) submitted_txns_with_allowed_proposers: IntCounterVec,
     pub(crate) latency_check_runs: IntCounter,
 }
 
@@ -167,6 +168,13 @@ impl TransactionDriverMetrics {
                 "transaction_driver_submit_amplification_factor",
                 "The amplification factor used by transaction driver to submit to validators",
                 COUNT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            submitted_txns_with_allowed_proposers: register_int_counter_vec_with_registry!(
+                "transaction_driver_submitted_txns_with_allowed_proposers",
+                "Number of submitted transactions that restrict their allowed proposers vs not",
+                &["restricted"],
                 registry,
             )
             .unwrap(),

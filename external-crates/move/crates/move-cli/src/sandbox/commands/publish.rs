@@ -72,7 +72,7 @@ pub fn publish<V: VMTestSetup>(
 
     // use the publish_module API from the VM since we don't allow breaking changes
     let natives = NativeFunctions::new(vm_test_setup.native_function_table())?;
-    let runtime = MoveRuntime::new_with_default_config(natives);
+    let runtime = MoveRuntime::new_with_test_config(natives);
 
     let mut gas_status = vm_test_setup.new_meter(None);
 

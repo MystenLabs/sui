@@ -13,7 +13,6 @@
         "stress",
         "sui-proxy",
         "sui-metric-checker",
-        "sui-analytics-indexer",
-        "sui-security-watchdog"
+        "sui-analytics-indexer"
 	]
 }

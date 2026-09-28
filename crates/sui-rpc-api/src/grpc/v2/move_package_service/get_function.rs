@@ -10,6 +10,7 @@ use crate::{
 };
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::{GetFunctionRequest, GetFunctionResponse};
+use sui_types::move_package::MovePackage;
 
 #[tracing::instrument(skip(service))]
 pub fn get_function(
@@ -35,9 +36,18 @@ pub fn get_function(
     })?;
 
     let package = load_package(service, package_id_str)?;
+    get_function_response(&package, module_name, function_name)
+}
 
+/// Build a `GetFunction` response from an already-loaded package. Shared with other implementors
+/// of `MovePackageService` (e.g. sui-kv-rpc) that load packages from a different backend.
+pub fn get_function_response(
+    package: &MovePackage,
+    module_name: &str,
+    function_name: &str,
+) -> Result<GetFunctionResponse> {
     let resolver_package =
-        sui_package_resolver::Package::read_from_package(&package).map_err(convert_error)?;
+        sui_package_resolver::Package::read_from_package(package).map_err(convert_error)?;
 
     let resolver_module = resolver_package
         .module(module_name)

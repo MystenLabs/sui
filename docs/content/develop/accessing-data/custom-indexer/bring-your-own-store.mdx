@@ -244,7 +244,7 @@ When Move smart contracts execute on Sui, they can emit events using the `sui::e
 
 Move contracts emit events like the following:
 
-```rust
+```move
 // Move smart contract
 use sui::event;
 
@@ -276,7 +276,7 @@ In checkpoint data, these events arrive as **raw BCS bytes** that need to be con
 
     ```rust
     use serde::Deserialize;
-    use sui_indexer_alt_framework::types::::base_types::ObjectID;
+    use sui_indexer_alt_framework::types::base_types::ObjectID;
 
     #[derive(Deserialize, Debug)]
     struct BalanceEvent {

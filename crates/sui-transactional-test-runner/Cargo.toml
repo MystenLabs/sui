@@ -18,7 +18,6 @@ bincode = { version = "2.0.1", features = ["serde"] }
 clap.workspace = true
 eyre.workspace = true
 http.workspace = true
-once_cell.workspace = true
 rand.workspace = true
 regex.workspace = true
 tempfile.workspace = true
@@ -54,11 +53,7 @@ sui-core.workspace = true
 sui-framework.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
-sui-json-rpc-types.workspace = true
-sui-json-rpc.workspace = true
-sui-json-rpc-api.workspace = true
 sui-framework-snapshot.workspace = true
-sui-storage.workspace = true
 typed-store.workspace = true
 
 [[bin]]

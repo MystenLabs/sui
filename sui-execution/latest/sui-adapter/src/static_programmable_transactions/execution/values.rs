@@ -276,6 +276,25 @@ impl Value {
         ])))
     }
 
+    /// Constructs a `sui::allowance::AllowanceWithdrawal` value
+    pub fn allowance_withdrawal(
+        allowance: ObjectID,
+        owner: AccountAddress,
+        limit: U256,
+        is_sponsor: bool,
+    ) -> Self {
+        // public struct AllowanceWithdrawal<phantom T: store> {
+        //     allowance: ID,
+        //     is_sponsor: bool,
+        //     inner: Withdrawal<T>,
+        // }
+        Self(VMValue::struct_(Struct::pack([
+            Self::id(allowance.into()).0,
+            VMValue::bool(is_sponsor),
+            Self::funds_accumulator_withdrawal(owner, limit).0,
+        ])))
+    }
+
     pub fn vec_pack(ty: Type, values: Vec<Self>) -> Result<Self, ExecutionError> {
         let specialization: VectorSpecialization = ty
             .try_into()

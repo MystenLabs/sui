@@ -3,14 +3,18 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 18 tasks
 
+// tests vector of objects where operations involve generics (type parameters)
+
 init:
 A: object(0,0)
 
-task 1, lines 8-110:
+task 1, lines 8-108:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 13452000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// create an object and pass it as a single element of a vector (success)
 
 task 2, line 112:
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
@@ -18,11 +22,14 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 114-118:
+task 3, line 114:
 //# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(2,0)]
 mutated: object(0,0)
 deleted: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
+
+// create a parent/child object pair, pass child by-value and parent as a single element of a vector
+// to check if authentication works (success)
 
 task 4, line 120:
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
@@ -36,9 +43,12 @@ created: object(5,0), object(5,1)
 mutated: object(0,0), object(4,0)
 gas summary: computation_cost: 1000000, storage_cost: 6665200,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
 
-task 6, lines 124-128:
+task 6, line 124:
 //# run Test::M::child_access_any --sender A --type-args Test::M::Any --args object(4,0) vector[object(5,0)]
 Error: Error checking transaction input objects: Object object(5,0) is owned by object object(5,1). Objects owned by other objects cannot be used as input arguments
+
+// create an object of one type and try to pass it as a single element of a vector whose elements
+// are of different type (failure)
 
 task 7, line 130:
 //# run Test::M::mint_another_any --type-args Test::M::Any --sender A --args 42
@@ -46,10 +56,12 @@ created: object(7,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2652400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8, lines 132-135:
+task 8, line 132:
 //# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(7,0)]
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
+
+// create two objects of different types and try to pass them both as elements of a vector (failure)
 
 task 9, line 137:
 //# run Test::M::mint_another_any --sender A --type-args Test::M::Any --args 42
@@ -63,10 +75,12 @@ created: object(10,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 11, lines 141-144:
+task 11, line 141:
 //# run Test::M::two_obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(9,0),object(10,0)]
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+// create a shared object and try to pass it as a single element of a vector (failure)
 
 task 12, line 146:
 //# run Test::M::mint_shared_any --sender A --type-args Test::M::Any --args 42
@@ -74,10 +88,12 @@ created: object(12,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 13, lines 148-151:
+task 13, line 148:
 //# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(12,0)]
 Error: Transaction Effects Status: Invalid command argument at 0. Immutable objects cannot be passed by-value.
 Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue } at command Some(0)
+
+// create an object and pass it both by-value and as element of a vector (failure)
 
 task 14, line 153:
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
@@ -85,10 +101,12 @@ created: object(14,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 15, lines 155-158:
+task 15, line 155:
 //# run Test::M::same_objects_any --sender A --type-args Test::M::Any --args object(14,0) vector[object(14,0)]
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }
+
+// create an object and pass it both by-reference and as element of a vector (failure)
 
 task 16, line 160:
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42

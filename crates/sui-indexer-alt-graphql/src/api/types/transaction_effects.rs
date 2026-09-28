@@ -96,10 +96,7 @@ impl TransactionEffects {
 impl EffectsContents {
     /// The checkpoint this transaction was finalized in.
     async fn checkpoint(&self) -> Option<Checkpoint> {
-        let Some(content) = &self.contents else {
-            return None;
-        };
-
+        let content = self.contents.as_ref()?;
         content
             .cp_sequence_number()
             .and_then(|cp| Checkpoint::with_sequence_number(self.scope.clone(), Some(cp)))
@@ -505,6 +502,17 @@ impl EffectsContents {
         // Execution context is not backed by the index yet.
         if self.scope.is_executed() {
             return Ok(self.clone());
+        }
+
+        // A just-streamed transaction runs ahead of the KV backend, so serve it from the in-memory
+        // streamed store (live streamed path only) until the backend catches up.
+        if let Some(streaming_transactions) = self.scope.streamed_transaction_store()
+            && let Some(contents) = streaming_transactions.get(&digest)
+        {
+            return Ok(Self {
+                scope: self.scope.clone(),
+                contents: Some(contents),
+            });
         }
 
         let kv_loader: &KvLoader = ctx.data()?;

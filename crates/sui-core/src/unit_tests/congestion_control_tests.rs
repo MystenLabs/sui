@@ -363,7 +363,7 @@ async fn test_congestion_control_execution_cancellation() {
 
     // Tests consensus object versions in effects are set correctly.
     assert_eq!(
-        effects.input_consensus_objects(),
+        effects.accessed_consensus_objects(),
         vec![
             InputConsensusObject::Cancelled(shared_object_1.0, SequenceNumber::CONGESTED),
             InputConsensusObject::Cancelled(shared_object_2.0, SequenceNumber::CANCELLED_READ)
@@ -381,8 +381,7 @@ async fn test_congestion_control_execution_cancellation() {
             effects,
             None,
             authority_state_2.get_object_cache_reader().as_ref(),
-        )
-        .unwrap();
+        );
     let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
     let (effects_2, execution_error) = authority_state_2
         .try_execute_executable_for_test(&executable, execution_env)

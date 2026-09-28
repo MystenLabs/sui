@@ -1,9 +1,8 @@
 ---
 title: zkLogin Authentication
 description: >-
-  Build a React application that authenticates users with OAuth providers and
-  derives Sui wallet addresses using zero-knowledge proofs, enabling
-  passwordless blockchain access.
+  Add zkLogin to a React application so users authenticate with OAuth providers
+  and get a derived Sui address, with no seed phrase to manage.
 keywords:
   - example
   - zklogin
@@ -28,8 +27,7 @@ concepts:
   - transaction_signing
 goal:
   description: >-
-    Reader can build a React application that authenticates users with OAuth
-    providers
+    Reader can add zkLogin authentication to an existing React application
   requires:
     - has_frontmatter:
         - title
@@ -49,13 +47,12 @@ goal:
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
-  - How do I build a zkLogin demo app on Sui?
+  - How do I add zkLogin to my React app?
   - What does the zkLogin authentication example demonstrate?
   - How do I integrate OAuth login with Sui transactions?
 answer: >-
-  Build a React application that authenticates users with OAuth providers and
-  derives Sui wallet addresses using zero-knowledge proofs, enabling
-  passwordless blockchain access.
+  Add zkLogin to a React application so users authenticate with OAuth providers
+  and get a derived Sui address, with no seed phrase to manage.
 ---
 
 This example demonstrates how to integrate [zkLogin](/sui-stack/zklogin-integration/zklogin) into a React application so users can authenticate with familiar OAuth providers (Google, Apple) and interact with the Sui blockchain without managing private keys.
@@ -158,90 +155,34 @@ To authorize a transaction, the user does not sign with a long-lived private key
 For more details, see the [zkLogin documentation](/sui-stack/zklogin-integration/zklogin).
 
 
-## Prerequisites
-
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
 
-- [x] [Install the latest version of Sui](/getting-started/onboarding/sui-install).
+- [x] An existing [React](https://react.dev/) app you can add routes and hooks to.
 
-- [x] [Configure the Sui client](/getting-started/onboarding/configure-sui-client).
+- [x] [Install the Sui CLI](/getting-started/onboarding/sui-install) and [fund an address with Testnet SUI](/getting-started/onboarding/get-coins) for testing transfers.
 
-- [x] [Create a Sui address](/getting-started/onboarding/get-address).
+- [x] [Node.js](https://nodejs.org/) 18 or later.
 
-- [x] [Get SUI Testnet tokens](/getting-started/onboarding/get-coins).
-
-- [x] Download and install an IDE. The following are recommended, as they offer Move extensions:
-
-    - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
-
-    - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
-
-    - [Vim](https://www.vim.org/download.php), corresponding [Move extension](https://github.com/yanganto/move.vim)
-
-    - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
-    
-        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
-
-- [x] [Download and install Git](https://git-scm.com/downloads).
-
-- [x] [Node.js](https://nodejs.org/) 18 or later
-
-- [x] [Rust toolchain](https://rustup.rs/) (for the relayer service)
-
-- [x] A Sui wallet ([Slush Wallet](https://slush.app/) or another compatible wallet)
-
-- [x] A [Google OAuth client](https://console.cloud.google.com/) and its client ID. Your Google OAuth client must have `http://localhost:5173/` set as an authorized JavaScript origin and authorized redirect URI.
+- [x] A [Google OAuth client](https://console.cloud.google.com/) whose authorized JavaScript origin and redirect URI both match your dev server origin.
 
 </TabItem>
 </Tabs>
 
-## Setup
+## Reference app
 
-Follow these steps to set up the example locally.
+A complete React implementation lives in [`sui-move-bootcamp/K2`](https://github.com/MystenLabs/sui-move-bootcamp/tree/solution/K2). Clone it to see the hooks below wired together, or read on for the pieces you need to port into your own app.
 
-##### Step 1: Clone the repo
+The app reads its configuration from environment variables, and the same values are what your integration needs:
 
-```bash
-$ git clone -b solution https://github.com/MystenLabs/sui-move-bootcamp.git
-$ cd sui-move-bootcamp/K2
-```
+| Variable | Purpose |
+| --- | --- |
+| `VITE_SUI_GRPC_URL` | Fullnode gRPC endpoint used to fetch the current epoch and execute transactions. |
+| `VITE_SALT` | The per-user salt. A fixed value is fine for a demo, but production needs a real salt service. |
+| `VITE_EPHEMERAL_KEY_DURATION_EPOCHS` | How many epochs past the current one the ephemeral key stays valid. |
+| `VITE_OAUTH_CLIENT_ID` | Your OAuth client ID. Determines which identities map to which addresses. |
 
-##### Step 2: Install dependencies
-
-```bash
-$ pnpm install
-$ pnpm install @mysten/utils
-```
-
-##### Step 3: Configure environment variables
-
-```bash
-$ cp .env.example .env
-```
-
-Edit `.env` with your values:
-
-```bash title='.env'
-VITE_NETWORK=testnet
-VITE_SUI_GRPC_URL=https://fullnode.testnet.sui.io:443
-VITE_SALT=248191903847969014646285995941615069143
-VITE_EPHEMERAL_KEY_DURATION_EPOCHS=2
-VITE_OAUTH_PROVIDER_NAME=GOOGLE
-VITE_OAUTH_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID
-```
-
-Replace `YOUR_GOOGLE_CLIENT_ID` with the OAuth client ID from your Google Cloud project. The `VITE_SALT` can be any large random number; it determines the derived Sui address. Use the same salt consistently to get the same address.
-
-## Run the example
-
-Start the frontend:
-
-```bash
-$ pnpm dev
-```
-
-Open `http://localhost:5173` in a browser. The landing page explains what zkLogin is. Click **Get Started** to enter the 4-step wizard. Complete each step in order: generate a key pair, sign in with Google, generate the ZK proof, then send a test SUI transfer to verify the full flow.
+The salt and the OAuth client ID together determine every derived address. Changing either one moves all of your users to different addresses, so treat both as permanent configuration.
 
 ## Key code highlights
 

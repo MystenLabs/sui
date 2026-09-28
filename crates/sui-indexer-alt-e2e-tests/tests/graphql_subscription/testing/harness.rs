@@ -550,6 +550,30 @@ pub fn graphql_redactions() -> insta::Settings {
     settings
 }
 
+/// Recursively sort every `objectChanges.nodes` array by Move type name, so that object changes,
+/// including those nested under a `previousTransaction`, serialize in a stable order across seeds.
+/// Call this on a subscription payload before snapshotting a query that descends into nested object
+/// changes; the redaction above only orders the top-level ones.
+pub fn sort_object_changes(value: &mut Value) {
+    match value {
+        Value::Array(items) => items.iter_mut().for_each(sort_object_changes),
+        Value::Object(map) => {
+            if let Some(nodes) = map
+                .get_mut("objectChanges")
+                .and_then(|changes| changes.get_mut("nodes"))
+                .and_then(Value::as_array_mut)
+            {
+                nodes.sort_by_key(|node| {
+                    let s = node.to_string();
+                    s.find("::").map(|i| s[i..].to_string()).unwrap_or(s)
+                });
+            }
+            map.values_mut().for_each(sort_object_changes);
+        }
+        _ => {}
+    }
+}
+
 /// Extract the digest from a top-level transaction subscription response. Each payload is a single
 /// edge. Path: data.transactions.node.digest
 pub fn transaction_digest(item: &Value) -> Vec<&str> {

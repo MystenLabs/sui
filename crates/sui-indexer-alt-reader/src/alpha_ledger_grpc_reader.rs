@@ -108,6 +108,22 @@ impl AlphaLedgerGrpcReader {
         drain_list_stream("ListEvents", stream).await
     }
 
+    pub async fn list_checkpoints(
+        &self,
+        request: proto::ListCheckpointsRequest,
+    ) -> anyhow::Result<StreamPage<proto::Checkpoint>> {
+        let stream = self
+            .client
+            .clone()
+            .ledger_client()
+            .list_checkpoints(self.request(request))
+            .await
+            .context("ListCheckpoints stream open failed")?
+            .into_inner();
+
+        drain_list_stream("ListCheckpoints", stream).await
+    }
+
     /// Create a gRPC request, optionally with the grpc-timeout header if configured.
     fn request<T>(&self, input: T) -> tonic::Request<T> {
         let mut request = tonic::Request::new(input);
@@ -236,6 +252,14 @@ impl TryFrom<proto::ListEventsResponse> for FrameKind<proto::Event> {
 
     fn try_from(response: proto::ListEventsResponse) -> anyhow::Result<Self> {
         classify_frame(response.event, response.watermark, response.end)
+    }
+}
+
+impl TryFrom<proto::ListCheckpointsResponse> for FrameKind<proto::Checkpoint> {
+    type Error = anyhow::Error;
+
+    fn try_from(response: proto::ListCheckpointsResponse) -> anyhow::Result<Self> {
+        classify_frame(response.checkpoint, response.watermark, response.end)
     }
 }
 

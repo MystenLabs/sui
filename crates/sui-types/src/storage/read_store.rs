@@ -683,11 +683,9 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
 
 /// Trait used to provide functionality to the REST API service.
 ///
-/// It extends both ObjectStore and ReadStore by adding functionality that may require more
+/// It extends ReadStore and RuntimeObjectResolver by adding functionality that may require more
 /// detailed underlying databases or indexes to support.
-pub trait RpcStateReader:
-    ObjectStore + ReadStore + super::RuntimeObjectResolver + Send + Sync
-{
+pub trait RpcStateReader: ReadStore + super::RuntimeObjectResolver + Send + Sync {
     /// Lowest available checkpoint for which object data can be requested.
     ///
     /// Specifically this is the lowest checkpoint for which input/output object data will be
@@ -811,6 +809,22 @@ pub trait RpcIndexes: Send + Sync {
         original_id: ObjectID,
         cursor: Option<u64>,
     ) -> Result<PackageVersionsIterator<'_>>;
+
+    /// Resolve the storage id holding the exact `version` of the package
+    /// originally published at `original_id`.
+    fn get_package_version_storage_id(
+        &self,
+        original_id: ObjectID,
+        version: u64,
+    ) -> Result<Option<ObjectID>>;
+
+    /// Resolve the `(version, storage_id)` of the latest package in
+    /// `original_id`'s upgrade lineage that existed at or before `checkpoint`.
+    fn get_package_at_checkpoint(
+        &self,
+        original_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<(u64, ObjectID)>>;
 
     fn get_highest_indexed_checkpoint_seq_number(&self)
     -> Result<Option<CheckpointSequenceNumber>>;

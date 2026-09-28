@@ -48,7 +48,6 @@ sui-package-alt.workspace = true
 tikv-jemalloc-ctl.workspace = true
 
 [dev-dependencies]
-jsonrpsee.workspace = true
 rand.workspace = true
 tempfile.workspace = true
 walkdir.workspace = true

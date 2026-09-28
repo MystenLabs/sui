@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 8 tasks
 
+// Test of hot value rules for entry functions that involves chains of entangled result, where the
+// heat is caused by taking a shared object by-value
+
 init:
 A: object(0,0)
 

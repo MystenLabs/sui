@@ -1,0 +1,96 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+// We double-check that strange name collision cases do not crop up
+
+task 1, lines 5-43:
+//# print-bytecode
+// Move bytecode v7
+module 42.a {
+
+public(friend) helper(): u64 {
+B0:
+	0: LdU64(0)
+	1: Ret
+}
+
+public local(): u64 {
+B0:
+	0: LdConst[1](u64: 2)
+	1: Ret
+}
+
+Constants [
+	0 => u64: 1
+	1 => u64: 2
+	2 => vector<u8>: "hello" // interpreted as UTF8 string
+]
+}
+// Move bytecode v7
+module 42.c {
+
+public read(): u64 {
+B0:
+	0: LdConst[0](u64: 1)
+	1: Ret
+}
+
+Constants [
+	0 => u64: 1
+]
+}
+// Move bytecode v7
+module 42.user {
+
+public both(): u64 {
+B0:
+	0: LdConst[0](u64: 3)
+	1: LdConst[1](u64: 4)
+	2: Add
+	3: Ret
+}
+
+Constants [
+	0 => u64: 3
+	1 => u64: 4
+]
+}
+// Move bytecode v7
+module 42.x {
+
+Constants [
+	0 => u64: 3
+]
+}
+// Move bytecode v7
+module 42.x_A {
+
+Constants [
+	0 => u64: 4
+]
+}
+// Move bytecode v7
+module 42.b {
+use 0000000000000000000000000000000000000000000000000000000000000042::a;
+
+public both(): u64 {
+B0:
+	0: Call a::helper(): u64
+	1: LdConst[0](u64: 1)
+	2: Add
+	3: Ret
+}
+
+public bytes(): vector<u8> {
+B0:
+	0: LdConst[1](vector<u8>: "hel..)
+	1: Ret
+}
+
+Constants [
+	0 => u64: 1
+	1 => vector<u8>: "hello" // interpreted as UTF8 string
+]
+}

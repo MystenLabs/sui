@@ -3,6 +3,10 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 15 tasks
 
+// tests invalid attempts at manually supplying &mut/&TxContext in dev inspect. The arity check
+// during translation rejects the chained calls; standalone reference-returning calls are covered
+// by the TxContext return rule (see programmable/tx_context_return_invalid)
+
 task 1, lines 10-40:
 //# publish
 created: object(1,0)

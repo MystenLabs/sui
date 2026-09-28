@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 937
 ---
 processed 18 tasks
 
@@ -76,7 +77,7 @@ task 10, lines 89-90:
 mutated: object(0,0), object(6,0)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
 
-task 11, lines 92-95:
+task 11, line 92:
 //# view-object 6,0
 Owner: Shared( 2 )
 Version: 9
@@ -88,6 +89,9 @@ Contents: Test_DepV1::DepM1::DepObj {
     },
     v: 39u64,
 }
+
+// call functions from two different versions of the same module modifying the same object defined
+// in the same version of the dependent module
 
 task 12, lines 97-98:
 //# programmable --sender A --inputs object(6,0)
@@ -101,7 +105,7 @@ task 13, lines 100-101:
 mutated: object(0,0), object(6,0)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
 
-task 14, lines 103-106:
+task 14, line 103:
 //# view-object 6,0
 Owner: Shared( 2 )
 Version: 11
@@ -113,6 +117,9 @@ Contents: Test_DepV1::DepM1::DepObj {
     },
     v: 37u64,
 }
+
+// call functions from two different versions of the same module modifying the same object defined
+// in different versions of the dependent module
 
 task 15, lines 108-109:
 //# programmable --sender A --inputs object(6,0)

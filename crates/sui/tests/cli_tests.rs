@@ -4149,12 +4149,12 @@ async fn test_send_funds_from_address_balance_sui() -> Result<(), anyhow::Error>
     );
 
     // The address balance covered gas as well, so the transaction carries no gas payment. Paying
-    // that way is epoch-scoped, so the fullnode gives it a ValidDuring expiration for replay
-    // protection.
+    // that way is epoch-scoped, so the fullnode gives it an expiration with a validity window for
+    // replay protection — `Validity` when it can also name the transaction's proposers.
     assert!(response.transaction.gas_data().payment.is_empty());
     assert!(matches!(
         response.transaction.expiration(),
-        TransactionExpiration::ValidDuring { .. }
+        TransactionExpiration::ValidDuring { .. } | TransactionExpiration::Validity { .. }
     ));
 
     // The sender's coins are untouched: both the amount and the gas came out of address balance.

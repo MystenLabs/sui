@@ -54,7 +54,7 @@ A rule is represented as a type with a `drop` ability. This type is called a wit
 
 ```move
 /// The Rule type
-struct Rule has drop {}
+public struct Rule has drop {}
 ```
 
 After you [add a rule](/onchain-finance/closed-loop-token/token-policy#adding-rules) to an action in the `TokenPolicy`, the action requires a stamp of the rule to pass confirmation.
@@ -73,7 +73,7 @@ module example::pass_rule {
     use sui::token::{Self, ActionRequest, TokenPolicy};
 
     /// The Rule type
-    struct Pass has drop {}
+    public struct Pass has drop {}
 
     /// Add approval from the Pass rule to the ActionRequest
     public fun verify<T>(

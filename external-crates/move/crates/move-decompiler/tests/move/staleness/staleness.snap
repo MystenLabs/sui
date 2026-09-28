@@ -1,6 +1,5 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
-assertion_line: 72
 ---
 module staleness {
     public fun feed_ts () {
@@ -11,14 +10,12 @@ module staleness {
         let l8 = true;
         let l9 = 0u64;
         while(l9 < l1) {
-            let l5 =         staleness::feed_ts(l9)
-;
+            let l5 = staleness::feed_ts(l9);
             if (l0 > l5) {
                 if (l0 - l5 >= l2) {
                     l8 = false;
                 } else {
-                    let l6 =         staleness::feed_ts(l3)
-;
+                    let l6 = staleness::feed_ts(l3);
                     if (l0 > l6) {
                         if (l0 - l6 >= l2) {
                             l8 = false;
@@ -33,8 +30,7 @@ module staleness {
                 if (l5 - l0 >= l2) {
                     l8 = false;
                 } else {
-                    let l7 =         staleness::feed_ts(l3)
-;
+                    let l7 = staleness::feed_ts(l3);
                     if (l0 > l7) {
                         if (l0 - l7 >= l2) {
                             l8 = false;
@@ -59,7 +55,7 @@ module staleness {
         } else {
             if (l1 - l0 >= l2) {
                 *l4 = false
-                *l3 =         *l3 + 1u64
+                *l3 = *l3 + 1u64
             }
         }
     }

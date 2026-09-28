@@ -63,11 +63,6 @@ const references = [
 				],
 			},
 			{
-				type: 'link',
-				label: 'JSON-RPC',
-				href: '/sui-api-ref',
-			},
-			{
 				type: 'category',
 				label: 'gRPC',
 				items: [
@@ -77,6 +72,21 @@ const references = [
 				],
 			},
 			'references/sui-api/rpc-best-practices',
+			{
+				// JSON-RPC was disabled on Mainnet the week of 2026-07-27. Kept
+				// behind a collapsed Legacy category for migration lookups until
+				// full decommission in mid-October 2026, then archive this entry.
+				type: 'category',
+				label: 'Legacy (to be archived)',
+				collapsed: true,
+				items: [
+					{
+						type: 'link',
+						label: 'JSON-RPC',
+						href: '/sui-api-ref',
+					},
+				],
+			},
 		],
 	},
 	{

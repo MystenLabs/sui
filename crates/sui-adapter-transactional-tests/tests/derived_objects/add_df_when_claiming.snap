@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 4 tasks
 
+// When claiming a derived object, add a DF to it immediately.
+
 init:
 A: object(0,0)
 

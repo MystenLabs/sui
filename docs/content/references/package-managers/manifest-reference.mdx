@@ -1,6 +1,8 @@
 ---
 title: Manifest Reference
-description: Explore examples of package manifest files.
+description: >-
+  Reference for Move.toml manifest syntax, fields, and configuration options,
+  including package, dependencies, environments, and dep-replacements sections.
 keywords:
   - move
   - move reference
@@ -28,7 +30,9 @@ questions:
   - What is the Move package manifest format?
   - What is the [environments] section in Move.toml?
   - Can I use Base58 or Hex chain IDs in Move.toml?
-answer: Explore examples of package manifest files.
+answer: >-
+  Reference for Move.toml manifest syntax, fields, and configuration options,
+  including package, dependencies, environments, and dep-replacements sections.
 ---
 
 `Move.toml` is the manifest file for a Sui Move package. It declares the package name, dependencies, network environments, and environment-specific dependency overrides. Every Move project has a `Move.toml` at its root ([Move package management](/develop/manage-packages/move-package-management)).
@@ -81,8 +85,8 @@ Maps custom environment names to chain identifiers. The `mainnet` and `testnet` 
 
 Chain IDs accept either format interchangeably:
 
-- **Hex** (short form) — the first 4 bytes of the genesis checkpoint digest, hex-encoded (for example, `"aba3e445"`).
-- **Base58** (full form) — the complete genesis checkpoint digest, Base58-encoded (for example, `"69WiPg3DAQhKenaFN9I6pYc7MYk..."`).
+- **Hex** (short form): the first 4 bytes of the genesis checkpoint digest, hex-encoded (for example, `"aba3e445"`).
+- **Base58** (full form): the complete genesis checkpoint digest, Base58-encoded (for example, `"69WiPg3DAQhKenaFN9I6pYc7MYk..."`).
 
 The package system compares chain IDs by their underlying bytes, so a Hex value in the manifest matches a Base58 value from the CLI and vice versa.
 

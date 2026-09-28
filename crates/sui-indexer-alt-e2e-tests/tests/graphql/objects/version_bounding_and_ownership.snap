@@ -6,6 +6,24 @@ processed 46 tasks
 init:
 A: object(0,0)
 
+// Paginating the owned objects of an object fetched at a specific version is
+// not supported, but we do support paginating the owned objects of an object
+// that is latest as of a particular checkpoint. At a surface level, this is
+// because of a limitation in our indexing, but this is a symptom of a deeper
+// reason:
+//
+// - The index used to track object ownership tracks state at checkpoint boundaries.
+// - Objects are versioned (every update to an object bumps its version), and
+//   an object can transition through multiple versions in one checkpoint.
+//
+// This means that if you are looking at an object at a specific version, that
+// version might not be at a checkpoint boundary, and so the ownership index
+// cannot tell you which objects it owned at that version.
+//
+// The deeper reason for this limitation is that transferring an object A to
+// another object B only modifies A, not B (it is A's "owner" field that has
+// been updated).
+
 task 1, lines 24-27:
 //# programmable --sender A --inputs 100
 //> 0: SplitCoins(Gas, [Input(0)]);

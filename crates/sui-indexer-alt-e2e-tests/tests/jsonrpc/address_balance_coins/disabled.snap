@@ -3,10 +3,15 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 4 tasks
 
+// Fund an address balance for B and verify that suix_getCoins DOES NOT return
+// the address balance coin, because the protocol does not support that feature
+// yet.
+
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 11-14:
+task 1, lines 10-14:
+// Send 1_000_000_000 from A to B's address balance
 //# programmable --sender A --inputs 1000000000 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
@@ -15,11 +20,12 @@ mutated: object(0,0)
 accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 1000000000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 16-18:
+task 2, line 16:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 19-23:
+task 3, lines 18-23:
+// B should see the address balance coin in getCoins
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",

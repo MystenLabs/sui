@@ -3,7 +3,8 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 35 tasks
 
-task 6, lines 182-188:
+task 6, lines 181-188:
+// Casting to u8, overflowing.
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -102,7 +103,7 @@ Error: Function execution failed with VMError: {
     message: "Cannot cast u32(256123) to u8",
 }
 
-task 15, lines 254-262:
+task 15, lines 254-260:
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -113,7 +114,8 @@ Error: Function execution failed with VMError: {
     message: "Cannot cast u256(11579208923731619542357098500868790785326998466564056403945758400791312963993) to u8",
 }
 
-task 16, lines 263-269:
+task 16, lines 262-269:
+// Casting to u16, overflowing.
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -201,7 +203,7 @@ Error: Function execution failed with VMError: {
     message: "Cannot cast u32(42949629) to u16",
 }
 
-task 24, lines 327-335:
+task 24, lines 327-333:
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -212,7 +214,8 @@ Error: Function execution failed with VMError: {
     message: "Cannot cast u256(115792089237316195423570985008687907853269984665640564039457584007913129639) to u16",
 }
 
-task 25, lines 336-342:
+task 25, lines 335-342:
+// Casting to u32, overflowing.
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -267,7 +270,7 @@ Error: Function execution failed with VMError: {
     message: "Cannot cast u128(340282366920938463463374607431768211455) to u32",
 }
 
-task 31, lines 384-392:
+task 31, lines 384-390:
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,
@@ -278,7 +281,8 @@ Error: Function execution failed with VMError: {
     message: "Cannot cast u256(115792089237316195423570985008687907853269984665640564039457584007913129639) to u32",
 }
 
-task 32, lines 393-399:
+task 32, lines 392-399:
+// Casting to u64, overflowing.
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,

@@ -25,13 +25,24 @@ pub enum VersionConstraint {
     AtLeast(u64, ObjectID),
 }
 
+/// How a specific version of a package resolves, recorded for every package version the linkage
+/// refinement touched.
+#[derive(Debug, Clone, Copy)]
+pub struct PackageResolution {
+    /// The original id of the package.
+    pub original_id: ObjectID,
+    /// The resolved version of the package. `None` only for the late-bound self entry that
+    /// `ResolvedLinkage::update_for_publication` adds.
+    pub version: Option<u64>,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ResolutionTable {
     pub(crate) config: ResolutionConfig,
     pub(crate) resolution_table: BTreeMap<ObjectID, VersionConstraint>,
     /// For every version of every package that we have seen, a mapping of the ObjectID for that
     /// package to its runtime ID.
-    pub(crate) all_versions_resolution_table: BTreeMap<ObjectID, ObjectID>,
+    pub(crate) all_versions_resolution_table: BTreeMap<ObjectID, PackageResolution>,
 }
 
 impl ResolutionTable {
@@ -192,9 +203,13 @@ pub(crate) fn add_and_unify<E: ExecutionErrorTrait, S: PackageStore + ?Sized>(
         .all_versions_resolution_table
         .contains_key(object_id)
     {
-        resolution_table
-            .all_versions_resolution_table
-            .insert(*object_id, original_pkg_id);
+        resolution_table.all_versions_resolution_table.insert(
+            *object_id,
+            PackageResolution {
+                original_id: original_pkg_id,
+                version: Some(package.version()),
+            },
+        );
     }
 
     Ok(())

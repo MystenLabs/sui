@@ -1,0 +1,20 @@
+Command `build -v`:
+INCLUDING DEPENDENCY Defn
+BUILDING Usage
+error[EC04001]: restricted visibility
+  ┌─ defn/sources/defn.move:6:9
+  │
+2 │     public(package) const MAX: u64 = 100;
+  │     --------------- A 'public(package)' constant can only be accessed from the same address and package as module 'Defn::defn' in package 'Defn'. This access is from address 'Usage' in package 'Usage'
+  ·
+6 │         MAX
+  │         ^^^ Invalid access of 'public(package)' visible constant 'Defn::defn::MAX'
+  │
+  ┌─ ./sources/usage.move:5:29
+  │
+5 │     public fun max(): u64 { defn::get!() }
+  │                             ------------ While expanding this macro
+  │
+  = This visibility error occurs in a macro body while expanding the macro 'Defn::defn::get'
+  = Visibility inside of expanded macros is resolved in the scope of the caller.
+

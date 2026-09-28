@@ -3,7 +3,7 @@
 
 #[cfg(msim)]
 mod test {
-    use mysten_common::{random::get_rng, register_debug_fatal_handler};
+    use mysten_common::register_debug_fatal_handler;
     use prost::Message;
     use rand::{Rng, distributions::uniform::SampleRange, thread_rng};
     use std::collections::BTreeMap;
@@ -21,6 +21,7 @@ mod test {
     use sui_benchmark::workloads::benchmark_move_base_dir;
     use sui_benchmark::workloads::composite::CompositeWorkloadConfig;
     use sui_benchmark::workloads::expected_failure::ExpectedFailurePayloadCfg;
+    use sui_benchmark::workloads::gas_double_spend::GasDoubleSpendSubmission;
     use sui_benchmark::workloads::workload::ExpectedFailureType;
     use sui_benchmark::workloads::workload_configuration::{
         WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
@@ -31,9 +32,7 @@ mod test {
         util::get_ed25519_keypair_from_keystore,
     };
     use sui_config::ExecutionCacheConfig;
-    use sui_config::node::{
-        AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig, RunWithRange,
-    };
+    use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::AuthorityState;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -57,7 +56,6 @@ mod test {
     use sui_types::base_types::{
         AuthorityName, ConciseableName, ObjectID, SequenceNumber, SuiAddress,
     };
-    use sui_types::committee::CommitteeTrait;
     use sui_types::digests::TransactionDigest;
     use sui_types::effects::TransactionEffectsAPI;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
@@ -182,6 +180,39 @@ mod test {
         test_simulated_load(test_cluster, 15).await;
     }
 
+    /// Runs the large-transaction workload in isolation and asserts it generates load.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_large_transaction() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(4, 10_000, 1).await;
+        let mut simulated_load_config = SimulatedLoadConfig::default();
+        simulated_load_config.remote_env = false;
+        simulated_load_config.large_transaction_weight = 1;
+        simulated_load_config.large_transaction_size_bytes = 10_000;
+        simulated_load_config.shared_counter_weight = 0;
+        simulated_load_config.transfer_object_weight = 0;
+        simulated_load_config.delegation_weight = 0;
+        simulated_load_config.batch_payment_weight = 0;
+        simulated_load_config.shared_deletion_weight = 0;
+        simulated_load_config.randomness_weight = 0;
+        simulated_load_config.randomized_transaction_weight = 0;
+        simulated_load_config.slow_weight = 0;
+        simulated_load_config.composite_weight = 0;
+        simulated_load_config.gas_double_spend_weight = 0;
+        info!("Simulated load config: {:?}", simulated_load_config);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            30,
+            simulated_load_config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
+    }
+
     /// Tests conflicting transfer workload which creates contention by submitting
     /// conflicting transactions as soft bundles. The soft bundle ensures deterministic
     /// ordering: first transaction succeeds, subsequent ones fail with ObjectLockConflict.
@@ -192,17 +223,20 @@ mod test {
         let mut simulated_load_config = SimulatedLoadConfig::default();
         // Use LocalValidatorAggregatorProxy for soft bundle support
         simulated_load_config.remote_env = false;
-        // Enable conflicting transfer workload
-        simulated_load_config.conflicting_transfer_weight = 1;
+        // Enable conflicting transfer workload. Weight 2 keeps it on par with the
+        // inherited default weights (randomized transaction, composite).
+        simulated_load_config.conflicting_transfer_weight = 2;
         simulated_load_config.num_contested_objects = 5;
         // Disable other workloads to isolate testing
         simulated_load_config.shared_counter_weight = 0;
-        simulated_load_config.transfer_object_weight = 1;
+        simulated_load_config.transfer_object_weight = 2;
         simulated_load_config.delegation_weight = 0;
         simulated_load_config.batch_payment_weight = 0;
         simulated_load_config.shared_deletion_weight = 0;
         simulated_load_config.randomness_weight = 0;
         simulated_load_config.slow_weight = 0;
+        // Gas double-spend creates the same object-lock contention this test asserts on.
+        simulated_load_config.gas_double_spend_weight = 0;
         info!("Simulated load config: {:?}", simulated_load_config);
 
         test_simulated_load_with_test_config(
@@ -599,7 +633,7 @@ mod test {
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
             let mut rng = thread_rng();
-            simulated_load_config.shared_counter_weight = if rng.gen_bool(0.5) { 5 } else { 50 };
+            simulated_load_config.shared_counter_weight = if rng.gen_bool(0.5) { 10 } else { 100 };
             simulated_load_config.num_shared_counters = match rng.gen_range(0..=2) {
                 0 => None, // shared_counter_hotness_factor is in play in this case.
                 n => Some(n),
@@ -609,9 +643,10 @@ mod test {
             // Use shared_counter_max_tip to make transactions to have different gas prices.
             simulated_load_config.use_shared_counter_max_tip = rng.gen_bool(0.25);
             simulated_load_config.shared_counter_max_tip = rng.gen_range(1..=1000);
+            simulated_load_config.shared_counter_gas_price_multiplier = rng.gen_range(1.0..=10.0);
 
             // Always enable the randomized tx workload in this test.
-            simulated_load_config.randomized_transaction_weight = 1;
+            simulated_load_config.randomized_transaction_weight = 2;
             // Disable concurrent transactions in congestion control test to avoid lock conflicts
             simulated_load_config.randomized_transaction_concurrency = 1;
             info!("Simulated load config: {:?}", simulated_load_config);
@@ -670,7 +705,7 @@ mod test {
 
         let mut simulated_load_config = SimulatedLoadConfig::default();
         {
-            simulated_load_config.expected_failure_weight = 20;
+            simulated_load_config.expected_failure_weight = 40;
             simulated_load_config.expected_failure_config.failure_type =
                 ExpectedFailureType::try_from(0).unwrap();
             info!("Simulated load config: {:?}", simulated_load_config);
@@ -1143,6 +1178,8 @@ mod test {
         remote_env: bool,
         num_transfer_accounts: u64,
         shared_counter_weight: u32,
+        large_transaction_weight: u32,
+        large_transaction_size_bytes: u64,
         slow_weight: u32,
         transfer_object_weight: u32,
         delegation_weight: u32,
@@ -1155,6 +1192,7 @@ mod test {
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
+        shared_counter_gas_price_multiplier: f64,
         expected_failure_weight: u32,
         expected_failure_config: ExpectedFailurePayloadCfg,
         party_weight: u32,
@@ -1162,26 +1200,34 @@ mod test {
         num_contested_objects: u64,
         composite_weight: u32,
         composite_config: Option<CompositeWorkloadConfig>,
+        gas_double_spend_weight: u32,
+        gas_double_spend_copies: usize,
+        gas_double_spend_submission: GasDoubleSpendSubmission,
     }
 
     impl Default for SimulatedLoadConfig {
         fn default() -> Self {
             Self {
                 remote_env: true,
-                shared_counter_weight: 1,
-                slow_weight: 1,
-                transfer_object_weight: 1,
+                // The enabled workloads run at weight 2 so that gas_double_spend (weight 1)
+                // gets ~5% of the traffic; integer weights can't express 5% otherwise.
+                shared_counter_weight: 2,
+                large_transaction_weight: 0,
+                large_transaction_size_bytes: 100_000,
+                slow_weight: 2,
+                transfer_object_weight: 2,
                 num_transfer_accounts: 2,
-                delegation_weight: 1,
-                batch_payment_weight: 1,
-                shared_deletion_weight: 1,
+                delegation_weight: 2,
+                batch_payment_weight: 2,
+                shared_deletion_weight: 2,
                 shared_counter_hotness_factor: 50,
-                randomness_weight: 1,
-                randomized_transaction_weight: 1,
+                randomness_weight: 2,
+                randomized_transaction_weight: 2,
                 randomized_transaction_concurrency: 4,
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
+                shared_counter_gas_price_multiplier: 1.0,
                 expected_failure_weight: 0,
                 expected_failure_config: ExpectedFailurePayloadCfg {
                     failure_type: ExpectedFailureType::try_from(0).unwrap(),
@@ -1190,8 +1236,13 @@ mod test {
                 party_weight: 0,
                 conflicting_transfer_weight: 0,
                 num_contested_objects: 2,
-                composite_weight: 1,
+                composite_weight: 2,
                 composite_config: Some(CompositeWorkloadConfig::balanced()),
+                // Weight 1 out of a total of 19 across the default workloads, i.e. ~5% of
+                // transactions race duplicate copies over the same gas object.
+                gas_double_spend_weight: 1,
+                gas_double_spend_copies: 2,
+                gas_double_spend_submission: GasDoubleSpendSubmission::default(),
             }
         }
     }
@@ -1210,6 +1261,10 @@ mod test {
                 batch_payment_weight: 0,
                 shared_deletion_weight: 0,
                 slow_weight: 0,
+                gas_double_spend_weight: 0,
+                // Pinned so the composite/randomized mix stays 1:1 regardless of the
+                // default weights above.
+                randomized_transaction_weight: 1,
                 ..Default::default()
             }
         }
@@ -1392,6 +1447,7 @@ mod test {
 
         let weights = WorkloadWeights {
             shared_counter: config.shared_counter_weight,
+            large_transaction: config.large_transaction_weight,
             transfer_object: config.transfer_object_weight,
             delegation: config.delegation_weight,
             batch_payment: config.batch_payment_weight,
@@ -1404,6 +1460,7 @@ mod test {
             party: config.party_weight,
             conflicting_transfer: config.conflicting_transfer_weight,
             composite: config.composite_weight,
+            gas_double_spend: config.gas_double_spend_weight,
         };
 
         let workload_config = WorkloadConfig {
@@ -1411,14 +1468,18 @@ mod test {
             num_workers,
             num_transfer_accounts: config.num_transfer_accounts,
             weights,
+            large_transaction_size_bytes: config.large_transaction_size_bytes,
             adversarial_cfg,
             expected_failure_cfg: config.expected_failure_config,
             batch_payment_size,
             shared_counter_hotness_factor: config.shared_counter_hotness_factor,
             num_shared_counters: config.num_shared_counters,
             shared_counter_max_tip,
+            shared_counter_gas_price_multiplier: config.shared_counter_gas_price_multiplier,
             num_contested_objects: config.num_contested_objects,
             randomized_transaction_concurrency: config.randomized_transaction_concurrency,
+            gas_double_spend_copies: config.gas_double_spend_copies,
+            gas_double_spend_submission: config.gas_double_spend_submission,
             target_qps,
             in_flight_ratio,
             duration,
@@ -2044,6 +2105,7 @@ mod test {
         let address_balance_enabled = protocol_config.enable_address_balance_gas_payments();
         let address_aliases_enabled = protocol_config.address_aliases();
         let auth_events_enabled = protocol_config.enable_authenticated_event_streams();
+        let allowances_enabled = protocol_config.enable_allowances();
 
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::composite::CompositionMetrics::new(),
@@ -2077,7 +2139,9 @@ mod test {
         .with_probability(AddressBalanceOverdraw::NAME, 0.3)
         .with_probability(AccumulatorBalanceRead::NAME, 0.3)
         .with_probability(AuthenticatedEventEmit::NAME, 0.1)
-        .with_probability(CoinReservationWithdraw::NAME, 0.3);
+        .with_probability(CoinReservationWithdraw::NAME, 0.3)
+        .with_probability(AllowanceWithdraw::NAME, 0.1)
+        .with_probability(AllowanceSelfWithdraw::NAME, 0.1);
 
         let test_cluster_for_scan = test_cluster.clone();
         test_simulated_load_with_test_config(
@@ -2183,6 +2247,28 @@ mod test {
                 auth_event_success_count > 0,
                 "expected at least one authenticated event emit"
             );
+        }
+
+        if allowances_enabled {
+            let sum_containing = |name: &str, counter: fn(&OperationSetStats) -> u64| -> u64 {
+                metrics
+                    .iter_stats()
+                    .filter(|(op_set, _)| op_set.contains(name))
+                    .map(|(_, stats)| counter(stats))
+                    .sum()
+            };
+
+            for name in [AllowanceWithdraw::NAME, AllowanceSelfWithdraw::NAME] {
+                let success_count = sum_containing(name, |s| s.success_count);
+                // The failure mix is seed-dependent: logged, not asserted.
+                info!(
+                    "{name} metrics: success={}, insufficient_funds={}, rejected={}",
+                    success_count,
+                    sum_containing(name, |s| s.insufficient_funds_count),
+                    sum_containing(name, |s| s.permanent_failure_count),
+                );
+                assert!(success_count > 0, "expected at least one {name} success");
+            }
         }
     }
 
@@ -2427,165 +2513,6 @@ mod test {
         );
         assert_eq!(m.abort, 0, "no transactions should abort");
         assert_eq!(m.permanent_failure, 0, "no permanent failures expected");
-    }
-
-    /// Tests that async post-processing produces consistent indexes even when
-    /// the node crashes after indexing but before notifying the checkpoint executor.
-    /// Uses a fail point to simulate this crash scenario under load, then verifies
-    /// that the async fullnode recovers and matches a sync fullnode's index state.
-    #[sim_test(config = "test_config()")]
-    async fn test_simulated_load_async_post_processing_consistency() {
-        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-
-        let mut test_cluster = init_test_cluster_builder(1, 0)
-            .with_authority_overload_config(AuthorityOverloadConfig {
-                check_system_overload_at_signing: false,
-                ..Default::default()
-            })
-            .build()
-            .await;
-
-        // Both fullnodes use RunWithRange::Epoch(0) so they stop after processing
-        // epoch 0. This ensures they are at the same checkpoint when we compare indexes.
-        let run_with_range = Some(RunWithRange::Epoch(0));
-
-        // Spawn async fullnode (default config)
-        let async_fn_config = test_cluster
-            .fullnode_config_builder()
-            .with_run_with_range(run_with_range)
-            .build(&mut get_rng(), test_cluster.swarm.config());
-        let async_fullnode = test_cluster
-            .start_fullnode_from_config(async_fn_config)
-            .await;
-        let async_fn_name = async_fullnode.sui_node.state().name;
-        let async_fn_sim_id = async_fullnode.sui_node.with(|n| n.get_sim_node_id());
-        drop(async_fullnode);
-
-        // Spawn sync fullnode
-        let sync_fn_config = test_cluster
-            .fullnode_config_builder()
-            .with_sync_post_process_one_tx(true)
-            .with_run_with_range(run_with_range)
-            .build(&mut get_rng(), test_cluster.swarm.config());
-        let sync_fullnode = test_cluster
-            .start_fullnode_from_config(sync_fn_config)
-            .await;
-        let sync_fn_name = sync_fullnode.sui_node.state().name;
-        drop(sync_fullnode);
-
-        let test_cluster: Arc<TestCluster> = test_cluster.into();
-
-        // Only crash the async fullnode. Grace period prevents rapid re-crashing
-        // after restart.
-        let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
-        let grace_period_clone = grace_period.clone();
-        register_fail_point("crash-after-post-process-one-tx", move || {
-            let cur_node = sui_simulator::current_simnode_id();
-            if cur_node != async_fn_sim_id {
-                return;
-            }
-
-            let mut grace_period = grace_period_clone.lock().unwrap();
-            if let Some(t) = *grace_period {
-                if t < Instant::now() {
-                    *grace_period = None;
-                } else {
-                    return;
-                }
-            }
-
-            let mut rng = thread_rng();
-            if rng.gen_range(0.0..1.0) < 0.02 {
-                let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
-                let alive_until = Instant::now()
-                    + restart_after
-                    + Duration::from_millis(rng.gen_range(5000..30000));
-                *grace_period = Some(alive_until);
-
-                error!(?cur_node, "killing async fullnode");
-                drop(grace_period);
-                sui_simulator::task::kill_current_node(Some(restart_after));
-            }
-        });
-
-        test_simulated_load_with_test_config(
-            test_cluster.clone(),
-            60,
-            SimulatedLoadConfig::default(),
-            None,
-            None,
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
-            false,
-        )
-        .await;
-
-        clear_fail_point("crash-after-post-process-one-tx");
-
-        // Wait for the async fullnode to restart if it was killed during the test.
-        let async_node = test_cluster.swarm.node(&async_fn_name).unwrap();
-        while async_node.get_node_handle().is_none() {
-            tokio::time::sleep(Duration::from_millis(500)).await;
-        }
-
-        // Subscribe to shutdown channels on both RunWithRange fullnodes BEFORE
-        // triggering epoch change. This ensures the broadcast::send succeeds when
-        // the RunWithRange condition fires.
-        // Also grab Arc<AuthorityState> references now, since get_node_handle()
-        // returns None after the node shuts down.
-        let async_node = test_cluster.swarm.node(&async_fn_name).unwrap();
-        let sync_node = test_cluster.swarm.node(&sync_fn_name).unwrap();
-        let async_handle = async_node.get_node_handle().unwrap();
-        let sync_handle = sync_node.get_node_handle().unwrap();
-        let mut async_shutdown_rx = async_handle.with(|node| node.subscribe_to_shutdown_channel());
-        let mut sync_shutdown_rx = sync_handle.with(|node| node.subscribe_to_shutdown_channel());
-        let async_state = async_handle.state();
-        let sync_state = sync_handle.state();
-        drop(async_handle);
-        drop(sync_handle);
-
-        // Close epoch on validators and wait for the default fullnode to reach
-        // epoch 1. We cannot use trigger_reconfiguration because it calls
-        // wait_for_epoch_all_nodes which may race with RunWithRange shutdown.
-        {
-            let cur_committee = test_cluster
-                .fullnode_handle
-                .sui_node
-                .with(|node| node.state().clone_committee_for_testing());
-            let mut cur_stake = 0;
-            for node in test_cluster.swarm.active_validators() {
-                node.get_node_handle()
-                    .unwrap()
-                    .with_async(|node| async { node.close_epoch_for_testing().await.unwrap() })
-                    .await;
-                cur_stake +=
-                    cur_committee.weight(&node.get_node_handle().unwrap().with(|n| n.state().name));
-                if cur_stake >= cur_committee.quorum_threshold() {
-                    break;
-                }
-            }
-            test_cluster
-                .wait_for_epoch(Some(cur_committee.epoch + 1))
-                .await;
-        }
-
-        // Wait for both RunWithRange fullnodes to shut down. This guarantees
-        // they have processed exactly through the end-of-epoch checkpoint and
-        // stopped, so their databases are quiescent and comparable.
-        async_shutdown_rx.recv().await.unwrap();
-        sync_shutdown_rx.recv().await.unwrap();
-
-        // Exhaustively compare index tables between the async and sync fullnodes.
-        let async_indexes = async_state
-            .indexes
-            .as_ref()
-            .expect("async fullnode should have indexes");
-        let sync_indexes = sync_state
-            .indexes
-            .as_ref()
-            .expect("sync fullnode should have indexes");
-        async_indexes
-            .tables()
-            .check_databases_equal(sync_indexes.tables());
     }
 
     /// Test that Observer nodes can connect to validators and stream consensus

@@ -25,6 +25,7 @@ pub(crate) mod get_transaction;
 mod list_checkpoints;
 mod list_events;
 mod list_transactions;
+mod move_package_service;
 
 #[tonic::async_trait]
 impl LedgerService for KvRpcServer {
@@ -33,7 +34,7 @@ impl LedgerService for KvRpcServer {
         _: tonic::Request<GetServiceInfoRequest>,
     ) -> Result<tonic::Response<GetServiceInfoResponse>, tonic::Status> {
         {
-            let cache = self.cache.read().await;
+            let cache = self.cache.borrow();
             if let Some(cached_info) = cache.as_ref() {
                 return Ok(tonic::Response::new(cached_info.clone()));
             }

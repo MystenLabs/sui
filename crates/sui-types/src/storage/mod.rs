@@ -7,9 +7,10 @@ mod read_store;
 mod shared_in_memory_store;
 mod write_store;
 
+use crate::IMPLICITLY_READ_SYSTEM_OBJECTS;
 use crate::base_types::{
-    ConsensusObjectSequenceKey, FullObjectID, FullObjectRef, SuiAddress, TransactionDigest,
-    VersionNumber,
+    ConsensusObjectSequenceKey, ConsensusObjectVersion, FullObjectID, FullObjectRef, SuiAddress,
+    SystemObjectVersions, TransactionDigest, VersionNumber,
 };
 use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -20,7 +21,7 @@ use crate::message_envelope::Message;
 use crate::move_package::MovePackage;
 use crate::storage::error::Error as StorageError;
 use crate::transaction::TransactionData;
-use crate::transaction::{SenderSignedData, TransactionDataAPI};
+use crate::transaction::{InputObjects, SenderSignedData, TransactionDataAPI};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
@@ -185,6 +186,15 @@ pub enum ObjectChange {
 pub trait StorageView: Storage + ParentSync + RuntimeObjectResolver {}
 impl<T: Storage + ParentSync + RuntimeObjectResolver> StorageView for T {}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
+pub enum ObjectFundsSufficiency {
+    Sufficient,
+    Insufficient,
+    Overflow,
+    LoadError(String),
+}
+
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
 pub trait RuntimeObjectResolver: BackingPackageStore {
@@ -238,6 +248,11 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
             None
         }
     }
+}
+
+/// Resolves the balance available for object-funds withdrawals during execution.
+pub trait ObjectFundsResolver {
+    fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
 }
 
 pub struct DenyListResult {
@@ -756,22 +771,14 @@ impl Display for DeleteKind {
     }
 }
 
-pub trait BackingStore:
-    BackingPackageStore + RuntimeObjectResolver + ObjectStore + ParentSync
-{
-    fn as_object_store(&self) -> &dyn ObjectStore;
-}
+pub trait BackingStore: RuntimeObjectResolver + ObjectStore + ParentSync {}
 
 impl<T> BackingStore for T
 where
-    T: BackingPackageStore,
     T: RuntimeObjectResolver,
     T: ObjectStore,
     T: ParentSync,
 {
-    fn as_object_store(&self) -> &dyn ObjectStore {
-        self
-    }
 }
 
 pub fn get_transaction_input_objects(
@@ -830,7 +837,71 @@ pub fn get_transaction_output_objects(
     Ok(output_objects)
 }
 
-// Returns an iterator over the ObjectKey's of objects read or written by this transaction
+impl SystemObjectVersions {
+    /// Obtains pinned system object versions from effects, queries the store for the initial shared versions.
+    pub fn from_effects(effects: &TransactionEffects, store: &dyn ObjectStore) -> Self {
+        Self::from_map(
+            effects
+                .accessed_consensus_objects()
+                .into_iter()
+                .filter_map(|ico| {
+                    let (id, version) = ico.id_and_version();
+                    if !id.is_implicitly_read_system_object() || version.is_cancelled() {
+                        return None;
+                    }
+                    let initial_shared_version = store
+                        .get_object(&id)
+                        .and_then(|object| object.owner().start_version())
+                        // unwrap safe because if effects contain an implicitly read system object,
+                        // it must exist in the store and is a shared object.
+                        .unwrap();
+                    Some((
+                        id,
+                        ConsensusObjectVersion {
+                            initial_shared_version,
+                            version,
+                        },
+                    ))
+                })
+                .collect(),
+        )
+    }
+
+    /// Before execution, get the versions of the implicitly read system objects from the declared
+    /// inputs, or else the latest from the store, and use these versions as the exact version to
+    /// read during execution.
+    /// This is used only in environments where there is no consensus to assign versions, e.g. simulacrum and dry-run.
+    pub fn from_inputs_or_latest_in_store(
+        input_objects: &InputObjects,
+        store: &dyn ObjectStore,
+    ) -> Self {
+        Self::from_map(
+            IMPLICITLY_READ_SYSTEM_OBJECTS
+                .iter()
+                .filter_map(|id| {
+                    let object = input_objects
+                        .iter_objects()
+                        .find(|object| object.id() == *id)
+                        .cloned()
+                        .or_else(|| store.get_object(id))?;
+                    let initial_shared_version = object
+                        .owner()
+                        .start_version()
+                        .expect("implicitly read system objects must be consensus objects");
+                    Some((
+                        *id,
+                        ConsensusObjectVersion {
+                            initial_shared_version,
+                            version: object.version(),
+                        },
+                    ))
+                })
+                .collect(),
+        )
+    }
+}
+
+// Returns a set of the ObjectKey's of objects read or written by this transaction
 pub fn get_transaction_object_set(
     transaction: &TransactionData,
     effects: &TransactionEffects,
@@ -964,6 +1035,16 @@ impl crate::storage::ObjectStore for TrackingBackingStore<'_> {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         self.inner
             .get_object(object_id)
+            .inspect(|o| self.track_object(o))
+    }
+
+    fn load_implicitly_read_system_object(
+        &self,
+        object_id: &ObjectID,
+        version: crate::base_types::ConsensusObjectVersion,
+    ) -> Option<Object> {
+        self.inner
+            .load_implicitly_read_system_object(object_id, version)
             .inspect(|o| self.track_object(o))
     }
 

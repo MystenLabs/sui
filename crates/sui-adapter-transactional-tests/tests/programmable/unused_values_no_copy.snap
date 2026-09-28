@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// tests invalid unused values without copy
+
 init:
 A: object(0,0)
 

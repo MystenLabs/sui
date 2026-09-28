@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod ast;
+mod needs_mut;
 mod refinement;
 mod structuring;
 

@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// tests the compatibility is run before init, otherwise some strange things can happen with
+// type layout
+
 init:
 A: object(0,0)
 

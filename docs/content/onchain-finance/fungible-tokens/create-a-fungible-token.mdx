@@ -1,6 +1,9 @@
 ---
 title: 'Create Fungible Tokens: Currency Standard'
-description: Learn how to create currencies and mint coins and tokens on the Sui network.
+description: >-
+  Learn how to create currencies using the Currency standard on Sui, including
+  standard and One-Time Witness creation flows, supply model configuration, and
+  regulated token setup.
 keywords:
   - mint tokens
   - create tokens
@@ -38,7 +41,10 @@ questions:
   - 'How do I create fungible tokens: currency standard?'
   - 'What is Create Fungible Tokens: Currency Standard in Sui?'
   - 'Why should I use create fungible tokens: currency standard?'
-answer: Learn how to create currencies and mint coins and tokens on the Sui network.
+answer: >-
+  Learn how to create currencies using the Currency standard on Sui, including
+  standard and One-Time Witness creation flows, supply model configuration, and
+  regulated token setup.
 ---
 
 Assets created using the Currency Standard are free-flowing, [wrappable](/develop/objects/object-ownership/wrapped), [freely transferable](/develop/objects/transfers/custom-rules) fungible assets that you can store in any app. The Currency Standard uses the [`sui::coin_registry`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui/coin_registry.md) module and the `Currency` object for metadata.
@@ -88,8 +94,8 @@ Then, call `coin_registry::finalize_registration` to place the coin into the reg
 # Requires the ID of the Currency object created during publishing.
 # This step is only required for OTW-created currencies.
 sui client ptb \
-    --assign @created_currency_object_id currency_to_promote \
-    --move-call 0x2::coin_registry::finalize_registration <CURRENCY_TYPE> @0xc currency_to_promote
+    --assign currency_to_promote @<CURRENCY_OBJECT_ID> \
+    --move-call 0x2::coin_registry::finalize_registration "<CURRENCY_TYPE>" @0xc currency_to_promote
 ```
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize_registration" signatureOnly />

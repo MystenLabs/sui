@@ -61,7 +61,11 @@ fn count_calls(pkg: &Arc<Package>) -> (usize, usize) {
 
 fn fresh_runtime(system: Vec<SerializedPackage>) -> MoveRuntime {
     let natives = NativeFunctions::empty_for_testing().unwrap();
-    MoveRuntime::new_with_system_packages(natives, VMConfig::default(), SystemPackages::new(system))
+    MoveRuntime::new_with_system_packages(
+        natives,
+        VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None),
+        SystemPackages::new(system),
+    )
 }
 
 // Publish a user pkg through the adapter, then force-load it via `resolve_and_cache_package`
@@ -418,7 +422,7 @@ fn move_stdlib_installs_and_user_calls_become_direct() {
     .expect("stdlib natives table");
     let runtime = MoveRuntime::new_with_system_packages(
         stdlib_natives,
-        VMConfig::default(),
+        VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None),
         SystemPackages::new(vec![stdlib_serialized]),
     );
     assert_eq!(

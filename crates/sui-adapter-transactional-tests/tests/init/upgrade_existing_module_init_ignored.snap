@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 7 tasks
 
+// Existing modules must not have init called during upgrade when they already had one. This also
+// covers that an init in a module introduced by an earlier upgrade is not rerun on a later upgrade.
+
 init:
 A: object(0,0)
 

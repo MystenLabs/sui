@@ -93,7 +93,7 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 2)],
 }
 
-task 9, lines 91-102:
+task 9, lines 91-100:
 //# run
 Error: Function execution failed with VMError: {
     major_status: ARITHMETIC_ERROR,

@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 937
 ---
 processed 24 tasks
 
@@ -81,7 +82,7 @@ created: object(7,0)
 mutated: object(0,0), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
 
-task 8, lines 72-74:
+task 8, line 72:
 //# view-object 2,3
 Owner: Object ID: ( fake(2,1) )
 Version: 2
@@ -99,7 +100,8 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
     },
 }
 
-task 9, line 75:
+task 9, lines 74-75:
+// The grand parent
 //# view-object 2,2
 Owner: Object ID: ( fake(2,3) )
 Version: 2
@@ -144,7 +146,7 @@ task 12, lines 81-82:
 mutated: object(0,0), object(2,0), object(2,1), object(2,2)
 gas summary: computation_cost: 1000000, storage_cost: 4818400,  storage_rebate: 4770216, non_refundable_storage_fee: 48184
 
-task 13, lines 84-86:
+task 13, line 84:
 //# view-object 2,3
 Owner: Object ID: ( fake(2,1) )
 Version: 2
@@ -162,7 +164,8 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
     },
 }
 
-task 14, line 87:
+task 14, lines 86-87:
+// The grand parent
 //# view-object 2,2
 Owner: Object ID: ( fake(2,3) )
 Version: 4
@@ -201,13 +204,14 @@ Contents: tto::M1::A {
     value: 1u64,
 }
 
-task 17, lines 93-96:
+task 17, lines 93-94:
 //# programmable --sender A --inputs object(2,0)
 //> tto::M1::remove(Input(0))
-// dev-inspect with 'check' and correct values
 mutated: object(0,0), object(2,0)
 deleted: object(2,2), object(2,3)
 gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 5936436, non_refundable_storage_fee: 59964
+
+// dev-inspect with 'check' and correct values
 
 task 18, lines 98-99:
 //# programmable --sender A --inputs object(2,0)@3 0 0 vector[0] --dev-inspect
@@ -221,12 +225,13 @@ task 19, lines 101-102:
 mutated: object(_), object(2,0)
 gas summary: computation_cost: 500000, storage_cost: 2264800,  storage_rebate: 1264032, non_refundable_storage_fee: 12768
 
-task 20, lines 104-107:
+task 20, lines 104-105:
 //# programmable --sender A --inputs object(2,0)@5 1 2 vector[] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
-// dev-inspect with 'check' and _incorrect_ values
 mutated: object(_), object(2,0)
 gas summary: computation_cost: 500000, storage_cost: 2264800,  storage_rebate: 1264032, non_refundable_storage_fee: 12768
+
+// dev-inspect with 'check' and _incorrect_ values
 
 task 21, lines 109-110:
 //# programmable --sender A --inputs object(2,0)@4 0 0 vector[0] --dev-inspect

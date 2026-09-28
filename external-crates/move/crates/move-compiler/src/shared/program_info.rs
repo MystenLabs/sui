@@ -42,6 +42,7 @@ pub struct ConstantInfo {
     pub index: usize,
     pub attributes: Attributes,
     pub defined_loc: Loc,
+    pub visibility: Visibility,
     pub signature: Type,
     // Set after compilation
     pub value: OnceLock<runtime_value::MoveValue>,
@@ -110,6 +111,7 @@ macro_rules! program_info {
                 index: cdef.index,
                 attributes: cdef.attributes.clone(),
                 defined_loc: cname.loc(),
+                visibility: cdef.visibility,
                 signature: cdef.signature.clone(),
                 value: OnceLock::new(),
             });
@@ -489,6 +491,13 @@ impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
         n: &DatatypeName,
     ) -> &Vec<DatatypeTypeParameter> {
         &self.enum_definition(m, n).type_parameters
+    }
+
+    pub fn is_enum(&self, module: &ModuleIdent, datatype_name: &DatatypeName) -> bool {
+        matches!(
+            self.datatype_kind(module, datatype_name),
+            DatatypeKind::Enum
+        )
     }
 
     /// Returns the enum variant names in sorted order.

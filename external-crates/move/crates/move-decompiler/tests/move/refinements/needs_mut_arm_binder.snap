@@ -1,0 +1,25 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module needs_mut_arm_binder {
+    public fun add_one () {
+        *l0 = *l0 + 1u64
+    }
+
+    public fun arm_binding () {
+        let l3 = l0;
+        return match(&l3: E) {
+            E::A { x: reg_4 } => {
+                let E::A { x: reg_6 } = l3;
+                let l4 = reg_6;
+                needs_mut_arm_binder::add_one(&mut l4)
+                l4
+            },
+            E::B => {
+                let E::B {} = l3;
+                0u64
+            },
+        }
+    }
+
+}

@@ -71,6 +71,9 @@ pub struct NodeConfig {
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
+    /// The address the fullnode's HTTP server (gRPC and REST) listens on. The
+    /// key keeps its historical name from when the JSON-RPC service was also
+    /// served on this address, so that existing configs keep working.
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
 
@@ -90,36 +93,6 @@ pub struct NodeConfig {
     /// For validator nodes this is expected to be `None`
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fullnode_sync_mode: Option<FullNodeSyncMode>,
-
-    #[serde(default = "default_enable_index_processing")]
-    pub enable_index_processing: bool,
-
-    /// When true, post-processing (JSON-RPC indexing and event emission) runs
-    /// synchronously on the execution path instead of being spawned to a
-    /// background thread. This is the legacy behavior and can be used as a
-    /// rollback mechanism or for testing.
-    #[serde(default)]
-    pub sync_post_process_one_tx: bool,
-
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub remove_deprecated_tables: bool,
-
-    #[serde(default)]
-    /// Determines the jsonrpc server type as either:
-    /// - 'websocket' for a websocket based service (deprecated)
-    /// - 'http' for an http based service
-    /// - 'both' for both a websocket and http based service (deprecated)
-    pub jsonrpc_server_type: Option<ServerType>,
-
-    /// When true, the JSON-RPC HTTP service is not started. This only stops the
-    /// node from serving JSON-RPC requests; it is independent of JSON-RPC
-    /// indexing (see `enable_index_processing`), which continues to run. This
-    /// lets a node keep indexing while no longer exposing the JSON-RPC service,
-    /// and it does not affect the gRPC/REST service served on the same address.
-    /// Defaults to false so the service stays enabled unless explicitly turned
-    /// off.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub disable_json_rpc: bool,
 
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
@@ -159,15 +132,6 @@ pub struct NodeConfig {
     #[serde(default)]
     pub expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name_service_package_address: Option<SuiAddress>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name_service_registry_id: Option<ObjectID>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name_service_reverse_registry_id: Option<ObjectID>,
-
     #[serde(default)]
     pub transaction_deny_config: TransactionDenyConfig,
 
@@ -192,15 +156,6 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub state_snapshot_write_config: StateSnapshotConfig,
-
-    #[serde(default)]
-    pub indexer_max_subscriptions: Option<usize>,
-
-    #[serde(default = "default_transaction_kv_store_config")]
-    pub transaction_kv_store_read_config: TransactionKeyValueStoreReadConfig,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction_kv_store_write_config: Option<TransactionKeyValueStoreWriteConfig>,
 
     #[serde(default = "default_jwk_fetch_interval_seconds")]
     pub jwk_fetch_interval_seconds: u64,
@@ -240,6 +195,12 @@ pub struct NodeConfig {
 
     #[serde(default = "bool_true")]
     pub enable_soft_bundle: bool,
+
+    /// Whether the simulate API restricts returned transactions to this node's preferred
+    /// proposers (`TransactionExpiration::Validity`). Disabled by default: with it off, simulate
+    /// falls back to `ValidDuring`, or no expiration for coin-paid transactions.
+    #[serde(default)]
+    pub enable_simulate_allowed_proposers: bool,
 
     #[serde(default)]
     pub verifier_signing_config: VerifierSigningConfig,
@@ -282,6 +243,12 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_driver_config: Option<TransactionDriverConfig>,
 
+    /// Consensus pulls transactions directly from a validator-side pool instead of
+    /// the admission-queue drain thread pushing them. Enabled by default; this takes
+    /// precedence over `authority_overload_config.admission_queue_enabled`.
+    #[serde(default)]
+    pub consensus_transaction_pool: ConsensusTransactionPoolConfig,
+
     /// Configuration for congestion tracker binary logging.
     /// When set, enables per-commit binary logs of congestion tracker state.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -320,6 +287,35 @@ impl Default for TransactionDriverConfig {
             blocked_submission_validators: vec![],
             enable_early_validation: true,
         }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ConsensusTransactionPoolConfig {
+    /// Set false to fall back to the push-based admission queue.
+    #[serde(default = "bool_true")]
+    pub enabled: bool,
+
+    /// Maximum queued user-lane entries. A soft bundle counts as one entry,
+    /// matching the existing admission queue. Defaults to the consensus
+    /// `max_pending_transactions` setting.
+    pub max_pending_transactions: Option<usize>,
+}
+
+impl Default for ConsensusTransactionPoolConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_pending_transactions: None,
+        }
+    }
+}
+
+impl ConsensusTransactionPoolConfig {
+    pub fn max_pending_transactions(&self, consensus_config: &ConsensusConfig) -> usize {
+        self.max_pending_transactions
+            .unwrap_or_else(|| consensus_config.max_pending_transactions())
     }
 }
 
@@ -496,6 +492,18 @@ pub struct ExecutionTimeObserverConfig {
     /// If unspecified, this will default to `false`.
     pub report_object_utilization_metric_with_full_id: Option<bool>,
 
+    /// Map from object ID to a human-readable name. Utilization of each listed object is
+    /// reported in the `epoch_execution_time_observer_tracked_object_utilization` metric,
+    /// labeled with both the full object ID and the name, regardless of whether the object
+    /// has ever been overutilized. This does not affect the bucketed per-object
+    /// utilization metric.
+    ///
+    /// Use this to precisely monitor a small number of known hot objects without enabling
+    /// `report_object_utilization_metric_with_full_id`.
+    ///
+    /// If unspecified, this will default to an empty map.
+    pub object_utilization_metric_tracked_ids: Option<BTreeMap<ObjectID, String>>,
+
     /// Unless target object utilization is exceeded by at least this amount, no observation
     /// will be shared with consensus.
     ///
@@ -572,6 +580,13 @@ impl ExecutionTimeObserverConfig {
     pub fn report_object_utilization_metric_with_full_id(&self) -> bool {
         self.report_object_utilization_metric_with_full_id
             .unwrap_or(false)
+    }
+
+    pub fn object_utilization_metric_tracked_ids(&self) -> impl Iterator<Item = (&ObjectID, &str)> {
+        self.object_utilization_metric_tracked_ids
+            .iter()
+            .flatten()
+            .map(|(id, name)| (id, name.as_str()))
     }
 
     pub fn observation_sharing_object_utilization_threshold(&self) -> Duration {
@@ -816,41 +831,6 @@ impl ExecutionCacheConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ServerType {
-    WebSocket,
-    Http,
-    Both,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct TransactionKeyValueStoreReadConfig {
-    #[serde(default = "default_base_url")]
-    pub base_url: String,
-
-    #[serde(default = "default_cache_size")]
-    pub cache_size: u64,
-}
-
-impl Default for TransactionKeyValueStoreReadConfig {
-    fn default() -> Self {
-        Self {
-            base_url: default_base_url(),
-            cache_size: default_cache_size(),
-        }
-    }
-}
-
-fn default_base_url() -> String {
-    "https://transactions.sui.io/".to_string()
-}
-
-fn default_cache_size() -> u64 {
-    100_000
-}
-
 fn default_jwk_fetch_interval_seconds() -> u64 {
     3600
 }
@@ -910,16 +890,8 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
     map
 }
 
-fn default_transaction_kv_store_config() -> TransactionKeyValueStoreReadConfig {
-    TransactionKeyValueStoreReadConfig::default()
-}
-
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
     AuthorityStorePruningConfig::default()
-}
-
-pub fn default_enable_index_processing() -> bool {
-    true
 }
 
 fn default_grpc_address() -> Multiaddr {
@@ -1087,17 +1059,6 @@ impl NodeConfig {
             })
     }
 
-    pub fn jsonrpc_server_type(&self) -> ServerType {
-        self.jsonrpc_server_type.unwrap_or(ServerType::Http)
-    }
-
-    /// Whether the JSON-RPC HTTP service should be served. This gates only the
-    /// JSON-RPC endpoints; the gRPC/REST service and JSON-RPC indexing are
-    /// unaffected.
-    pub fn json_rpc_enabled(&self) -> bool {
-        !self.disable_json_rpc
-    }
-
     pub fn rpc(&self) -> Option<&crate::RpcConfig> {
         self.rpc.as_ref()
     }
@@ -1218,9 +1179,6 @@ pub struct ExpensiveSafetyCheckConfig {
     /// Disable state consistency check even when we are running in debug mode.
     #[serde(default)]
     force_disable_state_consistency_check: bool,
-
-    #[serde(default)]
-    enable_secondary_index_checks: bool,
     // TODO: Add more expensive checks here
 }
 
@@ -1232,14 +1190,6 @@ impl ExpensiveSafetyCheckConfig {
             force_disable_epoch_sui_conservation_check: false,
             enable_state_consistency_check: true,
             force_disable_state_consistency_check: false,
-            enable_secondary_index_checks: false, // Disable by default for now
-        }
-    }
-
-    pub fn new_enable_all_with_secondary_index_checks() -> Self {
-        Self {
-            enable_secondary_index_checks: true,
-            ..Self::new_enable_all()
         }
     }
 
@@ -1250,7 +1200,6 @@ impl ExpensiveSafetyCheckConfig {
             force_disable_epoch_sui_conservation_check: true,
             enable_state_consistency_check: false,
             force_disable_state_consistency_check: true,
-            enable_secondary_index_checks: false,
         }
     }
 
@@ -1274,10 +1223,6 @@ impl ExpensiveSafetyCheckConfig {
 
     pub fn enable_deep_per_tx_sui_conservation_check(&self) -> bool {
         self.enable_deep_per_tx_sui_conservation_check || cfg!(debug_assertions)
-    }
-
-    pub fn enable_secondary_index_checks(&self) -> bool {
-        self.enable_secondary_index_checks
     }
 }
 
@@ -1350,8 +1295,6 @@ pub struct AuthorityStorePruningConfig {
     pub killswitch_tombstone_pruning: bool,
     #[serde(default = "default_smoothing", skip_serializing_if = "is_true")]
     pub smooth: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub num_epochs_to_retain_for_indexes: Option<u64>,
 }
 
 fn default_num_latest_epoch_dbs_to_retain() -> usize {
@@ -1392,7 +1335,6 @@ impl Default for AuthorityStorePruningConfig {
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
             smooth: true,
-            num_epochs_to_retain_for_indexes: None,
         }
     }
 }
@@ -1443,8 +1385,6 @@ pub struct DBCheckpointConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_store_config: Option<ObjectStoreConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub perform_index_db_checkpoints_at_epoch_end: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub prune_and_compact_before_upload: Option<bool>,
 }
 
@@ -1489,17 +1429,6 @@ pub struct StateSnapshotConfig {
     /// and are intended to be kept indefinitely.
     #[serde(default)]
     pub archive_interval_epochs: u64,
-}
-
-#[derive(Default, Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct TransactionKeyValueStoreWriteConfig {
-    pub aws_access_key_id: String,
-    pub aws_secret_access_key: String,
-    pub aws_region: String,
-    pub table_name: String,
-    pub bucket_name: String,
-    pub concurrency: usize,
 }
 
 /// Configuration for the threshold(s) at which we consider the system
@@ -1561,7 +1490,8 @@ pub struct AuthorityOverloadConfig {
 
     // Enables use of a gas-price-based priority queue for load shedding of
     // transactions at admission time. If false, when consensus is saturated, transactions
-    // are rejected with TooManyTransactionsPendingConsensus.
+    // are rejected with TooManyTransactionsPendingConsensus. Ignored unless
+    // `consensus_transaction_pool.enabled` is set false.
     #[serde(default = "default_admission_queue_enabled")]
     pub admission_queue_enabled: bool,
 
@@ -1902,9 +1832,12 @@ mod tests {
     use fastcrypto::traits::KeyPair;
     use rand::{SeedableRng, rngs::StdRng};
     use sui_keys::keypair_file::{write_authority_keypair_to_file, write_keypair_to_file};
+    use sui_types::base_types::ObjectID;
     use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SuiKeyPair, get_key_pair_from_rng};
 
-    use super::{AuthorityStorePruningConfig, Genesis, StateArchiveConfig};
+    use super::{
+        AuthorityStorePruningConfig, ExecutionTimeObserverConfig, Genesis, StateArchiveConfig,
+    };
     use crate::NodeConfig;
 
     #[test]
@@ -1959,6 +1892,32 @@ mod tests {
         assert_eq!(
             round_tripped.rpc_store_bitmap_periodic_compaction_days,
             Some(17)
+        );
+    }
+
+    #[test]
+    fn execution_time_observer_config_tracked_ids() {
+        let omitted: ExecutionTimeObserverConfig = serde_yaml::from_str("{}").unwrap();
+        assert_eq!(omitted.object_utilization_metric_tracked_ids().count(), 0);
+
+        let yaml = r#"
+            object-utilization-metric-tracked-ids:
+              "0x0000000000000000000000000000000000000000000000000000000000000005": sui-system-state
+              "0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407": deepbook-sui-usdc
+        "#;
+        let configured: ExecutionTimeObserverConfig = serde_yaml::from_str(yaml).unwrap();
+        let tracked: Vec<_> = configured.object_utilization_metric_tracked_ids().collect();
+        assert_eq!(tracked.len(), 2);
+        assert_eq!(
+            tracked[0],
+            (&ObjectID::from_single_byte(5), "sui-system-state")
+        );
+
+        let serialized = serde_yaml::to_string(&configured).unwrap();
+        let round_tripped: ExecutionTimeObserverConfig = serde_yaml::from_str(&serialized).unwrap();
+        assert_eq!(
+            round_tripped.object_utilization_metric_tracked_ids,
+            configured.object_utilization_metric_tracked_ids
         );
     }
 

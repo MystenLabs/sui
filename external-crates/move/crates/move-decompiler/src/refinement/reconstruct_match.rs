@@ -5,7 +5,7 @@ use crate::{
     ast::Exp,
     refinement::{
         Refine,
-        utils::{peek, peek_mut},
+        utils::{first_stmt, peek, peek_mut},
     },
 };
 
@@ -60,7 +60,12 @@ impl Refine for ReconstructMatch {
                 .into_iter()
                 .map(|(variant, mut body)| {
                     let fields = take_leading_unpack(&mut body, variant).unwrap_or_default();
-                    (variant, fields, body)
+                    crate::ast::MatchArm {
+                        variant,
+                        fields,
+                        guard: None,
+                        rhs: body,
+                    }
                 })
                 .collect();
             Exp::Match(scrutinee, enum_, arms)
@@ -72,18 +77,12 @@ impl Refine for ReconstructMatch {
 // -------------------------------------------------------------------------------------------------
 // Helpers
 
-/// True iff `body` starts (directly, or as the first item of a `Seq`) with an `UnpackVariant`
-/// whose variant tag is `arm_variant`. Looks through `Block` wrappers at both the body and
-/// the first-Seq-element positions, since translation wraps every lowered block.
+/// True iff `body` starts with an `UnpackVariant` whose variant tag is `arm_variant`.
 fn has_leading_unpack(body: &Exp, arm_variant: Symbol) -> bool {
-    match peek(body) {
-        Exp::UnpackVariant(_, (_, v), _, _) => *v == arm_variant,
-        Exp::Seq(items) => matches!(
-            items.first().map(peek),
-            Some(Exp::UnpackVariant(_, (_, v), _, _)) if *v == arm_variant
-        ),
-        _ => false,
-    }
+    matches!(
+        first_stmt(body),
+        Exp::UnpackVariant(_, (_, v), _, _) if *v == arm_variant
+    )
 }
 
 /// If `body` starts with an `UnpackVariant` of `arm_variant`, remove it and return its field

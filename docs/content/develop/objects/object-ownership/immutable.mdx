@@ -55,8 +55,10 @@ Objects on Sui can either be immutable or mutable. An immutable object cannot be
 To make an object immutable, call the [`sui::transfer::public_freeze_object`](/references/framework/sui_sui/transfer#sui_transfer_public_freeze_object) function from the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
 
 ```move
-public native fun public_freeze_object<T: key>(obj: T);
+public fun public_freeze_object<T: key + store>(obj: T)
 ```
+
+The `store` ability is what lets you freeze an object from outside the module that defines it. For a type without `store`, its defining module can call [`sui::transfer::freeze_object`](/references/framework/sui_sui/transfer#sui_transfer_freeze_object) instead, which takes `T: key`.
 
 This call permanently makes the object immutable. The operation cannot be reversed. Only freeze objects when you are certain they never need modification.
 

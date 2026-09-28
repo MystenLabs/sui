@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// A `&Y` from a ctx-taking call roots only in the object, so it survives later
+// TxContext uses.
+
 task 1, lines 9-39:
 //# publish
 created: object(1,0)

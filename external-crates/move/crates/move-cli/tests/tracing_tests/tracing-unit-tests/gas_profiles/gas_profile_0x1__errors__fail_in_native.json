@@ -25,7 +25,7 @@
       "name": "saved_traces/0x1__errors__fail_in_native.json.zst",
       "unit": "none",
       "startValue": 0,
-      "endValue": 4600,
+      "endValue": 4602,
       "events": [
         {
           "type": "O",
@@ -35,27 +35,27 @@
         {
           "type": "O",
           "frame": 1,
-          "at": 20
+          "at": 22
         },
         {
           "type": "O",
           "frame": 2,
-          "at": 4600
+          "at": 4602
         },
         {
           "type": "C",
           "frame": 2,
-          "at": 4600
+          "at": 4602
         },
         {
           "type": "C",
           "frame": 1,
-          "at": 4600
+          "at": 4602
         },
         {
           "type": "C",
           "frame": 0,
-          "at": 4600
+          "at": 4602
         }
       ]
     }

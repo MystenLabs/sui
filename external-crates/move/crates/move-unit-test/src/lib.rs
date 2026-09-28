@@ -41,6 +41,10 @@ pub struct UnitTestingConfig {
     #[clap(name = "gas-limit", short = 'i', long = "gas-limit")]
     pub gas_limit: Option<u64>,
 
+    /// Bound the maximum size of a loaded package (in MB).
+    #[clap(name = "package-size", long = "package-size")]
+    pub package_size: Option<u64>,
+
     /// A filter string to determine which unit tests to run
     #[clap(name = "filter", short = 'f', long = "filter")]
     pub filter: Option<String>,
@@ -151,6 +155,7 @@ impl UnitTestingConfig {
     pub fn default_with_bound(bound: Option<u64>) -> Self {
         Self {
             gas_limit: bound.or(Some(DEFAULT_EXECUTION_BOUND)),
+            package_size: None,
             filter: None,
             num_threads: 8,
             report_statistics: None,
@@ -281,6 +286,8 @@ impl UnitTestingConfig {
             .map(|trace_type| (trace_type.clone(), TRACE_DIR.to_string()));
         let mut test_runner = TestRunner::new(
             self.gas_limit.unwrap_or(DEFAULT_EXECUTION_BOUND),
+            // `package_size` is in MB; the VM takes bytes.
+            self.package_size.map(|mb| mb * 1_000_000),
             self.num_threads,
             self.report_stacktrace_on_abort,
             self.seed,

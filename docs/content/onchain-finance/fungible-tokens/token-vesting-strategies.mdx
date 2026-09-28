@@ -149,7 +149,7 @@ Similarly, milestone-based vesting creates vest events when specific project or 
 
 Tokens unlock when Mainnet of a blockchain project launches.
 
-Like the other examples, the following smart contract creates a wallet to hold the coins for distribution. Unlike the others, this `Wallet` object includes a `milestone_controller` field that you set to the address of the account with authority to update the milestone progress. The call to `new_wallet` aborts with an error if the wallet has the same address as the entity with milestone update privileges as an integrity check.
+Like the other examples, the following smart contract creates a wallet to hold the coins for distribution. Unlike the others, this `Wallet` object includes a `milestone_controller` field that you set to the address of the account with authority to update the milestone progress. As an integrity check, the call to `new_wallet` aborts if the wallet owner and the milestone controller are the same address.
 
 The milestone update authority calls `update_milestone_percentage` to update the percentage-to-complete value. The owner of the vested token wallet calls `claim` to retrieve the tokens unlocked based on the current percentage-to-complete value. For the first example scenario, you could update the milestone value by 10 percent for every million MAUs the project achieves. You could use the same contract for the second scenario, updating the percentage one time to 100 only after Mainnet launches.
 

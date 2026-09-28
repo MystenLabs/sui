@@ -73,7 +73,6 @@ concepts:
   frontend-wallet:
     must_appear_in:
       - "getting-started/onboarding/app-frontends.mdx"
-      - "getting-started/examples/dapp-kit-frontend.mdx"
     terms:
       - "ConnectButton"
       - "wallet"
@@ -84,8 +83,6 @@ concepts:
   ptb:
     must_appear_in:
       - "getting-started/onboarding/hello-world.mdx"
-      - "getting-started/examples/nft-app.mdx"
-      - "getting-started/examples/dapp-kit-frontend.mdx"
       - "getting-started/sui-for-ethereum.mdx"
       - "getting-started/sui-for-solana.mdx"
       - "develop/transactions/ptbs/prog-txn-blocks.mdx"
@@ -101,7 +98,6 @@ concepts:
     must_appear_in:
       - "getting-started/sui-for-ethereum.mdx"
       - "getting-started/sui-for-solana.mdx"
-      - "getting-started/examples/capability-pattern.mdx"
       - "develop/objects/object-ownership/index.mdx"
       - "develop/sui-architecture/object-model.mdx"
     terms:
@@ -113,7 +109,6 @@ concepts:
 
   capability-pattern:
     must_appear_in:
-      - "getting-started/examples/capability-pattern.mdx"
       - "getting-started/dev-cheat-sheet.mdx"
       - "develop/security/best-practices.mdx"
     terms:
@@ -125,7 +120,6 @@ concepts:
 
   test-scenario:
     must_appear_in:
-      - "getting-started/examples/scenario-testing.mdx"
       - "develop/testing-debugging/testing.mdx"
     terms:
       - "test_scenario"
@@ -136,7 +130,6 @@ concepts:
 
   event-indexing:
     must_appear_in:
-      - "getting-started/examples/event-indexer.mdx"
       - "develop/accessing-data/using-events.mdx"
     terms:
       - "event"
@@ -147,23 +140,12 @@ concepts:
 
   derived-objects:
     must_appear_in:
-      - "getting-started/examples/derived-objects.mdx"
       - "develop/objects/derived-objects.mdx"
     terms:
       - "derive"
       - "deterministic"
       - "object ID"
       - "predict"
-
-  nft-minting:
-    must_appear_in:
-      - "getting-started/examples/nft-app.mdx"
-    terms:
-      - "NFT"
-      - "mint"
-      - "hero"
-      - "registry"
-      - "PTB"
 
   local-network:
     must_appear_in:

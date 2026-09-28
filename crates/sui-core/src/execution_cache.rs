@@ -83,8 +83,6 @@ impl ExecutionCacheTraitPointers {
             + TransactionCacheRead
             + ExecutionCacheWrite
             + BackingStore
-            + BackingPackageStore
-            + ObjectStore
             + ExecutionCacheReconfigAPI
             + GlobalStateHashStore
             + CheckpointCache
@@ -714,6 +712,14 @@ macro_rules! implement_storage_traits {
                 version: sui_types::base_types::VersionNumber,
             ) -> Option<Object> {
                 ObjectCacheRead::get_object_by_key(self, object_id, version)
+            }
+
+            fn load_implicitly_read_system_object(
+                &self,
+                object_id: &ObjectID,
+                version: sui_types::base_types::ConsensusObjectVersion,
+            ) -> Option<Object> {
+                $implementor::load_implicitly_read_system_object(self, object_id, version)
             }
         }
 

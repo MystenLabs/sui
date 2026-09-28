@@ -3,6 +3,9 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 9 tasks
 
+// tests various valid constraints in script arguments
+// all tests should abort, signaling they pass verification
+
 task 1, lines 19-26:
 //# run --type-args u64 --args false
 Error: Function execution failed with VMError: {

@@ -6,6 +6,14 @@ processed 10 tasks
 init:
 A: object(0,0)
 
+// 1. Type whose package doesn't exist
+// 2. Type whose package is actually a move object
+// 3. Type whose module doesn't exist
+// 4. Type which doesn't exist in its module
+// 5. Type parameter arity mismatch
+// 6. Name that isn't valid JSON
+// 7. Name that doesn't serialize correctly
+
 task 1, lines 14-19:
 //# publish
 created: object(1,0)

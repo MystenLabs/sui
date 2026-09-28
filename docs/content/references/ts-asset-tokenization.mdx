@@ -50,8 +50,8 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   Generates an `AssetCap` for each new asset represented as a fractional NFT. In most scenarios, create it as an owned object, which you can then transfer to the platform administrator for access-restricted method invocation.
 
-  ```rust
-  struct AssetCap<phantom T> {
+  ```move
+  public struct AssetCap<phantom T> {
       id: UID,
       // the current supply in circulation
       supply: Supply<T>,
@@ -66,8 +66,8 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   The `AssetMetadata` struct defines the metadata representing the entire asset to fractionalize. This should be a shared object.
 
-  ```rust
-  struct AssetMetadata<phantom T> has key, store {
+  ```move
+  public struct AssetMetadata<phantom T> has key, store {
           id: UID,
           /// Name of the asset
           name: String,
@@ -86,8 +86,8 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   The `TokenizedAsset` is minted with a specified balance that is less than or equal to the remaining supply. If the `VecMap` of an asset is populated with values (indicating multiple unique entries), it is considered an NFT. If the `VecMap` of an asset is not populated (indicating an absence of individual entries), it is considered an FT.
 
-  ```rust
-  struct TokenizedAsset<phantom T> has key, store {
+  ```move
+  public struct TokenizedAsset<phantom T> has key, store {
           id: UID,
           /// The balance of the tokenized asset
           balance: Balance<T>,
@@ -102,9 +102,9 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   The `PlatformCap` is the capability issued to the address that deploys the contract. This capability grants specific permissions related to the platform functionalities, allowing the deployer certain controlled actions or access rights within the deployed contract.
 
-  ```rust
+  ```move
   /// Capability that is issued to the one deploying the contract
-  struct PlatformCap has key, store { id: UID }
+  public struct PlatformCap has key, store { id: UID }
   ```
 
 #### Functions
@@ -113,7 +113,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   Creates a `PlatformCap` and transfers it to the transaction sender.
 
-  ```rust
+  ```move
   fun init(ctx: &mut TxContext) {}
   ```
 
@@ -121,7 +121,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   Creates a fresh representation of an asset with its crucial attributes. Returns 2 distinct objects: the `AssetCap` and `AssetMetadata`. These objects encapsulate the necessary information and characteristics that define the asset within the system.
 
-  ```rust
+  ```move
   public fun new_asset<T: drop>(
           witness: T,
           total_supply: u64,
@@ -138,7 +138,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   Mints a tokenized asset. If new metadata is introduced during this process, the tokenized asset becomes unique, resulting in the creation of an NFT with a balance set to 1. If no new metadata is added, the system classifies the tokenized asset as an FT, permitting its balance to exceed 1 as specified by a provided argument. Returns the tokenized asset object.
 
-  ```rust
+  ```move
   public fun mint<T>(
           cap: &mut AssetCap<T>,
           keys: vector<String>,
@@ -152,7 +152,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   Receives a tokenized asset of the FT type with a balance greater than 1 and a value less than the object balance, then performs a split operation. The operation divides the existing tokenized asset into 2 separate tokenized assets. The newly created tokenized asset has a balance equal to the given value, while the balance of the provided object decreases by the specified value. Returns the newly created tokenized asset. This function does not accept tokenized assets of the NFT type.
 
-  ```rust
+  ```move
   public fun split<T>(
           self: &mut TokenizedAsset<T>,
           split_amount: u64,
@@ -164,7 +164,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   Receives 2 tokenized assets of the FT type and merges them. The operation increases the balance of the first tokenized asset by the balance of the second one. The system then burns the second tokenized asset. Returns the ID of the burned tokenized asset. This function does not accept tokenized assets of the NFT type.
 
-  ```rust
+  ```move
   public fun join<T>(
           self: &mut TokenizedAsset<T>,
           other: TokenizedAsset<T>
@@ -175,7 +175,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   Requires the `AssetCap` as a parameter, restricting invocation to the platform admin. Accepts a tokenized asset and burns it. The circulating supply decreases by the balance of the burned item. Requires a tokenized asset that is burnable.
 
-  ```rust
+  ```move
   public fun burn<T>(
           cap: &mut AssetCap<T>,
           tokenized_asset: TokenizedAsset<T>
@@ -186,7 +186,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   Returns the maximum supply of the asset.
 
-  ```rust
+  ```move
   public fun total_supply<T>(cap: &AssetCap<T>): u64 {}
   ```
 
@@ -194,7 +194,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   Returns the current circulating supply of the asset.
 
-  ```rust
+  ```move
   public fun supply<T>(cap: &AssetCap<T>): u64 {}
   ```
 
@@ -202,7 +202,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   Returns the balance of a tokenized asset.
 
-  ```rust
+  ```move
   public fun value<T>(tokenized_asset: &TokenizedAsset<T>): u64 {}
   ```
 
@@ -210,7 +210,7 @@ When it receives a new One-Time Witness type, it creates a unique representation
 
   An internal helper function that populates a `VecMap<String, String>`. It assists in the process of filling key-value pairs within the `VecMap` data structure.
 
-  ```rust
+  ```move
   fun create_vec_map_from_arrays(
           keys: vector<String>,
           values: vector<String>
@@ -229,16 +229,16 @@ The `proxy` module contains methods that the type owner uses to execute publishe
 
   The `PROXY` struct represents the One-Time Witness to claim the publisher.
 
-  ```rust
-  struct PROXY has drop {}
+  ```move
+  public struct PROXY has drop {}
   ```
 
 - `Registry`
 
   A shared object that serves as a repository for the `Publisher` object, specifically intended to control and restrict access to the creation and management of transfer policies for tokenized assets. Mutable access to this object is exclusively granted to the actual publisher.
 
-  ```rust
-  struct Registry has key {
+  ```move
+  public struct Registry has key {
           id: UID,
           publisher: Publisher
       }
@@ -248,8 +248,8 @@ The `proxy` module contains methods that the type owner uses to execute publishe
 
   A shared object that stores an empty transfer policy. You must create one per type `<T>` generated by a user. The unlock module uses this object.
 
-  ```rust
-  struct ProtectedTP<phantom T> has key, store {
+  ```move
+  public struct ProtectedTP<phantom T> has key, store {
           id: UID,
           policy_cap: TransferPolicyCap<T>,
           transfer_policy: TransferPolicy<T>
@@ -262,7 +262,7 @@ The `proxy` module contains methods that the type owner uses to execute publishe
 
   Creates the `Publisher` object, encapsulates it within the registry, and shares the `Registry` object.
 
-  ```rust
+  ```move
   fun init(otw: PROXY, ctx: &mut TxContext) {}
   ```
 
@@ -272,7 +272,7 @@ The `proxy` module contains methods that the type owner uses to execute publishe
 
   Also generates an empty transfer policy wrapped in a `ProtectedTP<T>` object, which is shared. You can use this functionality under specific conditions to override the Kiosk lock rule.
 
-  ```rust
+  ```move
   public fun setup_tp<T: drop>(
           registry: &Registry,
           publisher: &Publisher,
@@ -285,7 +285,7 @@ The `proxy` module contains methods that the type owner uses to execute publishe
 
   Uses the publisher nested within the registry and the sender publisher to generate and return an empty `Display` for the type `TokenizedAsset<T>`, where `T` is encapsulated within the `Publisher` object.
 
-  ```rust
+  ```move
   public fun new_display<T: drop>(
           registry: &Registry,
           publisher: &Publisher,
@@ -297,8 +297,8 @@ The `proxy` module contains methods that the type owner uses to execute publishe
 
   Given the `ProtectedTP`, returns the transfer policy for the type `TokenizedAsset<T>`.
 
-  ```rust
-  public(friend) fun transfer_policy<T>(
+  ```move
+  public(package) fun transfer_policy<T>(
           protected_tp: &ProtectedTP<T>
       ): &TransferPolicy<T> {}
   ```
@@ -307,7 +307,7 @@ The `proxy` module contains methods that the type owner uses to execute publishe
 
   Only accessible by the owner of the platform cap. Requires the registry as an argument to obtain a mutable reference to the publisher.
 
-  ```rust
+  ```move
   public fun publisher_mut(
       _: &PlatformCap,
       registry: &mut Registry
@@ -328,8 +328,8 @@ It allows tokenized asset type creators to enable these operations for kiosk ass
 
   A promise object established to prevent attempts of permanently unlocking an object beyond the intended scope of joining.
 
-  ```rust
-  struct JoinPromise {
+  ```move
+  public struct JoinPromise {
       /// the item where the balance of the burnt tokenized asset will be added.
       item: ID,
       /// burned is the id of the tokenized asset that will be burned
@@ -343,8 +343,8 @@ It allows tokenized asset type creators to enable these operations for kiosk ass
 
   A promise object created to ensure the permanent burning of a specified object.
 
-  ```rust
-  struct BurnPromise {
+  ```move
+  public struct BurnPromise {
     expected_supply: u64
   }
   ```
@@ -355,7 +355,7 @@ It allows tokenized asset type creators to enable these operations for kiosk ass
 
   A helper function that facilitates the joining of tokenized assets locked in a kiosk. It unlocks the tokenized asset set for burning and ensures that another tokenized asset of the same type eventually contains its balance by returning a `JoinPromise`.
 
-  ```rust
+  ```move
   public fun asset_from_kiosk_to_join<T>(
     self: &TokenizedAsset<T>, // A
     to_burn: &TokenizedAsset<T>, // B
@@ -368,7 +368,7 @@ It allows tokenized asset type creators to enable these operations for kiosk ass
 
   Demonstrates that the unlocked tokenized asset is successfully burned and its balance is incorporated into an existing tokenized asset.
 
-  ```rust
+  ```move
   public fun prove_join<T>(
     self: &TokenizedAsset<T>,
     promise: JoinPromise,
@@ -380,7 +380,7 @@ It allows tokenized asset type creators to enable these operations for kiosk ass
 
   A helper function that facilitates the burning of tokenized assets locked in a kiosk. It assists in unlocking them while ensuring a promise that the circulating supply is reduced, achieved by returning a `BurnPromise`.
 
-  ```rust
+  ```move
   public fun asset_from_kiosk_to_burn<T>(
       to_burn: &TokenizedAsset<T>,
       asset_cap: &AssetCap<T>,
@@ -394,7 +394,7 @@ It allows tokenized asset type creators to enable these operations for kiosk ass
 
   Ensures that the circulating supply of the asset cap is reduced by the balance of the burned tokenized asset.
 
-  ```rust
+  ```move
   public fun prove_burn<T>(
     asset_cap: &AssetCap<T>,
     promise: BurnPromise) {

@@ -3,7 +3,8 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 4 tasks
 
-task 0, lines 4-26:
+task 0, lines 3-24:
+// control: plain field borrow off the imm alias
 //# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000041::d0_control_no_call'. Got VMError: {
     major_status: WRITEREF_EXISTS_BORROW_ERROR,
@@ -13,7 +14,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 12)],
 }
 
-task 1, lines 27-54:
+task 1, lines 26-52:
+// the extension comes back from a call
 //# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::d1_call_off_imm_alias'. Got VMError: {
     major_status: WRITEREF_EXISTS_BORROW_ERROR,
@@ -23,7 +25,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(1), 12)],
 }
 
-task 2, lines 55-82:
+task 2, lines 54-80:
+// the call returns the whole S
 //# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000043::d2_call_identity_off_imm_alias'. Got VMError: {
     major_status: WRITEREF_EXISTS_BORROW_ERROR,

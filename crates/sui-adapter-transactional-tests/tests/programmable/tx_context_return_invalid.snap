@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 9 tasks
 
+// tests TxContext in return position of Move calls; it can never become a PTB result
+
 init:
 A: object(0,0)
 

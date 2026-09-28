@@ -59,7 +59,7 @@ Sui comes with a set of built-in package compatibility policies, listed here fro
 | Immutable       | No one can upgrade the package.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Dependency-only | You can only modify the dependencies of the package.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Additive        | You can add new functionality to the package (for example, new public functions or structs) but you can't change any of the existing functionality (for example, the code in existing public functions cannot change).                                                                                                                                                                                                                                                                                                                                                                        |
-| Compatible      | The most relaxed policy. In addition to what the more restrictive policies allow, in an upgraded version of the package: <ul><li>You can change all function implementations.</li><li>You can remove the ability constraints on generic type parameters in function signatures.</li><li>You can change, remove, or make `public` any `private`, `public(friend)`, and `entry` function signatures.</li><li>You cannot change `public` function signatures (except in the case of ability constraints mentioned previously).</li><li>You cannot change existing types.</li></ul> |
+| Compatible      | The most relaxed policy. In addition to what the more restrictive policies allow, in an upgraded version of the package: <ul><li>You can change all function implementations.</li><li>You can remove the ability constraints on generic type parameters in function signatures.</li><li>You can change, remove, or make `public` any `private`, `public(package)`, and `entry` function signatures.</li><li>You cannot change `public` function signatures (except in the case of ability constraints mentioned previously).</li><li>You cannot change existing types.</li></ul> |
 
 Each of these policies, in the order listed, is a superset of the previous one in the type of changes allowed in the upgraded package.
 
@@ -81,7 +81,7 @@ While step 2 is a built-in command, steps 1 and 3 are implemented as Move functi
 
 These are the functions that `sui client upgrade` calls for authorization and commit. Custom upgrade policies work by guarding access to a package `UpgradeCap` (and therefore to calls of these functions) behind extra conditions that are specific to that policy (such as voting, governance, permission lists, timelocks, and so on).
 
-Any pair of functions that produces an `UpgradeTicket` from an `UpgradeCap` and consumes an `UpgradeReceipt`. To update an `UpgradeCap` constitutes a custom upgrade policy.
+Any pair of functions that produces an `UpgradeTicket` from an `UpgradeCap`, and consumes an `UpgradeReceipt` to update that `UpgradeCap`, constitutes a custom upgrade policy.
 
 ## `UpgradeCap` {#upgradecap}
 
@@ -179,15 +179,13 @@ Treat the `UpgradeCap` owner as a privileged admin. Hold it under a multisig or 
 
 ## Example: Day of the week upgrade policy {#example-upgrade}
 
-Start by creating a new Move package for the upgrade policy:
+A policy lives in its own Move package so that it can outlive and govern the packages it protects. Add the module to an existing package you control, or create a dedicated one:
 
 ```sh
 $ sui move new policy
 ```
 
-The command creates a `policy` directory with a `sources` folder and `Move.toml` manifest.
-
-In the `sources` folder, create a source file named `day_of_week.move` that contains the following code:
+Add a `day_of_week.move` source file to the package's `sources` folder with the following code:
 
 ```move
 module policy::day_of_week;
@@ -236,7 +234,7 @@ fun week_day(ctx: &TxContext): u8 {
 
 ```
 
-This function uses the epoch timestamp from `TxContext` rather than `Clock` because it needs only daily granularity, which means the upgrade transactions don't require consensus.
+This function uses the epoch timestamp from `TxContext` rather than `Clock` because it needs only daily granularity, so the upgrade transaction does not have to take the `Clock` shared object as an input.
 
 Next, add an `authorize_upgrade` function that calls the previous function to get the current day of the week, then checks whether that value violates the policy, returning the `ENotAllowedDay` error value if it does.
 
@@ -427,36 +425,38 @@ Transaction Effects
 
 </details>
 
-### Creating a package for testing {#creating-testing-package}
+### Choosing a package to govern {#creating-testing-package}
 
-With a policy now available onchain, you need a package to upgrade. If you don't have a package available, use the `sui move new` command to create the template for a new package called `example`.
+With the policy onchain, you need a package for it to govern. Use one of your own packages, or create a throwaway to try the flow end to end:
 
 ```sh
 $ sui move new example
 ```
 
-In the `example/sources` directory, create an `example.move` file with the following code:
+The rest of this example uses a minimal `example.move` module in `example/sources`:
 
 ```move
 module example::example {
-    struct Event has copy, drop { x: u64 }
+    public struct Event has copy, drop { x: u64 }
     entry fun nudge() {
         sui::event::emit(Event { x: 41 })
     }
 }
 ```
 
-The instruction that follows publishes this example package and then upgrades it to change the value in the `Event` it emits. Because you are using a custom upgrade policy, you need to use the TypeScript SDK to build the package's publish and upgrade commands.
+The steps that follow publish this package and then upgrade it to change the value in the `Event` it emits.
 
-### Using TypeScript SDK {#using-typescript-sdk}
+### Wiring up the TypeScript SDK {#using-typescript-sdk}
 
-Create a new directory to store a Node.js project. You can use the `npm init` function to create the `package.json`, or manually create the file. Depending on your approach to creating `package.json`, populate or add the following JSON to it:
+Because you are using a custom upgrade policy, the CLI cannot build the publish and upgrade commands for you. Drive them from a Node.js project instead, either your existing deployment scripts or a small one alongside your package.
+
+The scripts below use ES module syntax, so make sure your `package.json` sets:
 
 ```json
 { "type": "module" }
 ```
 
-Open a terminal or console to the root of your Node.js project. Run the following command to add the Sui TypeScript SDK as a dependency:
+Then add the Sui TypeScript SDK as a dependency:
 
 ```sh
 $ npm install @mysten/sui

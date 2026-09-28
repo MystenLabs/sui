@@ -6,6 +6,22 @@ processed 18 tasks
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
 
+// Transactions:
+//
+// 1. A sends to self
+// 2. A sends to B
+// 3. A sends to C
+// 4. A sends to B and C
+// 5. B sends to A
+//
+// RPC queries:
+//
+// 1. All Transactions
+// 2, 3, 4, 5, 6, 7. Transactions affecting and to A, B, C respectively (they
+//     mean the same thing in this RPC implementation).
+// 8, 9, 10. Transactions sent by A, B, C respectively.
+// 11. Transactions sent by A to B.
+
 task 1, lines 22-24:
 //# programmable --sender A --inputs 42 @A
 //> 0: SplitCoins(Gas, [Input(0)]);

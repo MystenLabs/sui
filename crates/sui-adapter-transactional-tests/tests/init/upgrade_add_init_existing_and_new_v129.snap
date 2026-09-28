@@ -3,6 +3,11 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// Old behavior (pre-`init`-on-upgrade): the same upgrade is rejected, but for a different reason --
+// the new module with an `init` trips the "init in new modules on upgrade not yet supported" guard
+// before the existing-module-adds-init rule (which only exists once the feature is enabled) is ever
+// consulted.
+
 init:
 A: object(0,0)
 

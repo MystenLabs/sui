@@ -9,6 +9,7 @@ use crate::error::SuiError;
 use crate::execution::ExecutionResult;
 use crate::full_checkpoint_content::ObjectSet;
 use crate::storage::ObjectKey;
+use crate::transaction::AllowedProposers;
 use crate::transaction::TransactionData;
 use crate::transaction_driver_types::ExecuteTransactionRequestV3;
 use crate::transaction_driver_types::ExecuteTransactionResponseV3;
@@ -32,6 +33,19 @@ pub trait TransactionExecutor: Send + Sync {
     ) -> Result<SimulateTransactionResult, SuiError>;
 }
 
+/// Trait to let the gRPC service name the validators a transaction should be submitted to,
+/// without depending on the transaction driver that tracks them.
+pub trait ProposerSelector: Send + Sync {
+    /// Up to `max` validators this node would prefer to submit to, as committee indices for the
+    /// current epoch. `None` when no preference can be formed, in which case the transaction is
+    /// left unrestricted rather than pinned to an arbitrary set.
+    ///
+    /// The returned indices are strictly increasing, as `TransactionExpiration::Validity`
+    /// requires.
+    fn preferred_proposers(&self, max: usize) -> Option<AllowedProposers>;
+}
+
+#[derive(Debug)]
 pub struct SimulateTransactionResult {
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,

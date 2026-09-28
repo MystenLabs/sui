@@ -18,6 +18,9 @@ const DEFAULT_RENDER_AHEAD: usize = 4;
 const DEFAULT_BITMAP_BUCKET_BUDGET_TX: u64 = 4_000;
 const DEFAULT_BITMAP_BUCKET_BUDGET_EVENT: u64 = 4_000;
 const DEFAULT_MAX_BITMAP_FILTER_LITERALS: usize = 10;
+// Comfortably above the 10ms watermark refresh: a replica slower than this is genuinely behind,
+// and the client is better off retrying elsewhere.
+const DEFAULT_MONOTONIC_READ_WAIT_TIMEOUT_MS: u64 = 100;
 const DEFAULT_BITMAP_DRAIN_PROBE_ROWS: u32 = 50;
 const DEFAULT_REQUEST_BIGTABLE_CONCURRENCY: usize = 50;
 const DEFAULT_STAGE_CHUNK_SIZE: usize = 100;
@@ -446,6 +449,14 @@ pub struct KvRpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request_bigtable_concurrency: Option<usize>,
 
+    /// How long a request carrying `x-sui-min-checkpoint` waits for this replica's watermark to
+    /// reach the requested checkpoint before being told to retry elsewhere. Applies to every method;
+    /// requests without that header never wait.
+    ///
+    /// Defaults to `100` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub monotonic_read_wait_timeout_ms: Option<u64>,
+
     /// Per-table-stage read pipeline tunables (chunk size and fan-out
     /// concurrency), shared by the point-get and list APIs. Bounded by
     /// `request_bigtable_concurrency` at runtime, which remains the request-wide
@@ -541,6 +552,13 @@ impl KvRpcConfig {
     pub fn request_bigtable_concurrency(&self) -> usize {
         self.request_bigtable_concurrency
             .unwrap_or(DEFAULT_REQUEST_BIGTABLE_CONCURRENCY)
+    }
+
+    pub fn monotonic_read_wait_timeout(&self) -> Duration {
+        Duration::from_millis(
+            self.monotonic_read_wait_timeout_ms
+                .unwrap_or(DEFAULT_MONOTONIC_READ_WAIT_TIMEOUT_MS),
+        )
     }
 
     pub fn stages(&self) -> StagesConfig {

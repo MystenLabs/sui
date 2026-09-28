@@ -6,6 +6,12 @@ processed 17 tasks
 init:
 A: object(0,0), B: object(0,1)
 
+// 1. All objects owned by A
+// 2. ...owned by B
+// 3. Limited number of objects owned by A
+// 4. Objects after they have been modified
+// 5. Objects after they have been transferred
+
 task 1, lines 12-14:
 //# programmable --sender A --inputs @A 42 43 44
 //> 0: SplitCoins(Gas, [Input(1), Input(2), Input(3)]);

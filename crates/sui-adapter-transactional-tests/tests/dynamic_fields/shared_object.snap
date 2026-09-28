@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 9 tasks
 
+// tests adding a shared object as a dynamic field
+
 init:
 A: object(0,0)
 
@@ -18,13 +20,14 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2470000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 76-78:
+task 3, line 76:
 //# run test::m::child --sender A
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, line 79:
+task 4, lines 78-79:
+// This aborts because shared objects cannot be added as dynamic fields
 //# run test::m::add_field --sender A --args object(2,0) object(3,0)
 Error: Transaction Effects Status: The shared object operation is not allowed.
 Debug of error: SharedObjectOperationNotAllowed at command None

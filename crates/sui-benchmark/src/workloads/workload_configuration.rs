@@ -8,6 +8,7 @@ use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::addr_bal_deposit::{AddrBalDepositConfig, AddrBalDepositWorkloadBuilder};
 use crate::workloads::batch_payment::BatchPaymentWorkloadBuilder;
 use crate::workloads::delegation::DelegationWorkloadBuilder;
+use crate::workloads::gas_double_spend::{GasDoubleSpendSubmission, GasDoubleSpendWorkloadBuilder};
 use crate::workloads::party::PartyWorkloadBuilder;
 use crate::workloads::shared_counter::SharedCounterWorkloadBuilder;
 use crate::workloads::slow::SlowWorkloadBuilder;
@@ -25,6 +26,7 @@ use tracing::info;
 use super::adversarial::{AdversarialPayloadCfg, AdversarialWorkloadBuilder};
 use super::composite::{CompositeWorkloadBuilder, CompositeWorkloadConfig};
 use super::expected_failure::{ExpectedFailurePayloadCfg, ExpectedFailureWorkloadBuilder};
+use super::large_transaction::LargeTransactionWorkloadBuilder;
 use super::randomized_transaction::RandomizedTransactionWorkloadBuilder;
 use super::randomness::RandomnessWorkloadBuilder;
 use super::shared_object_deletion::SharedCounterDeletionWorkloadBuilder;
@@ -37,6 +39,7 @@ pub struct WorkloadWeights {
     pub batch_payment: u32,
     pub shared_deletion: u32,
     pub adversarial: u32,
+    pub large_transaction: u32,
     pub expected_failure: u32,
     pub randomness: u32,
     pub randomized_transaction: u32,
@@ -44,6 +47,7 @@ pub struct WorkloadWeights {
     pub party: u32,
     pub conflicting_transfer: u32,
     pub composite: u32,
+    pub gas_double_spend: u32,
 }
 
 pub struct WorkloadConfig {
@@ -52,13 +56,17 @@ pub struct WorkloadConfig {
     pub num_transfer_accounts: u64,
     pub weights: WorkloadWeights,
     pub adversarial_cfg: AdversarialPayloadCfg,
+    pub large_transaction_size_bytes: u64,
     pub expected_failure_cfg: ExpectedFailurePayloadCfg,
     pub batch_payment_size: u32,
     pub shared_counter_hotness_factor: u32,
     pub num_shared_counters: Option<u64>,
     pub shared_counter_max_tip: u64,
+    pub shared_counter_gas_price_multiplier: f64,
     pub num_contested_objects: u64,
     pub randomized_transaction_concurrency: u64,
+    pub gas_double_spend_copies: usize,
+    pub gas_double_spend_submission: GasDoubleSpendSubmission,
     pub target_qps: u64,
     pub in_flight_ratio: u64,
     pub duration: Interval,
@@ -87,6 +95,8 @@ impl WorkloadConfiguration {
                 delegation,
                 batch_payment,
                 adversarial,
+                large_transaction,
+                large_transaction_size_bytes,
                 expected_failure,
                 randomness,
                 randomized_transaction,
@@ -94,10 +104,14 @@ impl WorkloadConfiguration {
                 party,
                 conflicting_transfer,
                 composite,
+                gas_double_spend,
                 shared_counter_hotness_factor,
                 num_shared_counters,
                 shared_counter_max_tip,
+                shared_counter_gas_price_multiplier,
                 num_contested_objects,
+                gas_double_spend_copies,
+                gas_double_spend_submission,
                 batch_payment_size,
                 adversarial_cfg,
                 expected_failure_type,
@@ -156,6 +170,7 @@ impl WorkloadConfiguration {
                             batch_payment: batch_payment[i],
                             shared_deletion: shared_deletion[i],
                             adversarial: adversarial[i],
+                            large_transaction: large_transaction[i],
                             expected_failure: expected_failure[i],
                             randomness: randomness[i],
                             randomized_transaction: randomized_transaction[i],
@@ -163,7 +178,9 @@ impl WorkloadConfiguration {
                             party: party[i],
                             conflicting_transfer: conflicting_transfer[i],
                             composite: composite[i],
+                            gas_double_spend: gas_double_spend[i],
                         },
+                        large_transaction_size_bytes: large_transaction_size_bytes[i],
                         adversarial_cfg: AdversarialPayloadCfg::from_str(&adversarial_cfg[i])
                             .unwrap(),
                         expected_failure_cfg: ExpectedFailurePayloadCfg {
@@ -174,8 +191,14 @@ impl WorkloadConfiguration {
                         shared_counter_hotness_factor: shared_counter_hotness_factor[i],
                         num_shared_counters: num_shared_counters.as_ref().map(|n| n[i]),
                         shared_counter_max_tip: shared_counter_max_tip[i],
+                        shared_counter_gas_price_multiplier: shared_counter_gas_price_multiplier[i],
                         num_contested_objects: num_contested_objects[i],
                         randomized_transaction_concurrency: 4,
+                        gas_double_spend_copies: gas_double_spend_copies[i],
+                        gas_double_spend_submission: GasDoubleSpendSubmission::from_str(
+                            &gas_double_spend_submission[i],
+                        )
+                        .unwrap(),
                         target_qps: target_qps[i],
                         in_flight_ratio: in_flight_ratio[i],
                         duration: duration[i],
@@ -275,13 +298,17 @@ impl WorkloadConfiguration {
             num_transfer_accounts,
             weights,
             adversarial_cfg,
+            large_transaction_size_bytes,
             expected_failure_cfg,
             batch_payment_size,
             shared_counter_hotness_factor,
             num_shared_counters,
             shared_counter_max_tip,
+            shared_counter_gas_price_multiplier,
             num_contested_objects: _,
             randomized_transaction_concurrency,
+            gas_double_spend_copies,
+            gas_double_spend_submission,
             target_qps,
             in_flight_ratio,
             duration,
@@ -327,13 +354,15 @@ impl WorkloadConfiguration {
             + weights.delegation
             + weights.batch_payment
             + weights.adversarial
+            + weights.large_transaction
             + weights.randomness
             + weights.expected_failure
             + weights.randomized_transaction
             + weights.slow
             + weights.party
             + weights.conflicting_transfer
-            + weights.composite;
+            + weights.composite
+            + weights.gas_double_spend;
         let mut workload_builders = vec![];
         let shared_workload = SharedCounterWorkloadBuilder::from(
             weights.shared_counter as f32 / total_weight as f32,
@@ -343,6 +372,7 @@ impl WorkloadConfiguration {
             shared_counter_hotness_factor,
             num_shared_counters,
             shared_counter_max_tip,
+            shared_counter_gas_price_multiplier,
             reference_gas_price,
             duration,
             group,
@@ -399,6 +429,16 @@ impl WorkloadConfiguration {
             group,
         );
         workload_builders.push(adversarial_workload);
+        let large_transaction_workload = LargeTransactionWorkloadBuilder::from(
+            weights.large_transaction as f32 / total_weight as f32,
+            target_qps,
+            num_workers,
+            in_flight_ratio,
+            large_transaction_size_bytes,
+            duration,
+            group,
+        );
+        workload_builders.push(large_transaction_workload);
         let randomness_workload = RandomnessWorkloadBuilder::from(
             weights.randomness as f32 / total_weight as f32,
             target_qps,
@@ -431,6 +471,18 @@ impl WorkloadConfiguration {
             randomized_transaction_concurrency,
         );
         workload_builders.push(randomized_transaction_workload);
+        let gas_double_spend_workload = GasDoubleSpendWorkloadBuilder::from(
+            weights.gas_double_spend as f32 / total_weight as f32,
+            target_qps,
+            num_workers,
+            in_flight_ratio,
+            gas_double_spend_copies,
+            reference_gas_price,
+            gas_double_spend_submission,
+            duration,
+            group,
+        );
+        workload_builders.push(gas_double_spend_workload);
         let slow_workload = SlowWorkloadBuilder::from(
             weights.slow as f32 / total_weight as f32,
             target_qps,

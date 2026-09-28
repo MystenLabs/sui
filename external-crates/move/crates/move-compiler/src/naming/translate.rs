@@ -2610,6 +2610,7 @@ fn constant(context: &mut Context, _name: ConstantName, econstant: E::Constant) 
         index,
         attributes,
         loc,
+        visibility,
         signature: esignature,
         value: evalue,
     } = econstant;
@@ -2631,6 +2632,7 @@ fn constant(context: &mut Context, _name: ConstantName, econstant: E::Constant) 
         index,
         attributes,
         loc,
+        visibility,
         signature,
         value,
     }

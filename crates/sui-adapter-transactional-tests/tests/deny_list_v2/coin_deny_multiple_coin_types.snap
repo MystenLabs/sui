@@ -1,20 +1,25 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 6 tasks
+
+// This test verifies when sending two objects of different coin types in the same transaction,
+// if one is denied but not the other, the transaction check should still fail.
+// More importantly, if the second type is denied but not the first, the fact that
+// the first type doesn't even have a denylist entry should not matter.
 
 init:
 A: object(0,0)
 
-task 1, lines 11-62:
+task 1, lines 11-60:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6), object(1,7), object(1,8), object(1,9), object(1,10)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 34276000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 63-65:
+task 2, lines 62-63:
+// Coin1
 //# view-object 1,5
 Owner: Account Address ( A )
 Version: 2
@@ -29,7 +34,8 @@ Contents: sui::coin::Coin<test::regulated_coin1::REGULATED_COIN1> {
     },
 }
 
-task 3, lines 66-68:
+task 3, lines 65-66:
+// Coin2
 //# view-object 1,10
 Owner: Account Address ( A )
 Version: 2
@@ -44,7 +50,8 @@ Contents: sui::coin::Coin<test::regulated_coin2::REGULATED_COIN2> {
     },
 }
 
-task 4, line 69:
+task 4, lines 68-69:
+// Deny account A for coin2.
 //# run sui::coin::deny_list_v2_add --args object(0x403) object(1,8) @A --type-args test::regulated_coin2::REGULATED_COIN2 --sender A
 events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 98, 49, 54, 51, 48, 49, 50, 98, 50, 99, 97, 55, 102, 102, 56, 98, 100, 53, 97, 53, 54, 98, 50, 56, 50, 100, 48, 98, 56, 101, 101, 101, 48, 55, 51, 101, 49, 50, 98, 48, 100, 51, 49, 52, 52, 101, 98, 97, 54, 56, 49, 101, 49, 100, 98, 98, 57, 55, 100, 49, 51, 55, 101, 55, 51, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 50, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 50, 134, 227, 8, 85, 36, 87, 157, 154, 67, 29, 178, 8, 75, 99, 185, 237, 203, 14, 68, 178, 39, 85, 219, 94, 235, 221, 149, 253, 111, 231, 210, 170] }
 created: object(4,0), object(4,1), object(4,2)

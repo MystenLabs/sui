@@ -27,9 +27,18 @@ use sui_protocol_config_macros::{
 };
 use tracing::{info, warn};
 
+pub mod reachability;
+
+// Re-exported so that `assert_reachable_gated!` expands without requiring callers to depend on
+// the antithesis sdk or mysten-common directly.
+#[doc(hidden)]
+pub use antithesis_sdk::linkme;
+#[doc(hidden)]
+pub use mysten_common::assert_reachable_simtest;
+
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 136;
+const MAX_PROTOCOL_VERSION: u64 = 139;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -67,7 +76,7 @@ const MAINNET_USDB: &str =
 //            hash module bytes individually before computing package digest.
 // Version 8: Disallow changing abilities and type constraints for type parameters in structs
 //            during upgrades.
-// Version 9: Limit the length of Move idenfitiers to 128.
+// Version 9: Limit the length of Move identifiers to 128.
 //            Disallow extraneous module bytes,
 //            advance_to_highest_supported_protocol_version,
 // Version 10:increase bytecode verifier `max_verifier_meter_ticks_per_function` and
@@ -385,6 +394,26 @@ const MAINNET_USDB: &str =
 //              PTB Move call signature at most once mutably or any number of
 //              times immutably (never by value), and never in return position.
 //              Enable allowed_proposers on devnet.
+//              Add limits for references used by programmable transactions.
+//              Add additional linkage invariant hardening/invariant checks in PTBs.
+//              Add package_arena_size_in_bytes.
+// Version 137: Lower the per-bit cost of bulletproofs range proof verification, and raise the
+//              bound on batch size * range bits from 512 to 1024.
+//              Enable allowances on devnet and testnet.
+//              Enable fix_ptb_generated_reads.
+//              Charge `LdConst` for the abstract value size of the constant instead of its
+//              serialized byte length.
+//              Enable check_object_funds_withdraw_in_execution on devnet and charge for reads.
+//              Enable allowed_proposers on testnet and mainnet.
+//              Validate PTB indices at signing time.
+//              Enable memory_safety_invariant_check_v2.
+// Version 138: Enable BumpOnly
+//              Enable check_object_funds_withdraw_in_execution on testnet.
+//              Disable effects transaction dependencies on testnet.
+//              Enable allowances on mainnet.
+//              Merge colliding deferred-transaction entries in the consensus handler
+//              instead of overwriting (which stranded the displaced transactions).
+// Version 139: Enable forwarding addresses on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -995,9 +1024,18 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_order_independent_upgrade_init_linkage: bool,
 
+    // If true, adds additional hardening and checks to upgrade-init linkage entries, and adds
+    // additional linkage invariant checks around linkage.
+    #[serde(skip_serializing_if = "is_false")]
+    harden_linkage_consistency: bool,
+
     // Check shared object transfer restrictions per command.
     #[serde(skip_serializing_if = "is_false")]
     per_command_shared_object_transfer_rules: bool,
+
+    // Validate PTB input and result indices before signing.
+    #[serde(skip_serializing_if = "is_false")]
+    validate_ptb_argument_indices: bool,
 
     // Enable including checkpoint artifacts digest in the summary.
     #[serde(skip_serializing_if = "is_false")]
@@ -1092,6 +1130,11 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     normalize_depth_formula: bool,
 
+    // If true, `LdConst` charges for the abstract value size of the constant instead of its
+    // serialized byte length.
+    #[serde(skip_serializing_if = "is_false")]
+    charge_ld_const_abstract_size: bool,
+
     // If true, skip GC'ed accept votes in CommitFinalizer.
     #[serde(skip_serializing_if = "is_false")]
     consensus_skip_gced_accept_votes: bool,
@@ -1109,6 +1152,10 @@ struct FeatureFlags {
     // If true, create the forwarding address registry object in the change epoch transaction.
     #[serde(skip_serializing_if = "is_false")]
     create_forwarding_address_registry: bool,
+
+    // If true, resolve forwarding addresses through the forwarding address registry.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_forwarding_addresses: bool,
 
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // Deprecated: must always be set to `true`.
@@ -1238,6 +1285,32 @@ struct FeatureFlags {
     // If true enable unified linkage
     #[serde(skip_serializing_if = "is_false")]
     enable_unified_linkage: bool,
+
+    // Enable allowance-sourced funds withdrawals (`WithdrawFrom::SenderAllowance`).
+    // Requires `enable_accumulators`.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    enable_allowances: bool,
+
+    // Fixes last-use scoping and live-reference metering for generated `Read` PTB arguments.
+    #[serde(skip_serializing_if = "is_false")]
+    fix_ptb_generated_reads: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    check_object_funds_withdraw_in_execution: bool,
+    // If true, use the bitset implementation for PTB memory safety invariant check.
+    #[serde(skip_serializing_if = "is_false")]
+    memory_safety_invariant_check_v2: bool,
+
+    // Keep the effects wire representation, but stop collecting transaction dependencies.
+    #[serde(skip_serializing_if = "is_false")]
+    disable_effects_tx_dependencies: bool,
+
+    // If true, a deferred-transaction key collision in the consensus commit handler
+    // merges the colliding entries instead of overwriting the existing one, which
+    // silently dropped the displaced (finalized) transactions.
+    #[serde(skip_serializing_if = "is_false")]
+    merge_colliding_deferrals: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1573,6 +1646,10 @@ pub struct ProtocolConfig {
     /// Maximum depth of a Move value within the VM.
     max_move_value_depth: Option<u64>,
 
+    /// Maximum number of bytes a single package's arena may allocate when the package is loaded
+    /// into the VM. If unset, the VM uses its built-in default.
+    package_arena_size_in_bytes: Option<u64>,
+
     /// Maximum number of variants in an enum. Enforced by the bytecode verifier at signing.
     max_move_enum_variants: Option<u64>,
 
@@ -1767,6 +1844,12 @@ pub struct ProtocolConfig {
     event_emit_output_cost_per_byte: Option<u64>,
     event_emit_auth_stream_cost: Option<u64>,
 
+    // `funds_accumulator` module
+    // Base cost for reserving object funds for withdrawal.
+    reserve_object_funds_for_withdrawal_cost_base: Option<u64>,
+    // Cost of loading an object's settled balance on the first withdrawal for an owner and type.
+    reserve_object_funds_for_withdrawal_cold_read_cost: Option<u64>,
+
     //  `object` module
     // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
     object_borrow_uid_cost_base: Option<u64>,
@@ -1950,6 +2033,9 @@ pub struct ProtocolConfig {
 
     verify_bulletproofs_ristretto255_base_cost: Option<u64>,
     verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: Option<u64>,
+    // Upper bound on batch size * range in bits for a bulletproofs range proof. Defaults to 512
+    // when unset.
+    max_bulletproofs_total_bits: Option<u64>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -2182,6 +2268,22 @@ pub struct ProtocolConfig {
     /// Maximum serialized size in bytes of a gasless transaction (SenderSignedData).
     /// Bounds the persistent storage impact of each admitted gasless transaction.
     gasless_max_tx_size_bytes: Option<u64>,
+
+    /// The multiplier for each live reference charging per-command. Only used when
+    /// `allow_references_in_ptbs` is enabled.
+    translation_per_live_reference_charge: Option<u64>,
+
+    /// The maximum number of live references while checking a command. Only used when
+    /// `allow_references_in_ptbs` is enabled.
+    max_ptb_live_references: Option<u64>,
+
+    /// The maximum number of references returned by a command. Only used when
+    /// `allow_references_in_ptbs` is enabled.
+    max_ptb_returned_references: Option<u64>,
+
+    /// The maximum number of references returned over the course of the transaction. Only used
+    /// when `allow_references_in_ptbs` is enabled.
+    max_ptb_total_returned_references: Option<u64>,
 }
 
 /// An aliased address.
@@ -2281,6 +2383,10 @@ impl ProtocolConfig {
 
     pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta
+    }
+
+    pub fn enable_allowances(&self) -> bool {
+        self.feature_flags.enable_allowances && self.enable_accumulators()
     }
 
     pub fn enable_coin_reservation_obj_refs(&self) -> bool {
@@ -2676,6 +2782,10 @@ impl ProtocolConfig {
             event_emit_output_cost_per_byte: Some(10),
             event_emit_auth_stream_cost: None,
 
+            // `funds_accumulator` module: introduced in protocol version 137.
+            reserve_object_funds_for_withdrawal_cost_base: None,
+            reserve_object_funds_for_withdrawal_cold_read_cost: None,
+
             //  `object` module
             // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
             object_borrow_uid_cost_base: Some(52),
@@ -2861,6 +2971,7 @@ impl ProtocolConfig {
 
             verify_bulletproofs_ristretto255_base_cost: None,
             verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: None,
+            max_bulletproofs_total_bits: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -2918,6 +3029,7 @@ impl ProtocolConfig {
             // Limits the length of a Move identifier
             max_move_identifier_len: None,
             max_move_value_depth: None,
+            package_arena_size_in_bytes: None,
             max_move_enum_variants: None,
 
             gas_rounding_step: None,
@@ -2992,6 +3104,10 @@ impl ProtocolConfig {
             translation_per_type_node_charge: None,
             translation_per_reference_node_charge: None,
             translation_per_linkage_entry_charge: None,
+            translation_per_live_reference_charge: None,
+            max_ptb_live_references: None,
+            max_ptb_returned_references: None,
+            max_ptb_total_returned_references: None,
 
             max_updates_per_settlement_txn: None,
 
@@ -4642,8 +4758,52 @@ impl ProtocolConfig {
                 136 => {
                     cfg.feature_flags.ptb_tx_context_restrictions = true;
 
+                    cfg.translation_per_live_reference_charge = Some(1);
+                    cfg.max_ptb_live_references = Some(64);
+                    cfg.max_ptb_returned_references = Some(16);
+                    cfg.max_ptb_total_returned_references = Some(256);
+
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.allowed_proposers = true;
+                    }
+                    cfg.feature_flags.harden_linkage_consistency = true;
+
+                    cfg.package_arena_size_in_bytes = Some(10_000_000);
+                }
+                137 => {
+                    cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(621);
+                    cfg.max_bulletproofs_total_bits = Some(1024);
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_allowances = true;
+                    }
+                    cfg.feature_flags.fix_ptb_generated_reads = true;
+                    cfg.feature_flags.charge_ld_const_abstract_size = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
+                    }
+                    cfg.reserve_object_funds_for_withdrawal_cost_base = Some(52);
+                    // Equivalent to the fixed portion of a dynamic-field lookup (52 + 52) plus
+                    // loading the 80-byte accumulator field contents at one gas unit per byte.
+                    cfg.reserve_object_funds_for_withdrawal_cold_read_cost = Some(184);
+
+                    cfg.feature_flags.allowed_proposers = true;
+
+                    cfg.feature_flags.validate_ptb_argument_indices = true;
+                    cfg.feature_flags.memory_safety_invariant_check_v2 = true;
+                }
+                138 => {
+                    cfg.gas_model_version = Some(15);
+                    cfg.feature_flags.enable_allowances = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
+                        cfg.feature_flags.disable_effects_tx_dependencies = true;
+                    }
+                    cfg.feature_flags.merge_colliding_deferrals = true;
+                }
+                139 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_forwarding_addresses = true;
                     }
                 }
                 // Use this template when making changes:

@@ -25,7 +25,8 @@ use crate::{
     accumulators::{
         funds_read::AccountFundsRead,
         object_funds_checker::{
-            ObjectFundsChecker, ObjectFundsWithdrawStatus, metrics::ObjectFundsCheckerMetrics,
+            ObjectFundsCheckerDEPRECATED, ObjectFundsWithdrawStatus,
+            metrics::ObjectFundsCheckerMetrics,
         },
     },
     authority::{
@@ -38,7 +39,7 @@ use crate::{
 /// Checks object funds where the recorded net withdraws equal the checked running max
 /// withdraws, i.e. transactions whose withdraws are not offset by any deposits.
 fn check_object_funds_same(
-    checker: &ObjectFundsChecker,
+    checker: &ObjectFundsCheckerDEPRECATED,
     withdraws: BTreeMap<AccumulatorObjId, u128>,
     accumulator_version: SequenceNumber,
     funds_read: &dyn AccountFundsRead,
@@ -58,7 +59,7 @@ async fn test_sufficient_balance() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -78,7 +79,7 @@ async fn test_insufficient_balance() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -104,7 +105,7 @@ async fn test_pending_wait() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -134,7 +135,7 @@ async fn test_pending_then_sufficient() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -173,7 +174,7 @@ async fn test_pending_then_insufficient() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -217,7 +218,7 @@ async fn test_multiple_withdraws() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account1, 100), (account2, 100)]),
     ));
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -235,7 +236,7 @@ async fn test_multiple_withdraws() {
 
 #[tokio::test]
 async fn test_settle_accumulator_version() {
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -259,7 +260,7 @@ async fn test_account_version_ahead_of_schedule() {
             SequenceNumber::from_u64(1),
         )
         .await;
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -291,7 +292,7 @@ async fn test_settle_ahead_of_schedule() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -321,7 +322,7 @@ async fn test_check_out_of_order() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account1, 100), (account2, 100)]),
     ));
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -361,7 +362,7 @@ async fn test_commit() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -381,7 +382,7 @@ async fn test_commit() {
 
 #[tokio::test]
 async fn test_should_commit_early_exits() {
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -438,7 +439,7 @@ async fn test_should_commit_ignores_zero_net_withdraws() {
     // effects folding as a Split but creates no running max entry. It must be skipped
     // when recording unsettled withdraws instead of tripping the recording invariant
     // check.
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -504,7 +505,7 @@ async fn test_net_withdraws_do_not_block_same_version_withdraws() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );
@@ -549,7 +550,7 @@ async fn test_partial_net_withdraws() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    let checker = ObjectFundsChecker::new_for_testing(
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
         SequenceNumber::from_u64(0),
         Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
     );

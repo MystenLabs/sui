@@ -1,13 +1,15 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 13 tasks
+
+// Test send_funds and redeem_funds from sui::balance
 
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 9-12:
+task 1, lines 8-12:
+// Send 1000 from A to B
 //# programmable --sender A --inputs 1000 @B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
@@ -24,11 +26,12 @@ task 3, line 16:
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 No funds accumulator object found
 
-task 4, lines 18-20:
+task 4, line 18:
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 1000
 
-task 5, lines 21-23:
+task 5, lines 20-23:
+// B withdraws 500 and send to A
 //# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(500) @A
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
@@ -44,11 +47,12 @@ task 7, line 28:
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 500
 
-task 8, lines 30-32:
+task 8, line 30:
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
 500
 
-task 9, lines 33-35:
+task 9, lines 32-35:
+// B withdraws 500 and send to self
 //# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(500) @B
 //> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));

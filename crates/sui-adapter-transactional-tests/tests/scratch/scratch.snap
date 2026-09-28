@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// Basic end-to-end coverage of `sui::scratch` through "real" transaction execution, and a check
+// that the store is cleared between transactions (a fresh `ScratchRuntime` per transaction).
+
 init:
 A: object(0,0)
 

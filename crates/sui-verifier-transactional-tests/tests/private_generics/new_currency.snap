@@ -1,8 +1,9 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 3 tasks
+
+// tests that coin_registry::new_currency can only be called by internal types.
 
 task 0, lines 6-32:
 //# publish

@@ -1,27 +1,28 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
+assertion_line: 937
 ---
 processed 12 tasks
 
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-36:
+task 1, lines 6-34:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 7470800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 37-40:
+task 2, lines 36-38:
+// Create a party object.
 //# programmable --sender A
 //> ex::m::mint()
-// child
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3473200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 41-43:
+task 3, lines 40-41:
+// child
 //# view-object 2,1
 Owner: ConsensusAddressOwner( 2, A )
 Version: 2
@@ -33,7 +34,8 @@ Contents: ex::m::Child {
     },
 }
 
-task 4, lines 44-46:
+task 4, lines 43-44:
+// parent
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 2
@@ -45,7 +47,8 @@ Contents: ex::m::Parent {
     },
 }
 
-task 5, lines 47-48:
+task 5, lines 46-48:
+// Transfer party object to dynamic field.
 //# programmable --sender A --inputs object(2,1) object(2,0)
 //> ex::m::add_df(Input(1), Input(0))
 created: object(5,0)
@@ -64,7 +67,7 @@ Contents: ex::m::Child {
     },
 }
 
-task 7, lines 52-54:
+task 7, line 52:
 //# view-object 5,0
 Owner: Object ID: ( fake(2,0) )
 Version: 3
@@ -82,22 +85,23 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
     },
 }
 
-task 8, lines 55-59:
+task 8, lines 54-57:
+// Verify the dynamic field child object can't be transferred.
 //# programmable --inputs object(2,1) @A --sender A
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::A>(Input(0), Result(0))
-// Pull the object back out.
 Error: Error checking transaction input objects: Object object(2,1) is owned by object object(5,0). Objects owned by other objects cannot be used as input arguments
 
-task 9, lines 60-63:
+task 9, lines 59-61:
+// Pull the object back out.
 //# programmable --sender A --inputs object(2,0)
 //> ex::m::remove_df(Input(0))
-// Verify it can again be transferred to a different party.
 mutated: object(0,0), object(2,0), object(2,1)
 deleted: object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 3473200,  storage_rebate: 5868720, non_refundable_storage_fee: 59280
 
-task 10, lines 64-66:
+task 10, lines 63-66:
+// Verify it can again be transferred to a different party.
 //# programmable --inputs object(2,1) @B --sender A
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::Child>(Input(0), Result(0))

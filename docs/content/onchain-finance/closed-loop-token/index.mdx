@@ -67,10 +67,10 @@ Unlike Coin, which has `key + store` abilities and thus supports wrapping and pu
 
 ```move
 // defined in `sui::coin`
-struct Coin<phantom T> has key, store { id: UID, balance: Balance<T> }
+public struct Coin<phantom T> has key, store { id: UID, balance: Balance<T> }
 
 // defined in `sui::token`
-struct Token<phantom T> has key { id: UID, balance: Balance<T> }
+public struct Token<phantom T> has key { id: UID, balance: Balance<T> }
 ```
 
 ## Compliance and rules

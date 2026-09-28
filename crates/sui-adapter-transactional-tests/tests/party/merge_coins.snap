@@ -1,19 +1,20 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
+assertion_line: 937
 ---
 processed 8 tasks
 
 init:
 A: object(0,0)
 
-task 1, lines 6-20:
+task 1, lines 6-18:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 10374000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 21-26:
+task 2, lines 20-26:
+// Verify ConsenusAddressOwner coin can be merged into AddressOwner coin.
 //# programmable --sender A --inputs object(1,1) 100 @A
 //> 0: sui::coin::mint<ex::m::M>(Input(0), Input(1));
 //> 1: sui::coin::mint<ex::m::M>(Input(0), Input(1));
@@ -33,7 +34,7 @@ deleted: object(2,1)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
 
-task 4, lines 31-33:
+task 4, line 31:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 4
@@ -48,7 +49,8 @@ Contents: sui::coin::Coin<ex::m::M> {
     },
 }
 
-task 5, lines 34-39:
+task 5, lines 33-39:
+// Verify AddressOwner coin can be merged into ConsensusAddressOwner coin.
 //# programmable --sender A --inputs object(1,1) 100 @A
 //> 0: sui::coin::mint<ex::m::M>(Input(0), Input(1));
 //> 1: sui::coin::mint<ex::m::M>(Input(0), Input(1));

@@ -54,11 +54,21 @@ use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use task::chain_identifier;
+use task::streaming::CheckpointStreamTask;
+use task::streaming::StreamedCacheEvictionTask;
+use task::streaming::StreamedCaches;
+use task::streaming::StreamedObjectStore;
+use task::streaming::StreamedTransactionStore;
+use task::streaming::StreamingPackageStore;
+use task::streaming::SubscriberLimit;
+use task::streaming::SubscriptionBroadcast;
+use task::streaming::SubscriptionReadiness;
 use task::watermark::WatermarkTask;
 use task::watermark::WatermarksLock;
 use throttle::Throttle;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
+use tonic::metadata::MetadataValue;
 use tower_http::catch_panic;
 use tower_http::cors;
 use tracing::info;
@@ -66,16 +76,15 @@ use url::Url;
 
 use crate::api::mutation::Mutation;
 use crate::api::query::Query;
-#[cfg(feature = "staging")]
 use crate::api::subscription::Subscription;
 use crate::error::PanicHandler;
 use crate::extensions::logging::ClientInfo;
 use crate::extensions::logging::Logging;
 use crate::extensions::logging::Session;
 use crate::metrics::RpcMetrics;
+use crate::metrics::SubscriptionMetrics;
+use crate::middleware::client_protocol_version::ClientProtocolVersion;
 use crate::middleware::version::Version;
-#[cfg(not(feature = "staging"))]
-use async_graphql::EmptySubscription as Subscription;
 
 const GRAPHQL_PATH: &str = "/graphql";
 const GRAPHQL_SUBSCRIPTIONS_PATH: &str = "/graphql/subscriptions";
@@ -293,10 +302,14 @@ struct IdeEnabled(bool);
 #[derive(Clone, Copy)]
 struct SubscriptionsEnabled(bool);
 
-/// Per-subscriber delivery rate in output nodes per second, surfaced to the subscription handler so
-/// it can pace each payload by its cost. `0` disables pacing.
-#[derive(Clone, Copy)]
-struct SubscriptionThrottleRate(u32);
+/// Per-subscriber delivery throttle settings surfaced to the subscription handler: the rate in
+/// output nodes per second (`0` disables pacing) and the metric each payload's pacing delay is
+/// observed into.
+#[derive(Clone)]
+struct SubscriptionThrottle {
+    nodes_per_second: u32,
+    delay_metric: prometheus::Histogram,
+}
 
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
 /// command-line).
@@ -384,6 +397,8 @@ pub async fn start_rpc(
         metrics.clone(),
     );
 
+    let subscription_metrics = Arc::new(SubscriptionMetrics::new(registry));
+
     let streaming_setup = match subscription_args.checkpoint_stream_url {
         Some(uri) => {
             let ledger_grpc = ledger_grpc_reader
@@ -394,42 +409,38 @@ pub async fn start_rpc(
                 .as_ref()
                 .context("Alpha ledger gRPC reader is required when streaming is enabled")?;
 
-            let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
-                package_store.clone(),
-            ));
-            // Unbounded is intentional: if `kv_packages` lags long enough for this queue to
-            // grow without bound, the indexer infrastructure itself has a bigger problem and
-            // OOM on this service is one failure mode among many. Monitor via metrics.
-            #[allow(clippy::disallowed_methods)]
-            let (package_eviction_tx, package_eviction_rx) = tokio::sync::mpsc::unbounded_channel();
-            let readiness =
-                task::streaming::SubscriptionReadiness::new(watermark_task.watermarks_rx());
-            let (stream_task, broadcaster) = task::streaming::CheckpointStreamTask::new(
+            let streaming_packages = Arc::new(StreamingPackageStore::new(package_store.clone()));
+            let streaming_transactions = Arc::new(StreamedTransactionStore::new());
+            let streaming_objects = Arc::new(StreamedObjectStore::new());
+            let readiness = SubscriptionReadiness::new(watermark_task.watermarks_rx());
+            let (stream_task, broadcaster) = CheckpointStreamTask::new(
                 uri,
                 &config.subscription,
                 streaming_packages.clone(),
-                package_eviction_tx,
+                streaming_transactions.clone(),
+                streaming_objects.clone(),
                 readiness.clone(),
                 ledger_grpc.clone(),
                 watermark_task.watermarks_rx(),
+                subscription_metrics.clone(),
             );
-            let eviction_task = task::streaming::PackageEvictionTask::new(
-                streaming_packages.clone(),
-                package_eviction_rx,
+            let caches = Arc::new(StreamedCaches::new(
+                streaming_packages,
+                streaming_transactions,
+                streaming_objects,
+            ));
+            // One task flushes every streamed cache once its backing index catches up.
+            let eviction_task = StreamedCacheEvictionTask::new(
+                caches.to_evictable(),
                 watermark_task.watermarks(),
                 Duration::from_millis(config.subscription.package_eviction_interval_ms),
             );
-            Some((
-                stream_task,
-                broadcaster,
-                eviction_task,
-                streaming_packages,
-                readiness,
-            ))
+            Some((stream_task, broadcaster, eviction_task, caches, readiness))
         }
         None => None,
     };
 
+    let throttle_delay_metric = subscription_metrics.subscriber_throttle_delay.clone();
     let mut rpc = rpc
         .route(GRAPHQL_PATH, post(graphql).get(graphiql))
         .route(GRAPHQL_SUBSCRIPTIONS_PATH, post(graphql_subscriptions))
@@ -459,7 +470,7 @@ pub async fn start_rpc(
     }
 
     if let Some(fullnode_client) = fullnode_client {
-        rpc = rpc.data(fullnode_client);
+        rpc = rpc.layer(fullnode_client);
     }
 
     if let Some(ledger_grpc_reader) = ledger_grpc_reader.clone() {
@@ -468,15 +479,15 @@ pub async fn start_rpc(
 
     let subscriptions_enabled = streaming_setup.is_some();
     rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
-    rpc = rpc.layer(SubscriptionThrottleRate(
-        config
+    rpc = rpc.layer(SubscriptionThrottle {
+        nodes_per_second: config
             .subscription
             .per_subscriber_max_output_nodes_per_second,
-    ));
+        delay_metric: throttle_delay_metric,
+    });
 
     // The transaction subscription backfill waits on pipeline watermarks to gate delivery, so it
     // needs a live view of them. Captured before the watermark task is consumed by `run()`.
-    #[cfg(feature = "staging")]
     let subscription_watermarks_rx = watermark_task.watermarks_rx();
 
     let s_system_package_task = system_package_task.run();
@@ -485,34 +496,40 @@ pub async fn start_rpc(
     // Spawn the streaming tasks and wait for subscriptions to be ready before
     // binding the listener, so the schema is only advertised once `kv_packages`
     // has caught up to the first streamed checkpoint.
-    let streaming_handles =
-        if let Some((stream_task, _broadcaster, eviction_task, streaming_packages, readiness)) =
-            streaming_setup
+    let streaming_handles = if let Some((
+        stream_task,
+        _broadcaster,
+        eviction_task,
+        caches,
+        readiness,
+    )) = streaming_setup
+    {
+        let max_subscribers = config.subscription.max_subscribers;
+        rpc = rpc.data(caches).data(config.subscription);
+        let s_stream = stream_task.run();
+        let s_eviction = eviction_task.run();
+        readiness.wait_for_ready().await?;
+        // The broadcast handle is only consumed by the subscription resolvers.
         {
-            rpc = rpc.data(streaming_packages).data(config.subscription);
-            let s_stream = stream_task.run();
-            let s_eviction = eviction_task.run();
-            readiness.wait_for_ready().await?;
-            // The broadcast handle is only consumed by the (staging-gated) subscription resolvers.
-            #[cfg(feature = "staging")]
-            {
-                // `first_live_checkpoint` is the first checkpoint the live upstream stream
-                // broadcast, recorded as readiness fires.
-                let first_live_checkpoint = readiness
-                    .first_live_checkpoint()
-                    .expect("first_live_checkpoint is set before wait_for_ready returns Ok");
-                let subscription_broadcast = Arc::new(task::streaming::SubscriptionBroadcast::new(
-                    _broadcaster,
-                    first_live_checkpoint,
-                ));
-                rpc = rpc
-                    .data(subscription_broadcast)
-                    .data(subscription_watermarks_rx);
-            }
-            Some((s_stream, s_eviction))
-        } else {
-            None
-        };
+            // `first_live_checkpoint` is the first checkpoint the live upstream stream
+            // broadcast, recorded as readiness fires.
+            let first_live_checkpoint = readiness
+                .first_live_checkpoint()
+                .expect("first_live_checkpoint is set before wait_for_ready returns Ok");
+            let subscription_broadcast = Arc::new(SubscriptionBroadcast::new(
+                _broadcaster,
+                first_live_checkpoint,
+                subscription_metrics.clone(),
+            ));
+            rpc = rpc
+                .data(subscription_broadcast)
+                .data(subscription_watermarks_rx)
+                .data(SubscriberLimit::new(max_subscribers));
+        }
+        Some((s_stream, s_eviction))
+    } else {
+        None
+    };
 
     let s_rpc = rpc.run().await?;
 
@@ -536,7 +553,9 @@ async fn graphql(
     Extension(logging): Extension<LoggingConfig>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
+    client_protocol_version: Option<TypedHeader<ClientProtocolVersion>>,
     headers: axum::http::HeaderMap,
+    fullnode_client: Option<Extension<FullnodeClient>>,
     request: GraphQLRequest,
 ) -> GraphQLResponse {
     let mut request = request
@@ -550,7 +569,27 @@ async fn graphql(
         request = request.data(show_usage);
     }
 
+    let request = with_fullnode_client(request, fullnode_client, client_protocol_version);
     schema.execute(request).await.into()
+}
+
+fn with_fullnode_client(
+    request: async_graphql::Request,
+    fullnode_client: Option<Extension<FullnodeClient>>,
+    client_protocol_version: Option<TypedHeader<ClientProtocolVersion>>,
+) -> async_graphql::Request {
+    let Some(Extension(mut client)) = fullnode_client else {
+        return request;
+    };
+
+    if let Some(version) = client_protocol_version
+        .and_then(|TypedHeader(version)| MetadataValue::try_from(version.0.as_bytes()).ok())
+    {
+        client = client.with_client_protocol_version(version);
+    }
+
+    // Request data keeps the forwarded version isolated from other callers sharing the schema.
+    request.data(client)
 }
 
 /// Handler for GET requests on the GraphQL path. Serves the GraphiQL IDE when enabled,
@@ -575,8 +614,10 @@ async fn graphql_subscriptions(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(schema): Extension<Schema<Query, Mutation, Subscription>>,
     Extension(SubscriptionsEnabled(subscriptions_enabled)): Extension<SubscriptionsEnabled>,
-    Extension(SubscriptionThrottleRate(nodes_per_second)): Extension<SubscriptionThrottleRate>,
+    Extension(throttle_cfg): Extension<SubscriptionThrottle>,
     Extension(watermark): Extension<WatermarksLock>,
+    client_protocol_version: Option<TypedHeader<ClientProtocolVersion>>,
+    fullnode_client: Option<Extension<FullnodeClient>>,
     request: GraphQLRequest,
 ) -> axum::response::Response {
     if !subscriptions_enabled {
@@ -591,13 +632,15 @@ async fn graphql_subscriptions(
     // Query depth is computed once by the query-limits extension during validation and stashed here,
     // so the throttle can add its depth surcharge to each payload's cost.
     let query_depth = QueryDepth::default();
-    let throttle = Throttle::new(nodes_per_second);
+    let throttle = Throttle::new(throttle_cfg.nodes_per_second, throttle_cfg.delay_metric);
     let req = request
         .into_inner()
         .data(Session::new(addr))
         .data(watermarks)
         .data(rich::Meter::default())
         .data(query_depth.clone());
+
+    let req = with_fullnode_client(req, fullnode_client, client_protocol_version);
 
     // Pace delivery per subscriber, then serialize each payload into an SSE event.
     let stream = throttle
@@ -635,16 +678,122 @@ mod tests {
     use async_graphql_axum::GraphQLRequest;
     use async_graphql_axum::GraphQLResponse;
     use axum::routing::post;
+    use fastcrypto::encoding::Base64;
+    use fastcrypto::encoding::Encoding;
     use insta::assert_snapshot;
     use reqwest::Client;
     use serde_json::Value;
     use serde_json::json;
+    use sui_indexer_alt_reader::fullnode_client::X_SUI_CLIENT_PROTOCOL_VERSION;
     use sui_pg_db::temp::get_available_port;
+    use sui_types::base_types::SuiAddress;
+    use sui_types::transaction::ProgrammableTransaction;
+    use sui_types::transaction::TransactionData;
+    use tokio::sync::mpsc;
 
     use crate::error::code;
     use crate::extensions::logging::Session;
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_forward_client_protocol_version() {
+        let (sent, mut received) = mpsc::channel(1);
+        let upstream = Router::new().fallback(move |headers: axum::http::HeaderMap| {
+            let sent = sent.clone();
+            async move {
+                sent.send(headers).await.unwrap();
+                // Stop before response decoding: these tests only need the outgoing metadata.
+                [
+                    ("content-type", "application/grpc"),
+                    ("grpc-status", "3"),
+                    ("grpc-message", "metadata-recorded"),
+                ]
+            }
+        });
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let fullnode_url = format!("http://{}", listener.local_addr().unwrap());
+        let upstream_task = tokio::spawn(async move {
+            axum::serve(listener, upstream).await.unwrap();
+        });
+        let registry = Registry::new();
+        let fullnode = FullnodeClient::new(
+            None,
+            FullnodeArgs::new(fullnode_url.parse().unwrap()),
+            &registry,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), get_available_port());
+        let watermarks: WatermarksLock = Default::default();
+        let _service = RpcService::new(
+            RpcArgs {
+                rpc_listen_address: address,
+                no_ide: true,
+            },
+            "test",
+            schema(),
+            &registry,
+        )
+        .route(GRAPHQL_PATH, post(super::graphql))
+        .layer(fullnode)
+        .layer(watermarks)
+        .layer(LoggingConfig::default())
+        .run()
+        .await
+        .unwrap();
+
+        let tx = TransactionData::new_programmable(
+            SuiAddress::ZERO,
+            vec![],
+            ProgrammableTransaction {
+                inputs: vec![],
+                commands: vec![],
+            },
+            1,
+            1,
+        );
+        let bcs = Base64::encode(bcs::to_bytes(&tx).unwrap());
+        let queries = [
+            "{ simulateTransaction(transaction: {}) { effects { status } } }".to_owned(),
+            format!(
+                "mutation {{ executeTransaction(transactionDataBcs: \"{bcs}\", signatures: []) {{ effects {{ status }} }} }}"
+            ),
+        ];
+        let client = Client::new();
+        for query in queries {
+            for version in [Some("138"), Some("7"), None, Some("malformed"), None] {
+                let mut request = client
+                    .post(format!("http://{address}{GRAPHQL_PATH}"))
+                    .header("authorization", "do-not-forward")
+                    .json(&json!({ "query": query }));
+                if let Some(version) = version {
+                    request = request.header("X-Sui-Client-Protocol-Version", version);
+                }
+                let response: Value = request.send().await.unwrap().json().await.unwrap();
+                assert!(
+                    response["errors"][0]["message"]
+                        .as_str()
+                        .unwrap()
+                        .contains("metadata-recorded"),
+                    "{response}"
+                );
+                let headers = tokio::time::timeout(Duration::from_secs(5), received.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(
+                    headers
+                        .get(X_SUI_CLIENT_PROTOCOL_VERSION)
+                        .map(|v| v.to_str().unwrap()),
+                    version
+                );
+                assert!(!headers.contains_key("authorization"));
+            }
+        }
+        upstream_task.abort();
+    }
 
     /// Check that the exported schema is up-to-date.
     #[test]

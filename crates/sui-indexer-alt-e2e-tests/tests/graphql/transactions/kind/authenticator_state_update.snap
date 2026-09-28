@@ -6,16 +6,17 @@ processed 11 tasks
 init:
 A: object(0,0)
 
-task 1, lines 7-11:
+task 1, lines 6-9:
+// Create a simple transfer transaction (no AuthenticatorStateUpdate)
 //# programmable --sender A --inputs 1000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
-// Create an AuthenticatorStateUpdate transaction with a single JWK
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 12:
+task 2, lines 11-12:
+// Create an AuthenticatorStateUpdate transaction with a single JWK
 //# authenticator-state-update --round 1 --jwk-iss https://accounts.google.com --authenticator-obj-initial-shared-version 111
 AuthenticatorStateUpdate executed at epoch 0 round 1
 
@@ -23,11 +24,12 @@ task 3, line 14:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 16-18:
+task 4, line 16:
 //# advance-epoch
 Epoch advanced: 1
 
-task 5, line 19:
+task 5, lines 18-19:
+// Create an AuthenticatorStateUpdate transaction with multiple JWKs
 //# authenticator-state-update --round 2 --jwk-iss https://accounts.google.com --jwk-iss https://login.microsoftonline.com
 AuthenticatorStateUpdate executed at epoch 1 round 2
 

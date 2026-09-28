@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 13 tasks
 
+// Transfer a Test::fake coin from A to B and verify that the balance is reflected under B and not
+// A.
+
 init:
 A: object(0,0), B: object(0,1)
 

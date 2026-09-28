@@ -227,6 +227,58 @@ impl FullObjectRef {
 /// based on the object ID and start version.
 pub type ConsensusObjectSequenceKey = (ObjectID, SequenceNumber);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConsensusObjectVersion {
+    pub initial_shared_version: SequenceNumber,
+    pub version: SequenceNumber,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SystemObjectVersions {
+    accumulator_version: Option<ConsensusObjectVersion>,
+    forwarding_address_registry_version: Option<ConsensusObjectVersion>,
+}
+
+impl SystemObjectVersions {
+    pub fn new(
+        accumulator_version: Option<ConsensusObjectVersion>,
+        forwarding_address_registry_version: Option<ConsensusObjectVersion>,
+    ) -> Self {
+        Self {
+            accumulator_version,
+            forwarding_address_registry_version,
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self::new(None, None)
+    }
+
+    pub fn from_map(
+        mut versions: std::collections::BTreeMap<ObjectID, ConsensusObjectVersion>,
+    ) -> Self {
+        let accumulator_version = versions.remove(&crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID);
+        let forwarding_address_registry_version =
+            versions.remove(&crate::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID);
+        assert!(
+            versions.is_empty(),
+            "{:?} are not implicitly read system objects",
+            versions.keys().collect::<Vec<_>>()
+        );
+        Self::new(accumulator_version, forwarding_address_registry_version)
+    }
+
+    pub fn get(&self, object_id: &ObjectID) -> Option<ConsensusObjectVersion> {
+        match *object_id {
+            crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID => self.accumulator_version,
+            crate::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID => {
+                self.forwarding_address_registry_version
+            }
+            _ => panic!("{object_id} is not an implicitly read system object"),
+        }
+    }
+}
+
 /// Wrapper around StructTag with a space-efficient representation for common types like coins
 /// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win.
 /// The inner representation is private to prevent incorrectly constructing an `Other` instead of
@@ -1717,6 +1769,10 @@ impl ObjectID {
 
     pub fn is_clock(&self) -> bool {
         *self == SUI_CLOCK_OBJECT_ID
+    }
+
+    pub fn is_implicitly_read_system_object(&self) -> bool {
+        crate::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(self)
     }
 }
 

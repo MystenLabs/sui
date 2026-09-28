@@ -3,6 +3,15 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// verifies Todd's PTB arity example: an identity function that returns
+// &mut TxContext cannot be chained into a generic identity function whose
+// type parameter unifies to TxContext, because auto-injection fills the
+// generic's slot after unification. The tx_context_restrictions_verifier
+// only applies to system packages, so this user package publishes fine;
+// the PTB arity check rejects these chained calls during translation, and
+// the TxContext return rule rejects any standalone reference-returning call
+// (see tx_context_result_borrow_invalid).
+
 task 1, lines 15-32:
 //# publish
 created: object(1,0)

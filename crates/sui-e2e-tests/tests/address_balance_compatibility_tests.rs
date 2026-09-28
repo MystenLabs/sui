@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::ident_str;
+use sui_core::authority::authority_test_utils::dev_inspect_for_testing;
 use sui_macros::*;
 use sui_simulator::has_mainnet_protocol_config_override;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
@@ -15,6 +16,7 @@ use sui_types::{
         Argument, CallArg, Command, GasData, ObjectArg, TransactionData, TransactionDataAPI,
         TransactionDataV1, TransactionExpiration, TransactionKind,
     },
+    transaction_executor::TransactionChecks,
 };
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder, get_sui_accumulator_object_id};
 
@@ -2166,7 +2168,9 @@ async fn test_fake_coin_reservation_dry_run_does_not_panic() {
         .fullnode_handle
         .sui_node
         .with(|node| node.state().clone());
-    let join = tokio::task::spawn(async move { state.dry_exec_transaction(tx_data).await });
+    let join = tokio::task::spawn(async move {
+        state.simulate_transaction(tx_data, TransactionChecks::Enabled, true)
+    });
 
     match join.await {
         Ok(Ok(_)) => panic!("dry-run with fake coin reservation should have errored"),
@@ -2209,18 +2213,16 @@ async fn test_fake_coin_reservation_dev_inspect_does_not_panic() {
         .sui_node
         .with(|node| node.state().clone());
     let join = tokio::task::spawn(async move {
-        state
-            .dev_inspect_transaction_block(
-                sender,
-                tx_kind,
-                None,
-                None,
-                None,
-                None,
-                None,
-                /* skip_checks */ Some(true),
-            )
-            .await
+        dev_inspect_for_testing(
+            &state,
+            sender,
+            tx_kind,
+            None,
+            None,
+            None,
+            None,
+            TransactionChecks::Disabled,
+        )
     });
 
     match join.await {
@@ -2274,7 +2276,9 @@ async fn test_fake_coin_reservation_dry_run_safe_when_flag_disabled() {
         .fullnode_handle
         .sui_node
         .with(|node| node.state().clone());
-    let join = tokio::task::spawn(async move { state.dry_exec_transaction(tx_data).await });
+    let join = tokio::task::spawn(async move {
+        state.simulate_transaction(tx_data, TransactionChecks::Enabled, true)
+    });
 
     match join.await {
         Ok(Ok(_)) => panic!("dry-run with fake coin reservation should have errored"),
@@ -2317,18 +2321,16 @@ async fn test_fake_coin_reservation_dev_inspect_safe_when_flag_disabled() {
         .sui_node
         .with(|node| node.state().clone());
     let join = tokio::task::spawn(async move {
-        state
-            .dev_inspect_transaction_block(
-                sender,
-                tx_kind,
-                None,
-                None,
-                None,
-                None,
-                None,
-                /* skip_checks */ Some(true),
-            )
-            .await
+        dev_inspect_for_testing(
+            &state,
+            sender,
+            tx_kind,
+            None,
+            None,
+            None,
+            None,
+            TransactionChecks::Disabled,
+        )
     });
 
     match join.await {
@@ -2348,4 +2350,77 @@ async fn test_fake_coin_reservation_dev_inspect_safe_when_flag_disabled() {
         }
         Err(e) => panic!("unexpected join error: {e:?}"),
     }
+}
+
+#[sim_test]
+async fn test_non_sui_coin_reservation_transfer() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (_, coin_type) = test_env
+        .publish_and_mint_trusted_coin(sender, 10_000_000_000)
+        .await;
+    let reservation = test_env.encode_coin_reservation_for_type(sender, 0, 100, coin_type);
+
+    let (_, effects) = test_env
+        .transfer_coin_to_address_balance(
+            sender,
+            reservation,
+            SuiAddress::random_for_testing_only(),
+        )
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
+
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
+async fn test_unused_non_sui_coin_reservation_is_returned() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let (_, coin_type) = test_env
+        .publish_and_mint_trusted_coin(sender, 10_000_000_000)
+        .await;
+    let initial_balance = test_env.get_balance_ab(sender, coin_type.clone());
+    let reservation = test_env.encode_coin_reservation_for_type(sender, 0, 100, coin_type.clone());
+
+    let mut tx_builder = test_env.tx_builder(sender);
+    tx_builder
+        .ptb_builder_mut()
+        .obj(ObjectArg::ImmOrOwnedObject(reservation))
+        .unwrap();
+    let tx = tx_builder
+        .move_call(
+            sui_types::SUI_FRAMEWORK_PACKAGE_ID,
+            "clock",
+            "timestamp_ms",
+            vec![CallArg::CLOCK_IMM],
+        )
+        .build();
+
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
+    assert_eq!(test_env.get_balance_ab(sender, coin_type), initial_balance);
+
+    test_env.cluster.trigger_reconfiguration().await;
 }

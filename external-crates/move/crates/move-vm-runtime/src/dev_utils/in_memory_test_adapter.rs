@@ -37,7 +37,8 @@ impl InMemoryTestAdapter {
     pub fn new() -> Self {
         let storage = InMemoryStorage::new();
         let native_functions = NativeFunctions::empty_for_testing().unwrap();
-        let vm_config = VMConfig::default();
+        let vm_config =
+            VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None);
         let runtime = MoveRuntime::new(native_functions, vm_config);
         Self { runtime, storage }
     }

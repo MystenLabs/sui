@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[EC02016]: invalid visibility modifier
+  ┌─ tests/move_2024/constants/invalid_const_visibility.move:5:1
+  │
+5 │ public const A: u64 = 0;
+  │ ^^^^^^ Invalid constant declaration. Constants may only be internal or 'public(package)'
+
+error[EC02016]: invalid visibility modifier
+  ┌─ tests/move_2024/constants/invalid_const_visibility.move:7:1
+  │
+7 │ public(friend) const B: u64 = 1;
+  │ ^^^^^^^^^^^^^^ Invalid constant declaration. Constants may only be internal or 'public(package)'

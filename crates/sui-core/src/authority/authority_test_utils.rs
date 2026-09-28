@@ -11,6 +11,7 @@ use sui_types::utils::to_sender_signed_transaction;
 use super::shared_object_version_manager::AssignedVersions;
 use super::test_authority_builder::TestAuthorityBuilder;
 use super::*;
+use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
 
 #[cfg(test)]
 use super::shared_object_version_manager::Schedulable;
@@ -20,6 +21,34 @@ use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::HashMap;
 #[cfg(test)]
 use sui_types::transaction::TransactionKey;
+
+/// Simulate `transaction_kind` the way the removed dev-inspect API used to: the
+/// transaction is synthesized from the given gas parameters (defaulting to the
+/// reference gas price, the maximum gas budget, and the sender as sponsor), and
+/// a mock gas coin is injected when no gas payment is provided. Pass
+/// `TransactionChecks::Disabled` for the classic dev-inspect semantics.
+#[allow(clippy::too_many_arguments)]
+pub fn dev_inspect_for_testing(
+    state: &AuthorityState,
+    sender: SuiAddress,
+    transaction_kind: TransactionKind,
+    gas_price: Option<u64>,
+    gas_budget: Option<u64>,
+    gas_sponsor: Option<SuiAddress>,
+    gas_objects: Option<Vec<ObjectRef>>,
+    checks: TransactionChecks,
+) -> SuiResult<SimulateTransactionResult> {
+    let epoch_store = state.epoch_store_for_testing();
+    let transaction = TransactionData::new_with_gas_coins_allow_sponsor(
+        transaction_kind,
+        sender,
+        gas_objects.unwrap_or_default(),
+        gas_budget.unwrap_or(epoch_store.protocol_config().max_tx_gas()),
+        gas_price.unwrap_or(epoch_store.reference_gas_price()),
+        gas_sponsor.unwrap_or(sender),
+    );
+    state.simulate_transaction(transaction, checks, /* allow_mock_gas_coin */ true)
+}
 
 // =============================================================================
 // MFP (Mysticeti Fast Path) Test Helpers
@@ -99,7 +128,7 @@ pub async fn submit_to_consensus(
         .into_map()
         .get(&executable.key())
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_else(AssignedVersions::empty);
 
     Ok((executable, versions))
 }
@@ -130,20 +159,18 @@ pub async fn submit_and_execute(
     authority: &AuthorityState,
     transaction: Transaction,
 ) -> Result<(VerifiedExecutableTransaction, SignedTransactionEffects), SuiError> {
-    submit_and_execute_with_options(authority, None, transaction, false).await
+    submit_and_execute_with_options(authority, None, transaction).await
 }
 
 /// Options:
 /// - `fullnode`: Optionally sync and execute on a fullnode as well
-/// - `with_shared`: Whether the transaction involves shared objects (triggers version assignment)
 pub async fn submit_and_execute_with_options(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
     transaction: Transaction,
-    with_shared: bool,
 ) -> Result<(VerifiedExecutableTransaction, SignedTransactionEffects), SuiError> {
     let (exec, effects, _) =
-        submit_and_execute_with_error(authority, fullnode, transaction, with_shared).await?;
+        submit_and_execute_with_error(authority, fullnode, transaction).await?;
     Ok((exec, effects))
 }
 
@@ -152,7 +179,6 @@ pub async fn submit_and_execute_with_error(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
     transaction: Transaction,
-    with_shared: bool,
 ) -> Result<
     (
         VerifiedExecutableTransaction,
@@ -170,22 +196,20 @@ pub async fn submit_and_execute_with_error(
     let executable =
         VerifiedExecutableTransaction::new_from_consensus(verified_tx, epoch_store.epoch());
 
-    // Assign shared object versions if needed
-    let assigned_versions = if with_shared {
-        let versions = authority
-            .epoch_store_for_testing()
-            .assign_shared_object_versions_for_tests(
-                authority.get_object_cache_reader().as_ref(),
-                std::slice::from_ref(&executable.clone()),
-            )?;
-        versions
-            .into_map()
-            .get(&executable.key())
-            .cloned()
-            .unwrap_or_default()
-    } else {
-        AssignedVersions::default()
-    };
+    // This also assigns the accumulator root's version when accumulators are enabled, even if
+    // the transaction has no shared inputs. So we should always call this, whether or not there
+    // are shared objects present in the transaction.
+    let versions = authority
+        .epoch_store_for_testing()
+        .assign_shared_object_versions_for_tests(
+            authority.get_object_cache_reader().as_ref(),
+            std::slice::from_ref(&executable.clone()),
+        )?;
+    let assigned_versions = versions
+        .into_map()
+        .get(&executable.key())
+        .cloned()
+        .unwrap_or_else(AssignedVersions::empty);
 
     // State accumulator for validation
     let state_acc =
@@ -460,7 +484,7 @@ pub async fn assign_versions_and_schedule(
         .into_map()
         .get(&executable.key())
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_else(AssignedVersions::empty);
 
     let env = ExecutionEnv::new().with_assigned_versions(versions.clone());
     authority.execution_scheduler().enqueue_transactions(
@@ -489,5 +513,5 @@ pub async fn assign_shared_object_versions(
         .into_map()
         .get(&executable.key())
         .cloned()
-        .unwrap_or_default()
+        .unwrap_or_else(AssignedVersions::empty)
 }

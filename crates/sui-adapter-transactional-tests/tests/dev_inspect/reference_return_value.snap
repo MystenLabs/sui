@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// attempt to return a reference from a function
+
 init:
 A: object(0,0)
 

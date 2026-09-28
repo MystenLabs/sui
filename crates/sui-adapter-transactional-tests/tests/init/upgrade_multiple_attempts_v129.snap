@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 4 tasks
 
+// tests the multiple attempts at upgrading a package with different layouts for a type
+// in the new package
+
 init:
 A: object(0,0)
 

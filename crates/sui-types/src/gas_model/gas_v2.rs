@@ -6,8 +6,12 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use crate::error::{UserInputError, UserInputResult};
-    use crate::gas::{self, GasCostSummary, GasUsageReport, SuiGasStatusAPI};
+    use crate::error::UserInputResult;
+    use crate::gas::{GasCostSummary, GasUsageReport, SuiGasStatusAPI};
+    pub use crate::gas_model::gas_common::PerObjectStorage;
+    use crate::gas_model::gas_common::{
+        StorageGas, check_gas_data, check_gas_objects, half_digits_rounding, sender_rebate,
+    };
     use crate::gas_model::gas_predicates::{cost_table_for_version, txn_base_cost_as_multiplier};
     use crate::gas_model::units_types::CostTable;
     use crate::transaction::ObjectReadResult;
@@ -18,7 +22,6 @@ mod checked {
         gas_model::tables::{GasStatus, ZERO_COST_SCHEDULE},
     };
     use move_core_types::vm_status::StatusCode;
-    use serde::{Deserialize, Serialize};
     use sui_protocol_config::*;
 
     /// A bucket defines a range of units that will be priced the same.
@@ -68,17 +71,6 @@ mod checked {
             ComputationBucket::simple(200_000, 1_000_000),
             ComputationBucket::simple(1_000_000, max_bucket_cost),
         ]
-    }
-
-    /// Portion of the storage rebate that gets passed on to the transaction sender. The remainder
-    /// will be burned, then re-minted + added to the storage fund at the next epoch change
-    fn sender_rebate(storage_rebate: u64, storage_rebate_rate: u64) -> u64 {
-        // we round storage rebate such that `>= x.5` goes to x+1 (rounds up) and
-        // `< x.5` goes to x (truncates). We replicate `f32/64::round()`
-        const BASIS_POINTS: u128 = 10000;
-        (((storage_rebate as u128 * storage_rebate_rate as u128)
-        + (BASIS_POINTS / 2)) // integer rounding adds half of the BASIS_POINTS (denominator)
-        / BASIS_POINTS) as u64
     }
 
     /// A list of constant costs of various operations in Sui.
@@ -151,22 +143,6 @@ mod checked {
         }
     }
 
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct PerObjectStorage {
-        /// storage_cost is the total storage gas to charge. This is computed
-        /// at the end of execution while determining storage charges.
-        /// It tracks `storage_bytes * obj_data_cost_refundable` as
-        /// described in `storage_gas_price`
-        /// It has been multiplied by the storage gas price. This is the new storage rebate.
-        pub storage_cost: u64,
-        /// storage_rebate is the storage rebate (in Sui) for in this object.
-        /// This is computed at the end of execution while determining storage charges.
-        /// The value is in Sui.
-        pub storage_rebate: u64,
-        /// The object size post-transaction in bytes
-        pub new_size: u64,
-    }
-
     #[derive(Debug, Clone, Copy)]
     enum GasRoundingMode {
         /// Bucketize the computation cost according to predefined buckets.
@@ -201,22 +177,11 @@ mod checked {
         gas_price: u64,
         // RGP as defined in the protocol config.
         reference_gas_price: u64,
-        // Gas price for storage. This is a multiplier on the final charge
-        // as related to the storage gas price defined in the system
-        // (`ProtocolConfig::storage_gas_price`).
-        // Conceptually, given a constant `obj_data_cost_refundable`
-        // (defined in `ProtocolConfig::obj_data_cost_refundable`)
-        // `total_storage_cost = storage_bytes * obj_data_cost_refundable`
-        // `final_storage_cost = total_storage_cost * storage_gas_price`
-        storage_gas_price: u64,
-        /// Per Object Storage Cost and Storage Rebate, used to get accumulated values at the
-        /// end of execution to determine storage charges and rebates.
-        per_object_storage: Vec<(ObjectID, PerObjectStorage)>,
         // storage rebate rate as defined in the ProtocolConfig
         rebate_rate: u64,
-        /// Amount of storage rebate accumulated when we are running in unmetered mode (i.e. system transaction).
-        /// This allows us to track how much storage rebate we need to retain in system transactions.
-        unmetered_storage_rebate: u64,
+        /// Per-object storage accounting (accumulated costs/rebates + the storage config it needs),
+        /// shared with gas_v3 via `gas_common::StorageGas`.
+        storage: StorageGas,
         /// Rounding mode for gas charges.
         gas_rounding_mode: GasRoundingMode,
     }
@@ -245,10 +210,8 @@ mod checked {
                 computation_cost: 0,
                 gas_price,
                 reference_gas_price,
-                storage_gas_price,
-                per_object_storage: Vec::new(),
                 rebate_rate,
-                unmetered_storage_rebate: 0,
+                storage: StorageGas::new(storage_gas_price, cost_table.storage_per_byte_cost),
                 gas_rounding_mode,
                 cost_table,
             }
@@ -309,46 +272,6 @@ mod checked {
 
         pub fn reference_gas_price(&self) -> u64 {
             self.reference_gas_price
-        }
-
-        // Gas data is consistent
-        fn check_gas_data(
-            &self,
-            gas_objs: &[&ObjectReadResult],
-            gas_budget: u64,
-            available_address_balance_gas: u64,
-        ) -> UserInputResult {
-            // Gas budget is between min and max budget allowed
-            if gas_budget > self.cost_table.max_gas_budget {
-                return Err(UserInputError::GasBudgetTooHigh {
-                    gas_budget,
-                    max_budget: self.cost_table.max_gas_budget,
-                });
-            }
-            if gas_budget < self.cost_table.min_transaction_cost {
-                return Err(UserInputError::GasBudgetTooLow {
-                    gas_budget,
-                    min_budget: self.cost_table.min_transaction_cost,
-                });
-            }
-
-            // Gas balance (all gas coins + address balance together) is bigger or equal to budget
-            let mut gas_balance = available_address_balance_gas as u128;
-            for gas_obj in gas_objs {
-                gas_balance += gas::get_gas_balance(gas_obj.as_object().ok_or(
-                    UserInputError::InvalidGasObject {
-                        object_id: gas_obj.id(),
-                    },
-                )?)? as u128;
-            }
-            if gas_balance < gas_budget as u128 {
-                Err(UserInputError::GasBalanceTooLow {
-                    gas_balance,
-                    needed_gas_amount: gas_budget as u128,
-                })
-            } else {
-                Ok(())
-            }
         }
 
         fn storage_cost(&self) -> u64 {
@@ -443,21 +366,15 @@ mod checked {
         }
 
         fn storage_gas_units(&self) -> u64 {
-            self.per_object_storage
-                .iter()
-                .map(|(_, per_object)| per_object.storage_cost)
-                .sum()
+            self.storage.storage_gas_units()
         }
 
         fn storage_rebate(&self) -> u64 {
-            self.per_object_storage
-                .iter()
-                .map(|(_, per_object)| per_object.storage_rebate)
-                .sum()
+            self.storage.storage_rebate()
         }
 
         fn unmetered_storage_rebate(&self) -> u64 {
-            self.unmetered_storage_rebate
+            self.storage.unmetered_storage_rebate()
         }
 
         fn gas_used(&self) -> u64 {
@@ -465,8 +382,7 @@ mod checked {
         }
 
         fn reset_storage_cost_and_rebate(&mut self) {
-            self.per_object_storage = Vec::new();
-            self.unmetered_storage_rebate = 0;
+            self.storage.reset();
         }
 
         fn charge_storage_read(&mut self, size: usize) -> Result<(), ExecutionError> {
@@ -496,28 +412,10 @@ mod checked {
             object_id: ObjectID,
             new_size: usize,
             storage_rebate: u64,
-        ) -> u64 {
-            if self.is_unmetered() {
-                self.unmetered_storage_rebate += storage_rebate;
-                return 0;
-            }
-
-            // compute and track cost (based on size)
-            let new_size = new_size as u64;
-            let storage_cost =
-                new_size * self.cost_table.storage_per_byte_cost * self.storage_gas_price;
-            // track rebate
-
-            self.per_object_storage.push((
-                object_id,
-                PerObjectStorage {
-                    storage_cost,
-                    storage_rebate,
-                    new_size,
-                },
-            ));
-            // return the new object rebate (object storage cost)
-            storage_cost
+        ) -> Option<u64> {
+            let unmetered = self.is_unmetered();
+            self.storage
+                .track_mutation(object_id, new_size, storage_rebate, unmetered)
         }
 
         fn charge_storage_and_rebate(&mut self) -> Result<(), ExecutionError> {
@@ -544,7 +442,7 @@ mod checked {
         }
 
         fn adjust_computation_on_out_of_gas(&mut self) {
-            self.per_object_storage = Vec::new();
+            self.storage.reset();
             self.computation_cost = self.gas_budget;
         }
 
@@ -556,7 +454,7 @@ mod checked {
                 reference_gas_price: self.reference_gas_price(),
                 per_object_storage: self.per_object_storage().clone(),
                 gas_budget: self.gas_budget(),
-                storage_gas_price: self.storage_gas_price,
+                storage_gas_price: self.storage.storage_gas_price,
                 rebate_rate: self.rebate_rate,
             }
         }
@@ -572,70 +470,21 @@ mod checked {
             available_address_balance_gas: u64,
         ) -> UserInputResult {
             self.check_gas_objects(gas_objs)?;
-            self.check_gas_data(gas_objs, gas_budget, available_address_balance_gas)
+            check_gas_data(
+                gas_objs,
+                gas_budget,
+                available_address_balance_gas,
+                self.cost_table.min_transaction_cost,
+                self.cost_table.max_gas_budget,
+            )
         }
 
-        // Check gas objects have an address owner.
         fn check_gas_objects(&self, gas_objs: &[&ObjectReadResult]) -> UserInputResult {
-            // All gas objects have an address owner
-            // Note: because of address balance payments, gas_objs may be empty.
-            for gas_object in gas_objs {
-                // if as_object() returns None, it means the object has been deleted (and therefore
-                // must be a shared object).
-                if let Some(obj) = gas_object.as_object() {
-                    if !obj.is_address_owned() {
-                        return Err(UserInputError::GasObjectNotOwnedObject {
-                            owner: obj.owner.clone(),
-                        });
-                    }
-                } else {
-                    // This case should never happen (because gas can't be a shared object), but we
-                    // handle this case for future-proofing
-                    return Err(UserInputError::MissingGasPayment);
-                }
-            }
-            Ok(())
+            check_gas_objects(gas_objs)
         }
 
         fn per_object_storage(&self) -> &Vec<(ObjectID, PerObjectStorage)> {
-            &self.per_object_storage
+            self.storage.per_object_storage()
         }
-    }
-
-    fn half_digits_rounding(n: u64) -> u64 {
-        if n < 1000 {
-            return 1000;
-        }
-        let digits = n.ilog10();
-        let drop = digits / 2;
-        let base = 10u64.pow(drop);
-        n.div_ceil(base) * base
-    }
-
-    #[test]
-    fn test_half_digits_rounding() {
-        assert_eq!(half_digits_rounding(0), 1000);
-        assert_eq!(half_digits_rounding(1), 1000);
-        assert_eq!(half_digits_rounding(999), 1000);
-        assert_eq!(half_digits_rounding(1000), 1000);
-        assert_eq!(half_digits_rounding(1001), 1010);
-        assert_eq!(half_digits_rounding(1050), 1050);
-        assert_eq!(half_digits_rounding(1999), 2000);
-        assert_eq!(half_digits_rounding(20_000), 20_000);
-        assert_eq!(half_digits_rounding(20_001), 20_100);
-        assert_eq!(half_digits_rounding(20_500), 20_500);
-        assert_eq!(half_digits_rounding(29_999), 30_000);
-        assert_eq!(half_digits_rounding(300_000), 300_000);
-        assert_eq!(half_digits_rounding(300_001), 300_100);
-        assert_eq!(half_digits_rounding(305_500), 305_500);
-        assert_eq!(half_digits_rounding(305_501), 305_600);
-        assert_eq!(half_digits_rounding(999_999), 1_000_000);
-        assert_eq!(half_digits_rounding(1_000_000), 1_000_000);
-        assert_eq!(half_digits_rounding(1_000_001), 1_001_000);
-        assert_eq!(half_digits_rounding(1_005_000), 1_005_000);
-        assert_eq!(half_digits_rounding(1_005_001), 1_006_000);
-        assert_eq!(half_digits_rounding(1_999_999), 2_000_000);
-        assert_eq!(half_digits_rounding(10_000_001), 10_001_000);
-        assert_eq!(half_digits_rounding(100_000_001), 100_010_000);
     }
 }

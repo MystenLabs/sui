@@ -6,6 +6,17 @@ processed 16 tasks
 init:
 A: object(0,0), B: object(0,1)
 
+// Checkpoint 1:
+// A: Bag, Gas, Coin(1000), Coin(500), Coin(250), Table<u64, u64>
+
+// Checkpoint 2:
+// A: Bag, Gas, Coin(500), Coin(250), Table<u64, u64>
+// B: Gas, Coin(1000)
+
+// Checkpoint 3:
+// A: Bag, Bag, Gas, Coin(500), Coin(250), Coin(200), Coin(100),
+//    Table<u64, u64>, Table<address, address>
+
 task 1, lines 17-19:
 //# programmable --sender A --inputs 1000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -56,11 +67,12 @@ task 7, lines 39-40:
 mutated: object(0,0), object(1,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
-task 8, lines 42-44:
+task 8, line 42:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 9, lines 45-47:
+task 9, lines 44-47:
+// Create more coins for A
 //# programmable --sender A --inputs 100 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -68,25 +80,25 @@ created: object(9,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 10, lines 49-53:
+task 10, lines 49-51:
 //# programmable --sender A --inputs 200 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
-// Create another bag for A
 created: object(10,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 11, lines 54-58:
+task 11, lines 53-56:
+// Create another bag for A
 //# programmable --sender A --inputs @A
 //> 0: sui::bag::new();
 //> 1: TransferObjects([Result(0)], Input(0))
-// Create another table for A
 created: object(11,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 12, lines 59-61:
+task 12, lines 58-61:
+// Create another table for A
 //# programmable --sender A --inputs @A
 //> 0: sui::table::new<address, address>();
 //> 1: TransferObjects([Result(0)], Input(0))

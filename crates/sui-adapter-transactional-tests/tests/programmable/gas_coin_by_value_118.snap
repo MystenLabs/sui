@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 4 tasks
 
+// tests valid gas coin usage by value in protocol version 118, where send_funds is not yet enabled
+// for gas coin usage
+
 init:
 A: object(0,0), B: object(0,1)
 

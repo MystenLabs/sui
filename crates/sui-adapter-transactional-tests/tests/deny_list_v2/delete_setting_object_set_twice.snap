@@ -3,30 +3,36 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 23 tasks
 
+// This test verifies the correct deletion of the Config's setting object after the epoch it was
+// created. THe value is set twice over multiple epochs.
+
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 9-54:
+task 1, lines 9-52:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 20459200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 55-57:
+task 2, lines 54-55:
+// Deny account B.
 //# run sui::coin::deny_list_v2_add --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 53, 50, 102, 50, 51, 99, 57, 97, 51, 53, 56, 99, 49, 50, 52, 102, 54, 54, 51, 49, 99, 53, 57, 57, 50, 52, 99, 49, 51, 54, 55, 97, 49, 52, 50, 53, 100, 49, 102, 97, 54, 57, 102, 52, 57, 102, 54, 98, 51, 51, 99, 102, 55, 49, 97, 51, 98, 100, 98, 102, 100, 57, 56, 101, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 120, 101, 245, 33, 166, 3, 229, 112, 67, 65, 88, 144, 38, 82, 63, 187, 151, 44, 176, 199, 240, 155, 235, 159, 168, 192, 23, 199, 90, 252, 212, 63] }
 created: object(2,0), object(2,1), object(2,2)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
 gas summary: computation_cost: 1000000, storage_cost: 12190400,  storage_rebate: 2746260, non_refundable_storage_fee: 27740
 
-task 3, lines 58-60:
+task 3, lines 57-58:
+// Enable global pause.
 //# run sui::coin::deny_list_v2_enable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
 created: object(3,0)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
 gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 4356396, non_refundable_storage_fee: 44004
 
-task 4, line 61:
+task 4, lines 60-61:
+// View the setting objects
 //# view-object 2,1
 Owner: Object ID: ( fake(2,0) )
 Version: 3
@@ -90,21 +96,24 @@ Contents: sui::dynamic_field::Field<sui::deny_list::GlobalPauseKey, sui::config:
     },
 }
 
-task 6, lines 65-67:
+task 6, line 65:
 //# advance-epoch
 Epoch advanced: 1
 
-task 7, lines 68-70:
+task 7, lines 67-68:
+// Deny account B.
 //# run sui::coin::deny_list_v2_add --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6870400,  storage_rebate: 6794172, non_refundable_storage_fee: 68628
 
-task 8, lines 71-73:
+task 8, lines 70-71:
+// Enable global pause.
 //# run sui::coin::deny_list_v2_enable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 6665200,  storage_rebate: 6591024, non_refundable_storage_fee: 66576
 
-task 9, line 74:
+task 9, lines 73-74:
+// View the setting objects
 //# view-object 2,1
 Owner: Object ID: ( fake(2,0) )
 Version: 5
@@ -172,21 +181,24 @@ Contents: sui::dynamic_field::Field<sui::deny_list::GlobalPauseKey, sui::config:
     },
 }
 
-task 11, lines 78-80:
+task 11, line 78:
 //# advance-epoch
 Epoch advanced: 2
 
-task 12, lines 81-83:
+task 12, lines 80-81:
+// Undeny account B.
 //# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 6801696, non_refundable_storage_fee: 68704
 
-task 13, lines 84-86:
+task 13, lines 83-84:
+// Disable global pause.
 //# run sui::coin::deny_list_v2_disable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 6598548, non_refundable_storage_fee: 66652
 
-task 14, line 87:
+task 14, lines 86-87:
+// Verify the setting objects are still present
 //# view-object 2,1
 Owner: Object ID: ( fake(2,0) )
 Version: 7
@@ -250,37 +262,42 @@ Contents: sui::dynamic_field::Field<sui::deny_list::GlobalPauseKey, sui::config:
     },
 }
 
-task 16, lines 91-93:
+task 16, line 91:
 //# advance-epoch
 Epoch advanced: 3
 
-task 17, lines 94-96:
+task 17, lines 93-94:
+// Undeny account B.
 //# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
 deleted: object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 4400400,  storage_rebate: 6794172, non_refundable_storage_fee: 68628
 
-task 18, lines 97-99:
+task 18, lines 96-97:
+// Disable global pause.
 //# run sui::coin::deny_list_v2_disable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
 deleted: object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 4400400,  storage_rebate: 6591024, non_refundable_storage_fee: 66576
 
-task 19, line 100:
+task 19, lines 99-100:
+// Verify the setting objects are deleted
 //# view-object 2,1
 No object at id 2,1
 
-task 20, lines 102-104:
+task 20, line 102:
 //# view-object 3,0
 No object at id 3,0
 
-task 21, lines 105-107:
+task 21, lines 104-105:
+// Assert that the address is no longer denied.
 //# run test::regulated_coin::assert_address_deny_status --args immshared(0x403) @B false --sender A
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 22, line 108:
+task 22, lines 107-108:
+// Assert that global pause is disabled.
 //# run test::regulated_coin::assert_global_pause_status --args immshared(0x403) false --sender A
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403

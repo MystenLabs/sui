@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// An existing module (present in the prior version) that did not define an `init` may not add one
+// during an upgrade: doing so is rejected as an incompatible upgrade.
+
 init:
 A: object(0,0)
 

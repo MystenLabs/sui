@@ -49,6 +49,8 @@ pub use crate::indexer::METRICS_PREFIX;
 pub use crate::indexer::Store;
 pub use crate::indexer::checkpoint_broadcast::CheckpointBroadcast;
 pub use crate::indexer::checkpoint_broadcast::seed_watermark_to_tip as seed_checkpoint_broadcast_watermark;
+pub use crate::indexer::pruner::DEFAULT_RETRACTION_CURSORS_CAPACITY;
+pub use crate::indexer::pruner::RetractionCursors;
 pub use crate::indexer::pruner::embedded_prunable_checkpoint;
 pub use crate::indexer::pruner::prune_history_cohort;
 pub use crate::indexer::restore::HISTORY_COHORT;

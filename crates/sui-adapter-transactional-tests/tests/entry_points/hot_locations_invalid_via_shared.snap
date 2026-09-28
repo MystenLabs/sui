@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 21 tasks
 
+// Simple test of hot value rules each location and usage
+
 init:
 A: object(0,0)
 

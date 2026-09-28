@@ -1,0 +1,10 @@
+Command `build -v`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING A
+Command `test`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING A
+Running Move unit tests
+[ PASS    ] A::usage::check
+[ PASS    ] A::usage::expect_folded_code
+Test result: OK. Total tests: 2; passed: 2; failed: 0

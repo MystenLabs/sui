@@ -1,0 +1,45 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+// A legacy coin reservation input in a PTB with no commands of its own. The
+// conversion to a `Coin` and the send-back of the unused coin are both injected
+// during typing, so every executed command is annotated with an original command
+// index that does not exist.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 11-15:
+// Seed A's address balance.
+//# programmable --sender A --inputs 100000000000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
+//> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100000000000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 17:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, line 19:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+100000000000
+
+task 4, line 21:
+//# programmable --sender A --inputs coin_reservation<sui::balance::Balance<sui::sui::SUI>>(500000000)
+mutated: object(0,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 23:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, lines 25-26:
+// The reservation is withdrawn and immediately sent back, so A's balance is unchanged.
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+100000000000

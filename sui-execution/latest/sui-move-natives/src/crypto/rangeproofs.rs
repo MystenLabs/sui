@@ -25,11 +25,8 @@ pub const INVALID_PROOF: u64 = 1;
 pub const INVALID_RANGE: u64 = 2;
 pub const INVALID_BATCH_SIZE: u64 = 3;
 
-/// Upper bound for batch size * range in bits
-pub const MAX_TOTAL_BITS: u64 = 512;
-
-/// Proofs with MAX_TOTAL_BITS = 512 will be exactly 864 bytes.
-const MAX_PROOF_SIZE: usize = 864;
+/// Upper bound for batch size * range in bits, used when the protocol config does not set one.
+const DEFAULT_MAX_TOTAL_BITS: u64 = 512;
 
 #[derive(Clone)]
 pub struct BulletproofsCostParams {
@@ -42,6 +39,16 @@ fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
     Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
         .enable_verify_bulletproofs_ristretto255())
+}
+
+/// This also bounds the batch size, via the smallest supported range. It must stay within
+/// fastcrypto's Bulletproofs generator cache, outside of which the generators are rebuilt per
+/// call and the gas model no longer holds.
+fn max_total_bits(context: &NativeContext) -> PartialVMResult<u64> {
+    Ok(get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .max_bulletproofs_total_bits_as_option()
+        .unwrap_or(DEFAULT_MAX_TOTAL_BITS))
 }
 
 pub fn verify_bulletproofs_ristretto255(
@@ -65,6 +72,7 @@ pub fn verify_bulletproofs_with_dst_ristretto255(
     if !is_supported(context)? {
         return Ok(NativeResult::err(context.gas_used(), NOT_SUPPORTED));
     }
+    let max_total_bits = max_total_bits(context)?;
 
     let dst = pop_arg!(args, VectorRef).as_bytes_ref()?.to_vec();
     let commitments = pop_arg!(args, VectorRef);
@@ -88,7 +96,7 @@ pub fn verify_bulletproofs_with_dst_ristretto255(
     );
 
     let proof_bytes = proof.as_bytes_ref()?;
-    if proof_bytes.len() > MAX_PROOF_SIZE {
+    if proof_bytes.len() > RangeProof::serialized_size(max_total_bits as usize) {
         return Ok(NativeResult::err(context.gas_used(), INVALID_PROOF));
     }
 
@@ -105,7 +113,7 @@ pub fn verify_bulletproofs_with_dst_ristretto255(
 
     // The performance is linear in the product of length and range bits, so it is computed as base_cost + cost_per_bit * length * range_bits.
     let total_bits = length * range_bits as u64;
-    if length == 0 || !length.is_power_of_two() || total_bits > MAX_TOTAL_BITS {
+    if length == 0 || !length.is_power_of_two() || total_bits > max_total_bits {
         return Ok(NativeResult::err(context.gas_used(), INVALID_BATCH_SIZE));
     }
 

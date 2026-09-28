@@ -6,6 +6,16 @@ processed 15 tasks
 init:
 A: object(0,0)
 
+// 1. Default behavior of getTransactionBlock (no options)
+// 2. Setting a limit
+// 3. Setting a limit and cursor
+// 4. Changing the order
+// 5. Setting the order, cursor and limit
+// 6. Providing a bad cursor
+// 7. Page size too large
+// 8. Unsupported filter
+// 9. Supplying response options
+
 task 1, lines 16-18:
 //# programmable --sender A --inputs 12 @A
 //> 0: SplitCoins(Gas, [Input(0)]);

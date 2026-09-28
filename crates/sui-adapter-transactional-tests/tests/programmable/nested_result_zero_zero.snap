@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// tests  NestedResult(0,0) is always equivalent to Result(0)
+
 init:
 A: object(0,0)
 

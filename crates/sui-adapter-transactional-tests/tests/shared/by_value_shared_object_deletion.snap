@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 9 tasks
 
+// tests that shared objects can be deleted by passing by value
+// in both the defining module and in a module that did not define the type
+
 task 1, lines 9-26:
 //# publish
 created: object(1,0)
@@ -21,7 +24,7 @@ created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, lines 40-42:
+task 4, line 40:
 //# view-object 3,0
 Owner: Shared( 4 )
 Version: 4
@@ -33,7 +36,8 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 5, line 43:
+task 5, lines 42-43:
+// this deletes an object through consumption by another module
 //# run t1::o1::consume_o2 --args object(3,0)
 mutated: object(0,0)
 deleted: object(3,0)
@@ -45,7 +49,7 @@ created: object(6,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7, lines 47-49:
+task 7, line 47:
 //# view-object 6,0
 Owner: Shared( 6 )
 Version: 6
@@ -57,7 +61,8 @@ Contents: t2::o2::Obj2 {
     },
 }
 
-task 8, line 50:
+task 8, lines 49-50:
+// this deletes an object directly via the defining module
 //# run t2::o2::consume_o2 --args object(6,0)
 mutated: object(0,0)
 deleted: object(6,0)

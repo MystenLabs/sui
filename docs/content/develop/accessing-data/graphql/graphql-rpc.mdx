@@ -1,6 +1,10 @@
 ---
 title: GraphQL for Sui RPC
-description: Use GraphQL to make Sui RPC calls.
+description: >-
+  Learn the core concepts for working with GraphQL on Sui RPC, including request
+  headers, query composition with variables and fragments, pagination
+  strategies, query scope, service limits, and the components of the GraphQL and
+  General-purpose Indexer stack.
 keywords:
   - graphql
   - graphql headers
@@ -33,7 +37,11 @@ questions:
   - What is GraphQL for Sui RPC in Sui?
   - When to use?
   - How does graphql for sui rpc work on Sui?
-answer: Use GraphQL to make Sui RPC calls.
+answer: >-
+  Learn the core concepts for working with GraphQL on Sui RPC, including request
+  headers, query composition with variables and fragments, pagination
+  strategies, query scope, service limits, and the components of the GraphQL and
+  General-purpose Indexer stack.
 ---
 
 GraphQL provides a flexible way to query the Sui network, submit transactions, and simulate transactions. This page covers the core concepts for working with GraphQL on Sui RPC, including request headers, query composition with variables and fragments, pagination strategies, query scope, and service limits.
@@ -50,7 +58,7 @@ The GraphQL RPC Service reads data from the General-purpose Indexer's Postgres-c
 
 #### Release status
 
-GraphQL RPC Server and the General-purpose Indexer are generally available. JSON-RPC is deprecated. JSON-RPC is disabled on Sui Foundation mainnet full nodes the week of July 27, 2026, with full decommission in mid-October 2026. See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) for the complete timeline.
+GraphQL RPC Server and the General-purpose Indexer are generally available. JSON-RPC is deprecated. Sui Foundation disabled it on Mainnet full nodes the week of July 27, 2026, and plans full decommission for mid-October 2026. See the [JSON-RPC Migration Guide](/develop/accessing-data/json-rpc-migration) for the complete timeline.
 
 
 :::info

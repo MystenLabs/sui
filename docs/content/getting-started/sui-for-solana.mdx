@@ -74,7 +74,7 @@ For all types of ownership on Sui, see [Object Ownership](/develop/objects/objec
 
 ## Access control
 
-Identity or role-based access control is widely used through OpenZeppelin's `Ownable` and `AccessControl` contracts in Solidity.
+On Solana, access control is typically signer-based: programs verify transaction signers and account ownership, and Program Derived Addresses (PDAs) enable program-controlled accounts.
 
 Because object ownership is inherent in Sui, access to contract functions is typically gated through [capability objects](https://move-book.com/programmability/capability/).
 
@@ -86,9 +86,9 @@ You can read more in [The Move Book](https://move-book.com/programmability/capab
 
 In this example, a new user can only be created by presenting an `AdminCap` object during the function call.
 
-```Move
+```move
 /// Grants the owner the right to create new users in the system.
-public struct AdminCap {}
+public struct AdminCap has key { id: UID }
 
 /// Creates a new user in the system. Requires the `AdminCap` capability to be
 /// passed as the first argument.
@@ -141,7 +141,7 @@ See [Building Programmable Transaction Blocks](/develop/transactions/ptbs/buildi
 | Oracles | Third party | Third party |
 | Network upgrade strategy | Feature gates voted on by validators, activated when supermajority is reached | Protocol flags and framework upgrades voted on by validators then enabled |
 | IDE | VSCode (Rust Analyzer) | VSCode (Move extension) |
-| Transaction lifecycle | Transaction submitted to RPC, gossiped to leaders, included in block, voted on by validators using Tower BFT. | Two round trips from client to validators to generate transaction certificate (guaranteeing execution), and another round trip for shared objects to ensure ordering. |
+| Transaction lifecycle | Transaction submitted to RPC, gossiped to leaders, included in block, voted on by validators using Tower BFT. | The client submits the transaction to a full node, which forwards it to a validator through Transaction Driver. Validators vote on it, consensus commits it in a block, and every validator executes it against the same ordered state. Low latency. |
 | Parallel execution | Sealevel runtime enables parallel execution when transactions don't overlap in account access. Accounts must be declared upfront for scheduling. | Transactions that can be parallel are run in parallel. |
 | Storage fees, storage rebates | Rent-exempt accounts require minimum balance. No rent collection since 2021, no rebates. | Low storage fees paid upfront, rebates on destroying objects to incentivize cleanup. |
 | Contract immutability | Programs can be marked as upgradeable or immutable at deployment time. | Native mutable and immutable support using upgrade capabilities as objects. |

@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use anyhow::Context;
 use anyhow::Error;
 use anyhow::Result;
@@ -12,20 +14,22 @@ use sui_protocol_config::Chain;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
+use sui_types::digests::ChainIdentifier;
+use sui_types::digests::CheckpointDigest;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 
-use crate::CheckpointRead;
 use crate::Node;
-use crate::ObjectKey;
-use crate::ObjectRead;
-use crate::TransactionInfo;
-use crate::TransactionRead;
 use crate::gql::AddressOwnedObject;
+use crate::gql::CheckpointRead;
+use crate::gql::ObjectKey;
+use crate::gql::ObjectRead;
 use crate::gql::ObjectSeedMetadata;
+use crate::gql::TransactionInfo;
+use crate::gql::TransactionRead;
 use crate::gql::queries;
 
 /// Worker threads for [`gql_runtime`]. GraphQL calls are I/O-bound and issued one at a time from a
@@ -114,6 +118,17 @@ impl GraphQLClient {
             rpc,
             version: version.to_string(),
         })
+    }
+
+    /// Return the chain identifier of the live network, which is the digest of its genesis
+    /// checkpoint. A fork presents this identity as its own, whichever network it is, so that
+    /// clients and package management treat the fork as that network.
+    pub(crate) fn chain_identifier(&self) -> Result<ChainIdentifier, Error> {
+        let encoded = block_on!(queries::chain_id_query::query(self))?;
+        let digest = CheckpointDigest::from_str(&encoded).with_context(|| {
+            format!("invalid chain identifier '{encoded}' from the live network")
+        })?;
+        Ok(ChainIdentifier::from(digest))
     }
 
     pub(crate) async fn run_query<T, V>(
@@ -279,7 +294,7 @@ mod tests {
 
     use super::super::queries::checkpoint_query::{CheckpointArgs, Query as CheckpointQuery};
     use super::*;
-    use crate::VersionQuery;
+    use crate::gql::VersionQuery;
 
     fn mock_store(server: &MockServer) -> GraphQLClient {
         GraphQLClient::new(Node::Custom(server.uri()), "test-version").expect("store should build")

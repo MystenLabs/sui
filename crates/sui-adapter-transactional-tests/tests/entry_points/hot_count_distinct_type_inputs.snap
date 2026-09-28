@@ -3,6 +3,9 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 7 tasks
 
+// Test of hot value rules for entry functions respect separate counts for distinct types
+// of pure and receiving inputs
+
 init:
 A: object(0,0)
 

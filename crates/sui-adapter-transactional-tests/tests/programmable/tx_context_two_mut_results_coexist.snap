@@ -3,6 +3,8 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 3 tasks
 
+// Two `&mut Y` results from two ctx-taking calls coexist and can both be written through.
+
 task 1, lines 8-39:
 //# publish
 created: object(1,0)

@@ -3,6 +3,10 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 5 tasks
 
+// A generic TxContext slot is injected at its declared position among real
+// parameters, whether it leads or trails the user arguments; supplying an
+// extra argument on top of the real arguments is an arity error.
+
 task 1, lines 10-17:
 //# publish
 created: object(1,0)

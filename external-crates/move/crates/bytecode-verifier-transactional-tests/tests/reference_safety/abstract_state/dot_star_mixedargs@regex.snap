@@ -3,7 +3,7 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 4 tasks
 
-task 1, lines 42-44:
+task 1, line 42:
 //# view-abstract-state 0xb1::zzds_mixedargs::t
 {
   "b0": {
@@ -106,7 +106,8 @@ task 1, lines 42-44:
   }
 }
 
-task 2, lines 45-82:
+task 2, lines 44-80:
+// write through the mut extension while the imm return is live
 //# publish
 Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000b2::zzds_mixedargs_write_w'. Got VMError: {
     major_status: WRITEREF_EXISTS_BORROW_ERROR,
@@ -116,7 +117,8 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(1), 19)],
 }
 
-task 3, lines 83-118:
+task 3, lines 82-118:
+// write through the mut return: disjoint, allowed
 //# publish
 Error: Unable to publish module '00000000000000000000000000000000000000000000000000000000000000b3::zzds_mixedargs_write_m'. Got VMError: {
     major_status: WRITEREF_EXISTS_BORROW_ERROR,

@@ -40,7 +40,6 @@ pub struct SingleValidator {
 impl SingleValidator {
     pub(crate) async fn new(genesis_objects: &[Object], component: Component) -> Self {
         let validator = TestAuthorityBuilder::new()
-            .disable_indexer()
             .with_starting_objects(genesis_objects)
             // This is needed to properly run checkpoint executor.
             .insert_genesis_checkpoint()
@@ -217,7 +216,10 @@ impl SingleValidator {
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,
-                std::collections::BTreeMap::new(),
+                sui_types::base_types::SystemObjectVersions::empty(),
+                // The benchmark only measures execution throughput and never withdraws object
+                // funds, so there are no unsettled withdrawals to account for.
+                &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
                 gas_data,
                 gas_status,
                 kind,

@@ -323,12 +323,18 @@ pub trait TransactionEffectsAPI {
     /// It includes objects that are mutated, wrapped and deleted.
     /// This API is only available on effects v2 and above.
     fn old_object_metadata(&self) -> Vec<(ObjectRef, Owner)>;
-    /// Returns the list of sequenced consensus objects used in the input.
-    /// This is needed in effects because in transaction we only have object ID
-    /// for consensus objects. Their version and digest can only be figured out after sequencing.
-    /// Also provides the use kind to indicate whether the object was mutated or read-only.
-    /// It does not include per epoch config objects since they do not require sequencing.
-    fn input_consensus_objects(&self) -> Vec<InputConsensusObject>;
+    /// Returns the consensus objects the transaction read or wrote, with the version and digest
+    /// resolved during execution (the transaction itself only carries the object ID for consensus
+    /// objects; version and digest are known only after sequencing). Each entry's kind indicates
+    /// whether the object was mutated or read-only.
+    ///
+    /// This includes system objects (e.g. the accumulator root) read during execution but not
+    /// declared as sequenced inputs — they are recorded as read-only so nodes executing from
+    /// effects can reproduce the read, and are indistinguishable here from genuinely-sequenced
+    /// read-only inputs. Callers
+    /// that need only the transaction's declared inputs must filter using the transaction's own
+    /// input set. It does not include per epoch config objects, since they do not require sequencing.
+    fn accessed_consensus_objects(&self) -> Vec<InputConsensusObject>;
     fn created(&self) -> Vec<(ObjectRef, Owner)>;
     fn mutated(&self) -> Vec<(ObjectRef, Owner)>;
     fn unwrapped(&self) -> Vec<(ObjectRef, Owner)>;
@@ -361,7 +367,7 @@ pub trait TransactionEffectsAPI {
     fn gas_cost_summary(&self) -> &GasCostSummary;
 
     fn stream_ended_mutably_accessed_consensus_objects(&self) -> Vec<ObjectID> {
-        self.input_consensus_objects()
+        self.accessed_consensus_objects()
             .into_iter()
             .filter_map(|kind| match kind {
                 InputConsensusObject::MutateConsensusStreamEnded(id, _) => Some(id),

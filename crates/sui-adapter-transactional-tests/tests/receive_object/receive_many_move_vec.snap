@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 937
 ---
 processed 22 tasks
 
@@ -63,7 +64,7 @@ Contents: tto::M1::B {
     },
 }
 
-task 7, lines 89-91:
+task 7, line 89:
 //# view-object 2,4
 Owner: Account Address ( fake(2,0) )
 Version: 3
@@ -75,75 +76,76 @@ Contents: tto::M1::B {
     },
 }
 
-task 8, lines 92-95:
+task 8, lines 91-93:
+// Make the Move vec but then never use it -- this should be fine since they're all drop
 //# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) receiving(2,3) receiving(2,4)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::B>>([Input(1), Input(2), Input(3), Input(4)]);
-// Make the Move vec and pass, but never receive
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
 
-task 9, lines 96-100:
+task 9, lines 95-98:
+// Make the Move vec and pass, but never receive
 //# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) receiving(2,3) receiving(2,4)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::B>>([Input(1), Input(2), Input(3), Input(4)]);
 //> 1: tto::M1::receive_none(Input(0), Result(0));
-// Make the Move vec of receiving arguments and then receive all but the last. Only the ince we receive should be mutated
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
 
-task 10, lines 101-105:
+task 10, lines 100-103:
+// Make the Move vec of receiving arguments and then receive all but the last. Only the ince we receive should be mutated
 //# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) receiving(2,3) receiving(2,4)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::B>>([Input(1), Input(2), Input(3), Input(4)]);
 //> 1: tto::M1::receive_all_but_last(Input(0), Result(0));
-// Make the Move vec of receiving arguments, pass to a function by immref, then later use the vec to receive all of them
 mutated: object(0,0), object(2,0), object(2,2), object(2,3), object(2,4)
 gas summary: computation_cost: 1000000, storage_cost: 5852000,  storage_rebate: 5793480, non_refundable_storage_fee: 58520
 
-task 11, lines 106-111:
+task 11, lines 105-109:
+// Make the Move vec of receiving arguments, pass to a function by immref, then later use the vec to receive all of them
 //# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) receiving(2,3) receiving(2,4)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::B>>([Input(1), Input(2), Input(3), Input(4)]);
 //> 1: tto::M1::receive_none_by_immref(Input(0), Result(0));
 //> 2: tto::M1::receive_all_send_back(Input(0), Result(0));
-// Make the Move vec of receiving arguments, pass to a function by mutref, then later use the vec to receive all of them
 mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
 gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
 
-task 12, lines 112-117:
+task 12, lines 111-115:
+// Make the Move vec of receiving arguments, pass to a function by mutref, then later use the vec to receive all of them
 //# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) receiving(2,3) receiving(2,4)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::B>>([Input(1), Input(2), Input(3), Input(4)]);
 //> 1: tto::M1::receive_none_by_mutref(Input(0), Result(0));
 //> 2: tto::M1::receive_all_send_back(Input(0), Result(0));
+mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
+gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
+
+task 13, lines 117-121:
 // Make the Move vec of receiving arguments, pass to a function by mutref and receive some
-mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
-gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
-
-task 13, lines 118-123:
 //# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) receiving(2,3) receiving(2,4)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::B>>([Input(1), Input(2), Input(3), Input(4)]);
 //> 1: tto::M1::receive_all_but_last_by_mut_ref(Input(0), Result(0));
 //> 2: tto::M1::receive_all_by_mut_ref(Input(0), Result(0));
+mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
+gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
+
+task 14, lines 123-127:
 // Make the Move vec of receiving arguments, pass to a function by mutref, receive some, then pass by mutref again to receive the rest
-mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
-gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
-
-task 14, lines 124-129:
 //# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) receiving(2,3) receiving(2,4)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::B>>([Input(1), Input(2), Input(3), Input(4)]);
 //> 1: tto::M1::receive_all_but_last_by_mut_ref(Input(0), Result(0));
 //> 2: tto::M1::receive_all_by_mut_ref(Input(0), Result(0));
-// Make the Move vec of receiving arguments, pass to a function by mutref, receive some, then pass by value to receive the rest
 mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
 gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
 
-task 15, lines 130-135:
+task 15, lines 129-133:
+// Make the Move vec of receiving arguments, pass to a function by mutref, receive some, then pass by value to receive the rest
 //# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) receiving(2,3) receiving(2,4)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::B>>([Input(1), Input(2), Input(3), Input(4)]);
 //> 1: tto::M1::receive_all_but_last_by_mut_ref(Input(0), Result(0));
 //> 2: tto::M1::receive_all_send_back(Input(0), Result(0));
-// Make the Move vec of receiving arguments and then receive all of them
 mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
 gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
 
-task 16, lines 136-138:
+task 16, lines 135-138:
+// Make the Move vec of receiving arguments and then receive all of them
 //# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) receiving(2,3) receiving(2,4)
 //> 0: MakeMoveVec<sui::transfer::Receiving<tto::M1::B>>([Input(1), Input(2), Input(3), Input(4)]);
 //> 1: tto::M1::receive_all(Input(0), Result(0));

@@ -1,7 +1,7 @@
 ---
 title: Secure Messaging Chat App
 description: >-
-  Build an end-to-end encrypted group messaging app on Sui using Seal threshold
+  Add end-to-end encrypted group messaging to an app using Seal threshold
   encryption, a Walrus-backed relayer, and onchain permission management.
 keywords:
   - example
@@ -51,11 +51,11 @@ goal:
     - has_answer: true
       label: Needs answer summary for AI citation
 questions:
-  - How do I build an encrypted chat app on Sui?
+  - How do I add encrypted messaging to my app on Sui?
   - What does the Sui messaging chat example demonstrate?
   - How do I use the Sui Messaging SDK for end-to-end encryption?
 answer: >-
-  Build an end-to-end encrypted group messaging app on Sui using Seal threshold
+  Add end-to-end encrypted group messaging to an app using Seal threshold
   encryption, a Walrus-backed relayer, and onchain permission management.
 ---
 
@@ -81,40 +81,23 @@ This example teaches:
 - **Relayer pattern:** An offchain Rust service accepts encrypted messages, verifies sender signatures, checks onchain permissions through a cached membership store, and batches messages to Walrus for archival.
 - **File attachments:** Each file is individually encrypted with the group DEK, uploaded to Walrus through the publisher API, and referenced by a `quiltPatchId` in the message metadata.
 
-## Prerequisites
-
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
-- [x] [Install the latest version of Sui](/getting-started/onboarding/sui-install).
 
-- [x] [Configure the Sui client](/getting-started/onboarding/configure-sui-client).
+- [x] An existing [React](https://react.dev/) app and somewhere to run a Rust service.
 
-- [x] [Create a Sui address](/getting-started/onboarding/get-address).
+- [x] [Install the Sui CLI](/getting-started/onboarding/sui-install) and [fund an address with Testnet SUI](/getting-started/onboarding/get-coins).
 
-- [x] [Get SUI Testnet tokens](/getting-started/onboarding/get-coins).
+- [x] [Node.js](https://nodejs.org/) 22 or later and [pnpm](https://pnpm.io/installation) 10.17.0 or later, per the [Messaging SDK installation requirements](/sui-stack/messaging/installation), plus a [Rust toolchain](https://rustup.rs/) for the relayer.
 
-- [x] Download and install an IDE. The following are recommended, as they offer Move extensions:
-
-    - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
-
-    - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
-
-    - [Vim](https://www.vim.org/download.php), corresponding [Move extension](https://github.com/yanganto/move.vim)
-
-    - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
-    
-        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
-
-- [x] [Download and install Git](https://git-scm.com/downloads).
-
-- [x] [Node.js](https://nodejs.org/) 18 or later
-
-- [x] [Rust toolchain](https://rustup.rs/) (for the relayer service)
-
-- [x] A Sui wallet ([Slush Wallet](https://slush.app/) or another compatible wallet)
+- [x] A wallet that signs with a standard key, such as [Slush Wallet](https://slush.app/). zkLogin wallets do not work here. See [Wallet compatibility](#wallet-compatibility).
 
 </TabItem>
 </Tabs>
+
+For SDK installation and client setup, see [Installation](/sui-stack/messaging/installation) and [Developer Setup](/sui-stack/messaging/setup).
+
+## Architecture
 
 This example has 3 layers and 5 actors. The diagram below shows the components and the data flow between them.
 
@@ -150,89 +133,33 @@ The app uses a 2-layer encryption scheme called envelope encryption:
 
 This design means Seal handles key management and access control, while the actual message encryption uses fast symmetric crypto. The relayer, Walrus, and anyone observing the network can see encrypted bytes but never the plaintext.
 
-## Setup
+## Reference app
 
-Follow these steps to set up the example locally.
+A complete implementation lives in [`sui-stack-messaging`](https://github.com/MystenLabs/sui-stack-messaging). The `chat-app` directory holds the React frontend and `relayer` holds the Rust service.
 
-##### Step 1: Clone the repo
+### Configuration that matters
 
-```bash
-$ git clone https://github.com/MystenLabs/sui-stack-messaging.git
-$ cd sui-stack-messaging
-```
+The frontend and relayer both need to agree on the same package and key servers:
 
-##### Step 2: Build the TypeScript SDK
-
-The chat app depends on the local `@mysten/sui-stack-messaging` package:
-
-```bash
-$ cd ts-sdks
-$ pnpm install
-$ pnpm build
-```
-
-##### Step 3: Configure the frontend
-
-```bash
-$ cd ../chat-app
-$ pnpm install
-$ cp .env.example .env
-```
-
-Edit `.env` with your network and service configuration. By default
-
-```bash title='.env'
-VITE_SUI_NETWORK=testnet
-VITE_SUI_RPC_URL=https://fullnode.testnet.sui.io:443
-VITE_SUI_GRAPHQL_URL=https://sui-testnet.mystenlabs.com/graphql
-VITE_RELAYER_URL=http://localhost:3000
-VITE_WALRUS_PUBLISHER_URL=https://publisher.walrus-testnet.walrus.space
-VITE_WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
-VITE_WALRUS_EPOCHS=5
-VITE_SEAL_KEY_SERVER_OBJECT_IDS=COMMA_SEPARATED_SEAL_SERVER_IDS
-```
-
-Configure the `VITE_SEAL_KEY_SERVER_OBJECT_IDS` using the list of [verified key servers](https://seal-docs.wal.app/Pricing#verified-key-servers). You must provide at least 2 server object IDs.
-
-##### Step 4: Start the relayer
-
-```bash
-$ cd relayer
-$ cp .env.example .env  # fill in SUI_RPC_URL (https://fullnode.testnet.sui.io:443 for testnet) and GROUPS_PACKAGE_ID (Deployed Groups SDK package ID)
-```
-
-The deployed Groups SDK package IDs for Mainnet and Testnet are:
+| Setting | Notes |
+| --- | --- |
+| `VITE_SEAL_KEY_SERVER_OBJECT_IDS` | At least 2 object IDs from the [verified key servers](https://seal-docs.wal.app/Pricing#verified-key-servers) list. A single server fails with a threshold error. |
+| `VITE_WALRUS_PUBLISHER_URL` / `VITE_WALRUS_AGGREGATOR_URL` | Where encrypted quilts are written and read. |
+| `VITE_WALRUS_EPOCHS` | Storage duration for archived messages. |
+| `GROUPS_PACKAGE_ID` (relayer) | The deployed Groups SDK package, listed below. |
 
 | Network | Groups SDK package ID |
-| Testnet | 0xba8a26d42bc8b5e5caf4dac2a0f7544128d5dd9b4614af88eec1311ade11de79 |
-| Mainnet | 0x541840ae7df705d1c6329c22415ed61f9140a18b79b13c1c9dc7415b115c1ba8 |
+| --- | --- |
+| Testnet | `0xba8a26d42bc8b5e5caf4dac2a0f7544128d5dd9b4614af88eec1311ade11de79` |
+| Mainnet | `0x541840ae7df705d1c6329c22415ed61f9140a18b79b13c1c9dc7415b115c1ba8` |
 
-Then, run the relayer:
+### Wallet compatibility
 
-```bash
-$ cargo run
-```
+The relayer verifies sender signatures, so the connected wallet has to use a signature scheme it recognizes. A zkLogin wallet fails with `Invalid public key format: Unknown signature scheme flag: 0x05`. Use a passphrase or imported-key wallet.
 
-The relayer starts on `http://localhost:3000` by default. Leave it running, and open a separate terminal.
+### Group membership
 
-##### Step 5: Start the frontend
-
-In a new terminal, navigate back into the example's directory and start the app's frontend:
-
-```bash
-$ cd sui-stack-messaging/chat-app
-$ npm run dev
-```
-
-## Run the example
-
-Open `http://localhost:5173` in a browser and connect your wallet. Slush is the recommended wallet for this application. If using Slush, you must use a passphrase or imported wallet. If you use a wallet with zkLogin (such as login with Google), then you get the error `Invalid public key format: Unknown signature scheme flag: 0x05`. If you use another wallet like Suilet, it might not be supported and once logged in, the app might be blank.
-
-Click **+ New** in the sidebar to create a group. Enter a group name and optionally add member addresses. **You must add at least your wallet address as a group member, otherwise you cannot message the group.** The app creates a `PermissionedGroup<Messaging>` onchain, generates an encrypted DEK through [Seal](/sui-stack/nautilus/seal), and stores the encryption history onchain.
-
-Select the group from the sidebar to open the chat. Type a message and press **Enter**. The frontend encrypts the message with the group DEK, signs it with your wallet, and sends the ciphertext to the relayer. Other group members see the message appear in real time through polling, and their clients decrypt it locally.
-
-To test file attachments, click **Attach files** and select up to 10 files (5MB each). The frontend encrypts each file individually and uploads the ciphertext to Walrus before sending the message.
+Creating a group does not add you to it. Add your own address as a member at creation time, or you cannot post to the group you just made.
 
 ## Key code highlights
 

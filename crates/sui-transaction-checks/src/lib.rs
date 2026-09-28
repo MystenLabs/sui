@@ -18,14 +18,15 @@ mod checked {
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::object::ObjectPermission;
     use sui_types::transaction::{
-        CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
+        CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, SharedObjectMutability, TransactionData,
         TransactionDataAPI, TransactionKind,
     };
     use sui_types::{
         SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
         SUI_CLOCK_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
-        SUI_DISPLAY_REGISTRY_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+        SUI_DISPLAY_REGISTRY_OBJECT_ID, SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+        SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
@@ -61,7 +62,7 @@ mod checked {
         gas_ownership_checks: bool,
     ) -> SuiResult<SuiGasStatus> {
         if transaction.kind().is_system_tx() {
-            Ok(SuiGasStatus::new_unmetered())
+            Ok(SuiGasStatus::new_unmetered(protocol_config))
         } else {
             let is_gasless =
                 protocol_config.enable_gasless() && transaction.is_gasless_transaction();
@@ -94,39 +95,8 @@ mod checked {
             &input_objects,
             &[],
         )?;
+        transaction.check_allowance_inputs(&input_objects)?;
         check_receiving_objects(&input_objects, receiving_objects)?;
-        // Runs verifier, which could be expensive.
-        check_non_system_packages_to_be_published(
-            transaction,
-            protocol_config,
-            metrics,
-            verifier_signing_config,
-        )?;
-
-        Ok((gas_status, input_objects.into_checked()))
-    }
-
-    pub fn check_transaction_input_with_given_gas(
-        protocol_config: &ProtocolConfig,
-        reference_gas_price: u64,
-        transaction: &TransactionData,
-        mut input_objects: InputObjects,
-        receiving_objects: ReceivingObjects,
-        gas_object: Object,
-        metrics: &Arc<BytecodeVerifierMetrics>,
-        verifier_signing_config: &VerifierSigningConfig,
-    ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
-        let gas_object_ref = gas_object.compute_object_reference();
-        input_objects.push(ObjectReadResult::new_from_gas_object(&gas_object));
-
-        let gas_status = check_transaction_input_inner(
-            protocol_config,
-            reference_gas_price,
-            transaction,
-            &input_objects,
-            &[gas_object_ref],
-        )?;
-        check_receiving_objects(&input_objects, &receiving_objects)?;
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(
             transaction,
@@ -159,6 +129,8 @@ mod checked {
         )?;
         // NB: We do not check receiving objects when executing. Only at signing time do we check.
         // NB: move verifier is only checked at signing time, not at execution.
+        // NB: allowance withdrawal declarations are only validated at signing; at execution
+        // the allowance's own Move checks enforce policy on consensus-sequenced state.
 
         Ok((gas_status, input_objects.into_checked()))
     }
@@ -256,13 +228,7 @@ mod checked {
         transaction: &TransactionData,
         input_objects: &InputObjects,
     ) -> UserInputResult<()> {
-        let has_replay_protection = transaction.expiration().is_replay_protected()
-            || !transaction.gas_data().payment.is_empty()
-            || input_objects
-                .iter()
-                .any(|obj| obj.is_replay_protected_input());
-
-        if !has_replay_protection {
+        if !transaction.has_replay_protection(input_objects.iter()) {
             return Err(UserInputError::InvalidExpiration {
                 error: "Transactions must either have address-owned inputs, or a ValidDuring expiration with at most two epochs of validity"
                     .to_string(),
@@ -518,6 +484,7 @@ mod checked {
                         input_object_kind,
                         object,
                         system_transaction,
+                        protocol_config,
                     )?;
                 }
                 // We skip checking a removed consensus object because it no longer exists.
@@ -536,6 +503,7 @@ mod checked {
         object_kind: InputObjectKind,
         object: &Object,
         system_transaction: bool,
+        protocol_config: &ProtocolConfig,
     ) -> UserInputResult {
         // Defense-in-depth: Owner::Party is not yet supported.
         if matches!(object.owner, Owner::Party { .. }) {
@@ -632,6 +600,8 @@ mod checked {
 
                     match (object_id, mutability) {
                         // System objects that can be taken mutably
+                        (SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, _)
+                            if protocol_config.enable_forwarding_addresses() => (),
                         (SUI_SYSTEM_STATE_OBJECT_ID, _)
                         | (SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, _)
                         | (SUI_COIN_REGISTRY_OBJECT_ID, _)

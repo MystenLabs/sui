@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[EC04001]: restricted visibility
+   ┌─ tests/move_2024/constants/invalid_cross_module_macro_private.move:9:5
+   │
+ 6 │ const SECRET: u64 = 42;
+   │       ------ This constant is internal to its module. Only 'public(package)' constants can be accessed outside of their module
+   ·
+ 9 │     SECRET
+   │     ^^^^^^ Invalid access of internal constant '0x42::a::SECRET'
+   ·
+18 │ public fun steal(): u64 { a::get_secret!() }
+   │                           ---------------- While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macro '0x42::a::get_secret'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.

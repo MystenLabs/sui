@@ -134,6 +134,7 @@ feature_flags:
   check_for_init_during_upgrade: true
   enable_init_on_upgrade: true
   enable_order_independent_upgrade_init_linkage: true
+  harden_linkage_consistency: true
   include_checkpoint_artifacts_digest_in_summary: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
@@ -252,6 +253,7 @@ max_event_emit_size_total: 65536000
 max_move_vector_len: 262144
 max_move_identifier_len: 128
 max_move_value_depth: 128
+package_arena_size_in_bytes: 10000000
 max_move_enum_variants: 127
 max_back_edges_per_function: 10000
 max_back_edges_per_module: 10000
@@ -532,3 +534,7 @@ gasless_max_unused_inputs: 1
 gasless_max_pure_input_bytes: 32
 gasless_max_tps: 300
 gasless_max_tx_size_bytes: 16384
+translation_per_live_reference_charge: 1
+max_ptb_live_references: 64
+max_ptb_returned_references: 16
+max_ptb_total_returned_references: 256

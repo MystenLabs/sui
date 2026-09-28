@@ -39,15 +39,16 @@
 //!     PackageCache (shared, LRU + system-package invalidation) → DB
 //! ```
 
-// Only the (staging-gated) subscription resolvers backfill via `scan_checkpoints`; `test` keeps the
-// module's own unit tests compiling without the feature.
-#[cfg(any(feature = "staging", test))]
-mod checkpoint_resume;
 mod checkpoint_stream_task;
 mod gap_recovery;
-mod package_eviction_task;
+mod lifecycle;
 mod processed_checkpoint;
+mod streamed_cache_eviction;
+mod streamed_caches;
+mod streamed_object_store;
 mod streamed_package_store;
+mod streamed_store;
+mod streamed_transaction_store;
 mod subscription_readiness;
 #[cfg(test)]
 mod test_utils;
@@ -56,21 +57,25 @@ use std::sync::Arc;
 
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 
-#[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::CheckpointBroadcaster;
 pub(crate) use checkpoint_stream_task::CheckpointStreamTask;
-#[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::SubscriptionBroadcast;
-#[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::broadcast_error;
-#[cfg(feature = "staging")]
+pub(crate) use checkpoint_stream_task::checkpoint_field_mask;
+pub(crate) use checkpoint_stream_task::process_checkpoint;
 pub(crate) use checkpoint_stream_task::reconnect_error;
-#[cfg(feature = "staging")]
 pub(crate) use gap_recovery::wait_for_pipelines_catching_up_at;
-pub(crate) use package_eviction_task::PackageEvictionTask;
+pub(crate) use lifecycle::SubscriberLimit;
+pub(crate) use lifecycle::SubscriptionLifecycleGuard;
+pub(crate) use lifecycle::SubscriptionTerminationReason;
 pub(crate) use processed_checkpoint::ProcessedCheckpoint;
 pub(crate) use processed_checkpoint::ProcessedTransaction;
+pub(crate) use streamed_cache_eviction::EvictableCache;
+pub(crate) use streamed_cache_eviction::StreamedCacheEvictionTask;
+pub(crate) use streamed_caches::StreamedCaches;
+pub(crate) use streamed_object_store::StreamedObjectStore;
 pub(crate) use streamed_package_store::StreamedPackageStore;
+pub(crate) use streamed_transaction_store::StreamedTransactionStore;
 pub(crate) use subscription_readiness::SubscriptionReadiness;
 
 /// The full layered package store used by streaming subscriptions:

@@ -119,8 +119,6 @@ pub struct PreCompiledModuleInfo {
     /// information about the module from `TypingProgramInfo` used in to extract
     /// various information needed throughout the compilation process
     pub info: ModuleInfo,
-    /// for transactional test runner in move-transactional-test-runner/src/framework.rs
-    pub compiled_unit: Option<AnnotatedCompiledUnit>,
 }
 pub enum Visitor {
     TypingVisitor(TypingVisitorObj),
@@ -725,17 +723,12 @@ impl IntoIterator for PreCompiledProgramInfo {
     }
 }
 
-/// Given a set of dependencies, pre-compile them and save all data needed to compile
-/// against these dependencies without having to recompile them again. You can pass
-/// already pre-compiled transitive dependencies to avoid re-compiling them
-/// (`pre_compiled_program_opt` parameter). You can also obtain pre-compile a set of
-/// dependencies without the actual compiled modules in cases where these are not needed
-/// (`interface_only` parameter).
+/// Collect type and macro information for dependencies without generating bytecode.
+/// Pass previously compiled dependencies in `pre_compiled_program_opt` to reuse their metadata.
 pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
     targets: Vec<PackagePaths<Paths, NamedAddress>>,
     interface_files_dir_opt: Option<String>,
     pre_compiled_program_opt: Option<Arc<PreCompiledProgramInfo>>,
-    interface_only: bool,
     flags: Flags,
     vfs_root: Option<VfsPath>,
 ) -> anyhow::Result<Result<PreCompiledProgramInfo, (MappedFiles, Diagnostics)>> {
@@ -744,11 +737,6 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
         SaveFlag::ModuleNameAddresses,
         SaveFlag::MacroDefinitions,
     ]);
-    let files_to_compile = if interface_only {
-        Some(BTreeSet::new())
-    } else {
-        None
-    };
     let (files, pprog_and_comments_res) = Compiler::from_package_paths(
         vfs_root,
         targets,
@@ -757,7 +745,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     .set_interface_files_dir_opt(interface_files_dir_opt)
     .set_flags(flags)
     .set_pre_compiled_program_opt(pre_compiled_program_opt.clone())
-    .set_files_to_compile(files_to_compile)
+    .set_files_to_compile(Some(BTreeSet::new()))
     .add_save_hook(&hook)
     .run::<PASS_PARSER>()?;
 
@@ -776,14 +764,9 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
         PASS_COMPILATION,
     ) {
         Err((_pass, errors)) => Ok(Err((files, errors))),
-        Ok(PassResult::Compilation(compiled, _)) => {
+        Ok(PassResult::Compilation(_, _)) => {
             let program_info = hook.take_typing_info();
             let mut macro_definitions = hook.take_macro_definitions();
-
-            let mut compiled_units_by_module = compiled
-                .into_iter()
-                .map(|unit| (unit.module_ident(), unit))
-                .collect::<BTreeMap<_, _>>();
 
             // compute a set of already pre-compiled module identifiers (for modules
             // passed in `pre_compiled_program_opt` parameter) for efficient lookup
@@ -815,14 +798,6 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
 
                      let macro_definitions = macro_definitions.remove(&mod_ident);
 
-                     let compiled_unit = if interface_only {
-                        None
-                     } else {
-                        Some(compiled_units_by_module
-                        .remove(&mod_ident)
-                        .ok_or_else(|| anyhow::anyhow!("compiled unit not found for module: {:?}", mod_ident))?)
-                     };
-
                      Ok((
                          mod_ident,
                          Arc::new(PreCompiledModuleInfo {
@@ -830,7 +805,6 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
                              file_content,
                              macro_definitions,
                              info: typing_module_info.clone(),
-                             compiled_unit,
                          }),
                      ))
                  })

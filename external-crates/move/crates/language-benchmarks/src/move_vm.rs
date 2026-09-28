@@ -44,7 +44,7 @@ const LIB_ADDR: AccountAddress = AccountAddress::new([
     0x42,
 ]);
 
-static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock::new(|| {
+static MOVE_STDLIB_PROGRAM_INFO: LazyLock<Arc<PreCompiledProgramInfo>> = LazyLock::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
@@ -53,17 +53,37 @@ static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock::new
         }],
         None,
         None,
-        false,
         move_compiler::Flags::empty(),
         None,
     )
     .unwrap();
     match program_res {
-        Ok(stdlib) => stdlib,
+        Ok(stdlib) => Arc::new(stdlib),
         Err((files, errors)) => {
             eprintln!("!!!Standard library failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, errors)
         }
+    }
+});
+
+static MOVE_STDLIB_COMPILED: LazyLock<Vec<CompiledModule>> = LazyLock::new(|| {
+    let (files, units_res) = Compiler::from_files(
+        None,
+        move_stdlib::source_files(),
+        vec![],
+        move_stdlib::named_addresses(),
+    )
+    .build()
+    .unwrap();
+    match units_res {
+        Err(diags) => {
+            eprintln!("!!!Standard library failed to compile!!!");
+            move_compiler::diagnostics::report_diagnostics(&files, diags)
+        }
+        Ok((units, _warnings)) => units
+            .into_iter()
+            .map(|annot_module| annot_module.named_module.module)
+            .collect(),
     }
 });
 
@@ -110,11 +130,11 @@ pub fn bench_pinned_pkg_call<M: Measurement + 'static>(
     let runtime = if pinned {
         MoveRuntime::new_with_system_packages(
             natives,
-            VMConfig::default(),
+            VMConfig::new_for_test(/* allow_unpublishable_code_execution */ false, None),
             SystemPackages::new(vec![lib_pkg.clone().into_serialized_package()]),
         )
     } else {
-        MoveRuntime::new_with_default_config(natives)
+        MoveRuntime::new_with_test_config(natives)
     };
 
     let mut adapter = InMemoryTestAdapter::new_with_runtime(runtime);
@@ -151,7 +171,7 @@ pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
         move_core_types::parsing::address::NumericalAddress::parse_str(BENCH_ADDR_STR).unwrap(),
     );
     let (_files, compiled_units) = Compiler::from_files(None, src_files, vec![], named_addresses)
-        .set_pre_compiled_program_opt(Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())))
+        .set_pre_compiled_program_opt(Some(Arc::clone(&MOVE_STDLIB_PROGRAM_INFO)))
         .set_default_config(pkg_config)
         .build_and_report()
         .expect("Error compiling...");
@@ -162,7 +182,7 @@ pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
 }
 
 fn create_vm() -> InMemoryTestAdapter {
-    InMemoryTestAdapter::new_with_runtime(MoveRuntime::new_with_default_config(
+    InMemoryTestAdapter::new_with_runtime(MoveRuntime::new_with_test_config(
         stdlib_native_functions(
             AccountAddress::from_hex_literal("0x1").unwrap(),
             move_vm_runtime::natives::move_stdlib::GasParameters::zeros(),
@@ -173,17 +193,7 @@ fn create_vm() -> InMemoryTestAdapter {
 }
 
 fn publish_stdlib(adapter: &mut InMemoryTestAdapter) {
-    let stdlib_modules: Vec<CompiledModule> = PRECOMPILED_MOVE_STDLIB
-        .iter()
-        .filter_map(|(_, info)| {
-            info.compiled_unit
-                .as_ref()
-                .map(|unit| unit.named_module.module.clone())
-        })
-        .collect();
-    if stdlib_modules.is_empty() {
-        return;
-    }
+    let stdlib_modules = MOVE_STDLIB_COMPILED.clone();
     let pkg = StoredPackage::from_modules_for_testing(CORE_CODE_ADDRESS, stdlib_modules).unwrap();
     adapter.insert_package_into_storage(pkg);
 }

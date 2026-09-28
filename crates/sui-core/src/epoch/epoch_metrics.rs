@@ -131,6 +131,12 @@ pub struct EpochMetrics {
     /// Note: This metric is disabled by default as it may have very large cardinality.
     pub epoch_execution_time_observer_object_utilization: CounterVec,
 
+    /// Utilization of the objects listed in
+    /// `ExecutionTimeObserverConfig::object_utilization_metric_tracked_ids`, labeled by full
+    /// object ID and configured name, reported regardless of whether the object is
+    /// overutilized.
+    pub epoch_execution_time_observer_tracked_object_utilization: CounterVec,
+
     /// The number of execution time observations loaded at start of epoch.
     pub epoch_execution_time_observations_loaded: IntGauge,
 
@@ -305,6 +311,13 @@ impl EpochMetrics {
                 "epoch_execution_time_observer_object_utilization",
                 "Per-object utilization for objects that were overutilized at least once at some point in their lifetime",
                 &["object_id"],
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observer_tracked_object_utilization: register_counter_vec_with_registry!(
+                "epoch_execution_time_observer_tracked_object_utilization",
+                "Utilization of objects explicitly listed in the execution time observer config, labeled by full object ID and configured name",
+                &["object_id", "name"],
                 registry
             )
             .unwrap(),

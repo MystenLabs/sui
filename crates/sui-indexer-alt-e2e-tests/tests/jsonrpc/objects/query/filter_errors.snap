@@ -6,6 +6,11 @@ processed 5 tasks
 init:
 A: object(0,0)
 
+// 1. An object owner filter that has some nesting, but is still valid.
+// 2. An object owner filter that has too many levels of nesting.
+// 3. An object owner filter that has many type filters, but is still valid.
+// 3. An object owner filter that has too many type filters.
+
 task 1, lines 11-26:
 //# run-jsonrpc
 Response: {

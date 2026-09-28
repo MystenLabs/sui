@@ -154,6 +154,38 @@ impl PatternArm {
             .all(|pat| matches!(pat.pat.value, TP::Wildcard | TP::Binder(_, _)))
     }
 
+    fn head_is_bindable_only<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+    ) -> bool {
+        fn bindable_only<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+            context: &MC,
+            pat: &MatchPattern,
+        ) -> bool {
+            match &pat.pat.value {
+                TP::Binder(_, _) | TP::Wildcard => true,
+                TP::At(_, inner) => bindable_only(context, inner),
+                TP::Variant(..)
+                | TP::BorrowVariant(..)
+                | TP::Struct(..)
+                | TP::BorrowStruct(..)
+                | TP::Literal(_)
+                | TP::ErrorPat => false,
+                TP::Constant(_, _) => {
+                    eliminated_pattern_ice(context, pat.pat.loc, "constant");
+                    false
+                }
+                TP::Or(_, _) => {
+                    eliminated_pattern_ice(context, pat.pat.loc, "or");
+                    false
+                }
+            }
+        }
+        self.pats
+            .front()
+            .is_some_and(|pat| bindable_only(context, pat))
+    }
+
     fn all_wild_arm<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
         &mut self,
         context: &MC,
@@ -202,12 +234,19 @@ impl PatternArm {
         bindings
     }
 
-    fn first_variant(&self) -> Option<(VariantName, (Loc, Fields<Type>))> {
+    fn first_variant<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+    ) -> Option<(VariantName, (Loc, Fields<Type>))> {
         if self.pats.is_empty() {
             return None;
         }
 
-        fn first_variant_recur(pat: MatchPattern) -> Option<(VariantName, (Loc, Fields<Type>))> {
+        fn first_variant_recur<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+            context: &MC,
+            pat: MatchPattern,
+        ) -> Option<(VariantName, (Loc, Fields<Type>))> {
+            let ploc = pat.pat.loc;
             match pat.pat.value {
                 TP::Variant(_, _, name, _, fields) => {
                     let ty_fields: Fields<Type> = fields.clone().map(|_, (ndx, (ty, _))| (ndx, ty));
@@ -217,26 +256,36 @@ impl PatternArm {
                     let ty_fields: Fields<Type> = fields.clone().map(|_, (ndx, (ty, _))| (ndx, ty));
                     Some((name, (pat.pat.loc, ty_fields)))
                 }
-                TP::At(_, inner) => first_variant_recur(*inner),
+                TP::At(_, inner) => first_variant_recur(context, *inner),
                 TP::Struct(..) | TP::BorrowStruct(..) => None,
-                TP::Constant(_, _)
-                | TP::Binder(_, _)
-                | TP::Literal(_)
-                | TP::Wildcard
-                | TP::ErrorPat => None,
-                TP::Or(_, _) => unreachable!(),
+                TP::Binder(_, _) | TP::Literal(_) | TP::Wildcard | TP::ErrorPat => None,
+                TP::Constant(_, _) => {
+                    eliminated_pattern_ice(context, ploc, "constant");
+                    None
+                }
+                TP::Or(_, _) => {
+                    eliminated_pattern_ice(context, ploc, "or");
+                    None
+                }
             }
         }
 
-        first_variant_recur(self.pats.front().unwrap().clone())
+        first_variant_recur(context, self.pats.front().unwrap().clone())
     }
 
-    fn first_struct(&self) -> Option<(Loc, Fields<Type>)> {
+    fn first_struct<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+    ) -> Option<(Loc, Fields<Type>)> {
         if self.pats.is_empty() {
             return None;
         }
 
-        fn first_struct_recur(pat: MatchPattern) -> Option<(Loc, Fields<Type>)> {
+        fn first_struct_recur<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+            context: &MC,
+            pat: MatchPattern,
+        ) -> Option<(Loc, Fields<Type>)> {
+            let ploc = pat.pat.loc;
             match pat.pat.value {
                 TP::Struct(_, _, _, fields) => {
                     let ty_fields: Fields<Type> = fields.clone().map(|_, (ndx, (ty, _))| (ndx, ty));
@@ -246,29 +295,39 @@ impl PatternArm {
                     let ty_fields: Fields<Type> = fields.clone().map(|_, (ndx, (ty, _))| (ndx, ty));
                     Some((pat.pat.loc, ty_fields))
                 }
-                TP::At(_, inner) => first_struct_recur(*inner),
+                TP::At(_, inner) => first_struct_recur(context, *inner),
                 TP::Variant(..) | TP::BorrowVariant(..) => None,
-                TP::Constant(_, _)
-                | TP::Binder(_, _)
-                | TP::Literal(_)
-                | TP::Wildcard
-                | TP::ErrorPat => None,
-                TP::Or(_, _) => unreachable!(),
+                TP::Binder(_, _) | TP::Literal(_) | TP::Wildcard | TP::ErrorPat => None,
+                TP::Constant(_, _) => {
+                    eliminated_pattern_ice(context, ploc, "constant");
+                    None
+                }
+                TP::Or(_, _) => {
+                    eliminated_pattern_ice(context, ploc, "or");
+                    None
+                }
             }
         }
 
-        first_struct_recur(self.pats.front().unwrap().clone())
+        first_struct_recur(context, self.pats.front().unwrap().clone())
     }
 
-    fn first_lit(&self) -> Option<Value> {
+    fn first_lit<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+    ) -> Option<Value> {
         if self.pats.is_empty() {
             return None;
         }
 
-        fn first_lit_recur(pat: MatchPattern) -> Option<Value> {
+        fn first_lit_recur<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+            context: &MC,
+            pat: MatchPattern,
+        ) -> Option<Value> {
+            let ploc = pat.pat.loc;
             match pat.pat.value {
                 TP::Literal(v) => Some(v),
-                TP::At(_, inner) => first_lit_recur(*inner),
+                TP::At(_, inner) => first_lit_recur(context, *inner),
                 TP::Variant(_, _, _, _, _)
                 | TP::BorrowVariant(_, _, _, _, _, _)
                 | TP::Struct(..)
@@ -276,11 +335,18 @@ impl PatternArm {
                 | TP::Binder(_, _)
                 | TP::Wildcard
                 | TP::ErrorPat => None,
-                TP::Constant(_, _) | TP::Or(_, _) => unreachable!(),
+                TP::Constant(_, _) => {
+                    eliminated_pattern_ice(context, ploc, "constant");
+                    None
+                }
+                TP::Or(_, _) => {
+                    eliminated_pattern_ice(context, ploc, "or");
+                    None
+                }
             }
         }
 
-        first_lit_recur(self.pats.front().unwrap().clone())
+        first_lit_recur(context, self.pats.front().unwrap().clone())
     }
 
     fn pop_front_or_ice<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
@@ -367,7 +433,14 @@ impl PatternArm {
                     })
             }
             TP::ErrorPat => None,
-            TP::Constant(_, _) | TP::Or(_, _) => unreachable!(),
+            TP::Constant(_, _) => {
+                eliminated_pattern_ice(context, loc, "constant");
+                None
+            }
+            TP::Or(_, _) => {
+                eliminated_pattern_ice(context, loc, "or");
+                None
+            }
         }
     }
 
@@ -433,7 +506,14 @@ impl PatternArm {
                     })
             }
             TP::ErrorPat => None,
-            TP::Constant(_, _) | TP::Or(_, _) => unreachable!(),
+            TP::Constant(_, _) => {
+                eliminated_pattern_ice(context, loc, "constant");
+                None
+            }
+            TP::Or(_, _) => {
+                eliminated_pattern_ice(context, loc, "or");
+                None
+            }
         }
     }
 
@@ -444,6 +524,7 @@ impl PatternArm {
     ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
         let first_pattern = self.pop_front_or_ice(context, &mut output.pats)?;
+        let ploc = first_pattern.pat.loc;
         match first_pattern.pat.value {
             TP::Literal(v) if &v == literal => Some((vec![], output)),
             TP::Literal(_) => None,
@@ -451,7 +532,14 @@ impl PatternArm {
             TP::Struct(_, _, _, _) | TP::BorrowStruct(_, _, _, _, _) => None,
             TP::Binder(mut_, x) => Some((vec![(mut_, x)], output)),
             TP::Wildcard => Some((vec![], output)),
-            TP::Constant(_, _) | TP::Or(_, _) => unreachable!(),
+            TP::Constant(_, _) => {
+                eliminated_pattern_ice(context, ploc, "constant");
+                None
+            }
+            TP::Or(_, _) => {
+                eliminated_pattern_ice(context, ploc, "or");
+                None
+            }
             TP::At(x, inner) => {
                 output.pats.push_front(*inner);
                 output
@@ -471,13 +559,21 @@ impl PatternArm {
     ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
         let first_pattern = self.pop_front_or_ice(context, &mut output.pats)?;
+        let ploc = first_pattern.pat.loc;
         match first_pattern.pat.value {
             TP::Literal(_) => None,
             TP::Variant(_, _, _, _, _) | TP::BorrowVariant(_, _, _, _, _, _) => None,
             TP::Struct(_, _, _, _) | TP::BorrowStruct(_, _, _, _, _) => None,
             TP::Binder(mut_, x) => Some((vec![(mut_, x)], output)),
             TP::Wildcard => Some((vec![], output)),
-            TP::Constant(_, _) | TP::Or(_, _) => unreachable!(),
+            TP::Constant(_, _) => {
+                eliminated_pattern_ice(context, ploc, "constant");
+                None
+            }
+            TP::Or(_, _) => {
+                eliminated_pattern_ice(context, ploc, "or");
+                None
+            }
             TP::At(x, inner) => {
                 output.pats.push_front(*inner);
                 output
@@ -538,7 +634,7 @@ impl PatternMatrix {
                     context.reporter().add_diag(ice!((k.loc, msg)));
                     *x
                 });
-                let pat = apply_pattern_subst(pat, &guard_binders);
+                let pat = apply_pattern_subst(context, pat, &guard_binders);
                 patterns.push(PatternArm {
                     pats: VecDeque::from([pat]),
                     guard,
@@ -563,6 +659,17 @@ impl PatternMatrix {
                 .iter()
                 .all(|pat| matches!(pat.pat.value, TP::ErrorPat))
         })
+    }
+
+    /// Returns true if each row's head pattern is a binder or wildcard
+    /// (e.g., none discriminate the subject)
+    pub fn first_column_all_binders<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+    ) -> bool {
+        self.patterns
+            .iter()
+            .all(|pat| pat.head_is_bindable_only(context))
     }
 
     /// Returns true if there is an arm made up entirely of wildcards / binders with no guard.
@@ -680,21 +787,32 @@ impl PatternMatrix {
         (bindings, matrix)
     }
 
-    pub fn first_variant_ctors(&self) -> BTreeMap<VariantName, (Loc, Fields<Type>)> {
+    pub fn first_variant_ctors<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+    ) -> BTreeMap<VariantName, (Loc, Fields<Type>)> {
         self.patterns
             .iter()
-            .flat_map(|pat| pat.first_variant())
+            .flat_map(|pat| pat.first_variant(context))
             .collect()
     }
 
-    pub fn first_struct_ctors(&self) -> Option<(Loc, Fields<Type>)> {
-        self.patterns.iter().find_map(|pat| pat.first_struct())
-    }
-
-    pub fn first_lits(&self) -> BTreeSet<Value> {
+    pub fn first_struct_ctors<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+    ) -> Option<(Loc, Fields<Type>)> {
         self.patterns
             .iter()
-            .flat_map(|pat| pat.first_lit())
+            .find_map(|pat| pat.first_struct(context))
+    }
+
+    pub fn first_lits<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+        &self,
+        context: &MC,
+    ) -> BTreeSet<Value> {
+        self.patterns
+            .iter()
+            .flat_map(|pat| pat.first_lit(context))
             .collect()
     }
 
@@ -719,9 +837,27 @@ fn ty_to_wildcard_pattern(ty: Type, loc: Loc) -> T::MatchPattern {
     }
 }
 
+/// `TP::Constant` and `TP::Or` are removed by `const_pats_to_guards` and `flatten_or` before a
+/// `PatternMatrix` is built, so one reaching match compilation means the matrix was built from raw
+/// patterns.
+fn eliminated_pattern_ice<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+    context: &MC,
+    loc: Loc,
+    form: &str,
+) {
+    context.reporter().add_diag(ice!((
+        loc,
+        format!("ICE {form} pattern in match compilation")
+    )));
+}
+
 // NB: this converts any binders not in `env` to wildcards, and strips any `at` pattern binders
 // that is not in the `env`
-fn apply_pattern_subst(pat: MatchPattern, env: &UniqueMap<Var, Var>) -> MatchPattern {
+fn apply_pattern_subst<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(
+    context: &MC,
+    pat: MatchPattern,
+    env: &UniqueMap<Var, Var>,
+) -> MatchPattern {
     let MatchPattern {
         ty,
         pat: sp!(ploc, pat),
@@ -729,22 +865,22 @@ fn apply_pattern_subst(pat: MatchPattern, env: &UniqueMap<Var, Var>) -> MatchPat
     let new_pat = match pat {
         TP::Variant(m, e, v, ta, spats) => {
             let out_fields =
-                spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(pat, env))));
+                spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(context, pat, env))));
             TP::Variant(m, e, v, ta, out_fields)
         }
         TP::BorrowVariant(mut_, m, e, v, ta, spats) => {
             let out_fields =
-                spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(pat, env))));
+                spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(context, pat, env))));
             TP::BorrowVariant(mut_, m, e, v, ta, out_fields)
         }
         TP::Struct(m, s, ta, spats) => {
             let out_fields =
-                spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(pat, env))));
+                spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(context, pat, env))));
             TP::Struct(m, s, ta, out_fields)
         }
         TP::BorrowStruct(mut_, m, s, ta, spats) => {
             let out_fields =
-                spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(pat, env))));
+                spats.map(|_, (ndx, (t, pat))| (ndx, (t, apply_pattern_subst(context, pat, env))));
             TP::BorrowStruct(mut_, m, s, ta, out_fields)
         }
         TP::At(x, inner) => {
@@ -754,10 +890,10 @@ fn apply_pattern_subst(pat: MatchPattern, env: &UniqueMap<Var, Var>) -> MatchPat
             if let Some(y) = env.get(&x) {
                 TP::At(
                     sp(xloc, y.value),
-                    Box::new(apply_pattern_subst(*inner, env)),
+                    Box::new(apply_pattern_subst(context, *inner, env)),
                 )
             } else {
-                apply_pattern_subst(*inner, env).pat.value
+                apply_pattern_subst(context, *inner, env).pat.value
             }
         }
         TP::Binder(mut_, x) => {
@@ -769,7 +905,14 @@ fn apply_pattern_subst(pat: MatchPattern, env: &UniqueMap<Var, Var>) -> MatchPat
             }
         }
         pat @ (TP::Literal(_) | TP::ErrorPat | TP::Wildcard) => pat,
-        TP::Constant(_, _) | TP::Or(_, _) => unreachable!(),
+        TP::Constant(_, _) => {
+            eliminated_pattern_ice(context, ploc, "constant");
+            TP::ErrorPat
+        }
+        TP::Or(_, _) => {
+            eliminated_pattern_ice(context, ploc, "or");
+            TP::ErrorPat
+        }
     };
     MatchPattern {
         ty,
@@ -927,7 +1070,7 @@ fn const_pats_to_guards<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>
             }
             TP::At(_, inner) => convert_recur(context, inner, guard_exps, guard_map),
             TP::Literal(_) | TP::Binder(_, _) | TP::Wildcard | TP::ErrorPat => (),
-            TP::Or(_, _) => unreachable!(),
+            TP::Or(_, _) => eliminated_pattern_ice(context, input.pat.loc, "or"),
         }
     }
 

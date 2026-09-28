@@ -1,8 +1,9 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 11 tasks
+
+// Test settled_funds_value from sui::balance
 
 init:
 A: object(0,0), B: object(0,1), C: object(0,2), D: object(0,3)
@@ -34,18 +35,18 @@ mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5, lines 61-67:
+task 5, lines 61-63:
 //# programmable --sender A --inputs immshared(2764) @C 0
 // Check that C has a zero balance
 //> 0: test::balance_read::balance_check(Input(0), Input(1), Input(2));
-// Overflow D's balance (requires two transactions, since an individual transaction
-// will abort on overflow)
-//
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, lines 68-69:
+task 6, lines 65-69:
+// Overflow D's balance (requires two transactions, since an individual transaction
+// will abort on overflow)
+//
 //# programmable --sender A --inputs @A
 //> 0: test::balance_read::create_supply_holder();
 created: object(6,0)

@@ -1373,9 +1373,7 @@ impl CheckpointStateHasher {
                 info!("Object state hasher was dropped, stopping checkpoint accumulation");
                 break;
             };
-            hasher
-                .accumulate_checkpoint(&effects, seq, &epoch_store)
-                .expect("epoch ended while accumulating checkpoint");
+            hasher.accumulate_checkpoint(&effects, seq, &epoch_store);
         }
     }
 }
@@ -1512,11 +1510,7 @@ impl CheckpointBuilder {
             .expect("epoch should not have ended")
             .and_then(|s| s.checkpoint_height);
 
-        for (height, pending) in self
-            .epoch_store
-            .get_pending_checkpoints(last_height)
-            .expect("unexpected epoch store error")
-        {
+        for (height, pending) in self.epoch_store.get_pending_checkpoints(last_height) {
             debug!(checkpoint_commit_height = height, "Making checkpoint");
 
             let seq = self.make_checkpoint(pending).await?;
@@ -1641,7 +1635,11 @@ impl CheckpointBuilder {
 
             let _scope = monitored_scope("CheckpointBuilder::causal_sort");
             let ccp_digest = consensus_commit_prologue.map(|(d, _)| d);
-            let mut sorted = CausalOrder::causal_sort_with_ccp(root_effects, ccp_digest);
+            let mut sorted = CausalOrder::order_for_checkpoint(
+                root_effects,
+                ccp_digest,
+                self.epoch_store.protocol_config(),
+            );
 
             if let Some(settlement_key) = &checkpoint_roots.settlement_root {
                 let checkpoint_seq = pending.details.checkpoint_seq;
@@ -1986,7 +1984,7 @@ impl CheckpointBuilder {
 
             self.epoch_store
                 .consensus_messages_processed_notify(transaction_keys)
-                .await?;
+                .await;
         }
 
         let signatures = self
@@ -2077,11 +2075,8 @@ impl CheckpointBuilder {
                     .global_state_hasher
                     .upgrade()
                     .expect("No checkpoints should be getting built after local configuration");
-                let acc = state_acc.accumulate_checkpoint(
-                    &effects,
-                    sequence_number,
-                    &self.epoch_store,
-                )?;
+                let acc =
+                    state_acc.accumulate_checkpoint(&effects, sequence_number, &self.epoch_store);
 
                 state_acc
                     .wait_for_previous_running_root(&self.epoch_store, sequence_number)
@@ -2319,8 +2314,9 @@ async fn wait_for_effects_with_retry(
     tx_key: TransactionKey,
 ) -> Vec<TransactionEffects> {
     let delay = if in_antithesis() {
-        // antithesis has aggressive thread pausing, 5 seconds causes false positives
-        15
+        // antithesis pauses containers and threads for tens of seconds, so shorter
+        // timeouts produce false positives
+        60
     } else {
         5
     };
@@ -3119,7 +3115,7 @@ impl CheckpointService {
         use crate::authority::authority_per_epoch_store::consensus_quarantine::ConsensusCommitOutput;
 
         let mut output = ConsensusCommitOutput::new(0);
-        epoch_store.write_pending_checkpoint(&mut output, &checkpoint)?;
+        epoch_store.write_pending_checkpoint(&mut output, &checkpoint);
         output.set_default_commit_stats_for_testing();
         epoch_store.push_consensus_output_for_tests(output);
         self.notify_checkpoint()?;
@@ -3375,6 +3371,8 @@ mod tests {
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
         protocol_config.disable_accumulators_for_testing();
+        // This fixture supplies historical effects dependencies rather than consensus input order.
+        protocol_config.set_disable_effects_tx_dependencies_for_testing(false);
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(protocol_config)
             .build()

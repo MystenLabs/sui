@@ -4,13 +4,13 @@
 use crate::{
     gas_charger::GasPayment,
     static_programmable_transactions::{
-        linkage::resolved_linkage::ResolvedLinkage,
+        linkage::resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
         loading::ast::{self as L, PackagePayload},
         spanned::Spanned,
     },
 };
 use indexmap::{IndexMap, IndexSet};
-use move_core_types::{account_address::AccountAddress, u256::U256};
+use move_core_types::u256::U256;
 use move_vm_runtime::execution::values::VectorSpecialization;
 use std::cell::OnceCell;
 use sui_types::base_types::{ObjectID, ObjectRef};
@@ -37,6 +37,7 @@ pub struct Transaction {
     /// < `original_command_len`
     pub original_command_len: usize,
     pub commands: Commands,
+    pub unified_linkage: Option<ExecutableLinkage>,
 }
 
 /// The original index into the `input` vector of the transaction, before the inputs were split
@@ -76,9 +77,11 @@ pub struct ReceivingInput {
 #[derive(Debug)]
 pub struct WithdrawalInput {
     pub original_input_index: InputIndex,
-    /// The full type `sui::funds_accumulator::Withdrawal<T>`
+    /// The full type.
+    /// Either `sui::funds_accumulator::Withdrawal<T>` for a direct source, or
+    /// `sui::allowance::AllowanceWithdrawal<T>` for an allowance source
     pub ty: Type,
-    pub owner: AccountAddress,
+    pub source: WithdrawalSource,
     /// This amount is verified to be <= the max for the type described by the `T` in `ty`
     pub amount: U256,
 }
@@ -96,6 +99,8 @@ pub type Commands = Vec<Command>;
 pub type ObjectArg = L::ObjectArg;
 
 pub type Type = L::Type;
+
+pub type WithdrawalSource = L::WithdrawalSource;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Information for a given constraint for input bytes
