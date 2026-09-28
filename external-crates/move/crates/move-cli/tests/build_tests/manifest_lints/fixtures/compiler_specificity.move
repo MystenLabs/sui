@@ -1,6 +1,5 @@
 module test::m {
-    #[allow(all)]
-    public fun warning() {
+    fun unused_function() {
         let unused = 0u64;
     }
 }

@@ -5,5 +5,6 @@ edition = "2024"
 [addresses]
 test = "0x0"
 
-[lints]
-unused_variable = "allow"
+[lints.lint]
+all = "allow"
+abort_without_constant = "warn"
