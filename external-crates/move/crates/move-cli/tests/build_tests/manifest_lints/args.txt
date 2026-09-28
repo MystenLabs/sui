@@ -1,3 +1,4 @@
+> echo "Successful cases"
 > cp Move.compiler_allow.ok.toml Move.toml
 build
 > cp Move.compiler_warn.ok.toml Move.toml
@@ -31,6 +32,7 @@ build
 > cp Move.no_lint.ok.toml Move.toml
 build --no-lint
 
+> echo "Failing cases"
 > cp fixtures/compiler.move sources/m.move
 > cp Move.compiler_deny.error.toml Move.toml
 build
