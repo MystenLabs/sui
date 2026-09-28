@@ -4,8 +4,8 @@
 use std::fs;
 
 use move_compiler::editions::Flavor;
-use move_package_alt::{SourcePackageLayout, Vanilla};
-use move_package_alt_compilation::{build_config::BuildConfig, build_plan::BuildPlan};
+use move_package::{SourcePackageLayout, Vanilla};
+use move_package_compilation::{build_config::BuildConfig, build_plan::BuildPlan};
 use tempfile::tempdir;
 
 #[tokio::test]
