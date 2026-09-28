@@ -4,7 +4,7 @@ use anyhow::ensure;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_spanned::Spanned;
 
-use move_compiler::editions::Edition;
+use move_compiler::{diagnostics::filter::WarningFilterConfig, editions::Edition};
 
 use crate::compatibility::legacy::LegacyData;
 
@@ -30,6 +30,9 @@ pub type SystemDepName = String;
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ParsedManifest {
     pub package: PackageMetadata,
+
+    #[serde(default)]
+    pub lints: WarningFilterConfig,
 
     #[serde(default)]
     pub environments: BTreeMap<Spanned<EnvironmentName>, Spanned<EnvironmentID>>,
@@ -267,8 +270,11 @@ mod tests {
         DefaultDependency, ExternalDependency, ManifestDependencyInfo, ManifestGitDependency,
         ParsedManifest, ReplacementDependency,
     };
-    use move_compiler::editions::Edition;
-    use std::str::FromStr;
+    use move_compiler::{
+        diagnostics::filter::{WarningFilterValue, WarningLevel},
+        editions::Edition,
+    };
+    use std::{collections::BTreeMap, str::FromStr};
 
     impl ParsedManifest {
         /// (unsafe) convenience method for pulling out a dependency having given `name`
@@ -322,6 +328,35 @@ mod tests {
     }
 
     // Smoke tests ///////////////////////////////////////////////////////////////////////
+
+    #[test]
+    fn lint_levels() {
+        let manifest: ParsedManifest = toml_edit::de::from_str(
+            r#"
+            [package]
+            name = "example"
+
+            [lints]
+            unused = "deny"
+
+            [lints.lint]
+            abort_without_constant = "allow"
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            manifest.lints.0.get("unused"),
+            Some(&WarningFilterValue::Level(WarningLevel::Deny))
+        );
+        assert_eq!(
+            manifest.lints.0.get("lint"),
+            Some(&WarningFilterValue::Group(BTreeMap::from([(
+                "abort_without_constant".to_owned(),
+                WarningLevel::Allow,
+            )])))
+        );
+    }
 
     /// Parsing a basic file using a number of features succeeds
     #[test]

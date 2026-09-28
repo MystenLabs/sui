@@ -5,6 +5,7 @@
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use derive_where::derive_where;
+use move_compiler::diagnostics::filter::WarningFilterConfig;
 use sha2::{Digest as _, Sha256};
 use tempfile::tempdir;
 use tracing::debug;
@@ -44,6 +45,8 @@ pub struct Package<F: MoveFlavor> {
 
     /// The metadata of the package.
     metadata: PackageMetadata,
+
+    lints: WarningFilterConfig,
 
     /// A [`PackagePath`] representing the canonical path to the package directory.
     path: PackagePath,
@@ -137,6 +140,7 @@ impl<F: MoveFlavor> Package<F> {
             env: env.name().clone(),
             digest,
             metadata: manifest.package,
+            lints: manifest.lints,
             path,
             publication,
             dep_for_self: dep,
@@ -223,6 +227,10 @@ impl<F: MoveFlavor> Package<F> {
 
     pub fn metadata(&self) -> &PackageMetadata {
         &self.metadata
+    }
+
+    pub fn lints(&self) -> &WarningFilterConfig {
+        &self.lints
     }
 
     /// Read the manifest for the (already-fetched) package at `path` and the publication recorded

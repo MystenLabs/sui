@@ -362,6 +362,7 @@ fn move_stdlib_installs_and_user_calls_become_direct() {
         warning_filter: empty_filter_scope(),
         flavor: Flavor::Core,
         edition: Edition::E2024_ALPHA,
+        ..Default::default()
     })
     .build_and_report()
     .expect("stdlib compilation");
@@ -399,6 +400,7 @@ fn move_stdlib_installs_and_user_calls_become_direct() {
         warning_filter: empty_filter_scope(),
         flavor: Flavor::Core,
         edition: Edition::E2024_ALPHA,
+        ..Default::default()
     })
     .build_and_report()
     .expect("user compilation");

@@ -67,6 +67,12 @@ authors* = [<string>,+]  # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow
 # Additional fields may be added to this section by external tools. E.g., on Sui the following sections are added:
 published-at* = "<hex-address>" # The address that the package is published at. Should be set after the first publication.
 
+[lints] # (Optional section) Package-wide diagnostic levels
+<warning_name> = "allow" | "warn" | "deny"
+
+[lints.<prefix>] # (Optional section) Package-wide levels for prefixed lints
+<lint_name> = "allow" | "warn" | "deny"
+
 [dependencies] # (Optional section) Paths to dependencies 
 # One or more lines declaring dependencies in the following format
 
@@ -126,6 +132,19 @@ published-at* = "<hex-address>" # The address that the package is published at. 
 # The dev-addresses section allows overwriting named addresses for the `--test`
 # and `--dev` modes.
 <addr_name> = "<hex_address>" # e.g., alice = "0xB0B"
+```
+
+Lint levels use the same names accepted by diagnostic attributes. Unprefixed compiler warnings
+are configured directly under `[lints]`. Lints are grouped by their attribute prefix, such as
+`[lints.lint]`. Item-level attributes are more specific than package settings.
+For example:
+
+```toml
+[lints]
+warnings = "deny"
+
+[lints.lint]
+abort_without_constant = "deny"
 ```
 
 An example of a minimal package manifest:

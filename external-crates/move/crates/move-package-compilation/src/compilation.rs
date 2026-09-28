@@ -232,7 +232,12 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
         root_pkg.display_name()
     )?;
 
-    let lint_level = build_config.lint_flag.get();
+    let lint_level = match build_config.lint_flag.get() {
+        linters::LintLevel::Default if root_pkg.package_info().lints().0.contains_key("lint") => {
+            linters::LintLevel::All
+        }
+        level => level,
+    };
     let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
     let flags = compiler_flags(build_config);
     let mut compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
@@ -392,6 +397,7 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
                 .unwrap_or(Edition::LEGACY), // TODO require edition
             flavor: Flavor::from_str(pkg.flavor().unwrap_or("sui"))?,
             warning_filter: empty_filter_scope(),
+            warning_filter_config: pkg.lints().clone(),
         };
 
         // Assign a unique name for the compiler for each package.
