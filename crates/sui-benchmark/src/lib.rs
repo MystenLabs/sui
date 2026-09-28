@@ -43,7 +43,7 @@ use sui_types::{
     base_types::TransactionDigest,
     messages_grpc::{
         RawSubmitTxRequest, SubmitTxRequest, SubmitTxResult, SubmitTxType, WaitForEffectsRequest,
-        WaitForEffectsResponse,
+        WaitForEffectsResponse, WaitForEffectsStatus,
     },
     programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
@@ -810,10 +810,12 @@ async fn execute_soft_bundle_with_retries(
                 } => {
                     // Transaction was already executed - return the effects directly
                     outcomes.push(SubmissionOutcome::ImmediateResponse(
-                        WaitForEffectsResponse::Executed {
-                            effects_digest,
-                            details,
-                            staggering_active: None,
+                        WaitForEffectsResponse {
+                            staggering: None,
+                            status: WaitForEffectsStatus::Executed {
+                                effects_digest,
+                                details,
+                            },
                         },
                     ));
                 }
@@ -829,7 +831,10 @@ async fn execute_soft_bundle_with_retries(
                     }
                     // Non-retriable rejection - record as rejected response
                     outcomes.push(SubmissionOutcome::ImmediateResponse(
-                        WaitForEffectsResponse::Rejected { error: Some(error) },
+                        WaitForEffectsResponse {
+                            staggering: None,
+                            status: WaitForEffectsStatus::Rejected { error: Some(error) },
+                        },
                     ));
                 }
             }
@@ -880,12 +885,14 @@ async fn execute_soft_bundle_with_retries(
         // before giving up — our chosen validator didn't vote reject so won't
         // have one cached, but a different validator may.
         let retriable_wait_failure = wait_responses.iter().find_map(|r| match r {
-            Ok(WaitForEffectsResponse::Rejected { error: Some(e) }) if e.is_retryable().0 => {
-                Some(format!("rejected: {e:?}"))
-            }
-            Ok(WaitForEffectsResponse::Expired { epoch, round }) => {
-                Some(format!("expired (epoch {epoch}, round {round:?})"))
-            }
+            Ok(WaitForEffectsResponse {
+                status: WaitForEffectsStatus::Rejected { error: Some(e) },
+                ..
+            }) if e.is_retryable().0 => Some(format!("rejected: {e:?}")),
+            Ok(WaitForEffectsResponse {
+                status: WaitForEffectsStatus::Expired { epoch, round },
+                ..
+            }) => Some(format!("expired (epoch {epoch}, round {round:?})")),
             _ => None,
         });
         if let Some(reason) = retriable_wait_failure
