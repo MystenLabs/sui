@@ -56,6 +56,49 @@ warning[WC09002]: unused variable
 4 │         let unused = 0u64;
   │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
 
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Lint all warns only for lints\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Lint all warns only for lints
+External Command `cp fixtures/namespace_all.move sources/m.move`:
+External Command `cp Move.lints_all_warn.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+warning[WL04005]: 'abort' or 'assert' without named constant
+  ┌─ ./sources/m.move:7:15
+  │
+7 │         abort 1
+  │               ^ Prefer using a named constant.
+  │
+  = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+
+warning[WL04004]: unneeded return
+   ┌─ ./sources/m.move:11:9
+   │
+11 │         return 0
+   │         ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Warning all warns only for compiler warnings\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Warning all warns only for compiler warnings
+External Command `cp Move.warnings_all_warn.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+warning[WC09002]: unused variable
+  ┌─ ./sources/m.move:3:13
+  │
+3 │         let unused = 0u64;
+  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Configuring a lint enables only its visitor\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Configuring a lint enables only its visitor
+External Command `cp fixtures/lint_selective.move sources/m.move`:
+External Command `cp Move.lint_selective.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
 External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Lint allow suppresses a lint\n'`:
 
 # ===== [SUCCESS] ======================================
@@ -147,19 +190,6 @@ error[EC09002]: unused variable
 3 │         let unused = 0u64;
   │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
 
-External Command `printf '\n# ===== [FAILURE] ======================================\n# == The stricter level wins for equivalent filters\n'`:
-
-# ===== [FAILURE] ======================================
-# == The stricter level wins for equivalent filters
-External Command `cp Move.compiler_conflict.error.toml Move.toml`:
-Command `build`:
-BUILDING manifest_lints
-error[EC09002]: unused variable
-  ┌─ ./sources/m.move:3:13
-  │
-3 │         let unused = 0u64;
-  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
-
 External Command `printf '\n# ===== [FAILURE] ======================================\n# == Source deny overrides manifest allow\n'`:
 
 # ===== [FAILURE] ======================================
@@ -217,6 +247,20 @@ External Command `cp fixtures/clean.move sources/m.move`:
 External Command `cp Move.sui_lint_core.error.toml Move.toml`:
 Command `build --default-move-flavor core`:
 Error: unknown warning filter 'lint(public_entry)' in Move.toml
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Warnings under lints are redirected\n'`:
+
+# ===== [FAILURE] ======================================
+# == Warnings under lints are redirected
+External Command `cp Move.warning_under_lints.error.toml Move.toml`:
+Command `build`:
+Error: compiler warning 'unused_variable' must be configured under [warnings], not [lints]
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Lints under warnings are redirected\n'`:
+
+# ===== [FAILURE] ======================================
+# == Lints under warnings are redirected
+External Command `cp Move.lint_under_warnings.error.toml Move.toml`:
+Command `build`:
+Error: lint 'abort_without_constant' must be configured under [lints], not [warnings]
 External Command `printf '\n# ===== [FAILURE] ======================================\n# == Unknown compiler filters are rejected\n'`:
 
 # ===== [FAILURE] ======================================
@@ -249,4 +293,4 @@ External Command `printf '\n# ===== [FAILURE] ==================================
 # == Invalid lint levels are rejected
 External Command `cp Move.invalid_level.error.toml Move.toml`:
 Command `build`:
-Error: Error while loading dependency .: error while loading legacy manifest "./Move.toml": Error parsing '[lints]' section of manifest
+Error: Error while loading dependency .: error while loading legacy manifest "./Move.toml": Error parsing '[warnings]' section of manifest
