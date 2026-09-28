@@ -5,5 +5,5 @@ edition = "2024"
 [addresses]
 test = "0x0"
 
-[lints]
+[warnings]
 not_a_warning = "deny"

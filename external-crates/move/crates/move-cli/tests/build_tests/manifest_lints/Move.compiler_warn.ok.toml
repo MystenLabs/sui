@@ -5,6 +5,6 @@ edition = "2024"
 [addresses]
 test = "0x0"
 
-[lints]
-warnings = "allow"
+[warnings]
+all = "allow"
 unused_variable = "warn"

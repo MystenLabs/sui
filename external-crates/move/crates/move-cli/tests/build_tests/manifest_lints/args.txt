@@ -20,6 +20,20 @@ build
 > cp fixtures/source_warn.move sources/m.move
 build
 
+> printf '\n# ===== [SUCCESS] ======================================\n# == Lint all warns only for lints\n'
+> cp fixtures/namespace_all.move sources/m.move
+> cp Move.lints_all_warn.ok.toml Move.toml
+build
+
+> printf '\n# ===== [SUCCESS] ======================================\n# == Warning all warns only for compiler warnings\n'
+> cp Move.warnings_all_warn.ok.toml Move.toml
+build
+
+> printf '\n# ===== [SUCCESS] ======================================\n# == Configuring a lint enables only its visitor\n'
+> cp fixtures/lint_selective.move sources/m.move
+> cp Move.lint_selective.ok.toml Move.toml
+build
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == Lint allow suppresses a lint\n'
 > cp fixtures/lint.move sources/m.move
 > cp Move.lint_allow.ok.toml Move.toml
@@ -62,10 +76,6 @@ build --no-lint
 > cp Move.compiler_deny.error.toml Move.toml
 build
 
-> printf '\n# ===== [FAILURE] ======================================\n# == The stricter level wins for equivalent filters\n'
-> cp Move.compiler_conflict.error.toml Move.toml
-build
-
 > printf '\n# ===== [FAILURE] ======================================\n# == Source deny overrides manifest allow\n'
 > cp fixtures/source_deny.move sources/m.move
 > cp Move.source_deny.error.toml Move.toml
@@ -85,6 +95,14 @@ build --default-move-flavor sui
 > cp fixtures/clean.move sources/m.move
 > cp Move.sui_lint_core.error.toml Move.toml
 build --default-move-flavor core
+
+> printf '\n# ===== [FAILURE] ======================================\n# == Warnings under lints are redirected\n'
+> cp Move.warning_under_lints.error.toml Move.toml
+build
+
+> printf '\n# ===== [FAILURE] ======================================\n# == Lints under warnings are redirected\n'
+> cp Move.lint_under_warnings.error.toml Move.toml
+build
 
 > printf '\n# ===== [FAILURE] ======================================\n# == Unknown compiler filters are rejected\n'
 > cp Move.unknown.error.toml Move.toml

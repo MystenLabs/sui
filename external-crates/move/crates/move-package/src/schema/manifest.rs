@@ -1,11 +1,15 @@
-use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+    str::FromStr,
+};
 
 use anyhow::ensure;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_spanned::Spanned;
 
 use move_compiler::{
-    diagnostics::filter::{FILTER_ALL, FilterKind, FilterName, FilterPrefix},
+    diagnostics::filter::{FilterKind, FilterName, FilterPrefix},
     editions::Edition,
 };
 
@@ -27,14 +31,7 @@ pub type ModeName = String;
 pub type SystemDepName = String;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
-pub struct LintConfig(pub BTreeMap<String, LintValue>);
-
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum LintValue {
-    Level(LintLevel),
-    Group(BTreeMap<String, LintLevel>),
-}
+pub struct DiagnosticFilterConfig(pub BTreeMap<String, LintLevel>);
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -44,36 +41,18 @@ pub enum LintLevel {
     Deny,
 }
 
-impl LintConfig {
-    pub fn configured_filters(&self) -> Vec<(FilterPrefix, FilterName, FilterKind)> {
+impl DiagnosticFilterConfig {
+    pub fn configured_filters(
+        &self,
+        prefix: FilterPrefix,
+    ) -> impl Iterator<Item = (FilterPrefix, FilterName, FilterKind)> + '_ {
         self.0
             .iter()
-            .flat_map(|(config_name, value)| match value {
-                LintValue::Level(level) => vec![(
-                    None,
-                    if config_name == "warnings" {
-                        FILTER_ALL.into()
-                    } else {
-                        config_name.as_str().into()
-                    },
-                    level.filter_kind(),
-                )],
-                LintValue::Group(group) => group
-                    .iter()
-                    .map(|(name, level)| {
-                        (
-                            Some(config_name.as_str().into()),
-                            name.as_str().into(),
-                            level.filter_kind(),
-                        )
-                    })
-                    .collect(),
-            })
-            .collect()
+            .map(move |(name, level)| (prefix, name.as_str().into(), level.filter_kind()))
     }
 
-    pub fn enables_linters(&self) -> bool {
-        self.0.contains_key("lint")
+    pub fn filter_names(&self) -> BTreeSet<FilterName> {
+        self.0.keys().map(|name| name.as_str().into()).collect()
     }
 }
 
@@ -96,7 +75,10 @@ pub struct ParsedManifest {
     pub package: PackageMetadata,
 
     #[serde(default)]
-    pub lints: LintConfig,
+    pub warnings: DiagnosticFilterConfig,
+
+    #[serde(default)]
+    pub lints: DiagnosticFilterConfig,
 
     #[serde(default)]
     pub environments: BTreeMap<Spanned<EnvironmentName>, Spanned<EnvironmentID>>,
@@ -331,11 +313,11 @@ mod tests {
     use insta::assert_snapshot;
 
     use super::{
-        DefaultDependency, ExternalDependency, LintLevel, LintValue, ManifestDependencyInfo,
+        DefaultDependency, ExternalDependency, LintLevel, ManifestDependencyInfo,
         ManifestGitDependency, ParsedManifest, ReplacementDependency,
     };
     use move_compiler::editions::Edition;
-    use std::{collections::BTreeMap, str::FromStr};
+    use std::str::FromStr;
 
     impl ParsedManifest {
         /// (unsafe) convenience method for pulling out a dependency having given `name`
@@ -397,25 +379,19 @@ mod tests {
             [package]
             name = "example"
 
-            [lints]
+            [warnings]
             unused = "deny"
 
-            [lints.lint]
+            [lints]
             abort_without_constant = "allow"
             "#,
         )
         .unwrap();
 
+        assert_eq!(manifest.warnings.0.get("unused"), Some(&LintLevel::Deny));
         assert_eq!(
-            manifest.lints.0.get("unused"),
-            Some(&LintValue::Level(LintLevel::Deny))
-        );
-        assert_eq!(
-            manifest.lints.0.get("lint"),
-            Some(&LintValue::Group(BTreeMap::from([(
-                "abort_without_constant".to_owned(),
-                LintLevel::Allow,
-            )])))
+            manifest.lints.0.get("abort_without_constant"),
+            Some(&LintLevel::Allow)
         );
     }
 
@@ -751,7 +727,7 @@ mod tests {
           |
         6 |             [unknown]
           |              ^^^^^^^
-        unknown field `unknown`, expected one of `package`, `lints`, `environments`, `dependencies`, `dep-replacements`
+        unknown field `unknown`, expected one of `package`, `warnings`, `lints`, `environments`, `dependencies`, `dep-replacements`
         ");
     }
 
@@ -1267,7 +1243,7 @@ mod tests {
           |
         6 |             [addresses]
           |              ^^^^^^^^^
-        unknown field `addresses`, expected one of `package`, `lints`, `environments`, `dependencies`, `dep-replacements`
+        unknown field `addresses`, expected one of `package`, `warnings`, `lints`, `environments`, `dependencies`, `dep-replacements`
         ");
     }
 }

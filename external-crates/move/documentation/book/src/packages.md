@@ -67,10 +67,10 @@ authors* = [<string>,+]  # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow
 # Additional fields may be added to this section by external tools. E.g., on Sui the following sections are added:
 published-at* = "<hex-address>" # The address that the package is published at. Should be set after the first publication.
 
-[lints] # (Optional section) Package-wide diagnostic levels
+[warnings] # (Optional section) Package-wide compiler warning levels
 <warning_name> = "allow" | "warn" | "deny"
 
-[lints.<prefix>] # (Optional section) Package-wide levels for prefixed lints
+[lints] # (Optional section) Package-wide lint levels
 <lint_name> = "allow" | "warn" | "deny"
 
 [dependencies] # (Optional section) Paths to dependencies 
@@ -134,16 +134,27 @@ published-at* = "<hex-address>" # The address that the package is published at. 
 <addr_name> = "<hex_address>" # e.g., alice = "0xB0B"
 ```
 
-Lint levels use the same names accepted by diagnostic attributes. Unprefixed compiler warnings
-are configured directly under `[lints]`. Lints are grouped by their attribute prefix, such as
-`[lints.lint]`. Item-level attributes are more specific than package settings.
-For example:
+Warning and lint names match their source attributes. Item-level attributes are more specific
+than package settings. Configuring a lint enables its analysis; `all` enables every lint unless
+`--no-lint` is passed.
+
+```move
+module 0x0::example {
+    #[deny(unused_variable)]
+    fun compiler_warning() { let unused = 0; }
+
+    #[deny(lint(abort_without_constant))]
+    fun lint_warning() { abort 0 }
+}
+```
+
+The equivalent package configuration is:
 
 ```toml
-[lints]
-warnings = "deny"
+[warnings]
+unused_variable = "deny"
 
-[lints.lint]
+[lints]
 abort_without_constant = "deny"
 ```
 

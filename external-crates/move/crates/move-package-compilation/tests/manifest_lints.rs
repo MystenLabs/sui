@@ -18,8 +18,8 @@ async fn deny_warning_from_manifest() {
 name = "test"
 edition = "2024"
 
-[lints]
-warnings = "deny"
+[warnings]
+all = "deny"
 "#,
     )
     .unwrap();
