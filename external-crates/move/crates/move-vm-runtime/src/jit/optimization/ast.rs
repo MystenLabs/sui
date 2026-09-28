@@ -128,19 +128,6 @@ pub enum Bytecode {
     CastU16,
     CastU32,
     CastU256,
-    LdI8(i8),
-    LdI16(i16),
-    LdI32(i32),
-    LdI64(i64),
-    LdI128(Box<i128>),
-    LdI256(Box<move_core_types::i256::I256>),
-    CastI8,
-    CastI16,
-    CastI32,
-    CastI64,
-    CastI128,
-    CastI256,
-    Neg,
     PackVariant(VariantHandleIndex),
     PackVariantGeneric(VariantInstantiationHandleIndex),
     UnpackVariant(VariantHandleIndex),
@@ -172,19 +159,6 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::CastU64 => write!(f, "CastU64"),
             Bytecode::CastU128 => write!(f, "CastU128"),
             Bytecode::CastU256 => write!(f, "CastU256"),
-            Bytecode::LdI8(a) => write!(f, "LdI8({})", a),
-            Bytecode::LdI16(a) => write!(f, "LdI16({})", a),
-            Bytecode::LdI32(a) => write!(f, "LdI32({})", a),
-            Bytecode::LdI64(a) => write!(f, "LdI64({})", a),
-            Bytecode::LdI128(a) => write!(f, "LdI128({})", a),
-            Bytecode::LdI256(a) => write!(f, "LdI256({})", a),
-            Bytecode::CastI8 => write!(f, "CastI8"),
-            Bytecode::CastI16 => write!(f, "CastI16"),
-            Bytecode::CastI32 => write!(f, "CastI32"),
-            Bytecode::CastI64 => write!(f, "CastI64"),
-            Bytecode::CastI128 => write!(f, "CastI128"),
-            Bytecode::CastI256 => write!(f, "CastI256"),
-            Bytecode::Neg => write!(f, "Neg"),
             Bytecode::LdConst(a) => write!(f, "LdConst({})", a),
             Bytecode::LdTrue => write!(f, "LdTrue"),
             Bytecode::LdFalse => write!(f, "LdFalse"),
@@ -350,20 +324,7 @@ impl Bytecode {
             | Bytecode::UnpackVariantMutRef(_)
             | Bytecode::UnpackVariantGeneric(_)
             | Bytecode::UnpackVariantGenericImmRef(_)
-            | Bytecode::UnpackVariantGenericMutRef(_)
-            | Bytecode::LdI8(_)
-            | Bytecode::LdI16(_)
-            | Bytecode::LdI32(_)
-            | Bytecode::LdI64(_)
-            | Bytecode::LdI128(_)
-            | Bytecode::LdI256(_)
-            | Bytecode::CastI8
-            | Bytecode::CastI16
-            | Bytecode::CastI32
-            | Bytecode::CastI64
-            | Bytecode::CastI128
-            | Bytecode::CastI256
-            | Bytecode::Neg => None,
+            | Bytecode::UnpackVariantGenericMutRef(_) => None,
         }
     }
 
@@ -444,20 +405,7 @@ impl Bytecode {
             | Bytecode::UnpackVariantMutRef(_)
             | Bytecode::UnpackVariantGeneric(_)
             | Bytecode::UnpackVariantGenericImmRef(_)
-            | Bytecode::UnpackVariantGenericMutRef(_)
-            | Bytecode::LdI8(_)
-            | Bytecode::LdI16(_)
-            | Bytecode::LdI32(_)
-            | Bytecode::LdI64(_)
-            | Bytecode::LdI128(_)
-            | Bytecode::LdI256(_)
-            | Bytecode::CastI8
-            | Bytecode::CastI16
-            | Bytecode::CastI32
-            | Bytecode::CastI64
-            | Bytecode::CastI128
-            | Bytecode::CastI256
-            | Bytecode::Neg => false,
+            | Bytecode::UnpackVariantGenericMutRef(_) => false,
         }
     }
 }

@@ -947,7 +947,7 @@ impl VMDispatchTables {
         &self,
         ty: &ArenaType,
     ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
-        self.type_to_fully_annotated_layout(&ty.to_type())
+        self.type_to_fully_annotated_layout(&ty.to_type()?)
     }
 
     pub(crate) fn type_to_fully_annotated_layout(

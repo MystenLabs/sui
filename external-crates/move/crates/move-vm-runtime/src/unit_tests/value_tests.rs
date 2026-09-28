@@ -13,7 +13,7 @@ use crate::{
     shared::views::*,
 };
 use move_binary_format::{errors::*, file_format::VariantTag};
-use move_core_types::{account_address::AccountAddress, runtime_value, u256::U256};
+use move_core_types::{account_address::AccountAddress, i256::I256, runtime_value, u256::U256};
 
 #[cfg(test)]
 const SIZE_CONFIG: SizeConfig = SizeConfig {
@@ -1437,9 +1437,22 @@ fn signed_integer_bitwise_and_shift() -> PartialVMResult<()> {
             .cast_i32()?,
         0
     );
-    // shift left
     assert_eq!(iv(Value::i8(1))?.shl_checked(6)?.cast_i8()?, 64);
-    // shift right (arithmetic: preserves sign)
+    assert!(iv(Value::i8(i8::MAX))?.shl_checked(1).is_err());
+    assert!(iv(Value::i8(64))?.shl_checked(1).is_err());
+    assert_eq!(iv(Value::i8(-64))?.shl_checked(1)?.cast_i8()?, -128);
+    assert!(iv(Value::i8(-65))?.shl_checked(1).is_err());
+    assert!(
+        IntegerValue::I256(I256::max_value())
+            .shl_checked(1)
+            .is_err()
+    );
+    assert_eq!(
+        IntegerValue::I256(I256::min_value())
+            .shr_checked(1)?
+            .cast_i256()?,
+        I256::min_value().checked_shr(1).unwrap()
+    );
     assert_eq!(iv(Value::i8(-4))?.shr_checked(1)?.cast_i8()?, -2);
 
     Ok(())

@@ -11,12 +11,9 @@ use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     partial_vm_error,
 };
-use move_core_types::{
-    gas_algebra::{
-        AbstractMemorySize, GasQuantity, InternalGas, InternalGasUnit, NumArgs, NumBytes, ToUnit,
-        ToUnitFractional,
-    },
-    language_storage::ModuleId,
+use move_core_types::gas_algebra::{
+    AbstractMemorySize, GasQuantity, InternalGas, InternalGasUnit, NumArgs, NumBytes, ToUnit,
+    ToUnitFractional,
 };
 
 use crate::{
@@ -393,21 +390,21 @@ impl<'a> GasStatus<'a> {
 /// Returns a tuple of (<pops>, <pushes>, <stack_size_decrease>, <stack_size_increase>)
 fn get_simple_instruction_stack_change(
     instr: SimpleInstruction,
-) -> (u64, u64, AbstractMemorySize, AbstractMemorySize) {
+) -> PartialVMResult<(u64, u64, AbstractMemorySize, AbstractMemorySize)> {
     use SimpleInstruction::*;
 
-    match instr {
+    Ok(match instr {
         // NB: The `Ret` pops are accounted for in `Call` instructions, so we say `Ret` has no pops.
         Nop | Ret => (0, 0, 0.into(), 0.into()),
-        BrTrue | BrFalse => (1, 0, Type::Bool.size(), 0.into()),
+        BrTrue | BrFalse => (1, 0, Type::Bool.size()?, 0.into()),
         Branch => (0, 0, 0.into(), 0.into()),
-        LdU8 => (0, 1, 0.into(), Type::U8.size()),
-        LdU16 => (0, 1, 0.into(), Type::U16.size()),
-        LdU32 => (0, 1, 0.into(), Type::U32.size()),
-        LdU64 => (0, 1, 0.into(), Type::U64.size()),
-        LdU128 => (0, 1, 0.into(), Type::U128.size()),
-        LdU256 => (0, 1, 0.into(), Type::U256.size()),
-        LdTrue | LdFalse => (0, 1, 0.into(), Type::Bool.size()),
+        LdU8 => (0, 1, 0.into(), Type::U8.size()?),
+        LdU16 => (0, 1, 0.into(), Type::U16.size()?),
+        LdU32 => (0, 1, 0.into(), Type::U32.size()?),
+        LdU64 => (0, 1, 0.into(), Type::U64.size()?),
+        LdU128 => (0, 1, 0.into(), Type::U128.size()?),
+        LdU256 => (0, 1, 0.into(), Type::U256.size()?),
+        LdTrue | LdFalse => (0, 1, 0.into(), Type::Bool.size()?),
         FreezeRef => (1, 1, REFERENCE_SIZE, REFERENCE_SIZE),
         ImmBorrowLoc | MutBorrowLoc => (0, 1, 0.into(), REFERENCE_SIZE),
         ImmBorrowField | MutBorrowField | ImmBorrowFieldGeneric | MutBorrowFieldGeneric => {
@@ -415,46 +412,66 @@ fn get_simple_instruction_stack_change(
         }
         // Since we don't have the size of the value being cast here we take a conservative
         // over-approximation: it is _always_ getting cast from the smallest integer type.
-        CastU8 => (1, 1, Type::U8.size(), Type::U8.size()),
-        CastU16 => (1, 1, Type::U8.size(), Type::U16.size()),
-        CastU32 => (1, 1, Type::U8.size(), Type::U32.size()),
-        CastU64 => (1, 1, Type::U8.size(), Type::U64.size()),
-        CastU128 => (1, 1, Type::U8.size(), Type::U128.size()),
-        CastU256 => (1, 1, Type::U8.size(), Type::U256.size()),
-        LdI8 => (0, 1, 0.into(), Type::I8.size()),
-        LdI16 => (0, 1, 0.into(), Type::I16.size()),
-        LdI32 => (0, 1, 0.into(), Type::I32.size()),
-        LdI64 => (0, 1, 0.into(), Type::I64.size()),
-        LdI128 => (0, 1, 0.into(), Type::I128.size()),
-        LdI256 => (0, 1, 0.into(), Type::I256.size()),
-        CastI8 => (1, 1, Type::I8.size(), Type::I8.size()),
-        CastI16 => (1, 1, Type::I8.size(), Type::I16.size()),
-        CastI32 => (1, 1, Type::I8.size(), Type::I32.size()),
-        CastI64 => (1, 1, Type::I8.size(), Type::I64.size()),
-        CastI128 => (1, 1, Type::I8.size(), Type::I128.size()),
-        CastI256 => (1, 1, Type::I8.size(), Type::I256.size()),
-        Neg => (1, 1, Type::I8.size(), Type::I256.size()),
+        CastU8 => (1, 1, Type::U8.size()?, Type::U8.size()?),
+        CastU16 => (1, 1, Type::U8.size()?, Type::U16.size()?),
+        CastU32 => (1, 1, Type::U8.size()?, Type::U32.size()?),
+        CastU64 => (1, 1, Type::U8.size()?, Type::U64.size()?),
+        CastU128 => (1, 1, Type::U8.size()?, Type::U128.size()?),
+        CastU256 => (1, 1, Type::U8.size()?, Type::U256.size()?),
+        LdI8 => (0, 1, 0.into(), Type::I8.size()?),
+        LdI16 => (0, 1, 0.into(), Type::I16.size()?),
+        LdI32 => (0, 1, 0.into(), Type::I32.size()?),
+        LdI64 => (0, 1, 0.into(), Type::I64.size()?),
+        LdI128 => (0, 1, 0.into(), Type::I128.size()?),
+        LdI256 => (0, 1, 0.into(), Type::I256.size()?),
+        CastI8 => (1, 1, Type::I8.size()?, Type::I8.size()?),
+        CastI16 => (1, 1, Type::I8.size()?, Type::I16.size()?),
+        CastI32 => (1, 1, Type::I8.size()?, Type::I32.size()?),
+        CastI64 => (1, 1, Type::I8.size()?, Type::I64.size()?),
+        CastI128 => (1, 1, Type::I8.size()?, Type::I128.size()?),
+        CastI256 => (1, 1, Type::I8.size()?, Type::I256.size()?),
+        Neg => (1, 1, Type::I8.size()?, Type::I256.size()?),
         // NB: We don't know the size of what integers we're dealing with, so we conservatively
         // over-approximate by popping the smallest integers, and push the largest.
-        Add | Sub | Mul | Mod | Div => (2, 1, Type::U8.size() + Type::U8.size(), Type::U256.size()),
-        BitOr | BitAnd | Xor => (2, 1, Type::U8.size() + Type::U8.size(), Type::U256.size()),
-        Shl | Shr => (2, 1, Type::U8.size() + Type::U8.size(), Type::U256.size()),
+        Add | Sub | Mul | Mod | Div => (
+            2,
+            1,
+            Type::U8.size()? + Type::U8.size()?,
+            Type::U256.size()?,
+        ),
+        BitOr | BitAnd | Xor => (
+            2,
+            1,
+            Type::U8.size()? + Type::U8.size()?,
+            Type::U256.size()?,
+        ),
+        Shl | Shr => (
+            2,
+            1,
+            Type::U8.size()? + Type::U8.size()?,
+            Type::U256.size()?,
+        ),
         Or | And => (
             2,
             1,
-            Type::Bool.size() + Type::Bool.size(),
-            Type::Bool.size(),
+            Type::Bool.size()? + Type::Bool.size()?,
+            Type::Bool.size()?,
         ),
-        Lt | Gt | Le | Ge => (2, 1, Type::U8.size() + Type::U8.size(), Type::Bool.size()),
-        Not => (1, 1, Type::Bool.size(), Type::Bool.size()),
-        Abort => (1, 0, Type::U64.size(), 0.into()),
-    }
+        Lt | Gt | Le | Ge => (
+            2,
+            1,
+            Type::U8.size()? + Type::U8.size()?,
+            Type::Bool.size()?,
+        ),
+        Not => (1, 1, Type::Bool.size()?, Type::Bool.size()?),
+        Abort => (1, 0, Type::U64.size()?, 0.into()),
+    })
 }
 
 impl<'b> GasMeter for GasStatus<'b> {
     /// Charge an instruction and fail if not enough gas units are left.
     fn charge_simple_instr(&mut self, instr: SimpleInstruction) -> PartialVMResult<()> {
-        let (pops, pushes, pop_size, push_size) = get_simple_instruction_stack_change(instr);
+        let (pops, pushes, pop_size, push_size) = get_simple_instruction_stack_change(instr)?;
         self.charge(1, pushes, pops, push_size.into(), pop_size.into())
     }
 
@@ -515,8 +532,6 @@ impl<'b> GasMeter for GasStatus<'b> {
 
     fn charge_call(
         &mut self,
-        _module_id: &ModuleId,
-        _func_name: &str,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
@@ -532,8 +547,6 @@ impl<'b> GasMeter for GasStatus<'b> {
 
     fn charge_call_generic(
         &mut self,
-        _module_id: &ModuleId,
-        _func_name: &str,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
@@ -638,7 +651,7 @@ impl<'b> GasMeter for GasStatus<'b> {
             1,
             1,
             2,
-            (Type::Bool.size() + size_reduction).into(),
+            (Type::Bool.size()? + size_reduction).into(),
             size_reduction.into(),
         )
     }
@@ -650,7 +663,7 @@ impl<'b> GasMeter for GasStatus<'b> {
             1,
             1,
             2,
-            (Type::Bool.size() + size_reduction).into(),
+            (Type::Bool.size()? + size_reduction).into(),
             size_reduction.into(),
         )
     }
@@ -667,7 +680,7 @@ impl<'b> GasMeter for GasStatus<'b> {
     }
 
     fn charge_vec_len(&mut self) -> PartialVMResult<()> {
-        self.charge(1, 1, 1, Type::U64.size().into(), REFERENCE_SIZE.into())
+        self.charge(1, 1, 1, Type::U64.size()?.into(), REFERENCE_SIZE.into())
     }
 
     fn charge_vec_borrow(&mut self, _is_mut: bool, _is_success: bool) -> PartialVMResult<()> {
@@ -676,7 +689,7 @@ impl<'b> GasMeter for GasStatus<'b> {
             1,
             2,
             REFERENCE_SIZE.into(),
-            (REFERENCE_SIZE + Type::U64.size()).into(),
+            (REFERENCE_SIZE + Type::U64.size()?).into(),
         )
     }
 
@@ -701,7 +714,7 @@ impl<'b> GasMeter for GasStatus<'b> {
     }
 
     fn charge_vec_swap(&mut self) -> PartialVMResult<()> {
-        let size_decrease = REFERENCE_SIZE + Type::U64.size() + Type::U64.size();
+        let size_decrease = REFERENCE_SIZE + Type::U64.size()? + Type::U64.size()?;
         self.charge(1, 1, 1, 0, size_decrease.into())
     }
 

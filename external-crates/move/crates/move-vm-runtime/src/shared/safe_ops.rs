@@ -131,5 +131,100 @@ macro_rules! impl_safe_add_for_int {
     };
 }
 
+macro_rules! impl_safe_add_for_signed_int {
+    ($($t:ty),* $(,)?) => {
+        $(
+            impl SafeArithmetic for $t {
+                type Output = $t;
+                fn safe_add(self, rhs: Self) -> PartialVMResult<Self::Output> {
+                    self.checked_add(rhs).ok_or_else(|| {
+                        move_binary_format::partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "Integer addition overflow for type {}: {} + {}",
+                            stringify!($t),
+                            self,
+                            rhs
+                        )
+                    })
+                }
+                fn safe_sub(self, rhs: Self) -> PartialVMResult<Self::Output> {
+                    self.checked_sub(rhs).ok_or_else(|| {
+                        move_binary_format::partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "Integer subtraction overflow for type {}: {} - {}",
+                            stringify!($t),
+                            self,
+                            rhs
+                        )
+                    })
+                }
+                fn safe_mul(self, rhs: Self) -> PartialVMResult<Self::Output> {
+                    self.checked_mul(rhs).ok_or_else(|| {
+                        move_binary_format::partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "Integer multiplication error for type {}: {} * {}",
+                            stringify!($t),
+                            self,
+                            rhs
+                        )
+                    })
+                }
+                fn safe_shift_left(self, shift: u8) -> PartialVMResult<Self::Output> {
+                    let shifted = self.checked_shl(shift as u32).ok_or_else(|| {
+                        move_binary_format::partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "Integer shift left error for type {}: {} << {}",
+                            stringify!($t),
+                            self,
+                            shift
+                        )
+                    })?;
+                    if shifted.checked_shr(shift as u32) == Some(self) {
+                        Ok(shifted)
+                    } else {
+                        Err(move_binary_format::partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "Integer shift left overflow for type {}: {} << {}",
+                            stringify!($t),
+                            self,
+                            shift
+                        ))
+                    }
+                }
+                fn safe_shift_right(self, shift: u8) -> PartialVMResult<Self::Output> {
+                    self.checked_shr(shift as u32).ok_or_else(|| {
+                        move_binary_format::partial_vm_error!(
+                            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                            "Integer shift right error for type {}: {} >> {}",
+                            stringify!($t),
+                            self,
+                            shift
+                        )
+                    })
+                }
+            }
+
+            impl SafeArithmetic for &$t {
+                type Output = $t;
+                fn safe_add(self, rhs: Self) -> PartialVMResult<Self::Output> {
+                    (*self).safe_add(*rhs)
+                }
+                fn safe_sub(self, rhs: Self) -> PartialVMResult<Self::Output> {
+                    (*self).safe_sub(*rhs)
+                }
+                fn safe_mul(self, rhs: Self) -> PartialVMResult<Self::Output> {
+                    (*self).safe_mul(*rhs)
+                }
+                fn safe_shift_left(self, shift: u8) -> PartialVMResult<Self::Output> {
+                    (*self).safe_shift_left(shift)
+                }
+                fn safe_shift_right(self, shift: u8) -> PartialVMResult<Self::Output> {
+                    (*self).safe_shift_right(shift)
+                }
+            }
+        )*
+    };
+}
+
 impl_safe_add_for_int!(u8, u16, u32, u64, u128, move_core_types::u256::U256, usize);
-impl_safe_add_for_int!(i8, i16, i32, i64, i128, move_core_types::i256::I256);
+impl_safe_add_for_signed_int!(i8, i16, i32, i64, i128, move_core_types::i256::I256);

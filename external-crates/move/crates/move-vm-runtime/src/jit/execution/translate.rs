@@ -6,6 +6,7 @@ use crate::{
     cache::{
         arena::{ArenaBox, ArenaBuilder, ArenaVec},
         identifier_interner::{IdentifierInterner, IdentifierKey},
+        move_cache::Package as CachedPackage,
     },
     dbg_println,
     execution::{
@@ -15,9 +16,11 @@ use crate::{
     jit::{execution::ast::*, optimization::ast as input},
     natives::functions::NativeFunctions,
     shared::{
+        TypeSize,
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         types::{DefiningTypeId, OriginalId, VersionId},
         unique_map,
+        views::{SizeConfig, ValueView as _},
         vm_pointer::VMPointer,
     },
 };
@@ -33,11 +36,15 @@ use move_binary_format::{
 use move_core_types::{
     identifier::Identifier, language_storage::ModuleId, resolver::IntraPackageName,
 };
+use move_vm_config::runtime::VMConfig;
 
 use indexmap::IndexMap;
 use tracing::instrument;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    sync::Arc,
+};
 
 // -------------------------------------------------------------------------------------------------
 // Translation Context and Definitions
@@ -46,6 +53,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 struct PackageContext<'borrows> {
     pub natives: &'borrows NativeFunctions,
     pub interner: &'borrows IdentifierInterner,
+    pub vm_config: &'borrows VMConfig,
 
     pub type_origin_table: HashMap<IntraPackageKey, DefiningTypeId>,
 
@@ -60,6 +68,12 @@ struct PackageContext<'borrows> {
 
     pub vtable_funs: DefinitionMap<VMPointer<Function>>,
     pub vtable_types: DefinitionMap<VMPointer<DatatypeDescriptor>>,
+
+    /// Effective system packages for direct-call rewriting in this translation. The caller is
+    /// responsible for filtering this to the system packages that the user package's linkage
+    /// table actually maps to (`OriginalId -> our pinned VersionId`); membership here is the
+    /// *only* signal we use to direct-resolve cross-package calls into a system package.
+    pub system_packages: &'borrows BTreeMap<OriginalId, Arc<CachedPackage>>,
 }
 
 struct FunctionContext<'pkg_ctxt, 'natives> {
@@ -113,22 +127,44 @@ impl PackageContext<'_> {
         self.vtable_types.extend(datatypes)
     }
 
-    /// Try to resolve a function call (vtable entry) to a direct call (i.e. a call to a function
-    /// in the same package). If the vtable key represents an inter-package call this function
-    /// will return `None` as the call cannot be resolved to a direct call.
+    /// Try to resolve a function call (vtable entry) to a direct call.
+    ///
+    /// Two cases produce a direct call:
+    ///
+    /// 1. The target is a function in the same package; resolved via the in-progress vtable.
+    /// 2. The target is in a system package that this translation is keyed against; resolved
+    ///    via that system package's already-built vtable.
+    ///
+    /// Otherwise the call remains virtual and will be resolved at runtime through the
+    /// `VMDispatchTables`.
+    ///
+    /// SAFETY: The system-package map handed in here has already been filtered against the user
+    /// package's linkage table by the caller; absence here means "not a direct-call target", not
+    /// "missing dependency".
     fn try_resolve_direct_function_call(
         &self,
         vtable_entry: &VirtualTableKey,
     ) -> PartialVMResult<Option<VMPointer<Function>>> {
-        // We are calling into a different package so we cannot resolve this to a direct call.
-        if vtable_entry.package_key() != self.original_id {
+        let known_fn_opt = if vtable_entry.package_key() == self.original_id {
+            // Same-package call: resolve against the package we're currently building.
+            self.vtable_funs.get(vtable_entry.intra_package_key())
+        } else if let Some(sys_pkg) = self.system_packages.get(&vtable_entry.package_key()) {
+            // System-package call: caller has already filtered `system_packages` to those the
+            // user's linkage maps to our pinned versions, so membership here is sufficient.
+            sys_pkg
+                .runtime
+                .vtable
+                .functions
+                .get(vtable_entry.intra_package_key())
+        } else {
             return Ok(None);
-        }
-        match self.vtable_funs.get(vtable_entry.intra_package_key()) {
+        };
+
+        match known_fn_opt {
             Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
             None => Err(partial_vm_error!(
                 FUNCTION_RESOLUTION_FAILURE,
-                "Function not found in vtable with name: {}::{}",
+                "Could not find function with name: {}::{}",
                 self.version_id,
                 self.interner.resolve_ident(
                     &vtable_entry.intra_package_key().member_name,
@@ -180,8 +216,10 @@ impl FunctionContext<'_, '_> {
 
 #[instrument(level = "trace", skip_all)]
 pub fn package(
-    natives: &NativeFunctions,
+    vm_config: &VMConfig,
     interner: &IdentifierInterner,
+    natives: &NativeFunctions,
+    system_packages: &BTreeMap<OriginalId, Arc<CachedPackage>>,
     verified_package: input::Package,
 ) -> PartialVMResult<Package> {
     tracing::trace!(
@@ -191,6 +229,13 @@ pub fn package(
     );
     let version_id = verified_package.version_id;
     let original_id = verified_package.original_id;
+    // The package we're translating must not appear in its own direct-call system-package set;
+    // self-calls are resolved via `vtable_funs`, and confusing the two would let a package
+    // "direct-call" a stale/mismatched copy of itself.
+    debug_assert!(
+        !system_packages.contains_key(&original_id),
+        "package being translated ({original_id}) must not appear in its own system_packages set",
+    );
     let (module_ids_in_pkg, package_modules): (BTreeSet<_>, Vec<_>) =
         verified_package.modules.into_iter().unzip();
 
@@ -219,13 +264,15 @@ pub fn package(
     let mut package_context = PackageContext {
         natives,
         interner,
+        vm_config,
         version_id,
         original_id,
         loaded_modules: IndexMap::new(),
-        package_arena: ArenaBuilder::new_bounded(),
+        package_arena: ArenaBuilder::new_bounded(vm_config),
         vtable_funs: DefinitionMap::empty(),
         vtable_types: DefinitionMap::empty(),
         type_origin_table,
+        system_packages,
     };
 
     modules(&mut package_context, &module_ids_in_pkg, &package_modules)?;
@@ -234,12 +281,14 @@ pub fn package(
         version_id,
         natives: _,
         interner: _,
+        vm_config: _,
         original_id,
         loaded_modules,
         package_arena,
         vtable_funs,
         vtable_types,
         type_origin_table: _,
+        system_packages: _,
     } = package_context;
 
     let vtable = PackageVirtualTable::new(vtable_funs, vtable_types);
@@ -977,16 +1026,30 @@ fn constants(
         .constant_pool()
         .iter()
         .map(|constant| {
-            let value = Value::deserialize_constant(constant)
-                .ok_or_else(|| {
-                    partial_vm_error!(
-                        VERIFIER_INVARIANT_VIOLATION,
-                        "Verifier failed to verify the deserialization of constants"
-                    )
-                })?
-                .into_constant_value(&context.package_arena)?;
+            let deserialized_value = Value::deserialize_constant(constant).ok_or_else(|| {
+                partial_vm_error!(
+                    VERIFIER_INVARIANT_VIOLATION,
+                    "Verifier failed to verify the deserialization of constants"
+                )
+            })?;
+            let size = if context.vm_config.charge_ld_const_abstract_size {
+                // Charge for the abstract value size of the constant -- the cost of materializing
+                // it on the operand stack -- rather than its serialized byte length. Serialized
+                // length undercharges values that are cheap to encode but expensive to
+                // materialize, e.g. nested vectors, where an empty inner vector is a single
+                // serialized byte but materializes as a heap-allocated container.
+                //
+                // Constants cannot contain references, so `traverse_references` is irrelevant;
+                // `include_vector_size` matches the non-legacy size config in the Sui gas meter.
+                u64::from(deserialized_value.abstract_memory_size(&SizeConfig {
+                    traverse_references: false,
+                    include_vector_size: true,
+                })?)
+            } else {
+                constant.data.len() as u64
+            };
+            let value = deserialized_value.into_constant_value(&context.package_arena)?;
             let type_ = make_arena_type(context, module, &constant.type_)?;
-            let size = constant.data.len() as u64;
             let const_ = Constant { value, type_, size };
             Ok(const_)
         })
@@ -1377,20 +1440,7 @@ fn compute_renumbered_bytecode(
             | input::Bytecode::UnpackVariantGeneric(..)
             | input::Bytecode::UnpackVariantGenericImmRef(..)
             | input::Bytecode::UnpackVariantGenericMutRef(..)
-            | input::Bytecode::VariantSwitch(..)
-            | input::Bytecode::LdI8(_)
-            | input::Bytecode::LdI16(_)
-            | input::Bytecode::LdI32(_)
-            | input::Bytecode::LdI64(_)
-            | input::Bytecode::LdI128(..)
-            | input::Bytecode::LdI256(..)
-            | input::Bytecode::CastI8
-            | input::Bytecode::CastI16
-            | input::Bytecode::CastI32
-            | input::Bytecode::CastI64
-            | input::Bytecode::CastI128
-            | input::Bytecode::CastI256
-            | input::Bytecode::Neg) => Ok(instr),
+            | input::Bytecode::VariantSwitch(..)) => Ok(instr),
         }
     }
 
@@ -1534,20 +1584,6 @@ fn bytecode(
         input::Bytecode::CastU64 => Bytecode::CastU64,
         input::Bytecode::CastU8 => Bytecode::CastU8,
 
-        input::Bytecode::LdI8(n) => Bytecode::LdI8(n),
-        input::Bytecode::LdI16(n) => Bytecode::LdI16(n),
-        input::Bytecode::LdI32(n) => Bytecode::LdI32(n),
-        input::Bytecode::LdI64(n) => Bytecode::LdI64(n),
-        input::Bytecode::LdI128(n) => Bytecode::LdI128(context.package_context.arena_box(*n)?),
-        input::Bytecode::LdI256(n) => Bytecode::LdI256(context.package_context.arena_box(*n)?),
-        input::Bytecode::CastI8 => Bytecode::CastI8,
-        input::Bytecode::CastI16 => Bytecode::CastI16,
-        input::Bytecode::CastI32 => Bytecode::CastI32,
-        input::Bytecode::CastI64 => Bytecode::CastI64,
-        input::Bytecode::CastI128 => Bytecode::CastI128,
-        input::Bytecode::CastI256 => Bytecode::CastI256,
-        input::Bytecode::Neg => Bytecode::Neg,
-
         // Vectors
         input::Bytecode::VecPack(si, size) => {
             let ty_ptr = context.get_vec_type(&si)?;
@@ -1673,66 +1709,79 @@ fn make_arena_type(
     module: &CompiledModule,
     tok: &SignatureToken,
 ) -> PartialVMResult<ArenaType> {
-    let res = match tok {
-        SignatureToken::Bool => ArenaType::Bool,
-        SignatureToken::U8 => ArenaType::U8,
-        SignatureToken::U16 => ArenaType::U16,
-        SignatureToken::U32 => ArenaType::U32,
-        SignatureToken::U64 => ArenaType::U64,
-        SignatureToken::U128 => ArenaType::U128,
-        SignatureToken::U256 => ArenaType::U256,
-        SignatureToken::Address => ArenaType::Address,
-        SignatureToken::Signer => ArenaType::Signer,
-        SignatureToken::I8 => ArenaType::I8,
-        SignatureToken::I16 => ArenaType::I16,
-        SignatureToken::I32 => ArenaType::I32,
-        SignatureToken::I64 => ArenaType::I64,
-        SignatureToken::I128 => ArenaType::I128,
-        SignatureToken::I256 => ArenaType::I256,
-        SignatureToken::TypeParameter(idx) => ArenaType::TyParam(*idx),
-        SignatureToken::Vector(inner_tok) => {
-            ArenaType::Vector(context.arena_box(make_arena_type(context, module, inner_tok)?)?)
-        }
-        SignatureToken::Reference(inner_tok) => {
-            ArenaType::Reference(context.arena_box(make_arena_type(context, module, inner_tok)?)?)
-        }
-        SignatureToken::MutableReference(inner_tok) => ArenaType::MutableReference(
-            context.arena_box(make_arena_type(context, module, inner_tok)?)?,
-        ),
-        SignatureToken::Datatype(sh_idx) => {
-            let datatype_handle = module.datatype_handle_at(*sh_idx);
-            let datatype_name = context
-                .interner
-                .intern_ident_str(module.identifier_at(datatype_handle.name));
-            let module_handle = module.module_handle_at(datatype_handle.module);
-            let original_address = module.address_identifier_at(module_handle.address);
-            let module_name = context
-                .interner
-                .intern_ident_str(module.identifier_at(module_handle.name));
-            let cache_idx =
-                VirtualTableKey::from_parts(*original_address, module_name, datatype_name);
-            ArenaType::Datatype(cache_idx)
-        }
-        SignatureToken::DatatypeInstantiation(inst) => {
-            let (sh_idx, tys) = &**inst;
-            let type_parameters: Vec<_> = tys
-                .iter()
-                .map(|tok| make_arena_type(context, module, tok))
-                .collect::<PartialVMResult<_>>()?;
-            let type_parameters = context.arena_vec(type_parameters.into_iter())?;
-            let datatype_handle = module.datatype_handle_at(*sh_idx);
-            let datatype_name = context
-                .interner
-                .intern_ident_str(module.identifier_at(datatype_handle.name));
-            let module_handle = module.module_handle_at(datatype_handle.module);
-            let original_address = module.address_identifier_at(module_handle.address);
-            let module_name = context
-                .interner
-                .intern_ident_str(module.identifier_at(module_handle.name));
-            let cache_idx =
-                VirtualTableKey::from_parts(*original_address, module_name, datatype_name);
-            ArenaType::DatatypeInstantiation(context.arena_box((cache_idx, type_parameters))?)
-        }
-    };
-    Ok(res)
+    make_arena_type_impl(context, module, tok, &mut TypeSize::for_type_traversal())
+}
+
+fn make_arena_type_impl(
+    context: &PackageContext,
+    module: &CompiledModule,
+    tok: &SignatureToken,
+    type_size: &mut TypeSize,
+) -> PartialVMResult<ArenaType> {
+    type_size.enter_type(|type_size| {
+        let res = match tok {
+            SignatureToken::Bool => ArenaType::Bool,
+            SignatureToken::U8 => ArenaType::U8,
+            SignatureToken::U16 => ArenaType::U16,
+            SignatureToken::U32 => ArenaType::U32,
+            SignatureToken::U64 => ArenaType::U64,
+            SignatureToken::U128 => ArenaType::U128,
+            SignatureToken::U256 => ArenaType::U256,
+            SignatureToken::Address => ArenaType::Address,
+            SignatureToken::Signer => ArenaType::Signer,
+            SignatureToken::TypeParameter(idx) => ArenaType::TyParam(*idx),
+            SignatureToken::Vector(inner_tok) => ArenaType::Vector(
+                context.arena_box(make_arena_type_impl(context, module, inner_tok, type_size)?)?,
+            ),
+            SignatureToken::Reference(inner_tok) => ArenaType::Reference(
+                context.arena_box(make_arena_type_impl(context, module, inner_tok, type_size)?)?,
+            ),
+            SignatureToken::MutableReference(inner_tok) => ArenaType::MutableReference(
+                context.arena_box(make_arena_type_impl(context, module, inner_tok, type_size)?)?,
+            ),
+            SignatureToken::Datatype(sh_idx) => {
+                let datatype_handle = module.datatype_handle_at(*sh_idx);
+                let datatype_name = context
+                    .interner
+                    .intern_ident_str(module.identifier_at(datatype_handle.name));
+                let module_handle = module.module_handle_at(datatype_handle.module);
+                let original_address = module.address_identifier_at(module_handle.address);
+                let module_name = context
+                    .interner
+                    .intern_ident_str(module.identifier_at(module_handle.name));
+                let cache_idx =
+                    VirtualTableKey::from_parts(*original_address, module_name, datatype_name);
+                ArenaType::Datatype(cache_idx)
+            }
+            SignatureToken::DatatypeInstantiation(inst) => {
+                let (sh_idx, tys) = &**inst;
+                let type_parameters: Vec<_> = tys
+                    .iter()
+                    .map(|tok| make_arena_type_impl(context, module, tok, type_size))
+                    .collect::<PartialVMResult<_>>()?;
+                let type_parameters = context.arena_vec(type_parameters.into_iter())?;
+                let datatype_handle = module.datatype_handle_at(*sh_idx);
+                let datatype_name = context
+                    .interner
+                    .intern_ident_str(module.identifier_at(datatype_handle.name));
+                let module_handle = module.module_handle_at(datatype_handle.module);
+                let original_address = module.address_identifier_at(module_handle.address);
+                let module_name = context
+                    .interner
+                    .intern_ident_str(module.identifier_at(module_handle.name));
+                let cache_idx =
+                    VirtualTableKey::from_parts(*original_address, module_name, datatype_name);
+                ArenaType::DatatypeInstantiation(context.arena_box((cache_idx, type_parameters))?)
+            }
+            SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => {
+                todo!("[signed-ints] signed integer types in the VM runtime")
+            }
+        };
+        Ok(res)
+    })
 }
