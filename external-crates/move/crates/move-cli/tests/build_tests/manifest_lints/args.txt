@@ -1,81 +1,103 @@
 > printf '\n# ===== [SUCCESS] ======================================\n# == Compiler allow suppresses a warning\n'
 > cp Move.compiler_allow.ok.toml Move.toml
 build
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == Compiler warn emits a warning\n'
 > cp Move.compiler_warn.ok.toml Move.toml
 build
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == Specific compiler levels override broader levels\n'
 > cp fixtures/compiler_specificity.move sources/m.move
 > cp Move.compiler_specificity.ok.toml Move.toml
 build
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == Source allow overrides manifest deny\n'
 > cp fixtures/source_allow.move sources/m.move
 > cp Move.source_override.ok.toml Move.toml
 build
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == Source warn overrides manifest deny\n'
 > cp fixtures/source_warn.move sources/m.move
 build
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == Lint allow suppresses a lint\n'
 > cp fixtures/lint.move sources/m.move
 > cp Move.lint_allow.ok.toml Move.toml
 build
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == The lint flag respects manifest levels\n'
 build --lint
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == Lint warn emits a warning\n'
 > cp Move.lint_warn.ok.toml Move.toml
 build
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == Source lint allow overrides manifest deny\n'
 > cp fixtures/lint_allow.move sources/m.move
 > cp Move.lint_source_allow.ok.toml Move.toml
 build
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == Sui lint allow suppresses a lint\n'
 > cp fixtures/sui_lint.move sources/m.move
 > cp Move.sui_lint_allow.ok.toml Move.toml
 build --default-move-flavor sui
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == Sui lint warn emits a warning\n'
 > cp Move.sui_lint_warn.ok.toml Move.toml
 build --default-move-flavor sui
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == Dependency lint settings do not affect the root\n'
 > cp fixtures/clean.move sources/m.move
 > cp Move.dependency_lints.ok.toml Move.toml
 build
+
 > printf '\n# ===== [SUCCESS] ======================================\n# == The no-lint flag disables configured lints\n'
 > cp fixtures/lint.move sources/m.move
 > cp Move.no_lint.ok.toml Move.toml
 build --no-lint
 
+
 > printf '\n# ===== [FAILURE] ======================================\n# == Compiler deny produces an error\n'
 > cp fixtures/compiler.move sources/m.move
 > cp Move.compiler_deny.error.toml Move.toml
 build
+
 > printf '\n# ===== [FAILURE] ======================================\n# == The stricter level wins for equivalent filters\n'
 > cp Move.compiler_conflict.error.toml Move.toml
 build
+
 > printf '\n# ===== [FAILURE] ======================================\n# == Source deny overrides manifest allow\n'
 > cp fixtures/source_deny.move sources/m.move
 > cp Move.source_deny.error.toml Move.toml
 build
+
 > printf '\n# ===== [FAILURE] ======================================\n# == Lint deny produces an error\n'
 > cp fixtures/lint.move sources/m.move
 > cp Move.lint_deny.error.toml Move.toml
 build
+
 > printf '\n# ===== [FAILURE] ======================================\n# == Sui lint deny produces an error\n'
 > cp fixtures/sui_lint.move sources/m.move
 > cp Move.sui_lint_deny.error.toml Move.toml
 build --default-move-flavor sui
+
 > printf '\n# ===== [FAILURE] ======================================\n# == Sui-only lints are rejected in Core\n'
 > cp fixtures/clean.move sources/m.move
 > cp Move.sui_lint_core.error.toml Move.toml
 build --default-move-flavor core
+
 > printf '\n# ===== [FAILURE] ======================================\n# == Unknown compiler filters are rejected\n'
 > cp Move.unknown.error.toml Move.toml
 build
+
 > printf '\n# ===== [FAILURE] ======================================\n# == Unknown lints are rejected\n'
 > cp Move.unknown_lint.error.toml Move.toml
 build
+
 > printf '\n# ===== [FAILURE] ======================================\n# == Duplicate lint keys are rejected\n'
 > cp Move.duplicate_key.error.toml Move.toml
 build
+
 > printf '\n# ===== [FAILURE] ======================================\n# == Invalid lint levels are rejected\n'
 > cp Move.invalid_level.error.toml Move.toml
 build
