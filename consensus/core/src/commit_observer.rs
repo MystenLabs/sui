@@ -85,12 +85,18 @@ impl CommitObserver {
         {
             info!("Skipping block recovery for transaction voting: {e}");
         }
+        // Recovered votes can complete a commit that the finalizer already tried during replay.
+        observer.notify_new_blocks();
 
         observer
     }
 
     pub(crate) async fn stop(&mut self) {
         self.commit_finalizer_handle.stop().await;
+    }
+
+    pub(crate) fn notify_new_blocks(&self) {
+        self.commit_finalizer_handle.notify_new_blocks();
     }
 
     /// Creates and returns a list of committed subdags containing committed blocks, from a sequence
