@@ -1,0 +1,40 @@
+External Command `cp Move.allow.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+External Command `cp Move.warn.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+warning[WC09002]: unused variable
+  ┌─ ./sources/m.move:3:13
+  │
+3 │         let unused = 0u64;
+  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+
+External Command `cp Move.deny.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+error[EC09002]: unused variable
+  ┌─ ./sources/m.move:3:13
+  │
+3 │         let unused = 0u64;
+  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+
+External Command `cp fixtures/override.move sources/m.move`:
+Command `build`:
+BUILDING manifest_lints
+External Command `cp fixtures/lint.move sources/m.move`:
+External Command `cp Move.lint.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+error[EL04005]: 'abort' or 'assert' without named constant
+  ┌─ ./sources/m.move:3:15
+  │
+3 │         abort 1
+  │               ^ Prefer using a named constant.
+  │
+  = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+
+External Command `cp fixtures/clean.move sources/m.move`:
+External Command `cp Move.unknown.toml Move.toml`:
+Command `build`:
+Error: unknown warning filter 'not_a_warning' in Move.toml

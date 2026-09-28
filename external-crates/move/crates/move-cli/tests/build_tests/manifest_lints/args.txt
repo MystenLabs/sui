@@ -1,0 +1,14 @@
+> cp Move.allow.toml Move.toml
+build
+> cp Move.warn.toml Move.toml
+build
+> cp Move.deny.toml Move.toml
+build
+> cp fixtures/override.move sources/m.move
+build
+> cp fixtures/lint.move sources/m.move
+> cp Move.lint.toml Move.toml
+build
+> cp fixtures/clean.move sources/m.move
+> cp Move.unknown.toml Move.toml
+build
