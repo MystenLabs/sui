@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
 use move_bytecode_verifier_meter::{Meter, Scope};
-use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::MeterConfig;
 
 struct SuiVerifierMeterBounds {
@@ -18,11 +18,14 @@ impl SuiVerifierMeterBounds {
 
         let new_ticks = self.ticks.saturating_add(ticks);
         if new_ticks >= max_ticks {
-            return Err(PartialVMError::new(StatusCode::PROGRAM_TOO_COMPLEX)
-                    .with_message(format!(
-                        "program too complex. Ticks exceeded `{}` will exceed limits: `{} current + {} new > {} max`)",
-                        self.name, self.ticks, ticks, max_ticks
-                    )));
+            return Err(partial_vm_error!(
+                PROGRAM_TOO_COMPLEX,
+                "program too complex. Ticks exceeded `{}` will exceed limits: `{} current + {} new > {} max`",
+                self.name,
+                self.ticks,
+                ticks,
+                max_ticks
+            ));
         }
         self.ticks = new_ticks;
         Ok(())

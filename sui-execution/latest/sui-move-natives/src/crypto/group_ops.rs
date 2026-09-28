@@ -8,10 +8,10 @@ use fastcrypto::groups::{
     bls12381 as bls, ristretto255 as ristretto,
 };
 use fastcrypto::serde_helpers::ToFromByteArray;
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
 use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::gas_algebra::InternalGas;
-use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
@@ -154,13 +154,13 @@ pub struct GroupOpsCostParams {
 
 macro_rules! native_charge_gas_early_exit_option {
     ($native_context:ident, $cost:expr) => {{
-        use move_binary_format::errors::PartialVMError;
-        use move_core_types::vm_status::StatusCode;
         native_charge_gas_early_exit!(
             $native_context,
             $cost.ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for group ops is missing".to_string())
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Gas cost for group ops is missing"
+                )
             })?
         );
     }};
@@ -806,8 +806,10 @@ pub fn internal_multi_scalar_mul(
         .clone();
 
     let max_len = cost_params.bls12381_msm_max_len.ok_or_else(|| {
-        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-            .with_message("Max len for MSM is not set".to_string())
+        partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Max len for MSM is not set"
+        )
     })?;
 
     // TODO: can potentially improve performance when some of the points are the generator.
@@ -983,8 +985,10 @@ pub fn internal_sum(
             let max_terms = cost_params
                 .bls12381_uncompressed_g1_sum_max_terms
                 .ok_or_else(|| {
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("Max number of terms is not set".to_string())
+                    partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Max number of terms is not set"
+                    )
                 })?;
 
             if length > max_terms {

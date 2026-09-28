@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::vm_status::StatusCode;
+use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
 use move_vm_runtime::execution::values::Value;
 use sui_types::base_types::{MoveObjectType, ObjectID};
 
@@ -56,11 +56,10 @@ impl ObjectFingerprint {
     ) -> PartialVMResult<bool> {
         use ObjectFingerprint_ as F;
         let Some(inner) = &self.0 else {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    "Object fingerprint not enabled, yet we were asked for the changes".to_string(),
-                ),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Object fingerprint not enabled, yet we were asked for the changes"
+            ));
         };
         Ok(match (inner, final_value) {
             (F::Empty, None) => false,
