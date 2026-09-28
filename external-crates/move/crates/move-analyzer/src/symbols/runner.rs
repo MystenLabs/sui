@@ -28,7 +28,7 @@ use sysinfo::{Pid, ProcessesToUpdate, System};
 use vfs::VfsPath;
 
 use move_compiler::{editions::Flavor, linters::LintLevel};
-use move_package_alt::MoveFlavor;
+use move_package::MoveFlavor;
 
 /// Interval for checking if the parent process is still alive (in seconds)
 const PARENT_LIVENESS_MONITORING_INTERVAL_SECS: u64 = 10;

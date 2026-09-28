@@ -17,8 +17,8 @@ use base::{
     docgen::Docgen, lint::Lint, migrate::Migrate, new::New, profile::Profile, summary::Summary,
 };
 
-use move_package_alt::MoveFlavor;
-use move_package_alt_compilation::build_config::BuildConfig;
+use move_package::MoveFlavor;
+use move_package_compilation::build_config::BuildConfig;
 
 /// Default directory where saved Move resources live
 pub const DEFAULT_STORAGE_DIR: &str = "storage";
