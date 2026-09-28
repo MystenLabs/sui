@@ -244,10 +244,13 @@ impl GraphQLClient {
                 _ => backoff::Error::permanent(error.into()),
             });
         }
-        response
-            .json::<GraphQlResponse<T>>()
+        // Reqwest labels both interrupted body reads and invalid JSON as decode errors, so classify
+        // failures by stage to retry interrupted transfers without retrying malformed responses.
+        let bytes = response
+            .bytes()
             .await
-            .map_err(classify_request_error)
+            .map_err(|error| backoff::Error::transient(error.into()))?;
+        serde_json::from_slice(&bytes).map_err(|error| backoff::Error::permanent(error.into()))
     }
 
     pub(crate) fn chain(&self) -> Chain {
@@ -368,7 +371,7 @@ impl CheckpointRead for GraphQLClient {
     }
 }
 
-/// Classify connection and body-transfer failures as transient, leaving decode errors permanent.
+/// Classify request transport failures as transient and request construction failures as permanent.
 fn classify_request_error(error: reqwest::Error) -> backoff::Error<Error> {
     if error.is_connect() || error.is_timeout() || error.is_request() || error.is_body() {
         backoff::Error::transient(error.into())
@@ -398,6 +401,9 @@ mod tests {
     use itertools::Itertools as _;
     use serde_json::json;
     use sui_types::{base_types::ObjectID, test_checkpoint_data_builder::TestCheckpointBuilder};
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::TcpListener;
     use wiremock::matchers::{body_partial_json, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -744,6 +750,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_run_query_retries_truncated_response_body() {
+        // A raw TCP server lets Content-Length exceed the number of response bytes actually sent.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let body = br#"{"data":{"checkpoint":null}}"#;
+            let mut requests = Vec::new();
+            for truncated in [true, false] {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut headers = Vec::new();
+                while !headers.ends_with(b"\r\n\r\n") {
+                    headers.push(stream.read_u8().await.unwrap());
+                }
+                let headers = String::from_utf8(headers).unwrap();
+                let length = headers
+                    .lines()
+                    .find_map(|line| {
+                        let (name, value) = line.split_once(':')?;
+                        name.eq_ignore_ascii_case("content-length")
+                            .then(|| value.trim().parse::<usize>().unwrap())
+                    })
+                    .expect("query request should have a content length");
+                let mut request = vec![0; length];
+                stream.read_exact(&mut request).await.unwrap();
+                requests.push(request);
+
+                let headers = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len(),
+                );
+                stream.write_all(headers.as_bytes()).await.unwrap();
+                stream
+                    .write_all(if truncated { &body[..8] } else { body })
+                    .await
+                    .unwrap();
+                stream.shutdown().await.unwrap();
+            }
+            requests
+        });
+
+        let store = GraphQLClient::new(Node::Custom(url), "test-version").unwrap();
+        let operation = CheckpointQuery::build(CheckpointArgs {
+            sequence_number: Some(7),
+        });
+        let response = tokio::time::timeout(Duration::from_secs(10), store.run_query(&operation))
+            .await
+            .expect("query should finish within the test deadline")
+            .expect("query should recover from the interrupted response");
+        assert!(response.data.is_some());
+        let requests = server.await.unwrap();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0], requests[1]);
+    }
+
+    #[tokio::test]
     async fn test_run_query_does_not_retry_invalid_json() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
@@ -757,7 +818,12 @@ mod tests {
             sequence_number: Some(7),
         });
         let error = store.run_query(&operation).await.err().unwrap();
-        assert!(error.downcast_ref::<reqwest::Error>().unwrap().is_decode());
+        assert!(
+            error
+                .downcast_ref::<serde_json::Error>()
+                .unwrap()
+                .is_syntax()
+        );
     }
 
     #[tokio::test]
