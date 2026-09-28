@@ -41,5 +41,7 @@ build --default-move-flavor sui
 build
 > cp Move.unknown_lint.error.toml Move.toml
 build
+> cp Move.duplicate_key.error.toml Move.toml
+build
 > cp Move.invalid_level.error.toml Move.toml
 build
