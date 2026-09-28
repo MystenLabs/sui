@@ -262,3 +262,44 @@ impl BuildConfig {
 fn parse_symbol(s: &str) -> Result<Symbol, String> {
     Ok(Symbol::from(s))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn additional_named_addresses_are_injected() {
+        let address = AccountAddress::from_hex_literal("0x42").unwrap();
+        let config = BuildConfig {
+            additional_named_addresses: BTreeMap::from([("injected".to_owned(), address)]),
+            ..Default::default()
+        };
+
+        let addresses = config.addresses_for_config(BTreeMap::new());
+
+        assert_eq!(
+            addresses.inner[&Symbol::from("injected")].into_inner(),
+            address
+        );
+    }
+
+    #[test]
+    fn additional_named_addresses_override_manifest_addresses() {
+        let address = AccountAddress::from_hex_literal("0x42").unwrap();
+        let config = BuildConfig {
+            additional_named_addresses: BTreeMap::from([("overridden".to_owned(), address)]),
+            ..Default::default()
+        };
+        let manifest_addresses = BTreeMap::from([(
+            Identifier::new("overridden").unwrap(),
+            NamedAddress::Defined(OriginalID(AccountAddress::ONE)),
+        )]);
+
+        let addresses = config.addresses_for_config(manifest_addresses);
+
+        assert_eq!(
+            addresses.inner[&Symbol::from("overridden")].into_inner(),
+            address
+        );
+    }
+}

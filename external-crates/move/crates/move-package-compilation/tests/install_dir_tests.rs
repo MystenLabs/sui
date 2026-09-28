@@ -220,6 +220,82 @@ async fn test_no_install_dir_uses_default() {
 }
 
 #[tokio::test]
+async fn test_second_build_removes_stale_artifacts() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let package_path = temp_dir.path().join("test_package");
+    fs::create_dir(&package_path).expect("Failed to create package dir");
+    create_test_package(&package_path).expect("Failed to create test package");
+
+    let install_dir = temp_dir.path().join("install");
+    let build_config = BuildConfig {
+        install_dir: Some(install_dir.clone()),
+        default_flavor: Some(move_compiler::editions::Flavor::Core),
+        ..Default::default()
+    };
+    let env = Vanilla::default_environment();
+
+    compile_package::<_, Vanilla>(
+        &package_path,
+        &build_config,
+        &env,
+        Vanilla::new(),
+        &mut Vec::new(),
+    )
+    .await
+    .expect("compilation succeeds");
+
+    let stale_artifact = install_dir.join("build").join("test_package").join("stale");
+    fs::write(&stale_artifact, "stale").expect("Failed to write stale artifact");
+
+    compile_package::<_, Vanilla>(
+        &package_path,
+        &build_config,
+        &env,
+        Vanilla::new(),
+        &mut Vec::new(),
+    )
+    .await
+    .expect("compilation succeeds");
+
+    assert!(!stale_artifact.exists());
+}
+
+#[tokio::test]
+async fn test_case_insensitive_module_collisions_are_rejected() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let package_path = temp_dir.path().join("test_package");
+    fs::create_dir(&package_path).expect("Failed to create package dir");
+    create_test_package(&package_path).expect("Failed to create test package");
+    let sources = package_path.join(SourcePackageLayout::Sources.path());
+    fs::write(sources.join("upper.move"), "module test_package::Set {}")
+        .expect("Failed to write source");
+    fs::write(sources.join("lower.move"), "module test_package::set {}")
+        .expect("Failed to write source");
+
+    let build_config = BuildConfig {
+        default_flavor: Some(move_compiler::editions::Flavor::Core),
+        ..Default::default()
+    };
+    let env = Vanilla::default_environment();
+
+    let error = compile_package::<_, Vanilla>(
+        &package_path,
+        &build_config,
+        &env,
+        Vanilla::new(),
+        &mut Vec::new(),
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("would cause failures on case insensitive file systems")
+    );
+}
+
+#[tokio::test]
 async fn test_install_dir_existing_directory() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let package_path = temp_dir.path().join("test_package");
