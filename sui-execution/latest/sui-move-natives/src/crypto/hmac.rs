@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{NativesCostTable, get_extension};
 use fastcrypto::{hmac, traits::ToFromBytes};
-use move_binary_format::errors::PartialVMResult;
-use move_binary_format::safe_unwrap;
+use move_binary_format::{errors::PartialVMResult, safe_assert};
+use move_binary_format::{safe_assert_eq, safe_unwrap};
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
     execution::{
@@ -42,8 +42,8 @@ pub fn hmac_sha3_256(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 2);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 2);
 
     // Load the cost parameters from the protocol config
     let hmac_hmac_sha3_256_cost_params = get_extension!(context, NativesCostTable)?

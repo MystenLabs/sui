@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{NativesCostTable, get_extension};
 use fastcrypto::error::FastCryptoError;
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, safe_assert, safe_assert_eq};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::u256::U256;
@@ -63,8 +63,8 @@ pub fn check_zklogin_id_internal(
             )?
     );
 
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 6);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 6);
 
     // Poseidon hash of the user's pin code
     let pin_hash = pop_arg!(args, U256);
@@ -163,8 +163,8 @@ pub fn check_zklogin_issuer_internal(
             )?
     );
 
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     // The issuer (identity provider) id
     let issuer = pop_arg!(args, VectorRef);

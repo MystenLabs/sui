@@ -3,6 +3,7 @@
 
 use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::{safe_assert, safe_assert_eq};
 use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
 use move_vm_runtime::execution::values::VectorSpecialization;
 use move_vm_runtime::native_charge_gas_early_exit;
@@ -75,8 +76,8 @@ pub fn load_nitro_attestation_internal(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 2);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 2);
 
     let cost = context.gas_used();
     if !is_supported(context)? {

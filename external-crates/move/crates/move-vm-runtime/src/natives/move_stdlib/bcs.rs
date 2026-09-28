@@ -12,7 +12,7 @@ use crate::{
     },
     pop_arg,
 };
-use move_binary_format::{errors::PartialVMResult, safe_unwrap};
+use move_binary_format::{errors::PartialVMResult, safe_assert_eq, safe_unwrap};
 use move_core_types::{
     gas_algebra::{InternalGas, InternalGasPerByte, NumBytes},
     vm_status::sub_status::NFE_BCS_SERIALIZATION_FAILURE,
@@ -45,8 +45,8 @@ fn native_to_bytes(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     // pop type and value
     let ref_to_val = pop_arg!(args, Reference);

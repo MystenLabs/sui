@@ -312,7 +312,6 @@ pub fn borrow_child_object(
     }
     let child_ref = global_value.borrow_global().map_err(|err| {
         if err.major_status() == StatusCode::MISSING_DATA {
-            debug_assert!(false);
             partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
                 "borrow_global returned MISSING_DATA after exists() was true"
@@ -403,7 +402,6 @@ pub fn remove_child_object(
     }
     let child = global_value.move_from().map_err(|err| {
         if err.major_status() == StatusCode::MISSING_DATA {
-            debug_assert!(false);
             partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
                 "move_from returned MISSING_DATA after exists() was true"

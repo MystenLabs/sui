@@ -12,7 +12,7 @@ use crate::{
     },
     pop_arg,
 };
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, safe_assert, safe_assert_eq};
 use move_core_types::gas_algebra::{InternalGas, InternalGasPerByte, NumBytes};
 use sha2::{Digest, Sha256};
 use sha3::Sha3_256;
@@ -36,11 +36,11 @@ pub struct Sha2_256GasParameters {
 fn native_sha2_256(
     gas_params: &Sha2_256GasParameters,
     context: &mut NativeContext,
-    _ty_args: Vec<Type>,
+    ty_args: Vec<Type>,
     mut arguments: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(_ty_args.is_empty());
-    debug_assert!(arguments.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(arguments.len(), 1);
 
     let hash_arg = pop_arg!(arguments, Vec<u8>);
 
@@ -85,11 +85,11 @@ pub struct Sha3_256GasParameters {
 fn native_sha3_256(
     gas_params: &Sha3_256GasParameters,
     context: &mut NativeContext,
-    _ty_args: Vec<Type>,
+    ty_args: Vec<Type>,
     mut arguments: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(_ty_args.is_empty());
-    debug_assert!(arguments.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(arguments.len(), 1);
 
     let hash_arg = pop_arg!(arguments, Vec<u8>);
 
