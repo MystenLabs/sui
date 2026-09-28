@@ -22,7 +22,7 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{Argument, TransactionData, TransactionDataAPI},
 };
-use test_cluster::addr_balance_test_env::TestEnvBuilder;
+use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
 
 /// Helper to build a PTB that splits X MIST from GasCoin and transfers to recipient.
 /// When `gas` is provided, it's used as explicit gas payment.
@@ -1146,5 +1146,213 @@ async fn test_estimated_budget_excludes_mock_gas_coin_storage_for_address_balanc
          (simulated={simulated_budget}, actual={actual_net_gas}); \
          max expected overshoot is {max_expected_overshoot} MIST. \
          The mock gas coin's storage cost is leaking into the estimate."
+    );
+}
+
+// =============================================================================
+// Regression: with gas selection off, a transaction that pays for gas from
+// address balance must be simulated as it executes, without the synthetic gas
+// coin. The estimated budget excludes that coin's storage cost, so at mainnet's
+// reference gas price charging it fails the simulation with InsufficientGas
+// even though execution succeeds.
+// =============================================================================
+
+/// Mainnet's reference gas price in MIST. At this price the estimated budget's `1000 * RGP` safe
+/// overhead is smaller than the storage cost of a synthetic gas coin.
+const MAINNET_REFERENCE_GAS_PRICE: u64 = 100;
+
+/// Simulate `tx` with checks on and gas selection off, then execute it. Both must succeed and
+/// charge the same gas.
+async fn assert_simulation_matches_execution(test_env: &TestEnv, tx: &TransactionData) {
+    let simulated = test_env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(tx, true, false)
+        .await
+        .expect("Simulation request should succeed");
+    assert!(
+        simulated.transaction.effects.status().is_ok(),
+        "Simulation should succeed, got: {:?}",
+        simulated.transaction.effects.status()
+    );
+
+    let (_, effects) = test_env
+        .cluster
+        .sign_and_execute_transaction_directly(tx)
+        .await
+        .expect("Transaction should execute");
+    assert!(
+        effects.status().is_ok(),
+        "Execution should succeed, got: {:?}",
+        effects.status()
+    );
+    assert_eq!(
+        simulated.transaction.effects.gas_cost_summary(),
+        effects.gas_cost_summary(),
+        "Simulation should charge the same gas as execution"
+    );
+}
+
+#[sim_test]
+async fn test_simulate_address_balance_gas_without_gas_selection() {
+    use rand::rngs::OsRng;
+    use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+    use sui_rpc::proto::sui::rpc::v2::{
+        Argument, Command, GasPayment, Input, ProgrammableTransaction, SimulateTransactionRequest,
+        Transaction, TransactionKind, TransferObjects,
+    };
+    use sui_swarm_config::genesis_config::ValidatorGenesisConfigBuilder;
+    use sui_types::transaction::ObjectArg;
+
+    let mut test_env = TestEnvBuilder::new()
+        .with_test_cluster_builder_cb(Box::new(|builder| {
+            builder.with_validators(vec![
+                ValidatorGenesisConfigBuilder::new()
+                    .with_gas_price(MAINNET_REFERENCE_GAS_PRICE)
+                    .build(&mut OsRng),
+            ])
+        }))
+        .build()
+        .await;
+    assert_eq!(test_env.rgp, MAINNET_REFERENCE_GAS_PRICE);
+
+    let recipient = SuiAddress::random_for_testing_only();
+    let (sender, _) = test_env.get_sender_and_gas(0);
+    test_env
+        .fund_one_address_balance(sender, MIST_PER_SUI / 2)
+        .await;
+    let (_, coins) = test_env.get_sender_and_all_gas(0);
+
+    // Case 1: resolve the budget and address-balance gas with gas selection, then simulate the
+    // resolved transaction, which carries a ValidDuring expiration, without it.
+    let mut unresolved_transaction = Transaction::default();
+    unresolved_transaction.kind = Some(TransactionKind::from({
+        let mut ptb = ProgrammableTransaction::default();
+        ptb.inputs = vec![
+            {
+                let mut input = Input::default();
+                input.object_id = Some(coins[0].0.to_canonical_string(true));
+                input
+            },
+            {
+                let mut input = Input::default();
+                input.literal = Some(Box::new(recipient.to_string().into()));
+                input
+            },
+        ];
+        ptb.commands = vec![Command::from({
+            let mut message = TransferObjects::default();
+            message.objects = vec![Argument::new_input(0)];
+            message.address = Some(Argument::new_input(1));
+            message
+        })];
+        ptb
+    }));
+    unresolved_transaction.sender = Some(sender.to_string());
+    unresolved_transaction.gas_payment = Some({
+        let mut message = GasPayment::default();
+        message.owner = Some(sender.to_string());
+        message
+    });
+
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_env.cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+    let response = alpha_client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+    let resolved_transaction: TransactionData = response
+        .transaction
+        .as_ref()
+        .unwrap()
+        .transaction
+        .as_ref()
+        .unwrap()
+        .bcs
+        .as_ref()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert!(
+        resolved_transaction.gas_data().payment.is_empty(),
+        "Expected gas selection to pick address balance, got payment: {:?}",
+        resolved_transaction.gas_data().payment
+    );
+    assert_simulation_matches_execution(&test_env, &resolved_transaction).await;
+
+    // Case 2: the same kind of transfer without an expiration. The owned coin input protects it
+    // against replay, so it still pays for gas from address balance. The budget from case 1 does
+    // not carry over: this genesis coin has no storage rebate to offset its write.
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let coin_arg = builder.obj(ObjectArg::ImmOrOwnedObject(coins[1])).unwrap();
+    builder.transfer_arg(recipient, coin_arg);
+    let tx = TransactionData::new_programmable(
+        sender,
+        vec![],
+        builder.finish(),
+        5_000_000,
+        test_env.rgp,
+    );
+    assert_simulation_matches_execution(&test_env, &tx).await;
+}
+
+// =============================================================================
+// With gas selection off, a transaction without gas payment that could not pay
+// for gas from address balance as given is still simulated with the synthetic
+// gas coin, so dry runs of unpaid transactions keep working.
+// =============================================================================
+
+#[sim_test]
+async fn test_simulate_without_gas_selection_falls_back_to_mock_gas_coin() {
+    use sui_types::transaction::ObjectArg;
+
+    let mut test_env = TestEnvBuilder::new().build().await;
+    let client = test_env.cluster.grpc_client();
+    let gas_budget = 50_000_000;
+
+    // An owned input protects the transaction against replay, but the sender has no address
+    // balance to pay for gas.
+    let (sender, coin) = test_env.get_sender_and_gas(0);
+    assert_eq!(test_env.get_sui_balance_ab(sender), 0);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let coin_arg = builder.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap();
+    builder.transfer_arg(SuiAddress::random_for_testing_only(), coin_arg);
+    let tx = TransactionData::new_programmable(
+        sender,
+        vec![],
+        builder.finish(),
+        gas_budget,
+        test_env.rgp,
+    );
+    let response = client
+        .simulate_transaction(&tx, true, false)
+        .await
+        .expect("Simulation without address balance should use a mock gas coin");
+    assert!(
+        response.transaction.effects.status().is_ok(),
+        "Simulation without address balance should succeed, got: {:?}",
+        response.transaction.effects.status()
+    );
+
+    // The address balance covers the budget, but without a gas coin nothing protects the
+    // transaction against replay: it has no inputs and no expiration.
+    let (sender, _) = test_env.get_sender_and_gas(1);
+    test_env
+        .fund_one_address_balance(sender, MIST_PER_SUI)
+        .await;
+    let tx = build_no_gas_coin_ptb(sender, None, gas_budget, test_env.rgp);
+    let response = client
+        .simulate_transaction(&tx, true, false)
+        .await
+        .expect("Simulation without replay protection should use a mock gas coin");
+    assert!(
+        response.transaction.effects.status().is_ok(),
+        "Simulation without replay protection should succeed, got: {:?}",
+        response.transaction.effects.status()
     );
 }
