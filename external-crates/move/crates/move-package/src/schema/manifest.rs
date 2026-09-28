@@ -746,13 +746,13 @@ mod tests {
         .unwrap_err()
         .to_string();
 
-        assert_snapshot!(error, @r###"
+        assert_snapshot!(error, @r"
         TOML parse error at line 6, column 14
           |
         6 |             [unknown]
           |              ^^^^^^^
-        unknown field `unknown`, expected one of `package`, `environments`, `dependencies`, `dep-replacements`
-        "###);
+        unknown field `unknown`, expected one of `package`, `lints`, `environments`, `dependencies`, `dep-replacements`
+        ");
     }
 
     // `package` section parsing /////////////////////////////////////////////////////////
@@ -1262,12 +1262,12 @@ mod tests {
         .unwrap_err()
         .to_string();
 
-        assert_snapshot!(error, @r###"
+        assert_snapshot!(error, @r"
         TOML parse error at line 6, column 14
           |
         6 |             [addresses]
           |              ^^^^^^^^^
-        unknown field `addresses`, expected one of `package`, `environments`, `dependencies`, `dep-replacements`
-        "###);
+        unknown field `addresses`, expected one of `package`, `lints`, `environments`, `dependencies`, `dep-replacements`
+        ");
     }
 }
