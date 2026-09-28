@@ -88,7 +88,6 @@ pub fn compile_packages_in_file(filename: &str, dependencies: &[&str]) -> Vec<St
         warning_filter: unused_for_test_filter_scope(),
         flavor: Flavor::Sui,
         edition: Edition::E2024_ALPHA,
-        ..Default::default()
     })
     .build_and_report()
     .expect("Failed module compilation");

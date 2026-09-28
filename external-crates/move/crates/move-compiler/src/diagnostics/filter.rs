@@ -31,7 +31,6 @@ use std::{
 
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use serde::{Deserialize, Serialize};
 
 use crate::diagnostics::{
     Diagnostic,
@@ -46,44 +45,11 @@ use crate::shared::{format_allow_attr, known_attributes};
 pub type FilterPrefix = Option<Symbol>;
 pub type FilterName = Symbol;
 
-/// Package-level warning configuration, keyed by filter name or filter prefix.
-///
-/// Direct entries correspond to `#[allow(name)]`, while grouped entries correspond to
-/// `#[allow(prefix(name))]`.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WarningFilterConfig(pub BTreeMap<String, WarningFilterValue>);
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum WarningFilterValue {
-    Level(WarningLevel),
-    Group(BTreeMap<String, WarningLevel>),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum WarningLevel {
-    Allow,
-    Warn,
-    Deny,
-}
-
-impl From<WarningLevel> for FilterKind {
-    fn from(level: WarningLevel) -> Self {
-        match level {
-            WarningLevel::Allow => Self::Allow,
-            WarningLevel::Warn => Self::Warn,
-            WarningLevel::Deny => Self::Deny,
-        }
-    }
-}
-
 //**************************************************************************************************
 // Filter name constants
 //**************************************************************************************************
 
 pub const FILTER_ALL: &str = "all";
-pub const FILTER_WARNINGS: &str = "warnings";
 pub const FILTER_UNUSED: &str = "unused";
 pub const FILTER_MISSING_PHANTOM: &str = "missing_phantom";
 pub const FILTER_UNUSED_USE: &str = "unused_use";
@@ -438,6 +404,45 @@ pub static IDE_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpansion)>
             ),
         ]
     });
+
+/// Resolves named filter settings against compiler and custom filter registries.
+pub fn resolve_filter_names(
+    configured: impl IntoIterator<Item = (FilterPrefix, FilterName, FilterKind)>,
+    custom_known: impl IntoIterator<Item = (FilterPrefix, Vec<(FilterName, Vec<DiagnosticsID>)>)>,
+) -> Result<FilterScope, (FilterPrefix, FilterName)> {
+    let mut known = BTreeMap::<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>>::new();
+    for (name, ids) in COMPILER_KNOWN_FILTERS.iter() {
+        known
+            .entry(None)
+            .or_default()
+            .insert(Symbol::from(*name), ids.to_vec());
+    }
+    for (prefix, filters) in custom_known {
+        let known_for_prefix = known.entry(prefix).or_default();
+        for (name, ids) in filters {
+            known_for_prefix.entry(name).or_default().extend(ids);
+        }
+    }
+
+    let mut entries = BTreeMap::new();
+    for (prefix, name, kind) in configured {
+        let Some(ids) = known
+            .get(&prefix)
+            .and_then(|known_for_prefix| known_for_prefix.get(&name))
+        else {
+            return Err((prefix, name));
+        };
+        for id in ids {
+            entries
+                .entry(*id)
+                .and_modify(|entry: &mut Spanned<FilterKind>| {
+                    entry.value = entry.value.resolve_conflict(kind);
+                })
+                .or_insert(sp(Loc::invalid(), kind));
+        }
+    }
+    Ok(FilterScope::new(entries))
+}
 
 //**************************************************************************************************
 // Impls
