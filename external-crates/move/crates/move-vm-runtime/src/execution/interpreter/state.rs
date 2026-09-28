@@ -50,7 +50,7 @@ pub(crate) struct MachineState {
     /// Operand stack, where Move `Value`s are stored for stack operations.
     pub(crate) operand_stack: ValueStack,
     pub(crate) interner: Arc<IdentifierInterner>,
-    pub(crate) type_limits: TypeLimits,
+    pub(crate) type_limits: Arc<TypeLimits>,
     pub(crate) callstack_highwatermark: usize,
     pub(crate) valuestack_highwatermark: usize,
 }
@@ -88,7 +88,7 @@ pub(crate) struct CallFrame {
 impl MachineState {
     pub(super) fn new(
         interner: Arc<IdentifierInterner>,
-        type_limits: TypeLimits,
+        type_limits: Arc<TypeLimits>,
         call_stack: CallStack,
     ) -> Self {
         let callstack_highwatermark = call_stack.heap.cur_size();

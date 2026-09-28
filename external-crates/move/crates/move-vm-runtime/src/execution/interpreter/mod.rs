@@ -31,7 +31,7 @@ pub(crate) fn run(
     vtables: &mut VMDispatchTables,
     telemetry: &mut TransactionTelemetryContext,
     vm_config: Arc<VMConfig>,
-    type_limits: TypeLimits,
+    type_limits: Arc<TypeLimits>,
     extensions: &mut NativeContextExtensions,
     tracer: &mut Option<VMTracer<'_>>,
     gas_meter: &mut impl GasMeter,

@@ -56,6 +56,8 @@ pub struct MoveVM<'extensions> {
     pub(crate) native_extensions: NativeExtensions<'extensions>,
     /// The Move VM's configuration.
     pub(crate) vm_config: Arc<VMConfig>,
+    /// The type traversal limits used for execution in this VM.
+    pub(crate) type_limits: Arc<TypeLimits>,
     /// The Move VM's interner.
     pub(crate) interner: Arc<IdentifierInterner>,
     /// The Move Runtime telemetry
@@ -144,7 +146,7 @@ impl<'extensions> MoveVM<'extensions> {
             None,
             gas_meter,
             bypass_declared_entry_check,
-            TypeLimits::VM_DEFAULT,
+            self.type_limits.clone(),
         )
     }
 
@@ -182,8 +184,10 @@ impl<'extensions> MoveVM<'extensions> {
         max_type_nodes: Option<u64>,
     ) -> VMResult<Vec<Value>> {
         let type_limits = match max_type_nodes {
-            Some(max_type_nodes) => TypeLimits::VM_DEFAULT.raise_max_type_nodes_to(max_type_nodes),
-            None => TypeLimits::VM_DEFAULT,
+            Some(max_type_nodes) => {
+                Arc::new(self.type_limits.raise_max_type_nodes_to(max_type_nodes))
+            }
+            None => self.type_limits.clone(),
         };
         let tracer = if cfg!(feature = "tracing") {
             tracer
@@ -366,7 +370,7 @@ impl<'extensions> MoveVM<'extensions> {
         tracer: Option<&mut MoveTraceBuilder>,
         gas_meter: &mut impl GasMeter,
         bypass_declared_entry_check: bool,
-        type_limits: TypeLimits,
+        type_limits: Arc<TypeLimits>,
     ) -> VMResult<Vec<Value>> {
         let telemetry = Arc::clone(&self.telemetry);
         telemetry.with_transaction_telemetry(|txn_telemetry| {
@@ -486,7 +490,7 @@ impl<'extensions> MoveVM<'extensions> {
         func: VMPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
-        type_limits: TypeLimits,
+        type_limits: Arc<TypeLimits>,
     ) -> VMResult<Vec<Value>> {
         interpreter::run(
             &mut self.virtual_tables,
@@ -523,6 +527,7 @@ impl std::fmt::Debug for MoveVM<'_> {
             .field("virtual_tables", &self.virtual_tables)
             .field("link_context", &self.link_context)
             .field("vm_config", &self.vm_config)
+            .field("type_limits", &self.type_limits)
             // Note: native_extensions is intentionally omitted
             .finish()
     }
