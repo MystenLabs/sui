@@ -19,7 +19,7 @@ use crate::{
 use move_binary_format::{
     checked_as,
     errors::{PartialVMError, PartialVMResult},
-    partial_vm_error,
+    partial_vm_error, safe_assert, safe_assert_eq,
 };
 use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
 use std::{collections::VecDeque, sync::Arc};
@@ -54,8 +54,8 @@ pub fn native_empty(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.is_empty());
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert!(args.is_empty());
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
@@ -97,8 +97,8 @@ pub fn native_length(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
@@ -132,8 +132,8 @@ pub fn native_push_back(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 2);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 2);
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
@@ -192,8 +192,8 @@ pub fn native_borrow(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 2);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 2);
 
     native_charge_gas_early_exit!(context, gas_params.base);
     let idx = checked_as!(pop_arg!(args, u64), usize)?;
@@ -230,8 +230,8 @@ pub fn native_pop_back(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     native_charge_gas_early_exit!(context, gas_params.base);
     let r = pop_arg!(args, VectorRef);
@@ -266,8 +266,8 @@ pub fn native_destroy_empty(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
@@ -301,8 +301,8 @@ pub fn native_swap(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 3);
 
     native_charge_gas_early_exit!(context, gas_params.base);
     let idx2 = checked_as!(pop_arg!(args, u64), usize)?;

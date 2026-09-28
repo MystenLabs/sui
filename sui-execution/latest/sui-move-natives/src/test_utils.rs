@@ -3,7 +3,7 @@
 
 use crate::{legacy_test_cost, types::is_otw_struct};
 use move_binary_format::errors::PartialVMResult;
-use move_binary_format::safe_unwrap;
+use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::{gas_algebra::InternalGas, runtime_value::MoveTypeLayout};
 use move_vm_runtime::execution::values::Struct;
 use move_vm_runtime::execution::{Type, values::Value};
@@ -16,8 +16,8 @@ pub fn create_one_time_witness(
     mut ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.is_empty());
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert!(args.is_empty());
 
     let ty = safe_unwrap!(ty_args.pop());
     let type_tag = context.type_to_type_tag(&ty)?;

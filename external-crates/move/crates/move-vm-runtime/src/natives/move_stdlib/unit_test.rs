@@ -11,7 +11,7 @@ use crate::{
         make_module_natives,
     },
 };
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, safe_assert};
 use move_core_types::gas_algebra::InternalGas;
 use smallvec::smallvec;
 use std::{collections::VecDeque, sync::Arc};
@@ -32,8 +32,8 @@ fn native_poison(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
     let cost = gas_params.base_cost;
     native_charge_gas_early_exit!(context, cost);
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
@@ -53,8 +53,8 @@ fn native_destroy(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(!ty_args.is_empty());
-    debug_assert!(!args.is_empty());
+    safe_assert!(!ty_args.is_empty());
+    safe_assert!(!args.is_empty());
 
     native_charge_gas_early_exit!(context, gas_params.base);
 

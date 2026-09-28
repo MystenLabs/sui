@@ -4,7 +4,7 @@ use fastcrypto::{
     bls12381::{min_pk, min_sig},
     traits::{ToFromBytes, VerifyingKey},
 };
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, safe_assert, safe_assert_eq};
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::natives::functions::{NativeContext, NativeResult};
 use move_vm_runtime::{execution::values::VectorRef, native_charge_gas_early_exit};
@@ -42,8 +42,8 @@ pub fn bls12381_min_sig_verify(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     // Load the cost parameters from the protocol config
     let bls12381_bls12381_min_sig_verify_cost_params = get_extension!(context, NativesCostTable)?
@@ -120,8 +120,8 @@ pub fn bls12381_min_pk_verify(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     // Load the cost parameters from the protocol config
     let bls12381_bls12381_min_pk_verify_cost_params = get_extension!(context, NativesCostTable)?
