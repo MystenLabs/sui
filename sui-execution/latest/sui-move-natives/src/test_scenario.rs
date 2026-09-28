@@ -11,7 +11,8 @@ use crate::{
 };
 use better_any::{Tid, TidAble};
 use indexmap::{IndexMap, IndexSet};
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
 use move_binary_format::{safe_assert, safe_unwrap};
 use move_core_types::{
     account_address::AccountAddress,
@@ -19,7 +20,6 @@ use move_core_types::{
     annotated_visitor as AV,
     language_storage::StructTag,
     u256::U256,
-    vm_status::StatusCode,
 };
 use move_vm_runtime::{
     execution::values::{Vector, VectorSpecialization},
@@ -962,9 +962,7 @@ fn get_specified_ty(mut ty_args: Vec<Type>) -> PartialVMResult<Type> {
 fn pop_id(args: &mut VecDeque<Value>) -> PartialVMResult<ObjectID> {
     let v = match args.pop_back() {
         None => {
-            return Err(PartialVMError::new(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            ));
+            return Err(partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR));
         }
         Some(v) => v,
     };
@@ -1044,9 +1042,7 @@ fn transaction_effects(
 
 fn object_type_of_type(context: &NativeContext, ty: &Type) -> PartialVMResult<MoveObjectType> {
     let TypeTag::Struct(s_tag) = context.type_to_type_tag(ty)? else {
-        return Err(PartialVMError::new(
-            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-        ));
+        return Err(partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR));
     };
     Ok(MoveObjectType::from(*s_tag))
 }
