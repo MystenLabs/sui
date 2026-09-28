@@ -13,7 +13,7 @@ use sui_types::address_alias::get_address_alias_state_obj_initial_shared_version
 use sui_types::base_types::AuthorityName;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::{
-    SubmitTxRequest, SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
+    SubmitTxRequest, SubmitTxResult, WaitForEffectsRequest, WaitForEffectsStatus,
 };
 use sui_types::transaction::{CallArg, ObjectArg, Transaction};
 use sui_types::{SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
@@ -47,12 +47,12 @@ async fn submit_and_wait_for_effects(
         .await
         .unwrap();
 
-    let WaitForEffectsResponse::Executed {
+    let WaitForEffectsStatus::Executed {
         details: Some(details),
         ..
-    } = effects
+    } = effects.status
     else {
-        panic!("Expected Executed response, got {effects:?}");
+        panic!("Expected Executed response, got {:?}", effects.status);
     };
 
     details.effects
@@ -378,7 +378,7 @@ async fn test_alias_race() {
         .await
         .unwrap();
     assert!(
-        matches!(effects, WaitForEffectsResponse::Rejected { .. }),
+        matches!(effects.status, WaitForEffectsStatus::Rejected { .. }),
         "Expected Rejected response, got: {:?}",
         effects
     );

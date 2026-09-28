@@ -503,6 +503,7 @@ mod client_monitor_tests {
 
     use super::*;
     use std::collections::HashSet;
+    use sui_types::messages_grpc::StaggeringReport;
 
     fn get_authority_aggregator(
         committee_size: usize,
@@ -511,6 +512,10 @@ mod client_monitor_tests {
             AuthorityAggregatorBuilder::from_committee_size(committee_size)
                 .build_mock_authority_aggregator(),
         )
+    }
+
+    fn new_report(active: bool, report_ms: Option<u64>) -> StaggeringReport {
+        StaggeringReport { active, report_ms }
     }
 
     #[tokio::test]
@@ -956,20 +961,20 @@ mod client_monitor_tests {
         assert!(!monitor.staggering_active());
 
         // One of four equal-stake validators is below the validity threshold.
-        monitor.record_staggering_report(validators[0], Some(true));
+        monitor.record_staggering_report(validators[0], Some(new_report(true, None)));
         assert!(!monitor.staggering_active());
 
         // A second fresh report reaches f+1 stake: flips on immediately.
-        monitor.record_staggering_report(validators[1], Some(true));
+        monitor.record_staggering_report(validators[1], Some(new_report(true, None)));
         assert!(monitor.staggering_active());
 
         // A validator revising its report to inactive withdraws its stake.
-        monitor.record_staggering_report(validators[1], Some(false));
+        monitor.record_staggering_report(validators[1], Some(new_report(false, None)));
         assert!(!monitor.staggering_active());
 
         // Reports without the field carry no information and change nothing.
         monitor.record_staggering_report(validators[0], None);
-        monitor.record_staggering_report(validators[1], Some(true));
+        monitor.record_staggering_report(validators[1], Some(new_report(true, None)));
         assert!(monitor.staggering_active());
         monitor.record_staggering_report(validators[0], None);
         assert!(monitor.staggering_active());
@@ -983,14 +988,70 @@ mod client_monitor_tests {
         let config = ValidatorClientMonitorConfig::default();
 
         let stale = Instant::now() - (config.health_check_interval * 2 + Duration::from_secs(1));
-        monitor.record_staggering_report_at(validators[0], true, stale);
-        monitor.record_staggering_report_at(validators[1], true, stale);
+        monitor.record_staggering_report_at(validators[0], new_report(true, None), stale);
+        monitor.record_staggering_report_at(validators[1], new_report(true, None), stale);
         assert!(!monitor.staggering_active(), "stale reports must not count");
 
         // Fresh reports count again once enough stake refreshes.
-        monitor.record_staggering_report(validators[0], Some(true));
+        monitor.record_staggering_report(validators[0], Some(new_report(true, None)));
         assert!(!monitor.staggering_active());
-        monitor.record_staggering_report(validators[1], Some(true));
+        monitor.record_staggering_report(validators[1], Some(new_report(true, None)));
+        assert!(monitor.staggering_active());
+    }
+
+    #[tokio::test]
+    async fn test_staggering_reports_ordered_by_validator_timestamp() {
+        let auth_agg = get_authority_aggregator(4);
+        let monitor = ValidatorClientMonitor::new_for_test(auth_agg.clone());
+        let validators: Vec<_> = auth_agg.committee.names().cloned().collect();
+
+        monitor.record_staggering_report(validators[0], Some(new_report(true, Some(2_000))));
+        monitor.record_staggering_report(validators[1], Some(new_report(true, Some(2_000))));
+        assert!(monitor.staggering_active());
+
+        // A reordered response stamped before the stored report (a long-poll that was
+        // built while the mode was still off) must not clobber the newer state.
+        monitor.record_staggering_report(validators[1], Some(new_report(false, Some(1_000))));
+        assert!(monitor.staggering_active());
+
+        // An equal or newer stamp overwrites as usual.
+        monitor.record_staggering_report(validators[1], Some(new_report(false, Some(3_000))));
+        assert!(!monitor.staggering_active());
+    }
+
+    #[tokio::test]
+    async fn test_staggering_stale_entry_overwritten_regardless_of_timestamp() {
+        let auth_agg = get_authority_aggregator(4);
+        let monitor = ValidatorClientMonitor::new_for_test(auth_agg.clone());
+        let validators: Vec<_> = auth_agg.committee.names().cloned().collect();
+        let config = ValidatorClientMonitorConfig::default();
+
+        // A far-future stamp (bad clock or a liar) only shields the entry while it is
+        // fresh; once expired, any stamp overwrites and the validator recovers.
+        let stale = Instant::now() - (config.health_check_interval * 2 + Duration::from_secs(1));
+        monitor.record_staggering_report_at(
+            validators[0],
+            new_report(false, Some(u64::MAX)),
+            stale,
+        );
+        monitor.record_staggering_report(validators[0], Some(new_report(true, Some(1_000))));
+        monitor.record_staggering_report(validators[1], Some(new_report(true, Some(1_000))));
+        assert!(monitor.staggering_active());
+    }
+
+    #[tokio::test]
+    async fn test_staggering_reports_without_timestamp_last_write_wins() {
+        let auth_agg = get_authority_aggregator(4);
+        let monitor = ValidatorClientMonitor::new_for_test(auth_agg.clone());
+        let validators: Vec<_> = auth_agg.committee.names().cloned().collect();
+
+        // Old validators omit the timestamp: their reports keep last-write-wins
+        // semantics, in both directions and against stamped reports.
+        monitor.record_staggering_report(validators[0], Some(new_report(true, Some(5_000))));
+        monitor.record_staggering_report(validators[0], Some(new_report(false, None)));
+        monitor.record_staggering_report(validators[1], Some(new_report(true, None)));
+        assert!(!monitor.staggering_active());
+        monitor.record_staggering_report(validators[0], Some(new_report(true, None)));
         assert!(monitor.staggering_active());
     }
 
