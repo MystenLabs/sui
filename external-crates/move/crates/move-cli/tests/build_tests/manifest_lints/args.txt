@@ -13,6 +13,7 @@ build
 > cp fixtures/lint.move sources/m.move
 > cp Move.lint_allow.ok.toml Move.toml
 build
+build --lint
 > cp Move.lint_warn.ok.toml Move.toml
 build
 > cp fixtures/lint_allow.move sources/m.move
@@ -23,9 +24,17 @@ build
 build --default-move-flavor sui
 > cp Move.sui_lint_warn.ok.toml Move.toml
 build --default-move-flavor sui
+> cp fixtures/clean.move sources/m.move
+> cp Move.dependency_lints.ok.toml Move.toml
+build
+> cp fixtures/lint.move sources/m.move
+> cp Move.no_lint.ok.toml Move.toml
+build --no-lint
 
 > cp fixtures/compiler.move sources/m.move
 > cp Move.compiler_deny.error.toml Move.toml
+build
+> cp Move.compiler_conflict.error.toml Move.toml
 build
 > cp fixtures/source_deny.move sources/m.move
 > cp Move.source_deny.error.toml Move.toml
@@ -37,6 +46,8 @@ build
 > cp Move.sui_lint_deny.error.toml Move.toml
 build --default-move-flavor sui
 > cp fixtures/clean.move sources/m.move
+> cp Move.sui_lint_core.error.toml Move.toml
+build --default-move-flavor core
 > cp Move.unknown.error.toml Move.toml
 build
 > cp Move.unknown_lint.error.toml Move.toml

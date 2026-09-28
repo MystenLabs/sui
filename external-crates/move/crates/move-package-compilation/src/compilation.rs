@@ -388,8 +388,10 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
         // mapped to `0x0`
         let addresses = build_config.addresses_for_config(pkg.named_addresses()?);
 
-        // TODO: better default handling for edition and flavor
-        let flavor = Flavor::from_str(pkg.flavor().unwrap_or("sui"))?;
+        let flavor = build_config
+            .default_flavor
+            .or(pkg.flavor().map(Flavor::from_str).transpose()?)
+            .unwrap_or(Flavor::Sui);
         let warning_filter = if pkg.is_root() {
             let mut custom_known = vec![linters::known_filters()];
             if flavor == Flavor::Sui {
