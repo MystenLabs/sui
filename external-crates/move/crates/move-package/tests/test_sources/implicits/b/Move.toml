@@ -1,5 +1,0 @@
-[package]
-name = "B"
-edition = "2024.beta"
-
-[dependencies]

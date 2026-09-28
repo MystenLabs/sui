@@ -83,7 +83,6 @@ def switch_to_local(project):
             "move-cli": "tools/move-cli",
             "move-core-types": "move-core/types",
             "move-coverage": "tools/move-coverage",
-            "move-package": "tools/move-package",
             "move-resource-viewer": "tools/move-resource-viewer",
             "move-stackless-bytecode": "move-prover/bytecode",
             "move-unit-test": "tools/move-unit-test",
