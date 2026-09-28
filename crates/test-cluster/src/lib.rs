@@ -53,7 +53,7 @@ use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_grpc::{
     RawSubmitTxRequest, SubmitTxRequest, SubmitTxResult, SubmitTxType, WaitForEffectsRequest,
-    WaitForEffectsResponse,
+    WaitForEffectsResponse, WaitForEffectsStatus,
 };
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
@@ -766,14 +766,14 @@ impl TestCluster {
 
         let wait_responses = join_all(wait_futures).await;
         for ((index, _), response) in submitted_positions.into_iter().zip_debug_eq(wait_responses) {
-            match response? {
-                WaitForEffectsResponse::Executed { details, .. } => {
+            match response?.status {
+                WaitForEffectsStatus::Executed { details, .. } => {
                     let data = details.ok_or_else(|| SuiErrorKind::GenericAuthorityError {
                         error: "Expected execution details".to_string(),
                     })?;
                     executed_results[index] = Some((digests[index], data.effects));
                 }
-                WaitForEffectsResponse::Rejected { error } => {
+                WaitForEffectsStatus::Rejected { error } => {
                     return Err(error.unwrap_or_else(|| {
                         SuiErrorKind::GenericAuthorityError {
                             error: "Transaction was rejected".to_string(),
@@ -781,7 +781,7 @@ impl TestCluster {
                         .into()
                     }));
                 }
-                WaitForEffectsResponse::Expired { .. } => {
+                WaitForEffectsStatus::Expired { .. } => {
                     return Err(SuiErrorKind::TransactionExpired.into());
                 }
             }
