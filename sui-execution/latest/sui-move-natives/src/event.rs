@@ -48,8 +48,8 @@ pub fn emit(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     let ty = safe_unwrap!(ty_args.pop());
     let event_value = safe_unwrap!(args.pop_back());
@@ -61,8 +61,8 @@ pub fn emit_authenticated_impl(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 2);
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(ty_args.len(), 2);
+    safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
     if !get_extension!(context, ObjectRuntime)?

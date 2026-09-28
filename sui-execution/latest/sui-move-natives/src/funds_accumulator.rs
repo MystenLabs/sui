@@ -46,8 +46,8 @@ pub fn add_to_accumulator_address(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 3);
 
     // TODO(address-balances): add specific cost for this
     let event_emit_cost_params = context
@@ -118,8 +118,8 @@ pub fn withdraw_from_accumulator_address(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 3);
 
     // TODO(address-balances): add specific cost for this
     // TODO(address-balances): determine storage cost for "Merge"

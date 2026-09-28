@@ -14,7 +14,7 @@ use crate::{
 #[cfg(feature = "testing")]
 use crate::execution::values::{Reference, VMValueCast};
 
-use move_binary_format::{errors::PartialVMResult, safe_unwrap};
+use move_binary_format::{errors::PartialVMResult, safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use smallvec::smallvec;
 
@@ -36,8 +36,8 @@ fn native_print_nop(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
     Ok(NativeResult::ok(gas_params.base_cost, smallvec![]))
 }
 
@@ -49,8 +49,8 @@ fn native_print(
     mut args: VecDeque<Value>,
     _move_std_addr: AccountAddress,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     let _val = safe_unwrap!(args.pop_back());
     let _ty = safe_unwrap!(ty_args.pop());
@@ -118,8 +118,8 @@ fn native_print_stack_trace_nop(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
     Ok(NativeResult::ok(gas_params.base_cost, smallvec![]))
 }
 
@@ -130,8 +130,8 @@ fn native_print_stack_trace(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
 
     #[cfg(feature = "testing")]
     {

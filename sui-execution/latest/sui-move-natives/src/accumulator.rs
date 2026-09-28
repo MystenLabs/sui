@@ -5,8 +5,8 @@ use crate::{
     NativesCostTable, get_extension, get_extension_mut,
     object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
 };
-use move_binary_format::errors::PartialVMResult;
 use move_binary_format::safe_unwrap;
+use move_binary_format::{errors::PartialVMResult, safe_assert, safe_assert_eq};
 use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::execution::{Type, values::Value};
 use move_vm_runtime::native_charge_gas_early_exit;
@@ -37,8 +37,8 @@ fn emit_event(
     mut args: VecDeque<Value>,
     action: MoveAccumulatorAction,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 3);
 
     let event_emit_cost_params = get_extension!(context, NativesCostTable)?
         .event_emit_cost_params
@@ -72,8 +72,8 @@ pub fn record_settlement_sui_conservation(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 2);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 2);
 
     let output_sui = safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<u64>());
     let input_sui = safe_unwrap!(safe_unwrap!(args.pop_back()).value_as::<u64>());

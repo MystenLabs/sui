@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{NativesCostTable, get_extension};
 use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256};
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, safe_assert, safe_assert_eq};
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
     execution::{
@@ -30,8 +30,8 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
     // The caller specifies the block size
     block_size: u16,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 1);
 
     let msg = pop_arg!(args, VectorRef);
     let msg_ref = msg.as_bytes_ref()?;

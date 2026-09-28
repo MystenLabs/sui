@@ -5,7 +5,7 @@ use fastcrypto::{
     ed25519::{Ed25519PublicKey, Ed25519Signature},
     traits::{ToFromBytes, VerifyingKey},
 };
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, safe_assert, safe_assert_eq};
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
     execution::{
@@ -44,8 +44,8 @@ pub fn ed25519_verify(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     // Load the cost parameters from the protocol config
     let ed25519_verify_cost_params = get_extension!(context, NativesCostTable)?

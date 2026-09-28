@@ -15,7 +15,7 @@ use crate::{
     pop_arg,
     shared::safe_ops::SafeIndex as _,
 };
-use move_binary_format::{checked_as, errors::PartialVMResult};
+use move_binary_format::{checked_as, errors::PartialVMResult, safe_assert_eq};
 use move_core_types::gas_algebra::InternalGas;
 use std::{collections::VecDeque, sync::Arc};
 
@@ -45,7 +45,7 @@ fn native_check_utf8(
     _ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(args.len(), 1);
 
     let s_arg = pop_arg!(args, VectorRef);
     let s_ref = s_arg.as_bytes_ref()?;
@@ -88,7 +88,7 @@ fn native_is_char_boundary(
     _ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(args.len() == 2);
+    safe_assert_eq!(args.len(), 2);
 
     // Charge before doing work
     native_charge_gas_early_exit!(context, gas_params.base);
@@ -130,7 +130,7 @@ fn native_sub_string(
     _ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(args.len(), 3);
 
     let j = checked_as!(pop_arg!(args, u64), usize)?;
     let i = checked_as!(pop_arg!(args, u64), usize)?;
@@ -184,7 +184,7 @@ fn native_index_of(
     _ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(args.len() == 2);
+    safe_assert_eq!(args.len(), 2);
 
     // Charge base fee
     native_charge_gas_early_exit!(context, gas_params.base);

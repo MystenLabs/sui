@@ -9,7 +9,7 @@ use fastcrypto::groups::{
 };
 use fastcrypto::serde_helpers::ToFromByteArray;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::safe_unwrap;
+use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::native_charge_gas_early_exit;
@@ -246,8 +246,8 @@ pub fn internal_validate(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 2);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 2);
 
     let cost = context.gas_used();
     if !is_supported(context)? {
@@ -308,8 +308,8 @@ pub fn internal_add(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
     if !is_supported(context)? {
@@ -381,8 +381,8 @@ pub fn internal_sub(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
     if !is_supported(context)? {
@@ -454,8 +454,8 @@ pub fn internal_mul(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
     if !is_supported(context)? {
@@ -543,8 +543,8 @@ pub fn internal_div(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
     if !is_supported(context)? {
@@ -633,8 +633,8 @@ pub fn internal_hash_to(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 2);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 2);
 
     let cost = context.gas_used();
     if !is_supported(context)? {
@@ -787,8 +787,8 @@ pub fn internal_multi_scalar_mul(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
     if !is_msm_supported(context)? {
@@ -857,8 +857,8 @@ pub fn internal_pairing(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
     if !is_supported(context)? {
@@ -901,8 +901,8 @@ pub fn internal_convert(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
 
@@ -957,8 +957,8 @@ pub fn internal_sum(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 2);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 2);
 
     let cost = context.gas_used();
 

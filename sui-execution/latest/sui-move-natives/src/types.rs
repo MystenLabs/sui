@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::errors::PartialVMResult;
 use move_binary_format::safe_unwrap;
+use move_binary_format::{errors::PartialVMResult, safe_assert_eq};
 use move_core_types::{
     gas_algebra::InternalGas,
     language_storage::TypeTag,
@@ -57,8 +57,8 @@ pub fn is_one_time_witness(
     mut ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     let type_is_one_time_witness_cost_params = get_extension!(context, NativesCostTable)?
         .type_is_one_time_witness_cost_params
