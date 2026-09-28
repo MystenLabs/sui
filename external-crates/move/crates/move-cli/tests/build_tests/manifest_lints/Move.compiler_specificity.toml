@@ -1,0 +1,11 @@
+[package]
+name = "manifest_lints"
+edition = "2024"
+
+[addresses]
+test = "0x0"
+
+[lints]
+warnings = "deny"
+unused = "allow"
+unused_variable = "warn"
