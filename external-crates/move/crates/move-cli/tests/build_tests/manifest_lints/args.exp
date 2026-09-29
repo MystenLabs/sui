@@ -107,6 +107,13 @@ External Command `cp fixtures/lint.move sources/m.move`:
 External Command `cp Move.lint_allow.ok.toml Move.toml`:
 Command `build`:
 BUILDING manifest_lints
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Build mode overrides lint levels\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Build mode overrides lint levels
+External Command `cp Move.lint_modes.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
 External Command `printf '\n# ===== [SUCCESS] ======================================\n# == The lint flag respects manifest levels\n'`:
 
 # ===== [SUCCESS] ======================================
@@ -214,6 +221,21 @@ External Command `printf '\n# ===== [FAILURE] ==================================
 External Command `cp fixtures/lint.move sources/m.move`:
 External Command `cp Move.lint_deny.error.toml Move.toml`:
 Command `build`:
+BUILDING manifest_lints
+error[EL04005]: 'abort' or 'assert' without named constant
+  ┌─ ./sources/m.move:3:15
+  │
+3 │         abort 1
+  │               ^ Prefer using a named constant.
+  │
+  = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Test mode overrides lint levels\n'`:
+
+# ===== [FAILURE] ======================================
+# == Test mode overrides lint levels
+External Command `cp Move.lint_modes.ok.toml Move.toml`:
+Command `test`:
 BUILDING manifest_lints
 error[EL04005]: 'abort' or 'assert' without named constant
   ┌─ ./sources/m.move:3:15

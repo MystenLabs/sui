@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::ensure;
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de, ser::SerializeMap};
 use serde_spanned::Spanned;
 
 use move_compiler::{
@@ -30,8 +30,11 @@ pub type ModeName = String;
 /// The identifier for a system dependency (in `{system = "dep_id"}` dependencies
 pub type SystemDepName = String;
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
-pub struct DiagnosticFilterConfig(pub BTreeMap<String, LintLevel>);
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DiagnosticFilterConfig {
+    pub root: BTreeMap<String, LintLevel>,
+    pub modes: BTreeMap<ModeName, BTreeMap<String, LintLevel>>,
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -41,18 +44,94 @@ pub enum LintLevel {
     Deny,
 }
 
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum DiagnosticFilterEntry {
+    Level(LintLevel),
+    Mode(BTreeMap<String, LintLevel>),
+}
+
+impl<'de> Deserialize<'de> for DiagnosticFilterConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let entries = BTreeMap::<String, DiagnosticFilterEntry>::deserialize(deserializer)?;
+        let mut root = BTreeMap::new();
+        let mut modes = BTreeMap::new();
+        for (name, entry) in entries {
+            match entry {
+                DiagnosticFilterEntry::Level(level) => {
+                    root.insert(name, level);
+                }
+                DiagnosticFilterEntry::Mode(config) => {
+                    modes.insert(name, config);
+                }
+            }
+        }
+        Ok(Self { root, modes })
+    }
+}
+
+impl Serialize for DiagnosticFilterConfig {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.root.len() + self.modes.len()))?;
+        for (name, level) in &self.root {
+            map.serialize_entry(name, level)?;
+        }
+        for (mode, config) in &self.modes {
+            map.serialize_entry(mode, config)?;
+        }
+        map.end()
+    }
+}
+
 impl DiagnosticFilterConfig {
     pub fn configured_filters(
         &self,
         prefix: FilterPrefix,
-    ) -> impl Iterator<Item = (FilterPrefix, FilterName, FilterKind)> + '_ {
-        self.0
-            .iter()
+        modes: &[ModeName],
+    ) -> impl Iterator<Item = (FilterPrefix, FilterName, FilterKind)> {
+        self.effective_config(modes)
+            .into_iter()
             .map(move |(name, level)| (prefix, name.as_str().into(), level.filter_kind()))
     }
 
-    pub fn filter_names(&self) -> BTreeSet<FilterName> {
-        self.0.keys().map(|name| name.as_str().into()).collect()
+    pub fn all_configured_filters(
+        &self,
+        prefix: FilterPrefix,
+    ) -> impl Iterator<Item = (FilterPrefix, FilterName, FilterKind)> + '_ {
+        self.root
+            .iter()
+            .chain(self.modes.values().flat_map(|mode| mode.iter()))
+            .map(move |(name, level)| (prefix, name.as_str().into(), level.filter_kind()))
+    }
+
+    pub fn enabled_filter_names(&self, modes: &[ModeName]) -> BTreeSet<FilterName> {
+        self.effective_config(modes)
+            .into_iter()
+            .filter_map(|(name, level)| (level != LintLevel::Allow).then(|| name.as_str().into()))
+            .collect()
+    }
+
+    pub fn allowed_filter_names(&self, modes: &[ModeName]) -> BTreeSet<FilterName> {
+        self.effective_config(modes)
+            .into_iter()
+            .filter_map(|(name, level)| (level == LintLevel::Allow).then(|| name.as_str().into()))
+            .collect()
+    }
+
+    fn effective_config(&self, modes: &[ModeName]) -> BTreeMap<String, LintLevel> {
+        let mut result = self.root.clone();
+        for mode in modes {
+            if let Some(config) = self.modes.get(mode) {
+                result.extend(config.iter().map(|(name, level)| (name.clone(), *level)));
+            }
+        }
+        result
     }
 }
 
@@ -388,10 +467,39 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(manifest.warnings.0.get("unused"), Some(&LintLevel::Deny));
+        assert_eq!(manifest.warnings.root.get("unused"), Some(&LintLevel::Deny));
         assert_eq!(
-            manifest.lints.0.get("abort_without_constant"),
+            manifest.lints.root.get("abort_without_constant"),
             Some(&LintLevel::Allow)
+        );
+    }
+
+    #[test]
+    fn lint_levels_for_modes() {
+        let manifest: ParsedManifest = toml_edit::de::from_str(
+            r#"
+            [package]
+            name = "example"
+
+            [lints]
+            all = "deny"
+            shared_object_derp = "warn"
+            build = { all = "allow", shared_object_derp = "allow" }
+
+            [lints.test]
+            shared_object_derp = "deny"
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(manifest.lints.root.get("all"), Some(&LintLevel::Deny));
+        assert_eq!(
+            manifest.lints.modes["build"].get("shared_object_derp"),
+            Some(&LintLevel::Allow)
+        );
+        assert_eq!(
+            manifest.lints.modes["test"].get("shared_object_derp"),
+            Some(&LintLevel::Deny)
         );
     }
 

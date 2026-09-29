@@ -169,39 +169,78 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
-    linter_visitors_with_config(level, &BTreeSet::new())
+    linter_visitors_with_config(level, &BTreeSet::new(), &BTreeSet::new())
 }
 
 pub fn linter_visitors_with_config(
     level: LintLevel,
     configured: &BTreeSet<FilterName>,
+    allowed: &BTreeSet<FilterName>,
 ) -> Vec<Visitor> {
+    let all_name = Symbol::from(crate::diagnostics::filter::FILTER_ALL);
+    let all_allowed = allowed.contains(&all_name);
     let all = match level {
         LintLevel::None => return vec![],
-        LintLevel::Default => {
-            configured.contains(&Symbol::from(crate::diagnostics::filter::FILTER_ALL))
-        }
-        LintLevel::All => true,
+        LintLevel::Default => configured.contains(&all_name),
+        LintLevel::All => !all_allowed,
     };
+    let enabled = |name| {
+        (all || configured.contains(&Symbol::from(name))) && !allowed.contains(&Symbol::from(name))
+    };
+    let default_enabled = |name| !all_allowed && !allowed.contains(&Symbol::from(name));
 
-    let mut visitors = vec![
-        share_owned::ShareOwnedVerifier.visitor(),
-        self_transfer::SelfTransferVerifier.visitor(),
-        custom_state_change::CustomStateChangeVerifier.visitor(),
-        coin_field::CoinFieldVisitor.visitor(),
-        freeze_wrapped::FreezeWrappedVisitor.visitor(),
-        collection_equality::CollectionEqualityVisitor.visitor(),
-        public_random::PublicRandomVisitor.visitor(),
-        missing_key::MissingKeyVisitor.visitor(),
-        unnecessary_public_entry::UnnecessaryPublicEntry.visitor(),
-        uncallable_function::UncallableFunction.visitor(),
-        unused_object_with_fields::UnusedObjWithFieldsVerifier.visitor(),
-        crate::linters::unused_return_value::UnusedReturnValue.visitor(),
-    ];
-    if all || configured.contains(&Symbol::from("freezing_capability")) {
+    let mut visitors = vec![];
+    macro_rules! add_default_visitor {
+        ($name:literal, $visitor:expr) => {
+            if default_enabled($name) {
+                visitors.push($visitor);
+            }
+        };
+    }
+
+    add_default_visitor!("share_owned", share_owned::ShareOwnedVerifier.visitor());
+    add_default_visitor!(
+        "self_transfer",
+        self_transfer::SelfTransferVerifier.visitor()
+    );
+    add_default_visitor!(
+        "custom_state_change",
+        custom_state_change::CustomStateChangeVerifier.visitor()
+    );
+    add_default_visitor!("coin_field", coin_field::CoinFieldVisitor.visitor());
+    add_default_visitor!(
+        "freeze_wrapped",
+        freeze_wrapped::FreezeWrappedVisitor.visitor()
+    );
+    add_default_visitor!(
+        "collection_equality",
+        collection_equality::CollectionEqualityVisitor.visitor()
+    );
+    add_default_visitor!(
+        "public_random",
+        public_random::PublicRandomVisitor.visitor()
+    );
+    add_default_visitor!("missing_key", missing_key::MissingKeyVisitor.visitor());
+    add_default_visitor!(
+        "unnecessary_public_entry",
+        unnecessary_public_entry::UnnecessaryPublicEntry.visitor()
+    );
+    add_default_visitor!(
+        "uncallable_function",
+        uncallable_function::UncallableFunction.visitor()
+    );
+    add_default_visitor!(
+        "unused_object_with_fields",
+        unused_object_with_fields::UnusedObjWithFieldsVerifier.visitor()
+    );
+    add_default_visitor!(
+        "unused_return_value",
+        crate::linters::unused_return_value::UnusedReturnValue.visitor()
+    );
+    if enabled("freezing_capability") {
         visitors.push(freezing_capability::WarnFreezeCapability.visitor());
     }
-    if all || configured.contains(&Symbol::from("prefer_mut_tx_context")) {
+    if enabled("prefer_mut_tx_context") {
         visitors.push(public_mut_tx_context::PreferMutableTxContext.visitor());
     }
     visitors
@@ -229,7 +268,8 @@ mod tests {
         for name in ["freezing_capability", "prefer_mut_tx_context"] {
             let configured = BTreeSet::from([Symbol::from(name)]);
             assert_eq!(
-                linter_visitors_with_config(LintLevel::Default, &configured).len(),
+                linter_visitors_with_config(LintLevel::Default, &configured, &BTreeSet::new())
+                    .len(),
                 default_count + 1,
                 "{name}"
             );
@@ -237,10 +277,28 @@ mod tests {
     }
 
     #[test]
+    fn allowed_filters_do_not_run_visitors() {
+        let allowed = BTreeSet::from([Symbol::from("share_owned")]);
+        assert_eq!(
+            linter_visitors_with_config(LintLevel::Default, &BTreeSet::new(), &allowed).len(),
+            linter_visitors(LintLevel::Default).len() - 1
+        );
+    }
+
+    #[test]
+    fn allowed_all_disables_visitors() {
+        let allowed = BTreeSet::from([Symbol::from(crate::diagnostics::filter::FILTER_ALL)]);
+        assert_eq!(
+            linter_visitors_with_config(LintLevel::Default, &BTreeSet::new(), &allowed).len(),
+            0
+        );
+    }
+
+    #[test]
     fn configured_all_enables_all_visitors() {
         let configured = BTreeSet::from([Symbol::from(crate::diagnostics::filter::FILTER_ALL)]);
         assert_eq!(
-            linter_visitors_with_config(LintLevel::Default, &configured).len(),
+            linter_visitors_with_config(LintLevel::Default, &configured, &BTreeSet::new()).len(),
             linter_visitors(LintLevel::All).len()
         );
     }
