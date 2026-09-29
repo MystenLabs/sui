@@ -7,6 +7,7 @@ use mysten_common::sync::execution_permit::set_execution_permit;
 use mysten_common::{fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
+use std::sync::atomic::Ordering;
 use sui_macros::fail_point_async;
 use sui_types::execution::ExecutionOutput;
 use sui_types::transaction::TransactionDataAPI;
@@ -34,9 +35,10 @@ pub async fn execution_process(
     // Rate limit concurrent executions to half of the available CPUs.
     let execution_concurrency = std::cmp::max(1, num_cpus::get() / 2);
     let normal_limit = Arc::new(Semaphore::new(execution_concurrency));
-    // This is an optimization to speed up the execution of transactions that mutate an implicitly-read system object.
-    // These transactions help unblock other transactions that read the same object.
-    // Give them a dedicated permit pool so they execute as fast as possible.
+    // System transactions and transactions that mutate an implicitly-read system object get
+    // a dedicated permit pool so they never queue behind user transactions. Consensus commit
+    // prologues chain on the Clock object, so checkpoint building only keeps up with
+    // consensus if each prologue executes as soon as its predecessor has.
     let system_object_writer_limit = Arc::new(Semaphore::new(execution_concurrency));
 
     // Loop whenever there is a signal that a new transactions is ready to process.
@@ -93,11 +95,8 @@ pub async fn execution_process(
             continue;
         }
 
-        let limit = if certificate
-            .transaction_data()
-            .kind()
-            .mutates_implicitly_read_system_object()
-        {
+        let kind = certificate.transaction_data().kind();
+        let limit = if kind.is_system_tx() || kind.mutates_implicitly_read_system_object() {
             system_object_writer_limit.clone()
         } else {
             normal_limit.clone()
@@ -132,11 +131,9 @@ pub async fn execution_process(
             };
 
             if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {
-                authority
-                    .metrics
-                    .execution_queueing_latency
-                    .report(txn_ready_time.elapsed());
-                if let Some(latency) = authority.metrics.execution_queueing_latency.latency() {
+                let queueing_latency = &authority.execution_progress.queueing_latency;
+                queueing_latency.report(txn_ready_time.elapsed());
+                if let Some(latency) = queueing_latency.latency() {
                     authority
                         .metrics
                         .execution_queueing_delay_s
@@ -175,6 +172,10 @@ pub async fn execution_process(
                             .metrics
                             .execution_driver_executed_transactions
                             .inc();
+                        authority
+                            .execution_progress
+                            .executed_transactions
+                            .fetch_add(1, Ordering::Relaxed);
                     }
                     ExecutionOutput::EpochEnded => {
                         warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
