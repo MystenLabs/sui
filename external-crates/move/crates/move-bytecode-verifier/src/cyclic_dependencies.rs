@@ -3,11 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module contains verification of usage of dependencies for modules
+use move_binary_format::partial_vm_error;
 use move_binary_format::{
-    errors::{Location, PartialVMError, PartialVMResult, VMResult},
+    errors::{Location, PartialVMResult, VMResult},
     file_format::CompiledModule,
 };
-use move_core_types::{language_storage::ModuleId, vm_status::StatusCode};
+use move_core_types::language_storage::ModuleId;
 use std::collections::BTreeSet;
 
 pub fn verify_module<D>(module: &CompiledModule, imm_deps: D) -> VMResult<BTreeSet<ModuleId>>
@@ -58,7 +59,7 @@ where
     let mut visited = BTreeSet::new();
     for dep in module.immediate_dependencies() {
         if detect_cycles(&self_id, &dep, &mut visited, &imm_deps)? {
-            return Err(PartialVMError::new(StatusCode::CYCLIC_MODULE_DEPENDENCY));
+            return Err(partial_vm_error!(CYCLIC_MODULE_DEPENDENCY));
         }
     }
 
