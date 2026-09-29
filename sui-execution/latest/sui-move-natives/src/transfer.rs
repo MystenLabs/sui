@@ -6,11 +6,11 @@ use crate::{
     NativesCostTable, get_extension, get_extension_mut, get_receiver_object_id,
     get_tag_and_layouts, object_runtime::object_store::ObjectResult,
 };
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::{safe_assert, safe_unwrap};
+use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
+use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
-    vm_status::StatusCode,
 };
 use move_vm_runtime::shared::views::{SizeConfig, ValueView};
 use move_vm_runtime::{
@@ -50,8 +50,8 @@ pub fn receive_object_internal(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 3);
     let transfer_receive_object_internal_cost_params = get_extension!(context, NativesCostTable)?
         .transfer_receive_object_internal_cost_params
         .clone();
@@ -138,8 +138,8 @@ pub fn transfer_internal(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 2);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 2);
 
     let transfer_transfer_internal_cost_params = get_extension!(context, NativesCostTable)?
         .transfer_transfer_internal_cost_params
@@ -167,13 +167,13 @@ pub struct PartyTransferInternalCostParams {
 
 macro_rules! native_charge_gas_early_exit_option {
     ($native_context:ident, $cost:expr) => {{
-        use move_binary_format::errors::PartialVMError;
-        use move_core_types::vm_status::StatusCode;
         native_charge_gas_early_exit!(
             $native_context,
             $cost.ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for party is missing".to_string())
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Gas cost for party is missing"
+                )
             })?
         );
     }};
@@ -196,8 +196,8 @@ pub fn party_transfer_internal(
     const TRANSFER: u64 = 0b1000;
     const ALL: u64 = READ | WRITE | DELETE | TRANSFER;
 
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 4);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 4);
 
     let is_supported = get_extension!(context, ObjectRuntime)?
         .protocol_config
@@ -222,23 +222,22 @@ pub fn party_transfer_internal(
     let default_permissions = pop_arg!(args, u64);
     let obj = safe_unwrap!(args.pop_back());
     let Ok([permissions]): Result<[u64; 1], _> = permissions.try_into() else {
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Party transfer only supports one party member".to_string()),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Party transfer only supports one party member"
+        ));
     };
     if permissions != ALL || default_permissions != NONE {
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                "Party transfer only supports one party member with all permissions".to_string(),
-            ),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Party transfer only supports one party member with all permissions"
+        ));
     }
     let Ok([address]): Result<[AccountAddress; 1], _> = addresses.try_into() else {
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Party transfer only supports one party member".to_string()),
-        );
+        return Err(partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Party transfer only supports one party member"
+        ));
     };
 
     // Dummy version, to be filled with the correct initial version when the effects of the
@@ -267,8 +266,8 @@ pub fn freeze_object(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     let transfer_freeze_object_cost_params = get_extension!(context, NativesCostTable)?
         .transfer_freeze_object_cost_params
@@ -301,8 +300,8 @@ pub fn share_object(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     let transfer_share_object_cost_params = get_extension!(context, NativesCostTable)?
         .transfer_share_object_cost_params
@@ -344,10 +343,10 @@ fn object_runtime_transfer(
     let object_type = match context.type_to_type_tag(&ty)? {
         TypeTag::Struct(s) => MoveObjectType::from(*s),
         _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Sui verifier guarantees this is a struct"
+            ));
         }
     };
 

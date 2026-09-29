@@ -55,6 +55,7 @@ use better_any::{Tid, TidAble};
 use crypto::nitro_attestation::{self, NitroAttestationCostParams};
 use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::partial_vm_error;
 use move_binary_format::safe_unwrap;
 use move_core_types::{
     annotated_value as A,
@@ -62,7 +63,6 @@ use move_core_types::{
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     runtime_value as R,
-    vm_status::StatusCode,
 };
 use move_vm_runtime::natives::{
     extensions::NativeExtensionMarker,
@@ -1498,10 +1498,10 @@ pub(crate) fn get_tag_and_layouts(
     let tag = match context.type_to_type_tag(ty)? {
         TypeTag::Struct(s) => s,
         _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Sui verifier guarantees this is a struct"
+            ));
         }
     };
     let Some(layout) = context.type_to_type_layout(ty)? else {

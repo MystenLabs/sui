@@ -27,18 +27,13 @@
 //! to the serializer (`serializer.rs`) generates a binary of the form described. Vectors in
 //! those structs translate to tables and table specifications.
 
-use crate::{
-    IndexKind,
-    errors::{PartialVMError, PartialVMResult},
-    file_format_common,
-    internals::ModuleIndex,
-};
+use crate::partial_vm_error;
+use crate::{IndexKind, errors::PartialVMResult, file_format_common, internals::ModuleIndex};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::ModuleId,
     metadata::Metadata,
-    vm_status::StatusCode,
 };
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest::{collection::vec, prelude::*, strategy::BoxedStrategy};
@@ -447,8 +442,10 @@ impl StructDefinition {
     pub fn declared_field_count(&self) -> PartialVMResult<MemberCount> {
         match &self.field_information {
             // TODO we might want a more informative error here
-            StructFieldInformation::Native => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message("Looking for field in native structure".to_string())),
+            StructFieldInformation::Native => Err(partial_vm_error!(
+                LINKER_ERROR,
+                "Looking for field in native structure"
+            )),
             StructFieldInformation::Declared(fields) => Ok(fields.len() as u16),
         }
     }
@@ -892,11 +889,10 @@ impl AbilitySet {
         let type_arguments = type_arguments.into_iter();
 
         if declared_phantom_parameters.len() != type_arguments.len() {
-            return Err(
-                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                    "the length of `declared_phantom_parameters` doesn't match the length of `type_arguments`".to_string(),
-                ),
-            );
+            return Err(partial_vm_error!(
+                VERIFIER_INVARIANT_VIOLATION,
+                "the length of `declared_phantom_parameters` doesn't match the length of `type_arguments`"
+            ));
         }
 
         // Conceptually this is performing the following operation:

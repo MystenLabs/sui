@@ -4,6 +4,7 @@
 use crate::get_extension;
 use crate::object_runtime::ObjectRuntime;
 use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{safe_assert, safe_assert_eq};
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
@@ -31,8 +32,8 @@ pub fn is_feature_enabled(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 1);
 
     let feature_flag_name_bytes = pop_arg!(args, Vector);
     let bytes = feature_flag_name_bytes.to_vec_u8()?;

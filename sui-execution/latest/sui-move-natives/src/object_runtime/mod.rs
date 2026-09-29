@@ -15,6 +15,7 @@ use better_any::{Tid, TidAble};
 use indexmap::map::IndexMap;
 use indexmap::set::IndexSet;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::partial_vm_error;
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value::{MoveTypeLayout, MoveValue},
@@ -22,7 +23,6 @@ use move_core_types::{
     language_storage::StructTag,
     runtime_value as R,
     u256::U256,
-    vm_status::StatusCode,
 };
 use move_vm_runtime::execution::values::{GlobalValue, Value};
 use move_vm_runtime::natives::extensions::NativeExtensionMarker;
@@ -308,11 +308,14 @@ impl<'a> ObjectRuntime<'a> {
             self.protocol_config.max_num_new_move_object_ids_system_tx(),
             self.metrics.limits_metrics.excessive_new_move_object_ids
         ) {
-            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                .with_message(format!("Creating more than {} IDs is not allowed", lim))
-                .with_sub_status(
-                    VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED as u64,
-                ));
+            return Err(partial_vm_error!(
+                MEMORY_LIMIT_EXCEEDED,
+                "Creating more than {} IDs is not allowed",
+                lim
+            )
+            .with_sub_status(
+                VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED as u64,
+            ));
         };
 
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
@@ -352,11 +355,14 @@ impl<'a> ObjectRuntime<'a> {
                 .limits_metrics
                 .excessive_deleted_move_object_ids
         ) {
-            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                .with_message(format!("Deleting more than {} IDs is not allowed", lim))
-                .with_sub_status(
-                    VMMemoryLimitExceededSubStatusCode::DELETED_ID_COUNT_LIMIT_EXCEEDED as u64,
-                ));
+            return Err(partial_vm_error!(
+                MEMORY_LIMIT_EXCEEDED,
+                "Deleting more than {} IDs is not allowed",
+                lim
+            )
+            .with_sub_status(
+                VMMemoryLimitExceededSubStatusCode::DELETED_ID_COUNT_LIMIT_EXCEEDED as u64,
+            ));
         };
 
         let was_new = self.state.new_ids.shift_remove(&id);
@@ -446,14 +452,11 @@ impl<'a> ObjectRuntime<'a> {
                 TransferResult::New | TransferResult::SameOwner
             )
         {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!(
-                        "Untransferred object {} had its owner change or was not new",
-                        id
-                    ),
-                ),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Untransferred object {} had its owner change or was not new",
+                id
+            ));
         }
 
         // Metered transactions don't have limits for now
@@ -472,11 +475,14 @@ impl<'a> ObjectRuntime<'a> {
                 .limits_metrics
                 .excessive_transferred_move_object_ids
         ) {
-            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                .with_message(format!("Transferring more than {} IDs is not allowed", lim))
-                .with_sub_status(
-                    VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
-                ));
+            return Err(partial_vm_error!(
+                MEMORY_LIMIT_EXCEEDED,
+                "Transferring more than {} IDs is not allowed",
+                lim
+            )
+            .with_sub_status(
+                VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED as u64,
+            ));
         };
 
         self.state.transfers.insert(id, (owner, ty, obj));
@@ -519,11 +525,11 @@ impl<'a> ObjectRuntime<'a> {
                         .unwrap_or(0);
                     let new_total = current + amount as u128;
                     if new_total > u64::MAX as u128 {
-                        return Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
-                            .with_message(format!(
-                                "accumulator merge overflow: total merges {} exceed u64::MAX",
-                                new_total
-                            )));
+                        return Err(partial_vm_error!(
+                            ARITHMETIC_ERROR,
+                            "accumulator merge overflow: total merges {} exceed u64::MAX",
+                            new_total
+                        ));
                     }
                     self.state.accumulator_merge_totals.insert(key, new_total);
                     if self
@@ -539,8 +545,10 @@ impl<'a> ObjectRuntime<'a> {
                             .available
                             .checked_add(U256::from(amount as u128))
                             .ok_or_else(|| {
-                            PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
-                                .with_message("object funds available balance overflow".to_string())
+                            partial_vm_error!(
+                                ARITHMETIC_ERROR,
+                                "object funds available balance overflow"
+                            )
                         })?;
                     }
                 }
@@ -553,11 +561,11 @@ impl<'a> ObjectRuntime<'a> {
                         .unwrap_or(0);
                     let new_total = current + amount as u128;
                     if new_total > u64::MAX as u128 {
-                        return Err(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
-                            .with_message(format!(
-                                "accumulator split overflow: total splits {} exceed u64::MAX",
-                                new_total
-                            )));
+                        return Err(partial_vm_error!(
+                            ARITHMETIC_ERROR,
+                            "accumulator split overflow: total splits {} exceed u64::MAX",
+                            new_total
+                        ));
                     }
                     self.state.accumulator_split_totals.insert(key, new_total);
                 }
@@ -630,12 +638,11 @@ impl<'a> ObjectRuntime<'a> {
         if self.state.received.insert(child, obj_meta).is_some() {
             // We should never hit this -- it means that we have received the same object twice which
             // means we have a duplicated a receiving ticket somehow.
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(format!(
-                    "Object {child} at version {child_version} already received. This can only happen \
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Object {child} at version {child_version} already received. This can only happen \
                     if multiple `Receiving` arguments exist for the same object in the transaction which is impossible."
-                )),
-            );
+            ));
         }
         Ok(Some(value))
     }
@@ -808,12 +815,12 @@ impl<'a> ObjectRuntime<'a> {
 }
 
 pub fn max_event_error(max_events: u64) -> PartialVMError {
-    PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-        .with_message(format!(
-            "Emitting more than {} events is not allowed",
-            max_events
-        ))
-        .with_sub_status(VMMemoryLimitExceededSubStatusCode::EVENT_COUNT_LIMIT_EXCEEDED as u64)
+    partial_vm_error!(
+        MEMORY_LIMIT_EXCEEDED,
+        "Emitting more than {} events is not allowed",
+        max_events
+    )
+    .with_sub_status(VMMemoryLimitExceededSubStatusCode::EVENT_COUNT_LIMIT_EXCEEDED as u64)
 }
 
 impl ObjectRuntimeState {

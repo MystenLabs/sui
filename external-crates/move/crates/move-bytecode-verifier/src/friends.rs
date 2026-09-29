@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module contains verification of usage of dependencies for modules
+use move_binary_format::partial_vm_error;
 use move_binary_format::{
-    errors::{Location, PartialVMError, PartialVMResult, VMResult},
+    errors::{Location, PartialVMResult, VMResult},
     file_format::CompiledModule,
 };
-use move_core_types::vm_status::StatusCode;
 
 pub fn verify_module(module: &CompiledModule) -> VMResult<()> {
     verify_module_impl(module).map_err(|e| e.finish(Location::Module(module.self_id())))
@@ -17,9 +17,7 @@ fn verify_module_impl(module: &CompiledModule) -> PartialVMResult<()> {
     // cannot make friends with the module itself
     let self_handle = module.self_handle();
     if module.friend_decls().contains(self_handle) {
-        return Err(PartialVMError::new(
-            StatusCode::INVALID_FRIEND_DECL_WITH_SELF,
-        ));
+        return Err(partial_vm_error!(INVALID_FRIEND_DECL_WITH_SELF));
     }
 
     // cannot make friends with modules outside of the account address
@@ -38,8 +36,8 @@ fn verify_module_impl(module: &CompiledModule) -> PartialVMResult<()> {
         .iter()
         .any(|handle| module.address_identifier_at(handle.address) != self_address);
     if has_external_friend {
-        return Err(PartialVMError::new(
-            StatusCode::INVALID_FRIEND_DECL_WITH_MODULES_OUTSIDE_ACCOUNT_ADDRESS,
+        return Err(partial_vm_error!(
+            INVALID_FRIEND_DECL_WITH_MODULES_OUTSIDE_ACCOUNT_ADDRESS
         ));
     }
 
