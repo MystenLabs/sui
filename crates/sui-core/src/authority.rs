@@ -173,8 +173,8 @@ use crate::execution_cache::{
     ObjectCacheRead, StateSyncAPI,
 };
 use crate::execution_driver::execution_process;
+use crate::execution_progress::ExecutionProgress;
 use crate::global_state_hasher::{GlobalStateHashStore, GlobalStateHasher, WrappedObject};
-use crate::metrics::LatencyObserver;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::transaction_input_loader::TransactionInputLoader;
@@ -331,10 +331,6 @@ pub struct AuthorityMetrics {
     pub zklogin_sig_count: IntCounter,
     /// Count of multisig signatures
     pub multisig_sig_count: IntCounter,
-
-    // Tracks recent average txn queueing delay between when it is ready for execution
-    // until it starts executing.
-    pub execution_queueing_latency: LatencyObserver,
 }
 
 // Override default Prom buckets for positive numbers in 0-10M range
@@ -745,7 +741,6 @@ impl AuthorityMetrics {
                 TIMESTAMP_BIAS_SEC_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
-            execution_queueing_latency: LatencyObserver::new(),
         }
     }
 
@@ -939,6 +934,7 @@ pub struct AuthorityState {
     tx_execution_shutdown: Mutex<Option<oneshot::Sender<()>>>,
 
     pub metrics: Arc<AuthorityMetrics>,
+    pub execution_progress: Arc<ExecutionProgress>,
     _pruner: AuthorityStorePruner,
     _authority_per_epoch_pruner: AuthorityPerEpochStorePruner,
 
@@ -2603,6 +2599,7 @@ impl AuthorityState {
             execution_scheduler,
             tx_execution_shutdown: Mutex::new(Some(tx_execution_shutdown)),
             metrics,
+            execution_progress: Arc::new(ExecutionProgress::default()),
             _pruner,
             _authority_per_epoch_pruner,
             db_checkpoint_config: db_checkpoint_config.clone(),

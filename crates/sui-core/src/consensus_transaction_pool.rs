@@ -26,6 +26,7 @@ use crate::consensus_adapter::{
     processing_error,
 };
 use crate::consensus_handler::{SequencedConsensusTransactionKey, tx_type_label};
+use crate::execution_progress::ExecutionProgress;
 use async_trait::async_trait;
 use consensus_core::{BlockStatus, ClientError, LimitReached, Transaction, TransactionPool};
 use consensus_types::block::{
@@ -39,7 +40,9 @@ use prometheus::IntGauge;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::sync::Weak;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
+use sui_config::node::ConsensusTransactionPoolConfig;
 use sui_macros::fail_point_if;
 use sui_types::base_types::EpochId;
 use sui_types::digests::TransactionDigest;
@@ -274,6 +277,7 @@ impl UserLane {
 
 struct Pool {
     user: UserLane,
+    pacer: AdmissionPacer,
     // Unbounded: system transactions are correctness-critical, produced by trusted
     // internal components at bounded rates, and must never be evicted or outbid.
     system: VecDeque<PoolEntry>,
@@ -298,7 +302,7 @@ struct ProposedEntry {
 }
 
 enum Inner {
-    Open(Pool),
+    Open(Box<Pool>),
     Closed,
 }
 
@@ -313,6 +317,7 @@ pub struct ConsensusTransactionPool {
     epoch_store: Arc<AuthorityPerEpochStore>,
     metrics: Arc<AdmissionQueueMetrics>,
     adapter_metrics: ConsensusAdapterMetrics,
+    execution_progress: Arc<ExecutionProgress>,
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -322,6 +327,8 @@ impl ConsensusTransactionPool {
         max_pending_transactions: usize,
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
+        execution_progress: Arc<ExecutionProgress>,
+        config: ConsensusTransactionPoolConfig,
     ) -> Self {
         assert!(
             max_pending_transactions > 0,
@@ -343,15 +350,17 @@ impl ConsensusTransactionPool {
             epoch_store,
             metrics: metrics.clone(),
             adapter_metrics,
-            inner: Arc::new(Mutex::new(Inner::Open(Pool {
+            execution_progress,
+            inner: Arc::new(Mutex::new(Inner::Open(Box::new(Pool {
                 user: UserLane::Open(PriorityAdmissionQueue::new(
                     max_pending_transactions,
                     metrics,
                 )),
+                pacer: AdmissionPacer::new(&config),
                 system: VecDeque::new(),
                 pings: VecDeque::new(),
                 blocks: BTreeMap::new(),
-            }))),
+            })))),
         }
     }
 
@@ -366,6 +375,8 @@ impl ConsensusTransactionPool {
             max_pending_transactions,
             metrics,
             ConsensusAdapterMetrics::new_test(),
+            Arc::new(ExecutionProgress::default()),
+            ConsensusTransactionPoolConfig::default(),
         )
     }
 
@@ -912,6 +923,7 @@ impl TransactionPool for ConsensusTransactionPool {
         fail_point_if!("consensus_transaction_pool_disable_take", || {
             disabled = true;
         });
+        let committee_size = self.epoch_store.committee().num_members();
         #[allow(unused_mut)]
         let mut user_take_disabled = false;
         fail_point_if!("consensus_transaction_pool_disable_user_take", || {
@@ -991,13 +1003,39 @@ impl TransactionPool for ConsensusTransactionPool {
         {
             let mut pending_count = transactions.len();
             let mut pending_bytes = total_bytes;
+            // User transactions are admitted in gas price order at a pace set by this
+            // validator's own execution progress and queueing latency, so that fleet-wide
+            // admission tracks execution capacity.
+            let user_budget = pool.pacer.user_budget(
+                &self.execution_progress,
+                committee_size,
+                user.len(),
+                max_count.saturating_sub(pending_count),
+            );
+            self.metrics
+                .pool_queue_pressure
+                .set(i64::from(pool.pacer.queue_pressure()));
+            self.metrics
+                .pool_user_budget_percentage
+                .set(i64::from(pool.pacer.share_percentage()));
+            self.metrics
+                .pool_user_take_budget
+                .set(user_budget.min(i64::MAX as usize) as i64);
+            let user_max_count = pending_count + user_budget;
+            let user_max_bytes = max_bytes;
             let popped;
             (popped, already_processed) = user.pop_batch_while(|entry| {
                 // An already-processed entry is excluded without consuming block budget.
                 if all_processed(&mut entry.processed).is_some() {
                     return PopAction::Exclude;
                 }
-                match entry_limit(entry, pending_count, pending_bytes, max_count, max_bytes) {
+                match entry_limit(
+                    entry,
+                    pending_count,
+                    pending_bytes,
+                    user_max_count,
+                    user_max_bytes,
+                ) {
                     Some(limit) => {
                         limit_reached = limit;
                         PopAction::Stop
@@ -1009,6 +1047,8 @@ impl TransactionPool for ConsensusTransactionPool {
                     }
                 }
             });
+            let taken_user: usize = popped.iter().map(|entry| entry.transactions.len()).sum();
+            pool.pacer.consume(taken_user);
             for entry in popped {
                 self.decrement_lane_metrics("user", &entry);
                 transactions.extend(entry.transactions.iter().cloned());
@@ -1157,6 +1197,122 @@ impl ConsensusTransactionPool {
     }
 }
 
+/// Paces user lane admission by this validator's own execution progress while the pool
+/// is working off a backlog under execution overload. Once per pacing interval the pacer
+/// classifies execution queueing latency against the configured limits. Pacing engages
+/// when latency is above the hard limit and disengages once latency is back under the
+/// soft limit with the user lane empty, so a backlog is never released faster than
+/// execution absorbs it.
+///
+/// While engaged, each executed transaction earns `share` of a credit, divided by the
+/// committee size since every validator proposes and every admitted transaction is
+/// executed by all of them, and a take may include at most the whole credits
+/// accumulated. `share` follows queue pressure once per interval: halved above the hard
+/// limit, held between the limits, and raised additively below the soft limit, up to one
+/// and a half so admission can grow past the current execution rate. A floor of one
+/// credit per committee-size takes keeps the backlog moving if execution stalls.
+struct AdmissionPacer {
+    soft_limit: Duration,
+    hard_limit: Duration,
+    interval: Duration,
+    last_adjustment: Option<tokio::time::Instant>,
+    queue_pressure: i8,
+    engaged: bool,
+    last_executed: u64,
+    credits: f64,
+    share: f64,
+}
+
+impl AdmissionPacer {
+    const MIN_SHARE: f64 = 0.02;
+    const MAX_SHARE: f64 = 1.5;
+    const SHARE_INCREMENT: f64 = 0.05;
+    // Credits banked while the lane is empty are capped so a lull cannot fund a burst.
+    const MAX_CREDITS: f64 = 8.0;
+
+    fn new(config: &ConsensusTransactionPoolConfig) -> Self {
+        Self {
+            soft_limit: config.execution_queue_latency_soft_limit,
+            hard_limit: config.execution_queue_latency_hard_limit,
+            interval: config.admission_pacing_interval,
+            last_adjustment: None,
+            queue_pressure: -1,
+            engaged: false,
+            last_executed: 0,
+            credits: 0.0,
+            share: Self::MAX_SHARE,
+        }
+    }
+
+    fn share_percentage(&self) -> u32 {
+        if self.engaged {
+            (self.share * 100.0).round() as u32
+        } else {
+            100
+        }
+    }
+
+    fn queue_pressure(&self) -> i8 {
+        self.queue_pressure
+    }
+
+    fn user_budget(
+        &mut self,
+        progress: &ExecutionProgress,
+        committee_size: usize,
+        user_lane_depth: usize,
+        unthrottled: usize,
+    ) -> usize {
+        let executed = progress.executed_transactions.load(Ordering::Relaxed);
+        let now = tokio::time::Instant::now();
+        if self
+            .last_adjustment
+            .is_none_or(|last| now.duration_since(last) >= self.interval)
+        {
+            self.last_adjustment = Some(now);
+            let latency = progress.queueing_latency.latency().unwrap_or_default();
+            self.queue_pressure = if latency > self.hard_limit {
+                1
+            } else if latency > self.soft_limit {
+                0
+            } else {
+                -1
+            };
+            match self.queue_pressure {
+                p if p > 0 => {
+                    if !self.engaged {
+                        self.engaged = true;
+                        self.credits = 0.0;
+                        self.share = Self::MAX_SHARE;
+                        self.last_executed = executed;
+                    }
+                    self.share = (self.share / 2.0).max(Self::MIN_SHARE);
+                }
+                p if p < 0 => {
+                    self.share = (self.share + Self::SHARE_INCREMENT).min(Self::MAX_SHARE);
+                    if user_lane_depth == 0 {
+                        self.engaged = false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !self.engaged {
+            return unthrottled;
+        }
+        let delta = executed.saturating_sub(self.last_executed);
+        self.last_executed = executed;
+        let committee_size = committee_size.max(1) as f64;
+        self.credits = (self.credits + (delta as f64 * self.share + 1.0) / committee_size)
+            .min(Self::MAX_CREDITS);
+        (self.credits.floor() as usize).min(unthrottled)
+    }
+
+    fn consume(&mut self, taken: usize) {
+        self.credits = (self.credits - taken as f64).max(0.0);
+    }
+}
+
 /// Which block limit the entry would exceed, if any. Entries are all-or-nothing:
 /// a bundle that does not fit stays queued in full for the next proposal.
 fn entry_limit(
@@ -1201,19 +1357,26 @@ pub struct TransactionPoolContext {
     state: watch::Sender<PoolState>,
     metrics: Arc<AdmissionQueueMetrics>,
     adapter_metrics: ConsensusAdapterMetrics,
+    execution_progress: Arc<ExecutionProgress>,
 }
 
 impl TransactionPoolContext {
     pub fn new(
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
+        execution_progress: Arc<ExecutionProgress>,
     ) -> Self {
         let (state, _) = watch::channel(PoolState::Absent);
         Self {
             state,
             metrics,
             adapter_metrics,
+            execution_progress,
         }
+    }
+
+    pub fn execution_progress(&self) -> &Arc<ExecutionProgress> {
+        &self.execution_progress
     }
 
     pub fn set_active(&self, epoch: EpochId, pool: Arc<ConsensusTransactionPool>) {
@@ -1318,7 +1481,11 @@ impl TransactionPoolContext {
 
     #[cfg(test)]
     pub(crate) fn new_for_tests(metrics: Arc<AdmissionQueueMetrics>) -> Self {
-        Self::new(metrics, ConsensusAdapterMetrics::new_test())
+        Self::new(
+            metrics,
+            ConsensusAdapterMetrics::new_test(),
+            Arc::new(ExecutionProgress::default()),
+        )
     }
 }
 
@@ -1565,6 +1732,114 @@ mod tests {
         assert_eq!(transactions.len(), 1);
         ack(block(6));
         assert_eq!(low_receiver.await.unwrap().unwrap()[0].index, 0);
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn take_paces_user_lane_by_execution_under_queue_pressure() {
+        let (_state, pool) = test_state_and_pool(100).await;
+        let epoch = pool.epoch();
+        assert_eq!(pool.epoch_store.committee().num_members(), 1);
+        let _system_receiver = pool.submit(epoch, &[transaction()]).unwrap();
+        for gas_price in [10, 20, 30, 40, 50, 60] {
+            pool.try_insert(epoch, gas_price, vec![transaction()])
+                .unwrap();
+        }
+        let progress = pool.execution_progress.clone();
+        let interval = ConsensusTransactionPoolConfig::default().admission_pacing_interval;
+        // Sets the observed queueing latency and moves past the pacing interval so that
+        // the next take adjusts.
+        let tick = |latency: Duration| {
+            let progress = progress.clone();
+            async move {
+                for _ in 0..128 {
+                    progress.queueing_latency.report(latency);
+                }
+                tokio::time::advance(interval).await;
+            }
+        };
+        let below_soft = Duration::ZERO;
+        let between = Duration::from_secs(5);
+        let above_hard = Duration::from_secs(20);
+
+        // Not engaged: the user lane is unpaced.
+        tick(below_soft).await;
+        let (transactions, ack, _) = pool.take(3, usize::MAX);
+        assert_eq!(transactions.len(), 3);
+        assert_eq!(pool.metrics.pool_queue_pressure.get(), -1);
+        assert_eq!(pool.metrics.pool_user_budget_percentage.get(), 100);
+        drop(ack);
+        assert_eq!(pool.queue_depth("user"), 6);
+
+        // Latency above the hard limit engages pacing at half the maximum share.
+        // Executions before engagement do not count; only the floor credit applies, so
+        // the take is 1 system + 1 user.
+        progress
+            .executed_transactions
+            .fetch_add(100, Ordering::Relaxed);
+        tick(above_hard).await;
+        let (transactions, ack, _) = pool.take(8, usize::MAX);
+        assert_eq!(transactions.len(), 2);
+        assert_eq!(pool.metrics.pool_queue_pressure.get(), 1);
+        assert_eq!(pool.metrics.pool_user_budget_percentage.get(), 75);
+        assert_eq!(pool.metrics.pool_user_take_budget.get(), 1);
+        ack(block(1));
+        assert_eq!(pool.queue_depth("user"), 5);
+
+        // 4 executed transactions at a 75% share earn 3 credits, plus the floor: 4 user.
+        // No adjustment happens within the interval.
+        progress
+            .executed_transactions
+            .fetch_add(4, Ordering::Relaxed);
+        let (transactions, ack, _) = pool.take(8, usize::MAX);
+        assert_eq!(transactions.len(), 4);
+        assert_eq!(pool.metrics.pool_user_take_budget.get(), 4);
+        drop(ack);
+        assert_eq!(pool.queue_depth("user"), 5);
+
+        // Another interval above the hard limit halves the share again.
+        tick(above_hard).await;
+        let (_, ack, _) = pool.take(8, usize::MAX);
+        drop(ack);
+        assert_eq!(pool.metrics.pool_user_budget_percentage.get(), 38);
+
+        // Below the soft limit the share grows additively past 100% while the lane holds
+        // a backlog, and pacing stays engaged.
+        for _ in 0..30 {
+            tick(below_soft).await;
+            let (_, ack, _) = pool.take(8, usize::MAX);
+            drop(ack);
+        }
+        assert_eq!(pool.metrics.pool_user_budget_percentage.get(), 150);
+
+        // Drain the lane. An empty lane alone does not disengage pacing while latency is
+        // above the soft limit.
+        while pool.queue_depth("user") > 0 {
+            let (_, ack, _) = pool.take(8, usize::MAX);
+            ack(block(2));
+        }
+        tick(between).await;
+        let (transactions, ack, _) = pool.take(8, usize::MAX);
+        assert!(transactions.is_empty());
+        drop(ack);
+        assert_eq!(pool.metrics.pool_queue_pressure.get(), 0);
+        assert_eq!(pool.metrics.pool_user_budget_percentage.get(), 150);
+
+        // Latency under the soft limit with an empty lane disengages pacing, so a bundle
+        // larger than any banked credits is taken whole.
+        tick(below_soft).await;
+        let (_, ack, _) = pool.take(8, usize::MAX);
+        drop(ack);
+        assert_eq!(pool.metrics.pool_user_budget_percentage.get(), 100);
+        pool.try_insert(
+            epoch,
+            70,
+            vec![transaction(), transaction(), transaction(), transaction()],
+        )
+        .unwrap();
+        let (transactions, ack, _) = pool.take(8, usize::MAX);
+        assert_eq!(transactions.len(), 4);
+        ack(block(3));
+        pool.close();
     }
 
     #[tokio::test]

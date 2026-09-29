@@ -301,6 +301,30 @@ pub struct ConsensusTransactionPoolConfig {
     /// matching the existing admission queue. Defaults to the consensus
     /// `max_pending_transactions` setting.
     pub max_pending_transactions: Option<usize>,
+
+    /// Execution queueing latency below which user transaction admission may grow.
+    #[serde(default = "default_execution_queue_latency_soft_limit")]
+    pub execution_queue_latency_soft_limit: Duration,
+
+    /// Execution queueing latency above which user transaction admission is cut.
+    #[serde(default = "default_execution_queue_latency_hard_limit")]
+    pub execution_queue_latency_hard_limit: Duration,
+
+    /// How often user transaction admission is adjusted against the latency limits.
+    #[serde(default = "default_admission_pacing_interval")]
+    pub admission_pacing_interval: Duration,
+}
+
+fn default_execution_queue_latency_soft_limit() -> Duration {
+    Duration::from_secs(1)
+}
+
+fn default_execution_queue_latency_hard_limit() -> Duration {
+    Duration::from_secs(10)
+}
+
+fn default_admission_pacing_interval() -> Duration {
+    Duration::from_secs(10)
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -308,6 +332,9 @@ impl Default for ConsensusTransactionPoolConfig {
         Self {
             enabled: true,
             max_pending_transactions: None,
+            execution_queue_latency_soft_limit: default_execution_queue_latency_soft_limit(),
+            execution_queue_latency_hard_limit: default_execution_queue_latency_hard_limit(),
+            admission_pacing_interval: default_admission_pacing_interval(),
         }
     }
 }
