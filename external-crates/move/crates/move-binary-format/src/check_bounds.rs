@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::partial_vm_error;
 use crate::{
     IndexKind,
     errors::{
@@ -704,13 +705,11 @@ impl<'a> BoundsChecker<'a> {
                     if let Some(sh) = self.module.datatype_handles().get(idx.into_index())
                         && !sh.type_parameters.is_empty()
                     {
-                        return Err(PartialVMError::new(
-                            StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
-                        )
-                        .with_message(format!(
+                        return Err(partial_vm_error!(
+                            NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
                             "expected {} type parameters got 0 (Struct)",
                             sh.type_parameters.len(),
-                        )));
+                        ));
                     }
                 }
                 DatatypeInstantiation(inst) => {
@@ -719,14 +718,12 @@ impl<'a> BoundsChecker<'a> {
                     if let Some(sh) = self.module.datatype_handles().get(idx.into_index())
                         && sh.type_parameters.len() != type_params.len()
                     {
-                        return Err(PartialVMError::new(
-                            StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
-                        )
-                        .with_message(format!(
+                        return Err(partial_vm_error!(
+                            NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
                             "expected {} type parameters got {}",
                             sh.type_parameters.len(),
                             type_params.len(),
-                        )));
+                        ));
                     }
                 }
             }
@@ -853,7 +850,7 @@ impl<'a> BoundsChecker<'a> {
                     "Indexing into bytecode {} during bounds checking but 'current_function' was not set",
                     cur_bytecode_offset
                 );
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(msg)
+                partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "{}", msg)
             }
             BoundsCheckingContext::ModuleFunction(current_function_index) => {
                 offset_out_of_bounds_error(
