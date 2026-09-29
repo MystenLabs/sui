@@ -236,8 +236,6 @@ pub async fn execution_process(
             }
         }
 
-        authority.metrics.execution_rate_tracker.lock().record();
-
         // Certificate execution is CPU-bound and can take significant time, so run it on a
         // blocking thread to avoid stalling the async runtime's worker threads.
         let epoch_store_clone = epoch_store.clone();

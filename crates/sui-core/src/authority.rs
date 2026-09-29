@@ -49,7 +49,6 @@ use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -176,9 +175,7 @@ use crate::execution_cache::{
 use crate::execution_driver::execution_process;
 use crate::global_state_hasher::{GlobalStateHashStore, GlobalStateHasher, WrappedObject};
 use crate::metrics::LatencyObserver;
-use crate::metrics::RateTracker;
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::overload_monitor::{AuthorityOverloadInfo, overload_monitor_accept_tx};
 use crate::stake_aggregator::StakeAggregator;
 use crate::transaction_input_loader::TransactionInputLoader;
 
@@ -293,9 +290,6 @@ pub struct AuthorityMetrics {
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
     pub(crate) consensus_handler_duplicate_tx_count: Histogram,
 
-    pub(crate) authority_overload_status: IntGauge,
-    pub(crate) authority_load_shedding_percentage: IntGauge,
-
     pub(crate) transaction_overload_sources: IntCounterVec,
 
     /// Post processing metrics
@@ -341,18 +335,6 @@ pub struct AuthorityMetrics {
     // Tracks recent average txn queueing delay between when it is ready for execution
     // until it starts executing.
     pub execution_queueing_latency: LatencyObserver,
-
-    // Tracks the rate of transactions become ready for execution in transaction manager.
-    // The need for the Mutex is that the tracker is updated in transaction manager and read
-    // in the overload_monitor. There should be low mutex contention because
-    // transaction manager is single threaded and the read rate in overload_monitor is
-    // low. In the case where transaction manager becomes multi-threaded, we can
-    // create one rate tracker per thread.
-    pub txn_ready_rate_tracker: Arc<Mutex<RateTracker>>,
-
-    // Tracks the rate of transactions starts execution in execution driver.
-    // Similar reason for using a Mutex here as to `txn_ready_rate_tracker`.
-    pub execution_rate_tracker: Arc<Mutex<RateTracker>>,
 }
 
 // Override default Prom buckets for positive numbers in 0-10M range
@@ -522,16 +504,6 @@ impl AuthorityMetrics {
                 "Number of executing certificates, including queued and actually running certificates",
                 registry,
             )
-            .unwrap(),
-            authority_overload_status: register_int_gauge_with_registry!(
-                "authority_overload_status",
-                "Whether authority is current experiencing overload and enters load shedding mode.",
-                registry)
-            .unwrap(),
-            authority_load_shedding_percentage: register_int_gauge_with_registry!(
-                "authority_load_shedding_percentage",
-                "The percentage of transactions is shed when the authority is in load shedding mode.",
-                registry)
             .unwrap(),
             transaction_manager_transaction_queue_age_s: register_histogram_with_registry!(
                 "transaction_manager_transaction_queue_age_s",
@@ -774,8 +746,6 @@ impl AuthorityMetrics {
                 registry
             ).unwrap(),
             execution_queueing_latency: LatencyObserver::new(),
-            txn_ready_rate_tracker: Arc::new(Mutex::new(RateTracker::new(Duration::from_secs(10)))),
-            execution_rate_tracker: Arc::new(Mutex::new(RateTracker::new(Duration::from_secs(10)))),
         }
     }
 
@@ -994,7 +964,6 @@ pub struct AuthorityState {
     pub config: NodeConfig,
 
     /// Current overload status in this authority. Updated periodically.
-    pub overload_info: AuthorityOverloadInfo,
 
     /// The chain identifier is derived from the digest of the genesis checkpoint.
     chain_identifier: ChainIdentifier,
@@ -1301,22 +1270,7 @@ impl AuthorityState {
         Ok(())
     }
 
-    pub fn check_system_overload_at_signing(&self) -> bool {
-        self.config
-            .authority_overload_config
-            .check_system_overload_at_signing
-    }
-
-    pub(crate) fn check_system_overload(
-        &self,
-        tx_data: &SenderSignedData,
-        do_authority_overload_check: bool,
-    ) -> SuiResult {
-        if do_authority_overload_check {
-            self.check_authority_overload(tx_data).tap_err(|_| {
-                self.update_overload_metrics("execution_queue");
-            })?;
-        }
+    pub(crate) fn check_system_overload(&self, tx_data: &SenderSignedData) -> SuiResult {
         self.execution_scheduler
             .check_execution_overload(self.overload_config(), tx_data)
             .tap_err(|_| {
@@ -1335,18 +1289,6 @@ impl AuthorityState {
         }
 
         Ok(())
-    }
-
-    fn check_authority_overload(&self, tx_data: &SenderSignedData) -> SuiResult {
-        if !self.overload_info.is_overload.load(Ordering::Relaxed) {
-            return Ok(());
-        }
-
-        let load_shedding_percentage = self
-            .overload_info
-            .load_shedding_percentage
-            .load(Ordering::Relaxed);
-        overload_monitor_accept_tx(load_shedding_percentage, tx_data.digest())
     }
 
     pub(crate) fn update_overload_metrics(&self, source: &str) {
@@ -2674,7 +2616,6 @@ impl AuthorityState {
             _authority_per_epoch_pruner,
             db_checkpoint_config: db_checkpoint_config.clone(),
             config,
-            overload_info: AuthorityOverloadInfo::default(),
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
             consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
