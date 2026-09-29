@@ -7,6 +7,7 @@ use crate::RpcError;
 use crate::RpcService;
 use itertools::Itertools;
 use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::ProtocolVersion;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
@@ -43,6 +44,7 @@ const GAS_COIN_SIZE_BYTES: u64 = 40;
 pub fn simulate_transaction(
     service: &RpcService,
     request: SimulateTransactionRequest,
+    _client_protocol_version: Option<ProtocolVersion>,
 ) -> Result<SimulateTransactionResponse> {
     let executor = service
         .executor
