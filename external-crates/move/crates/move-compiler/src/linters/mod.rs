@@ -231,21 +231,24 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
-    linter_visitors_with_config(level, &BTreeSet::new())
+    linter_visitors_with_config(level, &BTreeSet::new(), &BTreeSet::new())
 }
 
 pub fn linter_visitors_with_config(
     level: LintLevel,
     configured: &BTreeSet<FilterName>,
+    allowed: &BTreeSet<FilterName>,
 ) -> Vec<Visitor> {
+    let all_name = Symbol::from(crate::diagnostics::filter::FILTER_ALL);
+    let all_allowed = allowed.contains(&all_name);
     let all = match level {
         LintLevel::None => return vec![],
-        LintLevel::Default => {
-            configured.contains(&Symbol::from(crate::diagnostics::filter::FILTER_ALL))
-        }
-        LintLevel::All => true,
+        LintLevel::Default => configured.contains(&all_name),
+        LintLevel::All => !all_allowed,
     };
-    let enabled = |name| all || configured.contains(&Symbol::from(name));
+    let enabled = |name| {
+        (all || configured.contains(&Symbol::from(name))) && !allowed.contains(&Symbol::from(name))
+    };
     let mut visitors = vec![];
 
     macro_rules! add_visitor {
@@ -312,7 +315,8 @@ mod tests {
         for (_, _, name) in CORE_LINT_WARNING_FILTERS {
             let configured = BTreeSet::from([Symbol::from(*name)]);
             assert_eq!(
-                linter_visitors_with_config(LintLevel::Default, &configured).len(),
+                linter_visitors_with_config(LintLevel::Default, &configured, &BTreeSet::new())
+                    .len(),
                 1,
                 "{name}"
             );
@@ -320,10 +324,20 @@ mod tests {
     }
 
     #[test]
+    fn allowed_filters_do_not_enable_visitors() {
+        let configured = BTreeSet::from([Symbol::from(crate::diagnostics::filter::FILTER_ALL)]);
+        let allowed = BTreeSet::from([Symbol::from("constant_naming")]);
+        assert_eq!(
+            linter_visitors_with_config(LintLevel::Default, &configured, &allowed).len(),
+            linter_visitors(LintLevel::All).len() - 1
+        );
+    }
+
+    #[test]
     fn configured_all_enables_all_visitors() {
         let configured = BTreeSet::from([Symbol::from(crate::diagnostics::filter::FILTER_ALL)]);
         assert_eq!(
-            linter_visitors_with_config(LintLevel::Default, &configured).len(),
+            linter_visitors_with_config(LintLevel::Default, &configured, &BTreeSet::new()).len(),
             linter_visitors(LintLevel::All).len()
         );
     }

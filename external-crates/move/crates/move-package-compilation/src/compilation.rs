@@ -235,7 +235,11 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     )?;
 
     let lint_level = build_config.lint_flag.get();
-    let configured_lints = root_pkg.package_info().lints().filter_names();
+    let lint_modes = lint_modes(build_config);
+    let package_info = root_pkg.package_info();
+    let lints = package_info.lints();
+    let enabled_lints = lints.enabled_filter_names(&lint_modes);
+    let allowed_lints = lints.allowed_filter_names(&lint_modes);
     let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
     let flags = compiler_flags(build_config);
     let mut compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
@@ -247,7 +251,8 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
             .add_custom_known_filters(filter_attr_name, filters)
             .add_visitors(sui_mode::linters::linter_visitors_with_config(
                 lint_level,
-                &configured_lints,
+                &enabled_lints,
+                &allowed_lints,
             ))
     }
     let (filter_attr_name, filters) = linters::known_filters();
@@ -255,10 +260,21 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
         .add_custom_known_filters(filter_attr_name, filters)
         .add_visitors(linters::linter_visitors_with_config(
             lint_level,
-            &configured_lints,
+            &enabled_lints,
+            &allowed_lints,
         ));
 
     compiler_driver(compiler)
+}
+
+fn lint_modes(build_config: &BuildConfig) -> Vec<move_package::schema::ModeName> {
+    let mut result = build_config.mode_set();
+    if build_config.test_mode {
+        result.retain(|mode| mode != "build");
+    } else if !result.iter().any(|mode| mode == "build") {
+        result.push("build".to_string());
+    }
+    result
 }
 
 /// Save the compiled package to disk
@@ -401,23 +417,26 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
             if flavor == Flavor::Sui {
                 custom_known.push(sui_mode::linters::known_filters());
             }
-            let configured = pkg
+            let all_configured = pkg
                 .warnings()
-                .configured_filters(None)
+                .all_configured_filters(None)
                 .chain(
                     pkg.lints()
-                        .configured_filters(Some(DiagnosticAttribute::LINT_SYMBOL)),
+                        .all_configured_filters(Some(DiagnosticAttribute::LINT_SYMBOL)),
                 )
                 .collect::<Vec<_>>();
-            resolve_filter_names(configured, custom_known.clone()).map_err(|(prefix, name)| {
+            resolve_filter_names(all_configured, custom_known.clone()).map_err(|(prefix, name)| {
                 let opposite_prefix = if prefix.is_none() {
                     Some(DiagnosticAttribute::LINT_SYMBOL)
                 } else {
                     None
                 };
                 let belongs_opposite =
-                    resolve_filter_names([(opposite_prefix, name, FilterKind::Warn)], custom_known)
-                        .is_ok();
+                    resolve_filter_names(
+                        [(opposite_prefix, name, FilterKind::Warn)],
+                        custom_known.clone(),
+                    )
+                    .is_ok();
                 if belongs_opposite && prefix.is_none() {
                     anyhow::anyhow!(
                         "lint '{}' must be configured under [lints], not [warnings]",
@@ -434,7 +453,17 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
                         format_allow_attr(prefix, name)
                     )
                 }
-            })?
+            })?;
+            let lint_modes = lint_modes(build_config);
+            let configured = pkg
+                .warnings()
+                .configured_filters(None, &lint_modes)
+                .chain(
+                    pkg.lints()
+                        .configured_filters(Some(DiagnosticAttribute::LINT_SYMBOL), &lint_modes),
+                )
+                .collect::<Vec<_>>();
+            resolve_filter_names(configured, custom_known).expect("filters were already checked")
         } else {
             empty_filter_scope()
         };
