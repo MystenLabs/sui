@@ -46,7 +46,7 @@ task 3, lines 22-25:
 //> TransferObjects([Result(0)], Input(1))
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 27-29:
 //# programmable --sender A --inputs 1000000000 @A
@@ -54,7 +54,7 @@ task 4, lines 27-29:
 //> TransferObjects([Result(0)], Input(1))
 created: object(4,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, line 31:
 //# create-checkpoint
@@ -73,8 +73,8 @@ task 7, lines 35-40:
 //> TransferObjects([Result(0)], Input(1))
 created: object(7,0)
 deleted: object(3,0), object(4,0)
-accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1999868240)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1999887802)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 1975802, non_refundable_storage_fee: 198
 
 task 8, line 42:
 //# create-checkpoint
@@ -85,4 +85,4 @@ task 9, lines 44-47:
 // net gas charge. The deposit-back event and the gas charge event should be
 // visible as separate accumulator entries in the snapshot.
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
-101999868240
+101999887802

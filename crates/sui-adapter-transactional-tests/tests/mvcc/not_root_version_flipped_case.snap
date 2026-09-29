@@ -64,7 +64,7 @@ task 6, lines 71-72:
 //# programmable --sender P2 --inputs object(4,0)
 //> 0: test::m::bump(Input(0));
 mutated: object(0,1), object(4,0), object(4,1)
-gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 3626568, non_refundable_storage_fee: 36632
+gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 3662834, non_refundable_storage_fee: 366
 
 task 7, line 74:
 //# view-object 4,1
@@ -90,7 +90,7 @@ task 8, lines 79-81:
 created: object(8,0)
 mutated: object(_), object(2,0)
 wrapped: object(4,0)
-gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2392632, non_refundable_storage_fee: 24168
+gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2416558, non_refundable_storage_fee: 242
 
 // checking that with version 3 we get the other value, then flip them to ensure
 // they abort
@@ -102,7 +102,7 @@ task 9, lines 86-88:
 created: object(8,0)
 mutated: object(_), object(2,0)
 wrapped: object(4,0)
-gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2392632, non_refundable_storage_fee: 24168
+gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2416558, non_refundable_storage_fee: 242
 
 // @2 with value 1 aborts
 
