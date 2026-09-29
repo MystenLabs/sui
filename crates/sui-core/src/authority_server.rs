@@ -537,35 +537,6 @@ impl ValidatorService {
         Ok(())
     }
 
-    /// Test method that performs transaction validation with overload checking.
-    /// Used for testing validator overload behavior.
-    pub fn handle_transaction_for_testing_with_overload_check(
-        &self,
-        transaction: Transaction,
-    ) -> SuiResult<()> {
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-
-        // Validity check (basic structural validation)
-        transaction.validity_check(&epoch_store.tx_validity_check_context())?;
-
-        // Check system overload
-        self.state.check_system_overload(
-            transaction.data(),
-            self.state.check_system_overload_at_signing(),
-        )?;
-
-        // Signature verification
-        let transaction = epoch_store
-            .verify_transaction_require_no_aliases(transaction)?
-            .into_tx();
-
-        // Validate the transaction
-        self.state
-            .handle_vote_transaction(&epoch_store, transaction)?;
-
-        Ok(())
-    }
-
     /// Collect the IDs of input objects that are immutable.
     /// This is used to create the ImmutableInputObjects claim for consensus messages.
     async fn collect_immutable_object_ids(
@@ -868,10 +839,7 @@ impl ValidatorService {
                     .inc();
             }
 
-            let overload_check_res = state.check_system_overload(
-                transaction.data(),
-                state.check_system_overload_at_signing(),
-            );
+            let overload_check_res = state.check_system_overload(transaction.data());
             if let Err(error) = overload_check_res {
                 metrics
                     .num_rejected_tx_during_overload
