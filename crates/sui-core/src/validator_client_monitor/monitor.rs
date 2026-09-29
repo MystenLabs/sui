@@ -194,6 +194,8 @@ where
             }
 
             self.update_cached_latencies(&authority_agg);
+            // Refreshes the staggering gauges even when no submissions query the view.
+            self.staggering_active();
         }
     }
 }
@@ -364,7 +366,12 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             })
             .map(|(name, _)| committee.weight(name))
             .sum();
-        active_stake >= committee.validity_threshold()
+        let active = active_stake >= committee.validity_threshold();
+        self.metrics
+            .staggering_active_stake
+            .set(active_stake as i64);
+        self.metrics.staggering_active.set(active as i64);
+        active
     }
 
     #[cfg(test)]
