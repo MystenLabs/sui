@@ -295,6 +295,7 @@ pub struct AuthorityMetrics {
     pub(crate) consensus_handler_duplicate_tx_count: Histogram,
     pub(crate) staggered_submission_excess_copies: Histogram,
     pub(crate) staggered_submission_signal_band: IntGauge,
+    pub(crate) staggered_submission_active: IntGauge,
     pub(crate) staggered_submission_signal_transitions: IntCounterVec,
     pub(crate) staggered_submission_duplication_ratio: Gauge,
 
@@ -619,6 +620,12 @@ impl AuthorityMetrics {
             staggered_submission_signal_band: register_int_gauge_with_registry!(
                 "staggered_submission_signal_band",
                 "The duplication signal's current band level (0 = off; higher bands stagger with longer hold caps); staggering itself only follows when the staggered_submission_signal protocol flag and the node's enable_staggered_submission_signal config are both enabled",
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_active: register_int_gauge_with_registry!(
+                "staggered_submission_active",
+                "Whether this validator is currently staggering submissions of transactions without allowed proposers (1) or not (0) — the state it reports to transaction drivers; unlike staggered_submission_signal_band it stays 0 while the signal runs in dry run",
                 registry,
             )
             .unwrap(),

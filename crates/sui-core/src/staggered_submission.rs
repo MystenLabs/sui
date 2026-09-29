@@ -217,6 +217,11 @@ impl StaggeredSubmission {
         self.active.load(Ordering::Relaxed)
     }
 
+    /// The duplication signal's band level (0 = off), which moves in dry run too.
+    pub fn signal_band(&self) -> usize {
+        self.signal.lock().band
+    }
+
     /// Manually flips staggering on or off, independent of the signal (tests and
     /// operator override). Runs with the current schedule params — by default the
     /// first band's hold cap — and is left in place until the signal's next applied
