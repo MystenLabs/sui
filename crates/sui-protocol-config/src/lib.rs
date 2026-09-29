@@ -416,6 +416,7 @@ const MAINNET_USDB: &str =
 // Version 139: Enable forwarding addresses on devnet.
 //              Reduce the non-refundable storage fee from 1% to 0.01%.
 //              Allow random beacon DKG to complete after its timeout on devnet and testnet.
+//              Enable staggered_submission_signal on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4831,6 +4832,7 @@ impl ProtocolConfig {
                 139 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_forwarding_addresses = true;
+                        cfg.feature_flags.staggered_submission_signal = true;
                     }
                     cfg.storage_rebate_rate = Some(9999);
                     if chain != Chain::Mainnet {
