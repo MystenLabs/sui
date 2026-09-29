@@ -60,7 +60,6 @@ use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::sync::{Mutex, broadcast, mpsc};
-use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{Instrument, error_span, info};
 use tracing::{debug, error, warn};
@@ -110,7 +109,6 @@ use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::global_state_hasher::GlobalStateHasher;
 use sui_core::module_cache_metrics::ResolverMetrics;
-use sui_core::overload_monitor::overload_monitor;
 use sui_core::rpc_store_embed::EmbeddedRpcStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
@@ -120,7 +118,6 @@ use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_client::NetworkAuthorityClient,
 };
-use sui_macros::fail_point;
 use sui_macros::{fail_point_arg, fail_point_async, replay_log};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
@@ -152,7 +149,6 @@ pub mod metrics;
 
 pub struct ValidatorComponents {
     validator_server_handle: Option<ValidatorGrpcServer>,
-    validator_overload_monitor_handle: Option<JoinHandle<()>>,
     consensus_manager: Arc<ConsensusManager>,
     consensus_store_pruner: ConsensusStorePruner,
     consensus_adapter: Arc<ConsensusAdapter>,
@@ -1452,25 +1448,6 @@ impl SuiNode {
             (None, None)
         };
 
-        // Starts an overload monitor that monitors the execution of the authority.
-        // Don't start the overload monitor when max_load_shedding_percentage is 0.
-        let validator_overload_monitor_handle = if node_role.is_validator()
-            && config
-                .authority_overload_config
-                .max_load_shedding_percentage
-                > 0
-        {
-            let authority_state = Arc::downgrade(&state);
-            let overload_config = config.authority_overload_config.clone();
-            fail_point!("starting_overload_monitor");
-            Some(spawn_monitored_task!(overload_monitor(
-                authority_state,
-                overload_config,
-            )))
-        } else {
-            None
-        };
-
         Self::start_epoch_specific_validator_components(
             &config,
             state.clone(),
@@ -1485,7 +1462,6 @@ impl SuiNode {
             global_state_hasher,
             backpressure_manager,
             validator_server_handle,
-            validator_overload_monitor_handle,
             checkpoint_metrics,
             sui_node_metrics,
             sui_tx_validator_metrics,
@@ -1541,7 +1517,6 @@ impl SuiNode {
         state_hasher: Weak<GlobalStateHasher>,
         backpressure_manager: Arc<BackpressureManager>,
         validator_server_handle: Option<ValidatorGrpcServer>,
-        validator_overload_monitor_handle: Option<JoinHandle<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
@@ -1664,7 +1639,6 @@ impl SuiNode {
 
         Ok(ValidatorComponents {
             validator_server_handle,
-            validator_overload_monitor_handle,
             consensus_manager,
             consensus_store_pruner,
             consensus_adapter,
@@ -2119,7 +2093,6 @@ impl SuiNode {
 
             let new_validator_components = if let Some(ValidatorComponents {
                 validator_server_handle,
-                validator_overload_monitor_handle,
                 consensus_manager,
                 consensus_store_pruner,
                 consensus_adapter,
@@ -2183,7 +2156,6 @@ impl SuiNode {
                         weak_hasher,
                         self.backpressure_manager.clone(),
                         validator_server_handle,
-                        validator_overload_monitor_handle,
                         checkpoint_metrics,
                         self.metrics.clone(),
                         sui_tx_validator_metrics,

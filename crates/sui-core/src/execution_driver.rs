@@ -143,8 +143,6 @@ pub async fn execution_process(
                         .observe(latency.as_secs_f64());
                 }
             }
-            authority.metrics.execution_rate_tracker.lock().record();
-
             fail_point_async!("transaction_execution_delay");
 
             // Hold the epoch-alive guard across execution so that `epoch_terminated()` waits
