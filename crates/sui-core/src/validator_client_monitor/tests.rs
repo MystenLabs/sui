@@ -3,11 +3,12 @@
 
 use super::*;
 use crate::validator_client_monitor::stats::{ClientObservedStats, ValidatorClientStats};
+use arc_swap::ArcSwap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::base_types::{AuthorityName, ConciseableName};
-use sui_types::committee::Committee;
+use sui_types::committee::{Committee, CommitteeTrait as _};
 use sui_types::crypto::{AuthorityKeyPair, KeypairTraits, get_key_pair};
 
 mod client_stats_tests {
@@ -955,22 +956,36 @@ mod client_monitor_tests {
     #[tokio::test]
     async fn test_staggering_active_requires_f_plus_one_stake() {
         let auth_agg = get_authority_aggregator(4);
-        let monitor = ValidatorClientMonitor::new_for_test(auth_agg.clone());
+        let metrics = Arc::new(ValidatorClientMetrics::new_for_tests());
+        let monitor = ValidatorClientMonitor::new(
+            ValidatorClientMonitorConfig::default(),
+            metrics.clone(),
+            Arc::new(ArcSwap::new(auth_agg.clone())),
+        );
         let validators: Vec<_> = auth_agg.committee.names().cloned().collect();
+        let validator_stake = auth_agg.committee.weight(&validators[0]) as i64;
 
         assert!(!monitor.staggering_active());
+        assert_eq!(metrics.staggering_active.get(), 0);
+        assert_eq!(metrics.staggering_active_stake.get(), 0);
 
         // One of four equal-stake validators is below the validity threshold.
         monitor.record_staggering_report(validators[0], Some(new_report(true, None)));
         assert!(!monitor.staggering_active());
+        assert_eq!(metrics.staggering_active.get(), 0);
+        assert_eq!(metrics.staggering_active_stake.get(), validator_stake);
 
         // A second fresh report reaches f+1 stake: flips on immediately.
         monitor.record_staggering_report(validators[1], Some(new_report(true, None)));
         assert!(monitor.staggering_active());
+        assert_eq!(metrics.staggering_active.get(), 1);
+        assert_eq!(metrics.staggering_active_stake.get(), 2 * validator_stake);
 
         // A validator revising its report to inactive withdraws its stake.
         monitor.record_staggering_report(validators[1], Some(new_report(false, None)));
         assert!(!monitor.staggering_active());
+        assert_eq!(metrics.staggering_active.get(), 0);
+        assert_eq!(metrics.staggering_active_stake.get(), validator_stake);
 
         // Reports without the field carry no information and change nothing.
         monitor.record_staggering_report(validators[0], None);
