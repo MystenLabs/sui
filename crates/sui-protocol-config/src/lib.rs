@@ -424,6 +424,7 @@ const MAINNET_USDB: &str =
 //              Shuffle the block order within each round of a consensus commit on devnet.
 //              Disable the ID leak verifier.
 //              Add the staggered-submission duplication signal thresholds.
+//              Enable staggered_submission_signal on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4945,6 +4946,7 @@ impl ProtocolConfig {
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.shuffle_consensus_commit_blocks = true;
+                        cfg.feature_flags.staggered_submission_signal = true;
                     }
 
                     cfg.feature_flags.allow_references_in_ptbs = true;
