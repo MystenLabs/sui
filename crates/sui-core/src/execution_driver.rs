@@ -44,6 +44,7 @@
 
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use mysten_common::{debug_fatal, fatal, random::get_rng};
@@ -214,11 +215,9 @@ pub async fn execution_process(
         }
 
         if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {
-            authority
-                .metrics
-                .execution_queueing_latency
-                .report(txn_ready_time.elapsed());
-            if let Some(latency) = authority.metrics.execution_queueing_latency.latency() {
+            let queueing_latency = &authority.execution_progress.queueing_latency;
+            queueing_latency.report(txn_ready_time.elapsed());
+            if let Some(latency) = queueing_latency.latency() {
                 authority
                     .metrics
                     .execution_queueing_delay_s
@@ -269,6 +268,10 @@ pub async fn execution_process(
                             .metrics
                             .execution_driver_executed_transactions
                             .inc();
+                        authority
+                            .execution_progress
+                            .executed_transactions
+                            .fetch_add(1, Ordering::Relaxed);
                     }
                     ExecutionOutput::EpochEnded => {
                         warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
