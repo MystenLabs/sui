@@ -1882,17 +1882,21 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .epoch_store
                 .protocol_config()
                 .staggered_submission_signal();
-        let (transition, duplication_ratio) = self
-            .epoch_store
-            .staggered_submission()
-            .record_commit(excess_copies, unique_user_txns, apply);
+        let staggered = self.epoch_store.staggered_submission();
+        let (transition, duplication_ratio) =
+            staggered.record_commit(excess_copies, unique_user_txns, apply);
         self.metrics
             .staggered_submission_duplication_ratio
             .set(duplication_ratio);
+        // Set every commit rather than on transitions so both gauges pick up the fresh
+        // per-epoch state after reconfiguration.
+        self.metrics
+            .staggered_submission_signal_band
+            .set(staggered.signal_band() as i64);
+        self.metrics
+            .staggered_submission_active
+            .set(staggered.is_active() as i64);
         if let Some(band) = transition {
-            self.metrics
-                .staggered_submission_signal_band
-                .set(band as i64);
             self.metrics
                 .staggered_submission_signal_transitions
                 .with_label_values(&[crate::staggered_submission::signal_band_label(band)])
