@@ -6,8 +6,9 @@
 //! instruction, in particular, for the bytecode instructions that come in both generic and
 //! non-generic flavors. It also checks constraints on instructions like VecPack/VecUnpack.
 
+use move_binary_format::partial_vm_error;
 use move_binary_format::{
-    errors::{Location, PartialVMError, PartialVMResult, VMResult},
+    errors::{Location, PartialVMResult, VMResult},
     file_format::{
         Bytecode, CodeOffset, CodeUnit, CompiledModule, DatatypeHandleIndex, EnumDefinitionIndex,
         FieldHandleIndex, FunctionDefinitionIndex, FunctionHandleIndex, StructDefinitionIndex,
@@ -15,7 +16,6 @@ use move_binary_format::{
     },
     partial_vm_error_with_debug_message, safe_assert,
 };
-use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
 
 pub struct InstructionConsistency<'a> {
@@ -223,10 +223,8 @@ impl<'a> InstructionConsistency<'a> {
     ) -> PartialVMResult<()> {
         let datatype_handle = self.module.datatype_handle_at(datatype_handle_index);
         if datatype_handle.type_parameters.is_empty() == generic {
-            return Err(
-                PartialVMError::new(StatusCode::GENERIC_MEMBER_OPCODE_MISMATCH)
-                    .at_code_offset(self.current_function(), offset as CodeOffset),
-            );
+            return Err(partial_vm_error!(GENERIC_MEMBER_OPCODE_MISMATCH)
+                .at_code_offset(self.current_function(), offset as CodeOffset));
         }
         Ok(())
     }
@@ -239,10 +237,8 @@ impl<'a> InstructionConsistency<'a> {
     ) -> PartialVMResult<()> {
         let function_handle = self.module.function_handle_at(func_handle_index);
         if function_handle.type_parameters.is_empty() == generic {
-            return Err(
-                PartialVMError::new(StatusCode::GENERIC_MEMBER_OPCODE_MISMATCH)
-                    .at_code_offset(self.current_function(), offset as CodeOffset),
-            );
+            return Err(partial_vm_error!(GENERIC_MEMBER_OPCODE_MISMATCH)
+                .at_code_offset(self.current_function(), offset as CodeOffset));
         }
         Ok(())
     }

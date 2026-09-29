@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::partial_vm_error;
 use crate::{
     IndexKind,
     file_format::{CodeOffset, FunctionDefinitionIndex, TableIndex},
@@ -509,10 +510,10 @@ impl<T> SafeUnwrap for Option<T> {
     fn safe_unwrap_or_error(self, file: &str, line: u32) -> Result<T, PartialVMError> {
         match self {
             Some(x) => Ok(x),
-            None => Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("{file}:{line} (none)")),
-            ),
+            None => Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "{file}:{line} (none)"
+            )),
         }
     }
 }
@@ -522,10 +523,10 @@ impl<T, E: std::fmt::Display> SafeUnwrap for Result<T, E> {
     fn safe_unwrap_or_error(self, file: &str, line: u32) -> Result<T, PartialVMError> {
         match self {
             Ok(x) => Ok(x),
-            Err(e) => Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("{file}:{line} {e:#}")),
-            ),
+            Err(e) => Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "{file}:{line} {e:#}"
+            )),
         }
     }
 }
