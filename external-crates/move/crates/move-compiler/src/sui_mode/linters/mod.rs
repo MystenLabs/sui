@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use crate::{
     cfgir::visitor::AbstractInterpreterVisitor,
     command_line::compiler::Visitor,
@@ -167,32 +169,42 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
-    match level {
-        LintLevel::None => vec![],
-        LintLevel::Default => vec![
-            share_owned::ShareOwnedVerifier.visitor(),
-            self_transfer::SelfTransferVerifier.visitor(),
-            custom_state_change::CustomStateChangeVerifier.visitor(),
-            coin_field::CoinFieldVisitor.visitor(),
-            freeze_wrapped::FreezeWrappedVisitor.visitor(),
-            collection_equality::CollectionEqualityVisitor.visitor(),
-            public_random::PublicRandomVisitor.visitor(),
-            missing_key::MissingKeyVisitor.visitor(),
-            unnecessary_public_entry::UnnecessaryPublicEntry.visitor(),
-            uncallable_function::UncallableFunction.visitor(),
-            unused_object_with_fields::UnusedObjWithFieldsVerifier.visitor(),
-            // This is not on by default outside of Sui mode
-            crate::linters::unused_return_value::UnusedReturnValue.visitor(),
-        ],
-        LintLevel::All => {
-            let mut visitors = linter_visitors(LintLevel::Default);
-            visitors.extend([
-                freezing_capability::WarnFreezeCapability.visitor(),
-                public_mut_tx_context::PreferMutableTxContext.visitor(),
-            ]);
-            visitors
+    linter_visitors_with_config(level, &BTreeSet::new())
+}
+
+pub fn linter_visitors_with_config(
+    level: LintLevel,
+    configured: &BTreeSet<FilterName>,
+) -> Vec<Visitor> {
+    let all = match level {
+        LintLevel::None => return vec![],
+        LintLevel::Default => {
+            configured.contains(&Symbol::from(crate::diagnostics::filter::FILTER_ALL))
         }
+        LintLevel::All => true,
+    };
+
+    let mut visitors = vec![
+        share_owned::ShareOwnedVerifier.visitor(),
+        self_transfer::SelfTransferVerifier.visitor(),
+        custom_state_change::CustomStateChangeVerifier.visitor(),
+        coin_field::CoinFieldVisitor.visitor(),
+        freeze_wrapped::FreezeWrappedVisitor.visitor(),
+        collection_equality::CollectionEqualityVisitor.visitor(),
+        public_random::PublicRandomVisitor.visitor(),
+        missing_key::MissingKeyVisitor.visitor(),
+        unnecessary_public_entry::UnnecessaryPublicEntry.visitor(),
+        uncallable_function::UncallableFunction.visitor(),
+        unused_object_with_fields::UnusedObjWithFieldsVerifier.visitor(),
+        crate::linters::unused_return_value::UnusedReturnValue.visitor(),
+    ];
+    if all || configured.contains(&Symbol::from("freezing_capability")) {
+        visitors.push(freezing_capability::WarnFreezeCapability.visitor());
     }
+    if all || configured.contains(&Symbol::from("prefer_mut_tx_context")) {
+        visitors.push(public_mut_tx_context::PreferMutableTxContext.visitor());
+    }
+    visitors
 }
 
 /// Returns abilities of a given type, if any.
@@ -205,4 +217,31 @@ pub fn type_abilities(sp!(_, st_): &SingleType) -> Option<E::AbilitySet> {
         return Some(abilities.clone());
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configured_non_default_filters_enable_their_visitors() {
+        let default_count = linter_visitors(LintLevel::Default).len();
+        for name in ["freezing_capability", "prefer_mut_tx_context"] {
+            let configured = BTreeSet::from([Symbol::from(name)]);
+            assert_eq!(
+                linter_visitors_with_config(LintLevel::Default, &configured).len(),
+                default_count + 1,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn configured_all_enables_all_visitors() {
+        let configured = BTreeSet::from([Symbol::from(crate::diagnostics::filter::FILTER_ALL)]);
+        assert_eq!(
+            linter_visitors_with_config(LintLevel::Default, &configured).len(),
+            linter_visitors(LintLevel::All).len()
+        );
+    }
 }

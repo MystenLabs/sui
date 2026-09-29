@@ -21,12 +21,14 @@ use colored::Colorize;
 use move_compiler::{
     Compiler, Flags,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::filter::empty_filter_scope,
+    diagnostics::filter::{FilterKind, empty_filter_scope, resolve_filter_names},
     editions::{Edition, Flavor},
     linters,
     shared::{
-        PackageConfig, PackagePaths, SaveFlag, SaveHook, files::MappedFiles,
-        known_attributes::ModeAttribute,
+        PackageConfig, PackagePaths, SaveFlag, SaveHook,
+        files::MappedFiles,
+        format_allow_attr,
+        known_attributes::{DiagnosticAttribute, ModeAttribute},
     },
     sui_mode,
 };
@@ -233,6 +235,7 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     )?;
 
     let lint_level = build_config.lint_flag.get();
+    let configured_lints = root_pkg.package_info().lints().filter_names();
     let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
     let flags = compiler_flags(build_config);
     let mut compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
@@ -242,12 +245,18 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
         let (filter_attr_name, filters) = sui_mode::linters::known_filters();
         compiler = compiler
             .add_custom_known_filters(filter_attr_name, filters)
-            .add_visitors(sui_mode::linters::linter_visitors(lint_level))
+            .add_visitors(sui_mode::linters::linter_visitors_with_config(
+                lint_level,
+                &configured_lints,
+            ))
     }
     let (filter_attr_name, filters) = linters::known_filters();
     compiler = compiler
         .add_custom_known_filters(filter_attr_name, filters)
-        .add_visitors(linters::linter_visitors(lint_level));
+        .add_visitors(linters::linter_visitors_with_config(
+            lint_level,
+            &configured_lints,
+        ));
 
     compiler_driver(compiler)
 }
@@ -383,15 +392,60 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
         // mapped to `0x0`
         let addresses = build_config.addresses_for_config(pkg.named_addresses()?);
 
-        // TODO: better default handling for edition and flavor
+        let flavor = build_config
+            .default_flavor
+            .or(pkg.flavor().map(Flavor::from_str).transpose()?)
+            .unwrap_or(Flavor::Sui);
+        let warning_filter = if pkg.is_root() {
+            let mut custom_known = vec![linters::known_filters()];
+            if flavor == Flavor::Sui {
+                custom_known.push(sui_mode::linters::known_filters());
+            }
+            let configured = pkg
+                .warnings()
+                .configured_filters(None)
+                .chain(
+                    pkg.lints()
+                        .configured_filters(Some(DiagnosticAttribute::LINT_SYMBOL)),
+                )
+                .collect::<Vec<_>>();
+            resolve_filter_names(configured, custom_known.clone()).map_err(|(prefix, name)| {
+                let opposite_prefix = if prefix.is_none() {
+                    Some(DiagnosticAttribute::LINT_SYMBOL)
+                } else {
+                    None
+                };
+                let belongs_opposite =
+                    resolve_filter_names([(opposite_prefix, name, FilterKind::Warn)], custom_known)
+                        .is_ok();
+                if belongs_opposite && prefix.is_none() {
+                    anyhow::anyhow!(
+                        "lint '{}' must be configured under [lints], not [warnings]",
+                        name
+                    )
+                } else if belongs_opposite {
+                    anyhow::anyhow!(
+                        "compiler warning '{}' must be configured under [warnings], not [lints]",
+                        name
+                    )
+                } else {
+                    anyhow::anyhow!(
+                        "unknown warning filter '{}' in Move.toml",
+                        format_allow_attr(prefix, name)
+                    )
+                }
+            })?
+        } else {
+            empty_filter_scope()
+        };
         let config = PackageConfig {
             is_dependency: !pkg.is_root(),
             edition: pkg
                 .edition()
                 .or(build_config.default_edition)
                 .unwrap_or(Edition::LEGACY), // TODO require edition
-            flavor: Flavor::from_str(pkg.flavor().unwrap_or("sui"))?,
-            warning_filter: empty_filter_scope(),
+            flavor,
+            warning_filter,
         };
 
         // Assign a unique name for the compiler for each package.

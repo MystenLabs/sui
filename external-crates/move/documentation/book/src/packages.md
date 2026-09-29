@@ -67,6 +67,12 @@ authors* = [<string>,+]  # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow
 # Additional fields may be added to this section by external tools. E.g., on Sui the following sections are added:
 published-at* = "<hex-address>" # The address that the package is published at. Should be set after the first publication.
 
+[warnings] # (Optional section) Package-wide compiler warning levels
+<warning_name> = "allow" | "warn" | "deny"
+
+[lints] # (Optional section) Package-wide lint levels
+<lint_name> = "allow" | "warn" | "deny"
+
 [dependencies] # (Optional section) Paths to dependencies 
 # One or more lines declaring dependencies in the following format
 
@@ -126,6 +132,30 @@ published-at* = "<hex-address>" # The address that the package is published at. 
 # The dev-addresses section allows overwriting named addresses for the `--test`
 # and `--dev` modes.
 <addr_name> = "<hex_address>" # e.g., alice = "0xB0B"
+```
+
+Warning and lint names match their source attributes. Item-level attributes are more specific
+than package settings. Configuring a lint enables its analysis; `all` enables every lint unless
+`--no-lint` is passed.
+
+```move
+module 0x0::example {
+    #[deny(unused_variable)]
+    fun compiler_warning() { let unused = 0; }
+
+    #[deny(lint(abort_without_constant))]
+    fun lint_warning() { abort 0 }
+}
+```
+
+The equivalent package configuration is:
+
+```toml
+[warnings]
+unused_variable = "deny"
+
+[lints]
+abort_without_constant = "deny"
 ```
 
 An example of a minimal package manifest:

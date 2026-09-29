@@ -21,10 +21,12 @@
 //! `#[deny]` secondary labels and `#[expect]` unfulfilled diagnostics) and avoids the
 //! complexity of an interning table.
 
-use std::collections::BTreeMap;
-use std::sync::{
-    Arc, LazyLock,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    collections::BTreeMap,
+    sync::{
+        Arc, LazyLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use move_ir_types::location::*;
@@ -402,6 +404,45 @@ pub static IDE_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpansion)>
             ),
         ]
     });
+
+/// Resolves named filter settings against compiler and custom filter registries.
+pub fn resolve_filter_names(
+    configured: impl IntoIterator<Item = (FilterPrefix, FilterName, FilterKind)>,
+    custom_known: impl IntoIterator<Item = (FilterPrefix, Vec<(FilterName, Vec<DiagnosticsID>)>)>,
+) -> Result<FilterScope, (FilterPrefix, FilterName)> {
+    let mut known = BTreeMap::<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>>::new();
+    for (name, ids) in COMPILER_KNOWN_FILTERS.iter() {
+        known
+            .entry(None)
+            .or_default()
+            .insert(Symbol::from(*name), ids.to_vec());
+    }
+    for (prefix, filters) in custom_known {
+        let known_for_prefix = known.entry(prefix).or_default();
+        for (name, ids) in filters {
+            known_for_prefix.entry(name).or_default().extend(ids);
+        }
+    }
+
+    let mut entries = BTreeMap::new();
+    for (prefix, name, kind) in configured {
+        let Some(ids) = known
+            .get(&prefix)
+            .and_then(|known_for_prefix| known_for_prefix.get(&name))
+        else {
+            return Err((prefix, name));
+        };
+        for id in ids {
+            entries
+                .entry(*id)
+                .and_modify(|entry: &mut Spanned<FilterKind>| {
+                    entry.value = entry.value.resolve_conflict(kind);
+                })
+                .or_insert(sp(Loc::invalid(), kind));
+        }
+    }
+    Ok(FilterScope::new(entries))
+}
 
 //**************************************************************************************************
 // Impls

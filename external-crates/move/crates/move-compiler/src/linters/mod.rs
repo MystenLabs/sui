@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use move_symbol_pool::Symbol;
 
 use crate::{
@@ -229,24 +231,100 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
-    match level {
-        LintLevel::None | LintLevel::Default => vec![],
-        LintLevel::All => {
-            vec![
-                constant_naming::ConstantNaming.visitor(),
-                unnecessary_while_loop::WhileTrueToLoop.visitor(),
-                meaningless_math_operation::MeaninglessMathOperation.visitor(),
-                unneeded_return::UnneededReturn.visitor(),
-                abort_constant::AssertAbortNamedConstants.visitor(),
-                loop_without_exit::LoopWithoutExit.visitor(),
-                unnecessary_conditional::UnnecessaryConditional.visitor(),
-                self_assignment::SelfAssignment.visitor(),
-                redundant_ref_deref::RedundantRefDeref.visitor(),
-                unnecessary_unit::UnnecessaryUnit.visitor(),
-                equal_operands::EqualOperands.visitor(),
-                combinable_comparisons::CombinableComparisons.visitor(),
-                unused_return_value::UnusedReturnValue.visitor(),
-            ]
+    linter_visitors_with_config(level, &BTreeSet::new())
+}
+
+pub fn linter_visitors_with_config(
+    level: LintLevel,
+    configured: &BTreeSet<FilterName>,
+) -> Vec<Visitor> {
+    let all = match level {
+        LintLevel::None => return vec![],
+        LintLevel::Default => {
+            configured.contains(&Symbol::from(crate::diagnostics::filter::FILTER_ALL))
         }
+        LintLevel::All => true,
+    };
+    let enabled = |name| all || configured.contains(&Symbol::from(name));
+    let mut visitors = vec![];
+
+    macro_rules! add_visitor {
+        ($name:literal, $visitor:expr) => {
+            if enabled($name) {
+                visitors.push($visitor);
+            }
+        };
+    }
+
+    add_visitor!("constant_naming", constant_naming::ConstantNaming.visitor());
+    add_visitor!(
+        "while_true",
+        unnecessary_while_loop::WhileTrueToLoop.visitor()
+    );
+    add_visitor!(
+        "unnecessary_math",
+        meaningless_math_operation::MeaninglessMathOperation.visitor()
+    );
+    add_visitor!("unneeded_return", unneeded_return::UnneededReturn.visitor());
+    add_visitor!(
+        "abort_without_constant",
+        abort_constant::AssertAbortNamedConstants.visitor()
+    );
+    add_visitor!(
+        "loop_without_exit",
+        loop_without_exit::LoopWithoutExit.visitor()
+    );
+    add_visitor!(
+        "unnecessary_conditional",
+        unnecessary_conditional::UnnecessaryConditional.visitor()
+    );
+    add_visitor!("self_assignment", self_assignment::SelfAssignment.visitor());
+    add_visitor!(
+        "redundant_ref_deref",
+        redundant_ref_deref::RedundantRefDeref.visitor()
+    );
+    add_visitor!(
+        "unnecessary_unit",
+        unnecessary_unit::UnnecessaryUnit.visitor()
+    );
+    add_visitor!(
+        "always_equal_operands",
+        equal_operands::EqualOperands.visitor()
+    );
+    add_visitor!(
+        "combinable_comparisons",
+        combinable_comparisons::CombinableComparisons.visitor()
+    );
+    add_visitor!(
+        "unused_return_value",
+        unused_return_value::UnusedReturnValue.visitor()
+    );
+
+    visitors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configured_filters_enable_their_visitors() {
+        for (_, _, name) in CORE_LINT_WARNING_FILTERS {
+            let configured = BTreeSet::from([Symbol::from(*name)]);
+            assert_eq!(
+                linter_visitors_with_config(LintLevel::Default, &configured).len(),
+                1,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn configured_all_enables_all_visitors() {
+        let configured = BTreeSet::from([Symbol::from(crate::diagnostics::filter::FILTER_ALL)]);
+        assert_eq!(
+            linter_visitors_with_config(LintLevel::Default, &configured).len(),
+            linter_visitors(LintLevel::All).len()
+        );
     }
 }

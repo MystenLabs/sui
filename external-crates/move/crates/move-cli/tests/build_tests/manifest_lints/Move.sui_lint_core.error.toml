@@ -1,0 +1,9 @@
+[package]
+name = "manifest_lints"
+edition = "2024"
+
+[addresses]
+test = "0x0"
+
+[lints]
+public_entry = "deny"

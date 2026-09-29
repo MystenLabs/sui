@@ -1,0 +1,296 @@
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Compiler allow suppresses a warning\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Compiler allow suppresses a warning
+External Command `cp Move.compiler_allow.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Compiler warn emits a warning\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Compiler warn emits a warning
+External Command `cp Move.compiler_warn.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+warning[WC09002]: unused variable
+  ┌─ ./sources/m.move:3:13
+  │
+3 │         let unused = 0u64;
+  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Specific compiler levels override broader levels\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Specific compiler levels override broader levels
+External Command `cp fixtures/compiler_specificity.move sources/m.move`:
+External Command `cp Move.compiler_specificity.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+warning[WC09002]: unused variable
+  ┌─ ./sources/m.move:3:13
+  │
+3 │         let unused = 0u64;
+  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Source allow overrides manifest deny\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Source allow overrides manifest deny
+External Command `cp fixtures/source_allow.move sources/m.move`:
+External Command `cp Move.source_override.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Source warn overrides manifest deny\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Source warn overrides manifest deny
+External Command `cp fixtures/source_warn.move sources/m.move`:
+Command `build`:
+BUILDING manifest_lints
+warning[WC09002]: unused variable
+  ┌─ ./sources/m.move:4:13
+  │
+2 │     #[warn(unused_variable)]
+  │            --------------- the lint level is defined here
+3 │     public fun warning() {
+4 │         let unused = 0u64;
+  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Lint all warns only for lints\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Lint all warns only for lints
+External Command `cp fixtures/namespace_all.move sources/m.move`:
+External Command `cp Move.lints_all_warn.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+warning[WL04005]: 'abort' or 'assert' without named constant
+  ┌─ ./sources/m.move:7:15
+  │
+7 │         abort 1
+  │               ^ Prefer using a named constant.
+  │
+  = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+
+warning[WL04004]: unneeded return
+   ┌─ ./sources/m.move:11:9
+   │
+11 │         return 0
+   │         ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Warning all warns only for compiler warnings\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Warning all warns only for compiler warnings
+External Command `cp Move.warnings_all_warn.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+warning[WC09002]: unused variable
+  ┌─ ./sources/m.move:3:13
+  │
+3 │         let unused = 0u64;
+  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Configuring a lint enables only its visitor\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Configuring a lint enables only its visitor
+External Command `cp fixtures/lint_selective.move sources/m.move`:
+External Command `cp Move.lint_selective.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Lint allow suppresses a lint\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Lint allow suppresses a lint
+External Command `cp fixtures/lint.move sources/m.move`:
+External Command `cp Move.lint_allow.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == The lint flag respects manifest levels\n'`:
+
+# ===== [SUCCESS] ======================================
+# == The lint flag respects manifest levels
+Command `build --lint`:
+BUILDING manifest_lints
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Lint warn emits a warning\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Lint warn emits a warning
+External Command `cp Move.lint_warn.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+warning[WL04005]: 'abort' or 'assert' without named constant
+  ┌─ ./sources/m.move:3:15
+  │
+3 │         abort 1
+  │               ^ Prefer using a named constant.
+  │
+  = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Source lint allow overrides manifest deny\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Source lint allow overrides manifest deny
+External Command `cp fixtures/lint_allow.move sources/m.move`:
+External Command `cp Move.lint_source_allow.ok.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Sui lint allow suppresses a lint\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Sui lint allow suppresses a lint
+External Command `cp fixtures/sui_lint.move sources/m.move`:
+External Command `cp Move.sui_lint_allow.ok.toml Move.toml`:
+Command `build --default-move-flavor sui`:
+BUILDING manifest_lints
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Sui lint warn emits a warning\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Sui lint warn emits a warning
+External Command `cp Move.sui_lint_warn.ok.toml Move.toml`:
+Command `build --default-move-flavor sui`:
+BUILDING manifest_lints
+warning[WSL01011]: unnecessary `entry` on a `public` function
+  ┌─ ./sources/m.move:2:12
+  │
+2 │     public entry fun entry_function() {}
+  │            ^^^^^ `entry` on `public` is meaningless. In conjunction with `public`, `entry` adds no additional permissions or restrictions.
+  │
+  = `public` functions can be called from PTBs. `entry` can be used to allow non-`public` (private or `public(package)`) functions to be called from PTBs, although there will be additional restrictions on the input arguments to such functions.
+
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == Dependency lint settings do not affect the root\n'`:
+
+# ===== [SUCCESS] ======================================
+# == Dependency lint settings do not affect the root
+External Command `cp fixtures/clean.move sources/m.move`:
+External Command `cp Move.dependency_lints.ok.toml Move.toml`:
+Command `build`:
+INCLUDING DEPENDENCY dep
+BUILDING manifest_lints
+External Command `printf '\n# ===== [SUCCESS] ======================================\n# == The no-lint flag disables configured lints\n'`:
+
+# ===== [SUCCESS] ======================================
+# == The no-lint flag disables configured lints
+External Command `cp fixtures/lint.move sources/m.move`:
+External Command `cp Move.no_lint.ok.toml Move.toml`:
+Command `build --no-lint`:
+BUILDING manifest_lints
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Compiler deny produces an error\n'`:
+
+# ===== [FAILURE] ======================================
+# == Compiler deny produces an error
+External Command `cp fixtures/compiler.move sources/m.move`:
+External Command `cp Move.compiler_deny.error.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+error[EC09002]: unused variable
+  ┌─ ./sources/m.move:3:13
+  │
+3 │         let unused = 0u64;
+  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Source deny overrides manifest allow\n'`:
+
+# ===== [FAILURE] ======================================
+# == Source deny overrides manifest allow
+External Command `cp fixtures/source_deny.move sources/m.move`:
+External Command `cp Move.source_deny.error.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+error[EC09002]: unused variable
+  ┌─ ./sources/m.move:4:13
+  │
+2 │     #[deny(unused_variable)]
+  │            --------------- the lint level is defined here
+3 │     public fun warning() {
+4 │         let unused = 0u64;
+  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Lint deny produces an error\n'`:
+
+# ===== [FAILURE] ======================================
+# == Lint deny produces an error
+External Command `cp fixtures/lint.move sources/m.move`:
+External Command `cp Move.lint_deny.error.toml Move.toml`:
+Command `build`:
+BUILDING manifest_lints
+error[EL04005]: 'abort' or 'assert' without named constant
+  ┌─ ./sources/m.move:3:15
+  │
+3 │         abort 1
+  │               ^ Prefer using a named constant.
+  │
+  = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Sui lint deny produces an error\n'`:
+
+# ===== [FAILURE] ======================================
+# == Sui lint deny produces an error
+External Command `cp fixtures/sui_lint.move sources/m.move`:
+External Command `cp Move.sui_lint_deny.error.toml Move.toml`:
+Command `build --default-move-flavor sui`:
+BUILDING manifest_lints
+error[ESL01011]: unnecessary `entry` on a `public` function
+  ┌─ ./sources/m.move:2:12
+  │
+2 │     public entry fun entry_function() {}
+  │            ^^^^^ `entry` on `public` is meaningless. In conjunction with `public`, `entry` adds no additional permissions or restrictions.
+  │
+  = `public` functions can be called from PTBs. `entry` can be used to allow non-`public` (private or `public(package)`) functions to be called from PTBs, although there will be additional restrictions on the input arguments to such functions.
+
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Sui-only lints are rejected in Core\n'`:
+
+# ===== [FAILURE] ======================================
+# == Sui-only lints are rejected in Core
+External Command `cp fixtures/clean.move sources/m.move`:
+External Command `cp Move.sui_lint_core.error.toml Move.toml`:
+Command `build --default-move-flavor core`:
+Error: unknown warning filter 'lint(public_entry)' in Move.toml
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Warnings under lints are redirected\n'`:
+
+# ===== [FAILURE] ======================================
+# == Warnings under lints are redirected
+External Command `cp Move.warning_under_lints.error.toml Move.toml`:
+Command `build`:
+Error: compiler warning 'unused_variable' must be configured under [warnings], not [lints]
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Lints under warnings are redirected\n'`:
+
+# ===== [FAILURE] ======================================
+# == Lints under warnings are redirected
+External Command `cp Move.lint_under_warnings.error.toml Move.toml`:
+Command `build`:
+Error: lint 'abort_without_constant' must be configured under [lints], not [warnings]
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Unknown compiler filters are rejected\n'`:
+
+# ===== [FAILURE] ======================================
+# == Unknown compiler filters are rejected
+External Command `cp Move.unknown.error.toml Move.toml`:
+Command `build`:
+Error: unknown warning filter 'not_a_warning' in Move.toml
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Unknown lints are rejected\n'`:
+
+# ===== [FAILURE] ======================================
+# == Unknown lints are rejected
+External Command `cp Move.unknown_lint.error.toml Move.toml`:
+Command `build`:
+Error: unknown warning filter 'lint(not_a_lint)' in Move.toml
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Duplicate lint keys are rejected\n'`:
+
+# ===== [FAILURE] ======================================
+# == Duplicate lint keys are rejected
+External Command `cp Move.duplicate_key.error.toml Move.toml`:
+Command `build`:
+Error: Error while loading dependency .: error while parsing "./Move.toml": TOML parse error at line 10, column 1
+   |
+10 | unused = "deny"
+   | ^
+duplicate key `unused` in table `lints`
+
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Invalid lint levels are rejected\n'`:
+
+# ===== [FAILURE] ======================================
+# == Invalid lint levels are rejected
+External Command `cp Move.invalid_level.error.toml Move.toml`:
+Command `build`:
+Error: Error while loading dependency .: error while loading legacy manifest "./Move.toml": Error parsing '[warnings]' section of manifest

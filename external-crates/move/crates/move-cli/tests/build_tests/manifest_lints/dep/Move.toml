@@ -1,0 +1,9 @@
+[package]
+name = "dep"
+edition = "2024"
+
+[addresses]
+dep = "0x42"
+
+[lints]
+abort_without_constant = "deny"

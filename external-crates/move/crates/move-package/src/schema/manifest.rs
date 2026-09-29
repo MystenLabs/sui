@@ -1,10 +1,17 @@
-use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+    str::FromStr,
+};
 
 use anyhow::ensure;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_spanned::Spanned;
 
-use move_compiler::editions::Edition;
+use move_compiler::{
+    diagnostics::filter::{FilterKind, FilterName, FilterPrefix},
+    editions::Edition,
+};
 
 use crate::compatibility::legacy::LegacyData;
 
@@ -23,6 +30,42 @@ pub type ModeName = String;
 /// The identifier for a system dependency (in `{system = "dep_id"}` dependencies
 pub type SystemDepName = String;
 
+#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
+pub struct DiagnosticFilterConfig(pub BTreeMap<String, LintLevel>);
+
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LintLevel {
+    Allow,
+    Warn,
+    Deny,
+}
+
+impl DiagnosticFilterConfig {
+    pub fn configured_filters(
+        &self,
+        prefix: FilterPrefix,
+    ) -> impl Iterator<Item = (FilterPrefix, FilterName, FilterKind)> + '_ {
+        self.0
+            .iter()
+            .map(move |(name, level)| (prefix, name.as_str().into(), level.filter_kind()))
+    }
+
+    pub fn filter_names(&self) -> BTreeSet<FilterName> {
+        self.0.keys().map(|name| name.as_str().into()).collect()
+    }
+}
+
+impl LintLevel {
+    fn filter_kind(self) -> FilterKind {
+        match self {
+            Self::Allow => FilterKind::Allow,
+            Self::Warn => FilterKind::Warn,
+            Self::Deny => FilterKind::Deny,
+        }
+    }
+}
+
 // Note: [Manifest] objects should not be mutated or serialized; they are user-defined files so
 // tools that write them should use [toml_edit] to set / preserve the formatting. However, we do
 // implement [Serialize] and provide [render_as_toml], primarily for generating tests
@@ -30,6 +73,12 @@ pub type SystemDepName = String;
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ParsedManifest {
     pub package: PackageMetadata,
+
+    #[serde(default)]
+    pub warnings: DiagnosticFilterConfig,
+
+    #[serde(default)]
+    pub lints: DiagnosticFilterConfig,
 
     #[serde(default)]
     pub environments: BTreeMap<Spanned<EnvironmentName>, Spanned<EnvironmentID>>,
@@ -264,8 +313,8 @@ mod tests {
     use insta::assert_snapshot;
 
     use super::{
-        DefaultDependency, ExternalDependency, ManifestDependencyInfo, ManifestGitDependency,
-        ParsedManifest, ReplacementDependency,
+        DefaultDependency, ExternalDependency, LintLevel, ManifestDependencyInfo,
+        ManifestGitDependency, ParsedManifest, ReplacementDependency,
     };
     use move_compiler::editions::Edition;
     use std::str::FromStr;
@@ -322,6 +371,29 @@ mod tests {
     }
 
     // Smoke tests ///////////////////////////////////////////////////////////////////////
+
+    #[test]
+    fn lint_levels() {
+        let manifest: ParsedManifest = toml_edit::de::from_str(
+            r#"
+            [package]
+            name = "example"
+
+            [warnings]
+            unused = "deny"
+
+            [lints]
+            abort_without_constant = "allow"
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(manifest.warnings.0.get("unused"), Some(&LintLevel::Deny));
+        assert_eq!(
+            manifest.lints.0.get("abort_without_constant"),
+            Some(&LintLevel::Allow)
+        );
+    }
 
     /// Parsing a basic file using a number of features succeeds
     #[test]
@@ -650,13 +722,13 @@ mod tests {
         .unwrap_err()
         .to_string();
 
-        assert_snapshot!(error, @r###"
+        assert_snapshot!(error, @r"
         TOML parse error at line 6, column 14
           |
         6 |             [unknown]
           |              ^^^^^^^
-        unknown field `unknown`, expected one of `package`, `environments`, `dependencies`, `dep-replacements`
-        "###);
+        unknown field `unknown`, expected one of `package`, `warnings`, `lints`, `environments`, `dependencies`, `dep-replacements`
+        ");
     }
 
     // `package` section parsing /////////////////////////////////////////////////////////
@@ -1166,12 +1238,12 @@ mod tests {
         .unwrap_err()
         .to_string();
 
-        assert_snapshot!(error, @r###"
+        assert_snapshot!(error, @r"
         TOML parse error at line 6, column 14
           |
         6 |             [addresses]
           |              ^^^^^^^^^
-        unknown field `addresses`, expected one of `package`, `environments`, `dependencies`, `dep-replacements`
-        "###);
+        unknown field `addresses`, expected one of `package`, `warnings`, `lints`, `environments`, `dependencies`, `dep-replacements`
+        ");
     }
 }
