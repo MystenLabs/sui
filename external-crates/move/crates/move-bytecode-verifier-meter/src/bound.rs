@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{Meter, Scope};
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::vm_status::StatusCode;
+use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
 use move_vm_config::verifier::MeterConfig;
 
 /// Module and function level metering.
@@ -43,11 +43,14 @@ impl Bounds {
             if new_units > max {
                 // TODO: change to a new status PROGRAM_TOO_COMPLEX once this is rolled out. For
                 // now we use an existing code to avoid breaking changes on potential rollback.
-                return Err(PartialVMError::new(StatusCode::CONSTRAINT_NOT_SATISFIED)
-                    .with_message(format!(
-                        "program too complex (in `{}` with `{} current + {} new > {} max`)",
-                        self.name, self.units, units, max
-                    )));
+                return Err(partial_vm_error!(
+                    CONSTRAINT_NOT_SATISFIED,
+                    "program too complex (in `{}` with `{} current + {} new > {} max`)",
+                    self.name,
+                    self.units,
+                    units,
+                    max
+                ));
             }
             self.units = new_units;
         }

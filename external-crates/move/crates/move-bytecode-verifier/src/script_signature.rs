@@ -13,16 +13,17 @@
 //! `check_signature` should be used by adapters to quickly and easily verify custom signature
 //! rules for entrypoints
 
+use move_binary_format::partial_vm_error;
 use move_binary_format::{
     IndexKind,
-    errors::{Location, PartialVMError, PartialVMResult, VMResult},
+    errors::{Location, PartialVMResult, VMResult},
     file_format::{
         CompiledModule, FunctionDefinitionIndex, SignatureIndex, SignatureToken, TableIndex,
     },
     file_format_common::{VERSION_1, VERSION_5},
     partial_vm_error_with_debug_message,
 };
-use move_core_types::{identifier::IdentStr, vm_status::StatusCode};
+use move_core_types::identifier::IdentStr;
 
 pub type FnCheckScriptSignature = fn(
     &CompiledModule,
@@ -156,9 +157,7 @@ pub fn legacy_script_signature_checks(
     };
     let has_valid_return_type = return_types.is_empty();
     if !all_args_have_valid_type || !has_valid_return_type {
-        Err(PartialVMError::new(
-            StatusCode::INVALID_MAIN_FUNCTION_SIGNATURE,
-        ))
+        Err(partial_vm_error!(INVALID_MAIN_FUNCTION_SIGNATURE))
     } else {
         Ok(())
     }

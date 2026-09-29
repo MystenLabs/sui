@@ -7,6 +7,7 @@
 //! - All forward jumps do not enter into the middle of a loop
 //! - All "breaks" (forward, loop-exiting jumps) go to the "end" of the loop
 //! - All "continues" (back jumps in a loop) are only to the current loop
+use move_binary_format::partial_vm_error;
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeOffset, CodeUnit, FunctionDefinitionIndex},
@@ -41,9 +42,9 @@ fn verify_fallthrough(
 ) -> PartialVMResult<()> {
     // Check to make sure that the bytecode vector ends with a branching instruction.
     match code.last() {
-        None => Err(PartialVMError::new(StatusCode::EMPTY_CODE_UNIT)),
+        None => Err(partial_vm_error!(EMPTY_CODE_UNIT)),
         Some(last) if !last.is_unconditional_branch() => {
-            Err(PartialVMError::new(StatusCode::INVALID_FALL_THROUGH)
+            Err(partial_vm_error!(INVALID_FALL_THROUGH)
                 .at_code_offset(current_function, (code.len() - 1) as CodeOffset))
         }
         Some(_) => Ok(()),
