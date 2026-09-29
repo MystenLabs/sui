@@ -156,7 +156,7 @@ pub struct StaggerParams {
     /// per-submission jitter added on top of the slot's nominal delay.
     pub step: Duration,
     /// Upper bound on the nominal (pre-jitter) delay: slots wrap around the
-    /// `max_delay/step` firing steps (see [`compute_delay`]), so a submitter never
+    /// `max_delay/step` firing steps (see `compute_delay`), so a submitter never
     /// waits longer than this plus half a step of jitter regardless of committee size.
     /// Band-driven: applied signal transitions set it to the active band's hold cap;
     /// it defaults to the first band's, which is also what a manual `set_active(true)`
