@@ -125,13 +125,6 @@ mod test {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         // 2 validators, 10 seconds per epoch.
         let test_cluster = init_test_cluster_builder(2, 10_000)
-            .with_authority_overload_config(AuthorityOverloadConfig {
-                // Disable system overload checks for the test - during tests with crashes,
-                // it is possible for overload protection to trigger due to validators
-                // having queued certs which are missing dependencies.
-                check_system_overload_at_signing: false,
-                ..Default::default()
-            })
             .with_num_unpruned_validators(1)
             .with_chain_override(chain)
             .build()
@@ -147,13 +140,6 @@ mod test {
     async fn test_simulated_load_with_accumulator_v2_partial_upgrade() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = init_test_cluster_builder(4, 10000)
-            .with_authority_overload_config(AuthorityOverloadConfig {
-                // Disable system overload checks for the test - during tests with crashes,
-                // it is possible for overload protection to trigger due to validators
-                // having queued certs which are missing dependencies.
-                check_system_overload_at_signing: false,
-                ..Default::default()
-            })
             .with_global_state_hash_v2_enabled_callback(Arc::new(|idx| idx % 2 == 0))
             .build()
             .await
@@ -1040,10 +1026,6 @@ mod test {
 
         let test_cluster = init_test_cluster_builder(4, 10000)
             .with_authority_overload_config(AuthorityOverloadConfig {
-                // Disable system overload checks for the test - during tests with crashes,
-                // it is possible for overload protection to trigger due to validators
-                // having queued certs which are missing dependencies.
-                check_system_overload_at_signing: false,
                 max_txn_age_in_queue: Duration::from_secs(10000),
                 max_transaction_manager_queue_length: 10000,
                 max_transaction_manager_per_object_queue_length: 10000,
@@ -1149,13 +1131,6 @@ mod test {
             "Provided number of unpruned validators is greater than the total number of validators"
         );
         init_test_cluster_builder(default_num_validators, default_epoch_duration_ms)
-            .with_authority_overload_config(AuthorityOverloadConfig {
-                // Disable system overload checks for the test - during tests with crashes,
-                // it is possible for overload protection to trigger due to validators
-                // having queued certs which are missing dependencies.
-                check_system_overload_at_signing: false,
-                ..Default::default()
-            })
             .with_num_unpruned_validators(default_num_of_unpruned_validators)
             .build()
             .await
@@ -2542,10 +2517,6 @@ mod test {
         // Build a 4-node validator network with an observer fullnode subscribed to the
         // first validator's observer server.
         let test_cluster = init_test_cluster_builder(4, 40_000)
-            .with_authority_overload_config(AuthorityOverloadConfig {
-                check_system_overload_at_signing: false,
-                ..Default::default()
-            })
             .with_observer_fullnode()
             .build()
             .await;
@@ -2678,10 +2649,6 @@ mod test {
         let init_framework =
             sui_framework_snapshot::load_bytecode_snapshot(target_version).unwrap();
         let test_cluster = init_test_cluster_builder(2, 10_000)
-            .with_authority_overload_config(AuthorityOverloadConfig {
-                check_system_overload_at_signing: false,
-                ..Default::default()
-            })
             .with_num_unpruned_validators(1)
             .with_protocol_version(ProtocolVersion::new(target_version))
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
