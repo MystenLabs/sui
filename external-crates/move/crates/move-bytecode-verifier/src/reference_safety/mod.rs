@@ -14,9 +14,10 @@ use crate::absint::{FunctionContext, TransferFunctions, analyze_function};
 use crate::reference_safety::abstract_state::{STEP_BASE_COST, ValueKind};
 use abstract_state::{AbstractState, AbstractValue};
 use move_abstract_stack::AbstractStack;
+use move_binary_format::partial_vm_error;
 use move_binary_format::{
     CompiledModule,
-    errors::{PartialVMError, PartialVMResult},
+    errors::PartialVMResult,
     file_format::{
         Bytecode, CodeOffset, FunctionDefinitionIndex, FunctionHandle, IdentifierIndex,
         SignatureIndex, SignatureToken, StructDefinition, StructFieldInformation,
@@ -195,9 +196,7 @@ fn vec_element_type(
 ) -> PartialVMResult<SignatureToken> {
     match verifier.module.signature_at(idx).0.first() {
         Some(ty) => Ok(ty.clone()),
-        None => Err(PartialVMError::new(
-            StatusCode::VERIFIER_INVARIANT_VIOLATION,
-        )),
+        None => Err(partial_vm_error!(VERIFIER_INVARIANT_VIOLATION)),
     }
 }
 
