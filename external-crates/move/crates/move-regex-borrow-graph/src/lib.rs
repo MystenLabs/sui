@@ -3,6 +3,8 @@
 
 #![forbid(unsafe_code)]
 
+use move_binary_format::partial_vm_error;
+
 pub mod collections;
 pub(crate) mod graph_map;
 pub mod meter;
@@ -87,9 +89,6 @@ impl<E: Into<move_binary_format::errors::PartialVMError>> From<MeterError<E>>
 impl From<InvariantViolation> for move_binary_format::errors::PartialVMError {
     fn from(e: InvariantViolation) -> Self {
         debug_assert!(false, "Invariant violation: {}", e.0);
-        move_binary_format::errors::PartialVMError::new(
-            move_core_types::vm_status::StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-        )
-        .with_message(e.0)
+        partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "{}", e.0)
     }
 }

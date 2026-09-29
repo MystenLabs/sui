@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module contains verification of usage of dependencies for modules and scripts.
+use move_binary_format::partial_vm_error;
 use move_binary_format::{
     IndexKind,
-    errors::{Location, PartialVMError, PartialVMResult, VMResult, verification_error},
+    errors::{Location, PartialVMResult, VMResult, verification_error},
     file_format::{
         AbilitySet, Bytecode, CodeOffset, CompiledModule, DatatypeHandleIndex, DatatypeTyParameter,
         FunctionDefinitionIndex, FunctionHandleIndex, ModuleHandleIndex, SignatureToken,
@@ -426,7 +427,7 @@ fn compare_cross_module_signatures(
     def_module: &CompiledModule,
 ) -> PartialVMResult<()> {
     if handle_sig.len() != def_sig.len() {
-        return Err(PartialVMError::new(StatusCode::TYPE_MISMATCH));
+        return Err(partial_vm_error!(TYPE_MISMATCH));
     }
     for (handle_type, def_type) in handle_sig.iter().zip(def_sig) {
         compare_types(context, handle_type, def_type, def_module)?;
@@ -471,7 +472,7 @@ fn compare_types(
         }
         (SignatureToken::TypeParameter(idx1), SignatureToken::TypeParameter(idx2)) => {
             if idx1 != idx2 {
-                Err(PartialVMError::new(StatusCode::TYPE_MISMATCH))
+                Err(partial_vm_error!(TYPE_MISMATCH))
             } else {
                 Ok(())
             }
@@ -490,7 +491,7 @@ fn compare_types(
         | (SignatureToken::TypeParameter(_), _)
         | (SignatureToken::U16, _)
         | (SignatureToken::U32, _)
-        | (SignatureToken::U256, _) => Err(PartialVMError::new(StatusCode::TYPE_MISMATCH)),
+        | (SignatureToken::U256, _) => Err(partial_vm_error!(TYPE_MISMATCH)),
     }
 }
 
@@ -513,7 +514,7 @@ fn compare_structs(
     let def_struct_name = def_module.identifier_at(def_struct_handle.name);
 
     if module_id != def_module_id || struct_name != def_struct_name {
-        Err(PartialVMError::new(StatusCode::TYPE_MISMATCH))
+        Err(partial_vm_error!(TYPE_MISMATCH))
     } else {
         Ok(())
     }

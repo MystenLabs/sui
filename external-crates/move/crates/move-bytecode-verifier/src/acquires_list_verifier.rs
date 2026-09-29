@@ -11,6 +11,7 @@
 //! - No missing resources (any resource acquired must be present)
 //! - No additional resources (no extraneous resources not actually acquired)
 
+use move_binary_format::partial_vm_error;
 use std::collections::{BTreeSet, HashMap};
 
 use move_binary_format::{
@@ -71,15 +72,13 @@ impl<'a> AcquiresVerifier<'a> {
 
         for annotation in verifier.annotated_acquires {
             if !verifier.actual_acquires.contains(&annotation) {
-                return Err(PartialVMError::new(
-                    StatusCode::EXTRANEOUS_ACQUIRES_ANNOTATION,
-                ));
+                return Err(partial_vm_error!(EXTRANEOUS_ACQUIRES_ANNOTATION));
             }
 
             let struct_def = safe_unwrap!(module.struct_defs().get(annotation.0 as usize));
             let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
             if !struct_handle.abilities.has_key() {
-                return Err(PartialVMError::new(StatusCode::INVALID_ACQUIRES_ANNOTATION));
+                return Err(partial_vm_error!(INVALID_ACQUIRES_ANNOTATION));
             }
         }
 
