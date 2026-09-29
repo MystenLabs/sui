@@ -691,9 +691,10 @@ impl AuthorityStorePruner {
     /// entries below the checkpoint-retention watermark; that is a subset of what is
     /// dropped here and both keep the current and previous epoch intact.
     ///
-    /// `last_pruned_epoch` short-circuits the call when the epoch has not advanced since
-    /// the previous invocation, so the delete is issued once per epoch rather than on
-    /// every tick, and narrows later deletes to the epochs that became eligible since.
+    /// `last_pruned_epoch` is the highest epoch deleted by an earlier call in this process.
+    /// It short-circuits the call while no new epoch has become eligible, so the delete is
+    /// issued once per epoch rather than on every tick, and narrows later deletes to the
+    /// epochs that became eligible since.
     fn prune_executed_tx_digests(
         perpetual_db: &Arc<AuthorityPerpetualTables>,
         checkpoint_store: &Arc<CheckpointStore>,
@@ -705,24 +706,28 @@ impl AuthorityStorePruner {
             .map(|c| c.epoch)
             .unwrap_or_default();
 
-        if current_epoch < 2 || last_pruned_epoch.is_some_and(|e| e >= current_epoch) {
+        if current_epoch < 2 {
             return Ok(());
         }
 
         // Epochs strictly below this one are deleted; this one and later are preserved.
         let retain_from_epoch = current_epoch - 1;
-        // Everything below the previous cutoff is already gone, so only cover the epochs
-        // that became eligible since then. A fresh process starts from epoch 0.
-        let from_epoch = last_pruned_epoch.map_or(0, |e| e - 1);
+        let highest_prunable_epoch = retain_from_epoch - 1;
+        if last_pruned_epoch.is_some_and(|e| e >= highest_prunable_epoch) {
+            return Ok(());
+        }
+        // Everything up to the previously pruned epoch is already gone, so only cover the
+        // epochs that became eligible since then. A fresh process starts from epoch 0.
+        let from_epoch = last_pruned_epoch.map_or(0, |e| e + 1);
         info!(
-            "Pruning executed_transaction_digests for epochs {}..{} (current epoch: {})",
-            from_epoch, retain_from_epoch, current_epoch
+            "Pruning executed_transaction_digests for epochs {}..={} (current epoch: {})",
+            from_epoch, highest_prunable_epoch, current_epoch
         );
 
         #[cfg(tidehunter)]
         {
             let from_key = (from_epoch, TransactionDigest::ZERO);
-            let to_key = (retain_from_epoch - 1, TransactionDigest::new([0xff; 32]));
+            let to_key = (highest_prunable_epoch, TransactionDigest::new([0xff; 32]));
             perpetual_db
                 .executed_transaction_digests
                 .drop_cells_in_range(&from_key, &to_key)?;
@@ -743,8 +748,8 @@ impl AuthorityStorePruner {
 
         metrics
             .last_pruned_executed_tx_digests_epoch
-            .set((retain_from_epoch - 1) as i64);
-        *last_pruned_epoch = Some(current_epoch);
+            .set(highest_prunable_epoch as i64);
+        *last_pruned_epoch = Some(highest_prunable_epoch);
         Ok(())
     }
 
