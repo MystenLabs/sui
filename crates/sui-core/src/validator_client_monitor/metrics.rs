@@ -3,9 +3,10 @@
 
 use mysten_metrics::{COUNT_BUCKETS, SUBSECOND_LATENCY_SEC_BUCKETS};
 use prometheus::{
-    GaugeVec, Histogram, HistogramVec, IntCounterVec, Registry, register_gauge_vec_with_registry,
-    register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry,
+    GaugeVec, Histogram, HistogramVec, IntCounterVec, IntGauge, Registry,
+    register_gauge_vec_with_registry, register_histogram_vec_with_registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_gauge_with_registry,
 };
 
 #[derive(Clone)]
@@ -25,6 +26,12 @@ pub struct ValidatorClientMetrics {
 
     /// Number of low latency validators that got shuffled.
     pub shuffled_validators: Histogram,
+
+    /// Whether the driver currently considers staggered submission active (1) or not (0).
+    pub staggering_active: IntGauge,
+
+    /// Stake of validators with a fresh report of staggering being active.
+    pub staggering_active_stake: IntGauge,
 }
 
 impl ValidatorClientMetrics {
@@ -68,6 +75,20 @@ impl ValidatorClientMetrics {
                 "validator_client_shuffled_validators",
                 "Number of low latency validators that got shuffled",
                 COUNT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
+            staggering_active: register_int_gauge_with_registry!(
+                "validator_client_staggering_active",
+                "Whether the driver considers staggered submission active (1) or not (0); while active, transactions without allowed proposers are targeted at their free stagger slots",
+                registry,
+            )
+            .unwrap(),
+
+            staggering_active_stake: register_int_gauge_with_registry!(
+                "validator_client_staggering_active_stake",
+                "Stake of validators with a fresh report of staggering being active; staggering is considered active once this reaches the committee's validity threshold (f+1)",
                 registry,
             )
             .unwrap(),
