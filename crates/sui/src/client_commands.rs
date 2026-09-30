@@ -251,7 +251,7 @@ pub enum SuiClientCommands {
         #[arg(value_parser)]
         address: Option<KeyIdentity>,
         /// The url to the faucet: its base URL for a faucet that requires proof of work, such as
-        /// https://faucet.testnet.sui.io, or its full /v2/gas URL for one that does not, such as
+        /// <https://faucet.testnet.sui.io>, or its full /v2/gas URL for one that does not, such as
         /// the local faucet of `sui start --with-faucet`
         #[clap(long)]
         url: Option<String>,
