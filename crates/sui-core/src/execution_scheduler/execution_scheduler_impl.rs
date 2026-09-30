@@ -326,10 +326,10 @@ impl ExecutionScheduler {
             }
         };
 
-        // Send even if the transaction was already executed: the driver must retire
-        // its causal index, and try_execute_immediately no-ops on an executed
-        // transaction. Such unnecessary sends should only happen briefly after a
-        // restart - in steady state, duplicate enqueues are removed by deduplication.
+        // Send even if the transaction was already executed: the driver must retire its
+        // causal index, and it drops such a transaction before dispatching it. These
+        // sends should only happen briefly after a restart - in steady state, duplicate
+        // enqueues are removed by deduplication.
         // TODO: Eventually we could fold execution_driver into the scheduler.
         self.send_transaction_for_execution(&cert, execution_env, enqueue_time);
     }
@@ -586,15 +586,15 @@ impl ExecutionScheduler {
         // Precondition: non-digest keys are already resolved (see the doc comment).
         // Checked here because a violation is silent - the placeholder just never
         // executes.
-        #[cfg(debug_assertions)]
-        for (cert, _) in &certs {
-            let key = cert.key();
-            if !matches!(key, TransactionKey::Digest(_)) {
-                assert!(
-                    epoch_store.tx_key_to_digest(&key).is_some(),
-                    "enqueued transaction {} with unresolved key {key:?}",
-                    cert.digest()
-                );
+        if mysten_common::in_test_configuration() {
+            for (cert, _) in &certs {
+                if let Some(key) = cert.non_digest_key() {
+                    assert!(
+                        epoch_store.tx_key_to_digest(&key).is_some(),
+                        "enqueued transaction {} with unresolved key {key:?}",
+                        cert.digest()
+                    );
+                }
             }
         }
 
