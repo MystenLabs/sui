@@ -1,0 +1,47 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-19:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6574000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 21-33:
+//# programmable --sender A --inputs 0 9 @A
+// VALID: pop an element once its reference is dead, then borrow and write the popped object
+//> 0: test::m::new();
+//> 1: MakeMoveVec<test::m::Obj>([Result(0)]);
+//> 2: std::vector::borrow_mut<test::m::Obj>(Result(1), Input(0));
+//> 3: test::m::use_mut<test::m::Obj>(Result(2));
+//> 4: std::vector::pop_back<test::m::Obj>(Result(1));
+//> 5: test::m::inner_mut(Result(4));
+//> 6: test::m::f_mut(Result(5));
+//> 7: test::m::write(Result(6), Input(1));
+//> 8: test::m::check_f(Result(4), Input(1));
+//> 9: TransferObjects([Result(4)], Input(2));
+//> 10: std::vector::destroy_empty<test::m::Obj>(Result(1));
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 35:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 2
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    inner: test::m::Inner {
+        f: 9u64,
+        g: 0u64,
+    },
+}

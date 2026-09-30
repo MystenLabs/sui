@@ -1,0 +1,23 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-21:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6840000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 23-28:
+//# programmable --sender A
+// INVALID: CannotMoveBorrowedValue at arg 1 of command 2, the parent by value while the sibling reference is live
+//> 0: test::m::new();
+//> 1: test::m::open(Result(0));
+//> 2: test::m::close_and_delete(NestedResult(1,0), Result(0));
+//> 3: test::m::use_mut<test::m::Inner>(NestedResult(1,1));
+Error: Transaction Effects Status: Invalid command argument at 1. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: CannotMoveBorrowedValue }, source: None, command: Some(2) } }

@@ -1,0 +1,42 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-19:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5350400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 21-26:
+//# programmable --inputs 42 7
+// VALID: the root is borrowed mutably again after a read that was the reference's last use
+//> 0: test::m::id_mut<u64>(Input(0));
+//> 1: test::m::check(Result(0), Input(0));
+//> 2: test::m::write(Input(0), Input(1));
+//> 3: test::m::check(Input(0), Input(1));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 28-33:
+//# programmable --inputs 1
+// VALID: the referent is consumed after a read that was the reference's last use
+//> 0: test::m::no_copy(Input(0));
+//> 1: test::m::value_ref(Result(0));
+//> 2: test::m::check(Result(1), Input(0));
+//> 3: test::m::take(Result(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 35-39:
+//# programmable --inputs 42
+// VALID: a by-reference use before the read leaves the reference in place for the read
+//> 0: test::m::id_mut<u64>(Input(0));
+//> 1: test::m::use_mut<u64>(Result(0));
+//> 2: test::m::check(Result(0), Input(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

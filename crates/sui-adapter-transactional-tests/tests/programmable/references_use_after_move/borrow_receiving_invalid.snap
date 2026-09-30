@@ -1,0 +1,27 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-21:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6384000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 23-24:
+//# programmable --sender A
+//> 0: test::m::start();
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3473200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 26-28:
+//# programmable --sender A --inputs receiving(2,1)
+// INVALID: ArgumentWithoutValue at arg 1 of command 0
+//> 0: test::m::v_then_r(Input(0), Input(0));
+Error: Transaction Effects Status: Invalid command argument at 1. Specified argument location does not have a value and cannot be used
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: ArgumentWithoutValue }, source: None, command: Some(0) } }

@@ -1,0 +1,38 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+// Gas paid from an address balance is an ephemeral coin whose Move value holds only the budget,
+// and gas paid with a coin plus a balance reservation is a smashed coin.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-13:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 3625200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-18:
+//# programmable --sender A --inputs 100000000000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
+//> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100000000000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 20:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 22-26:
+//# programmable --sender A --address-balance-gas --gas-budget 10000000 --inputs @B
+// INVALID: CannotMoveBorrowedValue at arg 0 of command 1, the ephemeral gas coin sent while borrowed
+//> 0: test::m::id_mut<sui::coin::Coin<sui::sui::SUI>>(Gas);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0));
+//> 2: test::m::use_mut<sui::coin::Coin<sui::sui::SUI>>(Result(0));
+Error: Transaction Effects Status: Invalid command argument at 0. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Debug of error: CommandArgumentError { arg_idx: 0, kind: CannotMoveBorrowedValue } at command Some(1)

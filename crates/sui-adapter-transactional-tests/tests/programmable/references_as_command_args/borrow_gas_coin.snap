@@ -1,0 +1,38 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-9:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 3458000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 11-15:
+//# programmable --sender A --inputs 1000 @B
+// VALID: SplitCoins through a `&mut Coin<SUI>` result rooted in the gas coin
+//> 0: test::m::id_mut<sui::coin::Coin<sui::sui::SUI>>(Gas);
+//> 1: SplitCoins(Result(0), [Input(0)]);
+//> 2: TransferObjects([Result(1)], Input(1));
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 17:
+//# view-object 2,0
+Owner: Account Address ( B )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 1000u64,
+    },
+}

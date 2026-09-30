@@ -1,0 +1,22 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-11:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-17:
+//# programmable
+// ABORTS: static checking permits two distinct free-floating mutable arguments, but boom aborts with code 7 before the call
+//> 0: test::m::boom();
+//> 1: test::m::boom();
+//> 2: test::m::two_mut(Result(0), Result(1));
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m::boom (function index 0) at offset 1, Abort Code: 7
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("boom") }, 7), source: Some(VMError { major_status: ABORTED, sub_status: Some(7), message: Some("test::m::boom at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }

@@ -1,0 +1,32 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-9:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3458000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 11-16:
+//# programmable --sender A --inputs 1000 @A
+// INVALID: CannotMoveBorrowedValue at arg 1 of command 2, a coin merged into a reference to itself
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::m::id_mut<sui::coin::Coin<sui::sui::SUI>>(Result(0));
+//> 2: MergeCoins(Result(1), [Result(0)]);
+//> 3: TransferObjects([Result(0)], Input(1));
+Error: Transaction Effects Status: Invalid command argument at 1. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: CannotMoveBorrowedValue }, source: None, command: Some(2) } }
+
+task 3, lines 18-22:
+//# programmable --sender A --inputs 1000 @A
+// INVALID: CannotMoveBorrowedValue at arg 1 of command 1, a coin merged into itself by value
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: MergeCoins(Result(0), [Result(0)]);
+//> 2: TransferObjects([Result(0)], Input(1));
+Error: Transaction Effects Status: Invalid command argument at 1. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: CannotMoveBorrowedValue }, source: None, command: Some(1) } }
