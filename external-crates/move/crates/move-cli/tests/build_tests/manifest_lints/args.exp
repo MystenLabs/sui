@@ -245,6 +245,21 @@ error[EL04005]: 'abort' or 'assert' without named constant
   │
   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
 
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Explicit test mode uses the test lint profile\n'`:
+
+# ===== [FAILURE] ======================================
+# == Explicit test mode uses the test lint profile
+External Command `cp Move.lint_modes.ok.toml Move.toml`:
+Command `build --mode test`:
+BUILDING manifest_lints
+error[EL04005]: 'abort' or 'assert' without named constant
+  ┌─ ./sources/m.move:3:15
+  │
+3 │         abort 1
+  │               ^ Prefer using a named constant.
+  │
+  = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+
 External Command `printf '\n# ===== [FAILURE] ======================================\n# == Sui lint deny produces an error\n'`:
 
 # ===== [FAILURE] ======================================

@@ -35,7 +35,7 @@ use move_compiler::{
 use move_docgen::DocgenFlags;
 use move_package::{
     MoveFlavor, PackageInfo, RootPackage,
-    schema::{Environment, PackageID},
+    schema::{DiagnosticProfile, Environment, PackageID},
 };
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, io::Write, path::PathBuf, str::FromStr};
@@ -235,11 +235,11 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     )?;
 
     let lint_level = build_config.lint_flag.get();
-    let lint_modes = lint_modes(build_config);
+    let active_profile = active_diagnostic_profile(build_config);
     let package_info = root_pkg.package_info();
-    let lints = package_info.lints();
-    let enabled_lints = lints.enabled_filter_names(&lint_modes);
-    let allowed_lints = lints.allowed_filter_names(&lint_modes);
+    let lints = &package_info.diagnostics().lint_filters;
+    let enabled_lints = lints.enabled_filter_names(active_profile);
+    let allowed_lints = lints.allowed_filter_names(active_profile);
     let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
     let flags = compiler_flags(build_config);
     let mut compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
@@ -267,14 +267,12 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     compiler_driver(compiler)
 }
 
-fn lint_modes(build_config: &BuildConfig) -> Vec<move_package::schema::ModeName> {
-    let mut result = build_config.mode_set();
-    if build_config.test_mode {
-        result.retain(|mode| mode != "build");
-    } else if !result.iter().any(|mode| mode == "build") {
-        result.push("build".to_string());
+fn active_diagnostic_profile(build_config: &BuildConfig) -> DiagnosticProfile {
+    if build_config.test_mode || build_config.modes.contains(&ModeAttribute::TEST.into()) {
+        DiagnosticProfile::Test
+    } else {
+        DiagnosticProfile::Build
     }
-    result
 }
 
 /// Save the compiled package to disk
@@ -417,32 +415,41 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
             if flavor == Flavor::Sui {
                 custom_known.push(sui_mode::linters::known_filters());
             }
-            let all_configured = pkg
-                .warnings()
+            let diagnostics = pkg.diagnostics();
+            let all_warnings = diagnostics
+                .warning_filters
                 .all_configured_filters(None)
-                .chain(
-                    pkg.lints()
-                        .all_configured_filters(Some(DiagnosticAttribute::LINT_SYMBOL)),
-                )
                 .collect::<Vec<_>>();
-            resolve_filter_names(all_configured, custom_known.clone()).map_err(|(prefix, name)| {
-                let opposite_prefix = if prefix.is_none() {
-                    Some(DiagnosticAttribute::LINT_SYMBOL)
-                } else {
-                    None
-                };
-                let belongs_opposite =
-                    resolve_filter_names(
-                        [(opposite_prefix, name, FilterKind::Warn)],
-                        custom_known.clone(),
-                    )
-                    .is_ok();
-                if belongs_opposite && prefix.is_none() {
+            resolve_filter_names(all_warnings, custom_known.clone()).map_err(|(_, name)| {
+                if resolve_filter_names(
+                    [(
+                        Some(DiagnosticAttribute::LINT_SYMBOL),
+                        name,
+                        FilterKind::Warn,
+                    )],
+                    custom_known.clone(),
+                )
+                .is_ok()
+                {
                     anyhow::anyhow!(
                         "lint '{}' must be configured under [lints], not [warnings]",
                         name
                     )
-                } else if belongs_opposite {
+                } else {
+                    anyhow::anyhow!(
+                        "unknown warning filter '{}' in Move.toml",
+                        format_allow_attr(None, name)
+                    )
+                }
+            })?;
+            let all_lints = diagnostics
+                .lint_filters
+                .all_configured_filters(Some(DiagnosticAttribute::LINT_SYMBOL))
+                .collect::<Vec<_>>();
+            resolve_filter_names(all_lints, custom_known.clone()).map_err(|(_, name)| {
+                if resolve_filter_names([(None, name, FilterKind::Warn)], custom_known.clone())
+                    .is_ok()
+                {
                     anyhow::anyhow!(
                         "compiler warning '{}' must be configured under [warnings], not [lints]",
                         name
@@ -450,17 +457,18 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
                 } else {
                     anyhow::anyhow!(
                         "unknown warning filter '{}' in Move.toml",
-                        format_allow_attr(prefix, name)
+                        format_allow_attr(Some(DiagnosticAttribute::LINT_SYMBOL), name)
                     )
                 }
             })?;
-            let lint_modes = lint_modes(build_config);
-            let configured = pkg
-                .warnings()
-                .configured_filters(None, &lint_modes)
+            let active_profile = active_diagnostic_profile(build_config);
+            let configured = diagnostics
+                .warning_filters
+                .configured_filters(None, active_profile)
                 .chain(
-                    pkg.lints()
-                        .configured_filters(Some(DiagnosticAttribute::LINT_SYMBOL), &lint_modes),
+                    diagnostics
+                        .lint_filters
+                        .configured_filters(Some(DiagnosticAttribute::LINT_SYMBOL), active_profile),
                 )
                 .collect::<Vec<_>>();
             resolve_filter_names(configured, custom_known).expect("filters were already checked")

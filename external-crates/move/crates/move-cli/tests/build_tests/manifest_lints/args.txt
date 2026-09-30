@@ -94,6 +94,10 @@ build
 > cp Move.lint_modes.ok.toml Move.toml
 test
 
+> printf '\n# ===== [FAILURE] ======================================\n# == Explicit test mode uses the test lint profile\n'
+> cp Move.lint_modes.ok.toml Move.toml
+build --mode test
+
 > printf '\n# ===== [FAILURE] ======================================\n# == Sui lint deny produces an error\n'
 > cp fixtures/sui_lint.move sources/m.move
 > cp Move.sui_lint_deny.error.toml Move.toml

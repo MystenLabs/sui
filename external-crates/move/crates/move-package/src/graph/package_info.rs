@@ -8,7 +8,7 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{Package, paths::PackagePath},
-    schema::{DiagnosticFilterConfig, OriginalID, PackageID, PackageName, PublishAddresses},
+    schema::{DiagnosticConfigObject, OriginalID, PackageID, PackageName, PublishAddresses},
 };
 
 use super::PackageGraph;
@@ -100,12 +100,8 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
         self.package().metadata().edition
     }
 
-    pub fn warnings(&self) -> &DiagnosticFilterConfig {
-        self.package().warnings()
-    }
-
-    pub fn lints(&self) -> &DiagnosticFilterConfig {
-        self.package().lints()
+    pub fn diagnostics(&self) -> &DiagnosticConfigObject {
+        self.package().diagnostics()
     }
 
     /// The flavor for the package
