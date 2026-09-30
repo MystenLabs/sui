@@ -3,8 +3,8 @@
 
 use crate::base::reroot_path;
 use clap::*;
-use move_package_alt::MoveFlavor;
-use move_package_alt_compilation::{build_config::BuildConfig, find_env};
+use move_package::MoveFlavor;
+use move_package_compilation::{build_config::BuildConfig, find_env};
 use std::path::Path;
 
 /// Build the package at `path`. If no path is provided defaults to current directory.

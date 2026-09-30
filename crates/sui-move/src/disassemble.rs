@@ -7,7 +7,7 @@ use move_bytecode_source_map::utils::serialize_to_json_string;
 use move_cli::base;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
-use move_package_alt_compilation::build_config::BuildConfig;
+use move_package_compilation::build_config::BuildConfig;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;

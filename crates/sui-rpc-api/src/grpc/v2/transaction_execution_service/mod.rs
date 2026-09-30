@@ -46,12 +46,15 @@ impl TransactionExecutionService for RpcService {
         request: tonic::Request<SimulateTransactionRequest>,
     ) -> Result<tonic::Response<SimulateTransactionResponse>, tonic::Status> {
         let service = self.clone();
+        let client_protocol_version = crate::client_protocol_version(request.metadata());
         let request = request.into_inner();
-        tokio::task::spawn_blocking(move || simulate::simulate_transaction(&service, request))
-            .await
-            .map_err(|e| tonic::Status::internal(format!("simulate_transaction task failed: {e}")))?
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        tokio::task::spawn_blocking(move || {
+            simulate::simulate_transaction(&service, request, client_protocol_version)
+        })
+        .await
+        .map_err(|e| tonic::Status::internal(format!("simulate_transaction task failed: {e}")))?
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 }
 
