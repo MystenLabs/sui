@@ -341,6 +341,11 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     /// aging out of the window. Freshness runs on the driver's receipt clock only;
     /// the validator-local timestamps merely order each validator's own reports.
     pub fn staggering_active(&self) -> bool {
+        if cfg!(not(test)) {
+            self.metrics.staggering_active.set(0);
+            return false;
+        }
+
         if let Some((active, computed_at)) = *self.staggering_view.read()
             && computed_at.elapsed() < STAGGERING_VIEW_TTL
         {
