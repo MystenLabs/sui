@@ -1735,26 +1735,22 @@ impl AuthorityPerEpochStore {
     }
 
     /// Record a mapping from a transaction key (such as TransactionKey::RandomRound) to its digest.
-    pub(crate) fn insert_tx_key(
-        &self,
-        tx_key: TransactionKey,
-        tx_digest: TransactionDigest,
-    ) -> SuiResult {
+    pub(crate) fn insert_tx_key(&self, tx_key: TransactionKey, tx_digest: TransactionDigest) {
         let _metrics_scope =
             mysten_metrics::monitored_scope("AuthorityPerEpochStore::insert_tx_key");
 
         if matches!(tx_key, TransactionKey::Digest(_)) {
             debug_fatal!("useless to insert a digest key");
-            return Ok(());
+            return;
         }
 
         let tables = self.tables();
         tables
             .transaction_key_to_digest
-            .insert(&tx_key, &tx_digest)?;
+            .insert(&tx_key, &tx_digest)
+            .expect("db error");
         self.executed_digests_notify_read
             .notify(&tx_key, &tx_digest);
-        Ok(())
     }
 
     /// Fire an in-memory notification that a barrier transaction has been executed.
