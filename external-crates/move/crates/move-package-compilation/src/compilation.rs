@@ -21,7 +21,7 @@ use colored::Colorize;
 use move_compiler::{
     Compiler, Flags,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::filter::{empty_filter_scope, resolve_filter_names},
+    diagnostics::filter::empty_filter_scope,
     editions::{Edition, Flavor},
     linters,
     shared::{
@@ -236,8 +236,7 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     let active_profile = active_diagnostic_profile(build_config);
     let package_info = root_pkg.package_info();
     let diagnostics = package_info.diagnostics();
-    let enabled_lints = diagnostics.enabled_lints(active_profile);
-    let allowed_lints = diagnostics.allowed_lints(active_profile);
+    let (enabled_lints, allowed_lints) = diagnostics.lint_names(active_profile);
     let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
     let flags = compiler_flags(build_config);
     let mut compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
@@ -413,11 +412,8 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
             if flavor == Flavor::Sui {
                 custom_known.push(sui_mode::linters::known_filters());
             }
-            let diagnostics = pkg.diagnostics();
-            diagnostics.validate(&custom_known)?;
-            let active_profile = active_diagnostic_profile(build_config);
-            resolve_filter_names(diagnostics.configured_filters(active_profile), custom_known)
-                .expect("filters were already checked")
+            pkg.diagnostics()
+                .resolve_for_profile(active_diagnostic_profile(build_config), &custom_known)?
         } else {
             empty_filter_scope()
         };
