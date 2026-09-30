@@ -36,13 +36,12 @@ const ENVELOPE_HEADROOM_BYTES: u64 = 8 * 1024;
 /// Gas units budgeted per transaction, with generous headroom over the expected cost.
 const GAS_UNITS_PER_TX: u64 = 1_000_000;
 
-fn random_allowed_proposer_expiration(
+fn all_allowed_proposers_expiration(
     rng: &mut impl Rng,
     epoch: u64,
     chain: ChainIdentifier,
     committee_size: u32,
 ) -> TransactionExpiration {
-    let proposer = rng.gen_range(0..committee_size);
     TransactionExpiration::Validity {
         min_epoch: Some(epoch),
         max_epoch: Some(epoch),
@@ -52,7 +51,8 @@ fn random_allowed_proposer_expiration(
         nonce: rng.r#gen(),
         allowed_proposers: Some(AllowedProposers {
             epoch,
-            proposers: NonEmpty::singleton(proposer),
+            proposers: NonEmpty::from_vec((0..committee_size).collect())
+                .expect("committee must not be empty"),
         }),
     }
 }
@@ -136,7 +136,7 @@ impl LargeTransactionTestPayload {
             gas_price * GAS_UNITS_PER_TX,
             gas_price,
         );
-        *data.expiration_mut() = random_allowed_proposer_expiration(
+        *data.expiration_mut() = all_allowed_proposers_expiration(
             &mut self.rng,
             epoch,
             self.chain_identifier,
@@ -158,7 +158,7 @@ mod tests {
     use sui_types::digests::CheckpointDigest;
 
     #[test]
-    fn allowed_proposer_is_in_the_current_committee() {
+    fn allowed_proposers_cover_the_current_committee() {
         let mut rng = SmallRng::seed_from_u64(7);
         let epoch = 42;
         let committee_size = 125;
@@ -166,7 +166,7 @@ mod tests {
 
         for _ in 0..1_000 {
             let expiration =
-                random_allowed_proposer_expiration(&mut rng, epoch, chain, committee_size);
+                all_allowed_proposers_expiration(&mut rng, epoch, chain, committee_size);
             let TransactionExpiration::Validity {
                 min_epoch,
                 max_epoch,
@@ -179,8 +179,11 @@ mod tests {
             assert_eq!(min_epoch, Some(epoch));
             assert_eq!(max_epoch, Some(epoch));
             assert_eq!(allowed.epoch, epoch);
-            assert_eq!(allowed.proposers.len(), 1);
-            assert!(allowed.proposers.head < committee_size);
+            assert_eq!(allowed.proposers.len(), committee_size as usize);
+            assert_eq!(
+                allowed.proposers.iter().copied().collect::<Vec<_>>(),
+                (0..committee_size).collect::<Vec<_>>()
+            );
         }
     }
 }
