@@ -6,7 +6,7 @@ use std::sync::Arc;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, BlockTimestampMs, Round};
 use parking_lot::RwLock;
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom};
 
 use crate::{
     block::{TestBlock, VerifiedBlock, genesis_blocks},
@@ -92,26 +92,71 @@ pub(crate) fn build_dag_layer(
     references
 }
 
+/// Controls Byzantine equivocations injected while generating a randomized DAG.
+///
+/// At most `floor((N - 1) / 3)` distinct authorities can equivocate in one round,
+/// regardless of `max_equivocators`.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct RandomDagEquivocationConfig {
+    /// Percentage of rounds in which Byzantine authorities equivocate.
+    pub equivocation_rate: u8,
+    /// Upper bound on the number of distinct equivocating authorities per round.
+    pub max_equivocators: usize,
+    /// Number of additional conflicting blocks each selected authority produces.
+    pub equivocations_per_authority: usize,
+}
+
 pub(crate) fn create_random_dag(
     seed: u64,
     include_leader_percentage: u64,
     num_rounds: Round,
     context: Arc<Context>,
+    equivocation_config: RandomDagEquivocationConfig,
 ) -> DagBuilder {
     assert!(
         (0..=100).contains(&include_leader_percentage),
         "include_leader_percentage must be in the range 0..100"
     );
+    assert!(
+        equivocation_config.equivocation_rate <= 100,
+        "equivocation_rate must be in the range 0..=100"
+    );
 
     let mut rng = StdRng::seed_from_u64(seed);
     let mut dag_builder = DagBuilder::new(context);
+    let max_safe_equivocators = (dag_builder.context.committee.size() - 1) / 3;
+    let max_equivocators = equivocation_config
+        .max_equivocators
+        .min(max_safe_equivocators);
 
     for r in 1..=num_rounds {
         let random_num = rng.gen_range(0..100);
         let include_leader = random_num <= include_leader_percentage;
-        dag_builder
-            .layer(r)
-            .min_ancestor_links(include_leader, Some(random_num));
+        let min_ancestor_links_seed = rng.r#gen();
+
+        let should_equivocate = equivocation_config.equivocations_per_authority > 0
+            && max_equivocators > 0
+            && rng.gen_range(0..100) < equivocation_config.equivocation_rate;
+        if should_equivocate {
+            let num_equivocators = rng.gen_range(1..=max_equivocators);
+            let mut authorities = dag_builder
+                .context
+                .committee
+                .authorities()
+                .map(|(authority, _)| authority)
+                .collect::<Vec<_>>();
+            authorities.shuffle(&mut rng);
+
+            dag_builder
+                .layer(r)
+                .authorities(authorities.into_iter().take(num_equivocators).collect())
+                .equivocate(equivocation_config.equivocations_per_authority)
+                .min_ancestor_links(include_leader, Some(min_ancestor_links_seed));
+        } else {
+            dag_builder
+                .layer(r)
+                .min_ancestor_links(include_leader, Some(min_ancestor_links_seed));
+        }
     }
 
     dag_builder
