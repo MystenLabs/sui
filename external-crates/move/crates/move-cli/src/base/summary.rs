@@ -18,8 +18,8 @@ use move_binary_format::CompiledModule;
 use move_command_line_common::files::{MOVE_COMPILED_EXTENSION, extension_equals, find_filenames};
 use move_core_types::account_address::AccountAddress;
 use move_model_2 as M2;
-use move_package_alt::{MoveFlavor, RootPackage};
-use move_package_alt_compilation::{
+use move_package::{MoveFlavor, RootPackage};
+use move_package_compilation::{
     build_config::BuildConfig, compiled_package::BuildNamedAddresses, find_env,
 };
 use move_symbol_pool::Symbol;

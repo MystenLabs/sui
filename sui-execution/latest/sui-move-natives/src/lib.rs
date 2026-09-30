@@ -88,7 +88,7 @@ mod config;
 mod crypto;
 mod dynamic_field;
 pub mod event;
-mod funds_accumulator;
+pub mod funds_accumulator;
 mod object;
 pub mod object_runtime;
 mod package;
@@ -137,6 +137,10 @@ pub struct NativesCostTable {
 
     // Event natives
     pub event_emit_cost_params: EventEmitCostParams,
+
+    // Funds accumulator natives
+    pub reserve_object_funds_for_withdrawal_cost_params:
+        funds_accumulator::ReserveObjectFundsForWithdrawalCostParams,
 
     // Object
     pub borrow_uid_cost_params: BorrowUidCostParams,
@@ -375,6 +379,16 @@ impl NativesCostTable {
                     .event_emit_auth_stream_cost_as_option()
                     .map(Into::into),
             },
+
+            reserve_object_funds_for_withdrawal_cost_params:
+                funds_accumulator::ReserveObjectFundsForWithdrawalCostParams {
+                    base_cost: protocol_config
+                        .reserve_object_funds_for_withdrawal_cost_base_as_option()
+                        .map(Into::into),
+                    cold_read_cost: protocol_config
+                        .reserve_object_funds_for_withdrawal_cold_read_cost_as_option()
+                        .map(Into::into),
+                },
 
             borrow_uid_cost_params: BorrowUidCostParams {
                 object_borrow_uid_cost_base: protocol_config.object_borrow_uid_cost_base().into(),
@@ -1112,6 +1126,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             make_native!(funds_accumulator::withdraw_from_accumulator_address),
         ),
         (
+            "funds_accumulator",
+            "reserve_object_funds_for_withdrawal",
+            make_native!(funds_accumulator::reserve_object_funds_for_withdrawal),
+        ),
+        (
             "groth16",
             "verify_groth16_proof_internal",
             make_native!(groth16::verify_groth16_proof_internal),
@@ -1249,6 +1268,16 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "test_scenario",
             "deallocate_receiving_ticket_for_object",
             make_native!(test_scenario::deallocate_receiving_ticket_for_object),
+        ),
+        (
+            "test_scenario",
+            "settled_funds",
+            make_native!(test_scenario::settled_funds),
+        ),
+        (
+            "test_scenario",
+            "reserve_funds_from_address",
+            make_native!(test_scenario::reserve_funds_from_address),
         ),
         (
             "transfer",

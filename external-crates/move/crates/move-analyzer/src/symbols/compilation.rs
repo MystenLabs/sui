@@ -48,8 +48,8 @@ use move_compiler::{
 };
 use move_ir_types::location::Loc;
 
-use move_package_alt::{MoveFlavor, RootPackage};
-use move_package_alt_compilation::{
+use move_package::{MoveFlavor, RootPackage};
+use move_package_compilation::{
     build_config::BuildConfig,
     build_plan::BuildPlan,
     compilation::{compiler_flags, make_deps_for_compiler},
@@ -396,7 +396,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     flavor: Option<Flavor>,
     cursor_file_opt: Option<&PathBuf>,
 ) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
-    let build_config = move_package_alt_compilation::build_config::BuildConfig {
+    let build_config = move_package_compilation::build_config::BuildConfig {
         test_mode: true,
         default_flavor: flavor,
         lint_flag: lint.into(),
@@ -932,7 +932,6 @@ fn compute_pre_compiled_dep_data(
             Some(Arc::new(PreCompiledProgramInfo::new(
                 pre_compiled_modules.clone(),
             ))),
-            true,
             compiler_flags.clone(),
             Some(vfs_root.clone()),
         )

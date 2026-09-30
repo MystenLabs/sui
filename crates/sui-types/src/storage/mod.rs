@@ -7,13 +7,12 @@ mod read_store;
 mod shared_in_memory_store;
 mod write_store;
 
-use crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+use crate::IMPLICITLY_READ_SYSTEM_OBJECTS;
 use crate::base_types::{
     ConsensusObjectSequenceKey, ConsensusObjectVersion, FullObjectID, FullObjectRef, SuiAddress,
     SystemObjectVersions, TransactionDigest, VersionNumber,
 };
 use crate::committee::EpochId;
-use crate::effects::InputConsensusObject;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::error::{ExecutionError, SuiError, SuiErrorKind};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
@@ -22,7 +21,7 @@ use crate::message_envelope::Message;
 use crate::move_package::MovePackage;
 use crate::storage::error::Error as StorageError;
 use crate::transaction::TransactionData;
-use crate::transaction::{SenderSignedData, TransactionDataAPI};
+use crate::transaction::{InputObjects, SenderSignedData, TransactionDataAPI};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
@@ -187,6 +186,15 @@ pub enum ObjectChange {
 pub trait StorageView: Storage + ParentSync + RuntimeObjectResolver {}
 impl<T: Storage + ParentSync + RuntimeObjectResolver> StorageView for T {}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
+pub enum ObjectFundsSufficiency {
+    Sufficient,
+    Insufficient,
+    Overflow,
+    LoadError(String),
+}
+
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
 pub trait RuntimeObjectResolver: BackingPackageStore {
@@ -240,6 +248,11 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
             None
         }
     }
+}
+
+/// Resolves the balance available for object-funds withdrawals during execution.
+pub trait ObjectFundsResolver {
+    fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
 }
 
 pub struct DenyListResult {
@@ -827,50 +840,64 @@ pub fn get_transaction_output_objects(
 impl SystemObjectVersions {
     /// Obtains pinned system object versions from effects, queries the store for the initial shared versions.
     pub fn from_effects(effects: &TransactionEffects, store: &dyn ObjectStore) -> Self {
-        let accumulator_version = effects
-            .accessed_consensus_objects()
-            .into_iter()
-            .find_map(|ico| match ico {
-                InputConsensusObject::Mutate((id, version, _))
-                | InputConsensusObject::ReadOnly((id, version, _))
-                    if id == SUI_ACCUMULATOR_ROOT_OBJECT_ID =>
-                {
-                    Some(version)
-                }
-                _ => None,
-            })
-            .map(|version| {
-                let initial_shared_version = store
-                    .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-                    .and_then(|object| object.owner().start_version())
-                    // unwrap safe because if effects contain the accumulator root object, it must
-                    // exist in the store and is a shared object.
-                    .unwrap();
-                ConsensusObjectVersion {
-                    initial_shared_version,
-                    version,
-                }
-            });
-        Self::new(accumulator_version)
+        Self::from_map(
+            effects
+                .accessed_consensus_objects()
+                .into_iter()
+                .filter_map(|ico| {
+                    let (id, version) = ico.id_and_version();
+                    if !id.is_implicitly_read_system_object() || version.is_cancelled() {
+                        return None;
+                    }
+                    let initial_shared_version = store
+                        .get_object(&id)
+                        .and_then(|object| object.owner().start_version())
+                        // unwrap safe because if effects contain an implicitly read system object,
+                        // it must exist in the store and is a shared object.
+                        .unwrap();
+                    Some((
+                        id,
+                        ConsensusObjectVersion {
+                            initial_shared_version,
+                            version,
+                        },
+                    ))
+                })
+                .collect(),
+        )
     }
 
-    /// Before execution, get the latest versions of the implicitly read system objects from the store,
-    /// and use these versions as the exact version to read during execution.
+    /// Before execution, get the versions of the implicitly read system objects from the declared
+    /// inputs, or else the latest from the store, and use these versions as the exact version to
+    /// read during execution.
     /// This is used only in environments where there is no consensus to assign versions, e.g. simulacrum and dry-run.
-    pub fn from_latest_in_store(store: &dyn ObjectStore) -> Self {
-        let accumulator_version = store
-            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .map(|object| {
-                let initial_shared_version = object
-                    .owner()
-                    .start_version()
-                    .expect("accumulator root must be a consensus object");
-                ConsensusObjectVersion {
-                    initial_shared_version,
-                    version: object.version(),
-                }
-            });
-        Self::new(accumulator_version)
+    pub fn from_inputs_or_latest_in_store(
+        input_objects: &InputObjects,
+        store: &dyn ObjectStore,
+    ) -> Self {
+        Self::from_map(
+            IMPLICITLY_READ_SYSTEM_OBJECTS
+                .iter()
+                .filter_map(|id| {
+                    let object = input_objects
+                        .iter_objects()
+                        .find(|object| object.id() == *id)
+                        .cloned()
+                        .or_else(|| store.get_object(id))?;
+                    let initial_shared_version = object
+                        .owner()
+                        .start_version()
+                        .expect("implicitly read system objects must be consensus objects");
+                    Some((
+                        *id,
+                        ConsensusObjectVersion {
+                            initial_shared_version,
+                            version: object.version(),
+                        },
+                    ))
+                })
+                .collect(),
+        )
     }
 }
 
@@ -1018,6 +1045,7 @@ impl crate::storage::ObjectStore for TrackingBackingStore<'_> {
     ) -> Option<Object> {
         self.inner
             .load_implicitly_read_system_object(object_id, version)
+            .inspect(|o| self.track_object(o))
     }
 
     fn get_object_by_key(

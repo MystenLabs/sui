@@ -11,8 +11,8 @@ use move_command_line_common::{
 use move_compiler::command_line::COLOR_MODE_ENV_VAR;
 use move_coverage::coverage_map::{CoverageMap, ExecCoverageMapWithModules, TraceConsumer};
 
-use move_package_alt::{PackageLoader, RootPackage, SourcePackageLayout, Vanilla};
-use move_package_alt_compilation::{
+use move_package::{PackageLoader, RootPackage, SourcePackageLayout, Vanilla};
+use move_package_compilation::{
     layout::CompiledPackageLayout, on_disk_package::OnDiskCompiledPackage,
 };
 use move_unit_test::TRACE_DIR;
@@ -55,7 +55,7 @@ fn collect_coverage(
     let canonical_build = build_dir.canonicalize().unwrap();
 
     let pkg_root = &SourcePackageLayout::try_find_root(&canonical_build).unwrap();
-    let package_name = move_package_alt::read_name_from_manifest(pkg_root)?;
+    let package_name = move_package::read_name_from_manifest(pkg_root)?;
 
     let pkg_path = &build_dir
         .join(package_name)

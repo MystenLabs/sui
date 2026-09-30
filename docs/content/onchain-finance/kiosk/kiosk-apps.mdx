@@ -81,7 +81,7 @@ use sui::dynamic_field as df;
 use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
 
 /// The dynamic field key for the Kiosk Name Extension
-struct KioskName has copy, store, drop {}
+public struct KioskName has copy, store, drop {}
 
 /// Add a name to the Kiosk (in this implementation can be called only once)
 public fun add(self: &mut Kiosk, cap: &KioskOwnerCap, name: String) {
@@ -147,7 +147,7 @@ use sui::kiosk_extension;
 const PERMISSIONS: u128 = 1;
 
 /// The Witness struct used to identify and authorize the extension.
-struct Extension has drop {}
+public struct Extension has drop {}
 
 /// Install the Mallbox extension into the Kiosk.
 public fun add(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext) {
@@ -188,7 +188,7 @@ module examples::letterbox_ext;
 const PERMISSIONS: u128 = 1;
 
 /// The witness struct used to identify and authorize the app.
-struct Extension has drop {}
+public struct Extension has drop {}
 
 /// Install the Mallbox app into the kiosk and request `place` permission.
 public fun add(kiosk: &mut Kiosk, cap: &KioskOwnerCap, ctx: &mut TxContext) {
@@ -208,8 +208,8 @@ module examples::letterbox_ext;
 const ENotEnoughPermissions: u64 = 1;
 
 /// Place a letter into the kiosk without the `KioskOwnerCap`.
-public fun place(kiosk: &mut Kiosk, letter: Letter, policy: &TransferPolicy<T>) {
-    assert!(kiosk_extension::can_place<Extension>(kiosk), ENotEnoughPermissions)
+public fun place(kiosk: &mut Kiosk, letter: Letter, policy: &TransferPolicy<Letter>) {
+    assert!(kiosk_extension::can_place<Extension>(kiosk), ENotEnoughPermissions);
 
     kiosk_extension::place(Extension {}, kiosk, letter, policy)
 }

@@ -322,6 +322,15 @@ pub enum UserInputError {
     #[error("Commands following a command with Random can only be TransferObjects or MergeCoins")]
     PostRandomCommandRestrictions,
 
+    #[error(
+        "Invalid argument at command {command_idx}, argument {argument_idx}: index {index} is out of bounds"
+    )]
+    InvalidArgumentIndex {
+        command_idx: usize,
+        argument_idx: usize,
+        index: u16,
+    },
+
     // Soft Bundle related errors
     #[error("Number of transactions ({size}) exceeds the maximum allowed ({limit}) in a batch")]
     TooManyTransactionsInBatch { size: usize, limit: u64 },
@@ -735,9 +744,6 @@ pub enum SuiErrorKind {
 
     #[error("Missing committee information for epoch {0}")]
     MissingCommitteeAtEpoch(EpochId),
-
-    #[error("Index store not available on this Fullnode.")]
-    IndexStoreNotAvailable,
 
     #[error("Failed to read dynamic field from table in the object store: {0}")]
     DynamicFieldReadError(String),

@@ -33,9 +33,7 @@ impl StreamedObjectStore {
 
     /// Index a streamed checkpoint's execution objects by `(id, version)`. Deleted/wrapped entries
     /// (`None`) are skipped: they have no contents to serve and fall through to the KV backend.
-    // Called only from the staging-gated population path (the object source, `execution_objects`, is
-    // staging-only) and from tests.
-    #[cfg_attr(not(feature = "staging"), allow(dead_code))]
+    // Called from the population path (the object source, `execution_objects`) and from tests.
     pub(crate) fn index_objects(&self, checkpoint_seq: u64, objects: &ExecutionObjectMap) {
         for ((id, version), object) in objects.iter() {
             if let Some(object) = object {

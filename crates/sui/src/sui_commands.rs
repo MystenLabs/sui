@@ -20,7 +20,7 @@ use futures::future;
 use move_analyzer::analyzer;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_compiler::editions::Flavor;
-use move_package_alt_compilation::build_config::BuildConfig;
+use move_package_compilation::build_config::BuildConfig;
 use mysten_common::{ZipDebugEqIteratorExt, tempdir};
 use prometheus::Registry;
 use rand::rngs::OsRng;

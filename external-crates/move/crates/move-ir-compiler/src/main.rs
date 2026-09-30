@@ -7,7 +7,10 @@
 use anyhow::Context;
 use clap::Parser;
 use move_binary_format::{errors::VMError, file_format::CompiledModule};
-use move_bytecode_verifier::{dependencies, verify_module_unmetered};
+use move_bytecode_verifier::{
+    dependencies::{self, DependencyIndex},
+    verify_module_unmetered,
+};
 use move_command_line_common::files::{
     DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_IR_EXTENSION,
 };
@@ -46,7 +49,7 @@ fn print_error_and_exit(verification_error: &VMError) -> ! {
 
 fn do_verify_module(module: &CompiledModule, dependencies: &[CompiledModule]) {
     verify_module_unmetered(module).unwrap_or_else(|err| print_error_and_exit(&err));
-    if let Err(err) = dependencies::verify_module(module, dependencies) {
+    if let Err(err) = dependencies::verify_module(&DependencyIndex::new(dependencies), module) {
         print_error_and_exit(&err);
     }
 }

@@ -65,7 +65,7 @@ Each epoch change emits a `0x2::validator_set::ValidatorEpochInfo` event per val
 
 ### Reward distribution 
 
-A stake deposit request goes into a pending state immediately in the staking pool. Wallets like [Slush] reflect any pending stake deposit requests for your account.
+A stake deposit request goes into a pending state immediately in the staking pool. Wallets like [Slush](/onchain-finance/asset-custody/wallets/slush) reflect any pending stake deposit requests for your account.
 
 At the end of each epoch, the network distributes collected gas fees and stake subsidies among validators and stakers as staking rewards. The rewards a validator receives depend on:
 
@@ -103,7 +103,7 @@ Stake rewards consist of gas fees and stake subsidies. The total amount distribu
 - **Gas fees:** Each epoch's amount depends on the total gas fees collected throughout the epoch. Each Sui transaction pays gas fees depending on two variables, the amount of executed gas units and the gas price:
 
 $$
-_GasFee = GasPrice _ GasUnits
+GasFee = GasPrice * GasUnits
 $$
 
 The total gas fees correspond to the sum of gas fees across all transactions the network processes in the epoch. During regular market conditions, the vast majority of transactions should have a `GasPrice` equal to the `ReferenceGasPrice`.

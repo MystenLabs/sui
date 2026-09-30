@@ -35,11 +35,10 @@ use move_symbol_pool::Symbol;
 use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
 use move_transactional_test_runner::tasks::TaskCommand;
 use move_transactional_test_runner::{
-    framework::{CompiledState, MoveTestAdapter, compile_any, store_modules},
+    framework::{CompiledState, MoveTestAdapter, PreCompiledDeps, compile_any, store_modules},
     tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
 };
 use move_vm_runtime::dev_utils::vm_arguments::ValueFrame;
-use once_cell::sync::Lazy;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use serde::Deserialize;
 use serde_json::Value;
@@ -52,24 +51,15 @@ use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 use sui_core::authority::AuthorityState;
 use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
-use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
-use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, SuiAccumulatorOperation,
-    SuiAccumulatorValue, SuiExecutionStatus, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
-};
+use sui_framework::{BuiltInFramework, DEFAULT_FRAMEWORK_PATH};
 use sui_protocol_config::{
     Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
     ProtocolVersion,
-};
-use sui_storage::{
-    key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::KeyPairWrapper;
@@ -96,6 +86,7 @@ use sui_types::storage::ReadStore;
 use sui_types::storage::{ObjectStore, RpcStateReader};
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
+use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID};
 use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
@@ -135,6 +126,10 @@ pub enum FakeID {
 }
 
 const DEFAULT_GAS_PRICE: u64 = 1_000;
+
+/// The maximum number of events summarized for a transaction, matching the page size the
+/// JSON-RPC event query used to apply.
+const QUERY_MAX_RESULT_LIMIT: usize = 50;
 
 const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     MOVE_STDLIB_PACKAGE_ID,
@@ -418,7 +413,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
+        pre_compiled_deps: Option<PreCompiledDeps>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -428,10 +423,11 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         _path: &Path,
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
-        assert!(
-            pre_compiled_deps.is_some(),
-            "Must populate 'pre_compiled_deps' with Sui framework"
-        );
+        let pre_compiled_deps =
+            pre_compiled_deps.expect("Must populate 'pre_compiled_deps' with Sui framework");
+        // Overlap framework compilation with executor setup.
+        let framework_compile =
+            tokio::task::spawn_blocking(move || Arc::clone(LazyLock::force(pre_compiled_deps)));
 
         // Unpack the init arguments
         let AdapterInitConfig {
@@ -488,6 +484,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
 
+        let pre_compiled_deps = framework_compile
+            .await
+            .expect("framework compilation panicked");
+
         sui_types::transaction::clear_gasless_tokens_for_testing();
 
         let mut test_adapter = Self {
@@ -499,7 +499,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             read_replica,
             compiled_state: CompiledState::new(
                 named_address_mapping,
-                pre_compiled_deps,
+                Some(pre_compiled_deps),
+                BuiltInFramework::iter_system_packages().flat_map(|package| package.modules()),
                 Some(NumericalAddress::new(
                     AccountAddress::ZERO.into_bytes(),
                     NumberFormat::Hex,
@@ -2156,7 +2157,7 @@ impl SuiTestAdapter {
             ExecutionStatus::Success => {
                 let events = self
                     .executor
-                    .query_tx_events_asc(digest, *QUERY_MAX_RESULT_LIMIT)
+                    .query_tx_events_asc(digest, QUERY_MAX_RESULT_LIMIT)
                     .await?;
                 Ok(TxnSummary {
                     events,
@@ -2199,12 +2200,11 @@ impl SuiTestAdapter {
     }
 
     async fn dry_run(&mut self, transaction: TransactionData) -> anyhow::Result<TxnSummary> {
-        let results = self.executor.dry_run_transaction_block(transaction).await?;
-        let DryRunTransactionBlockResponse {
+        let SimulateTransactionResult {
             effects, events, ..
-        } = results;
+        } = self.executor.dry_run_transaction_block(transaction).await?;
 
-        self.tx_summary_from_effects(effects, events)
+        self.tx_summary_from_effects(effects, events.unwrap_or_default())
     }
 
     async fn dev_inspect(
@@ -2213,65 +2213,66 @@ impl SuiTestAdapter {
         transaction_kind: TransactionKind,
         gas_price: Option<u64>,
     ) -> anyhow::Result<TxnSummary> {
-        let results = self
+        let SimulateTransactionResult {
+            effects, events, ..
+        } = self
             .executor
             .dev_inspect_transaction_block(sender, transaction_kind, gas_price)
             .await?;
-        let DevInspectResults {
-            effects, events, ..
-        } = results;
 
-        self.tx_summary_from_effects(effects, events)
+        self.tx_summary_from_effects(effects, events.unwrap_or_default())
     }
 
+    /// Summarize the effects of a simulated (dry-run or dev-inspect) transaction.
     fn tx_summary_from_effects(
         &mut self,
-        effects: SuiTransactionBlockEffects,
-        events: SuiTransactionBlockEvents,
+        effects: TransactionEffects,
+        events: TransactionEvents,
     ) -> anyhow::Result<TxnSummary> {
-        if let SuiExecutionStatus::Failure { error } = effects.status() {
+        if let ExecutionStatus::Failure(ExecutionFailure { error, command }) = effects.status() {
+            // Match the error rendering of the JSON-RPC effects these summaries used to be
+            // built from, so the expected test output is unchanged.
+            let error = match command {
+                Some(command) => format!("{error:?} in command {command}"),
+                None => format!("{error:?}"),
+            };
             return Err(anyhow::anyhow!(self.stabilize_str(format!(
                 "Transaction Effects Status: {error}\nExecution Error: {error}",
             ))));
         }
 
-        let mut created_ids: Vec<_> = effects.created().iter().map(|o| o.object_id()).collect();
-        let mut mutated_ids: Vec<_> = effects.mutated().iter().map(|o| o.object_id()).collect();
-        let mut unwrapped_ids: Vec<_> = effects.unwrapped().iter().map(|o| o.object_id()).collect();
-        let mut deleted_ids: Vec<_> = effects.deleted().iter().map(|o| o.object_id).collect();
+        let mut created_ids: Vec<_> = effects
+            .created()
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut mutated_ids: Vec<_> = effects
+            .mutated()
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut unwrapped_ids: Vec<_> = effects
+            .unwrapped()
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut deleted_ids: Vec<_> = effects.deleted().iter().map(|(id, _, _)| *id).collect();
         let mut unwrapped_then_deleted_ids: Vec<_> = effects
             .unwrapped_then_deleted()
             .iter()
-            .map(|o| o.object_id)
+            .map(|(id, _, _)| *id)
             .collect();
-        let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|o| o.object_id).collect();
+        let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|(id, _, _)| *id).collect();
         let accumulator_events = effects.accumulator_events();
         let mut accumulators_written: Vec<_> = accumulator_events
             .iter()
             .map(|event| {
-                let operation = match event.operation {
-                    SuiAccumulatorOperation::Merge => AccumulatorOperation::Merge,
-                    SuiAccumulatorOperation::Split => AccumulatorOperation::Split,
-                };
-                let value = match &event.value {
-                    SuiAccumulatorValue::Integer(v) => EffectsAccumulatorValue::Integer(*v),
-                    SuiAccumulatorValue::IntegerTuple(a, b) => {
-                        EffectsAccumulatorValue::IntegerTuple(*a, *b)
-                    }
-                    SuiAccumulatorValue::EventDigest(digests) => {
-                        EffectsAccumulatorValue::EventDigest(digests.clone())
-                    }
-                };
                 (
-                    event.accumulator_obj,
-                    event.address,
-                    event
-                        .ty
-                        .clone()
-                        .try_into()
-                        .expect("Failed to parse accumulator type tag"),
-                    operation,
-                    value,
+                    *event.accumulator_obj.inner(),
+                    event.write.address.address,
+                    event.write.address.ty.clone(),
+                    event.write.operation.clone(),
+                    event.write.value.clone(),
                 )
             })
             .collect();
@@ -2318,14 +2319,8 @@ impl SuiTestAdapter {
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         accumulators_written.sort_by_key(|(id, _, _, _, _)| self.real_to_fake_object_id(id));
 
-        let events = events
-            .data
-            .into_iter()
-            .map(|sui_event| sui_event.into())
-            .collect();
-
         Ok(TxnSummary {
-            events,
+            events: events.data,
             gas_summary: gas_summary.clone(),
             created: created_ids,
             mutated: mutated_ids,
@@ -2728,7 +2723,7 @@ impl Default for AdapterInitConfig {
     }
 }
 
-static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| {
+static NAMED_ADDRESSES: LazyLock<BTreeMap<String, NumericalAddress>> = LazyLock::new(|| {
     let mut map = move_stdlib::named_addresses();
     assert!(map.get("std").unwrap().into_inner() == MOVE_STDLIB_ADDRESS);
     // TODO fix Sui framework constants
@@ -2763,7 +2758,9 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
     map
 });
 
-pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
+/// Compiler metadata for the system packages, including macro definitions.
+/// Bytecode is loaded separately from `BuiltInFramework`.
+pub static PRE_COMPILED: LazyLock<Arc<PreCompiledProgramInfo>> = LazyLock::new(|| {
     // TODO invoke package system? Or otherwise pull the versions for these packages as per their
     // actual Move.toml files. They way they are treated here is odd, too, though.
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
@@ -2811,7 +2808,6 @@ pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
         }],
         None,
         None,
-        false,
         Flags::empty(),
         None,
     )
@@ -2821,7 +2817,7 @@ pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
             eprintln!("!!!Sui framework failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, diags)
         }
-        Ok(res) => res,
+        Ok(res) => Arc::new(res),
     }
 });
 
@@ -2836,30 +2832,32 @@ async fn create_validator_fullnode(
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
                 .with_reference_gas_price(reference_gas_price.unwrap_or(500));
         builder = builder.with_protocol_version(protocol_config.version);
-        builder.build()
+        Arc::new(builder.build())
     };
 
-    let validator = TestAuthorityBuilder::new()
-        .with_protocol_config(protocol_config.clone())
-        .with_starting_objects(objects)
-        .with_shared_network_config(&network_config)
-        .insert_genesis_checkpoint()
-        .skip_genesis_owner_index()
-        .build()
-        .await;
-
-    let fullnode_key_pair = get_authority_key_pair().1;
-    let fullnode = TestAuthorityBuilder::new()
-        .with_protocol_config(protocol_config.clone())
-        .with_starting_objects(objects)
-        .with_shared_network_config(&network_config)
-        .with_keypair(&fullnode_key_pair)
-        .insert_genesis_checkpoint()
-        .skip_genesis_owner_index()
-        .build()
-        .await;
-
-    (validator, fullnode)
+    // Both builds need the same process-wide protocol config override.
+    // Install it here because separate overrides in each build would conflict.
+    let _guard = {
+        let protocol_config = protocol_config.clone();
+        ProtocolConfig::apply_overrides_for_testing(move |_, _| protocol_config.clone())
+    };
+    let build_node = |keypair: Option<AuthorityKeyPair>| {
+        let network_config = network_config.clone();
+        let objects = objects.to_vec();
+        tokio::spawn(async move {
+            let mut builder = TestAuthorityBuilder::new()
+                .with_starting_objects(&objects)
+                .with_shared_network_config(&network_config)
+                .insert_genesis_checkpoint();
+            if let Some(keypair) = &keypair {
+                builder = builder.with_keypair(keypair);
+            }
+            builder.build().await
+        })
+    };
+    let validator = build_node(None);
+    let fullnode = build_node(Some(get_authority_key_pair().1));
+    tokio::try_join!(validator, fullnode).expect("authority setup task panicked")
 }
 
 async fn create_val_fullnode_executor(
@@ -2870,17 +2868,9 @@ async fn create_val_fullnode_executor(
     let (validator, fullnode) =
         create_validator_fullnode(protocol_config, objects, reference_gas_price).await;
 
-    let metrics = KeyValueStoreMetrics::new_for_tests();
-    let kv_store = Arc::new(TransactionKeyValueStore::new(
-        "rocksdb",
-        metrics,
-        validator.clone(),
-    ));
-
     ValidatorWithFullnode {
         validator,
         fullnode,
-        kv_store,
         pending_effects: Vec::new(),
         next_checkpoint_seq: 1, // 0 is genesis
     }

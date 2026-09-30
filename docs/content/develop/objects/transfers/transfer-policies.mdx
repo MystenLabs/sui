@@ -79,11 +79,11 @@ module examples::dummy_rule {
 
     /// The rule Witness; has no fields and is used as a
     /// static authorization method for the rule.
-    struct Rule has drop {}
+    public struct Rule has drop {}
 
     /// Configuration struct with any fields (as long as it
     /// has `drop`). Managed by the rule module.
-    struct Config has store, drop {}
+    public struct Config has store, drop {}
 
     /// Function that adds a rule to the `TransferPolicy`.
     /// Requires `TransferPolicyCap` to make sure the rules are
@@ -139,11 +139,11 @@ module examples::royalty_rule {
     // skipping dependencies
     const MAX_BP: u16 = 10_000;
 
-    struct Rule has drop {}
+    public struct Rule has drop {}
 
     /// In this implementation rule has a configuration - `amount_bp`
     /// which is the percentage of the `paid` in basis points.
-    struct Config has store, drop { amount_bp: u16 }
+    public struct Config has store, drop { amount_bp: u16 }
 
     /// When a rule is added, configuration details are specified
     public fun add<T>(
@@ -186,8 +186,8 @@ module examples::time_rule {
     // skipping some dependencies
     use sui::clock::{Self, Clock};
 
-    struct Rule has drop {}
-    struct Config has store, drop { start_time: u64 }
+    public struct Rule has drop {}
+    public struct Config has store, drop { start_time: u64 }
 
     /// Start time is yet to come
     const ETooSoon: u64 = 0;
@@ -221,7 +221,7 @@ In the following example, both the rules and receipts are empty, so they match t
 module sui::transfer_policy {
     // ... skipped ...
 
-    struct TransferRequest<phantom T> {
+    public struct TransferRequest<phantom T> {
         // ... other fields omitted ...
 
         /// Collected receipts. Used to verify that all of the rules
@@ -231,7 +231,7 @@ module sui::transfer_policy {
 
     // ... skipped ...
 
-    struct TransferPolicy<phantom T> has key, store {
+    public struct TransferPolicy<phantom T> has key, store {
         // ... other fields omitted ...
 
         /// Set of types of attached rules - used to verify `receipts` when
@@ -263,8 +263,8 @@ module examples::witness_rule {
     const ERuleNotSet: u64 = 0;
 
     /// This rule requires a witness of type W, see the implementation
-    struct Rule<phantom W> has drop {}
-    struct Config has store, drop {}
+    public struct Rule<phantom W> has drop {}
+    public struct Config has store, drop {}
 
     /// No special arguments are required to set this rule, but the
     /// publisher now needs to specify a witness type
@@ -294,8 +294,8 @@ module examples::capability_rule {
     // skipping dependencies
 
     /// Changing the type parameter name for better readability
-    struct Rule<phantom Cap> has drop {}
-    struct Config {}
+    public struct Rule<phantom Cap> has drop {}
+    public struct Config {}
 
     /// Absolutely identical to the witness setting
     public fun add<T, Cap>(/* ... */) {

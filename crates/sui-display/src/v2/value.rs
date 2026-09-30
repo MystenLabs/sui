@@ -222,6 +222,38 @@ impl Value<'_> {
         Ok(derive_object_id(parent, &type_, &bytes)?)
     }
 
+    /// The Move type of this value.
+    pub fn type_(&self) -> TypeTag {
+        match self {
+            Value::Address(_) => TypeTag::Address,
+            Value::Bool(_) => TypeTag::Bool,
+            Value::Bytes(_) => TypeTag::Vector(Box::new(TypeTag::U8)),
+            Value::U8(_) => TypeTag::U8,
+            Value::U16(_) => TypeTag::U16,
+            Value::U32(_) => TypeTag::U32,
+            Value::U64(_) => TypeTag::U64,
+            Value::U128(_) => TypeTag::U128,
+            Value::U256(_) => TypeTag::U256,
+
+            Value::Enum(e) => e.type_.clone().into(),
+            Value::Struct(s) => s.type_.clone().into(),
+
+            Value::Slice(s) => s.layout.into(),
+
+            Value::String(_) => {
+                let (&address, module, name) = RESOLVED_UTF8_STR;
+                TypeTag::Struct(Box::new(StructTag {
+                    address,
+                    module: module.to_owned(),
+                    name: name.to_owned(),
+                    type_params: vec![],
+                }))
+            }
+
+            Value::Vector(v) => v.type_(),
+        }
+    }
+
     /// Write out a formatted representation of this value, transformed by `transform`, to the
     /// provided writer.
     ///
@@ -280,38 +312,6 @@ impl Value<'_> {
             Value::Enum(e) => e.format_json(meter),
             Value::Vector(v) => v.format_json(meter),
             Value::Slice(s) => s.format_json(meter),
-        }
-    }
-
-    /// The Move type of this value.
-    pub(crate) fn type_(&self) -> TypeTag {
-        match self {
-            Value::Address(_) => TypeTag::Address,
-            Value::Bool(_) => TypeTag::Bool,
-            Value::Bytes(_) => TypeTag::Vector(Box::new(TypeTag::U8)),
-            Value::U8(_) => TypeTag::U8,
-            Value::U16(_) => TypeTag::U16,
-            Value::U32(_) => TypeTag::U32,
-            Value::U64(_) => TypeTag::U64,
-            Value::U128(_) => TypeTag::U128,
-            Value::U256(_) => TypeTag::U256,
-
-            Value::Enum(e) => e.type_.clone().into(),
-            Value::Struct(s) => s.type_.clone().into(),
-
-            Value::Slice(s) => s.layout.into(),
-
-            Value::String(_) => {
-                let (&address, module, name) = RESOLVED_UTF8_STR;
-                TypeTag::Struct(Box::new(StructTag {
-                    address,
-                    module: module.to_owned(),
-                    name: name.to_owned(),
-                    type_params: vec![],
-                }))
-            }
-
-            Value::Vector(v) => v.type_(),
         }
     }
 

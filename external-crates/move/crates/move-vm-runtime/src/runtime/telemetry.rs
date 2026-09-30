@@ -612,7 +612,13 @@ impl TransactionTelemetryContext {
 
 impl Drop for Timer {
     fn drop(&mut self) {
-        if !self.reported {
+        // Skip the assertion while unwinding. Execution can be unwound through the VM by a
+        // panic raised outside of it (e.g. under the simulator, a parked blocking thread is
+        // aborted via `panic_any` when its node is killed), which skips the `report_time`
+        // call that would have marked the timer reported. Asserting here would then be a
+        // panic inside a destructor during cleanup, which Rust escalates to a non-unwinding
+        // panic and aborts the process - turning an orderly unwind into a hard crash.
+        if !self.reported && !std::thread::panicking() {
             debug_assert!(
                 false,
                 "Timer of kind {:?} was not recorded before drop",

@@ -4,7 +4,7 @@
 use clap::Parser;
 use move_cli::base::lint;
 use move_compiler::editions::Flavor;
-use move_package_alt_compilation::build_config::BuildConfig;
+use move_package_compilation::build_config::BuildConfig;
 use std::path::Path;
 use sui_package_alt::SuiFlavor;
 

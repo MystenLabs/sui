@@ -60,9 +60,7 @@ use task::streaming::StreamedCaches;
 use task::streaming::StreamedObjectStore;
 use task::streaming::StreamedTransactionStore;
 use task::streaming::StreamingPackageStore;
-#[cfg(feature = "staging")]
 use task::streaming::SubscriberLimit;
-#[cfg(feature = "staging")]
 use task::streaming::SubscriptionBroadcast;
 use task::streaming::SubscriptionReadiness;
 use task::watermark::WatermarkTask;
@@ -70,6 +68,7 @@ use task::watermark::WatermarksLock;
 use throttle::Throttle;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
+use tonic::metadata::MetadataValue;
 use tower_http::catch_panic;
 use tower_http::cors;
 use tracing::info;
@@ -77,7 +76,6 @@ use url::Url;
 
 use crate::api::mutation::Mutation;
 use crate::api::query::Query;
-#[cfg(feature = "staging")]
 use crate::api::subscription::Subscription;
 use crate::error::PanicHandler;
 use crate::extensions::logging::ClientInfo;
@@ -85,9 +83,8 @@ use crate::extensions::logging::Logging;
 use crate::extensions::logging::Session;
 use crate::metrics::RpcMetrics;
 use crate::metrics::SubscriptionMetrics;
+use crate::middleware::client_protocol_version::ClientProtocolVersion;
 use crate::middleware::version::Version;
-#[cfg(not(feature = "staging"))]
-use async_graphql::EmptySubscription as Subscription;
 
 const GRAPHQL_PATH: &str = "/graphql";
 const GRAPHQL_SUBSCRIPTIONS_PATH: &str = "/graphql/subscriptions";
@@ -473,7 +470,7 @@ pub async fn start_rpc(
     }
 
     if let Some(fullnode_client) = fullnode_client {
-        rpc = rpc.data(fullnode_client);
+        rpc = rpc.layer(fullnode_client);
     }
 
     if let Some(ledger_grpc_reader) = ledger_grpc_reader.clone() {
@@ -491,7 +488,6 @@ pub async fn start_rpc(
 
     // The transaction subscription backfill waits on pipeline watermarks to gate delivery, so it
     // needs a live view of them. Captured before the watermark task is consumed by `run()`.
-    #[cfg(feature = "staging")]
     let subscription_watermarks_rx = watermark_task.watermarks_rx();
 
     let s_system_package_task = system_package_task.run();
@@ -508,14 +504,12 @@ pub async fn start_rpc(
         readiness,
     )) = streaming_setup
     {
-        #[cfg(feature = "staging")]
         let max_subscribers = config.subscription.max_subscribers;
         rpc = rpc.data(caches).data(config.subscription);
         let s_stream = stream_task.run();
         let s_eviction = eviction_task.run();
         readiness.wait_for_ready().await?;
-        // The broadcast handle is only consumed by the (staging-gated) subscription resolvers.
-        #[cfg(feature = "staging")]
+        // The broadcast handle is only consumed by the subscription resolvers.
         {
             // `first_live_checkpoint` is the first checkpoint the live upstream stream
             // broadcast, recorded as readiness fires.
@@ -559,7 +553,9 @@ async fn graphql(
     Extension(logging): Extension<LoggingConfig>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
+    client_protocol_version: Option<TypedHeader<ClientProtocolVersion>>,
     headers: axum::http::HeaderMap,
+    fullnode_client: Option<Extension<FullnodeClient>>,
     request: GraphQLRequest,
 ) -> GraphQLResponse {
     let mut request = request
@@ -573,7 +569,27 @@ async fn graphql(
         request = request.data(show_usage);
     }
 
+    let request = with_fullnode_client(request, fullnode_client, client_protocol_version);
     schema.execute(request).await.into()
+}
+
+fn with_fullnode_client(
+    request: async_graphql::Request,
+    fullnode_client: Option<Extension<FullnodeClient>>,
+    client_protocol_version: Option<TypedHeader<ClientProtocolVersion>>,
+) -> async_graphql::Request {
+    let Some(Extension(mut client)) = fullnode_client else {
+        return request;
+    };
+
+    if let Some(version) = client_protocol_version
+        .and_then(|TypedHeader(version)| MetadataValue::try_from(version.0.as_bytes()).ok())
+    {
+        client = client.with_client_protocol_version(version);
+    }
+
+    // Request data keeps the forwarded version isolated from other callers sharing the schema.
+    request.data(client)
 }
 
 /// Handler for GET requests on the GraphQL path. Serves the GraphiQL IDE when enabled,
@@ -600,6 +616,8 @@ async fn graphql_subscriptions(
     Extension(SubscriptionsEnabled(subscriptions_enabled)): Extension<SubscriptionsEnabled>,
     Extension(throttle_cfg): Extension<SubscriptionThrottle>,
     Extension(watermark): Extension<WatermarksLock>,
+    client_protocol_version: Option<TypedHeader<ClientProtocolVersion>>,
+    fullnode_client: Option<Extension<FullnodeClient>>,
     request: GraphQLRequest,
 ) -> axum::response::Response {
     if !subscriptions_enabled {
@@ -621,6 +639,8 @@ async fn graphql_subscriptions(
         .data(watermarks)
         .data(rich::Meter::default())
         .data(query_depth.clone());
+
+    let req = with_fullnode_client(req, fullnode_client, client_protocol_version);
 
     // Pace delivery per subscriber, then serialize each payload into an SSE event.
     let stream = throttle
@@ -658,16 +678,122 @@ mod tests {
     use async_graphql_axum::GraphQLRequest;
     use async_graphql_axum::GraphQLResponse;
     use axum::routing::post;
+    use fastcrypto::encoding::Base64;
+    use fastcrypto::encoding::Encoding;
     use insta::assert_snapshot;
     use reqwest::Client;
     use serde_json::Value;
     use serde_json::json;
+    use sui_indexer_alt_reader::fullnode_client::X_SUI_CLIENT_PROTOCOL_VERSION;
     use sui_pg_db::temp::get_available_port;
+    use sui_types::base_types::SuiAddress;
+    use sui_types::transaction::ProgrammableTransaction;
+    use sui_types::transaction::TransactionData;
+    use tokio::sync::mpsc;
 
     use crate::error::code;
     use crate::extensions::logging::Session;
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_forward_client_protocol_version() {
+        let (sent, mut received) = mpsc::channel(1);
+        let upstream = Router::new().fallback(move |headers: axum::http::HeaderMap| {
+            let sent = sent.clone();
+            async move {
+                sent.send(headers).await.unwrap();
+                // Stop before response decoding: these tests only need the outgoing metadata.
+                [
+                    ("content-type", "application/grpc"),
+                    ("grpc-status", "3"),
+                    ("grpc-message", "metadata-recorded"),
+                ]
+            }
+        });
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let fullnode_url = format!("http://{}", listener.local_addr().unwrap());
+        let upstream_task = tokio::spawn(async move {
+            axum::serve(listener, upstream).await.unwrap();
+        });
+        let registry = Registry::new();
+        let fullnode = FullnodeClient::new(
+            None,
+            FullnodeArgs::new(fullnode_url.parse().unwrap()),
+            &registry,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), get_available_port());
+        let watermarks: WatermarksLock = Default::default();
+        let _service = RpcService::new(
+            RpcArgs {
+                rpc_listen_address: address,
+                no_ide: true,
+            },
+            "test",
+            schema(),
+            &registry,
+        )
+        .route(GRAPHQL_PATH, post(super::graphql))
+        .layer(fullnode)
+        .layer(watermarks)
+        .layer(LoggingConfig::default())
+        .run()
+        .await
+        .unwrap();
+
+        let tx = TransactionData::new_programmable(
+            SuiAddress::ZERO,
+            vec![],
+            ProgrammableTransaction {
+                inputs: vec![],
+                commands: vec![],
+            },
+            1,
+            1,
+        );
+        let bcs = Base64::encode(bcs::to_bytes(&tx).unwrap());
+        let queries = [
+            "{ simulateTransaction(transaction: {}) { effects { status } } }".to_owned(),
+            format!(
+                "mutation {{ executeTransaction(transactionDataBcs: \"{bcs}\", signatures: []) {{ effects {{ status }} }} }}"
+            ),
+        ];
+        let client = Client::new();
+        for query in queries {
+            for version in [Some("138"), Some("7"), None, Some("malformed"), None] {
+                let mut request = client
+                    .post(format!("http://{address}{GRAPHQL_PATH}"))
+                    .header("authorization", "do-not-forward")
+                    .json(&json!({ "query": query }));
+                if let Some(version) = version {
+                    request = request.header("X-Sui-Client-Protocol-Version", version);
+                }
+                let response: Value = request.send().await.unwrap().json().await.unwrap();
+                assert!(
+                    response["errors"][0]["message"]
+                        .as_str()
+                        .unwrap()
+                        .contains("metadata-recorded"),
+                    "{response}"
+                );
+                let headers = tokio::time::timeout(Duration::from_secs(5), received.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(
+                    headers
+                        .get(X_SUI_CLIENT_PROTOCOL_VERSION)
+                        .map(|v| v.to_str().unwrap()),
+                    version
+                );
+                assert!(!headers.contains_key("authorization"));
+            }
+        }
+        upstream_task.abort();
+    }
 
     /// Check that the exported schema is up-to-date.
     #[test]

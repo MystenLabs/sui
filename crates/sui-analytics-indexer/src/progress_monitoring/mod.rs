@@ -27,7 +27,7 @@ pub trait MaxCheckpointReader: Send + Sync + 'static {
     async fn max_checkpoint(&self) -> Result<i64>;
 }
 
-fn load_password(path: &str) -> Result<String> {
+fn load_secret(path: &str) -> Result<String> {
     Ok(fs::read_to_string(path)?.trim().to_string())
 }
 
@@ -102,11 +102,11 @@ pub fn spawn_snowflake_monitors(
             .ok_or_else(|| anyhow!("Missing sf_role"))?
             .clone();
 
-        let password = load_password(
+        let private_key_pem = load_secret(
             config
-                .sf_password_file
+                .sf_private_key_file
                 .as_ref()
-                .ok_or_else(|| anyhow!("Missing sf_password_file"))?,
+                .ok_or_else(|| anyhow!("Missing sf_private_key_file"))?,
         )?;
 
         let pipeline_name = pipeline_config.pipeline.to_string();
@@ -123,7 +123,7 @@ pub fn spawn_snowflake_monitors(
                 &schema,
                 &username,
                 &role,
-                &password,
+                &private_key_pem,
                 &sf_table_id,
                 &sf_checkpoint_col_id,
             )

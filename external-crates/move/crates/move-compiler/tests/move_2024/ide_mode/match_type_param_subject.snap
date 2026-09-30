@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[WC10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:1:9
+  │
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown diagnostic filter 'ide_path_autocomplete'
+
+warning[WC10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:1:31
+  │
+1 │ #[allow(ide_path_autocomplete,ide_dot_autocomplete)]
+  │                               ^^^^^^^^^^^^^^^^^^^^ Unknown diagnostic filter 'ide_dot_autocomplete'
+
+error[EC04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/match_type_param_subject.move:16:16
+   │
+16 │         match (t) {
+   │                ^ Pattern '_' not covered
+   │
+   = Match arms with guards are not considered for coverage.

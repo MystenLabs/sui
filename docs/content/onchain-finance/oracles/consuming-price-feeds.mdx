@@ -63,7 +63,7 @@ The TypeScript samples live in the `examples/oracle-adapter/ts` package and type
 
 :::caution
 
-The Pyth Sui SDK talks JSON-RPC, but the Mysten Testnet fullnode serves gRPC, so the default `getFullnodeUrl('testnet')` returns 404 for every SDK call. Point `rpcUrl` at a JSON-RPC provider or your own node. Every Testnet Pyth consumer hits this, and the failure looks like an unrelated 404 rather than an RPC-protocol mismatch.
+The Pyth Sui SDK talks JSON-RPC, but the Mysten Testnet fullnode serves gRPC, so the default `getFullnodeUrl('testnet')` returns 404 for every SDK call. Point `rpcUrl` at a JSON-RPC provider or your own node. Every Testnet Pyth consumer hits this, and the failure looks like an unrelated 404 rather than an RPC-protocol mismatch. For the same reason, these samples use a JSON-RPC client rather than the `SuiGrpcClient` that the rest of this documentation uses.
 
 :::
 

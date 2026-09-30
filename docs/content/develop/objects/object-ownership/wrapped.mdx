@@ -86,10 +86,10 @@ If you put the object of type `Bar` into an object of type `Foo`, the object typ
 ## Wrapping and unwrapping
 
 <CodeWalkthrough source="examples/move/basics/sources/object_basics.move" language="move">
-  <Step lines="69-71" title="Create a wrapped object">
+  <Step lines="72-74" title="Create a wrapped object">
     The `wrap` function takes an `Object` by value and places it inside a new `Wrapper` struct. The `Wrapper` is then transferred to the sender. After wrapping, the original object is no longer directly accessible onchain and can only be reached through the wrapper.
   </Step>
-  <Step lines="73-78" title="Unwrap a wrapped object">
+  <Step lines="76-81" title="Unwrap a wrapped object">
     You can take out the wrapped object and transfer it to an address, modify it, delete it, or freeze it. This is called unwrapping. The `unwrap` function destructs the `Wrapper`, deletes its UID, and transfers the inner `Object` back to the sender. The object's ID stays the same across wrapping and unwrapping.
   </Step>
 </CodeWalkthrough>
@@ -265,7 +265,7 @@ public fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mut TxCo
 
 The function passes a `warrior` as a mutable reference of `SimpleWarrior`, and passes a `sword` by value to wrap it into the `warrior`.
 
-Because `Sword` is a Sui object type without `drop` ability, if the warrior already has a sword equipped, the warrior can't drop that sword. If you call `option::fill` without first calling `equip_sword`, an error occurs. `equip_sword` checks whether there is already a sword equipped and if so, removes it and sends it back to the sender. To the player, this returns an equipped sword to their inventory when they equip the different sword.
+Because `Sword` is a Sui object type without `drop` ability, if the warrior already has a sword equipped, the warrior can't drop that sword. If you call `option::fill` without first calling `option::extract`, an error occurs. `equip_sword` checks whether there is already a sword equipped and if so, removes it and sends it back to the sender. To the player, this returns an equipped sword to their inventory when they equip the different sword.
 
 View the source code in the [`simple_warrior`](https://github.com/MystenLabs/sui/tree/main/examples/move/simple_warrior) example or check out the [`hero`](https://github.com/MystenLabs/sui/tree/main/examples/move/hero) example for a more complex implementation.
 

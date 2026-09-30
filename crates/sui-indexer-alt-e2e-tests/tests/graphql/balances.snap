@@ -43,7 +43,7 @@ task 4, line 50:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 52-81:
+task 5, lines 52-84:
 //# run-graphql
 Response: {
   "data": {
@@ -51,7 +51,10 @@ Response: {
       "balance": {
         "totalBalance": "1002000",
         "coinBalance": "2000",
-        "addressBalance": "1000000"
+        "addressBalance": "1000000",
+        "coinMetadata": {
+          "decimals": 6
+        }
       },
       "balances": {
         "nodes": [

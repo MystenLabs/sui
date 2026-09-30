@@ -1,8 +1,9 @@
 ---
 title: Groth16
 description: >-
-  Zero-knowledge proofs are used to validate statements without revealing
-  information about the proof's inputs.
+  Use the Sui Move API to verify Groth16 zk-SNARK proofs over BN254 or BLS12-381
+  curves, with examples using the Circom circuit language and Arkworks Rust
+  library.
 keywords:
   - groth16
   - zero knowledge
@@ -58,11 +59,11 @@ The randomly generated proving and verifying keys used in the following example 
 
 ## Usage
 
-The following example demonstrates how to create a Groth16 proof from a statement written in Circom and then verify it using the Sui Move API. The API currently supports up to eight public inputs.
+The following example demonstrates how to create a Groth16 proof from a statement written in Circom and then verify it using the Sui Move API. The API supports up to 8 public inputs.
 
 ### Create circuit
 
-In this example, we create a proof which demonstrates that we know a factorization `a * b = c` of a publicly known number `c` without revealing `a` and `b`.
+This example creates a proof demonstrating that you know a factorization `a * b = c` of a publicly known number `c`, without revealing `a` and `b`.
 
 ```circom
 pragma circom 2.1.5;
@@ -163,7 +164,7 @@ To verify a proof, you also need two more inputs, `public_inputs_bytes` and `pro
 
 The following example smart contract uses the output from the program above. It first prepares a verification key and verifies the corresponding proof. This example uses the BN254 elliptic curve construction, which is given as the first parameter to the `prepare_verifying_key` and `verify_groth16_proof` functions. You can use the `bls12381` function instead for BLS12-381 construction.
 
-```rust
+```move
 use sui::groth16;
 
 public fun groth16_bn254_test() {

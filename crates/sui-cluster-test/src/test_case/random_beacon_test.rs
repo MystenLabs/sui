@@ -21,18 +21,18 @@ impl TestCaseImpl for RandomBeaconTest {
     }
 
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
-        let wallet_context: &WalletContext = ctx.get_wallet();
         // Test only if the beacon is enabled.
-        if !Self::is_beacon_enabled(wallet_context).await {
+        if !Self::is_beacon_enabled(ctx.get_wallet()).await {
             info!("Random beacon is not enabled. Skipping test.");
             return Ok(());
         }
 
         info!("Testing a transaction that uses Random.");
 
-        let sui_objs = ctx.get_sui_from_faucet(Some(1)).await;
+        let sui_objs = ctx.get_sui(Some(1)).await;
         assert!(!sui_objs.is_empty());
 
+        let wallet_context: &WalletContext = ctx.get_wallet();
         let package_ref = publish_basics_package(wallet_context).await;
 
         let response = emit_new_random_u128(wallet_context, package_ref.0).await;

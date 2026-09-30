@@ -2966,6 +2966,16 @@ body {
   font-weight: 600;
   margin-bottom: 1rem;
 }
+
+/* The lead row on the landing page carries two tiles rather than three. The
+   shared Cards grid is 3-up at xl, which would leave a hole beside them, so
+   widen the pair to fill the row. Below the Docusaurus desktop breakpoint the
+   grid is already 1-up and matches the rest of the page. */
+@media (min-width: 997px) {
+  .gs-section--primary .grid-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 /* Legacy API banner - deprecated surfaces scheduled for removal.
    Deliberately amber rather than the blue admonition palette: every other
    callout on the site is blue or grey, so a blue banner would not read as

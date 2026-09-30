@@ -96,10 +96,7 @@ impl TransactionEffects {
 impl EffectsContents {
     /// The checkpoint this transaction was finalized in.
     async fn checkpoint(&self) -> Option<Checkpoint> {
-        let Some(content) = &self.contents else {
-            return None;
-        };
-
+        let content = self.contents.as_ref()?;
         content
             .cp_sequence_number()
             .and_then(|cp| Checkpoint::with_sequence_number(self.scope.clone(), Some(cp)))

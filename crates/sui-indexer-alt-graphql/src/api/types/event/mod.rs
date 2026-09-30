@@ -334,6 +334,7 @@ impl Event {
             "sender",
             "transaction_digest",
             "event_index",
+            "checkpoint",
         ]));
         request.start_checkpoint = match cp_bounds.start_bound() {
             Bound::Included(&s) => Some(s),

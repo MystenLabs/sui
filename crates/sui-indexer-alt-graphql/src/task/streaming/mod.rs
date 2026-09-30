@@ -41,7 +41,6 @@
 
 mod checkpoint_stream_task;
 mod gap_recovery;
-#[cfg(any(feature = "staging", test))]
 mod lifecycle;
 mod processed_checkpoint;
 mod streamed_cache_eviction;
@@ -58,26 +57,16 @@ use std::sync::Arc;
 
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 
-#[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::CheckpointBroadcaster;
 pub(crate) use checkpoint_stream_task::CheckpointStreamTask;
-#[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::SubscriptionBroadcast;
-#[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::broadcast_error;
-#[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::checkpoint_field_mask;
-#[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::process_checkpoint;
-#[cfg(feature = "staging")]
 pub(crate) use checkpoint_stream_task::reconnect_error;
-#[cfg(feature = "staging")]
 pub(crate) use gap_recovery::wait_for_pipelines_catching_up_at;
-#[cfg(feature = "staging")]
 pub(crate) use lifecycle::SubscriberLimit;
-#[cfg(feature = "staging")]
 pub(crate) use lifecycle::SubscriptionLifecycleGuard;
-#[cfg(feature = "staging")]
 pub(crate) use lifecycle::SubscriptionTerminationReason;
 pub(crate) use processed_checkpoint::ProcessedCheckpoint;
 pub(crate) use processed_checkpoint::ProcessedTransaction;

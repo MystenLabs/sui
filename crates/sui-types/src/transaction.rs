@@ -1037,6 +1037,31 @@ pub fn clear_gasless_tokens_for_testing() {
 }
 
 impl ProgrammableTransaction {
+    pub fn validate_argument_indices(&self) -> UserInputResult {
+        for (command_idx, command) in self.commands.iter().enumerate() {
+            for (argument_idx, argument) in command.arguments().enumerate() {
+                let index = match argument {
+                    Argument::Input(index) if *index as usize >= self.inputs.len() => *index,
+                    Argument::Result(index) | Argument::NestedResult(index, _)
+                        if *index as usize >= command_idx =>
+                    {
+                        *index
+                    }
+                    Argument::GasCoin
+                    | Argument::Input(_)
+                    | Argument::Result(_)
+                    | Argument::NestedResult(_, _) => continue,
+                };
+                return Err(UserInputError::InvalidArgumentIndex {
+                    command_idx,
+                    argument_idx,
+                    index,
+                });
+            }
+        }
+        Ok(())
+    }
+
     pub fn has_shared_inputs(&self) -> bool {
         self.inputs
             .iter()
@@ -1593,17 +1618,20 @@ impl Command {
         })
     }
 
-    fn arguments(&self) -> impl Iterator<Item = &Argument> + '_ {
-        let (args, single): (&[Argument], Option<&Argument>) = match self {
-            Command::MoveCall(c) => (&c.arguments, None),
-            Command::TransferObjects(args, arg)
-            | Command::MergeCoins(arg, args)
-            | Command::SplitCoins(arg, args) => (args, Some(arg)),
-            Command::MakeMoveVec(_, args) => (args, None),
-            Command::Upgrade(_, _, _, arg) => (&[], Some(arg)),
-            Command::Publish(_, _) => (&[], None),
-        };
-        args.iter().chain(single)
+    /// Iterates over arguments in command-argument order.
+    pub(crate) fn arguments(&self) -> Box<dyn Iterator<Item = &Argument> + '_> {
+        match self {
+            Command::MoveCall(c) => Box::new(c.arguments.iter()),
+            Command::TransferObjects(args, recipient) => {
+                Box::new(args.iter().chain(std::iter::once(recipient)))
+            }
+            Command::SplitCoins(coin, amounts) | Command::MergeCoins(coin, amounts) => {
+                Box::new(std::iter::once(coin).chain(amounts))
+            }
+            Command::MakeMoveVec(_, args) => Box::new(args.iter()),
+            Command::Upgrade(_, _, _, arg) => Box::new(std::iter::once(arg)),
+            Command::Publish(_, _) => Box::new(std::iter::empty()),
+        }
     }
 }
 
@@ -1689,6 +1717,9 @@ impl ProgrammableTransaction {
         }
         for command in commands {
             command.validity_check(config)?;
+        }
+        if config.validate_ptb_argument_indices() {
+            self.validate_argument_indices()?;
         }
 
         // If randomness is used, it must be enabled by protocol config.
@@ -2533,6 +2564,21 @@ impl TransactionData {
         match self {
             TransactionData::V1(v1) => v1,
         }
+    }
+
+    /// Whether the transaction is protected against replay, given its loaded `input_objects`:
+    /// it has a `ValidDuring` expiration of at most two epochs, a gas payment object, or an
+    /// address-owned input or coin reservation among `input_objects`. `input_objects` is only
+    /// consumed when the expiration and gas payment do not already protect the transaction.
+    pub fn has_replay_protection(
+        &self,
+        input_objects: impl IntoIterator<Item = impl std::borrow::Borrow<ObjectReadResult>>,
+    ) -> bool {
+        self.expiration().is_replay_protected()
+            || !self.gas_data().payment.is_empty()
+            || input_objects
+                .into_iter()
+                .any(|object| object.borrow().is_replay_protected_input())
     }
     fn new_system_transaction(kind: TransactionKind) -> Self {
         // assert transaction kind if a system transaction
@@ -3631,8 +3677,8 @@ impl TransactionDataAPI for TransactionDataV1 {
 
             // Legacy behavior: when paying gas from address balance, we require ValidDuring expiration
             // even if the transaction has other replay-protected inputs.
-            // New behavior: the check is done in `check_address_balance_replay_protection`, which only
-            // requires two-epoch ValidDuring if there are no replay-protected inputs.
+            // New behavior: the check is done in `check_replay_protection` in sui-transaction-checks,
+            // which only requires two-epoch ValidDuring if there are no replay-protected inputs.
             if !config.relax_valid_during_for_owned_inputs() {
                 if matches!(self.expiration(), TransactionExpiration::None) {
                     // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error

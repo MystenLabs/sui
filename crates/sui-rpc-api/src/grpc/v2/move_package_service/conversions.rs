@@ -20,11 +20,11 @@ use sui_rpc::proto::sui::rpc::v2::{
 };
 use sui_types::base_types::ObjectID;
 
-pub(crate) fn convert_error(e: sui_package_resolver::error::Error) -> RpcError {
+pub fn convert_error(e: sui_package_resolver::error::Error) -> RpcError {
     RpcError::new(tonic::Code::Internal, e.to_string())
 }
 
-pub(crate) fn convert_datatype(
+pub fn convert_datatype(
     datatype_name: &str,
     data_def: &DataDef,
     package_id: &ObjectID,
@@ -80,7 +80,7 @@ pub(crate) fn convert_datatype(
     message
 }
 
-pub(crate) fn convert_module(
+pub fn convert_module(
     module_name: &str,
     resolved_module: &sui_package_resolver::Module,
     package_id: &ObjectID,
@@ -124,7 +124,7 @@ pub(crate) fn convert_module(
     Ok(message)
 }
 
-pub(crate) fn convert_function(function_name: &str, func_def: &FunctionDef) -> FunctionDescriptor {
+pub fn convert_function(function_name: &str, func_def: &FunctionDef) -> FunctionDescriptor {
     let visibility = match func_def.visibility {
         MoveVisibility::Private => Visibility::Private,
         MoveVisibility::Public => Visibility::Public,

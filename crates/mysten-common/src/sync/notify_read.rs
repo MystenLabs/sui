@@ -269,6 +269,12 @@ impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: 
             start_time + Duration::from_secs(LONG_WAIT_LOG_INTERVAL_SECS),
             Duration::from_secs(LONG_WAIT_LOG_INTERVAL_SECS),
         );
+        let checkpoint_builder_stall_threshold_secs = if crate::in_antithesis() {
+            // Antithesis faults can delay checkpoint effects throughout node recovery.
+            120
+        } else {
+            60
+        };
 
         loop {
             tokio::select! {
@@ -298,7 +304,9 @@ impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: 
                         );
                     }
 
-                    if task_name == CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME && elapsed_secs >= 60 {
+                    if task_name == CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME
+                        && elapsed_secs >= checkpoint_builder_stall_threshold_secs
+                    {
                         debug_fatal!("{} is stuck", task_name);
                     }
                 }

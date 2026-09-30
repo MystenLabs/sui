@@ -154,14 +154,14 @@ public struct Receiving<phantom T: key> has drop { ... }
 /// NB: &mut UID here allows the defining module of the parent type to
 /// define custom access/permission policies around receiving objects sent
 /// to objects of a type that it defines. You can see this more in the examples.
-public native fun receive<T: key>(parent: &mut UID, object: Receiving<T>): T;
+public fun receive<T: key>(parent: &mut UID, to_receive: Receiving<T>): T
 
 /// Given mutable (locked) access to the `parent` and a `Receiving` argument
 /// referencing an object of type `T` owned by `parent` use the `object`
 /// argument to receive and return the referenced owned object of type `T`.
 /// The object `T` must have `store` to be received by this function, and
 /// this can be called outside of the module that defines `T`.
-public native fun public_receive<T: key + store>(parent: &mut UID, object: Receiving<T>): T;
+public fun public_receive<T: key + store>(parent: &mut UID, to_receive: Receiving<T>): T
 
 ...
 ```

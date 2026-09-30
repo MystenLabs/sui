@@ -110,30 +110,15 @@ When building an application on Sui, you can integrate SuiLink to verify cross-c
 
 To retrieve a user's SuiLink connections, use the following gRPC query:
 
-```typescript
-const SUILINK_PACKAGE_ID_ETH_SOL = '0xf857fa9df5811e6df2a0240a1029d365db24b5026896776ddd1c3c70803bccd3';
-const SUILINK_PACKAGE_ID_SUI = '0x73f5ab2461c5993408fff21354fa9831d4f4a66cc81382419ec29e3c80c384b5';
+<ImportContent source="suilink-query-objects" mode="snippet" />
 
-const ethSolSuiLinks = await grpcClient.listOwnedObjects({
-  owner: suiAddress,
-  type: `${SUILINK_PACKAGE_ID_ETH_SOL}::suilink::SuiLink`,
-  include: { json: true },
-});
-
-const suiSuiLinks = await grpcClient.listOwnedObjects({
-  owner: suiAddress,
-  type: `${SUILINK_PACKAGE_ID_SUI}::suilink::SuiLink`,
-  include: { json: true },
-});
-```
-
-This returns all SuiLink NFTs owned by the specified Sui address.
+This returns every SuiLink NFT owned by the specified Sui address, across both packages. `listOwnedObjects` returns one page at a time, so `listAllOwnedObjects` follows `hasNextPage` and `cursor` to the end. An address with more links than a single page holds otherwise looks like it has fewer.
 
 ### SuiLink NFT structure
 
 Each SuiLink NFT contains the following fields:
 
-```typescript
+```json
 {
   "id": "0xcafe",
   "network_address": "0xdecaf",
@@ -141,17 +126,9 @@ Each SuiLink NFT contains the following fields:
 }
 ```
 
-The NFT type indicates which blockchain network the wallet is linked to:
+The `type` field on each object indicates which blockchain network the wallet is linked to:
 
-```typescript
-for (const link of ethSolSuiLinks.objects) {
-  const id = link.json.id as string;                   // "0xcafe"
-  const linkedAddress = link.json.network_address as string; // "0xdecaf"
-  const timestamp = link.json.timestamp_ms as string;        // "1751541273947"
-  const chainType = link.type; // full type string includes the generic param,
-                               // e.g. "...::SuiLink<...::ethereum::Ethereum>"
-}
-
+```
 // Sui-to-Sui SuiLink (Mainnet)
 0xf857fa9df5811e6df2a0240a1029d365db24b5026896776ddd1c3c70803bccd3::suilink::SuiLink<0x73f5ab2461c5993408fff21354fa9831d4f4a66cc81382419ec29e3c80c384b5::sui::Sui>
 

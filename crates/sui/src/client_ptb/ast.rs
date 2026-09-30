@@ -59,6 +59,7 @@ pub const VECTOR: &str = "vector";
 pub const SOME: &str = "some";
 pub const NONE: &str = "none";
 pub const GAS: &str = "gas";
+pub const WITHDRAWAL: &str = "withdrawal";
 
 pub const KEYWORDS: &[&str] = &[
     ADDRESS, BOOL, VECTOR, SOME, NONE, GAS, U8, U16, U32, U64, U128, U256,
@@ -174,6 +175,14 @@ pub enum Argument {
     String(String),
     Vector(Vec<Spanned<Argument>>),
     Option(Spanned<Option<Box<Argument>>>),
+    Withdrawal(WithdrawalArg),
+}
+
+/// A withdrawal from an address balance.
+#[derive(Debug, Clone)]
+pub struct WithdrawalArg {
+    pub amount: u64,
+    pub type_arg: Option<ParsedType>,
 }
 
 impl Argument {
@@ -263,6 +272,9 @@ impl Argument {
             (Argument::Identifier(_) | Argument::VariableAccess(_, _) | Argument::Gas, _) => {
                 error!(loc, "Unable to convert '{self}' to non-object value.")
             }
+            (Argument::Withdrawal(_), _) => {
+                error!(loc, "Withdrawal inputs cannot be used as pure values.")
+            }
             (arg, tag) => error!(loc, "Unable to serialize '{arg}' as a {tag} value"),
         })
     }
@@ -306,6 +318,9 @@ impl Argument {
             }
             Argument::Identifier(_) | Argument::VariableAccess(_, _) | Argument::Gas => {
                 error!(loc, "Unable to convert '{self}' to non-object value.")
+            }
+            Argument::Withdrawal(_) => {
+                error!(loc, "Withdrawal inputs cannot be used as pure values.")
             }
         })
     }
@@ -372,6 +387,10 @@ impl fmt::Display for Argument {
             Argument::Option(sp!(_, o)) => match o {
                 Some(v) => write!(f, "some({v})"),
                 None => write!(f, "none"),
+            },
+            Argument::Withdrawal(WithdrawalArg { amount, type_arg }) => match type_arg {
+                Some(type_arg) => write!(f, "{WITHDRAWAL}<{}>({amount})", TyDisplay(type_arg)),
+                None => write!(f, "{WITHDRAWAL}({amount})"),
             },
         }
     }

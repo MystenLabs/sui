@@ -275,9 +275,12 @@ fn referenced_names_contains(exp: &Exp, target: &str) -> bool {
         }
         Exp::Match(e, _, arms) => {
             referenced_names_contains(e, target)
-                || arms
-                    .iter()
-                    .any(|(_, _, b)| referenced_names_contains(b, target))
+                || arms.iter().any(|arm| {
+                    arm.guard
+                        .as_ref()
+                        .is_some_and(|g| referenced_names_contains(g, target))
+                        || referenced_names_contains(&arm.rhs, target)
+                })
         }
         Exp::MatchLit(e, arms) => {
             referenced_names_contains(e, target)

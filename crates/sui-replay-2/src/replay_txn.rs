@@ -22,7 +22,7 @@ use std::time::Instant;
 use sui_data_store::{
     EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
 };
-use sui_types::{TypeTag, base_types::SequenceNumber};
+use sui_types::TypeTag;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
@@ -353,8 +353,6 @@ impl ReplayTransaction {
     // This is currently called from `execute_transaction_to_effects` but it could
     // be computed for a `ReplayTransaction` and cached.
     pub fn get_input_objects_for_replay(&self) -> Result<InputObjects, anyhow::Error> {
-        let _deleted_shared_info_map: BTreeMap<ObjectID, (TransactionDigest, SequenceNumber)> =
-            BTreeMap::new();
         let mut resolved_input_objs = vec![];
         let input_objects_kind = self.txn_data.input_objects().context(format!(
             "Failed to get input objects from transaction {}",
@@ -669,18 +667,25 @@ fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<ObjectKey>, 
     let mut object_keys = effects
         .accessed_consensus_objects()
         .iter()
-        .map(|input_consensus_object| match input_consensus_object {
-            InputConsensusObject::MutateConsensusStreamEnded(object_id, version)
-            | InputConsensusObject::ReadConsensusStreamEnded(object_id, version)
-            | InputConsensusObject::Cancelled(object_id, version) => ObjectKey {
-                object_id: *object_id,
-                version_query: VersionQuery::Version(version.value()),
-            },
+        .filter_map(|input_consensus_object| match input_consensus_object {
             InputConsensusObject::Mutate((object_id, version, _digest))
-            | InputConsensusObject::ReadOnly((object_id, version, _digest)) => ObjectKey {
+            | InputConsensusObject::ReadOnly((object_id, version, _digest)) => Some(ObjectKey {
                 object_id: *object_id,
                 version_query: VersionQuery::Version(version.value()),
-            },
+            }),
+            // Stream-ended and cancelled inputs have no object to load: the version
+            // is the consensus-assigned version at which the object does not exist,
+            // or a cancellation sentinel (e.g. SequenceNumber::CONGESTED). These
+            // transactions are early execution errors and are never re-executed.
+            InputConsensusObject::MutateConsensusStreamEnded(..)
+            | InputConsensusObject::ReadConsensusStreamEnded(..)
+            | InputConsensusObject::Cancelled(..) => {
+                trace!(
+                    "Ignored `InputConsensusObject`: {:?}",
+                    input_consensus_object
+                );
+                None
+            }
         })
         .collect::<BTreeSet<_>>();
     effects

@@ -61,7 +61,7 @@ You create a new `TokenPolicy` using the `token::new_policy` function. The funct
 public fun new_policy<T>(
     treasury_cap: &TreasuryCap<T>,
     ctx: &mut TxContext
-): (TokenPolicy<TokenType>, TokenPolicyCap<TokenType>);
+): (TokenPolicy<T>, TokenPolicyCap<T>);
 ```
 
 You must use the `token::share_policy` function to share the `TokenPolicy` object.
@@ -125,7 +125,7 @@ public fun flush<T>(
     policy: &mut TokenPolicy<T>,
     treasury_cap: &mut TreasuryCap<T>,
     ctx: &mut TxContext
-);
+): u64;
 ```
 
 ## Cheat sheet: TokenPolicy API

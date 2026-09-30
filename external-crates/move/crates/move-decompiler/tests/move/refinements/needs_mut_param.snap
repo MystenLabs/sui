@@ -1,0 +1,14 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module needs_mut_param {
+    public fun add_one () {
+        *l0 = *l0 + 1u64
+    }
+
+    public fun param_mut_borrow () {
+        needs_mut_param::add_one(&mut l0)
+        return l0
+    }
+
+}

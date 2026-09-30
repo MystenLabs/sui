@@ -53,6 +53,8 @@ answer: >-
 
 To implement zkLogin, first read [What is zkLogin?](/sui-stack/zklogin-integration) for the underlying concepts, then [configure at least one OpenID provider](/sui-stack/zklogin-integration/developer-account).
 
+This page covers zkLogin on its own. Consumer apps usually combine it with sponsored transactions so a new user never has to fund an address before their first action. For that combination end to end, see the [Consumer App Cookbook](/sui-stack/zklogin-integration/consumer-app-zklogin).
+
 Your application generates an ephemeral key pair, then prompts the user to complete an OAuth login flow with a nonce derived from the ephemeral public key. When the provider returns the JSON Web Token (JWT), your application obtains a zero-knowledge proof and a unique user salt, then computes the zkLogin Sui address from the OAuth subject identifier and that salt. Your application signs transactions with the ephemeral private key and submits each transaction with both the ephemeral signature and the zero-knowledge proof.
 
 :::caution Production hardening
