@@ -1562,12 +1562,7 @@ impl AuthorityState {
             (execution_start_time.elapsed().as_micros() as f64) / 1000.0
         );
 
-        let commit_result = self.commit_certificate(certificate, transaction_outputs, epoch_store);
-        if let Err(err) = commit_result {
-            error!(?tx_digest, "Error committing transaction: {err}");
-            tx_guard.release();
-            return ExecutionOutput::Fatal(err);
-        }
+        self.commit_certificate(certificate, transaction_outputs, epoch_store);
 
         if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
             certificate.data().transaction_data().kind()
@@ -1784,7 +1779,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         transaction_outputs: Arc<TransactionOutputs>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
+    ) {
         let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
             monitored_scope("Execution::commit_certificate");
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
@@ -1796,7 +1791,7 @@ impl AuthorityState {
         epoch_store.insert_executed_in_epoch(tx_digest);
         let key = certificate.key();
         if !matches!(key, TransactionKey::Digest(_)) {
-            epoch_store.insert_tx_key(key, *tx_digest)?;
+            epoch_store.insert_tx_key(key, *tx_digest);
         }
 
         // Allow testing what happens if we crash here.
@@ -1823,8 +1818,6 @@ impl AuthorityState {
             self.get_object_cache_reader()
                 .force_reload_system_packages(&BuiltInFramework::all_package_ids());
         }
-
-        Ok(())
     }
 
     fn update_metrics(
