@@ -103,12 +103,13 @@ impl TonicValidatorClient {
     async fn get_client(
         &self,
         peer: AuthorityIndex,
+        kind: ChannelKind,
         timeout: Duration,
     ) -> ConsensusResult<ConsensusServiceClient<Channel>> {
         let config = &self.context.parameters.tonic;
         let channel = self
             .channel_pool
-            .get_channel(self.network_keypair.clone(), peer, timeout)
+            .get_channel(self.network_keypair.clone(), peer, kind, timeout)
             .await?;
         let client = ConsensusServiceClient::new(channel)
             .max_encoding_message_size(config.message_size_limit)
@@ -132,7 +133,9 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         last_received: Round,
         timeout: Duration,
     ) -> ConsensusResult<BlockStream> {
-        let mut client = self.get_client(peer, timeout).await?;
+        let mut client = self
+            .get_client(peer, ChannelKind::Subscription, timeout)
+            .await?;
         // TODO: add sampled block acknowledgments for latency measurements.
         let request = Request::new(stream::once(async move {
             SubscribeBlocksRequest {
@@ -197,7 +200,15 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         fetch_missing_ancestors: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
-        let mut client = self.get_client(peer, timeout).await?;
+        // Commit sync requests carry block refs only (see the request shapes documented on
+        // AuthorityService::handle_fetch_blocks). Their responses are large and long-running,
+        // so they get their own connection instead of sharing the live sync one.
+        let kind = if fetch_after_rounds.is_empty() {
+            ChannelKind::CommitSync
+        } else {
+            ChannelKind::Fetch
+        };
+        let mut client = self.get_client(peer, kind, timeout).await?;
         let max_allowed_bytes =
             max_fetch_blocks_response_bytes(&self.context, &block_refs, &fetch_after_rounds);
         let mut request = Request::new(FetchBlocksRequest {
@@ -274,7 +285,9 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         commit_range: CommitRange,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
-        let mut client = self.get_client(peer, timeout).await?;
+        let mut client = self
+            .get_client(peer, ChannelKind::CommitSync, timeout)
+            .await?;
         let mut request = Request::new(FetchCommitsRequest {
             start: commit_range.start(),
             end: commit_range.end(),
@@ -294,7 +307,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         authorities: Vec<AuthorityIndex>,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
-        let mut client = self.get_client(peer, timeout).await?;
+        let mut client = self.get_client(peer, ChannelKind::Fetch, timeout).await?;
         let mut request = Request::new(FetchLatestBlocksRequest {
             authorities: authorities
                 .iter()
@@ -369,7 +382,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         peer: AuthorityIndex,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
-        let mut client = self.get_client(peer, timeout).await?;
+        let mut client = self.get_client(peer, ChannelKind::Fetch, timeout).await?;
         let mut request = Request::new(GetLatestRoundsRequest {});
         request.set_timeout(timeout);
         let response = client.get_latest_rounds(request).await.map_err(|e| {
@@ -386,7 +399,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         block: &crate::VerifiedBlock,
         timeout: Duration,
     ) -> ConsensusResult<()> {
-        let mut client = self.get_client(peer, timeout).await?;
+        let mut client = self.get_client(peer, ChannelKind::Fetch, timeout).await?;
         let mut request = Request::new(SendBlockRequest {
             block: block.serialized().clone(),
         });
@@ -425,12 +438,27 @@ pub(crate) fn rebox_request(
     request.map(tonic::body::Body::new)
 }
 
+/// The traffic class an RPC belongs to. Each class gets its own connection per peer, so a
+/// class's data flows on its own TCP connection with its own congestion window and loss
+/// recovery. Without this, a peer's live block stream shares one connection (and one h2 send
+/// queue) with the fetch responses and the commit sync transfers it serves us, which can be
+/// hundreds of MB when blocks are full.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum ChannelKind {
+    /// The peer's own block stream: on the critical path of every round.
+    Subscription,
+    /// Live and periodic sync requests: small, urgent, bounded by `max_blocks_per_sync`.
+    Fetch,
+    /// Commit sync transfers: large catch-up requests bounded by `max_blocks_per_fetch`.
+    CommitSync,
+}
+
 /// Manages a pool of connections to peers to avoid constantly reconnecting,
 /// which can be expensive.
 struct ChannelPool {
     context: Arc<Context>,
-    // Size is limited by known authorities in the committee.
-    channels: RwLock<BTreeMap<AuthorityIndex, Channel>>,
+    // Size is limited by known authorities in the committee times the number of channel kinds.
+    channels: RwLock<BTreeMap<(AuthorityIndex, ChannelKind), Channel>>,
     // Simple address override for peers. If set, this address is used instead of the committee address.
     address_overrides: RwLock<BTreeMap<AuthorityIndex, Multiaddr>>,
 }
@@ -463,11 +491,13 @@ impl ChannelPool {
             }
         }
 
-        // Clear the cached channel so that the next connection attempt uses the updated address.
+        // Clear the cached channels so that the next connection attempt uses the updated address.
         let mut channels = self.channels.write();
-        if channels.remove(&peer).is_some() {
+        let before = channels.len();
+        channels.retain(|(p, _), _| *p != peer);
+        if channels.len() < before {
             info!(
-                "Cleared cached channel for peer {} due to address update",
+                "Cleared cached channels for peer {} due to address update",
                 peer
             );
         }
@@ -477,11 +507,12 @@ impl ChannelPool {
         &self,
         network_keypair: NetworkKeyPair,
         peer: AuthorityIndex,
+        kind: ChannelKind,
         timeout: Duration,
     ) -> ConsensusResult<Channel> {
         {
             let channels = self.channels.read();
-            if let Some(channel) = channels.get(&peer) {
+            if let Some(channel) = channels.get(&(peer, kind)) {
                 return Ok(channel.clone());
             }
         }
@@ -528,7 +559,7 @@ impl ChannelPool {
 
         let deadline = tokio::time::Instant::now() + timeout;
         let channel = loop {
-            trace!("Connecting to endpoint at {address}");
+            trace!("Connecting {kind:?} channel to endpoint at {address}");
             match endpoint.connect().await {
                 Ok(channel) => break channel,
                 Err(e) => {
@@ -542,7 +573,7 @@ impl ChannelPool {
                 }
             }
         };
-        trace!("Connected to {address}");
+        trace!("Connected {kind:?} channel to {address}");
 
         let channel = tower::ServiceBuilder::new()
             .layer(CallbackLayer::new(MetricsCallbackMaker::new(
@@ -558,8 +589,8 @@ impl ChannelPool {
             .service(channel);
 
         let mut channels = self.channels.write();
-        // There should not be many concurrent attempts at connecting to the same peer.
-        let channel = channels.entry(peer).or_insert(channel);
+        // There should not be many concurrent attempts at connecting to the same peer and kind.
+        let channel = channels.entry((peer, kind)).or_insert(channel);
         Ok(channel.clone())
     }
 }
@@ -1760,7 +1791,7 @@ mod tests {
         // Verify channels map doesn't contain the peer
         {
             let channels = client.channel_pool.channels.read();
-            assert!(!channels.contains_key(&peer));
+            assert!(!channels.keys().any(|(p, _)| *p == peer));
         }
     }
 
@@ -1820,5 +1851,87 @@ mod tests {
             assert!(!overrides.contains_key(&peer1));
             assert_eq!(overrides.get(&peer2), Some(&address2));
         }
+    }
+
+    /// Each traffic class gets its own connection to a peer, so a peer's live block stream
+    /// never shares a TCP connection with the fetch and commit sync transfers it serves.
+    #[tokio::test]
+    async fn channel_per_kind() {
+        use crate::network::{NetworkManager, test_network::TestService};
+        use parking_lot::Mutex;
+
+        let (context, keys) = Context::new_for_test(4);
+        let own_index = context.committee.to_authority_index(0).unwrap();
+        let peer_index = context.committee.to_authority_index(1).unwrap();
+
+        let context_1 = Arc::new(context.clone().with_authority_index(peer_index));
+        let mut manager_1 = TonicManager::new(context_1, keys[1].0.clone());
+        // The server only holds the service weakly, so keep it alive for the test.
+        let service_1 = Arc::new(Mutex::new(TestService::new()));
+        manager_1.start_validator_server(service_1.clone()).await;
+
+        let context_0 = Arc::new(context.clone().with_authority_index(own_index));
+        let client_0 = TonicValidatorClient::new(context_0.clone(), keys[0].0.clone());
+        let timeout = Duration::from_secs(5);
+        let cached_kinds = |client: &TonicValidatorClient| {
+            client
+                .channel_pool
+                .channels
+                .read()
+                .keys()
+                .filter(|(p, _)| *p == peer_index)
+                .map(|(_, kind)| *kind)
+                .collect::<Vec<_>>()
+        };
+
+        let _stream = client_0
+            .subscribe_blocks(peer_index, 0, timeout)
+            .await
+            .unwrap();
+        assert_eq!(cached_kinds(&client_0), vec![ChannelKind::Subscription]);
+
+        // Live sync request: block refs and fetch_after_rounds.
+        let block_ref = BlockRef::new(1, peer_index, BlockDigest::MIN);
+        let fetch_after_rounds = vec![0; context.committee.size()];
+        client_0
+            .fetch_blocks(
+                peer_index,
+                vec![block_ref],
+                fetch_after_rounds,
+                true,
+                timeout,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            cached_kinds(&client_0),
+            vec![ChannelKind::Subscription, ChannelKind::Fetch]
+        );
+
+        // Commit sync requests: commits, then block refs only.
+        client_0
+            .fetch_commits(peer_index, (1..=2).into(), timeout)
+            .await
+            .unwrap();
+        client_0
+            .fetch_blocks(peer_index, vec![block_ref], vec![], false, timeout)
+            .await
+            .unwrap();
+        assert_eq!(
+            cached_kinds(&client_0),
+            vec![
+                ChannelKind::Subscription,
+                ChannelKind::Fetch,
+                ChannelKind::CommitSync
+            ]
+        );
+        // Repeated requests reuse the cached connections.
+        assert_eq!(client_0.channel_pool.channels.read().len(), 3);
+
+        // An address update drops every connection to the peer.
+        client_0.update_peer_address(peer_index, None);
+        assert!(cached_kinds(&client_0).is_empty());
+
+        manager_1.stop().await;
     }
 }
