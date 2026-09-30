@@ -42,7 +42,7 @@ answer: >-
   half-open region (lower, higher]. Tick 0 is the negative-infinity sentinel and
   tick 1073741823 is the positive-infinity sentinel. A minted position is a
   packed u256 order ID that is unique only within one expiry market.
-last_verified: 2026-09-14
+last_verified: 2026-09-23
 verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 ---
 
@@ -77,7 +77,7 @@ public fun reference_tick_source_timestamp_ms(market: &ExpiryMarket): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="tick_size,admission_tick_size,reference_tick,reference_tick_source_timestamp_ms"
 	noComments
 />
@@ -91,7 +91,7 @@ The only conversion in the other direction is `range_codec::strike_from_tick`, w
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="strike_from_tick"
 	noComments
 />
@@ -107,7 +107,7 @@ The registry also holds the 1h, 1d, 1w, and 1mo cadences in a disabled state, an
 
 ## A position is a tick pair {#range-key}
 
-Both mint functions take `lower_tick` and `higher_tick` as separate `u64` arguments, and both order events carry them the same way. Only the durable order ID packs the pair into one integer.
+Every mint function takes `lower_tick` and `higher_tick` as separate `u64` arguments, and every order event carries them the same way. Only the durable order ID packs the pair into one integer.
 
 The payout region is left-open and right-closed. A settlement exactly at the lower strike loses, and a settlement exactly at the higher strike wins. The chain decides that in `range_codec::settlement_in_range`, which first rounds the settlement price up onto the tick grid:
 
@@ -176,7 +176,7 @@ The `reference_tick` is the one finite strike a market admits off the admission 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="set_reference_tick"
 	noComments
 />
@@ -193,7 +193,7 @@ Grid state lives in the market's `StrikeExposure`, which has no public functions
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="StrikeExposure"
 />
 
@@ -224,7 +224,7 @@ Using a 0.01 USD fine grid under a 1 USD admission grid, the same numeric strike
 
 ## The packed order ID {#order-id}
 
-`mint_exact_quantity` and `mint_exact_amount` both return a `u256` order ID. That integer carries the durable contract terms and nothing else, so the ID deliberately omits mint-only inputs such as entry probability, premium, and fee policy. Tightening admission policy in a later version therefore cannot retroactively invalidate an existing ID.
+`mint_exact_quantity`, `mint_exact_amount`, and `mint_exact_cost` all return a `u256` order ID. That integer carries the durable contract terms and nothing else, so the ID deliberately omits mint-only inputs such as entry probability, premium, and fee policy. Tightening admission policy in a later version therefore cannot retroactively invalidate an existing ID.
 
 The layout is dense in the low bits:
 
@@ -251,7 +251,7 @@ The `sequence` counter is expiry-local, so an order ID is unique only within one
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="Order"
 />
 
@@ -289,7 +289,7 @@ public fun expiry_market_id(
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="expiry_market_id"
 	noComments
 />
@@ -306,7 +306,7 @@ The registry stores those IDs in a `Table` keyed by `market_manager::MarketKey`,
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="MarketKey"
 />
 

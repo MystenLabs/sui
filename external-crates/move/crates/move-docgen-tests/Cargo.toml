@@ -7,8 +7,8 @@ license = "Apache-2.0"
 
 [dependencies]
 move-docgen.workspace = true
-move-package-alt.workspace = true
-move-package-alt-compilation.workspace = true
+move-package.workspace = true
+move-package-compilation.workspace = true
 move-command-line-common.workspace = true
 
 tempfile.workspace = true

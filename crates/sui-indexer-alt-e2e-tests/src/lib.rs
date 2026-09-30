@@ -962,6 +962,7 @@ async fn start_archival(
         None,
         kv_rpc_config.ledger_history(),
         kv_rpc_config.request_bigtable_concurrency(),
+        kv_rpc_config.monotonic_read_wait_timeout(),
         kv_rpc_config.stages(),
         kv_rpc_config.enable_list_apis(),
     )

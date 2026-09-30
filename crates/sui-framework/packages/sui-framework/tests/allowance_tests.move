@@ -9,7 +9,7 @@ module sui::allowance_tests;
 
 use std::string::String;
 use sui::allowance::{Self, Allowance, AllowanceCap, RateLimit};
-use sui::balance::Balance;
+use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
 use sui::test_scenario::{Self as ts, Scenario};
 
@@ -23,6 +23,7 @@ public struct APP {}
 public struct APP2 {}
 
 const FUNDER: address = @0xF;
+const FUNDER_FUNDS: u64 = 1_000_000;
 const SPENDER: address = @0x5;
 const SPENDER2: address = @0x52;
 
@@ -34,10 +35,12 @@ const MS_PER_DAY: u64 = 86_400_000;
 // === Test harness ===
 
 /// Wraps a test body in a scenario (begun as `$sender`) with a clock, and
-/// cleans both up after.
+/// cleans both up after. FUNDER is sent `FUNDER_FUNDS`, which it can spend
+/// from the body's second transaction on.
 macro fun test($sender: address, $body: |&mut Scenario, &mut Clock|) {
     let mut scenario = ts::begin($sender);
     let mut clock = clock::create_for_testing(scenario.ctx());
+    balance::create_for_testing<TEST>(FUNDER_FUNDS).send_funds(FUNDER);
     $body(&mut scenario, &mut clock);
     clock.destroy_for_testing();
     scenario.end();
@@ -132,12 +135,15 @@ fun spend(
     alw: &mut Allowance<Balance<TEST>>,
     id: ID,
     funder: address,
-    amount: u256,
+    amount: u64,
     clock: &Clock,
     ctx: &TxContext,
 ) {
     let b = alw.balance_spend(
-        allowance::new_withdrawal_for_testing<Balance<TEST>>(id, funder, amount),
+        allowance::new_withdrawal_for_testing(
+            id,
+            ts::withdraw_balance_from_address<TEST>(funder, amount),
+        ),
         clock,
         ctx,
     );
@@ -148,13 +154,16 @@ fun spend(
 fun spend_as_app(
     alw: &mut Allowance<Balance<TEST>>,
     id: ID,
-    amount: u256,
+    amount: u64,
     clock: &Clock,
     ctx: &TxContext,
 ) {
     let b = alw.app_balance_spend(
         allowance::spend_permit(internal::permit<APP>()),
-        allowance::new_withdrawal_for_testing<Balance<TEST>>(id, FUNDER, amount),
+        allowance::new_withdrawal_for_testing(
+            id,
+            ts::withdraw_balance_from_address<TEST>(FUNDER, amount),
+        ),
         clock,
         ctx,
     );
@@ -190,7 +199,10 @@ fun test_dropped_withdrawal_consumes_nothing() {
 
         // Dropping an unspent withdrawal must not touch the accounting: the
         // full cap is still spendable afterwards.
-        let _dropped = allowance::new_withdrawal_for_testing<Balance<TEST>>(id, FUNDER, 1000);
+        let _dropped = allowance::new_withdrawal_for_testing(
+            id,
+            ts::withdraw_balance_from_address<TEST>(FUNDER, 1000),
+        );
         spend(&mut alw, id, FUNDER, 1000, clock, scenario.ctx());
         ts::return_shared(alw);
     });
@@ -236,7 +248,10 @@ fun test_sponsor_withdrawal_rejected() {
         let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
         let id = object::id(&alw);
         let b = alw.balance_spend(
-            allowance::new_sponsor_withdrawal_for_testing<Balance<TEST>>(id, FUNDER, 100),
+            allowance::new_sponsor_withdrawal_for_testing(
+                id,
+                ts::withdraw_balance_from_address<TEST>(FUNDER, 100),
+            ),
             clock,
             scenario.ctx(),
         );
@@ -978,6 +993,7 @@ fun test_signer_spend_rejected_when_app_bound() {
 fun test_wrong_funder_rejected() {
     test!(FUNDER, |scenario, clock| {
         new_allowance().lifetime_cap(1000).create<Balance<TEST>>(scenario.ctx());
+        balance::create_for_testing<TEST>(100).send_funds(@0xBAD);
 
         scenario.next_tx(SPENDER);
         let mut alw = scenario.take_shared<Allowance<Balance<TEST>>>();
@@ -1125,7 +1141,10 @@ fun test_wrong_app_permit_rejected() {
         // A permit for a different app than the allowance is bound to.
         let b = alw.app_balance_spend(
             allowance::spend_permit(internal::permit<APP2>()),
-            allowance::new_withdrawal_for_testing<Balance<TEST>>(id, FUNDER, 100),
+            allowance::new_withdrawal_for_testing(
+                id,
+                ts::withdraw_balance_from_address<TEST>(FUNDER, 100),
+            ),
             clock,
             scenario.ctx(),
         );
