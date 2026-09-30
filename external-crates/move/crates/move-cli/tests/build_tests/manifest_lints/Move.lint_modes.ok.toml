@@ -1,0 +1,23 @@
+[package]
+name = "manifest_lints"
+edition = "2024"
+
+[addresses]
+test = "0x0"
+std = "0x1"
+
+[dependencies]
+UnitTest = { local = "unit-test" }
+
+[warnings]
+all = "allow"
+
+[lints]
+all = "deny"
+
+[lints.build]
+all = "allow"
+
+[lints.test]
+all = "allow"
+abort_without_constant = "deny"

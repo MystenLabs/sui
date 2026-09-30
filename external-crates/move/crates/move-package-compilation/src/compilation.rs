@@ -21,14 +21,12 @@ use colored::Colorize;
 use move_compiler::{
     Compiler, Flags,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::filter::{FilterKind, empty_filter_scope, resolve_filter_names},
+    diagnostics::filter::{empty_filter_scope, resolve_filter_names},
     editions::{Edition, Flavor},
     linters,
     shared::{
-        PackageConfig, PackagePaths, SaveFlag, SaveHook,
-        files::MappedFiles,
-        format_allow_attr,
-        known_attributes::{DiagnosticAttribute, ModeAttribute},
+        PackageConfig, PackagePaths, SaveFlag, SaveHook, files::MappedFiles,
+        known_attributes::ModeAttribute,
     },
     sui_mode,
 };
@@ -237,9 +235,9 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
     let lint_level = build_config.lint_flag.get();
     let active_profile = active_diagnostic_profile(build_config);
     let package_info = root_pkg.package_info();
-    let lints = &package_info.diagnostics().lint_filters;
-    let enabled_lints = lints.enabled_filter_names(active_profile);
-    let allowed_lints = lints.allowed_filter_names(active_profile);
+    let diagnostics = package_info.diagnostics();
+    let enabled_lints = diagnostics.enabled_lints(active_profile);
+    let allowed_lints = diagnostics.allowed_lints(active_profile);
     let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
     let flags = compiler_flags(build_config);
     let mut compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
@@ -416,62 +414,10 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
                 custom_known.push(sui_mode::linters::known_filters());
             }
             let diagnostics = pkg.diagnostics();
-            let all_warnings = diagnostics
-                .warning_filters
-                .all_configured_filters(None)
-                .collect::<Vec<_>>();
-            resolve_filter_names(all_warnings, custom_known.clone()).map_err(|(_, name)| {
-                if resolve_filter_names(
-                    [(
-                        Some(DiagnosticAttribute::LINT_SYMBOL),
-                        name,
-                        FilterKind::Warn,
-                    )],
-                    custom_known.clone(),
-                )
-                .is_ok()
-                {
-                    anyhow::anyhow!(
-                        "lint '{}' must be configured under [lints], not [warnings]",
-                        name
-                    )
-                } else {
-                    anyhow::anyhow!(
-                        "unknown warning filter '{}' in Move.toml",
-                        format_allow_attr(None, name)
-                    )
-                }
-            })?;
-            let all_lints = diagnostics
-                .lint_filters
-                .all_configured_filters(Some(DiagnosticAttribute::LINT_SYMBOL))
-                .collect::<Vec<_>>();
-            resolve_filter_names(all_lints, custom_known.clone()).map_err(|(_, name)| {
-                if resolve_filter_names([(None, name, FilterKind::Warn)], custom_known.clone())
-                    .is_ok()
-                {
-                    anyhow::anyhow!(
-                        "compiler warning '{}' must be configured under [warnings], not [lints]",
-                        name
-                    )
-                } else {
-                    anyhow::anyhow!(
-                        "unknown warning filter '{}' in Move.toml",
-                        format_allow_attr(Some(DiagnosticAttribute::LINT_SYMBOL), name)
-                    )
-                }
-            })?;
+            diagnostics.validate(&custom_known)?;
             let active_profile = active_diagnostic_profile(build_config);
-            let configured = diagnostics
-                .warning_filters
-                .configured_filters(None, active_profile)
-                .chain(
-                    diagnostics
-                        .lint_filters
-                        .configured_filters(Some(DiagnosticAttribute::LINT_SYMBOL), active_profile),
-                )
-                .collect::<Vec<_>>();
-            resolve_filter_names(configured, custom_known).expect("filters were already checked")
+            resolve_filter_names(diagnostics.configured_filters(active_profile), custom_known)
+                .expect("filters were already checked")
         } else {
             empty_filter_scope()
         };
@@ -501,4 +447,38 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
     }
 
     Ok(package_paths)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diagnostic_profile_follows_testing_configuration() {
+        assert_eq!(
+            active_diagnostic_profile(&BuildConfig::default()),
+            DiagnosticProfile::Build
+        );
+        assert_eq!(
+            active_diagnostic_profile(&BuildConfig {
+                test_mode: true,
+                ..BuildConfig::default()
+            }),
+            DiagnosticProfile::Test
+        );
+        assert_eq!(
+            active_diagnostic_profile(&BuildConfig {
+                modes: vec![ModeAttribute::TEST.into()],
+                ..BuildConfig::default()
+            }),
+            DiagnosticProfile::Test
+        );
+        assert_eq!(
+            active_diagnostic_profile(&BuildConfig {
+                modes: vec![Symbol::from("spec")],
+                ..BuildConfig::default()
+            }),
+            DiagnosticProfile::Build
+        );
+    }
 }

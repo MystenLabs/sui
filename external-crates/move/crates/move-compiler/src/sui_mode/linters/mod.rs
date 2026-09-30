@@ -187,7 +187,10 @@ pub fn linter_visitors_with_config(
     let enabled = |name| {
         (all || configured.contains(&Symbol::from(name))) && !allowed.contains(&Symbol::from(name))
     };
-    let default_enabled = |name| !all_allowed && !allowed.contains(&Symbol::from(name));
+    let default_enabled = |name| {
+        (!all_allowed || configured.contains(&Symbol::from(name)))
+            && !allowed.contains(&Symbol::from(name))
+    };
 
     let mut visitors = vec![];
     macro_rules! add_default_visitor {
@@ -222,7 +225,7 @@ pub fn linter_visitors_with_config(
     );
     add_default_visitor!("missing_key", missing_key::MissingKeyVisitor.visitor());
     add_default_visitor!(
-        "unnecessary_public_entry",
+        "public_entry",
         unnecessary_public_entry::UnnecessaryPublicEntry.visitor()
     );
     add_default_visitor!(
@@ -282,6 +285,16 @@ mod tests {
         assert_eq!(
             linter_visitors_with_config(LintLevel::Default, &BTreeSet::new(), &allowed).len(),
             linter_visitors(LintLevel::Default).len() - 1
+        );
+    }
+
+    #[test]
+    fn configured_filter_overrides_allowed_all() {
+        let configured = BTreeSet::from([Symbol::from("public_entry")]);
+        let allowed = BTreeSet::from([Symbol::from(crate::diagnostics::filter::FILTER_ALL)]);
+        assert_eq!(
+            linter_visitors_with_config(LintLevel::Default, &configured, &allowed).len(),
+            1
         );
     }
 

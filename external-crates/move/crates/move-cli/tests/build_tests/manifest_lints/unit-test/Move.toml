@@ -1,0 +1,6 @@
+[package]
+name = "UnitTest"
+edition = "2024"
+
+[addresses]
+std = "0x1"
