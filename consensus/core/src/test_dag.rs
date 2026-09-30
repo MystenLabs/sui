@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, BlockTimestampMs, Round};
@@ -94,13 +97,13 @@ pub(crate) fn build_dag_layer(
 
 /// Controls Byzantine equivocations injected while generating a randomized DAG.
 ///
-/// At most `floor((N - 1) / 3)` distinct authorities can equivocate in one round,
-/// regardless of `max_equivocators`.
+/// A fixed set of at most `floor((N - 1) / 3)` distinct authorities can
+/// equivocate throughout the DAG, regardless of `max_equivocators`.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct RandomDagEquivocationConfig {
-    /// Percentage of rounds in which Byzantine authorities equivocate.
+    /// Percentage of rounds in which authorities from the fixed Byzantine set equivocate.
     pub equivocation_rate: u8,
-    /// Upper bound on the number of distinct equivocating authorities per round.
+    /// Upper bound on the size of the fixed Byzantine set.
     pub max_equivocators: usize,
     /// Number of additional conflicting blocks each selected authority produces.
     pub equivocations_per_authority: usize,
@@ -124,6 +127,7 @@ pub(crate) fn create_random_dag(
 
     let mut rng = StdRng::seed_from_u64(seed);
     let mut dag_builder = DagBuilder::new(context);
+    // Randomized consensus tests use equal-stake test committees.
     let max_safe_equivocators = (dag_builder.context.committee.size() - 1) / 3;
     let max_equivocators = equivocation_config
         .max_equivocators
@@ -141,10 +145,12 @@ pub(crate) fn create_random_dag(
         let random_num = rng.gen_range(0..100);
         let include_leader = random_num <= include_leader_percentage;
         let min_ancestor_links_seed = rng.r#gen();
+        let should_equivocate_this_round =
+            rng.gen_range(0..100) < equivocation_config.equivocation_rate;
 
         let should_equivocate = equivocation_config.equivocations_per_authority > 0
             && max_equivocators > 0
-            && rng.gen_range(0..100) < equivocation_config.equivocation_rate;
+            && should_equivocate_this_round;
         if should_equivocate {
             let num_equivocators = rng.gen_range(1..=max_equivocators);
             let mut authorities = byzantine_authorities.clone();
@@ -163,4 +169,76 @@ pub(crate) fn create_random_dag(
     }
 
     dag_builder
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::block::BlockAPI;
+
+    #[test]
+    fn random_dag_equivocations_use_a_fixed_safe_authority_set() {
+        let num_authorities = 7;
+        let num_rounds = 100;
+        let context = Arc::new(Context::new_for_test(num_authorities).0);
+        let dag_builder = create_random_dag(
+            7,
+            100,
+            num_rounds,
+            context.clone(),
+            RandomDagEquivocationConfig {
+                equivocation_rate: 100,
+                max_equivocators: usize::MAX,
+                equivocations_per_authority: 2,
+            },
+        );
+        let max_safe_equivocators = (num_authorities - 1) / 3;
+        let max_parent_links = context.committee.quorum_threshold() as usize + 1;
+        let mut all_equivocators = BTreeSet::new();
+        let mut saw_equivocation = false;
+        let mut saw_max_equivocators = false;
+
+        for round in 1..=num_rounds {
+            let blocks_per_author = dag_builder
+                .blocks
+                .values()
+                .filter(|block| block.round() == round)
+                .fold(BTreeMap::new(), |mut counts, block| {
+                    *counts.entry(block.author()).or_insert(0) += 1;
+                    counts
+                });
+            let equivocators = blocks_per_author
+                .values()
+                .filter(|&&blocks| blocks > 1)
+                .count();
+            all_equivocators.extend(
+                blocks_per_author
+                    .iter()
+                    .filter_map(|(&author, &blocks)| (blocks > 1).then_some(author)),
+            );
+            assert!(
+                equivocators <= max_safe_equivocators,
+                "round {round} has {equivocators} equivocating authorities"
+            );
+            saw_equivocation |= equivocators > 0;
+            saw_max_equivocators |= equivocators == max_safe_equivocators;
+        }
+
+        assert!(saw_equivocation);
+        assert!(saw_max_equivocators);
+        assert!(all_equivocators.len() <= max_safe_equivocators);
+        assert!(dag_builder.blocks.values().all(|block| {
+            let mut ancestor_authors = BTreeSet::new();
+            block
+                .ancestors()
+                .iter()
+                .all(|ancestor| ancestor_authors.insert(ancestor.author))
+        }));
+        assert!(
+            dag_builder
+                .blocks
+                .values()
+                .all(|block| block.ancestors().len() <= max_parent_links)
+        );
+    }
 }

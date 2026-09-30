@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::BTreeMap,
     ops::{Bound::Included, RangeInclusive},
     sync::Arc,
 };
@@ -655,6 +655,17 @@ impl<'a> LayerBuilder<'a> {
         };
 
         let mut authorities_to_shuffle = authorities.clone();
+        let ancestors_by_author = self
+            .ancestors
+            .iter()
+            .filter(|ancestor| ancestor.round < round)
+            .fold(
+                BTreeMap::<AuthorityIndex, Vec<BlockRef>>::new(),
+                |mut grouped, ancestor| {
+                    grouped.entry(ancestor.author).or_default().push(*ancestor);
+                    grouped
+                },
+            );
 
         let mut leaders = vec![];
         if let Some(leader_round) = self.leader_round {
@@ -675,22 +686,27 @@ impl<'a> LayerBuilder<'a> {
                 authorities_to_shuffle.shuffle(&mut rng);
 
                 // TODO: handle quroum threshold properly with stake
-                let min_ancestors: HashSet<AuthorityIndex> = authorities_to_shuffle
+                let mut selected_authorities = authorities_to_shuffle
                     .iter()
                     .take(quorum_threshold)
                     .cloned()
-                    .collect();
+                    .collect::<Vec<_>>();
+                for leader in &leaders {
+                    if !selected_authorities.contains(leader) {
+                        selected_authorities.push(*leader);
+                    }
+                }
 
                 (
                     *authority,
-                    self.ancestors
-                        .iter()
-                        .filter(|a| {
-                            leaders.contains(&a.author)
-                                || min_ancestors.contains(&a.author)
-                                || a.round != round
+                    selected_authorities
+                        .into_iter()
+                        .filter_map(|ancestor_author| {
+                            ancestors_by_author
+                                .get(&ancestor_author)
+                                .and_then(|ancestors| ancestors.choose(&mut rng))
+                                .copied()
                         })
-                        .cloned()
                         .collect::<Vec<BlockRef>>(),
                 )
             })

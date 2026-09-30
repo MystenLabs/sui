@@ -160,13 +160,27 @@ impl CommitTestFixture {
         &mut self,
         last_decided: crate::block::Slot,
     ) -> (Vec<CommittedSubDag>, crate::block::Slot) {
+        let (finalized, last_decided, _) = self.try_commit_with_skip_count(last_decided).await;
+        (finalized, last_decided)
+    }
+
+    /// Tries to decide leaders and returns the number of skipped leaders alongside
+    /// finalized commits. This is useful for asserting Byzantine test scenarios.
+    pub(crate) async fn try_commit_with_skip_count(
+        &mut self,
+        last_decided: crate::block::Slot,
+    ) -> (Vec<CommittedSubDag>, crate::block::Slot, usize) {
         let sequence = self.committer.try_decide(last_decided);
         let new_last_decided = sequence
             .last()
             .map(|leader| leader.slot())
             .unwrap_or(last_decided);
+        let skipped = sequence
+            .iter()
+            .filter(|leader| matches!(leader, DecidedLeader::Skip(_)))
+            .count();
         let finalized = self.process_commits(sequence).await;
-        (finalized, new_last_decided)
+        (finalized, new_last_decided, skipped)
     }
 
     /// Process decided leaders through linearizer and commit finalizer,
