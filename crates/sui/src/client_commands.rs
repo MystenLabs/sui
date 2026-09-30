@@ -3076,8 +3076,8 @@ pub async fn request_tokens_from_faucet(
     url: String,
 ) -> Result<(), anyhow::Error> {
     match FaucetEndpoint::parse(&url)? {
-        FaucetEndpoint::Pow(base) => {
-            let payout = faucet::request_gas(&base, address).await?;
+        FaucetEndpoint::ProofOfWork(base_url) => {
+            let payout = faucet::request_gas(&base_url, address).await?;
             println!(
                 "Request successful. The faucet sent {} to the address balance of {} in transaction {}.",
                 payout.amount(),
@@ -3086,7 +3086,7 @@ pub async fn request_tokens_from_faucet(
             );
             Ok(())
         }
-        FaucetEndpoint::NoPow(url) => request_tokens_without_pow(address, url).await,
+        FaucetEndpoint::WithoutProofOfWork(url) => request_tokens_without_pow(address, url).await,
     }
 }
 
