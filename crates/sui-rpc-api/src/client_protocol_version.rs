@@ -21,6 +21,21 @@ pub fn client_protocol_version(metadata: &MetadataMap) -> Option<ProtocolVersion
         .map(ProtocolVersion::new)
 }
 
+/// How far past this binary's max protocol version a reported version is still recorded as
+/// itself. A client may know a few versions this node doesn't, but not many.
+const METRIC_VERSIONS_ABOVE_MAX: u64 = 20;
+
+/// The client's reported protocol version for metrics, or 0 (never a real protocol version) if
+/// the header is missing or invalid. The header is client-controlled, so versions above
+/// `ProtocolVersion::MAX_ALLOWED + METRIC_VERSIONS_ABOVE_MAX` count as invalid, which bounds the
+/// number of distinct values.
+pub(crate) fn client_protocol_version_for_metrics(metadata: &MetadataMap) -> u64 {
+    client_protocol_version(metadata)
+        .map(|v| v.as_u64())
+        .filter(|&v| v <= ProtocolVersion::MAX_ALLOWED.as_u64() + METRIC_VERSIONS_ABOVE_MAX)
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -41,5 +56,24 @@ mod tests {
         assert_eq!(parse(Some("-1")), None);
         assert_eq!(parse(Some("1.2")), None);
         assert_eq!(parse(Some("18446744073709551616")), None);
+    }
+
+    #[test]
+    fn metric_version_is_bounded() {
+        let version = |value: Option<String>| {
+            let mut metadata = MetadataMap::new();
+            if let Some(value) = value {
+                metadata.insert(X_SUI_CLIENT_PROTOCOL_VERSION, value.parse().unwrap());
+            }
+            client_protocol_version_for_metrics(&metadata)
+        };
+        let cap = ProtocolVersion::MAX_ALLOWED.as_u64() + METRIC_VERSIONS_ABOVE_MAX;
+
+        assert_eq!(version(None), 0);
+        assert_eq!(version(Some("abc".into())), 0);
+        assert_eq!(version(Some("137".into())), 137);
+        assert_eq!(version(Some(cap.to_string())), cap);
+        assert_eq!(version(Some((cap + 1).to_string())), 0);
+        assert_eq!(version(Some(u64::MAX.to_string())), 0);
     }
 }
