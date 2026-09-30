@@ -703,6 +703,13 @@ where
             let signed_block: SignedBlock =
                 bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
 
+            let block_ref = BlockRef::new(
+                signed_block.round(),
+                signed_block.author(),
+                VerifiedBlock::compute_digest(&serialized_block),
+            );
+            let _inflight_verification = context.inflight_block_verifications.register(block_ref);
+
             // TODO: cache received and verified block refs to avoid duplicated work.
             let (verified_block, reject_txn_votes) = block_verifier
                 .verify_and_vote(signed_block, serialized_block)

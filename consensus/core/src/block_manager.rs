@@ -336,6 +336,15 @@ impl BlockManager {
                     .with_label_values(&[ancestor_hostname])
                     .inc();
 
+                if self.context.inflight_block_verifications.contains(ancestor) {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .block_manager_missing_ancestors_inflight_verification
+                        .with_label_values(&[ancestor_hostname])
+                        .inc();
+                }
+
                 // Add the ancestor to the missing blocks set only if it doesn't already exist in the suspended blocks - meaning
                 // that we already have its payload.
                 if !self.suspended_blocks.contains_key(ancestor) {
@@ -674,6 +683,42 @@ mod tests {
                 .map(|block| block.reference())
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[tokio::test]
+    async fn records_missing_ancestor_undergoing_verification() {
+        let (context, _key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let mut block_manager = BlockManager::new(context.clone(), dag_state);
+
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=2).build();
+        let block = dag_builder
+            .blocks
+            .values()
+            .find(|block| block.round() == 2)
+            .unwrap()
+            .clone();
+        let ancestor = *block.ancestors().first().unwrap();
+        let ancestor_hostname = &context.committee.authority(ancestor.author).hostname;
+        let metric = context
+            .metrics
+            .node_metrics
+            .block_manager_missing_ancestors_inflight_verification
+            .with_label_values(&[ancestor_hostname]);
+        let before = metric.get();
+        let first_verification = context.inflight_block_verifications.register(ancestor);
+        let _second_verification = context.inflight_block_verifications.register(ancestor);
+        drop(first_verification);
+        assert!(context.inflight_block_verifications.contains(&ancestor));
+
+        let (accepted, missing) = block_manager.try_accept_blocks(vec![block]);
+
+        assert!(accepted.is_empty());
+        assert!(missing.contains(&ancestor));
+        assert_eq!(metric.get(), before + 1);
     }
 
     #[tokio::test]

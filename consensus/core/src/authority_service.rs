@@ -182,6 +182,16 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             return Err(e);
         }
 
+        let block_ref = BlockRef::new(
+            signed_block.round(),
+            signed_block.author(),
+            VerifiedBlock::compute_digest(&serialized_bytes),
+        );
+        let inflight_verification = self
+            .context
+            .inflight_block_verifications
+            .register(block_ref);
+
         // Reject blocks failing parsing and validations.
         let block_verifier = self.block_verifier.clone();
         let serialized = serialized_bytes.clone();
@@ -197,6 +207,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                         .inc();
                     info!("Invalid block from {}: {}", peer, e);
                 })?;
+        drop(inflight_verification);
         let excluded_ancestors = self
             .parse_excluded_ancestors(peer, &verified_block, serialized_block.excluded_ancestors)
             .tap_err(|e| {
@@ -209,7 +220,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                     .inc();
             })?;
 
-        let block_ref = verified_block.reference();
+        debug_assert_eq!(block_ref, verified_block.reference());
         debug!("Received block {} via send block.", block_ref);
 
         self.context

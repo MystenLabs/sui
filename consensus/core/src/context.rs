@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::SystemTime};
+use std::{collections::BTreeMap, sync::Arc, time::SystemTime};
 
 use consensus_config::{AuthorityIndex, Committee, ConsensusProtocolConfig, Parameters};
 use consensus_config::{NetworkKeyPair, ProtocolKeyPair};
-use consensus_types::block::BlockTimestampMs;
+use consensus_types::block::{BlockRef, BlockTimestampMs};
+use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio::time::Instant;
 
@@ -30,6 +31,8 @@ pub struct Context {
     pub metrics: Arc<Metrics>,
     /// Access to local clock
     pub clock: Arc<Clock>,
+    /// Block references currently undergoing verification on this authority.
+    pub(crate) inflight_block_verifications: Arc<InflightBlockVerifications>,
 }
 
 impl Context {
@@ -57,6 +60,7 @@ impl Context {
             protocol_config,
             metrics,
             clock,
+            inflight_block_verifications: Arc::new(InflightBlockVerifications::default()),
         }
     }
 
@@ -127,6 +131,52 @@ impl Context {
     /// Returns true if this node is an observer (i.e., not part of the committee).
     pub fn is_observer(&self) -> bool {
         !self.is_validator()
+    }
+}
+
+/// Tracks block references while their verification is in progress. Reference counts preserve
+/// visibility when the same block is verified concurrently through subscription and fetch paths.
+#[derive(Default)]
+pub(crate) struct InflightBlockVerifications {
+    block_refs: Mutex<BTreeMap<BlockRef, usize>>,
+}
+
+impl InflightBlockVerifications {
+    pub(crate) fn register(
+        self: &Arc<Self>,
+        block_ref: BlockRef,
+    ) -> InflightBlockVerificationGuard {
+        *self.block_refs.lock().entry(block_ref).or_default() += 1;
+        InflightBlockVerificationGuard {
+            tracker: self.clone(),
+            block_ref,
+        }
+    }
+
+    pub(crate) fn contains(&self, block_ref: &BlockRef) -> bool {
+        self.block_refs.lock().contains_key(block_ref)
+    }
+
+    fn unregister(&self, block_ref: BlockRef) {
+        let mut block_refs = self.block_refs.lock();
+        let count = block_refs
+            .get_mut(&block_ref)
+            .expect("in-flight block verification must be registered");
+        *count -= 1;
+        if *count == 0 {
+            block_refs.remove(&block_ref);
+        }
+    }
+}
+
+pub(crate) struct InflightBlockVerificationGuard {
+    tracker: Arc<InflightBlockVerifications>,
+    block_ref: BlockRef,
+}
+
+impl Drop for InflightBlockVerificationGuard {
+    fn drop(&mut self) {
+        self.tracker.unregister(self.block_ref);
     }
 }
 
