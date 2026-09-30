@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-    str::FromStr,
-};
+use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
 use anyhow::ensure;
 use serde::{Deserialize, Deserializer, Serialize, de};
@@ -13,8 +9,8 @@ use serde_spanned::Spanned;
 
 use move_compiler::{
     diagnostics::{
-        codes::DiagnosticsID,
-        filter::{FilterKind, FilterName, FilterPrefix, FilterScope, resolve_filter_names},
+        config::{DiagnosticFilterConfig, DiagnosticFilterSettings, KnownDiagnosticFilters},
+        filter::{FilterKind, FilterPrefix, resolve_filter_names},
     },
     editions::Edition,
     shared::{format_allow_attr, known_attributes::DiagnosticAttribute},
@@ -38,7 +34,6 @@ pub type ModeName = String;
 pub type SystemDepName = String;
 
 pub type ConfigFilters = BTreeMap<String, LintLevel>;
-pub type KnownDiagnosticFilters = Vec<(FilterPrefix, Vec<(FilterName, Vec<DiagnosticsID>)>)>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticProfile {
@@ -150,39 +145,21 @@ impl DiagnosticConfigObject {
         &self,
         profile: DiagnosticProfile,
         known: &KnownDiagnosticFilters,
-    ) -> anyhow::Result<FilterScope> {
+    ) -> anyhow::Result<DiagnosticFilterSettings> {
         self.warning_filters.validate(None, known)?;
         self.lint_filters
             .validate(Some(DiagnosticAttribute::LINT_SYMBOL), known)?;
-        let configured = [
-            (None, &self.warning_filters),
-            (Some(DiagnosticAttribute::LINT_SYMBOL), &self.lint_filters),
-        ]
-        .into_iter()
-        .flat_map(|(prefix, entries)| {
-            entries
+        let synthesize = |entries: &DiagnosticFilterEntries| {
+            let config = entries
                 .effective_diagnostics(profile)
-                .map(move |(name, level)| (prefix, name.as_str().into(), level.filter_kind()))
-        });
-        Ok(resolve_filter_names(configured, known.iter().cloned())
-            .expect("filters were already checked"))
-    }
-
-    /// Returns enabled and allowed lint names for the selected profile.
-    pub fn lint_names(
-        &self,
-        profile: DiagnosticProfile,
-    ) -> (BTreeSet<FilterName>, BTreeSet<FilterName>) {
-        let mut enabled = BTreeSet::new();
-        let mut allowed = BTreeSet::new();
-        for (name, level) in self.lint_filters.effective_diagnostics(profile) {
-            let names = match level {
-                LintLevel::Allow => &mut allowed,
-                LintLevel::Warn | LintLevel::Deny => &mut enabled,
-            };
-            names.insert(name.as_str().into());
-        }
-        (enabled, allowed)
+                .map(|(name, level)| (name.as_str().into(), level.filter_kind()))
+                .collect::<DiagnosticFilterConfig>();
+            (!config.is_empty()).then_some(config)
+        };
+        Ok(DiagnosticFilterSettings {
+            warnings: synthesize(&self.warning_filters),
+            lints: synthesize(&self.lint_filters),
+        })
     }
 }
 
@@ -447,11 +424,15 @@ mod tests {
         DiagnosticProfile, ExternalDependency, LintLevel, ManifestDependencyInfo,
         ManifestGitDependency, ParsedManifest, ReplacementDependency,
     };
-    use move_compiler::{diagnostics::filter::FilterName, editions::Edition, linters};
-    use std::{
-        collections::{BTreeMap, BTreeSet},
-        str::FromStr,
+    use move_compiler::{
+        diagnostics::{
+            config::{DiagnosticFilterSettings, known_diagnostic_filters},
+            filter::{FilterKind, FilterName},
+        },
+        editions::{Edition, Flavor},
+        linters,
     };
+    use std::{collections::BTreeMap, str::FromStr};
 
     impl ParsedManifest {
         /// (unsafe) convenience method for pulling out a dependency having given `name`
@@ -657,9 +638,12 @@ mod tests {
     }
 
     #[test]
-    fn allowed_and_enabled_lints_use_effective_profile() {
+    fn effective_settings_preserve_warning_and_lint_levels() {
         let diagnostics = DiagnosticConfigObject {
-            warning_filters: DiagnosticFilterEntries::default(),
+            warning_filters: toml_edit::de::from_str(
+                "unused_variable = 'allow'\n[build]\nunused_variable = 'deny'",
+            )
+            .unwrap(),
             lint_filters: toml_edit::de::from_str(
                 r#"
                 all = "deny"
@@ -672,24 +656,69 @@ mod tests {
             )
             .unwrap(),
         };
+        let known = known_diagnostic_filters(Flavor::Core);
+        let build = diagnostics
+            .resolve_for_profile(DiagnosticProfile::Build, &known)
+            .unwrap();
+        assert_eq!(
+            build.warnings.unwrap().iter().collect::<BTreeMap<_, _>>(),
+            BTreeMap::from([(FilterName::from("unused_variable"), FilterKind::Deny)])
+        );
+        assert_eq!(
+            build.lints.unwrap().iter().collect::<BTreeMap<_, _>>(),
+            BTreeMap::from([
+                (FilterName::from("all"), FilterKind::Allow),
+                (FilterName::from("abort_without_constant"), FilterKind::Deny),
+            ])
+        );
+        let test = diagnostics
+            .resolve_for_profile(DiagnosticProfile::Test, &known)
+            .unwrap();
+        assert_eq!(
+            test.warnings.unwrap().iter().collect::<BTreeMap<_, _>>(),
+            BTreeMap::from([(FilterName::from("unused_variable"), FilterKind::Allow)])
+        );
+        assert_eq!(
+            test.lints.unwrap().iter().collect::<BTreeMap<_, _>>(),
+            BTreeMap::from([
+                (FilterName::from("all"), FilterKind::Deny),
+                (FilterName::from("abort_without_constant"), FilterKind::Warn),
+            ])
+        );
+    }
 
-        assert_eq!(
-            diagnostics.lint_names(DiagnosticProfile::Build),
-            (
-                BTreeSet::from([FilterName::from("abort_without_constant")]),
-                BTreeSet::from([FilterName::from("all")]),
-            )
-        );
-        assert_eq!(
-            diagnostics.lint_names(DiagnosticProfile::Test),
-            (
-                BTreeSet::from([
-                    FilterName::from("all"),
-                    FilterName::from("abort_without_constant"),
-                ]),
-                BTreeSet::new(),
-            )
-        );
+    #[test]
+    fn empty_diagnostics_preserve_compiler_defaults() {
+        for profile in [DiagnosticProfile::Build, DiagnosticProfile::Test] {
+            assert_eq!(
+                DiagnosticConfigObject::default()
+                    .resolve_for_profile(profile, &known_diagnostic_filters(Flavor::Core))
+                    .unwrap(),
+                DiagnosticFilterSettings::default()
+            );
+        }
+    }
+
+    #[test]
+    fn diagnostic_validation_uses_the_effective_flavor() {
+        let diagnostics = DiagnosticConfigObject {
+            lint_filters: toml_edit::de::from_str("[test]\npublic_entry = 'deny'").unwrap(),
+            ..DiagnosticConfigObject::default()
+        };
+        for profile in [DiagnosticProfile::Build, DiagnosticProfile::Test] {
+            assert!(
+                diagnostics
+                    .resolve_for_profile(profile, &known_diagnostic_filters(Flavor::Sui))
+                    .is_ok()
+            );
+            assert_eq!(
+                diagnostics
+                    .resolve_for_profile(profile, &known_diagnostic_filters(Flavor::Core))
+                    .unwrap_err()
+                    .to_string(),
+                "unknown warning filter 'lint(public_entry)' in Move.toml"
+            );
+        }
     }
 
     #[test]

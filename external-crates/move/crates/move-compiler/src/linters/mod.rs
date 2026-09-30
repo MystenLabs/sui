@@ -1,15 +1,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-
 use move_symbol_pool::Symbol;
 
 use crate::{
     cfgir::visitor::{AbstractInterpreterVisitor, CFGIRVisitor},
-    command_line::compiler::Visitor,
+    command_line::compiler::{Visitor, VisitorConstructor},
     diagnostics::{
         codes::{DiagnosticOrigin, DiagnosticsID},
+        config::DiagnosticFilterConfig,
         filter::FilterName,
     },
     shared::known_attributes::DiagnosticAttribute,
@@ -230,93 +229,71 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
     )
 }
 
+const OPTIONAL_LINTS: &[(&str, VisitorConstructor)] = &[
+    ("constant_naming", || {
+        constant_naming::ConstantNaming.visitor()
+    }),
+    ("while_true", || {
+        unnecessary_while_loop::WhileTrueToLoop.visitor()
+    }),
+    ("unnecessary_math", || {
+        meaningless_math_operation::MeaninglessMathOperation.visitor()
+    }),
+    ("unneeded_return", || {
+        unneeded_return::UnneededReturn.visitor()
+    }),
+    ("abort_without_constant", || {
+        abort_constant::AssertAbortNamedConstants.visitor()
+    }),
+    ("loop_without_exit", || {
+        loop_without_exit::LoopWithoutExit.visitor()
+    }),
+    ("unnecessary_conditional", || {
+        unnecessary_conditional::UnnecessaryConditional.visitor()
+    }),
+    ("self_assignment", || {
+        self_assignment::SelfAssignment.visitor()
+    }),
+    ("redundant_ref_deref", || {
+        redundant_ref_deref::RedundantRefDeref.visitor()
+    }),
+    ("unnecessary_unit", || {
+        unnecessary_unit::UnnecessaryUnit.visitor()
+    }),
+    ("always_equal_operands", || {
+        equal_operands::EqualOperands.visitor()
+    }),
+    ("combinable_comparisons", || {
+        combinable_comparisons::CombinableComparisons.visitor()
+    }),
+    ("unused_return_value", || {
+        unused_return_value::UnusedReturnValue.visitor()
+    }),
+];
+
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
-    linter_visitors_with_config(level, &BTreeSet::new(), &BTreeSet::new())
+    linter_visitors_with_config(level, &DiagnosticFilterConfig::default())
 }
 
 pub fn linter_visitors_with_config(
     level: LintLevel,
-    configured: &BTreeSet<FilterName>,
-    allowed: &BTreeSet<FilterName>,
+    config: &DiagnosticFilterConfig,
 ) -> Vec<Visitor> {
-    let all_name = Symbol::from(crate::diagnostics::filter::FILTER_ALL);
-    let all_allowed = allowed.contains(&all_name);
-    let all = match level {
-        LintLevel::None => return vec![],
-        LintLevel::Default => configured.contains(&all_name),
-        LintLevel::All => !all_allowed,
-    };
-    let enabled = |name| {
-        (all || configured.contains(&Symbol::from(name))) && !allowed.contains(&Symbol::from(name))
-    };
-    let mut visitors = vec![];
-
-    macro_rules! add_visitor {
-        ($name:literal, $visitor:expr) => {
-            if enabled($name) {
-                visitors.push($visitor);
-            }
-        };
-    }
-
-    add_visitor!("constant_naming", constant_naming::ConstantNaming.visitor());
-    add_visitor!(
-        "while_true",
-        unnecessary_while_loop::WhileTrueToLoop.visitor()
-    );
-    add_visitor!(
-        "unnecessary_math",
-        meaningless_math_operation::MeaninglessMathOperation.visitor()
-    );
-    add_visitor!("unneeded_return", unneeded_return::UnneededReturn.visitor());
-    add_visitor!(
-        "abort_without_constant",
-        abort_constant::AssertAbortNamedConstants.visitor()
-    );
-    add_visitor!(
-        "loop_without_exit",
-        loop_without_exit::LoopWithoutExit.visitor()
-    );
-    add_visitor!(
-        "unnecessary_conditional",
-        unnecessary_conditional::UnnecessaryConditional.visitor()
-    );
-    add_visitor!("self_assignment", self_assignment::SelfAssignment.visitor());
-    add_visitor!(
-        "redundant_ref_deref",
-        redundant_ref_deref::RedundantRefDeref.visitor()
-    );
-    add_visitor!(
-        "unnecessary_unit",
-        unnecessary_unit::UnnecessaryUnit.visitor()
-    );
-    add_visitor!(
-        "always_equal_operands",
-        equal_operands::EqualOperands.visitor()
-    );
-    add_visitor!(
-        "combinable_comparisons",
-        combinable_comparisons::CombinableComparisons.visitor()
-    );
-    add_visitor!(
-        "unused_return_value",
-        unused_return_value::UnusedReturnValue.visitor()
-    );
-
-    visitors
+    config.select_lints(level, &[], OPTIONAL_LINTS)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diagnostics::filter::{FILTER_ALL, FilterKind};
 
     #[test]
     fn configured_filters_enable_their_visitors() {
         for (_, _, name) in CORE_LINT_WARNING_FILTERS {
-            let configured = BTreeSet::from([Symbol::from(*name)]);
+            let config =
+                DiagnosticFilterConfig::from_iter([(Symbol::from(*name), FilterKind::Warn)]);
             assert_eq!(
-                linter_visitors_with_config(LintLevel::Default, &configured, &BTreeSet::new())
-                    .len(),
+                linter_visitors_with_config(LintLevel::Default, &config).len(),
                 1,
                 "{name}"
             );
@@ -325,19 +302,22 @@ mod tests {
 
     #[test]
     fn allowed_filters_do_not_enable_visitors() {
-        let configured = BTreeSet::from([Symbol::from(crate::diagnostics::filter::FILTER_ALL)]);
-        let allowed = BTreeSet::from([Symbol::from("constant_naming")]);
+        let config = DiagnosticFilterConfig::from_iter([
+            (Symbol::from(FILTER_ALL), FilterKind::Warn),
+            (Symbol::from("constant_naming"), FilterKind::Allow),
+        ]);
         assert_eq!(
-            linter_visitors_with_config(LintLevel::Default, &configured, &allowed).len(),
+            linter_visitors_with_config(LintLevel::Default, &config).len(),
             linter_visitors(LintLevel::All).len() - 1
         );
     }
 
     #[test]
     fn configured_all_enables_all_visitors() {
-        let configured = BTreeSet::from([Symbol::from(crate::diagnostics::filter::FILTER_ALL)]);
+        let config =
+            DiagnosticFilterConfig::from_iter([(Symbol::from(FILTER_ALL), FilterKind::Warn)]);
         assert_eq!(
-            linter_visitors_with_config(LintLevel::Default, &configured, &BTreeSet::new()).len(),
+            linter_visitors_with_config(LintLevel::Default, &config).len(),
             linter_visitors(LintLevel::All).len()
         );
     }
