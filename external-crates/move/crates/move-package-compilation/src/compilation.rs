@@ -21,14 +21,12 @@ use colored::Colorize;
 use move_compiler::{
     Compiler, Flags,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::filter::empty_filter_scope,
+    diagnostics::{config::known_diagnostic_filters, filter::empty_filter_scope},
     editions::{Edition, Flavor},
-    linters,
     shared::{
         PackageConfig, PackagePaths, SaveFlag, SaveHook, files::MappedFiles,
         known_attributes::ModeAttribute,
     },
-    sui_mode,
 };
 use move_docgen::DocgenFlags;
 use move_package::{
@@ -225,6 +223,19 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
 
     debug!("Package paths {:#?}", package_paths);
 
+    let root_flavor = package_paths
+        .iter()
+        .filter_map(|path| path.name.as_ref())
+        .find(|(_, config)| !config.is_dependency)
+        .expect("root package is included")
+        .1
+        .flavor;
+    let package_info = root_pkg.package_info();
+    let diagnostic_settings = package_info.diagnostics().resolve_for_profile(
+        active_diagnostic_profile(build_config),
+        &known_diagnostic_filters(root_flavor),
+    )?;
+
     writeln!(
         w,
         "{} {}",
@@ -232,34 +243,11 @@ pub fn build_for_driver<W: Write + Send, T, F: MoveFlavor>(
         root_pkg.display_name()
     )?;
 
-    let lint_level = build_config.lint_flag.get();
-    let active_profile = active_diagnostic_profile(build_config);
-    let package_info = root_pkg.package_info();
-    let diagnostics = package_info.diagnostics();
-    let (enabled_lints, allowed_lints) = diagnostics.lint_names(active_profile);
-    let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
     let flags = compiler_flags(build_config);
-    let mut compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
+    let compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
         .unwrap()
-        .set_flags(flags);
-    if sui_mode {
-        let (filter_attr_name, filters) = sui_mode::linters::known_filters();
-        compiler = compiler
-            .add_custom_known_filters(filter_attr_name, filters)
-            .add_visitors(sui_mode::linters::linter_visitors_with_config(
-                lint_level,
-                &enabled_lints,
-                &allowed_lints,
-            ))
-    }
-    let (filter_attr_name, filters) = linters::known_filters();
-    compiler = compiler
-        .add_custom_known_filters(filter_attr_name, filters)
-        .add_visitors(linters::linter_visitors_with_config(
-            lint_level,
-            &enabled_lints,
-            &allowed_lints,
-        ));
+        .set_flags(flags)
+        .set_diagnostic_filters(build_config.lint_flag.get(), diagnostic_settings);
 
     compiler_driver(compiler)
 }
@@ -407,16 +395,6 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
             .default_flavor
             .or(pkg.flavor().map(Flavor::from_str).transpose()?)
             .unwrap_or(Flavor::Sui);
-        let warning_filter = if pkg.is_root() {
-            let mut custom_known = vec![linters::known_filters()];
-            if flavor == Flavor::Sui {
-                custom_known.push(sui_mode::linters::known_filters());
-            }
-            pkg.diagnostics()
-                .resolve_for_profile(active_diagnostic_profile(build_config), &custom_known)?
-        } else {
-            empty_filter_scope()
-        };
         let config = PackageConfig {
             is_dependency: !pkg.is_root(),
             edition: pkg
@@ -424,7 +402,7 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
                 .or(build_config.default_edition)
                 .unwrap_or(Edition::LEGACY), // TODO require edition
             flavor,
-            warning_filter,
+            warning_filter: empty_filter_scope(),
         };
 
         // Assign a unique name for the compiler for each package.

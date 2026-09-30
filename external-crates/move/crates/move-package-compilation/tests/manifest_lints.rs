@@ -1,11 +1,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
+use std::{collections::BTreeSet, fs};
 
 use move_compiler::editions::Flavor;
 use move_package::{SourcePackageLayout, Vanilla};
-use move_package_compilation::{build_config::BuildConfig, build_plan::BuildPlan};
+use move_package_compilation::{
+    build_config::BuildConfig, build_plan::BuildPlan, compilation::build_for_driver,
+};
 use tempfile::tempdir;
 
 #[tokio::test]
@@ -43,4 +45,40 @@ all = "deny"
         .compile_no_exit(&mut Vec::new(), |compiler| compiler);
 
     assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn inactive_profile_is_validated_before_compiler_setup() {
+    let dir = tempdir().unwrap();
+    fs::create_dir(dir.path().join(SourcePackageLayout::Sources.path())).unwrap();
+    fs::write(
+        dir.path().join("Move.toml"),
+        r#"[package]
+name = "test"
+edition = "2024"
+
+[lints.test]
+public_entry = "deny"
+"#,
+    )
+    .unwrap();
+    let config = BuildConfig {
+        default_flavor: Some(Flavor::Core),
+        ..BuildConfig::default()
+    };
+    let root = config
+        .package_loader(dir.path(), &Vanilla::default_environment(), Vanilla::new())
+        .load()
+        .await
+        .unwrap();
+    let mut output = Vec::new();
+    let result: anyhow::Result<()> =
+        build_for_driver(&mut output, None, &config, &root, BTreeSet::new(), |_| {
+            panic!("invalid settings reached the compiler driver")
+        });
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "unknown warning filter 'lint(public_entry)' in Move.toml"
+    );
+    assert!(!String::from_utf8(output).unwrap().contains("BUILDING"));
 }
