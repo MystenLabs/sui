@@ -159,21 +159,21 @@ Extending the previous example, a PTB that calls `use_asset` is written as follo
 
 ```typescript
 // initialize the PTB
-const txb = new TransactionBlock();
+const tx = new Transaction();
 // load the assetManager
-const assetManager = txb.object(assetManagerId);
+const assetManager = tx.object(assetManagerId);
 // retrieve the asset
-const [asset, borrow] = txb.moveCall({
+const [asset, borrow] = tx.moveCall({
     target: "0xaddr1::another_module::get_asset",
     arguments: [ assetManager ],
 });
 // use the asset
-txb.moveCall({
+tx.moveCall({
     target: "0xaddr2::a_module::use_asset",
     arguments: [ asset ],
 });
 // return the asset
-txb.moveCall({
+tx.moveCall({
     target: "0xaddr1::another_module::return_asset",
     arguments: [ assetManager, asset, borrow ],
 });
