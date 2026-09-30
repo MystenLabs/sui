@@ -216,7 +216,10 @@ impl ObserverNetworkService for ObserverService {
                 // It only waits for synchronizer to queue the request to a peer.
                 // When this fails, it usually means the queue is full.
                 // The fetch will retry from other peers via live and periodic syncs.
-                if let Err(err) = synchronizer.fetch_blocks(missing_ancestors, peer).await {
+                if let Err(err) = synchronizer
+                    .fetch_blocks(missing_ancestors, peer, block_ref.round)
+                    .await
+                {
                     tracing::debug!("Failed to fetch missing ancestors via synchronizer: {err}");
                 }
             });

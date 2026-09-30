@@ -9,7 +9,7 @@ use std::{
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
-use futures::{StreamExt as _, stream::FuturesUnordered};
+use futures::{FutureExt as _, StreamExt as _, stream::FuturesUnordered};
 use itertools::Itertools as _;
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::{
@@ -39,6 +39,7 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
     network::{ObserverNetworkClient, PeerId, SynchronizerClient, ValidatorNetworkClient},
     peers_pool::PeersPool,
+    received_blocks::ReceivedBlocks,
     round_tracker::RoundTracker,
     task::{shutdown_join_set, spawn_blocking},
 };
@@ -63,6 +64,15 @@ struct BlocksGuard {
     map: Arc<InflightBlocksMap>,
     block_refs: BTreeSet<BlockRef>,
     peer: PeerId,
+}
+
+/// A live fetch queued to a peer's fetch task.
+struct LiveFetch {
+    blocks_guard: BlocksGuard,
+    /// Wait `live_sync_fetch_delay` before fetching: the blocks are from the round just below
+    /// the block that referenced them, so they are probably still in flight on their authors'
+    /// streams. Older blocks are fetched immediately, they are late already.
+    wait: bool,
 }
 
 impl Drop for BlocksGuard {
@@ -168,6 +178,7 @@ enum Command {
     FetchBlocks {
         missing_block_refs: BTreeSet<BlockRef>,
         peer: PeerId,
+        block_round: Round,
         result: oneshot::Sender<Result<(), ConsensusError>>,
     },
     FetchOwnLastBlock,
@@ -184,17 +195,21 @@ pub(crate) struct SynchronizerHandle {
 
 impl SynchronizerHandle {
     /// Explicitly asks from the synchronizer to fetch the blocks - provided the block_refs set - from
-    /// the peer.
+    /// the peer. `block_round` is the round of the received block that references the missing
+    /// blocks: the ones from the round just below it wait `live_sync_fetch_delay` before being
+    /// fetched, older ones are fetched immediately.
     pub(crate) async fn fetch_blocks(
         &self,
         missing_block_refs: BTreeSet<BlockRef>,
         peer: PeerId,
+        block_round: Round,
     ) -> ConsensusResult<()> {
         let (sender, receiver) = oneshot::channel();
         self.commands_sender
             .send(Command::FetchBlocks {
                 missing_block_refs,
                 peer,
+                block_round,
                 result: sender,
             })
             .await
@@ -257,7 +272,7 @@ pub(crate) struct Synchronizer<
 > {
     context: Arc<Context>,
     commands_receiver: Receiver<Command>,
-    fetch_block_senders: BTreeMap<PeerId, Sender<BlocksGuard>>,
+    fetch_block_senders: BTreeMap<PeerId, Sender<LiveFetch>>,
     core_dispatcher: Arc<D>,
     commit_vote_monitor: Arc<CommitVoteMonitor>,
     dag_state: Arc<RwLock<DagState>>,
@@ -274,6 +289,7 @@ pub(crate) struct Synchronizer<
     // When commit is not progressing, commit sync fails over to periodic sync for catchup.
     commit_sync_failover: bool,
     peers_pool: Arc<PeersPool>,
+    received_blocks: Arc<ReceivedBlocks>,
 }
 
 impl<V, D, VC, OC> Synchronizer<V, D, VC, OC>
@@ -293,6 +309,7 @@ where
         round_tracker: Arc<RwLock<RoundTracker>>,
         dag_state: Arc<RwLock<DagState>>,
         peers_pool: Arc<PeersPool>,
+        received_blocks: Arc<ReceivedBlocks>,
         sync_last_known_own_block: bool,
     ) -> Arc<SynchronizerHandle> {
         let (commands_sender, commands_receiver) =
@@ -308,7 +325,7 @@ where
         let known_peers = peers_pool.get_known_peers();
         for peer in known_peers {
             let (sender, receiver) =
-                channel("consensus_synchronizer_fetches", FETCH_BLOCKS_CONCURRENCY);
+                channel::<LiveFetch>("consensus_synchronizer_fetches", FETCH_BLOCKS_CONCURRENCY);
             let fetch_blocks_from_peer_async = Self::fetch_blocks_from_peer(
                 peer.clone(),
                 network_client.clone(),
@@ -322,6 +339,7 @@ where
                 commands_sender.clone(),
                 round_tracker.clone(),
                 peers_pool.clone(),
+                received_blocks.clone(),
             );
             tasks.spawn(monitored_future!(fetch_blocks_from_peer_async));
             fetch_block_senders.insert(peer, sender);
@@ -356,6 +374,7 @@ where
                 last_commit_change_time: Instant::now(),
                 commit_sync_failover: false,
                 peers_pool,
+                received_blocks,
             };
             s.run().await;
         }));
@@ -378,7 +397,7 @@ where
             tokio::select! {
                 Some(command) = self.commands_receiver.recv() => {
                     match command {
-                        Command::FetchBlocks{ missing_block_refs, peer, result } => {
+                        Command::FetchBlocks{ missing_block_refs, peer, block_round, result } => {
                             // Check if peer is available. This check also makes sure that we are not trying to fetch from ourselves.
                             if !self.peers_pool.is_peer_known(&peer) {
                                 result.send(Err(ConsensusError::PeerUnavailable(format!("{:?}", peer)))).ok();
@@ -390,40 +409,25 @@ where
                             // Fetch from the lowest to highest round, to ensure progress.
                             let missing_block_refs = missing_block_refs
                                 .into_iter()
-                                .take(self.context.parameters.max_blocks_per_sync)
-                                .collect();
+                                .take(self.context.parameters.max_blocks_per_sync);
 
-                            let blocks_guard = self.inflight_blocks_map.lock_blocks(missing_block_refs, peer.clone());
-                            let Some(blocks_guard) = blocks_guard else {
-                                result.send(Ok(())).ok();
-                                continue;
-                            };
-
-                            // We don't block if the corresponding peer task is saturated - but we rather drop the request. That's ok as the periodic
-                            // synchronization task will handle any still missing blocks in next run.
-                            let r = self
-                                .fetch_block_senders
-                                .get(&peer)
-                                .ok_or(ConsensusError::PeerNotFound(format!("Peer {} not found in fetch_block_senders", peer)))
-                                .and_then(|sender| {
-                                    sender
-                                        .try_send(blocks_guard)
-                                        .map_err(|err| {
-                                            match err {
-                                                TrySendError::Full(_) => {
-                                                    let peer_name = peer.labelname(&self.context);
-                                                    self.context
-                                                        .metrics
-                                                        .node_metrics
-                                                        .synchronizer_skipped_fetch_requests
-                                                        .with_label_values(&[peer_name])
-                                                        .inc();
-                                                    ConsensusError::SynchronizerSaturated(format!("{:?}", peer))
-                                                },
-                                                TrySendError::Closed(_) => ConsensusError::Shutdown
-                                            }
-                                        })
-                                });
+                            // Blocks older than the round below the received block are late already
+                            // and get queued first, without the fetch delay.
+                            let (recent, older): (BTreeSet<_>, BTreeSet<_>) = missing_block_refs
+                                .partition(|block_ref| block_ref.round + 1 >= block_round);
+                            let mut r = Ok(());
+                            for (block_refs, wait) in [(older, false), (recent, true)] {
+                                if block_refs.is_empty() {
+                                    continue;
+                                }
+                                let Some(blocks_guard) = self.inflight_blocks_map.lock_blocks(block_refs, peer.clone()) else {
+                                    continue;
+                                };
+                                r = self.queue_live_fetch(LiveFetch { blocks_guard, wait }, &peer);
+                                if r.is_err() {
+                                    break;
+                                }
+                            }
 
                             result.send(r).ok();
                         }
@@ -514,20 +518,20 @@ where
         context: Arc<Context>,
         core_dispatcher: Arc<D>,
         dag_state: Arc<RwLock<DagState>>,
-        mut receiver: Receiver<BlocksGuard>,
+        mut receiver: Receiver<LiveFetch>,
         commands_sender: Sender<Command>,
         round_tracker: Arc<RwLock<RoundTracker>>,
         _peers_pool: Arc<PeersPool>,
+        received_blocks: Arc<ReceivedBlocks>,
     ) {
         const MAX_RETRIES: u32 = 3;
         let mut requests = FuturesUnordered::new();
 
         loop {
             tokio::select! {
-                Some(blocks_guard) = receiver.recv(), if requests.len() < FETCH_BLOCKS_CONCURRENCY => {
-                    let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
-
-                    requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, 1))
+                Some(live_fetch) = receiver.recv(), if requests.len() < FETCH_BLOCKS_CONCURRENCY => {
+                    // Boxed: the first request filters (and maybe waits) before fetching, retries fetch directly.
+                    requests.push(Self::live_fetch_blocks_request(network_client.clone(), peer.clone(), live_fetch, context.clone(), dag_state.clone(), received_blocks.clone()).boxed())
                 },
                 Some((response, blocks_guard, retries, _peer, fetch_after_rounds)) = requests.next() => {
                     match response {
@@ -542,6 +546,7 @@ where
                                 context.clone(),
                                 commands_sender.clone(),
                                 round_tracker.clone(),
+                                received_blocks.clone(),
                                 "live"
                             ).await {
                                 warn!("Error while processing fetched blocks from peer {}: {err}", peer.hostname(&context));
@@ -551,7 +556,8 @@ where
                         Err(_) => {
                             context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer.labelname(&context).as_str(), "live"]).inc();
                             if retries <= MAX_RETRIES {
-                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, retries))
+                                let block_refs = blocks_guard.block_refs.iter().cloned().collect();
+                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, block_refs, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, retries).boxed())
                             } else {
                                 warn!("Max retries {retries} reached while trying to fetch blocks from peer {}.", peer.hostname(&context));
                                 // we don't necessarily need to do, but dropping the guard here to unlock the blocks
@@ -581,6 +587,7 @@ where
         context: Arc<Context>,
         commands_sender: Sender<Command>,
         round_tracker: Arc<RwLock<RoundTracker>>,
+        received_blocks: Arc<ReceivedBlocks>,
         sync_method: &str,
     ) -> ConsensusResult<()> {
         if serialized_blocks.is_empty() {
@@ -598,6 +605,10 @@ where
             move || Self::verify_blocks(serialized_blocks, block_verifier, &context, peer)
         })
         .await??;
+
+        // Fetched blocks are locked in the inflight map, but the ancestors the peer added to the
+        // response are not: keep them all visible to live sync until Core has processed them.
+        let _received = received_blocks.track(blocks.iter().map(|b| b.reference()).collect());
 
         if context.protocol_config.transaction_voting_enabled() {
             transaction_vote_tracker.add_voted_blocks(voted_blocks);
@@ -747,10 +758,79 @@ where
         Ok((verified_blocks, voted_blocks))
     }
 
+    /// Live sync request for the missing ancestors of a received block. The blocks are often
+    /// already in flight on their authors' streams, or received and still being verified or
+    /// queued for Core, so the request waits `live_sync_fetch_delay` when asked to and then
+    /// drops every block that has been accepted or received in the meantime. Nothing is sent if
+    /// none remain.
+    async fn live_fetch_blocks_request(
+        network_client: Arc<SynchronizerClient<VC, OC>>,
+        peer: PeerId,
+        live_fetch: LiveFetch,
+        context: Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
+        received_blocks: Arc<ReceivedBlocks>,
+    ) -> (
+        ConsensusResult<Vec<Bytes>>,
+        BlocksGuard,
+        u32,
+        PeerId,
+        Vec<Round>,
+    ) {
+        let LiveFetch { blocks_guard, wait } = live_fetch;
+        let delay = context.parameters.live_sync_fetch_delay;
+        if wait && !delay.is_zero() {
+            sleep(delay).await;
+        }
+
+        let metrics = &context.metrics.node_metrics;
+        let block_refs: Vec<BlockRef> = blocks_guard.block_refs.iter().cloned().collect();
+        let accepted = dag_state.read().contains_blocks(block_refs.clone());
+        let block_refs: Vec<BlockRef> = block_refs
+            .into_iter()
+            .zip_debug_eq(accepted)
+            .filter(|(block_ref, accepted)| {
+                let reason = if *accepted {
+                    "accepted"
+                } else if received_blocks.contains(block_ref) {
+                    "received"
+                } else {
+                    return true;
+                };
+                trace!("Skipping live fetch of {block_ref} from {peer}: {reason}");
+                metrics
+                    .synchronizer_live_fetch_skipped_blocks
+                    .with_label_values(&[reason])
+                    .inc();
+                false
+            })
+            .map(|(block_ref, _)| block_ref)
+            .collect();
+
+        // Computed after the delay, so the peer filters out everything accepted by now.
+        let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state);
+        if block_refs.is_empty() {
+            metrics.synchronizer_live_fetch_skipped_requests.inc();
+            return (Ok(vec![]), blocks_guard, 1, peer, fetch_after_rounds);
+        }
+        Self::fetch_blocks_request(
+            network_client,
+            peer,
+            blocks_guard,
+            block_refs,
+            fetch_after_rounds,
+            true,
+            FETCH_REQUEST_TIMEOUT,
+            1,
+        )
+        .await
+    }
+
     async fn fetch_blocks_request(
         network_client: Arc<SynchronizerClient<VC, OC>>,
         peer: PeerId,
         blocks_guard: BlocksGuard,
+        block_refs: Vec<BlockRef>,
         fetch_after_rounds: Vec<Round>,
         fetch_missing_ancestors: bool,
         request_timeout: Duration,
@@ -767,11 +847,7 @@ where
             request_timeout,
             network_client.fetch_blocks(
                 peer.clone(),
-                blocks_guard
-                    .block_refs
-                    .clone()
-                    .into_iter()
-                    .collect::<Vec<_>>(),
+                block_refs,
                 fetch_after_rounds.clone().into_iter().collect::<Vec<_>>(),
                 fetch_missing_ancestors,
                 request_timeout,
@@ -959,6 +1035,7 @@ where
         let dag_state = self.dag_state.clone();
         let round_tracker = self.round_tracker.clone();
         let peers_pool = self.peers_pool.clone();
+        let received_blocks = self.received_blocks.clone();
 
         let mut missing_blocks = self
             .core_dispatcher
@@ -1035,6 +1112,7 @@ where
                         context.clone(),
                         commands_sender.clone(),
                         round_tracker.clone(),
+                        received_blocks.clone(),
                         "periodic",
                     )
                     .await
@@ -1060,6 +1138,27 @@ where
             }));
 
         Ok(())
+    }
+
+    // We don't block if the corresponding peer task is saturated - but we rather drop the request. That's ok as the periodic
+    // synchronization task will handle any still missing blocks in next run.
+    fn queue_live_fetch(&self, live_fetch: LiveFetch, peer: &PeerId) -> ConsensusResult<()> {
+        let sender = self.fetch_block_senders.get(peer).ok_or_else(|| {
+            ConsensusError::PeerNotFound(format!("Peer {} not found in fetch_block_senders", peer))
+        })?;
+        sender.try_send(live_fetch).map_err(|err| match err {
+            TrySendError::Full(_) => {
+                let peer_name = peer.labelname(&self.context);
+                self.context
+                    .metrics
+                    .node_metrics
+                    .synchronizer_skipped_fetch_requests
+                    .with_label_values(&[peer_name])
+                    .inc();
+                ConsensusError::SynchronizerSaturated(format!("{:?}", peer))
+            }
+            TrySendError::Closed(_) => ConsensusError::Shutdown,
+        })
     }
 
     fn should_run_periodic_sync(&mut self) -> bool {
@@ -1314,10 +1413,12 @@ where
                         .collect::<Vec<_>>()
                         .join(", ")
                 );
+                let block_refs = blocks_guard.block_refs.iter().cloned().collect();
                 request_futures.push(Self::fetch_blocks_request(
                     network_client.clone(),
                     peer,
                     blocks_guard,
+                    block_refs,
                     fetch_after_rounds.clone(),
                     false,
                     FETCH_REQUEST_TIMEOUT,
@@ -1360,10 +1461,12 @@ where
                                             .collect::<Vec<_>>()
                                             .join(", ")
                                     );
+                                    let block_refs = blocks_guard.block_refs.iter().cloned().collect();
                                     request_futures.push(Self::fetch_blocks_request(
                                         network_client.clone(),
                                         next_peer,
                                         blocks_guard,
+                                        block_refs,
                                         fetch_after_rounds,
                                         false,
                                         FETCH_REQUEST_TIMEOUT,
@@ -1406,6 +1509,8 @@ mod tests {
     use tokio::{sync::Mutex, time::sleep};
 
     use crate::commit::{CommitVote, TrustedCommit};
+    use crate::received_blocks::ReceivedBlocks;
+    use crate::synchronizer::SynchronizerHandle;
     use crate::{
         CommitDigest, CommitIndex,
         block::{TestBlock, VerifiedBlock},
@@ -1721,11 +1826,13 @@ mod tests {
             round_tracker,
             dag_state,
             peers_pool.clone(),
+            ReceivedBlocks::new(),
             false,
         );
 
-        // Create some test blocks
-        let expected_blocks = (0..10)
+        // Create some test blocks. Round 0 is genesis and already accepted, so it would be
+        // dropped from the request.
+        let expected_blocks = (1..=10)
             .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round, 0).build()))
             .collect::<Vec<_>>();
         let missing_blocks = expected_blocks
@@ -1739,10 +1846,11 @@ mod tests {
             .stub_fetch_blocks(expected_blocks.clone(), peer, None)
             .await;
 
-        // WHEN request missing blocks from peer 1
+        // WHEN request missing blocks from peer 1, as ancestors of a block at round 12. None is
+        // from the round just below it, so a single request is sent without the fetch delay.
         assert!(
             handle
-                .fetch_blocks(missing_blocks, PeerId::Validator(peer))
+                .fetch_blocks(missing_blocks, PeerId::Validator(peer), 12)
                 .await
                 .is_ok()
         );
@@ -1753,6 +1861,166 @@ mod tests {
         // THEN ensure those ended up in Core
         let added_blocks = core_dispatcher.get_add_blocks().await;
         assert_eq!(added_blocks, expected_blocks);
+    }
+
+    /// Starts a synchronizer over mocks. Returns the handle, the core dispatcher that receives
+    /// the fetched blocks, the mock client to stub fetches on, the DAG state and the received
+    /// blocks tracker.
+    #[allow(clippy::type_complexity)]
+    fn start_synchronizer_for_live_fetch(
+        context: Arc<Context>,
+    ) -> (
+        Arc<SynchronizerHandle>,
+        Arc<MockCoreThreadDispatcher>,
+        Arc<MockNetworkClient>,
+        Arc<RwLock<DagState>>,
+        Arc<ReceivedBlocks>,
+    ) {
+        let block_verifier = Arc::new(NoopBlockVerifier {});
+        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let mock_client = Arc::new(MockNetworkClient::default());
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
+        let received_blocks = ReceivedBlocks::new();
+        let network_client = Arc::new(SynchronizerClient::new(
+            context.clone(),
+            Some(mock_client.clone()),
+            Some(mock_client.clone()),
+        ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
+        let handle = Synchronizer::start(
+            network_client,
+            context,
+            core_dispatcher.clone(),
+            commit_vote_monitor,
+            block_verifier,
+            transaction_vote_tracker,
+            round_tracker,
+            dag_state.clone(),
+            peers_pool,
+            received_blocks.clone(),
+            false,
+        );
+        (
+            handle,
+            core_dispatcher,
+            mock_client,
+            dag_state,
+            received_blocks,
+        )
+    }
+
+    #[tokio::test]
+    async fn live_fetch_skips_accepted_or_received_blocks() {
+        // GIVEN
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let (handle, core_dispatcher, mock_client, dag_state, received_blocks) =
+            start_synchronizer_for_live_fetch(context.clone());
+
+        let blocks = (1..=3)
+            .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round, 0).build()))
+            .collect::<Vec<_>>();
+        let missing_blocks = blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<BTreeSet<_>>();
+
+        // One block is accepted already and one is received and still being processed.
+        dag_state.write().accept_block(blocks[0].clone());
+        let _received = received_blocks.track(vec![blocks[1].reference()]);
+
+        // Only the block still missing is expected on the wire. The mock panics on any other
+        // request.
+        let peer = AuthorityIndex::new_for_test(1);
+        mock_client
+            .stub_fetch_blocks(vec![blocks[2].clone()], peer, None)
+            .await;
+
+        // WHEN the blocks are requested as ancestors of a block at round 4.
+        assert!(
+            handle
+                .fetch_blocks(missing_blocks, PeerId::Validator(peer), 4)
+                .await
+                .is_ok()
+        );
+        sleep(Duration::from_millis(1_000)).await;
+
+        // THEN only the missing block is fetched and added to Core. The request for the two
+        // available blocks (older than round 3, queued separately) is not sent at all.
+        let added_blocks = core_dispatcher.get_add_blocks().await;
+        assert_eq!(added_blocks, vec![blocks[2].clone()]);
+        let metrics = &context.metrics.node_metrics;
+        assert_eq!(
+            metrics
+                .synchronizer_live_fetch_skipped_blocks
+                .with_label_values(&["accepted"])
+                .get(),
+            1
+        );
+        assert_eq!(
+            metrics
+                .synchronizer_live_fetch_skipped_blocks
+                .with_label_values(&["received"])
+                .get(),
+            1
+        );
+        assert_eq!(metrics.synchronizer_live_fetch_skipped_requests.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn live_fetch_waits_only_for_the_round_below_the_received_block() {
+        // GIVEN a fetch delay long enough that a delayed request cannot complete in the test.
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context.with_parameters(Parameters {
+            live_sync_fetch_delay: Duration::from_secs(60),
+            ..Default::default()
+        }));
+        let (handle, core_dispatcher, mock_client, _dag_state, _received_blocks) =
+            start_synchronizer_for_live_fetch(context.clone());
+
+        let blocks = (1..=3)
+            .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round, 0).build()))
+            .collect::<Vec<_>>();
+        let missing_blocks = blocks
+            .iter()
+            .map(|block| block.reference())
+            .collect::<BTreeSet<_>>();
+
+        // Rounds 1 and 2 are older than the round below the received block: fetched at once.
+        // Round 3 is the round below: fetched after the delay.
+        let peer = AuthorityIndex::new_for_test(1);
+        mock_client
+            .stub_fetch_blocks(vec![blocks[0].clone(), blocks[1].clone()], peer, None)
+            .await;
+        mock_client
+            .stub_fetch_blocks(vec![blocks[2].clone()], peer, None)
+            .await;
+
+        // WHEN the blocks are requested as ancestors of a block at round 4.
+        assert!(
+            handle
+                .fetch_blocks(missing_blocks, PeerId::Validator(peer), 4)
+                .await
+                .is_ok()
+        );
+        sleep(Duration::from_millis(1_000)).await;
+
+        // THEN the older blocks are in Core and the round 3 block is still waiting.
+        let added_blocks = core_dispatcher.get_add_blocks().await;
+        assert_eq!(added_blocks, vec![blocks[0].clone(), blocks[1].clone()]);
+        assert_eq!(
+            context
+                .metrics
+                .node_metrics
+                .synchronizer_live_fetch_skipped_requests
+                .get(),
+            0
+        );
     }
 
     #[tokio::test]
@@ -1786,11 +2054,12 @@ mod tests {
             round_tracker,
             dag_state,
             peers_pool.clone(),
+            ReceivedBlocks::new(),
             false,
         );
 
         // Create some test blocks
-        let expected_blocks = (0..=2 * FETCH_BLOCKS_CONCURRENCY)
+        let expected_blocks = (1..=2 * FETCH_BLOCKS_CONCURRENCY as u32 + 1)
             .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round as Round, 0).build()))
             .collect::<Vec<_>>();
 
@@ -1815,7 +2084,11 @@ mod tests {
             // an error with "saturated" synchronizer
             if iter.peek().is_none() {
                 match handle
-                    .fetch_blocks(missing_blocks, PeerId::Validator(peer))
+                    .fetch_blocks(
+                        missing_blocks,
+                        PeerId::Validator(peer),
+                        block.reference().round + 1,
+                    )
                     .await
                 {
                     Err(ConsensusError::SynchronizerSaturated(peer_str)) => {
@@ -1826,7 +2099,11 @@ mod tests {
             } else {
                 assert!(
                     handle
-                        .fetch_blocks(missing_blocks, PeerId::Validator(peer))
+                        .fetch_blocks(
+                            missing_blocks,
+                            PeerId::Validator(peer),
+                            block.reference().round + 1
+                        )
                         .await
                         .is_ok()
                 );
@@ -1898,6 +2175,7 @@ mod tests {
             round_tracker,
             dag_state,
             peers_pool.clone(),
+            ReceivedBlocks::new(),
             false,
         );
 
@@ -2003,6 +2281,7 @@ mod tests {
             round_tracker,
             dag_state.clone(),
             peers_pool.clone(),
+            ReceivedBlocks::new(),
             false,
         );
 
@@ -2128,6 +2407,7 @@ mod tests {
             round_tracker,
             dag_state.clone(),
             peers_pool.clone(),
+            ReceivedBlocks::new(),
             false,
         );
 
@@ -2302,6 +2582,7 @@ mod tests {
             round_tracker,
             dag_state,
             peers_pool.clone(),
+            ReceivedBlocks::new(),
             true,
         );
 
@@ -2401,6 +2682,7 @@ mod tests {
             context.clone(),
             commands_sender,
             round_tracker,
+            ReceivedBlocks::new(),
             "test",
         )
         .await;

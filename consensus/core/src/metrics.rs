@@ -173,6 +173,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) synchronizer_fetched_blocks_by_authority: IntCounterVec,
     pub(crate) synchronizer_fetch_failures: IntCounterVec,
     pub(crate) synchronizer_skipped_fetch_requests: IntCounterVec,
+    pub(crate) synchronizer_live_fetch_skipped_blocks: IntCounterVec,
+    pub(crate) synchronizer_live_fetch_skipped_requests: IntCounter,
     pub(crate) synchronizer_process_fetched_failures: IntCounterVec,
     pub(crate) synchronizer_periodic_sync_decision: IntCounterVec,
     pub(crate) network_received_excluded_ancestors_from_authority: IntCounterVec,
@@ -545,6 +547,17 @@ impl NodeMetrics {
                 "synchronizer_skipped_fetch_requests",
                 "Number of fetch requests skipped against each peer, because the peer is saturated",
                 &["peer"],
+                registry,
+            ).unwrap(),
+            synchronizer_live_fetch_skipped_blocks: register_int_counter_vec_with_registry!(
+                "synchronizer_live_fetch_skipped_blocks",
+                "Number of blocks dropped from live fetch requests after the fetch delay, because they were accepted or received in the meantime",
+                &["reason"],
+                registry,
+            ).unwrap(),
+            synchronizer_live_fetch_skipped_requests: register_int_counter_with_registry!(
+                "synchronizer_live_fetch_skipped_requests",
+                "Number of live fetch requests not sent, because none of their blocks were still missing after the fetch delay",
                 registry,
             ).unwrap(),
             synchronizer_process_fetched_failures: register_int_counter_vec_with_registry!(

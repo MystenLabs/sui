@@ -40,6 +40,7 @@ use crate::{
     observer_service::ObserverService,
     observer_subscriber::ObserverSubscriber,
     peers_pool::PeersPool,
+    received_blocks::ReceivedBlocks,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::RoundTracker,
     storage::rocksdb_store::RocksDBStore,
@@ -403,6 +404,10 @@ where
         // Create the PeersPool
         let peers_pool = Arc::new(PeersPool::new(context.clone()));
 
+        // Shared between the authority service and the synchronizer, so live sync can see
+        // blocks that have been received but not yet processed by Core.
+        let received_blocks = ReceivedBlocks::new();
+
         let synchronizer = Synchronizer::start(
             synchronizer_client.clone(),
             context.clone(),
@@ -413,6 +418,7 @@ where
             round_tracker.clone(),
             dag_state.clone(),
             peers_pool.clone(),
+            received_blocks.clone(),
             sync_last_known_own_block,
         );
 
@@ -449,6 +455,7 @@ where
                 transaction_vote_tracker.clone(),
                 dag_state.clone(),
                 block_sync_service.clone(),
+                received_blocks.clone(),
             ));
 
             // Start the validator server if this is a validator node.

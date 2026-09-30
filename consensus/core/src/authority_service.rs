@@ -29,6 +29,7 @@ use crate::{
     network::{
         BlockStream, ExtendedSerializedBlock, PeerId, SerializedBlockForm, ValidatorNetworkService,
     },
+    received_blocks::ReceivedBlocks,
     round_tracker::RoundTracker,
     synchronizer::SynchronizerHandle,
     task::spawn_blocking,
@@ -48,6 +49,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     dag_state: Arc<RwLock<DagState>>,
     round_tracker: Arc<RwLock<RoundTracker>>,
     block_sync_service: Arc<BlockSyncService>,
+    received_blocks: Arc<ReceivedBlocks>,
 }
 
 impl<C: CoreThreadDispatcher> AuthorityService<C> {
@@ -62,6 +64,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         transaction_vote_tracker: TransactionVoteTracker,
         dag_state: Arc<RwLock<DagState>>,
         block_sync_service: Arc<BlockSyncService>,
+        received_blocks: Arc<ReceivedBlocks>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
         Self {
@@ -76,6 +79,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             dag_state,
             round_tracker,
             block_sync_service,
+            received_blocks,
         }
     }
 
@@ -181,6 +185,16 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             info!("Block with wrong authority from {}: {}", peer, e);
             return Err(e);
         }
+
+        // Keep the block visible to live sync until Core has processed it, so it is not fetched
+        // again as a missing ancestor while it is verified or queued for the core thread. The
+        // digest is computed a second time inside the verifier; hashing is cheap next to
+        // signature verification.
+        let _received = self.received_blocks.track(vec![BlockRef::new(
+            signed_block.round(),
+            signed_block.author(),
+            VerifiedBlock::compute_digest(&serialized_bytes),
+        )]);
 
         // Reject blocks failing parsing and validations.
         let block_verifier = self.block_verifier.clone();
@@ -305,7 +319,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
                 // When this fails, it usually means the queue is full.
                 // The fetch will retry from other peers via live and periodic syncs.
                 if let Err(err) = synchronizer
-                    .fetch_blocks(missing_ancestors, PeerId::Validator(peer))
+                    .fetch_blocks(missing_ancestors, PeerId::Validator(peer), block_ref.round)
                     .await
                 {
                     debug!("Failed to fetch missing ancestors via synchronizer: {err}");
@@ -330,7 +344,11 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             let synchronizer = self.synchronizer.clone();
             spawn_monitored_task!(async move {
                 if let Err(err) = synchronizer
-                    .fetch_blocks(missing_excluded_ancestors, PeerId::Validator(peer))
+                    .fetch_blocks(
+                        missing_excluded_ancestors,
+                        PeerId::Validator(peer),
+                        block_ref.round,
+                    )
                     .await
                 {
                     debug!("Failed to fetch excluded ancestors via synchronizer: {err}");
@@ -709,6 +727,7 @@ mod tests {
         time::Duration,
     };
 
+    use crate::received_blocks::ReceivedBlocks;
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
@@ -928,6 +947,7 @@ mod tests {
             round_tracker.clone(),
             dag_state.clone(),
             peers_pool.clone(),
+            ReceivedBlocks::new(),
             false,
         );
         let block_sync_service = Arc::new(BlockSyncService::new(
@@ -946,6 +966,7 @@ mod tests {
             transaction_vote_tracker,
             dag_state,
             block_sync_service,
+            ReceivedBlocks::new(),
         ));
 
         // Test delaying blocks with time drift.
@@ -1068,6 +1089,7 @@ mod tests {
             round_tracker.clone(),
             dag_state.clone(),
             peers_pool.clone(),
+            ReceivedBlocks::new(),
             false,
         );
         let block_sync_service = Arc::new(BlockSyncService::new(
@@ -1086,6 +1108,7 @@ mod tests {
             transaction_vote_tracker,
             dag_state.clone(),
             block_sync_service,
+            ReceivedBlocks::new(),
         ));
 
         // GIVEN: 40 rounds of blocks in the dag state.
@@ -1284,6 +1307,7 @@ mod tests {
             round_tracker.clone(),
             dag_state.clone(),
             peers_pool.clone(),
+            ReceivedBlocks::new(),
             true,
         );
         let block_sync_service = Arc::new(BlockSyncService::new(
@@ -1302,6 +1326,7 @@ mod tests {
             transaction_vote_tracker,
             dag_state.clone(),
             block_sync_service,
+            ReceivedBlocks::new(),
         ));
 
         // Create some blocks for a few authorities. Create some equivocations as well and store in dag state.
@@ -1363,6 +1388,7 @@ mod tests {
             round_tracker.clone(),
             dag_state.clone(),
             peers_pool.clone(),
+            ReceivedBlocks::new(),
             false,
         );
         let block_sync_service = Arc::new(BlockSyncService::new(
@@ -1393,6 +1419,7 @@ mod tests {
             transaction_vote_tracker,
             dag_state.clone(),
             block_sync_service,
+            ReceivedBlocks::new(),
         ));
 
         let peer = context.committee.to_authority_index(1).unwrap();
@@ -1462,6 +1489,7 @@ mod tests {
             round_tracker.clone(),
             dag_state.clone(),
             peers_pool.clone(),
+            ReceivedBlocks::new(),
             false,
         );
         let block_sync_service = Arc::new(BlockSyncService::new(
@@ -1483,6 +1511,7 @@ mod tests {
             transaction_vote_tracker,
             dag_state.clone(),
             block_sync_service,
+            ReceivedBlocks::new(),
         ));
 
         let peer = context.committee.to_authority_index(1).unwrap();

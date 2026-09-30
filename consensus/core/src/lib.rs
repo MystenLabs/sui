@@ -34,6 +34,7 @@ mod observer_service;
 mod observer_subscriber;
 mod peers_pool;
 mod proposer;
+mod received_blocks;
 mod round_prober;
 mod round_tracker;
 mod stake_aggregator;

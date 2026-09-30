@@ -51,6 +51,13 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_max_blocks_per_fetch")]
     pub max_blocks_per_fetch: usize,
 
+    /// Time to wait before sending a live sync request for the missing ancestors of a received
+    /// block. The missing blocks are usually already in flight on their authors' streams, or
+    /// received and still being verified or queued for Core. After the wait only the blocks
+    /// still missing are requested. Zero disables the wait.
+    #[serde(default = "Parameters::default_live_sync_fetch_delay")]
+    pub live_sync_fetch_delay: Duration,
+
     /// Time to wait during node start up until the node has synced the last proposed block via the
     /// network peers. When set to `0` the sync mechanism is disabled. This property is meant to be
     /// used for amnesia recovery.
@@ -200,6 +207,10 @@ impl Parameters {
         8
     }
 
+    pub(crate) fn default_live_sync_fetch_delay() -> Duration {
+        Duration::from_millis(10)
+    }
+
     pub(crate) fn default_commit_sync_batch_size() -> u32 {
         if cfg!(msim) {
             // Exercise commit sync.
@@ -233,6 +244,7 @@ impl Default for Parameters {
             max_forward_time_drift: Parameters::default_max_forward_time_drift(),
             max_blocks_per_sync: Parameters::default_max_blocks_per_sync(),
             max_blocks_per_fetch: Parameters::default_max_blocks_per_fetch(),
+            live_sync_fetch_delay: Parameters::default_live_sync_fetch_delay(),
             sync_last_known_own_block_timeout:
                 Parameters::default_sync_last_known_own_block_timeout(),
             round_prober_interval_ms: Parameters::default_round_prober_interval_ms(),
