@@ -41,7 +41,7 @@ use sui_types::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
-use tracing::{debug, error, instrument};
+use tracing::{debug, instrument};
 
 use super::{PendingCertificate, overload_tracker::OverloadTracker};
 
@@ -441,7 +441,10 @@ impl ExecutionScheduler {
                         }
                     },
                     Err(e) => {
-                        error!("Withdraw scheduler stopped: {:?}", e);
+                        // A sender drops unsent only if its withdraw is still pending when
+                        // reconfigure replaces the scheduler, but every settlement in an
+                        // epoch executes before the change epoch transaction.
+                        debug_fatal!("Withdraw scheduler stopped: {:?}", e);
                     }
                 }
             }
