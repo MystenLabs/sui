@@ -143,13 +143,17 @@ impl TransactionVoteTracker {
     }
 
     /// Retrieves own votes on peer block transactions.
+    /// Every input block must be above the vote tracker GC round.
     pub(crate) fn get_own_votes(&self, block_refs: Vec<BlockRef>) -> Vec<BlockTransactionVotes> {
         let mut votes = vec![];
         let vote_tracker_state = self.vote_tracker_state.read();
         for block_ref in block_refs {
-            if block_ref.round <= vote_tracker_state.gc_round {
-                continue;
-            }
+            assert!(
+                block_ref.round > vote_tracker_state.gc_round,
+                "Transaction vote target {} is at or below vote tracker GC round {}",
+                block_ref,
+                vote_tracker_state.gc_round,
+            );
             let vote_info = vote_tracker_state.votes.get(&block_ref).unwrap_or_else(|| {
                 panic!(
                     "Ancestor block {} not found in vote tracker state",
@@ -183,6 +187,22 @@ impl TransactionVoteTracker {
             .map(|(idx, stake_agg)| (*idx, stake_agg.stake()))
             .collect::<Vec<_>>();
         Some(accumulated_reject_votes)
+    }
+
+    /// Snapshots reject voters so callers can combine them with other votes without counting an
+    /// authority twice. Returns None if no information is found for the block.
+    pub(crate) fn get_reject_vote_aggregators(
+        &self,
+        block_ref: &BlockRef,
+    ) -> Option<BTreeMap<TransactionIndex, StakeAggregator<QuorumThreshold>>> {
+        Some(
+            self.vote_tracker_state
+                .read()
+                .votes
+                .get(block_ref)?
+                .reject_txn_votes
+                .clone(),
+        )
     }
 
     /// Runs garbage collection on the internal state by removing data for blocks <= gc_round,
@@ -318,16 +338,82 @@ struct VoteInfo {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
+    use std::{collections::BTreeSet, sync::Arc};
 
     use consensus_config::{AuthorityIndex, Parameters};
 
     use crate::{
-        TestBlock, Transaction, VerifiedBlock, block::BlockTransactionVotes, context::Context,
-        metrics::test_metrics,
+        TestBlock, Transaction, VerifiedBlock, block::BlockTransactionVotes,
+        block_verifier::NoopBlockVerifier, context::Context, metrics::test_metrics,
+        storage::mem_store::MemStore,
     };
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_reject_vote_aggregators_preserve_voters_in_independent_snapshot() {
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let tracker =
+            TransactionVoteTracker::new(context.clone(), Arc::new(NoopBlockVerifier), dag_state);
+        let target = VerifiedBlock::new_for_test(
+            TestBlock::new(1, 0)
+                .set_transactions(vec![Transaction::new(vec![1]); 2])
+                .build(),
+        );
+        let target_ref = target.reference();
+        assert!(tracker.get_reject_vote_aggregators(&target_ref).is_none());
+        tracker.add_voted_blocks(vec![(target, vec![])]);
+        assert!(
+            tracker
+                .get_reject_vote_aggregators(&target_ref)
+                .unwrap()
+                .is_empty()
+        );
+
+        let rejection = |round, author, rejects| {
+            VerifiedBlock::new_for_test(
+                TestBlock::new(round, author)
+                    .set_transaction_votes(vec![BlockTransactionVotes {
+                        block_ref: target_ref,
+                        rejects,
+                    }])
+                    .build(),
+            )
+        };
+        let first_voter = AuthorityIndex::new_for_test(1);
+        let second_voter = AuthorityIndex::new_for_test(2);
+        tracker.add_voted_blocks(vec![(rejection(2, 1, vec![0]), vec![])]);
+        let mut snapshot = tracker.get_reject_vote_aggregators(&target_ref).unwrap();
+
+        tracker.add_voted_blocks(vec![
+            (rejection(3, 1, vec![0]), vec![]),
+            (rejection(2, 2, vec![0, 1]), vec![]),
+        ]);
+        assert_eq!(snapshot.len(), 1);
+        let snapshot_votes = snapshot.get_mut(&0).unwrap();
+        assert_eq!(snapshot_votes.authorities(), &BTreeSet::from([first_voter]));
+        assert_eq!(snapshot_votes.stake(), 1);
+        assert!(!snapshot_votes.add_unique(first_voter, &context.committee));
+        assert!(snapshot_votes.add_unique(AuthorityIndex::new_for_test(3), &context.committee));
+
+        let current = tracker.get_reject_vote_aggregators(&target_ref).unwrap();
+        assert_eq!(current.len(), 2);
+        assert_eq!(
+            current[&0].authorities(),
+            &BTreeSet::from([first_voter, second_voter])
+        );
+        assert_eq!(current[&0].stake(), 2);
+        assert_eq!(current[&1].authorities(), &BTreeSet::from([second_voter]));
+        assert_eq!(
+            tracker.get_reject_votes(&target_ref),
+            Some(vec![(0, 2), (1, 1)])
+        );
+    }
 
     // 4 authorities with stakes [1, 2, 3, 4], total 10.
     #[tokio::test]

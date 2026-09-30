@@ -9,7 +9,7 @@ use std::{
 
 use consensus_config::ProtocolKeyPair;
 #[cfg(test)]
-use consensus_config::{AuthorityIndex, Stake, local_committee_and_keys};
+use consensus_config::{AuthorityIndex, Committee, Stake, local_committee_and_keys};
 use consensus_types::block::{BlockRef, Round};
 use itertools::Itertools as _;
 #[cfg(test)]
@@ -347,6 +347,7 @@ impl Core {
         &mut self,
         blocks: Vec<VerifiedBlock>,
     ) -> (Vec<VerifiedBlock>, BTreeSet<BlockRef>) {
+        let has_new_blocks = !blocks.is_empty();
         let (accepted_blocks, missing_block_refs) = self.block_manager.try_accept_blocks(blocks);
         for block in &accepted_blocks {
             tracing::trace!(
@@ -357,6 +358,10 @@ impl Core {
                 block.timestamp_ms()
             );
             self.signals.new_accepted_block(block.clone());
+        }
+        if has_new_blocks {
+            // Reject votes are available even when missing ancestors suspend all incoming blocks.
+            self.commit_observer.notify_new_blocks();
         }
         (accepted_blocks, missing_block_refs)
     }
@@ -599,6 +604,7 @@ impl Core {
             self.signals.new_block(extended_block.clone())?;
             self.signals
                 .new_accepted_block(extended_block.block.clone());
+            self.commit_observer.notify_new_blocks();
 
             fail_point!("consensus-after-propose");
 
@@ -1289,6 +1295,19 @@ impl CoreTestFixture {
         store: Arc<MemStore>,
     ) -> Self {
         let (committee, mut signers) = local_committee_and_keys(0, authorities.clone());
+        // Production uses v3 committee thresholds when v3 is enabled. A crash-only
+        // fault budget gives these tests the v2 quorum threshold and no equivocation
+        // tolerance.
+        let committee = if context.protocol_config.enable_v3() {
+            Committee::new_v3(
+                committee.epoch(),
+                committee.authorities_slice().to_vec(),
+                /* malicious_stake */ 0,
+                /* crash_stake */ 1,
+            )
+        } else {
+            committee
+        };
         let mut context = context.clone();
         context = context
             .with_committee(committee)
@@ -1780,11 +1799,13 @@ mod test {
         assert_eq!(proposed.transaction_votes_cutoff_round(), gc_round);
     }
 
-    // Adds 3 rounds of peer blocks. The local authority rejects transaction 0 in each block.
-    // Then proposes a block.
+    // Adds peer blocks through `last_round`. One peer can equivocate in round 1. The local
+    // authority rejects transaction 0 in each block. Then it proposes a block.
     // Returns the fixture, the proposed block and the peer blocks.
     async fn propose_after_peer_blocks_with_reject_votes(
         context: Context,
+        last_round: Round,
+        round_one_equivocations: usize,
     ) -> (CoreTestFixture, VerifiedBlock, Vec<VerifiedBlock>) {
         let mut fixture = CoreTestFixture::new(
             context,
@@ -1794,11 +1815,30 @@ mod test {
         )
         .await;
         let mut builder = DagBuilder::new(fixture.core.context.clone());
-        builder
-            .layers(1..=3)
-            .authorities(vec![fixture.core.context.own_index])
-            .skip_block()
-            .build();
+        if round_one_equivocations == 0 {
+            builder
+                .layers(1..=last_round)
+                .authorities(vec![fixture.core.context.own_index])
+                .skip_block()
+                .build();
+        } else {
+            builder
+                .layer(1)
+                .authorities(vec![AuthorityIndex::new_for_test(1)])
+                .equivocate(round_one_equivocations)
+                .build();
+            builder
+                .blocks
+                .retain(|block_ref, _| block_ref.author != fixture.core.context.own_index);
+            builder
+                .last_ancestors
+                .retain(|block_ref| block_ref.author != fixture.core.context.own_index);
+            builder
+                .layers(2..=last_round)
+                .authorities(vec![fixture.core.context.own_index])
+                .skip_block()
+                .build();
+        }
         let blocks = builder.blocks.values().cloned().collect::<Vec<_>>();
         fixture
             .transaction_vote_tracker
@@ -1818,7 +1858,7 @@ mod test {
         let vote_target_limit = max_transaction_vote_targets(&context);
 
         let (_fixture, proposed, blocks) =
-            propose_after_peer_blocks_with_reject_votes(context).await;
+            propose_after_peer_blocks_with_reject_votes(context, 3, 0).await;
 
         // V2 blocks have no signed cutoff round, so the V3 limit must not remove their targets.
         assert!(blocks.len() > vote_target_limit);
@@ -1830,11 +1870,11 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let (mut context, _) = Context::new_for_test(4);
         context.protocol_config.set_enable_v3_for_testing(true);
-        context.protocol_config.set_gc_depth_for_testing(1);
+        context.protocol_config.set_gc_depth_for_testing(3);
         let vote_target_limit = max_transaction_vote_targets(&context);
 
         let (fixture, proposed, blocks) =
-            propose_after_peer_blocks_with_reject_votes(context).await;
+            propose_after_peer_blocks_with_reject_votes(context, 2, 8).await;
 
         assert!(blocks.len() > vote_target_limit);
         assert!(!proposed.transaction_votes().is_empty());
@@ -3412,6 +3452,122 @@ mod test {
         for i in 6..=10 {
             let commit = &commits[i - 6];
             assert_eq!(commit.reference().index, i as u32);
+        }
+    }
+
+    #[tokio::test]
+    async fn new_blocks_notify_v3_finalizer_without_new_commit() {
+        for suspend_last_voter in [false, true] {
+            let (mut context, _) = Context::new_for_test(4);
+            context.protocol_config.set_enable_v3_for_testing(true);
+            let mut fixture =
+                CoreTestFixture::new(context, vec![1; 4], AuthorityIndex::new_for_test(0), true)
+                    .await;
+            fixture.core.proposer = None;
+            assert_eq!(fixture.core.context.committee.quorum_threshold(), 3);
+            assert_eq!(fixture.core.context.committee.certification_threshold(), 2);
+
+            let genesis_refs: Vec<_> = genesis_blocks(&fixture.core.context)
+                .iter()
+                .map(|block| block.reference())
+                .collect();
+            let transaction_count = if suspend_last_voter { 1 } else { 2 };
+            let blocks: Vec<_> = (0..4)
+                .map(|author| {
+                    let transactions = if author == 0 {
+                        vec![crate::Transaction::new(vec![1]); transaction_count]
+                    } else {
+                        vec![]
+                    };
+                    VerifiedBlock::new_for_test(
+                        TestBlock::new(1, author)
+                            .set_ancestors(genesis_refs.clone())
+                            .set_transactions(transactions)
+                            .build_v3(0),
+                    )
+                })
+                .collect();
+            fixture.add_blocks(blocks[..3].to_vec()).unwrap();
+            let target = &blocks[0];
+            let rejected_index = (transaction_count - 1) as u16;
+            let voters: Vec<_> = (0..3)
+                .map(|author| {
+                    let ancestors = if suspend_last_voter && author == 2 {
+                        &blocks[..]
+                    } else {
+                        &blocks[..3]
+                    };
+                    let mut ancestors: Vec<_> =
+                        ancestors.iter().map(|block| block.reference()).collect();
+                    ancestors.sort_by_key(|block_ref| block_ref.author.value() != author as usize);
+                    VerifiedBlock::new_for_test(
+                        TestBlock::new(2, author)
+                            .set_ancestors(ancestors)
+                            .set_transaction_votes(vec![crate::block::BlockTransactionVotes {
+                                block_ref: target.reference(),
+                                rejects: vec![rejected_index],
+                            }])
+                            .build_v3(0),
+                    )
+                })
+                .collect();
+            fixture.add_blocks(voters[..2].to_vec()).unwrap();
+
+            let commit = TrustedCommit::new_for_test(
+                1,
+                fixture.dag_state.read().last_commit_digest(),
+                0,
+                target.reference(),
+                vec![target.reference()],
+            );
+            fixture
+                .core
+                .add_certified_commits(CertifiedCommits::new(
+                    vec![CertifiedCommit::new_certified(
+                        commit.clone(),
+                        vec![target.clone()],
+                    )],
+                    vec![],
+                ))
+                .unwrap();
+            tokio::time::timeout(Duration::from_secs(1), async {
+                while fixture
+                    .core
+                    .context
+                    .metrics
+                    .node_metrics
+                    .finalizer_buffered_commits
+                    .get()
+                    != 1
+                {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .expect("The synced commit must wait for another vote");
+
+            let missing = fixture.add_blocks(voters[2..].to_vec()).unwrap();
+            assert_eq!(!missing.is_empty(), suspend_last_voter);
+            assert_eq!(fixture.dag_state.read().last_commit_index(), 1);
+            let finalized = tokio::time::timeout(
+                Duration::from_secs(1),
+                fixture._commit_output_receiver.recv(),
+            )
+            .await
+            .expect("Core must notify the finalizer even without a new commit")
+            .unwrap();
+            assert_eq!(finalized.commit_ref, commit.reference());
+            assert_eq!(
+                finalized
+                    .rejected_transactions_by_block
+                    .get(&target.reference()),
+                Some(&vec![rejected_index])
+            );
+            assert_eq!(
+                fixture.store.read_last_finalized_commit().unwrap(),
+                Some(commit.reference())
+            );
+            fixture.core.stop().await;
         }
     }
 

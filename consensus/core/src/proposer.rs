@@ -560,8 +560,8 @@ impl Proposer for ValidatorProposer {
                 let (new_causal_history, mut cutoff_round) = {
                     let mut dag_state = self.dag_state.write();
                     // Core cannot advance the DAG commit state during a proposal, so the GC round
-                    // stays the same below. Tracker GC never exceeds DAG GC, so this cutoff
-                    // covers each target which get_own_votes() omits because of GC.
+                    // stays the same below. Tracker GC never exceeds DAG GC, so every target
+                    // returned below is also above the tracker GC round.
                     let cutoff_round = dag_state.gc_round();
                     let new_causal_history: Vec<BlockRef> = ancestors
                         .iter()
@@ -848,11 +848,9 @@ impl ProposalLeaderWaiter {
 ///
 /// Only V3 proposals can use this function, because V2 blocks have no signed cutoff round.
 ///
-/// REQUIRED: consumers of V3 blocks must use the signed cutoff round to find which targets a
-/// block votes on. This function can move the cutoff above the GC round, but `CommitFinalizer`
-/// still infers the vote coverage of a block from commit GC rounds. So it can count an implicit
-/// accept vote for a removed target which is above the GC round and at or below the cutoff.
-/// TODO: use the signed cutoff round in `CommitFinalizer` before v3 is enabled.
+/// The V3 finalizer treats a first vote whose signed cutoff covers its target as rejecting every
+/// transaction in that target. Advancing the cutoff therefore preserves rejection when explicit
+/// votes are removed. Later blocks on the same authority chain cannot change that first vote.
 fn truncate_transaction_votes(
     transaction_votes: &mut Vec<BlockTransactionVotes>,
     limit: usize,
