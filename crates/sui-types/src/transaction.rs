@@ -1699,6 +1699,13 @@ impl ProgrammableTransaction {
                 value: config.max_input_objects().to_string()
             }
         );
+        fp_ensure!(
+            inputs.len() <= u16::MAX as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum inputs in a programmable transaction".to_string(),
+                value: u16::MAX.to_string()
+            }
+        );
         for input in inputs {
             input.validity_check(config)?
         }
