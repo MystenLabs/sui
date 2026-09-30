@@ -128,6 +128,14 @@ pub(crate) fn create_random_dag(
     let max_equivocators = equivocation_config
         .max_equivocators
         .min(max_safe_equivocators);
+    let mut byzantine_authorities = dag_builder
+        .context
+        .committee
+        .authorities()
+        .map(|(authority, _)| authority)
+        .collect::<Vec<_>>();
+    byzantine_authorities.shuffle(&mut rng);
+    byzantine_authorities.truncate(max_equivocators);
 
     for r in 1..=num_rounds {
         let random_num = rng.gen_range(0..100);
@@ -139,12 +147,7 @@ pub(crate) fn create_random_dag(
             && rng.gen_range(0..100) < equivocation_config.equivocation_rate;
         if should_equivocate {
             let num_equivocators = rng.gen_range(1..=max_equivocators);
-            let mut authorities = dag_builder
-                .context
-                .committee
-                .authorities()
-                .map(|(authority, _)| authority)
-                .collect::<Vec<_>>();
+            let mut authorities = byzantine_authorities.clone();
             authorities.shuffle(&mut rng);
 
             dag_builder

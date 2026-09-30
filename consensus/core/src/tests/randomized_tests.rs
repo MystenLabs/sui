@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, env};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    env,
+};
 
 use rand::{Rng as _, SeedableRng as _, rngs::StdRng};
 
@@ -146,6 +149,8 @@ async fn test_random_dag_with_equivocations() {
             equivocation_config,
         );
         let max_safe_equivocators = (num_authorities - 1) / 3;
+        let mut saw_max_equivocators = false;
+        let mut all_equivocators = BTreeSet::new();
         for round in 1..=num_rounds {
             let blocks_per_author = dag_builder
                 .blocks
@@ -159,11 +164,26 @@ async fn test_random_dag_with_equivocations() {
                 .values()
                 .filter(|&&blocks| blocks > 1)
                 .count();
+            all_equivocators.extend(
+                blocks_per_author
+                    .iter()
+                    .filter_map(|(&author, &blocks)| (blocks > 1).then_some(author)),
+            );
             assert!(
                 (1..=max_safe_equivocators).contains(&equivocators),
                 "round {round} has {equivocators} equivocating authorities"
             );
+            saw_max_equivocators |= equivocators == max_safe_equivocators;
         }
+        assert!(
+            saw_max_equivocators,
+            "seed {seed} did not generate a round with {max_safe_equivocators} equivocators"
+        );
+        assert!(
+            all_equivocators.len() <= max_safe_equivocators,
+            "seed {seed} has {} distinct equivocating authorities",
+            all_equivocators.len()
+        );
         let all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
         let dag = RandomDag::from_blocks(context.clone(), all_blocks);
         let mut delivery_rng = StdRng::seed_from_u64(seed);
@@ -186,9 +206,14 @@ async fn test_random_dag_with_equivocations() {
         }
 
         let commits = assert_commit_sequences_match(commit_sequences);
+        let last_commit_round = commits
+            .last()
+            .expect("honest quorum did not make progress")
+            .leader
+            .round;
         assert!(
-            !commits.is_empty(),
-            "honest quorum did not make progress for seed {seed}"
+            last_commit_round >= num_rounds * 3 / 4,
+            "honest quorum stopped making progress at round {last_commit_round} for seed {seed}"
         );
     }
 }

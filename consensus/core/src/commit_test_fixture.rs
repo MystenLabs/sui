@@ -593,6 +593,9 @@ fn build_block_for_instance(
 struct RoundState {
     // Total stake of visited blocks in this round.
     visited_stake: Stake,
+    // Authors with a block visited in this round. Equivocations only count once
+    // toward the quorum stake that controls the delivery window.
+    visited_authors: BTreeSet<AuthorityIndex>,
     // Indices of unvisited blocks in this round.
     unvisited: Vec<usize>,
 }
@@ -696,8 +699,10 @@ impl Iterator for RandomDagIterator<'_> {
         let block = self.dag.blocks[block_idx].clone();
 
         // Update visited stake for this round.
-        let stake = self.dag.context.committee.stake(block.author());
-        self.round_states[selected_round].visited_stake += stake;
+        let round_state = &mut self.round_states[selected_round];
+        if round_state.visited_authors.insert(block.author()) {
+            round_state.visited_stake += self.dag.context.committee.stake(block.author());
+        }
         self.num_remaining -= 1;
 
         // Advance completed_round while next round has all blocks visited.
