@@ -48,8 +48,8 @@ use std::process::Command;
 
 use fs_extra::dir::CopyOptions;
 use insta_cmd::get_cargo_bin;
-use move_package_alt::read_publication;
-use move_package_alt::schema::Environment;
+use move_package::read_publication;
+use move_package::schema::Environment;
 use sui_config::SUI_CLIENT_CONFIG;
 use sui_package_alt::SuiFlavor;
 use sui_sdk::wallet_context::WalletContext;

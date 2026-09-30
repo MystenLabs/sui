@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use clap::*;
 use colored::Colorize;
-use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
+use move_package_compilation::build_config::BuildConfig as MoveBuildConfig;
 use sui_config::{SUI_CLIENT_CONFIG, sui_config_dir};
 use sui_move::execute_move_command;
 use sui_sdk::wallet_context::WalletContext;

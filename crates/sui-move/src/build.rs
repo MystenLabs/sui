@@ -3,7 +3,7 @@
 
 use clap::Parser;
 use move_cli::base::{self};
-use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
+use move_package_compilation::build_config::BuildConfig as MoveBuildConfig;
 use std::{fs, path::Path};
 use sui_move_build::BuildConfig;
 use sui_package_alt::{SuiFlavor, find_environment};
