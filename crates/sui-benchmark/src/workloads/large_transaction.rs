@@ -15,12 +15,17 @@ use crate::workloads::payload::Payload;
 use crate::workloads::{Gas, GasCoinConfig, workload::ExpectedFailureType};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
+use nonempty::NonEmpty;
 use rand::{Rng, SeedableRng, rngs::SmallRng};
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair;
+use sui_types::digests::ChainIdentifier;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{Command, Transaction, TransactionData};
+use sui_types::transaction::{
+    AllowedProposers, Command, Transaction, TransactionData, TransactionDataAPI as _,
+    TransactionExpiration,
+};
 use sui_types::type_input::TypeInput;
 use sui_types::utils::to_sender_signed_transaction;
 
@@ -31,6 +36,27 @@ const ENVELOPE_HEADROOM_BYTES: u64 = 8 * 1024;
 /// Gas units budgeted per transaction, with generous headroom over the expected cost.
 const GAS_UNITS_PER_TX: u64 = 1_000_000;
 
+fn random_allowed_proposer_expiration(
+    rng: &mut impl Rng,
+    epoch: u64,
+    chain: ChainIdentifier,
+    committee_size: u32,
+) -> TransactionExpiration {
+    let proposer = rng.gen_range(0..committee_size);
+    TransactionExpiration::Validity {
+        min_epoch: Some(epoch),
+        max_epoch: Some(epoch),
+        min_timestamp: None,
+        max_timestamp: None,
+        chain,
+        nonce: rng.r#gen(),
+        allowed_proposers: Some(AllowedProposers {
+            epoch,
+            proposers: NonEmpty::singleton(proposer),
+        }),
+    }
+}
+
 #[derive(Debug)]
 pub struct LargeTransactionTestPayload {
     /// Total payload bytes to attach to each transaction.
@@ -38,6 +64,8 @@ pub struct LargeTransactionTestPayload {
     sender: SuiAddress,
     state: InMemoryWallet,
     system_state_observer: Arc<SystemStateObserver>,
+    chain_identifier: ChainIdentifier,
+    committee_size: u32,
     rng: SmallRng,
 }
 
@@ -67,13 +95,14 @@ impl Payload for LargeTransactionTestPayload {
 
 impl LargeTransactionTestPayload {
     fn create_transaction(&mut self) -> Transaction {
-        let (gas_price, max_pure_arg_size, max_tx_size) = {
+        let (epoch, gas_price, max_pure_arg_size, max_tx_size) = {
             let state = self.system_state_observer.state.borrow();
             let cfg = state
                 .protocol_config
                 .as_ref()
                 .expect("Protocol config not in system state");
             (
+                state.epoch,
                 state.reference_gas_price,
                 cfg.max_pure_argument_size() as u64,
                 cfg.max_tx_size_bytes(),
@@ -100,12 +129,18 @@ impl LargeTransactionTestPayload {
             remaining -= n;
         }
 
-        let data = TransactionData::new_programmable(
+        let mut data = TransactionData::new_programmable(
             self.sender,
             vec![account.gas],
             builder.finish(),
             gas_price * GAS_UNITS_PER_TX,
             gas_price,
+        );
+        *data.expiration_mut() = random_allowed_proposer_expiration(
+            &mut self.rng,
+            epoch,
+            self.chain_identifier,
+            self.committee_size,
         );
         let tx = to_sender_signed_transaction(data, account.key());
         // Assert the full payload made it into the transaction.
@@ -114,6 +149,39 @@ impl LargeTransactionTestPayload {
             "payload did not reach the transaction: requested {total} bytes",
         );
         tx
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_types::digests::CheckpointDigest;
+
+    #[test]
+    fn allowed_proposer_is_in_the_current_committee() {
+        let mut rng = SmallRng::seed_from_u64(7);
+        let epoch = 42;
+        let committee_size = 125;
+        let chain = ChainIdentifier::from(CheckpointDigest::default());
+
+        for _ in 0..1_000 {
+            let expiration =
+                random_allowed_proposer_expiration(&mut rng, epoch, chain, committee_size);
+            let TransactionExpiration::Validity {
+                min_epoch,
+                max_epoch,
+                allowed_proposers: Some(allowed),
+                ..
+            } = expiration
+            else {
+                panic!("expected a validity expiration with an allowed proposer");
+            };
+            assert_eq!(min_epoch, Some(epoch));
+            assert_eq!(max_epoch, Some(epoch));
+            assert_eq!(allowed.epoch, epoch);
+            assert_eq!(allowed.proposers.len(), 1);
+            assert!(allowed.proposers.head < committee_size);
+        }
     }
 }
 
@@ -210,20 +278,27 @@ impl Workload<dyn Payload> for LargeTransactionWorkload {
 
     async fn make_test_payloads(
         &self,
-        _execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
         _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
+        let chain_identifier = execution_proxy.get_chain_identifier();
+        let committee_size = execution_proxy.clone_committee().num_members() as u32;
+        assert!(
+            committee_size > 0,
+            "large transaction workload requires a committee"
+        );
         self.payload_gas
             .iter()
-            .enumerate()
-            .map(|(i, gas)| {
+            .map(|gas| {
                 Box::<dyn Payload>::from(Box::new(LargeTransactionTestPayload {
                     payload_bytes: self.payload_bytes,
                     sender: gas.1,
                     state: InMemoryWallet::new(gas),
                     system_state_observer: system_state_observer.clone(),
-                    rng: SmallRng::seed_from_u64(i as u64),
+                    chain_identifier,
+                    committee_size,
+                    rng: SmallRng::from_entropy(),
                 }))
             })
             .collect()

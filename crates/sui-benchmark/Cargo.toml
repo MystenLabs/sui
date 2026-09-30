@@ -23,6 +23,7 @@ tracing.workspace = true
 clap.workspace = true
 prometheus.workspace = true
 rand.workspace = true
+nonempty.workspace = true
 indicatif.workspace = true
 duration-str.workspace = true
 hdrhistogram.workspace = true
