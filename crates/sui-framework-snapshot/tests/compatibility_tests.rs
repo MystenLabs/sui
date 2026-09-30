@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod compatibility_tests {
-    use move_package_alt::PackageLoader;
+    use move_package::PackageLoader;
     use std::collections::BTreeMap;
     use std::path::Path;
     use sui_framework::{BuiltInFramework, compare_system_package};

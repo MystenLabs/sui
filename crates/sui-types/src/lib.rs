@@ -155,15 +155,18 @@ pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION
 /// them as shared inputs. Their read version is recorded in effects (as a read-only consensus
 /// object) and reproduced when executing from effects (checkpoint execution during state sync, and
 /// crash recovery) so the read resolves to the same version on every node. Execution paths that are
-/// not sequenced by consensus (dev-inspect / dry-run) pin these objects at their latest committed
-/// versions instead.
+/// not sequenced by consensus (dev-inspect / dry-run) pin these objects at their declared input
+/// versions, or else their latest committed versions, instead.
 ///
 /// Membership here only says the object *may* be read implicitly, so its read version must be
 /// reproducible. A transaction can still declare such an object as an explicit shared input (e.g.
 /// a settlement transaction mutating the accumulator root, or a user transaction that passes it
 /// in); declared inputs are version-assigned through the normal shared-input path, independent of
 /// this set. Extend this as more implicitly-read system objects arise.
-pub const IMPLICITLY_READ_SYSTEM_OBJECTS: &[ObjectID] = &[SUI_ACCUMULATOR_ROOT_OBJECT_ID];
+pub const IMPLICITLY_READ_SYSTEM_OBJECTS: &[ObjectID] = &[
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+];
 
 pub fn sui_framework_address_concat_string(suffix: &str) -> String {
     format!("{}{suffix}", SUI_FRAMEWORK_ADDRESS.to_hex_literal())

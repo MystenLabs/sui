@@ -4,8 +4,8 @@
 use crate::base::reroot_path;
 use clap::*;
 use move_compiler::linters::LintLevel;
-use move_package_alt::MoveFlavor;
-use move_package_alt_compilation::{build_config::BuildConfig, find_env};
+use move_package::MoveFlavor;
+use move_package_compilation::{build_config::BuildConfig, find_env};
 use std::path::Path;
 
 /// Run Move linters on the package at `path`. If no path is provided defaults to current directory.

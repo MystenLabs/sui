@@ -49,7 +49,7 @@ answer: >-
 
 The SuiPlay0X1 is one part of a larger ecosystem of Sui gaming. Users might play your game for the first time on the device, and later decide to continue playing your game on PC. Or, they might have already played your game before on PC with their own mnemonic wallet and want to continue playing on the device.
 
-As a result, it’s important to consider the different possible migration flows for your game both for new users and existing ones.
+As a result, it's important to consider the different possible migration flows for your game both for new users and existing ones.
 
 ## On-device ⇒ off-device
 
@@ -73,6 +73,49 @@ The Playtron wallet is portable and can connect to any app using the Sui dApp Ki
 - No manual transfer required.
 - Users can connect their Playtron wallet to marketplaces, DeFi protocols, and other apps that support Playtron wallet.
 
+### How do I connect a Playtron wallet in my off-device app?
+
+Use Sui dApp Kit to add wallet connection support to the off-device (PC or web) version of your game. The Playtron wallet is an [Enoki Connect](https://docs.enoki.mystenlabs.com/enoki-connect) wallet rather than a browser extension, so `ConnectButton` does not find it on its own. Register it first, then it appears in the connection list alongside any extension wallets the player has installed.
+
+Create the dApp Kit instance:
+
+<ImportContent source="packages/enoki-connect/demo-dapp/src/dapp-kit.ts" mode="code" org="MystenLabs" repo="ts-sdks" />
+
+Then call `registerEnokiConnectWallets` with the `playtron` app slug before you render, and wrap your game UI in `DAppKitProvider`:
+
+```tsx
+// main.tsx
+import ReactDOM from 'react-dom/client';
+import { DAppKitProvider } from '@mysten/dapp-kit-react';
+import { registerEnokiConnectWallets } from '@mysten/enoki-connect';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { dAppKit } from './dapp-kit';
+import App from './App';
+
+const queryClient = new QueryClient();
+
+registerEnokiConnectWallets({
+  publicAppSlugs: ['playtron'],
+  dappName: 'Your game',
+}).catch(() => {});
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <QueryClientProvider client={queryClient}>
+    <DAppKitProvider dAppKit={dAppKit}>
+      <App />
+    </DAppKitProvider>
+  </QueryClientProvider>,
+);
+```
+
+This follows the [Enoki Connect demo app](https://github.com/MystenLabs/ts-sdks/tree/main/packages/enoki-connect/demo-dapp), with `playtron` in place of the demo slugs. For the registration flow and what a public app slug is, see [Wallet registration by other dApps](https://docs.enoki.mystenlabs.com/enoki-connect#wallet-registration-by-other-dapps). For the rest of the dApp Kit setup, including the package to install and which networks to configure, see [SDK Integrations](/sui-stack/suiplay0x1/integration#off-device-example-add-wallet-connection-with-sui-dapp-kit).
+
+:::info
+
+`@mysten/enoki-connect` is in active development, and its API can change without notice. `@mysten/dapp-kit` without a suffix is the deprecated 1.x package, so older examples that wrap your app in `SuiClientProvider` and `WalletProvider` target a version you should not build on.
+
+:::
+
 ## Off-device ⇒ on-device
 
 If a user starts playing your game off-device first, their primary wallet depends on what wallet architecture you choose in your game design (custodial, self-custody, or game-specific zkLogin). Depending on what kind of wallet interactions your game requires during gameplay, you have different options for supporting cross-device gameplay. To learn more about wallet options, see [Wallet Integration Options](/sui-stack/suiplay0x1/wallet-integration).
@@ -85,13 +128,49 @@ Examples where read-only is adequate:
 
 - Soulbound assets, such as a proof of attendance protocol (POAP).
 - An NFT representing membership access. 
-- An NFT representing an unlocked skin that can’t be transacted on while playing the game (but can be traded separately on a third-party NFT marketplace).
+- An NFT representing an unlocked skin that can't be transacted on while playing the game (but can be traded separately on a third-party NFT marketplace).
 
 Users login to the Playtron wallet through the companion web site ([https://wallet.playtron.one](https://wallet.playtron.one)) to link their Playtron wallet to their existing wallet. This works for tying the Playtron wallet to self-custody wallets. This doesn't work for tying to custodial wallets, but that shouldn't be necessary as your game's backend can track users' assets across devices (such as through a user ID or Steam/EGS login).
 
 If you are using a game-specific zkLogin wallet, a properly configured [Enoki Connect](https://docs.enoki.mystenlabs.com/enoki-connect) can link your game-specific zkLogin wallet with the Playtron wallet.  
 
 Games can read from the linked wallet and act based on contents. There are no transaction capabilities with linked assets, however.
+
+### How do I read assets from a linked wallet?
+
+Reading a linked wallet takes two queries. First, read the player's SuiLink NFTs to find out which addresses they have actually proven they own. Then query assets at those addresses.
+
+:::warning
+
+Never grant an in-game benefit based on an address a client supplies. Any player can name an address that holds the asset you are checking for. The SuiLink NFT in the player's Playtron wallet is the authenticated proof, so derive the address from the link and ignore anything the client sends.
+
+:::
+
+Start with the `listAllOwnedObjects` and `getLinkedAddresses` helpers from [SuiLink](/onchain-finance/asset-custody/wallets/suilink#querying-suilink-objects):
+
+<ImportContent source="suilink-query-objects" mode="snippet" />
+
+Then check the player's Playtron wallet and each linked address for the asset your game gates on:
+
+```ts
+const MEMBERSHIP_TYPE = '0xPACKAGE_ID::membership::Membership';
+
+async function hasMembership(playtronAddress: string) {
+  // The Playtron wallet is the address the player connected, so check it directly
+  const owned = await listAllOwnedObjects(playtronAddress, MEMBERSHIP_TYPE);
+  if (owned.length > 0) return true;
+
+  // Then check every address the player has proven they own through SuiLink
+  for (const link of await getLinkedAddresses(playtronAddress)) {
+    const linkedAssets = await listAllOwnedObjects(link.address, MEMBERSHIP_TYPE);
+    if (linkedAssets.length > 0) return true;
+  }
+
+  return false;
+}
+```
+
+This pattern works for any read-only asset check: membership NFTs, POAPs, soulbound items, and unlocked cosmetics. Replace `0xPACKAGE_ID` with your own package ID, and see [SuiLink](/onchain-finance/asset-custody/wallets/suilink) for the Testnet package IDs and the full NFT structure.
 
 ### Full asset access
 
@@ -100,7 +179,7 @@ If your game requires the user to sign or approve transactions to act on assets 
 - Tokens that represent game currency and users can spend during the course of gameplay.
 - NFTs that can be traded from inside your game that require signed transactions.
 
-For self-custody and game-specific zkLogin wallets, users must transfer assets from original self-custody wallets to Playtron wallets. For custodial wallets, there is no need as your game backend can track the user’s assets across devices (such as through a user ID or Steam/EGS login).
+For self-custody and game-specific zkLogin wallets, users must transfer assets from original self-custody wallets to Playtron wallets. For custodial wallets, there is no need as your game backend can track the user's assets across devices (such as through a user ID or Steam/EGS login).
 
 Transfer enables full transaction capabilities on-device. The companion web app provides user-friendly transfer flows  
 

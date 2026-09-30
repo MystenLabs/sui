@@ -34,7 +34,7 @@ use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageServic
 use sui_rpc_api::ServerVersion;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::Message;
-use tokio::sync::RwLock;
+use tokio::sync::watch;
 use tokio::time::Duration;
 use tokio::time::sleep;
 use tonic::transport::Identity;
@@ -44,6 +44,7 @@ use tracing::error;
 
 mod bigtable_client;
 mod config;
+mod monotonic_read;
 mod object_cache;
 mod operation;
 mod package_store;
@@ -61,6 +62,8 @@ pub use config::ResolvedLedgerHistoryMethodConfig;
 pub use config::ResolvedStageConfig;
 pub use config::StageConfig;
 pub use config::StagesConfig;
+use monotonic_read::MonotonicReadLayer;
+pub use monotonic_read::X_SUI_MIN_CHECKPOINT;
 use package_store::BigTablePackageStore;
 
 /// Pipelines whose watermarks always bound the `GetServiceInfo` checkpoint
@@ -266,11 +269,15 @@ pub struct KvRpcServer {
     client: BigTableClient,
     server_version: Option<ServerVersion>,
     service_info_watermark_pipelines: Vec<&'static str>,
-    cache: Arc<RwLock<Option<GetServiceInfoResponse>>>,
+    /// Latest service info this replica has read from the KV store, refreshed by the task spawned
+    /// in [`KvRpcServer::init`].
+    /// A `watch` channel so a monotonic read can await a refresh rather than poll for one.
+    cache: Arc<watch::Sender<Option<GetServiceInfoResponse>>>,
     package_resolver: PackageResolver,
     metrics: Arc<KvRpcMetrics>,
     pub(crate) ledger_history: LedgerHistoryConfig,
     pub(crate) request_bigtable_concurrency: usize,
+    pub(crate) monotonic_read_wait_timeout: Duration,
     pub(crate) stages: StagesConfig,
     // The list RPCs are part of the stable v2 LedgerService, but serving them
     // needs the pipelines in [`LIST_API_SERVICE_INFO_WATERMARK_PIPELINES`].
@@ -336,6 +343,12 @@ fn spawn_listener(
             ),
         ))
         .layer(request_log_layer)
+        // Innermost, so a request held or rejected here is still counted by the metrics layer and
+        // recorded by the request log above it.
+        .layer(MonotonicReadLayer::new(
+            ledger.cache.subscribe(),
+            ledger.monotonic_read_wait_timeout,
+        ))
         .add_service(move_package_service_with_response_compression(
             ledger.clone(),
         ))
@@ -381,6 +394,7 @@ impl KvRpcServer {
         pool_config: PoolConfig,
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
+        monotonic_read_wait_timeout: Duration,
         stages: StagesConfig,
         enable_list_apis: bool,
     ) -> anyhow::Result<Self> {
@@ -415,6 +429,7 @@ impl KvRpcServer {
             metrics,
             ledger_history,
             request_bigtable_concurrency,
+            monotonic_read_wait_timeout,
             stages,
         )
     }
@@ -431,6 +446,7 @@ impl KvRpcServer {
             server_version,
             LedgerHistoryConfig::default(),
             KvRpcConfig::default().request_bigtable_concurrency(),
+            KvRpcConfig::default().monotonic_read_wait_timeout(),
             StagesConfig::default(),
             false,
         )
@@ -447,6 +463,7 @@ impl KvRpcServer {
         server_version: Option<ServerVersion>,
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
+        monotonic_read_wait_timeout: Duration,
         stages: StagesConfig,
         enable_list_apis: bool,
     ) -> anyhow::Result<Self> {
@@ -462,6 +479,7 @@ impl KvRpcServer {
             metrics,
             ledger_history,
             request_bigtable_concurrency,
+            monotonic_read_wait_timeout,
             stages,
         )
     }
@@ -474,11 +492,12 @@ impl KvRpcServer {
         metrics: Arc<KvRpcMetrics>,
         ledger_history: LedgerHistoryConfig,
         request_bigtable_concurrency: usize,
+        monotonic_read_wait_timeout: Duration,
         stages: StagesConfig,
     ) -> anyhow::Result<Self> {
         ledger_history.validate()?;
 
-        let cache = Arc::new(RwLock::new(None));
+        let cache = Arc::new(watch::Sender::new(None));
 
         let package_store: Arc<dyn PackageStore> = Arc::new(PackageStoreWithLruCache::new(
             BigTablePackageStore::new(client.clone()),
@@ -495,6 +514,7 @@ impl KvRpcServer {
             metrics,
             ledger_history,
             request_bigtable_concurrency,
+            monotonic_read_wait_timeout,
             stages,
             list_apis_enabled: enable_list_apis,
         };
@@ -511,8 +531,7 @@ impl KvRpcServer {
                 .await
                 {
                     Ok(info) => {
-                        let mut cache = server_clone.cache.write().await;
-                        *cache = Some(info);
+                        server_clone.cache.send_replace(Some(info));
                     }
                     Err(e) => error!("Failed to update service info cache: {:?}", e),
                 }
