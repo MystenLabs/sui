@@ -1,1 +1,1 @@
-build -v --mode verify_only
+build -v --mode verify_only --no-lint

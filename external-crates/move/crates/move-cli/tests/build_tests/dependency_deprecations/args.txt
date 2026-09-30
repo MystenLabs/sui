@@ -1,1 +1,1 @@
-build -v
+build -v --no-lint

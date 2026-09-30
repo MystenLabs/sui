@@ -11,12 +11,14 @@ use crate::{
     compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{
         codes::{DiagnosticsID, Severity},
+        config::{DiagnosticFilterSettings, KnownDiagnosticFilters, known_diagnostic_filters},
         filter::{FilterName, FilterScope},
         *,
     },
-    editions::Edition,
+    editions::{Edition, Flavor},
     expansion::{self, ast as E},
     hlir, interface_generator,
+    linters::{self, LintLevel},
     naming::{self, ast as N},
     parser::{self, ast::FunctionName, *},
     shared::{
@@ -26,7 +28,7 @@ use crate::{
         program_info::ModuleInfo,
         unique_map::UniqueMap,
     },
-    to_bytecode,
+    sui_mode, to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
     unit_test,
 };
@@ -65,11 +67,9 @@ pub struct Compiler {
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
     visitors: IndexMap<TypeId, Visitor>,
+    diagnostic_filters: Option<(LintLevel, DiagnosticFilterSettings)>,
     warning_filter: Option<FilterScope>,
-    known_warning_filters: Vec<(
-        /* Prefix */ Option<Symbol>,
-        Vec<(FilterName, Vec<DiagnosticsID>)>,
-    )>,
+    known_warning_filters: KnownDiagnosticFilters,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
     /// Root path of the virtual file system.
@@ -125,6 +125,8 @@ pub enum Visitor {
     CFGIRVisitor(CFGIRVisitorObj),
     AbsIntVisitor(AbsIntVisitorObj),
 }
+
+pub type VisitorConstructor = fn() -> Visitor;
 
 //**************************************************************************************************
 // Entry points and impls
@@ -204,6 +206,7 @@ impl Compiler {
             compiled_module_named_address_mapping: BTreeMap::new(),
             flags: Flags::empty(),
             visitors: IndexMap::new(),
+            diagnostic_filters: None,
             warning_filter: None,
             known_warning_filters: vec![],
             package_configs,
@@ -289,6 +292,17 @@ impl Compiler {
         self
     }
 
+    /// Sets diagnostic settings validated for the target flavors.
+    pub fn set_diagnostic_filters(
+        mut self,
+        level: LintLevel,
+        settings: DiagnosticFilterSettings,
+    ) -> Self {
+        assert!(self.diagnostic_filters.is_none());
+        self.diagnostic_filters = Some((level, settings));
+        self
+    }
+
     pub fn set_warning_filter(mut self, filter: Option<FilterScope>) -> Self {
         assert!(self.warning_filter.is_none());
         self.warning_filter = filter;
@@ -343,15 +357,54 @@ impl Compiler {
             pre_compiled_lib,
             compiled_module_named_address_mapping,
             flags,
-            visitors,
+            mut visitors,
+            diagnostic_filters,
             warning_filter,
-            known_warning_filters,
-            package_configs,
-            default_config,
+            mut known_warning_filters,
+            mut package_configs,
+            mut default_config,
             vfs_root,
             save_hooks,
             files_to_compile,
         } = self;
+        if let Some((level, settings)) = diagnostic_filters {
+            let uses_default_config =
+                package_configs.is_empty() || targets.iter().any(|path| path.package.is_none());
+            let sui_mode = package_configs
+                .values()
+                .any(|config| !config.is_dependency && config.flavor == Flavor::Sui)
+                || (uses_default_config
+                    && default_config
+                        .as_ref()
+                        .map(|config| config.flavor)
+                        .unwrap_or_default()
+                        == Flavor::Sui);
+            let flavor = if sui_mode { Flavor::Sui } else { Flavor::Core };
+            known_warning_filters.extend(known_diagnostic_filters(flavor));
+            let scope = settings.filter_scope(&known_warning_filters);
+            for config in package_configs
+                .values_mut()
+                .filter(|config| !config.is_dependency)
+            {
+                config.warning_filter = scope.clone();
+            }
+            if uses_default_config {
+                let config = default_config.get_or_insert_with(PackageConfig::default);
+                if !config.is_dependency {
+                    config.warning_filter = scope;
+                }
+            }
+            let lint_config = settings.lints.unwrap_or_default();
+            let mut passes = if sui_mode {
+                sui_mode::linters::linter_visitors_with_config(level, &lint_config)
+            } else {
+                vec![]
+            };
+            passes.extend(linters::linter_visitors_with_config(level, &lint_config));
+            for visitor in passes {
+                visitors.entry(visitor.type_id()).or_insert(visitor);
+            }
+        }
         let vfs_root = match vfs_root {
             Some(p) => p,
             None => VfsPath::new(PhysicalFS::new("/")),
@@ -1206,6 +1259,197 @@ impl Visitor {
             Visitor::TypingVisitor(v) => Any::type_id(&**v),
             Visitor::CFGIRVisitor(v) => Any::type_id(&**v),
             Visitor::AbsIntVisitor(v) => Any::type_id(&**v),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::diagnostics::{
+        codes::DiagnosticOrigin,
+        config::DiagnosticFilterConfig,
+        filter::{FILTER_ALL, FilterKind, empty_filter_scope, resolve_filter_names},
+    };
+
+    fn compiler_env(
+        flavor: Flavor,
+        level: LintLevel,
+        settings: DiagnosticFilterSettings,
+        dependency_scope: FilterScope,
+    ) -> CompilationEnv {
+        let other_flavor = match flavor {
+            Flavor::Core => Flavor::Sui,
+            Flavor::Sui => Flavor::Core,
+        };
+        let packages: Vec<PackagePaths<Symbol, Symbol>> = vec![
+            PackagePaths {
+                name: Some((
+                    Symbol::from("root"),
+                    PackageConfig {
+                        flavor,
+                        ..PackageConfig::default()
+                    },
+                )),
+                paths: vec![],
+                named_address_map: BTreeMap::new(),
+            },
+            PackagePaths {
+                name: Some((
+                    Symbol::from("dep"),
+                    PackageConfig {
+                        flavor: other_flavor,
+                        is_dependency: true,
+                        warning_filter: dependency_scope,
+                        ..PackageConfig::default()
+                    },
+                )),
+                paths: vec![],
+                named_address_map: BTreeMap::new(),
+            },
+        ];
+        Compiler::from_package_paths(None, packages, vec![])
+            .unwrap()
+            .set_diagnostic_filters(level, settings)
+            .run::<PASS_PARSER>()
+            .unwrap()
+            .1
+            .unwrap()
+            .compilation_env
+    }
+
+    fn lint_visitor_count(env: &CompilationEnv) -> usize {
+        let lint_types = linters::linter_visitors(LintLevel::All)
+            .into_iter()
+            .chain(sui_mode::linters::linter_visitors(LintLevel::All))
+            .map(|visitor| visitor.type_id())
+            .collect::<BTreeSet<_>>();
+        let visitors = env.visitors();
+        visitors
+            .typing
+            .iter()
+            .map(|visitor| Any::type_id(&**visitor))
+            .chain(
+                visitors
+                    .cfgir
+                    .iter()
+                    .map(|visitor| Any::type_id(&**visitor)),
+            )
+            .chain(
+                visitors
+                    .abs_int
+                    .iter()
+                    .map(|visitor| Any::type_id(&**visitor)),
+            )
+            .filter(|type_id| lint_types.contains(type_id))
+            .count()
+    }
+
+    #[test]
+    fn diagnostic_settings_use_root_flavor_and_preserve_dependencies() {
+        let dependency_scope = resolve_filter_names(
+            [(None, FilterName::from("unused_variable"), FilterKind::Deny)],
+            [],
+        )
+        .unwrap();
+        for (flavor, name, origin) in [
+            (
+                Flavor::Core,
+                "abort_without_constant",
+                DiagnosticOrigin::Lint,
+            ),
+            (Flavor::Sui, "public_entry", DiagnosticOrigin::SuiLint),
+        ] {
+            let settings = DiagnosticFilterSettings {
+                warnings: Some(DiagnosticFilterConfig::from_iter([(
+                    FilterName::from("unused_variable"),
+                    FilterKind::Allow,
+                )])),
+                lints: Some(DiagnosticFilterConfig::from_iter([
+                    (FilterName::from(FILTER_ALL), FilterKind::Allow),
+                    (FilterName::from(name), FilterKind::Deny),
+                ])),
+            };
+            for level in [LintLevel::None, LintLevel::Default, LintLevel::All] {
+                let env = compiler_env(flavor, level, settings.clone(), dependency_scope.clone());
+                let scope = &env
+                    .package_config(Some(Symbol::from("root")))
+                    .warning_filter;
+                assert!(
+                    scope
+                        .filter_entries()
+                        .any(|(id, kind)| id.origin == origin && kind.value == FilterKind::Deny)
+                );
+                assert!(
+                    scope
+                        .filter_entries()
+                        .any(|(id, kind)| id.origin == DiagnosticOrigin::Compiler
+                            && kind.value == FilterKind::Allow)
+                );
+                assert_eq!(
+                    env.package_config(Some(Symbol::from("dep"))).warning_filter,
+                    dependency_scope
+                );
+                assert_eq!(
+                    lint_visitor_count(&env),
+                    usize::from(level != LintLevel::None)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn diagnostic_settings_support_files_without_package_names() {
+        let settings = DiagnosticFilterSettings {
+            lints: Some(DiagnosticFilterConfig::from_iter([
+                (FilterName::from(FILTER_ALL), FilterKind::Allow),
+                (FilterName::from("public_entry"), FilterKind::Deny),
+            ])),
+            ..DiagnosticFilterSettings::default()
+        };
+        let env = Compiler::from_files(
+            None,
+            Vec::<Symbol>::new(),
+            Vec::<Symbol>::new(),
+            BTreeMap::<Symbol, NumericalAddress>::new(),
+        )
+        .set_diagnostic_filters(LintLevel::Default, settings)
+        .set_default_config(PackageConfig {
+            flavor: Flavor::Sui,
+            ..PackageConfig::default()
+        })
+        .run::<PASS_PARSER>()
+        .unwrap()
+        .1
+        .unwrap()
+        .compilation_env;
+        assert_eq!(lint_visitor_count(&env), 1);
+        assert!(
+            env.package_config(None)
+                .warning_filter
+                .filter_entries()
+                .any(|(id, kind)| {
+                    id.origin == DiagnosticOrigin::SuiLint && kind.value == FilterKind::Deny
+                })
+        );
+    }
+
+    #[test]
+    fn empty_diagnostic_settings_preserve_flavor_defaults() {
+        for (flavor, expected) in [
+            (Flavor::Core, 0),
+            (
+                Flavor::Sui,
+                sui_mode::linters::linter_visitors(LintLevel::Default).len(),
+            ),
+        ] {
+            let env = compiler_env(
+                flavor,
+                LintLevel::Default,
+                DiagnosticFilterSettings::default(),
+                empty_filter_scope(),
+            );
+            assert_eq!(lint_visitor_count(&env), expected);
         }
     }
 }
