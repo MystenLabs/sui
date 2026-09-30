@@ -95,7 +95,7 @@ impl Payload for LargeTransactionTestPayload {
 
 impl LargeTransactionTestPayload {
     fn create_transaction(&mut self) -> Transaction {
-        let (epoch, gas_price, max_pure_arg_size, max_tx_size) = {
+        let (epoch, reference_gas_price, max_pure_arg_size, max_tx_size) = {
             let state = self.system_state_observer.state.borrow();
             let cfg = state
                 .protocol_config
@@ -108,6 +108,15 @@ impl LargeTransactionTestPayload {
                 cfg.max_tx_size_bytes(),
             )
         };
+        // SIP-45 permits one allowed proposer per RGP multiple (with three free).
+        // Pay for the whole committee so TransactionDriver's derived amplification
+        // factor sends the large transaction to every validator symmetrically.
+        let gas_price = reference_gas_price
+            .checked_mul(self.committee_size as u64)
+            .expect("large transaction gas price overflow");
+        let gas_budget = gas_price
+            .checked_mul(GAS_UNITS_PER_TX)
+            .expect("large transaction gas budget overflow");
 
         // Stay under the per-input size limit, accounting for the BCS length prefix.
         let per_input = max_pure_arg_size.saturating_sub(16);
@@ -133,7 +142,7 @@ impl LargeTransactionTestPayload {
             self.sender,
             vec![account.gas],
             builder.finish(),
-            gas_price * GAS_UNITS_PER_TX,
+            gas_budget,
             gas_price,
         );
         *data.expiration_mut() = all_allowed_proposers_expiration(
