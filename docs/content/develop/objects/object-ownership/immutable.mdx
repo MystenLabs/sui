@@ -212,4 +212,4 @@ public fun update(
 }
 ```
 
-The function fails because the `ColorObject` is immutable.
+The function fails because the `ColorObject` parameter is passed by immutable reference (`&ColorObject`) rather than mutable reference (`&mut ColorObject`).

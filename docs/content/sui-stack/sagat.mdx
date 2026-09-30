@@ -55,7 +55,7 @@ Use the [Sagat web interface](https://sagat.mystenlabs.com/) for signing transac
 
 ## What is multisig?
 
-[Multisig](/develop/transactions/transaction-auth/multisig) is a type of authentication that requires multiple signatures from different parties before a transaction can be executed. Several addresses can be invited to a multisig group. On Sagat, all invited parties must accept for the multisig to be created.
+[Multisig](/develop/transactions/transaction-auth/multisig) is a type of authentication that requires multiple signatures from different parties before a transaction can be executed. Several addresses can be invited to a multisig group. On Sagat, invited parties can accept or reject multisig invitations after the multisig is created.
 
 Each multisig can have a different voting threshold. For example, in a multisig that contains 3 users, only 2 of the users might need to sign the proposed transaction for it to be approved. In other scenarios, all users might be required to sign the transaction, and if one rejects it, the proposed transaction is canceled. Each threshold can configure different weights per user, enabling endless combinations, such as 5 out of 6 with just 2 addresses.
 

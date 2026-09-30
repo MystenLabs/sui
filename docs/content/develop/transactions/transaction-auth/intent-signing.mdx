@@ -50,7 +50,7 @@ answer: >-
   and authority signatures.
 ---
 
-An intent is a compact struct that serves as the domain separator for a message that a signature commits to. The data that the signature commits to is an intent message. All signatures in Sui must commit to an intent message rather than the message itself.
+An intent is a compact struct that serves as the domain separator for a message that a signature commits to. The data that the signature commits to is an intent message. All user signatures in Sui must commit to an intent message rather than the message itself.
 
 The intent signing standard provides a compact domain separator to the data being signed for both user signatures and authority signatures. It has several benefits:
 

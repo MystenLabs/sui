@@ -175,13 +175,13 @@ Open the `greeting.move` file in your IDE of choice. You can see the following M
 
 A unique aspect of programming applications on Sui is the resource safety that the Move Bytecode Verifier enforces. Move packages must satisfy the following resource safety parameters:
 
-- All resources must be either moved into global storage or destroyed by the end of a transaction. 
+- All resources must be either moved into global storage or explicitly destroyed by the end of a transaction. 
 
 - Resources cannot be copied. 
 
 In the "Hello, World!" example, the struct `Greeting` is a resource type. 
 
-To satisfy the requirement that all resources must be moved or destroyed by the end of a transaction, `Greeting` is assigned to `new_greeting`, which the call to `transfer::share_object(new_greeting)` then moves into global storage.
+To satisfy the requirement that all resources must be moved or destroyed by the end of a transaction, `new_greeting` is assigned to `Greeting`, which the call to `transfer::share_object(new_greeting)` then moves into global storage.
 
 To mutate `Greeting`, the function `update_text` takes the input `(&mut Greeting)` rather than the resource itself. This function satisfies resource safety because the function does not copy the resource and mutates it through a reference.
 

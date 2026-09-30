@@ -2,7 +2,7 @@
 title: Derived Objects
 description: >-
   Derived objects enable deterministic object addresses, Transfer-to-Object
-  capabilities, guaranteed uniqueness, and native parallelization for building
+  capabilities, guaranteed uniqueness, and scalable composition for building
   scalable composable systems on Sui.
 keywords:
   - Derived objects
@@ -37,7 +37,7 @@ questions:
   - Why should I use derived objects?
 answer: >-
   Derived objects enable deterministic object addresses, Transfer-to-Object
-  capabilities, guaranteed uniqueness, and native parallelization for building
+  capabilities, guaranteed uniqueness, and improved composability for building
   scalable composable systems on Sui.
 ---
 
@@ -127,7 +127,7 @@ Registry structures are patterns that work particularly well with derived object
 
 ### Classic registry
 
-Perhaps the biggest advantage for classic registries is the straightforward queries. This increased discoverability comes at the cost of parallelization, however, as all operations must go through the parent object.
+Perhaps the biggest advantage for classic registries is the straightforward queries. This increased discoverability comes at the cost of parallelization, however, as all operations must go through the parent object, creating a centralized bottleneck.
 
 ```move
 use sui::table::{Self, Table};

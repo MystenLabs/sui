@@ -37,7 +37,7 @@ answer: >-
   asset tokenization types without recompiling Move source code.
 ---
 
-This feature was developed to enable Move bytecode serialization and deserialization on the web. In essence, this feature allows you to edit existing contracts in a web environment.
+This feature was developed to enable Move bytecode serialization and deserialization on the web. In essence, this feature allows you to edit existing contracts in a web environment, so you can create and publish new asset tokenization types without recompiling the Move source code.
 
 In the case of asset tokenization, these edits allow you to create and publish new types that represent physical or digital assets that you want to tokenize.
 
@@ -45,7 +45,7 @@ In the case of asset tokenization, these edits allow you to create and publish n
 
 :::caution
 
-When you make modifications to the template package, you must repeat this process. Some alterations, like changing a constant name, do not affect the produced bytecode.
+When you make modifications to the template package, you must repeat this process. Some alterations, like changing a constant name, do not affect the produced bytecode, because the library addresses a constant by the position it has in the constant pool rather than by its name.
 
 :::
 

@@ -50,12 +50,12 @@ The quantity borrowed can be the maximum amount that the pool owns. Borrowing fr
 
 ## API
 
-The `Pool` exposes the following endpoints for flash loans.
+The `Pool` exposes the following endpoints for flash loans. Each borrow function returns a `FlashLoan` hot potato (struct with no abilities), which must be returned back to the pool by the end of the call. The transaction is atomic, so the entire transaction fails if the loan is not returned.
 
 <details>
 <summary>Borrow flash loan base</summary>
 
-Borrow base assets from the `Pool`. The function returns a hot potato, forcing the borrower to return the assets within the same transaction.
+Borrow base assets from the `Pool`. The function returns a hot potato, forcing the borrower to return the assets within the same transaction. The quantity borrowed can be the maximum amount that the pool owns.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="borrow_flashloan_base" noComments />
 
@@ -64,7 +64,7 @@ Borrow base assets from the `Pool`. The function returns a hot potato, forcing t
 <details>
 <summary>Borrow flash loan quote</summary>
 
-Borrow quote assets from the `Pool`. The function returns a hot potato, forcing the borrower to return the assets within the same transaction.
+Borrow quote assets from the `Pool`. The function returns a hot potato, forcing the borrower to return the assets within the same transaction. Borrowing from a pool and trading in the same pool can result in failures because trading requires the movement of funds.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="borrow_flashloan_quote" noComments />
 

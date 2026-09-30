@@ -75,6 +75,7 @@ Key points:
 
 - Call `tx_context::dummy()` to create a transaction context for testing without a real transaction.
 - Objects with the `key` ability contain a `UID` that must be created with `object::new`. Transfer or destroy every object before the test ends to avoid resource safety errors.
+- Objects with the `key` ability contain a `UID` that must be created with `object::new`. Transfer or destroy every object before the test ends to avoid resource safety errors.
 - Use `assert!` to verify expected values. The second argument is an error code that appears in the test output if the assertion fails.
 
 ### Test-only code
