@@ -18,7 +18,7 @@ use crate::{
     dependency::Pinned,
     package::{manifest::ManifestError, package_loader::PackageConfig},
     schema::{
-        CachedPackageInfo, DefaultDependency, DiagnosticFilterConfig, ManifestDependencyInfo,
+        CachedPackageInfo, DefaultDependency, DiagnosticConfigObject, ManifestDependencyInfo,
         ParsedManifest, Publication,
     },
 };
@@ -46,9 +46,7 @@ pub struct Package<F: MoveFlavor> {
     /// The metadata of the package.
     metadata: PackageMetadata,
 
-    warnings: DiagnosticFilterConfig,
-
-    lints: DiagnosticFilterConfig,
+    diagnostics: DiagnosticConfigObject,
 
     /// A [`PackagePath`] representing the canonical path to the package directory.
     path: PackagePath,
@@ -142,8 +140,10 @@ impl<F: MoveFlavor> Package<F> {
             env: env.name().clone(),
             digest,
             metadata: manifest.package,
-            warnings: manifest.warnings,
-            lints: manifest.lints,
+            diagnostics: DiagnosticConfigObject {
+                warning_filters: manifest.warnings,
+                lint_filters: manifest.lints,
+            },
             path,
             publication,
             dep_for_self: dep,
@@ -232,12 +232,8 @@ impl<F: MoveFlavor> Package<F> {
         &self.metadata
     }
 
-    pub fn warnings(&self) -> &DiagnosticFilterConfig {
-        &self.warnings
-    }
-
-    pub fn lints(&self) -> &DiagnosticFilterConfig {
-        &self.lints
+    pub fn diagnostics(&self) -> &DiagnosticConfigObject {
+        &self.diagnostics
     }
 
     /// Read the manifest for the (already-fetched) package at `path` and the publication recorded

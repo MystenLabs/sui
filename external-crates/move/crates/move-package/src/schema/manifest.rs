@@ -30,10 +30,50 @@ pub type ModeName = String;
 /// The identifier for a system dependency (in `{system = "dep_id"}` dependencies
 pub type SystemDepName = String;
 
+pub type ConfigFilters = BTreeMap<String, LintLevel>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DiagnosticProfile {
+    Build,
+    Test,
+}
+
+impl DiagnosticProfile {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Build => "build",
+            Self::Test => "test",
+        }
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "build" => Some(Self::Build),
+            "test" => Some(Self::Test),
+            _ => None,
+        }
+    }
+}
+
+impl Serialize for DiagnosticProfile {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct DiagnosticFilterConfig {
-    pub root: BTreeMap<String, LintLevel>,
-    pub modes: BTreeMap<ModeName, BTreeMap<String, LintLevel>>,
+pub struct DiagnosticFilterEntries {
+    pub filters: ConfigFilters,
+    pub profile_filters: BTreeMap<DiagnosticProfile, ConfigFilters>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DiagnosticConfigObject {
+    pub warning_filters: DiagnosticFilterEntries,
+    pub lint_filters: DiagnosticFilterEntries,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
@@ -48,54 +88,75 @@ pub enum LintLevel {
 #[serde(untagged)]
 enum DiagnosticFilterEntry {
     Level(LintLevel),
-    Mode(BTreeMap<String, LintLevel>),
+    Mode(ConfigFilters),
 }
 
-impl<'de> Deserialize<'de> for DiagnosticFilterConfig {
+impl<'de> Deserialize<'de> for DiagnosticFilterEntries {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         let entries = BTreeMap::<String, DiagnosticFilterEntry>::deserialize(deserializer)?;
-        let mut root = BTreeMap::new();
-        let mut modes = BTreeMap::new();
+        let mut filters = BTreeMap::new();
+        let mut profile_filters = BTreeMap::new();
         for (name, entry) in entries {
             match entry {
                 DiagnosticFilterEntry::Level(level) => {
-                    root.insert(name, level);
+                    filters.insert(name, level);
                 }
                 DiagnosticFilterEntry::Mode(config) => {
-                    modes.insert(name, config);
+                    let profile = DiagnosticProfile::from_name(&name).ok_or_else(|| {
+                        de::Error::custom(format!(
+                            "unknown diagnostic profile '{name}', expected 'build' or 'test'"
+                        ))
+                    })?;
+                    profile_filters.insert(profile, config);
                 }
             }
         }
-        Ok(Self { root, modes })
+        Ok(Self {
+            filters,
+            profile_filters,
+        })
     }
 }
 
-impl Serialize for DiagnosticFilterConfig {
+impl Serialize for DiagnosticFilterEntries {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut map = serializer.serialize_map(Some(self.root.len() + self.modes.len()))?;
-        for (name, level) in &self.root {
+        let mut map =
+            serializer.serialize_map(Some(self.filters.len() + self.profile_filters.len()))?;
+        for (name, level) in &self.filters {
             map.serialize_entry(name, level)?;
         }
-        for (mode, config) in &self.modes {
-            map.serialize_entry(mode, config)?;
+        for (profile, config) in &self.profile_filters {
+            map.serialize_entry(profile.as_str(), config)?;
         }
         map.end()
     }
 }
 
-impl DiagnosticFilterConfig {
+impl DiagnosticFilterEntries {
+    pub fn filters_no_profile(&self) -> ConfigFilters {
+        self.filters.clone()
+    }
+
+    pub fn filters(&self, profile: DiagnosticProfile) -> ConfigFilters {
+        let mut result = self.filters_no_profile();
+        if let Some(filters) = self.profile_filters.get(&profile) {
+            result.extend(filters.iter().map(|(name, level)| (name.clone(), *level)));
+        }
+        result
+    }
+
     pub fn configured_filters(
         &self,
         prefix: FilterPrefix,
-        modes: &[ModeName],
+        profile: DiagnosticProfile,
     ) -> impl Iterator<Item = (FilterPrefix, FilterName, FilterKind)> {
-        self.effective_config(modes)
+        self.filters(profile)
             .into_iter()
             .map(move |(name, level)| (prefix, name.as_str().into(), level.filter_kind()))
     }
@@ -104,34 +165,24 @@ impl DiagnosticFilterConfig {
         &self,
         prefix: FilterPrefix,
     ) -> impl Iterator<Item = (FilterPrefix, FilterName, FilterKind)> + '_ {
-        self.root
+        self.filters
             .iter()
-            .chain(self.modes.values().flat_map(|mode| mode.iter()))
+            .chain(self.profile_filters.values().flat_map(|mode| mode.iter()))
             .map(move |(name, level)| (prefix, name.as_str().into(), level.filter_kind()))
     }
 
-    pub fn enabled_filter_names(&self, modes: &[ModeName]) -> BTreeSet<FilterName> {
-        self.effective_config(modes)
+    pub fn enabled_filter_names(&self, profile: DiagnosticProfile) -> BTreeSet<FilterName> {
+        self.filters(profile)
             .into_iter()
             .filter_map(|(name, level)| (level != LintLevel::Allow).then(|| name.as_str().into()))
             .collect()
     }
 
-    pub fn allowed_filter_names(&self, modes: &[ModeName]) -> BTreeSet<FilterName> {
-        self.effective_config(modes)
+    pub fn allowed_filter_names(&self, profile: DiagnosticProfile) -> BTreeSet<FilterName> {
+        self.filters(profile)
             .into_iter()
             .filter_map(|(name, level)| (level == LintLevel::Allow).then(|| name.as_str().into()))
             .collect()
-    }
-
-    fn effective_config(&self, modes: &[ModeName]) -> BTreeMap<String, LintLevel> {
-        let mut result = self.root.clone();
-        for mode in modes {
-            if let Some(config) = self.modes.get(mode) {
-                result.extend(config.iter().map(|(name, level)| (name.clone(), *level)));
-            }
-        }
-        result
     }
 }
 
@@ -154,10 +205,10 @@ pub struct ParsedManifest {
     pub package: PackageMetadata,
 
     #[serde(default)]
-    pub warnings: DiagnosticFilterConfig,
+    pub warnings: DiagnosticFilterEntries,
 
     #[serde(default)]
-    pub lints: DiagnosticFilterConfig,
+    pub lints: DiagnosticFilterEntries,
 
     #[serde(default)]
     pub environments: BTreeMap<Spanned<EnvironmentName>, Spanned<EnvironmentID>>,
@@ -467,9 +518,12 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(manifest.warnings.root.get("unused"), Some(&LintLevel::Deny));
         assert_eq!(
-            manifest.lints.root.get("abort_without_constant"),
+            manifest.warnings.filters.get("unused"),
+            Some(&LintLevel::Deny)
+        );
+        assert_eq!(
+            manifest.lints.filters.get("abort_without_constant"),
             Some(&LintLevel::Allow)
         );
     }
@@ -492,13 +546,13 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(manifest.lints.root.get("all"), Some(&LintLevel::Deny));
+        assert_eq!(manifest.lints.filters.get("all"), Some(&LintLevel::Deny));
         assert_eq!(
-            manifest.lints.modes["build"].get("shared_object_derp"),
+            manifest.lints.profile_filters[&DiagnosticProfile::Build].get("shared_object_derp"),
             Some(&LintLevel::Allow)
         );
         assert_eq!(
-            manifest.lints.modes["test"].get("shared_object_derp"),
+            manifest.lints.profile_filters[&DiagnosticProfile::Test].get("shared_object_derp"),
             Some(&LintLevel::Deny)
         );
     }
