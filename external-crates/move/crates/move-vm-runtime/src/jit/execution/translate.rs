@@ -213,7 +213,7 @@ impl FunctionContext<'_, '_> {
                     expects one and only one signature token"
             ));
         };
-        Ok(tys.to_ref().safe_get(0)?.ptr_clone())
+        Ok(VMPointer::from_ref(tys.to_ref().safe_get(0)?))
     }
 }
 

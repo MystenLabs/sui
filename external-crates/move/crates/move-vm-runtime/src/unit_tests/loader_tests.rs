@@ -933,7 +933,7 @@ fn test_term_formula_argument_order() {
     use crate::{
         cache::arena::ArenaBuilder,
         jit::execution::ast::{ArenaType, SizedArenaType},
-        shared::type_size_formulae::ArenaTypeSizeFormula,
+        shared::{type_size_formulae::ArenaTypeSizeFormula, vm_pointer::VMPointer},
     };
 
     let data_store = InMemoryStorage::new();
@@ -954,14 +954,14 @@ fn test_term_formula_argument_order() {
     let arena = ArenaBuilder::new_bounded(&VMConfig::new_for_test(
         /* allow_unpublishable_code_execution */ false, None,
     ));
+    let alloc = |ty| VMPointer::from_ref(&*arena.alloc_box(ty).unwrap());
     let apply = |name: &str, args: Vec<ArenaType>| {
-        ArenaType::DatatypeInstantiation(
-            arena
-                .alloc_box((key(name), arena.alloc_vec(args.into_iter()).unwrap()))
-                .unwrap(),
-        )
+        let args = arena.alloc_vec(args.into_iter().map(alloc)).unwrap();
+        ArenaType::DatatypeInstantiation(VMPointer::from_ref(
+            &*arena.alloc_box((key(name), args)).unwrap(),
+        ))
     };
-    let vec_of = |inner: ArenaType| ArenaType::Vector(arena.alloc_box(inner).unwrap());
+    let vec_of = |inner: ArenaType| ArenaType::Vector(alloc(inner));
 
     // T<u64, vector<u64>>: type 4 nodes / 3 deep; value depth max(2, 1+1, 2+2) = 4 (3 if the
     // arguments were swapped); layout 2 + 1 + 2 = 5.
@@ -970,7 +970,7 @@ fn test_term_formula_argument_order() {
             ArenaTypeSizeFormula::from_term(&ty, &arena, &crate::shared::TypeLimits::VM_DEFAULT)
                 .unwrap(),
         ),
-        ty,
+        ty: alloc(ty),
     };
 
     let term = sized(apply("T", vec![ArenaType::U64, vec_of(ArenaType::U64)]));

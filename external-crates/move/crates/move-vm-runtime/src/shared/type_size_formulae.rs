@@ -994,7 +994,7 @@ impl ArenaTypeSizeFormula {
                 let struct_ = struct_.to_ref();
                 from_fields(
                     checked_as!(struct_.type_parameters.len(), u16)?,
-                    struct_.fields.iter(),
+                    struct_.fields.iter().map(|field| &**field),
                     0,
                     arena,
                     type_limits,
@@ -1007,7 +1007,7 @@ impl ArenaTypeSizeFormula {
                     enum_
                         .variants
                         .iter()
-                        .flat_map(|variant| variant.fields.iter()),
+                        .flat_map(|variant| variant.fields.iter().map(|field| &**field)),
                     enum_.variants.len() as u64,
                     arena,
                     type_limits,
