@@ -87,6 +87,16 @@ pub fn sender_rebate(storage_rebate: u64, storage_rebate_rate: u64) -> u64 {
     u64::try_from(rebate).unwrap_or(u64::MAX)
 }
 
+/// Internal gas for reading `size` bytes of package inputs at `cost_per_kb` per KiB (1,024 bytes),
+/// rounded up. Saturates at `u64::MAX` instead of overflowing.
+pub fn package_read_internal_gas(size: usize, cost_per_kb: u64) -> u64 {
+    // The product of two values below 2^64 always fits in a u128.
+    let cost = (size as u128)
+        .saturating_mul(u128::from(cost_per_kb))
+        .div_ceil(1024);
+    u64::try_from(cost).unwrap_or(u64::MAX)
+}
+
 pub fn half_digits_rounding(n: u64) -> u64 {
     if n < 1000 {
         return 1000;
