@@ -1797,6 +1797,8 @@ pub struct ProtocolConfig {
     // `forwarding_address` module
     forwarding_address_resolve_cost_base: Option<u64>,
     forwarding_address_resolve_cost_per_byte: Option<u64>,
+    // Highest forwarding address variant the resolver accepts; higher variants abort.
+    forwarding_address_max_variant: Option<u64>,
 
     // `dynamic_field` module
     // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -2745,6 +2747,7 @@ impl ProtocolConfig {
             // `forwarding_address` module
             forwarding_address_resolve_cost_base: None,
             forwarding_address_resolve_cost_per_byte: None,
+            forwarding_address_max_variant: None,
 
             // `dynamic_field` module
             // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -4815,6 +4818,7 @@ impl ProtocolConfig {
                         cfg.forwarding_address_resolve_cost_base = Some(52);
                         cfg.forwarding_address_resolve_cost_per_byte =
                             Some(cfg.obj_access_cost_read_per_byte());
+                        cfg.forwarding_address_max_variant = Some(0);
                     }
                 }
                 // Use this template when making changes:
