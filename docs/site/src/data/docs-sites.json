@@ -1,0 +1,48 @@
+{
+  "_comment": "The Mysten Labs documentation directory, rendered on the docs.sui.io home page and intended to be the single list that also drives the cross-site search tabs and llms.txt federation. Add a site here, not in three places. Every url is absolute so this list survives being moved to another domain.",
+  "sites": [
+    {
+      "name": "Sui",
+      "description": "The Sui blockchain: Move development, the CLI, SDKs in context, onchain finance, and node operation.",
+      "url": "https://docs.sui.io",
+      "llms": "https://docs.sui.io/llms.txt",
+      "searchIndex": "sui_docs",
+      "self": true
+    },
+    {
+      "name": "Walrus",
+      "description": "Decentralized storage for blobs, media, and app data. Includes Walrus Sites, Oyster, and Walrus Memory.",
+      "url": "https://docs.wal.app",
+      "llms": "https://docs.wal.app/llms.txt",
+      "searchIndex": "walrus_docs"
+    },
+    {
+      "name": "TypeScript SDKs",
+      "description": "Reference and guides for the @mysten packages: sui, dapp-kit, walrus, seal, kiosk, bcs, and codegen.",
+      "url": "https://sdk.mystenlabs.com",
+      "llms": "https://sdk.mystenlabs.com/llms.txt",
+      "searchIndex": "sui_sdks"
+    },
+    {
+      "name": "The Move Book",
+      "description": "The Move language reference and book, covering the language itself independently of any one chain.",
+      "url": "https://move-book.com",
+      "llms": "https://move-book.com/llms.txt",
+      "searchIndex": "move_book"
+    },
+    {
+      "name": "SuiNS",
+      "description": "The Sui Name Service: registering names, resolving them, and integrating them into an app.",
+      "url": "https://docs.suins.io",
+      "llms": "https://docs.suins.io/llms.txt",
+      "searchIndex": "suins_docs"
+    },
+    {
+      "name": "Seal",
+      "description": "Threshold encryption and onchain access control. Also rendered inside the Sui docs.",
+      "url": "https://docs.sui.io/sui-stack/seal",
+      "llms": null,
+      "searchIndex": null
+    }
+  ]
+}

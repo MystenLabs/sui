@@ -4,6 +4,27 @@
 
 > For the complete, unabridged page index see [llms-full.txt](https://docs.sui.io/llms-full.txt).
 
+## Mysten Labs documentation
+
+The Mysten Labs stack is documented across several sites. Each publishes its own
+llms.txt covering that product. Fetch the one you need rather than crawling HTML.
+
+- [Sui](https://docs.sui.io/llms.txt): this file. The Sui blockchain, Move on Sui, the CLI, SDKs in context, node operation, and the onchain finance and Sui Stack guides.
+- [Walrus](https://docs.wal.app/llms.txt): decentralized storage. Also covers Walrus Sites, Oyster, and Walrus Memory.
+- [TypeScript SDKs](https://sdk.mystenlabs.com/llms.txt): API reference and guides for @mysten packages, including sui, dapp-kit, walrus, seal, kiosk, bcs, and codegen.
+- [SuiNS](https://docs.suins.io/llms.txt): the Sui Name Service.
+- [The Move Book](https://move-book.com/llms.txt): the Move language reference, independent of any one chain.
+
+Seal and Hashi publish documentation but no llms.txt yet. Seal is also rendered
+under https://docs.sui.io/sui-stack/seal and is covered by this index.
+
+## Machine-readable access
+
+- **Markdown for any page.** Append `.md` to any docs.sui.io URL to get clean markdown instead of HTML. `https://docs.sui.io/develop.md` and `https://docs.sui.io/develop/transactions/transaction-lifecycle.md` both work. Prefer this to parsing the rendered page.
+- **Agent skills.** [https://docs.sui.io/skills](https://docs.sui.io/skills) lists installable skills for Sui development, each with a slug, category, and install path.
+- **MCP server.** [https://docs.sui.io/getting-started/sui-mcp-server](https://docs.sui.io/getting-started/sui-mcp-server) documents the Sui MCP server for tool-using agents.
+- **Search across sites.** [https://docs.sui.io/search](https://docs.sui.io/search) searches Sui, SuiNS, the Move Book, the SDKs, and Walrus together.
+
 ## Move
 
 - [Move Language Reference](https://move-book.com/llms.txt)
