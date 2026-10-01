@@ -17,8 +17,10 @@ keywords:
   - prediction market
   - referral
   - referrer
-last_verified: 2026-09-28
-verified_against: deepbookv3 abb4cfd9 (predict protocol version 3 on both networks); deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8; live referral_fee_rate read from both ProtocolConfig objects on 2026-09-28
+  - builder code
+  - builder fee
+last_verified: 2026-10-01
+verified_against: deepbookv3 abb4cfd9 (predict protocol version 3 on both networks); deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8; live referral_fee_rate read from both ProtocolConfig objects on 2026-09-28; builder-code ID derivation checked against existing Mainnet and Testnet codes on 2026-10-01
 goal:
   description: >-
     Reader can explain how DeepBook Predict splits state across the Registry,
@@ -45,6 +47,8 @@ questions:
   - Does a DeepBook Predict pool flush block trading?
   - How does the DeepBook Predict referral system work?
   - Does a referred DeepBook Predict trader pay more?
+  - How do DeepBook Predict builder codes work?
+  - How much does a DeepBook Predict builder code earn?
 answer: >-
   DeepBook Predict splits its onchain state across a Registry, a ProtocolConfig,
   a PoolVault, and one ExpiryMarket per expiry. Trader balances and positions
@@ -55,7 +59,9 @@ answer: >-
   finish the flush at that frozen mark while trading continues. An account
   created with a referrer routes a protocol-wide share of its mint fees to that
   referrer, at no extra cost to the trader. A referred trader pays exactly the
-  same total as an unreferred trader.
+  same total as an unreferred trader. A builder code instead adds a fee on top
+  of each mint and live close, 10 percent of the trading fee capped at 0.5
+  percent of quantity, which the code's owner claims from the code's address.
 ---
 
 DeepBook Predict keeps its protocol state in 4 kinds of shared object, custodies user funds in the DeepBook `account` package, and reads every price from feeds that belong to a separate `propbook` package. Knowing which object owns which piece of state is enough to follow any Predict transaction. The same contracts run on Sui Mainnet and Sui Testnet; the only difference a reader of this page meets is the quote coin, which is native USDC on Mainnet and a mintable test coin with the same `usdc::USDC` module path on Testnet, where it displays as DUSDC.
@@ -151,7 +157,7 @@ A quote reports every charge separately, and a mint debits the premium plus the 
 
 - **Trading fee:** The protocol charges it once at each finite boundary of the range, so a directional position pays 1 boundary fee and a two-sided range pays 2. Each boundary's per-unit rate is proportional to the standard deviation of the Bernoulli outcome at that strike, so it peaks where the probability of settling above the strike is nearest to 50 percent and falls toward the tails, with a per-unit floor underneath it. A linear ramp lifts that rate inside a configured window before expiry, and the protocol rounds each boundary's fee down separately.
 - **Fee incentive subsidy:** A reduction in the trading fee, funded from the market's sponsored incentive balance. Anyone can top that balance up. It is `fee_incentive_subsidy` onchain and `subsidy` in the SDK quote and receipt.
-- **Builder fee:** An optional add-on for accounts that carry a builder code, computed from the trading fee and capped by a per-quantity rate. It routes to the builder code's address rather than into the pool.
+- **Builder fee:** An optional add-on for accounts that carry a builder code: 10 percent of the trading fee, capped at 0.5 percent of quantity. It routes to the builder code's address rather than into the pool. [Builder codes](#builder-codes) covers the mechanism.
 - **Congestion surcharge:** A flat per-unit charge that fires only when the transaction's gas price is a high outlier against the market's own smoothed estimate. It is `penalty_fee` onchain and `penalty` in the SDK quote and receipt, so a `penalty` line in a quote is this charge. Admin can disable it, and it ships disabled on both deployments.
 - **Inventory-impact charge:** A charge sized by the change a trade makes to the book's payout profile, held in the market's isolated escrow and rebated when a trade closes that exposure. Its rate ships at zero, which makes the mechanism inert.
 
@@ -238,7 +244,72 @@ Predict has a second way to reward the party that brings in a trader, and DeepBo
 | How it is attached | Once, at account creation, permanently | Set or cleared at any time, under the account's owner or app authorization |
 | Rate | Protocol-wide `referral_fee_rate` | Protocol-wide builder multiplier, capped per quantity |
 
-An account can carry both, and a mint then pays both independently. DeepBook spot referrals attach to a balance manager and pay out of spot trading fees; the `ReferralQueries` methods on the `@mysten/deepbook-v3` package root read those, and they do not apply to Predict accounts or mints.
+An account can carry both, and a mint then pays both independently. [Builder codes](#builder-codes) covers the builder side in full. DeepBook spot referrals attach to a balance manager and pay out of spot trading fees; the `ReferralQueries` methods on the `@mysten/deepbook-v3` package root read those, and they do not apply to Predict accounts or mints.
+
+## Builder codes {#builder-codes}
+
+A builder code lets an app, wallet, or bot that routes order flow to Predict earn a fee from the accounts that trade through it. An account opts in by attaching a code. From then on, each of its mints and live closes pays a builder fee on top of the trading fee, and the fee collects at the code's own address until the code's owner claims it.
+
+Builder codes and referrals answer different needs. A referral pays out of protocol fees at no cost to the trader, and it is fixed when the account is created. A builder fee is an extra charge the trader pays, and the account can change or remove its code at any time. [Referrals, builder codes, and DeepBook spot referrals](#referrals-vs-builder-codes) compares the two.
+
+### Create a code {#builder-code-create}
+
+`registry::create_and_share_builder_code` creates a shared `BuilderCode` object and returns its ID. Anyone can call it. The transaction sender becomes the code's owner and chooses an `index`, so one address can own any number of codes, for example one for each app it runs. [Builder codes](/onchain-finance/deepbook/deepbook-predict/contract-information/registry#builder-codes) gives the signature.
+
+The code's ID derives from the Predict `Registry`, the owner address, and the index. You can therefore compute the ID before the code exists, and a second creation with the same owner and index aborts with `derived_object::EObjectAlreadyExists`. Creation is version-gated like other Predict calls and emits `BuilderCodeCreated`.
+
+The owner never changes. `BuilderCode` has no function that transfers ownership or deletes the code, and only the owner can claim its fees, so the key that creates a code is the only key that can ever collect from it.
+
+### Attach a code to an account {#builder-code-attach}
+
+An account attaches a code with `predict_account::set_builder_code` and removes it with `predict_account::unset_builder_code`. [Builder codes](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#builder-codes) gives both signatures. Each call takes an `Auth`, which in practice means the account owner signs it. The code's owner takes no part, and no session wrapper exists for either call, so a session key cannot change the attachment.
+
+An account carries at most one code. Attaching one affects only the trades that follow, and a later `set_builder_code` replaces it. Any app the account owner signs a `set_builder_code` transaction for can therefore switch the account to that app's own code, and the previous code earns nothing from the account's later trades.
+
+### What the builder earns {#builder-fee}
+
+On each mint and each live close by an account that carries a code, the protocol charges:
+
+```text
+builder_fee = min(floor(trading_fee * 100_000_000 / 1e9), floor(quantity * 5_000_000 / 1e9))
+```
+
+That is 10 percent of the trading fee, capped at 0.5 percent of the quantity, which is the position's maximum payout. Both rates are compiled constants, `constants::builder_fee_multiplier` and `constants::max_builder_fee_rate`, so they are the same on both networks and change only with a package upgrade. No admin setting adjusts them, unlike the referral rate.
+
+Three details decide what a trade pays:
+
+- **The trader pays it on top of the trading fee.** On a mint it adds to `all_in_cost`, so the `max_cost` cap covers it. On a live close it comes out of the proceeds, so the `min_proceeds` floor covers it.
+- **The sponsor subsidy does not reduce it.** On a mint the protocol computes it from the full trading fee, before the subsidy, so a subsidized mint pays the same builder fee as an unsubsidized one.
+- **A live close caps it again.** The builder fee on a close cannot exceed the payout left after the trading fee, so a close whose trading fee consumes the whole payout pays no builder fee.
+
+A settled redeem pays no builder fee, because it charges no fees at all.
+
+For example, take the two-sided range from [Fee components](#fee-components), which pays 0.08 USDC per contract in trading fee. Ten percent of that is 0.008 USDC per contract, but the cap is 0.005 USDC per contract, so the builder fee is 0.005 USDC per contract, or 0.50 USDC on a 100-contract mint.
+
+### Claim the fees {#builder-fee-claim}
+
+The protocol sends each builder fee to the code's object address with `balance::send_funds`, through the balance accumulator, in the same transaction as the trade. The fees never reach the owner's address or any account directly. Two functions on `deepbook_predict::builder_code` read and collect them:
+
+- **`claimable_builder_fees`** returns the USDC that the accumulator has settled at the code's address. It counts only funds the accumulator has already settled, so it can briefly lag the most recent trades.
+- **`claim_all_builder_fees`** withdraws all of it and returns a `Coin<USDC>`, which the same transaction must transfer or use. Only the code's owner can call it, and any other sender aborts with `builder_code::ENotOwner`. With nothing to claim, it returns a zero-value coin and emits no event. It has no partial form.
+
+Claiming takes no `ProtocolConfig`, so a trading pause, a protocol freeze, or a raised version watermark never blocks it. [Predict Accounts SDK](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#operate-builder-code) shows how to create a code and claim its fees from TypeScript.
+
+### Track builder activity {#builder-code-events}
+
+Five events cover a code's life:
+
+| **Event** | **Fields** | **Emitted** |
+| --- | --- | --- |
+| `builder_code_events::BuilderCodeCreated` | `builder_code_id`, `owner`, `builder_code_index` | Once, when the code is created. |
+| `builder_code_events::BuilderCodeSet` | `account_id`, `owner`, `builder_code_id` | On each attach and each removal. `owner` is the account's owner, and `builder_code_id` is `none` after a removal. |
+| `order_events::OrderMinted` | `builder_fee`, `builder_code_id` | On each mint. |
+| `order_events::LiveOrderRedeemed` | `builder_fee`, `builder_code_id` | On each live close. |
+| `builder_code_events::BuilderFeesClaimed` | `builder_code_id`, `owner`, `amount` | On each claim that collects a non-zero amount. |
+
+On the 2 order events, `builder_code_id` names the code that was paid, not the code the account carries. It is `none` whenever `builder_fee` is 0, even when the account has a code attached. To find the accounts that carry a code, read `BuilderCodeSet`. To total what a code has earned, sum `builder_fee` over the order events whose `builder_code_id` is that code. Referral attribution behaves differently: `OrderMinted.referrer_account_id` is present even when the referral payment is 0.
+
+In the SDK, `MintReceipt` and `RedeemReceipt` carry `builderCodeId` and `fees.builder`, with the exact integer in `raw.builderFee`, and `decode.builderCode` reads `BuilderCodeSet`.
 
 ## Pool liquidity and PLP {#vault-and-plp}
 
