@@ -3,17 +3,17 @@
 
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
-use anyhow::{bail, ensure};
+use anyhow::ensure;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_spanned::Spanned;
 
 use move_compiler::{
     diagnostics::{
         config::{DiagnosticFilterConfig, DiagnosticFilterSettings, KnownDiagnosticFilters},
-        filter::{FilterKind, FilterPrefix, resolve_filter_names},
+        filter::{FilterKind, FilterPrefix, validate_filter_names},
     },
     editions::Edition,
-    shared::{format_allow_attr, known_attributes::DiagnosticAttribute},
+    shared::known_attributes::DiagnosticAttribute,
 };
 
 use crate::compatibility::legacy::LegacyData;
@@ -103,34 +103,48 @@ impl DiagnosticFilterEntries {
         )
     }
 
-    fn validate(&self, prefix: FilterPrefix, known: &KnownDiagnosticFilters) -> anyhow::Result<()> {
-        let configured = [&self.filters, &self.build, &self.test]
-            .into_iter()
-            .flat_map(|filters| filters.iter())
-            .map(|(name, level)| (prefix, name.as_str().into(), level.filter_kind()));
-        let name = match resolve_filter_names(configured, known.iter().cloned()) {
-            Ok(_) => return Ok(()),
-            Err((_, name)) => name,
+    fn validation_errors(
+        &self,
+        prefix: FilterPrefix,
+        known: &KnownDiagnosticFilters,
+    ) -> Vec<String> {
+        let section = if prefix.is_none() {
+            "warnings"
+        } else {
+            "lints"
         };
         let lint_prefix = Some(DiagnosticAttribute::LINT_SYMBOL);
-        if prefix.is_none()
-            && resolve_filter_names(
-                [(lint_prefix, name, FilterKind::Warn)],
-                known.iter().cloned(),
-            )
-            .is_ok()
-        {
-            bail!("lint '{name}' must be configured under [lints], not [warnings]");
+        let mut errors = vec![];
+        for (suffix, filters) in [
+            ("", &self.filters),
+            (".build", &self.build),
+            (".test", &self.test),
+        ] {
+            let configured = filters.keys().map(|name| (prefix, name.as_str()));
+            let unknown = match validate_filter_names(configured, known.iter()) {
+                Ok(()) => continue,
+                Err(unknown) => unknown,
+            };
+            assert!(
+                !unknown.is_empty(),
+                "failed filter validation must report an unknown name"
+            );
+            for (_, name) in unknown {
+                let message = if prefix.is_none() {
+                    if validate_filter_names([(lint_prefix, name)], known.iter()).is_ok() {
+                        format!("lint filter; use [lints{suffix}]")
+                    } else {
+                        "unknown compiler warning filter".to_owned()
+                    }
+                } else if validate_filter_names([(None, name)], known.iter()).is_ok() {
+                    format!("compiler warning filter; use [warnings{suffix}]")
+                } else {
+                    "unknown lint filter".to_owned()
+                };
+                errors.push(format!("  [{section}{suffix}] {name:?}: {message}"));
+            }
         }
-        if prefix == lint_prefix
-            && resolve_filter_names([(None, name, FilterKind::Warn)], known.iter().cloned()).is_ok()
-        {
-            bail!("compiler warning '{name}' must be configured under [warnings], not [lints]");
-        }
-        bail!(
-            "unknown warning filter '{}' in Move.toml",
-            format_allow_attr(prefix, name)
-        )
+        errors
     }
 }
 
@@ -141,9 +155,16 @@ impl DiagnosticConfigObject {
         profile: DiagnosticProfile,
         known: &KnownDiagnosticFilters,
     ) -> anyhow::Result<DiagnosticFilterSettings> {
-        self.warning_filters.validate(None, known)?;
-        self.lint_filters
-            .validate(Some(DiagnosticAttribute::LINT_SYMBOL), known)?;
+        let mut errors = self.warning_filters.validation_errors(None, known);
+        errors.extend(
+            self.lint_filters
+                .validation_errors(Some(DiagnosticAttribute::LINT_SYMBOL), known),
+        );
+        ensure!(
+            errors.is_empty(),
+            "invalid diagnostic filter names in Move.toml:\n{}",
+            errors.join("\n")
+        );
         let config_for_profile = |entries: &DiagnosticFilterEntries| {
             let config = entries
                 .effective_diagnostics(profile)
@@ -617,7 +638,7 @@ mod tests {
                 diagnostic_settings(source, profile, Flavor::Core)
                     .unwrap_err()
                     .to_string(),
-                "unknown warning filter 'lint(public_entry)' in Move.toml"
+                "invalid diagnostic filter names in Move.toml:\n  [lints.test] \"public_entry\": unknown lint filter"
             );
         }
     }
@@ -642,30 +663,29 @@ mod tests {
 
     #[test]
     fn diagnostic_validation_errors_are_consistent() {
-        for (section, name, expected) in [
-            (
-                "warnings",
-                "abort_without_constant",
-                "lint 'abort_without_constant' must be configured under [lints], not [warnings]",
-            ),
-            (
-                "lints",
-                "unused_variable",
-                "compiler warning 'unused_variable' must be configured under [warnings], not [lints]",
-            ),
-            (
-                "warnings",
-                "not_a_warning",
-                "unknown warning filter 'not_a_warning' in Move.toml",
-            ),
-            (
-                "lints",
-                "not_a_lint",
-                "unknown warning filter 'lint(not_a_lint)' in Move.toml",
-            ),
-        ] {
-            for suffix in ["", ".build", ".test"] {
+        for suffix in ["", ".build", ".test"] {
+            for (section, name, message) in [
+                (
+                    "warnings",
+                    "abort_without_constant",
+                    format!("lint filter; use [lints{suffix}]"),
+                ),
+                (
+                    "lints",
+                    "unused_variable",
+                    format!("compiler warning filter; use [warnings{suffix}]"),
+                ),
+                (
+                    "warnings",
+                    "not_a_warning",
+                    "unknown compiler warning filter".to_owned(),
+                ),
+                ("lints", "not_a_lint", "unknown lint filter".to_owned()),
+            ] {
                 let source = format!("[{section}{suffix}]\n{name} = 'warn'");
+                let expected = format!(
+                    "invalid diagnostic filter names in Move.toml:\n  [{section}{suffix}] {name:?}: {message}"
+                );
                 for profile in [DiagnosticProfile::Build, DiagnosticProfile::Test] {
                     assert_eq!(
                         diagnostic_settings(&source, profile, Flavor::Core)

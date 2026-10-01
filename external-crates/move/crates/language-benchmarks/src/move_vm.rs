@@ -161,10 +161,8 @@ fn make_path(file: &str) -> PathBuf {
 // Compile `bench.move` and its dependencies
 pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
     let src_files = vec![make_path(filename).to_str().unwrap().to_owned()];
-    let pkg_config = move_compiler::shared::PackageConfig {
-        edition: Edition::E2024_BETA,
-        ..Default::default()
-    };
+    let pkg_config =
+        move_compiler::shared::PackageConfig::default().set_edition(Edition::E2024_BETA);
     let mut named_addresses = move_stdlib::named_addresses();
     named_addresses.insert(
         "bench".to_string(),

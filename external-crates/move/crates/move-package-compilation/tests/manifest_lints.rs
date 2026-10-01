@@ -78,7 +78,7 @@ public_entry = "deny"
         });
     assert_eq!(
         result.unwrap_err().to_string(),
-        "unknown warning filter 'lint(public_entry)' in Move.toml"
+        "invalid diagnostic filter names in Move.toml:\n  [lints.test] \"public_entry\": unknown lint filter"
     );
     assert!(!String::from_utf8(output).unwrap().contains("BUILDING"));
 }

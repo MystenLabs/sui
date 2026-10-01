@@ -151,7 +151,9 @@ each section. Configuring a lint as `warn` or `deny` enables its analysis; `allo
 `--lint` enables otherwise unconfigured optional lints, but respects manifest settings.
 `--no-lint` disables all lint analysis regardless of manifest settings.
 
-Item-level attributes override package diagnostic levels, but cannot enable disabled lint analysis.
+Only the root manifest configures package diagnostics. Dependency diagnostics are suppressed.
+Module attributes override manifest levels, even when the manifest setting is more specific.
+Member attributes override module attributes. Source attributes cannot enable disabled lint analysis.
 
 ```move
 module 0x0::example {

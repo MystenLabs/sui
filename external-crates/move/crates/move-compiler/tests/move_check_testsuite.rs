@@ -17,7 +17,7 @@ use move_command_line_common::{
 use move_compiler::{
     Compiler, PASS_PARSER,
     command_line::compiler::move_check_for_errors,
-    diagnostics::filter::{empty_filter_scope, unused_for_test_filter_scope},
+    diagnostics::config::DiagnosticFilterSettings,
     diagnostics::*,
     editions::{Edition, Flavor},
     linters::{self, LintLevel},
@@ -160,17 +160,9 @@ fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
         Edition::LEGACY
     };
     // config
-    let warning_filter = if matches!(test_kind, TestKind::Unused | TestKind::IDE) {
-        empty_filter_scope()
-    } else {
-        unused_for_test_filter_scope()
-    };
-    let config = PackageConfig {
-        flavor,
-        edition,
-        is_dependency: false,
-        warning_filter,
-    };
+    let config = PackageConfig::default()
+        .set_flavor(flavor)
+        .set_edition(edition);
     // test info
     let test_info = TestInfo {
         flavor,
@@ -235,11 +227,17 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
         named_address_map,
     }];
 
+    let settings = if matches!(test_kind, TestKind::Unused | TestKind::IDE) {
+        DiagnosticFilterSettings::default()
+    } else {
+        DiagnosticFilterSettings::for_testing()
+    };
     let flags = flags.set_sources_shadow_deps(true);
     let mut compiler = Compiler::from_package_paths(None, targets, deps)
         .unwrap()
         .set_flags(flags)
-        .set_default_config(package_config);
+        .set_default_config(package_config)
+        .set_diagnostic_filters(LintLevel::None, settings);
 
     if flavor == Flavor::Sui {
         let (prefix, filters) = sui_mode::linters::known_filters();
