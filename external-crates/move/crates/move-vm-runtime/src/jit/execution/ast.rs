@@ -114,9 +114,9 @@ pub(crate) struct Module {
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
     pub field_instantiations: ArenaVec<FieldInstantiation>,
 
-    /// a map from signatures in instantiations to the `ArenaVec<ArenaType>` that represents it.
-    /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
-    pub instantiation_signatures: ArenaVec<ArenaVec<ArenaType>>,
+    /// a map from signatures in instantiations to the interned types that represent it.
+    /// [ALLOC] This vector is allocated in the package arena
+    pub instantiation_signatures: ArenaVec<ArenaVec<VMPointer<ArenaType>>>,
 
     /// constant references carry an index into a global vector of values.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
@@ -137,7 +137,7 @@ impl Drop for Module {
 #[derive(Debug)]
 pub(crate) struct Constant {
     pub(crate) value: ConstantValue,
-    pub(crate) type_: ArenaType,
+    pub(crate) type_: VMPointer<ArenaType>,
     // Size of constant -- used for gas charging. When
     // `VMConfig::charge_ld_const_abstract_size` is set this is the abstract value size of the
     // constant; otherwise it is the serialized byte length.
@@ -156,9 +156,9 @@ pub(crate) struct Function {
     pub visibility: Visibility,
     pub index: FunctionDefinitionIndex,
     pub code: ArenaVec<Bytecode>,
-    pub parameters: ArenaVec<ArenaType>,
-    pub locals: ArenaVec<ArenaType>,
-    pub return_: ArenaVec<ArenaType>,
+    pub parameters: ArenaVec<VMPointer<ArenaType>>,
+    pub locals: ArenaVec<VMPointer<ArenaType>>,
+    pub return_: ArenaVec<VMPointer<ArenaType>>,
     pub type_parameters: ArenaVec<AbilitySet>,
     // NOTE: This field is manually dropped in Function::drop() to prevent Arc leaks
     // Any value holding a `Function` needs to ensure it is correctly dropped.
@@ -208,7 +208,7 @@ pub(crate) struct StructDef {
     pub def_vtable_key: VirtualTableKey,
     pub abilities: AbilitySet,
     pub type_parameters: ArenaVec<DatatypeTyParameter>,
-    pub fields: ArenaVec<ArenaType>,
+    pub fields: ArenaVec<VMPointer<ArenaType>>,
     pub field_names: ArenaVec<IdentifierKey>,
 }
 
@@ -226,7 +226,7 @@ pub(crate) struct EnumDef {
 pub(crate) struct VariantDef {
     pub variant_tag: VariantTag,
     pub variant_name: IdentifierKey,
-    pub fields: ArenaVec<ArenaType>,
+    pub fields: ArenaVec<VMPointer<ArenaType>>,
     pub field_names: ArenaVec<IdentifierKey>,
     pub enum_def: VMPointer<EnumDef>,
 }
@@ -239,7 +239,7 @@ pub(crate) struct VariantDef {
 #[derive(Debug)]
 pub(crate) struct FunctionInstantiation {
     pub handle: CallType,
-    pub(crate) instantiation: VMPointer<ArenaVec<ArenaType>>,
+    pub(crate) instantiation: VMPointer<ArenaVec<VMPointer<ArenaType>>>,
 }
 
 #[derive(Debug)]
@@ -247,7 +247,7 @@ pub(crate) struct StructInstantiation {
     // struct field count
     pub field_count: u16,
     pub def_vtable_key: VirtualTableKey,
-    pub(crate) type_params: VMPointer<ArenaVec<ArenaType>>,
+    pub(crate) type_params: VMPointer<ArenaVec<VMPointer<ArenaType>>>,
 }
 
 // A field handle. The offset is the only used information when operating on a field
@@ -271,7 +271,7 @@ pub(crate) struct EnumInstantiation {
     pub variant_count_map: ArenaVec<u16>,
     pub enum_def: VMPointer<EnumDef>,
     pub def_vtable_key: VirtualTableKey,
-    pub type_params: VMPointer<ArenaVec<ArenaType>>,
+    pub type_params: VMPointer<ArenaVec<VMPointer<ArenaType>>>,
 }
 
 // A variant instantiation.
@@ -292,11 +292,11 @@ pub(crate) enum ArenaType {
     U128,
     Address,
     Signer,
-    Vector(ArenaBox<ArenaType>),
+    Vector(VMPointer<ArenaType>),
     Datatype(VirtualTableKey),
-    DatatypeInstantiation(ArenaBox<(VirtualTableKey, ArenaVec<ArenaType>)>),
-    Reference(ArenaBox<ArenaType>),
-    MutableReference(ArenaBox<ArenaType>),
+    DatatypeInstantiation(VMPointer<(VirtualTableKey, ArenaVec<VMPointer<ArenaType>>)>),
+    Reference(VMPointer<ArenaType>),
+    MutableReference(VMPointer<ArenaType>),
     TyParam(u16),
     U16,
     U32,
@@ -1380,7 +1380,32 @@ pub trait TypeNodeCount {
 
 // Generated implementations.
 impl_count_type_nodes!(Type);
-impl_count_type_nodes!(ArenaType);
+
+impl TypeNodeCount for ArenaType {
+    fn count_type_nodes(&self) -> PartialVMResult<u64> {
+        let mut todo = vec![self];
+        let mut result = 0u64;
+        while let Some(ty) = todo.pop() {
+            match ty {
+                ArenaType::Vector(ty)
+                | ArenaType::Reference(ty)
+                | ArenaType::MutableReference(ty) => {
+                    result = result.safe_add(1)?;
+                    todo.push(ty);
+                }
+                ArenaType::DatatypeInstantiation(instantiation) => {
+                    let (_, type_arguments) = &**instantiation;
+                    result = result.safe_add(1)?;
+                    todo.extend(type_arguments.iter().map(|ty| &**ty));
+                }
+                _ => {
+                    result = result.safe_add(1)?;
+                }
+            }
+        }
+        Ok(result)
+    }
+}
 
 // -------------------------------------------------------------------------------------------------
 // Into
@@ -1610,11 +1635,10 @@ impl std::fmt::Debug for ArenaType {
             ArenaType::U128 => write!(f, "u128"),
             ArenaType::Address => write!(f, "address"),
             ArenaType::Signer => write!(f, "signer"),
-            ArenaType::Vector(inner) => write!(f, "vector<{:?}>", inner.inner_ref()),
+            ArenaType::Vector(inner) => write!(f, "vector<{:?}>", inner.to_ref()),
             ArenaType::Datatype(key) => write!(f, "{:?}", key),
             ArenaType::DatatypeInstantiation(inst) => {
-                // inst is an ArenaBox<(VirtualTableKey, ArenaVec<ArenaType>)>
-                let (key, types) = inst.inner_ref();
+                let (key, types) = inst.to_ref();
                 write!(f, "{:?}<", key)?;
                 let types = types
                     .iter()
@@ -1622,8 +1646,8 @@ impl std::fmt::Debug for ArenaType {
                     .collect::<String>();
                 write!(f, "{}>", types)
             }
-            ArenaType::Reference(inner) => write!(f, "&{:?}", inner.inner_ref()),
-            ArenaType::MutableReference(inner) => write!(f, "&mut {:?}", inner.inner_ref()),
+            ArenaType::Reference(inner) => write!(f, "&{:?}", inner.to_ref()),
+            ArenaType::MutableReference(inner) => write!(f, "&mut {:?}", inner.to_ref()),
             ArenaType::TyParam(idx) => write!(f, "T{}", idx),
             ArenaType::U16 => write!(f, "u16"),
             ArenaType::U32 => write!(f, "u32"),
