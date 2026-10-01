@@ -18,10 +18,10 @@
 //! filters, indexes, and bumps the watermark for a whole batch under one lock,
 //! serializing version admission across the two sources; combined with every
 //! committed transaction executing before its epoch closes, this guarantees every
-//! assigned index reaches the driver. Units without a version (pre-accumulator
-//! epochs replayed from checkpoints, the end-of-epoch transaction) bypass
-//! deduplication; execution cannot block on undeclared dependencies in such epochs,
-//! and any future blocking feature must be gated on accumulator-versioned epochs.
+//! assigned index reaches the driver. This design depends on accumulator versions
+//! being present, which holds because accumulators cannot be disabled once enabled.
+//! Units without a version (pre-accumulator epochs replayed from checkpoints, where
+//! nothing blocks, and the end-of-epoch transaction) bypass deduplication.
 //!
 //! A unit that already-indexed units may wait on must never be re-assigned a new,
 //! higher index (its blocked waiters would pin the concurrency limit while the
