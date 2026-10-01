@@ -21,6 +21,7 @@ use crate::{
         values::Value as RuntimeValue,
     },
     jit::execution::ast::{ArenaType, Function, Type, TypeSubst},
+    shared::vm_pointer::VMPointer,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMError, VMResult};
 use move_core_types::{
@@ -1991,7 +1992,7 @@ impl FunctionTypeInfo {
             })
         }
 
-        let subst_and_layout_type = |ty: &ArenaType| -> Option<TagWithLayoutInfoOpt> {
+        let subst_and_layout_type = |ty: &VMPointer<ArenaType>| -> Option<TagWithLayoutInfoOpt> {
             let subst_ty = ty.subst(ty_args).ok()?;
             let (ty, ref_type) = deref_ty(subst_ty)?;
             let tag = vtables.type_to_type_tag(&ty).ok()?;

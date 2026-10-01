@@ -14,7 +14,7 @@ use crate::{
         ArenaType, FunctionInstantiation, StructInstantiation, Type, TypeNodeCount, TypeSubst,
         VariantInstantiation,
     },
-    shared::TypeLimits,
+    shared::{TypeLimits, vm_pointer::VMPointer},
 };
 
 use move_binary_format::{errors::PartialVMResult, partial_vm_error};
@@ -76,7 +76,7 @@ pub fn instantiate_enum_type(
 fn instantiate_datatype_common(
     limits: &TypeLimits,
     datatype_key: &VirtualTableKey,
-    type_params: &[ArenaType],
+    type_params: &[VMPointer<ArenaType>],
     ty_args: &[Type],
 ) -> PartialVMResult<Type> {
     // Before instantiating the type, count the # of nodes of all type arguments plus
