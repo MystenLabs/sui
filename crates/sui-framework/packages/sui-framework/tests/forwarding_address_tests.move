@@ -33,9 +33,15 @@ fun register_allocates_distinct_ids_owned_by_the_registrant() {
     assert!(alice_id != RESERVED_MASTER_ID);
     assert!(bob_id != RESERVED_MASTER_ID);
     assert!(alice_id != bob_id);
-    assert!(forwarding_address::registered_master_for_testing(&registry, alice_id) == option::some(ALICE));
-    assert!(forwarding_address::registered_master_for_testing(&registry, bob_id) == option::some(BOB));
-    assert!(forwarding_address::registered_master_for_testing(&registry, RESERVED_MASTER_ID).is_none());
+    assert!(
+        forwarding_address::registered_master_for_testing(&registry, alice_id) == option::some(ALICE),
+    );
+    assert!(
+        forwarding_address::registered_master_for_testing(&registry, bob_id) == option::some(BOB),
+    );
+    assert!(
+        forwarding_address::registered_master_for_testing(&registry, RESERVED_MASTER_ID).is_none(),
+    );
     test_scenario::return_shared(registry);
 
     scenario.next_tx(ALICE);
