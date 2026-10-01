@@ -244,6 +244,8 @@ pub(crate) fn dependency_drop_filter_scope() -> FilterScope {
 // Known filter registration
 //**************************************************************************************************
 
+const UNUSED_ITEM_CATEGORY: u8 = Category::UnusedItem as u8;
+
 /// Expansion of a known filter name into the set of [`DiagnosticsID`] triples it covers.
 /// Wildcard sentinels in the IDs are converted to [`FilterTarget`] variants at the filter
 /// boundary. Kind is supplied at attribute-resolution time, not stored here.
@@ -256,8 +258,8 @@ pub static COMPILER_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpans
             (all) => {
                 DiagnosticsID::all(DiagnosticOrigin::Compiler)
             };
-            ($cat:ident) => {
-                DiagnosticsID::category(DiagnosticOrigin::Compiler, Category::$cat as u8)
+            (UnusedItem) => {
+                DiagnosticsID::category(DiagnosticOrigin::Compiler, UNUSED_ITEM_CATEGORY)
             };
             ($cat:ident :: $code:ident) => {
                 DiagnosticsID::exact(
