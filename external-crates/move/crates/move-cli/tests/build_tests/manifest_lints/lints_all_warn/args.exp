@@ -1,0 +1,16 @@
+Command `build`:
+BUILDING manifest_lints
+warning[WL04005]: 'abort' or 'assert' without named constant
+   ┌─ ./sources/m.move:10:15
+   │
+10 │         abort 1
+   │               ^ Prefer using a named constant.
+   │
+   = Consider using an error constant with the '#[error]' to allow for a more descriptive error.
+
+warning[WL04004]: unneeded return
+   ┌─ ./sources/m.move:14:9
+   │
+14 │         return 0
+   │         ^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+

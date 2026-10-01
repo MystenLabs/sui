@@ -1,0 +1,2 @@
+Command `build`:
+Error: Error while loading dependency .: error while loading legacy manifest "./Move.toml": Error parsing '[warnings]' section of manifest
