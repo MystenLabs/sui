@@ -10,17 +10,19 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import roots from "./lib/roots.cjs";
+
+const { CONTENT_ROOT, SOURCE_ROOT } = roots;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const LIB_RS = path.resolve(
-  __dirname,
-  "../../../crates/sui-protocol-config/src/lib.rs",
-);
-const MDX_FILE = path.resolve(
-  __dirname,
-  "../../content/develop/transaction-payment/gasless-stablecoin-transfers.mdx",
+// A Rust file, so it resolves against the code checkout; the page it checks
+// resolves against the content tree. See scripts/lib/roots.cjs.
+const LIB_RS = path.join(SOURCE_ROOT, "crates/sui-protocol-config/src/lib.rs");
+const MDX_FILE = path.join(
+  CONTENT_ROOT,
+  "develop/transaction-payment/gasless-stablecoin-transfers.mdx",
 );
 
 // Human-readable issuer names keyed by the Rust constant name.

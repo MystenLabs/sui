@@ -5,9 +5,10 @@ const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
 
-const contentDir = path.join(__dirname, '../../content');
+const { CONTENT_ROOT, SOURCE_ROOT } = require('./lib/roots.cjs');
+const contentDir = CONTENT_ROOT;
 const outputDir = path.join(__dirname, '../build/markdown');
-const repoRoot = path.join(__dirname, '../../..');
+const repoRoot = SOURCE_ROOT;
 const snippetsDir = path.join(contentDir, 'snippets');
 
 // ── Snippet resolution ──────────────────────────────────────────────────────

@@ -4,10 +4,14 @@
 const fs = require("fs");
 const path = require("path");
 
+// Resolved against the code checkout rather than process.cwd(), so this no
+// longer depends on being run from docs/site. See scripts/lib/roots.cjs.
+const { SOURCE_ROOT } = require("./lib/roots.cjs");
+
 const SPECS = [
-  { network: "mainnet", relPath: "../../crates/sui-indexer-alt-jsonrpc/openrpc.json", strictJson: true },
-  { network: "testnet", relPath: "../../crates/sui-indexer-alt-jsonrpc/openrpc.json", strictJson: true },
-  { network: "devnet", relPath: "../../crates/sui-indexer-alt-jsonrpc/openrpc.json", strictJson: true },
+  { network: "mainnet", relPath: "crates/sui-indexer-alt-jsonrpc/openrpc.json", strictJson: true },
+  { network: "testnet", relPath: "crates/sui-indexer-alt-jsonrpc/openrpc.json", strictJson: true },
+  { network: "devnet", relPath: "crates/sui-indexer-alt-jsonrpc/openrpc.json", strictJson: true },
 ];
 
 // Treat these as "expected non-JSON stubs".
@@ -78,7 +82,7 @@ function validateOpenRpcShape(doc, absPath) {
 }
 
 function main() {
-  const repoRoot = process.cwd();
+  const repoRoot = SOURCE_ROOT;
 
   let validCount = 0;
   const warnings = [];
