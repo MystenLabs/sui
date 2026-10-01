@@ -328,6 +328,18 @@ Error: Error while loading dependency .: error while parsing "./Move.toml": TOML
    | ^
 duplicate key `unused` in table `lints`
 
+External Command `printf '\n# ===== [FAILURE] ======================================\n# == Duplicate keys in an inactive diagnostic profile are rejected\n'`:
+
+# ===== [FAILURE] ======================================
+# == Duplicate keys in an inactive diagnostic profile are rejected
+External Command `cp Move.duplicate_profile_key.error.toml Move.toml`:
+Command `build`:
+Error: Error while loading dependency .: error while parsing "./Move.toml": TOML parse error at line 13, column 1
+   |
+13 | abort_without_constant = "deny"
+   | ^
+duplicate key `abort_without_constant` in table `lints.test`
+
 External Command `printf '\n# ===== [FAILURE] ======================================\n# == Invalid lint levels are rejected\n'`:
 
 # ===== [FAILURE] ======================================

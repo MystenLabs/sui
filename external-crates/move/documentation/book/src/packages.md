@@ -73,6 +73,18 @@ published-at* = "<hex-address>" # The address that the package is published at. 
 [lints] # (Optional section) Package-wide lint levels
 <lint_name> = "allow" | "warn" | "deny"
 
+[warnings.build] # (Optional section) Compiler warning overrides for builds
+<warning_name> = "allow" | "warn" | "deny"
+
+[warnings.test] # (Optional section) Compiler warning overrides for tests
+<warning_name> = "allow" | "warn" | "deny"
+
+[lints.build] # (Optional section) Lint overrides for builds
+<lint_name> = "allow" | "warn" | "deny"
+
+[lints.test] # (Optional section) Lint overrides for tests
+<lint_name> = "allow" | "warn" | "deny"
+
 [dependencies] # (Optional section) Paths to dependencies 
 # One or more lines declaring dependencies in the following format
 
@@ -134,9 +146,12 @@ published-at* = "<hex-address>" # The address that the package is published at. 
 <addr_name> = "<hex_address>" # e.g., alice = "0xB0B"
 ```
 
-Warning and lint names match their source attributes. Item-level attributes are more specific
-than package settings. Configuring a lint enables its analysis; `all` enables every lint unless
-`--no-lint` is passed.
+Warning and lint names match their source attributes. Specific settings override `all` within
+each section. Configuring a lint as `warn` or `deny` enables its analysis; `allow` disables it.
+`--lint` enables otherwise unconfigured optional lints, but respects manifest settings.
+`--no-lint` disables all lint analysis regardless of manifest settings.
+
+Item-level attributes override package diagnostic levels, but cannot enable disabled lint analysis.
 
 ```move
 module 0x0::example {
@@ -157,6 +172,27 @@ unused_variable = "deny"
 [lints]
 abort_without_constant = "deny"
 ```
+
+Both warning and lint sections support `build` and `test` profiles. `build` selects the build
+profile; `test` and `build --mode test` select the test profile. Other build modes still select the
+build profile. Other diagnostic profile names are rejected.
+
+Profile entries replace matching base keys, while unconfigured keys inherit their base settings.
+Build and test profiles are independent and may configure the same keys. Duplicate keys within
+one profile are invalid TOML. Inline tables and dotted tables are both supported:
+
+```toml
+[lints]
+all = "allow"
+abort_without_constant = "warn"
+build = { abort_without_constant = "allow" }
+
+[lints.test]
+abort_without_constant = "deny"
+```
+
+This example disables `abort_without_constant` during normal builds and makes it an error during
+tests. The base `all` setting applies to both profiles.
 
 An example of a minimal package manifest:
 

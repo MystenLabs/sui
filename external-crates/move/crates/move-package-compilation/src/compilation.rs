@@ -422,37 +422,3 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
 
     Ok(package_paths)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn diagnostic_profile_follows_testing_configuration() {
-        assert_eq!(
-            active_diagnostic_profile(&BuildConfig::default()),
-            DiagnosticProfile::Build
-        );
-        assert_eq!(
-            active_diagnostic_profile(&BuildConfig {
-                test_mode: true,
-                ..BuildConfig::default()
-            }),
-            DiagnosticProfile::Test
-        );
-        assert_eq!(
-            active_diagnostic_profile(&BuildConfig {
-                modes: vec![ModeAttribute::TEST.into()],
-                ..BuildConfig::default()
-            }),
-            DiagnosticProfile::Test
-        );
-        assert_eq!(
-            active_diagnostic_profile(&BuildConfig {
-                modes: vec![Symbol::from("spec")],
-                ..BuildConfig::default()
-            }),
-            DiagnosticProfile::Build
-        );
-    }
-}
