@@ -9,7 +9,8 @@
 //! transaction's execution will produce (the blocking primitives in
 //! `mysten_common::sync`). Declared inputs never cause this - the scheduler sends a
 //! transaction only once they are available; blocking happens only for *undeclared*
-//! dependencies on system objects (the clock, the accumulator root). With bounded
+//! dependencies on system objects (the clock, and the implicitly read system objects:
+//! the accumulator root and the forwarding address registry). With bounded
 //! concurrency this could deadlock: every slot parked on a value whose writer was
 //! never admitted.
 //!
