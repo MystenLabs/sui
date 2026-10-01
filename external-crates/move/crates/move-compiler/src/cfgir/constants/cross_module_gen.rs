@@ -205,7 +205,7 @@ pub(crate) fn module(
             continue;
         };
 
-        for (_, block) in blocks.iter_mut() {
+        for block in blocks.values_mut() {
             for cmd in block.iter_mut() {
                 command(&mut ctxt, cmd);
             }

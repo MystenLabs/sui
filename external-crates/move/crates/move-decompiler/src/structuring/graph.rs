@@ -85,7 +85,7 @@ impl Graph {
     }
 
     pub fn update_loop_info(&mut self, loop_head: NodeIndex) {
-        for (_, back_edges) in self.back_edges.iter_mut() {
+        for back_edges in self.back_edges.values_mut() {
             back_edges.remove(&loop_head);
         }
         for node in self.back_edges.keys().copied().collect::<Vec<_>>() {

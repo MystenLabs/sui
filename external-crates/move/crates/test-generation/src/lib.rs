@@ -177,9 +177,9 @@ fn output_error_case(module: CompiledModule, output_path: Option<String>, case_i
                 .expect("Unable to serialize module");
             let output_file = format!("{}/case{}_{}.module", path, tid, case_id);
             let mut f = fs::File::create(output_file)
-                .unwrap_or_else(|err| panic!("Unable to open output file {}: {}", &path, err));
+                .unwrap_or_else(|err| panic!("Unable to open output file {}: {}", path, err));
             f.write_all(&out)
-                .unwrap_or_else(|err| panic!("Unable to write to output file {}: {}", &path, err));
+                .unwrap_or_else(|err| panic!("Unable to write to output file {}: {}", path, err));
         }
         None => {
             debug!("{:#?}", module);

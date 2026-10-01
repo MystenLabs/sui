@@ -27,7 +27,7 @@ pub fn validate_syntax_methods(
     module: &mut N::ModuleDefinition,
 ) {
     let methods = &mut module.syntax_methods;
-    for (_, entry) in methods.iter_mut() {
+    for entry in methods.values_mut() {
         if let Some(index) = &mut entry.index {
             let IndexSyntaxMethods { index, index_mut } = &mut **index;
             if let (Some(index_defn), Some(index_mut_defn)) = (index.as_ref(), index_mut.as_ref())

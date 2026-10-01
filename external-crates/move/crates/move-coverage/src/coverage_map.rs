@@ -224,7 +224,7 @@ impl CoverageMap {
 
     pub fn to_unified_exec_map(&self) -> ExecCoverageMap {
         let mut unified_map = ExecCoverageMap::new(String::new());
-        for (_, exec_map) in self.exec_maps.iter() {
+        for exec_map in self.exec_maps.values() {
             for ((module_addr, module_name), module_map) in exec_map.module_maps.iter() {
                 for (func_name, func_map) in module_map.function_maps.iter() {
                     for (pc, count) in func_map.iter() {

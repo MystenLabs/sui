@@ -314,7 +314,7 @@ fn execute_inner<M: Measurement + 'static>(
                             None,
                         )
                         .unwrap_or_else(|err| {
-                            panic!("{:?}::bench in {file} failed with {:?}", &module_id, err)
+                            panic!("{:?}::bench in {file} failed with {:?}", module_id, err)
                         })
                 })
             });
