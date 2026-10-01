@@ -307,11 +307,7 @@ impl CompilationEnv {
             })
             .collect();
 
-        let root_scope = if flags.silence_warnings() {
-            filter::all_filter_scope()
-        } else {
-            root_scope.unwrap_or_else(filter::empty_filter_scope)
-        };
+        let root_scope = root_scope.unwrap_or_else(filter::empty_filter_scope);
 
         let mut diags = Diagnostics::new();
         if flags.json_errors() {
@@ -369,13 +365,22 @@ impl CompilationEnv {
         &self.mapped_files
     }
 
+    fn root_filter_stack(&self) -> FilterStack {
+        let mut stack = FilterStack::new();
+        if self.flags.silence_warnings() {
+            stack.push(filter::all_filter_scope());
+        }
+        stack.push(self.root_scope.clone());
+        stack
+    }
+
     pub fn diagnostic_reporter_at_top_level(&self) -> DiagnosticReporter<'_> {
         DiagnosticReporter::new(
             &self.flags,
             &self.known_filter_names,
             Arc::clone(&self.diags),
             Arc::clone(&self.ide_information),
-            FilterStack::root(self.root_scope.clone()),
+            self.root_filter_stack(),
         )
     }
 
@@ -383,7 +388,7 @@ impl CompilationEnv {
         DiagnosticReporter::dummy_reporter(
             &self.flags,
             &self.known_filter_names,
-            FilterStack::root(self.root_scope.clone()),
+            self.root_filter_stack(),
         )
     }
 
@@ -393,7 +398,7 @@ impl CompilationEnv {
             &self.known_filter_names,
             Arc::new(RwLock::new(Diagnostics::new())),
             Arc::clone(&self.ide_information),
-            FilterStack::root(self.root_scope.clone()),
+            self.root_filter_stack(),
         )
     }
 
@@ -905,7 +910,9 @@ fn parse_symbol(s: &str) -> Result<Symbol, String> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PackageConfig {
     pub is_dependency: bool,
-    pub warning_filter: FilterScope,
+    // TODO (diagnostics): This field is intentionally unused, because the package system currently only
+    // considers the root manifest's warning scope for usage. In the future, we should support it per-package.
+    _warning_filter: FilterScope,
     pub flavor: Flavor,
     pub edition: Edition,
 }
@@ -914,10 +921,27 @@ impl Default for PackageConfig {
     fn default() -> Self {
         Self {
             is_dependency: false,
-            warning_filter: filter::empty_filter_scope(),
+            _warning_filter: filter::empty_filter_scope(),
             flavor: Flavor::default(),
             edition: Edition::default(),
         }
+    }
+}
+
+impl PackageConfig {
+    pub fn set_edition(mut self, edition: Edition) -> Self {
+        self.edition = edition;
+        self
+    }
+
+    pub fn set_flavor(mut self, flavor: Flavor) -> Self {
+        self.flavor = flavor;
+        self
+    }
+
+    pub fn set_is_dependency(mut self, is_dependency: bool) -> Self {
+        self.is_dependency = is_dependency;
+        self
     }
 }
 

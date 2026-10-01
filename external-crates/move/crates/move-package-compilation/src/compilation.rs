@@ -21,7 +21,7 @@ use colored::Colorize;
 use move_compiler::{
     Compiler, Flags,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{config::known_diagnostic_filters, filter::empty_filter_scope},
+    diagnostics::config::known_diagnostic_filters,
     editions::{Edition, Flavor},
     shared::{
         PackageConfig, PackagePaths, SaveFlag, SaveHook, files::MappedFiles,
@@ -395,15 +395,14 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
             .default_flavor
             .or(pkg.flavor().map(Flavor::from_str).transpose()?)
             .unwrap_or(Flavor::Sui);
-        let config = PackageConfig {
-            is_dependency: !pkg.is_root(),
-            edition: pkg
-                .edition()
-                .or(build_config.default_edition)
-                .unwrap_or(Edition::LEGACY), // TODO require edition
-            flavor,
-            warning_filter: empty_filter_scope(),
-        };
+        let config = PackageConfig::default()
+            .set_is_dependency(!pkg.is_root())
+            .set_edition(
+                pkg.edition()
+                    .or(build_config.default_edition)
+                    .unwrap_or(Edition::LEGACY),
+            )
+            .set_flavor(flavor);
 
         // Assign a unique name for the compiler for each package.
         let safe_name = Symbol::from(pkg.id().clone());

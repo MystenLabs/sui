@@ -12,7 +12,7 @@ use crate::{
     diagnostics::{
         codes::{DiagnosticsID, Severity},
         config::{DiagnosticFilterSettings, KnownDiagnosticFilters, known_diagnostic_filters},
-        filter::{FilterName, FilterScope},
+        filter::FilterName,
         *,
     },
     editions::{Edition, Flavor},
@@ -68,7 +68,6 @@ pub struct Compiler {
     flags: Flags,
     visitors: IndexMap<TypeId, Visitor>,
     diagnostic_filters: Option<(LintLevel, DiagnosticFilterSettings)>,
-    warning_filter: Option<FilterScope>,
     known_warning_filters: KnownDiagnosticFilters,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
@@ -207,7 +206,6 @@ impl Compiler {
             flags: Flags::empty(),
             visitors: IndexMap::new(),
             diagnostic_filters: None,
-            warning_filter: None,
             known_warning_filters: vec![],
             package_configs,
             default_config: None,
@@ -303,12 +301,6 @@ impl Compiler {
         self
     }
 
-    pub fn set_warning_filter(mut self, filter: Option<FilterScope>) -> Self {
-        assert!(self.warning_filter.is_none());
-        self.warning_filter = filter;
-        self
-    }
-
     pub fn add_custom_known_filters(
         mut self,
         prefix: Option<impl Into<Symbol>>,
@@ -359,17 +351,18 @@ impl Compiler {
             flags,
             mut visitors,
             diagnostic_filters,
-            warning_filter,
             mut known_warning_filters,
-            mut package_configs,
-            mut default_config,
+            package_configs,
+            default_config,
             vfs_root,
             save_hooks,
             files_to_compile,
         } = self;
-        if let Some((level, settings)) = diagnostic_filters {
+
+        let root_scope = if let Some((level, settings)) = diagnostic_filters {
             let uses_default_config =
                 package_configs.is_empty() || targets.iter().any(|path| path.package.is_none());
+
             let sui_mode = package_configs
                 .values()
                 .any(|config| !config.is_dependency && config.flavor == Flavor::Sui)
@@ -380,20 +373,10 @@ impl Compiler {
                         .unwrap_or_default()
                         == Flavor::Sui);
             let flavor = if sui_mode { Flavor::Sui } else { Flavor::Core };
+
             known_warning_filters.extend(known_diagnostic_filters(flavor));
-            let scope = settings.filter_scope(&known_warning_filters);
-            for config in package_configs
-                .values_mut()
-                .filter(|config| !config.is_dependency)
-            {
-                config.warning_filter = scope.clone();
-            }
-            if uses_default_config {
-                let config = default_config.get_or_insert_with(PackageConfig::default);
-                if !config.is_dependency {
-                    config.warning_filter = scope;
-                }
-            }
+            let filter_scope = settings.filter_scope(&known_warning_filters);
+
             let lint_config = settings.lints.unwrap_or_default();
             let mut passes = if sui_mode {
                 sui_mode::linters::linter_visitors_with_config(level, &lint_config)
@@ -404,13 +387,20 @@ impl Compiler {
             for visitor in passes {
                 visitors.entry(visitor.type_id()).or_insert(visitor);
             }
-        }
+
+            Some(filter_scope)
+        } else {
+            None
+        };
+
+        // Set up the virtual file system root, or default to the physical root if not specified.
         let vfs_root = match vfs_root {
             Some(p) => p,
             None => VfsPath::new(PhysicalFS::new("/")),
         };
         let mut vfs_to_original_path = HashMap::new();
 
+        // Set up the targets and dependencies, possibly converting them to VFS paths .
         let targets = targets
             .into_iter()
             .map(|p| {
@@ -451,15 +441,18 @@ impl Compiler {
             interface_files_dir_opt,
             &compiled_module_named_address_mapping,
         )?;
+
+        // Set up compilation environment.
         let mut compilation_env = CompilationEnv::new(
             flags,
             visitors.into_values().collect(),
             save_hooks,
-            warning_filter,
+            root_scope,
             package_configs,
             default_config,
             files_to_compile,
         );
+
         for (prefix, filters) in known_warning_filters {
             compilation_env.add_custom_known_filters(prefix, filters);
         }
@@ -474,6 +467,7 @@ impl Compiler {
         }
         let mapped_files = compilation_env.mapped_files().clone();
 
+        // Create a SteppedCompiler at the parser pass and run it to the target pass.
         let res: Result<_, (Pass, Diagnostics)> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
                 .run::<TARGET>();

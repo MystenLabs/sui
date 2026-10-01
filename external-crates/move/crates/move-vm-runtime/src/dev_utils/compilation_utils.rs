@@ -8,8 +8,9 @@ use move_binary_format::{file_format::CompiledModule, file_format_common::VERSIO
 use move_compiler::{
     Compiler as MoveCompiler,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::filter::unused_for_test_filter_scope,
+    diagnostics::config::DiagnosticFilterSettings,
     editions::{Edition, Flavor},
+    linters::LintLevel,
     shared::{NumericalAddress, PackageConfig},
 };
 use std::{collections::BTreeMap, fs::File, io::Write, path::PathBuf};
@@ -83,12 +84,12 @@ pub fn compile_packages_in_file(filename: &str, dependencies: &[&str]) -> Vec<St
         deps,
         std::collections::BTreeMap::<String, _>::new(),
     )
-    .set_default_config(PackageConfig {
-        is_dependency: false,
-        warning_filter: unused_for_test_filter_scope(),
-        flavor: Flavor::Sui,
-        edition: Edition::E2024_ALPHA,
-    })
+    .set_default_config(
+        PackageConfig::default()
+            .set_flavor(Flavor::Sui)
+            .set_edition(Edition::E2024_ALPHA),
+    )
+    .set_diagnostic_filters(LintLevel::None, DiagnosticFilterSettings::for_testing())
     .build_and_report()
     .expect("Failed module compilation");
 

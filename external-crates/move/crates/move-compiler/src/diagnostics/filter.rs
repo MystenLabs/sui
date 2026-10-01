@@ -14,7 +14,7 @@
 //!
 //! ## Allocation strategy
 //!
-//! Each [`FilterScope`] wraps an `Arc<FilterScopeData>`. Singletons (empty, all, test,
+//! Each [`FilterScope`] wraps an `Arc<FilterScopeData>`. Singletons (empty, all,
 //! dependency-drop) are shared via `LazyLock`; per-item scopes are allocated individually.
 //! Scopes are *not* deduplicated: each item gets its own `Arc` even when filters are
 //! identical. This preserves per-item source locations on filter entries (needed for
@@ -38,6 +38,7 @@ use crate::diagnostics::{
         Category, CodeGeneration, Declarations, DiagnosticOrigin, DiagnosticsID, Severity,
         TypeSafety, UnusedItem,
     },
+    config::KnownDiagnosticFilterGroup,
 };
 use crate::shared::{format_allow_attr, known_attributes};
 
@@ -57,6 +58,7 @@ pub const FILTER_UNUSED_VARIABLE: &str = "unused_variable";
 pub const FILTER_UNUSED_ASSIGNMENT: &str = "unused_assignment";
 pub const FILTER_UNUSED_TRAILING_SEMI: &str = "unused_trailing_semi";
 pub const FILTER_UNUSED_ATTRIBUTE: &str = "unused_attribute";
+pub const FILTER_UNUSED_FUNCTION_TYPE_PARAMETER: &str = "unused_function_type_parameter";
 pub const FILTER_UNUSED_TYPE_PARAMETER: &str = "unused_type_parameter";
 pub const FILTER_UNUSED_FUNCTION: &str = "unused_function";
 pub const FILTER_UNUSED_STRUCT_FIELD: &str = "unused_field";
@@ -215,34 +217,6 @@ static ALL_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
     }))
 });
 
-const UNUSED_ITEM_CATEGORY: u8 = Category::UnusedItem as u8;
-const UNUSED_ITEM_CODES: [u8; 6] = [
-    UnusedItem::Function as u8,
-    UnusedItem::StructField as u8,
-    UnusedItem::FunTypeParam as u8,
-    UnusedItem::Constant as u8,
-    UnusedItem::MutReference as u8,
-    UnusedItem::MutParam as u8,
-];
-
-static UNUSED_FOR_TEST_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
-    let filter_entries = UNUSED_ITEM_CODES
-        .into_iter()
-        .map(|c| {
-            let target = FilterTarget::Diagnostic(DiagnosticsID::exact(
-                DiagnosticOrigin::Compiler,
-                UNUSED_ITEM_CATEGORY,
-                c,
-            ));
-            (target, sp(Loc::invalid(), FilterKind::Allow))
-        })
-        .collect();
-    FilterScope(Arc::new(FilterScopeData {
-        filter_entries,
-        expects: vec![],
-    }))
-});
-
 static DEPENDENCY_DROP_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
     let target = FilterTarget::AllForDependency;
     FilterScope(Arc::new(FilterScopeData {
@@ -252,22 +226,17 @@ static DEPENDENCY_DROP_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
 });
 
 /// Scope with no filter entries: the common case for any item without lint attributes.
-pub fn empty_filter_scope() -> FilterScope {
+pub(crate) fn empty_filter_scope() -> FilterScope {
     EMPTY_FILTER_SCOPE.clone()
 }
 
 /// Scope that allows all compiler diagnostics (used for `--silence-warnings`).
-pub fn all_filter_scope() -> FilterScope {
+pub(crate) fn all_filter_scope() -> FilterScope {
     ALL_FILTER_SCOPE.clone()
 }
 
-/// Scope that suppresses unused-item warnings commonly noisy in test contexts.
-pub fn unused_for_test_filter_scope() -> FilterScope {
-    UNUSED_FOR_TEST_FILTER_SCOPE.clone()
-}
-
 /// Scope that drops every diagnostic entirely. Used for dependency compilation.
-pub fn dependency_drop_filter_scope() -> FilterScope {
+pub(crate) fn dependency_drop_filter_scope() -> FilterScope {
     DEPENDENCY_DROP_FILTER_SCOPE.clone()
 }
 
@@ -334,6 +303,10 @@ pub static COMPILER_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpans
             (
                 FILTER_UNUSED_STRUCT_FIELD,
                 leak(vec![code!(UnusedItem::StructField)]),
+            ),
+            (
+                FILTER_UNUSED_FUNCTION_TYPE_PARAMETER,
+                leak(vec![code!(UnusedItem::FunTypeParam)]),
             ),
             (
                 FILTER_UNUSED_TYPE_PARAMETER,
@@ -405,10 +378,50 @@ pub static IDE_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpansion)>
         ]
     });
 
-/// Resolves named filter settings against compiler and custom filter registries.
-pub fn resolve_filter_names(
+/// Rejects names absent from the compiler and supplied custom registries.
+pub fn validate_filter_names<'name, 'known>(
+    configured: impl IntoIterator<Item = (FilterPrefix, &'name str)>,
+    custom_known: impl IntoIterator<Item = &'known KnownDiagnosticFilterGroup>,
+) -> Result<(), Vec<(FilterPrefix, &'name str)>> {
+    let mut known = BTreeMap::<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>>::new();
+    for (name, ids) in COMPILER_KNOWN_FILTERS.iter() {
+        known
+            .entry(None)
+            .or_default()
+            .insert(Symbol::from(*name), ids.to_vec());
+    }
+    for (prefix, filters) in custom_known {
+        let known_for_prefix = known.entry(*prefix).or_default();
+        for (name, ids) in filters {
+            known_for_prefix
+                .entry(*name)
+                .or_default()
+                .extend_from_slice(ids);
+        }
+    }
+
+    let mut unknown = vec![];
+    for (prefix, name) in configured {
+        if known
+            .get(&prefix)
+            .and_then(|known_for_prefix| known_for_prefix.get(&Symbol::from(name)))
+            .is_none()
+        {
+            unknown.push((prefix, name));
+        }
+    }
+    if unknown.is_empty() {
+        Ok(())
+    } else {
+        Err(unknown)
+    }
+}
+
+/// Resolves named filter settings against compiler and custom filter registries, creating a
+/// filter scope to perform that diagnostic filtering.
+pub(crate) fn resolve_filter_names<'known>(
     configured: impl IntoIterator<Item = (FilterPrefix, FilterName, FilterKind)>,
-    custom_known: impl IntoIterator<Item = (FilterPrefix, Vec<(FilterName, Vec<DiagnosticsID>)>)>,
+    custom_known: impl IntoIterator<Item = &'known KnownDiagnosticFilterGroup>,
 ) -> Result<FilterScope, (FilterPrefix, FilterName)> {
     let mut known = BTreeMap::<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>>::new();
     for (name, ids) in COMPILER_KNOWN_FILTERS.iter() {
@@ -418,9 +431,12 @@ pub fn resolve_filter_names(
             .insert(Symbol::from(*name), ids.to_vec());
     }
     for (prefix, filters) in custom_known {
-        let known_for_prefix = known.entry(prefix).or_default();
+        let known_for_prefix = known.entry(*prefix).or_default();
         for (name, ids) in filters {
-            known_for_prefix.entry(name).or_default().extend(ids);
+            known_for_prefix
+                .entry(*name)
+                .or_default()
+                .extend_from_slice(ids);
         }
     }
 
@@ -453,7 +469,7 @@ impl FilterScope {
     /// sentinels) are translated into internal [`FilterTarget`] variants. Empty input returns the
     /// shared
     /// [`EMPTY_FILTER_SCOPE`] singleton.
-    pub fn new(input: BTreeMap<DiagnosticsID, Spanned<FilterKind>>) -> Self {
+    pub(crate) fn new(input: BTreeMap<DiagnosticsID, Spanned<FilterKind>>) -> Self {
         if input.is_empty() {
             return EMPTY_FILTER_SCOPE.clone();
         }
@@ -476,24 +492,9 @@ impl FilterScope {
         }))
     }
 
-    /// Iterate over the scope's filter entries as diagnostics IDs, with loc information.
-    pub fn filter_entries(
-        &self,
-    ) -> impl Iterator<Item = (DiagnosticsID, Spanned<FilterKind>)> + '_ {
-        self.0.filter_entries.iter().map(|(target, kind)| {
-            let id = match target {
-                FilterTarget::Diagnostic(id) => *id,
-                FilterTarget::Category(origin, cat) => DiagnosticsID::category(*origin, *cat),
-                FilterTarget::Origin(origin) => DiagnosticsID::all(*origin),
-                FilterTarget::AllForDependency => DiagnosticsID::all(DiagnosticOrigin::Compiler),
-            };
-            (id, *kind)
-        })
-    }
-
     /// Emit diagnostics for every `#[expect(...)]` entry that was never matched. TODO: decide if
     /// we want to finalize beyond `to_bytecode` in case compilation fails earlier.
-    pub fn finalize(self) -> Vec<Diagnostic> {
+    pub(crate) fn finalize(self) -> Vec<Diagnostic> {
         self.0
             .expects
             .iter()
@@ -514,15 +515,11 @@ impl FilterScope {
 }
 
 impl FilterStack {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { stack: vec![] }
     }
 
-    pub fn root(scope: FilterScope) -> Self {
-        Self { stack: vec![scope] }
-    }
-
-    pub fn push(&mut self, scope: FilterScope) {
+    pub(crate) fn push(&mut self, scope: FilterScope) {
         if self.stack.iter().any(|s| {
             s.0.filter_entries
                 .contains_key(&FilterTarget::AllForDependency)
@@ -535,15 +532,15 @@ impl FilterStack {
         }
     }
 
-    pub fn pop(&mut self) {
-        debug_assert!(self.stack.pop().is_some(), "ICE: popped empty filter stack");
+    pub(crate) fn pop(&mut self) {
+        self.stack.pop().expect("ICE: popped empty filter stack");
     }
 
     /// Resolve a diagnostic against the active scope stack.
     ///
     /// Warnings that pass through get an `#[allow(...)]` hint note when a known filter
     /// name exists. `Deny` upgrades severity to `NonblockingError`.
-    pub fn filter(
+    pub(crate) fn filter(
         &self,
         mut diag: Diagnostic,
         known_filter_names: &BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,

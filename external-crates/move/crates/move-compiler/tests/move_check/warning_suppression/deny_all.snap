@@ -5,6 +5,15 @@ info:
   edition: legacy
   lint: false
 ---
+error[EC09008]: unused function
+  ┌─ tests/move_check/warning_suppression/deny_all.move:4:9
+  │
+2 │ #[deny(all)]
+  │        --- the lint level is defined here
+3 │ module 0x42::m {
+4 │     fun foo(a: u64) {
+  │         ^^^ The non-'public', non-'entry' function 'foo' is never called. Consider removing it.
+
 error[EC09002]: unused variable
   ┌─ tests/move_check/warning_suppression/deny_all.move:4:13
   │

@@ -22,9 +22,10 @@ use move_command_line_common::{
 use move_compiler::{
     PreCompiledProgramInfo,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{Diagnostics, filter::unused_for_test_filter_scope},
+    diagnostics::{Diagnostics, config::DiagnosticFilterSettings},
     editions::{Edition, Flavor},
     expansion::ast::Address,
+    linters::LintLevel,
     shared::{NumericalAddress, PackageConfig, files::MappedFiles},
 };
 use move_core_types::parsing::{
@@ -778,10 +779,6 @@ pub fn compile_source_units(
 
     use move_compiler::PASS_COMPILATION;
     let named_address_mapping = state.named_address_mapping.clone();
-    // txn testing framework test code includes private unused functions and unused struct types on
-    // purpose and generating warnings for all of them does not make much sense (and there would be
-    // a lot of them!) so let's suppress them function warnings, so let's suppress these
-    let warning_filter = unused_for_test_filter_scope();
     let (mut files, compiler_res) = move_compiler::Compiler::from_files(
         None,
         vec![file_name.as_ref().to_str().unwrap().to_owned()],
@@ -790,12 +787,12 @@ pub fn compile_source_units(
     )
     .set_pre_compiled_program_opt(state.pre_compiled_program_info_opt.clone())
     .set_flags(move_compiler::Flags::empty().set_sources_shadow_deps(true))
-    .set_warning_filter(Some(warning_filter))
-    .set_default_config(PackageConfig {
-        edition: state.edition,
-        flavor: state.flavor,
-        ..PackageConfig::default()
-    })
+    .set_diagnostic_filters(LintLevel::None, DiagnosticFilterSettings::for_testing())
+    .set_default_config(
+        PackageConfig::default()
+            .set_edition(state.edition)
+            .set_flavor(state.flavor),
+    )
     .run::<PASS_COMPILATION>()?;
     let units_or_diags = compiler_res.map(|move_compiler| move_compiler.into_compiled_units());
 

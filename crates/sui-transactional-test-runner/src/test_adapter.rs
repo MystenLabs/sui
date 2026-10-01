@@ -2784,11 +2784,9 @@ pub static PRE_COMPILED: LazyLock<Arc<PreCompiledProgramInfo>> = LazyLock::new(|
         buf.extend(["packages", "deepbook", "sources"]);
         buf.to_string_lossy().to_string()
     };
-    let config = PackageConfig {
-        edition: Edition::E2024_BETA,
-        flavor: Flavor::Sui,
-        ..Default::default()
-    };
+    let config = PackageConfig::default()
+        .set_edition(Edition::E2024_BETA)
+        .set_flavor(Flavor::Sui);
     let bridge_sources = {
         let mut buf = sui_files.to_path_buf();
         buf.extend(["packages", "bridge", "sources"]);

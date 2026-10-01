@@ -5,6 +5,24 @@ info:
   edition: legacy
   lint: false
 ---
+error[EC09008]: unused function
+  ┌─ tests/move_check/warning_suppression/wildcard_outer_deny_all_inner_allow.move:5:9
+  │
+2 │ #[deny(all)]
+  │        --- the lint level is defined here
+  ·
+5 │     fun allowed(a: u64) {
+  │         ^^^^^^^ The non-'public', non-'entry' function 'allowed' is never called. Consider removing it.
+
+error[EC09008]: unused function
+   ┌─ tests/move_check/warning_suppression/wildcard_outer_deny_all_inner_allow.move:10:9
+   │
+ 2 │ #[deny(all)]
+   │        --- the lint level is defined here
+   ·
+10 │     fun denied(b: u64) {
+   │         ^^^^^^ The non-'public', non-'entry' function 'denied' is never called. Consider removing it.
+
 error[EC09002]: unused variable
    ┌─ tests/move_check/warning_suppression/wildcard_outer_deny_all_inner_allow.move:10:16
    │
