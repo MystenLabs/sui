@@ -36,7 +36,6 @@ move-vm-runtime.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true
-insta = { workspace = true, features = ["filters"] }
 
 [[test]]
 name = "tests"
