@@ -378,11 +378,9 @@ pub static IDE_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpansion)>
         ]
     });
 
-/// Rejects names absent from the compiler and supplied custom registries.
-pub fn validate_filter_names<'name, 'known>(
-    configured: impl IntoIterator<Item = (FilterPrefix, &'name str)>,
+fn build_known_filter_map<'known>(
     custom_known: impl IntoIterator<Item = &'known KnownDiagnosticFilterGroup>,
-) -> Result<(), Vec<(FilterPrefix, &'name str)>> {
+) -> BTreeMap<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>> {
     let mut known = BTreeMap::<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>>::new();
     for (name, ids) in COMPILER_KNOWN_FILTERS.iter() {
         known
@@ -399,7 +397,15 @@ pub fn validate_filter_names<'name, 'known>(
                 .extend_from_slice(ids);
         }
     }
+    known
+}
 
+/// Rejects names absent from the compiler and supplied custom registries.
+pub fn validate_filter_names<'name, 'known>(
+    configured: impl IntoIterator<Item = (FilterPrefix, &'name str)>,
+    custom_known: impl IntoIterator<Item = &'known KnownDiagnosticFilterGroup>,
+) -> Result<(), Vec<(FilterPrefix, &'name str)>> {
+    let known = build_known_filter_map(custom_known);
     let mut unknown = vec![];
     for (prefix, name) in configured {
         if known
@@ -423,23 +429,7 @@ pub(crate) fn resolve_filter_names<'known>(
     configured: impl IntoIterator<Item = (FilterPrefix, FilterName, FilterKind)>,
     custom_known: impl IntoIterator<Item = &'known KnownDiagnosticFilterGroup>,
 ) -> Result<FilterScope, (FilterPrefix, FilterName)> {
-    let mut known = BTreeMap::<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>>::new();
-    for (name, ids) in COMPILER_KNOWN_FILTERS.iter() {
-        known
-            .entry(None)
-            .or_default()
-            .insert(Symbol::from(*name), ids.to_vec());
-    }
-    for (prefix, filters) in custom_known {
-        let known_for_prefix = known.entry(*prefix).or_default();
-        for (name, ids) in filters {
-            known_for_prefix
-                .entry(*name)
-                .or_default()
-                .extend_from_slice(ids);
-        }
-    }
-
+    let known = build_known_filter_map(custom_known);
     let mut entries = BTreeMap::new();
     for (prefix, name, kind) in configured {
         let Some(ids) = known
