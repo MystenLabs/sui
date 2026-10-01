@@ -1,0 +1,14 @@
+Command `build --mode test --no-lint`:
+Error: invalid diagnostic filter names in Move.toml:
+  [warnings] "abort_without_constant": lint filter; use [lints]
+  [warnings] "bad\n\"warning": unknown compiler warning filter
+  [warnings.build] "not_a_warning": unknown compiler warning filter
+  [warnings.build] "unneeded_return": lint filter; use [lints.build]
+  [warnings.test] "abort_without_constant": lint filter; use [lints.test]
+  [warnings.test] "unknown_test_warning": unknown compiler warning filter
+  [lints] "unknown_base_lint": unknown lint filter
+  [lints] "unused_variable": compiler warning filter; use [warnings]
+  [lints.build] "deprecated_usage": compiler warning filter; use [warnings.build]
+  [lints.build] "not_a_lint": unknown lint filter
+  [lints.test] "test_unknown_lint": unknown lint filter
+  [lints.test] "unused_const": compiler warning filter; use [warnings.test]

@@ -1,0 +1,35 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "manifest_lints"
+edition = "2024"
+
+[addresses]
+test = "0x0"
+
+[warnings]
+all = "allow"
+abort_without_constant = "deny"
+"bad\n\"warning" = "warn"
+
+[warnings.build]
+not_a_warning = "warn"
+unneeded_return = "allow"
+
+[warnings.test]
+abort_without_constant = "warn"
+unknown_test_warning = "allow"
+
+[lints]
+all = "allow"
+unused_variable = "deny"
+unknown_base_lint = "allow"
+
+[lints.build]
+not_a_lint = "warn"
+deprecated_usage = "deny"
+
+[lints.test]
+test_unknown_lint = "allow"
+unused_const = "warn"

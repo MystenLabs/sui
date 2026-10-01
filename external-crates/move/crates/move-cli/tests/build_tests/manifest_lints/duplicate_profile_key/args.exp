@@ -1,0 +1,7 @@
+Command `build`:
+Error: Error while loading dependency .: error while parsing "./Move.toml": TOML parse error at line 13, column 1
+   |
+13 | abort_without_constant = "deny"
+   | ^
+duplicate key `abort_without_constant` in table `lints.test`
+

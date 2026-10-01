@@ -1,0 +1,10 @@
+Command `build --default-move-flavor sui`:
+BUILDING manifest_lints
+error[ESL01011]: unnecessary `entry` on a `public` function
+  ┌─ ./sources/m.move:5:12
+  │
+5 │     public entry fun entry_function() {}
+  │            ^^^^^ `entry` on `public` is meaningless. In conjunction with `public`, `entry` adds no additional permissions or restrictions.
+  │
+  = `public` functions can be called from PTBs. `entry` can be used to allow non-`public` (private or `public(package)`) functions to be called from PTBs, although there will be additional restrictions on the input arguments to such functions.
+

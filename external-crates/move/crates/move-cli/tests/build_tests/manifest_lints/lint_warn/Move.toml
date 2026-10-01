@@ -1,0 +1,13 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "manifest_lints"
+edition = "2024"
+
+[addresses]
+test = "0x0"
+
+[lints]
+all = "allow"
+abort_without_constant = "warn"
