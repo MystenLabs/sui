@@ -95,6 +95,8 @@ pub struct DagState {
     // Blocks and commits must be buffered for persistence before they can be
     // inserted into the local DAG or sent to output.
     blocks_to_write: Vec<VerifiedBlock>,
+    // Total serialized size of blocks_to_write.
+    blocks_to_write_bytes: usize,
     commits_to_write: Vec<TrustedCommit>,
 
     // Buffers the reputation scores & last_committed_rounds to be flushed with the
@@ -189,6 +191,7 @@ impl DagState {
             last_committed_rounds: last_committed_rounds.clone(),
             pending_commit_votes: VecDeque::new(),
             blocks_to_write: vec![],
+            blocks_to_write_bytes: 0,
             commits_to_write: vec![],
             commit_info_to_write: vec![],
             finalized_commits_to_write: vec![],
@@ -358,6 +361,7 @@ impl DagState {
             }
         }
         self.update_block_metadata(&block);
+        self.blocks_to_write_bytes += block.serialized().len();
         self.blocks_to_write.push(block);
         let source = if self.context.own_index == block_ref.author {
             "own"
@@ -1228,6 +1232,11 @@ impl DagState {
         commit_round.saturating_sub(self.context.protocol_config.gc_depth())
     }
 
+    /// Total serialized size of the accepted blocks that are not yet flushed to storage.
+    pub(crate) fn unflushed_blocks_bytes(&self) -> usize {
+        self.blocks_to_write_bytes
+    }
+
     /// Flushes unpersisted blocks, commits and commit info to storage.
     ///
     /// REQUIRED: when buffering a block, all of its ancestors and the latest commit which sets the GC round
@@ -1248,6 +1257,7 @@ impl DagState {
 
         // Flush buffered data to storage.
         let pending_blocks = std::mem::take(&mut self.blocks_to_write);
+        self.blocks_to_write_bytes = 0;
         let pending_commits = std::mem::take(&mut self.commits_to_write);
         let pending_commit_info = std::mem::take(&mut self.commit_info_to_write);
         let pending_finalized_commits = std::mem::take(&mut self.finalized_commits_to_write);
