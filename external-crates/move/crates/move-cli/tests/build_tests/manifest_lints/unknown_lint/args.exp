@@ -1,0 +1,3 @@
+Command `build`:
+Error: invalid diagnostic filter names in Move.toml:
+  [lints] "not_a_lint": unknown lint filter

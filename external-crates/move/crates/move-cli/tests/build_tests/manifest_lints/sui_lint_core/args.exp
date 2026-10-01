@@ -1,0 +1,3 @@
+Command `build --default-move-flavor core`:
+Error: invalid diagnostic filter names in Move.toml:
+  [lints] "public_entry": unknown lint filter

@@ -1,0 +1,11 @@
+Command `build`:
+BUILDING manifest_lints
+error[EC09002]: unused variable
+  ┌─ ./sources/m.move:7:13
+  │
+5 │     #[deny(unused_variable)]
+  │            --------------- the lint level is defined here
+6 │     public fun warning() {
+7 │         let unused = 0u64;
+  │             ^^^^^^ Unused local variable 'unused'. Consider removing or prefixing with an underscore: '_unused'
+
