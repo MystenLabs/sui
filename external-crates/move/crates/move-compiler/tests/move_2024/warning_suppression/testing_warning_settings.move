@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --edition 2024 --addresses A=0x42
-
-//# publish
 module A::warnings {
     public struct S<T> has drop { value: u64 }
 
@@ -22,9 +19,5 @@ module A::warnings {
     public fun reference(value: &mut u64): u64 {
         let reference = &mut *value;
         *reference
-    }
-
-    public fun parameter(mut value: u64): u64 {
-        value
     }
 }
