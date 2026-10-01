@@ -53,6 +53,7 @@ pub struct Package {
     pub(crate) loaded_modules: IndexMap<IdentifierKey, Module>,
 
     // NB: Package functions and code are allocated into this arena.
+    // [SAFETY] Interned ArenaType pointers remain valid until the arena is collected with the package.
     pub(crate) package_arena: Arena,
     pub vtable: PackageVirtualTable,
 }
