@@ -8,7 +8,10 @@ use crate::{
     diagnostics::{
         codes::DiagnosticsID,
         filter::{
-            FILTER_ALL, FilterKind, FilterName, FilterPrefix, FilterScope, resolve_filter_names,
+            FILTER_ALL, FILTER_UNUSED_CONST, FILTER_UNUSED_FUNCTION,
+            FILTER_UNUSED_FUNCTION_TYPE_PARAMETER, FILTER_UNUSED_MUT_PARAM, FILTER_UNUSED_MUT_REF,
+            FILTER_UNUSED_STRUCT_FIELD, FilterKind, FilterName, FilterPrefix, FilterScope,
+            resolve_filter_names,
         },
     },
     editions::Flavor,
@@ -17,7 +20,8 @@ use crate::{
     sui_mode,
 };
 
-pub type KnownDiagnosticFilters = Vec<(FilterPrefix, Vec<(FilterName, Vec<DiagnosticsID>)>)>;
+pub type KnownDiagnosticFilterGroup = (FilterPrefix, Vec<(FilterName, Vec<DiagnosticsID>)>);
+pub type KnownDiagnosticFilters = Vec<KnownDiagnosticFilterGroup>;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DiagnosticFilterSettings {
@@ -41,8 +45,28 @@ pub fn known_diagnostic_filters(flavor: Flavor) -> KnownDiagnosticFilters {
 }
 
 impl DiagnosticFilterSettings {
+    /// Allows unused functions, fields, function type parameters, constants, mutable references, and
+    /// mutable parameters in test fixtures.
+    pub fn for_testing() -> Self {
+        let warnings = [
+            FILTER_UNUSED_FUNCTION,
+            FILTER_UNUSED_STRUCT_FIELD,
+            FILTER_UNUSED_FUNCTION_TYPE_PARAMETER,
+            FILTER_UNUSED_CONST,
+            FILTER_UNUSED_MUT_REF,
+            FILTER_UNUSED_MUT_PARAM,
+        ]
+        .into_iter()
+        .map(|name| (FilterName::from(name), FilterKind::Allow))
+        .collect();
+        Self {
+            warnings: Some(warnings),
+            lints: None,
+        }
+    }
+
     /// Builds the scope for settings validated against the supplied registry.
-    pub fn filter_scope(&self, known: &KnownDiagnosticFilters) -> FilterScope {
+    pub(crate) fn filter_scope(&self, known: &KnownDiagnosticFilters) -> FilterScope {
         let configured = [
             (None, &self.warnings),
             (Some(DiagnosticAttribute::LINT_SYMBOL), &self.lints),
@@ -54,7 +78,7 @@ impl DiagnosticFilterSettings {
                 .flat_map(|config| config.iter())
                 .map(move |(name, kind)| (prefix, name, kind))
         });
-        resolve_filter_names(configured, known.iter().cloned())
+        resolve_filter_names(configured, known.iter())
             .expect("diagnostic settings must be validated against the supplied registry")
     }
 }
