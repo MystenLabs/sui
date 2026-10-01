@@ -133,9 +133,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         last_received: Round,
         timeout: Duration,
     ) -> ConsensusResult<BlockStream> {
-        let mut client = self
-            .get_client(peer, ChannelKind::Subscription, timeout)
-            .await?;
+        let mut client = self.get_client(peer, ChannelKind::Live, timeout).await?;
         // TODO: add sampled block acknowledgments for latency measurements.
         let request = Request::new(stream::once(async move {
             SubscribeBlocksRequest {
@@ -202,11 +200,11 @@ impl ValidatorNetworkClient for TonicValidatorClient {
     ) -> ConsensusResult<Vec<Bytes>> {
         // Commit sync requests carry block refs only (see the request shapes documented on
         // AuthorityService::handle_fetch_blocks). Their responses are large and long-running,
-        // so they get their own connection instead of sharing the live sync one.
+        // so they get their own connection instead of sharing the live one.
         let kind = if fetch_after_rounds.is_empty() {
             ChannelKind::CommitSync
         } else {
-            ChannelKind::Fetch
+            ChannelKind::Live
         };
         let mut client = self.get_client(peer, kind, timeout).await?;
         let max_allowed_bytes =
@@ -307,7 +305,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         authorities: Vec<AuthorityIndex>,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
-        let mut client = self.get_client(peer, ChannelKind::Fetch, timeout).await?;
+        let mut client = self.get_client(peer, ChannelKind::Live, timeout).await?;
         let mut request = Request::new(FetchLatestBlocksRequest {
             authorities: authorities
                 .iter()
@@ -382,7 +380,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         peer: AuthorityIndex,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
-        let mut client = self.get_client(peer, ChannelKind::Fetch, timeout).await?;
+        let mut client = self.get_client(peer, ChannelKind::Live, timeout).await?;
         let mut request = Request::new(GetLatestRoundsRequest {});
         request.set_timeout(timeout);
         let response = client.get_latest_rounds(request).await.map_err(|e| {
@@ -399,7 +397,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         block: &crate::VerifiedBlock,
         timeout: Duration,
     ) -> ConsensusResult<()> {
-        let mut client = self.get_client(peer, ChannelKind::Fetch, timeout).await?;
+        let mut client = self.get_client(peer, ChannelKind::Live, timeout).await?;
         let mut request = Request::new(SendBlockRequest {
             block: block.serialized().clone(),
         });
@@ -440,16 +438,17 @@ pub(crate) fn rebox_request(
 
 /// The traffic class an RPC belongs to. Each class gets its own connection per peer, so a
 /// class's data flows on its own TCP connection with its own congestion window and loss
-/// recovery. Without this, a peer's live block stream shares one connection (and one h2 send
-/// queue) with the fetch responses and the commit sync transfers it serves us, which can be
-/// hundreds of MB when blocks are full.
+/// recovery.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum ChannelKind {
-    /// The peer's own block stream: on the critical path of every round.
-    Subscription,
-    /// Live and periodic sync requests: small, urgent, bounded by `max_blocks_per_sync`.
-    Fetch,
-    /// Commit sync transfers: large catch-up requests bounded by `max_blocks_per_fetch`.
+    /// The peer's own block stream, plus live and periodic sync requests. Sync requests are
+    /// small and urgent, and stay on this connection because the stream keeps it warm: on a
+    /// connection of their own, which idles between requests, each response restarts from a
+    /// small congestion window and takes several round trips on a long path.
+    Live,
+    /// Commit sync transfers: large catch-up requests bounded by `max_blocks_per_fetch`, which
+    /// can be hundreds of MB when blocks are full and would otherwise share the live
+    /// connection's send queue and congestion window.
     CommitSync,
 }
 
@@ -1853,8 +1852,8 @@ mod tests {
         }
     }
 
-    /// Each traffic class gets its own connection to a peer, so a peer's live block stream
-    /// never shares a TCP connection with the fetch and commit sync transfers it serves.
+    /// Live traffic (the block stream and sync requests) shares one connection to a peer, and
+    /// commit sync transfers get their own.
     #[tokio::test]
     async fn channel_per_kind() {
         use crate::network::{NetworkManager, test_network::TestService};
@@ -1888,9 +1887,9 @@ mod tests {
             .subscribe_blocks(peer_index, 0, timeout)
             .await
             .unwrap();
-        assert_eq!(cached_kinds(&client_0), vec![ChannelKind::Subscription]);
+        assert_eq!(cached_kinds(&client_0), vec![ChannelKind::Live]);
 
-        // Live sync request: block refs and fetch_after_rounds.
+        // Live sync request (block refs and fetch_after_rounds): reuses the stream's connection.
         let block_ref = BlockRef::new(1, peer_index, BlockDigest::MIN);
         let fetch_after_rounds = vec![0; context.committee.size()];
         client_0
@@ -1903,10 +1902,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(
-            cached_kinds(&client_0),
-            vec![ChannelKind::Subscription, ChannelKind::Fetch]
-        );
+        assert_eq!(cached_kinds(&client_0), vec![ChannelKind::Live]);
 
         // Commit sync requests: commits, then block refs only.
         client_0
@@ -1919,14 +1915,10 @@ mod tests {
             .unwrap();
         assert_eq!(
             cached_kinds(&client_0),
-            vec![
-                ChannelKind::Subscription,
-                ChannelKind::Fetch,
-                ChannelKind::CommitSync
-            ]
+            vec![ChannelKind::Live, ChannelKind::CommitSync]
         );
         // Repeated requests reuse the cached connections.
-        assert_eq!(client_0.channel_pool.channels.read().len(), 3);
+        assert_eq!(client_0.channel_pool.channels.read().len(), 2);
 
         // An address update drops every connection to the peer.
         client_0.update_peer_address(peer_index, None);
