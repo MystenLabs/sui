@@ -306,8 +306,14 @@ pub mod checked {
                 .iter()
                 // don't charge for loading Sui Framework or Move stdlib
                 .filter(|(id, _)| !is_system_package(**id))
-                .map(|(_, obj)| obj.object_size_for_gas_metering())
-                .try_for_each(|size| self.gas_status.charge_storage_read(size))
+                .try_for_each(|(_, obj)| {
+                    let size = obj.object_size_for_gas_metering();
+                    if obj.is_package() {
+                        self.gas_status.charge_package_object_read(size)
+                    } else {
+                        self.gas_status.charge_storage_read(size)
+                    }
+                })
         }
 
         pub fn charge_coin_transfers(
@@ -511,15 +517,24 @@ pub mod checked {
                 let objects = temporary_store.objects();
                 // TODO: Charge input object count.
                 let _object_count = objects.len();
-                // Charge bytes read
-                let total_size = temporary_store
+                // Charge bytes read. Without a package rate, charging packages separately from
+                // objects deducts the same total as one charge on the sum, because the per-byte
+                // charge is linear in size for every gas model that reaches this code.
+                let (object_size, package_size) = temporary_store
                     .objects()
                     .iter()
                     // don't charge for loading Sui Framework or Move stdlib
                     .filter(|(id, _)| !is_system_package(**id))
-                    .map(|(_, obj)| obj.object_size_for_gas_metering())
-                    .sum();
-                self.gas_status.charge_storage_read(total_size)
+                    .fold((0usize, 0usize), |(objs, pkgs), (_, obj)| {
+                        let size = obj.object_size_for_gas_metering();
+                        if obj.is_package() {
+                            (objs, pkgs.saturating_add(size))
+                        } else {
+                            (objs.saturating_add(size), pkgs)
+                        }
+                    });
+                self.gas_status.charge_storage_read(object_size)?;
+                self.gas_status.charge_package_object_read(package_size)
             }
 
             /// Entry point for legacy gas charging.

@@ -278,6 +278,7 @@ package_publish_cost_fixed: 1000
 base_tx_cost_per_byte: 0
 package_publish_cost_per_byte: 80
 obj_access_cost_read_per_byte: 15
+obj_access_cost_read_per_package_kb: 150
 obj_access_cost_mutate_per_byte: 40
 obj_access_cost_delete_per_byte: 40
 obj_access_cost_verify_per_byte: 200

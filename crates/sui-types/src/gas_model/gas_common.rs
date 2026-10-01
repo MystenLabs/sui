@@ -87,6 +87,16 @@ pub fn sender_rebate(storage_rebate: u64, storage_rebate_rate: u64) -> u64 {
     u64::try_from(rebate).unwrap_or(u64::MAX)
 }
 
+/// Internal gas for reading `size` bytes of package inputs at `cost_per_kb` per 1,000 bytes, rounded
+/// up. Saturates at `u64::MAX` instead of overflowing.
+pub fn package_read_internal_gas(size: usize, cost_per_kb: u64) -> u64 {
+    // The product of two values below 2^64 always fits in a u128.
+    let cost = (size as u128)
+        .saturating_mul(u128::from(cost_per_kb))
+        .div_ceil(1000);
+    u64::try_from(cost).unwrap_or(u64::MAX)
+}
+
 pub fn half_digits_rounding(n: u64) -> u64 {
     if n < 1000 {
         return 1000;
@@ -224,4 +234,152 @@ fn test_half_digits_rounding() {
     assert_eq!(half_digits_rounding(1_999_999), 2_000_000);
     assert_eq!(half_digits_rounding(10_000_001), 10_001_000);
     assert_eq!(half_digits_rounding(100_000_001), 100_010_000);
+}
+
+#[cfg(test)]
+#[allow(clippy::arithmetic_side_effects)]
+mod package_read_tests {
+    use super::*;
+    use crate::error::ExecutionError;
+    use crate::gas::{SuiGasStatus, SuiGasStatusAPI};
+    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+
+    const RGP: u64 = 1_000;
+
+    // Sizes around the 1,000-byte rounding unit and the package and object size limits.
+    const SIZES: &[usize] = &[
+        0,
+        1,
+        2,
+        6,
+        7,
+        199,
+        200,
+        999,
+        1_000,
+        1_001,
+        1_999,
+        89_315,
+        100 * 1024,
+        250 * 1024 + 89,
+    ];
+
+    #[test]
+    fn package_read_rounds_up() {
+        let charge = |size| package_read_internal_gas(size, 150);
+        assert_eq!(charge(0), 0);
+        assert_eq!(charge(1), 1); // 0.15
+        assert_eq!(charge(6), 1); // 0.9
+        assert_eq!(charge(7), 2); // 1.05
+        assert_eq!(charge(999), 150); // 149.85
+        assert_eq!(charge(1_000), 150);
+        assert_eq!(charge(1_001), 151); // 150.15
+        assert_eq!(charge(89_315), 13_398); // 13,397.25
+        assert_eq!(charge(100 * 1024), 15_360);
+    }
+
+    #[test]
+    fn package_read_saturates() {
+        assert_eq!(package_read_internal_gas(usize::MAX, u64::MAX), u64::MAX);
+        assert_eq!(package_read_internal_gas(usize::MAX, 1_000), u64::MAX);
+        assert_eq!(
+            package_read_internal_gas(1, u64::MAX),
+            u64::MAX.div_ceil(1000)
+        );
+        assert_eq!(
+            u128::from(package_read_internal_gas(usize::MAX, 999)),
+            (u128::from(u64::MAX) * 999).div_ceil(1000)
+        );
+    }
+
+    fn config(version: u64) -> ProtocolConfig {
+        ProtocolConfig::get_for_version(ProtocolVersion::new(version), Chain::Mainnet)
+    }
+
+    // Runs `charge` with a budget of `units` gas units and returns its result and the internal gas
+    // left afterwards.
+    fn run(
+        config: &ProtocolConfig,
+        units: u64,
+        charge: impl FnOnce(&mut SuiGasStatus) -> Result<(), ExecutionError>,
+    ) -> (bool, u64) {
+        let mut status = SuiGasStatus::new(units * RGP, RGP, RGP, config).unwrap();
+        let ok = charge(&mut status).is_ok();
+        (ok, status.move_gas_status().remaining_internal_gas())
+    }
+
+    // Without a package rate (every protocol version before 139), a package read must deduct
+    // exactly what `charge_storage_read` deducts, and splitting one charge into an object charge
+    // and a package charge must leave the same result and gas as a single charge on the total.
+    // Budgets just above, at, and below the total cover the out-of-gas edge.
+    #[test]
+    fn unset_package_rate_matches_storage_read() {
+        // Protocol 137 uses gas_v2; 138 uses gas_v3.
+        for version in [137, 138] {
+            let config = config(version);
+            assert_eq!(config.obj_access_cost_read_per_package_kb_as_option(), None);
+            for &objects in SIZES {
+                for &packages in SIZES {
+                    let total = (objects + packages) as u64 * 15;
+                    let exact = total.div_ceil(1000);
+                    for units in [exact + 1, exact, exact.saturating_sub(1)] {
+                        let single = run(&config, units, |s| s.charge_storage_read(packages));
+                        let package =
+                            run(&config, units, |s| s.charge_package_object_read(packages));
+                        assert_eq!(
+                            package, single,
+                            "v{version} packages={packages} units={units}"
+                        );
+
+                        let combined = run(&config, units, |s| {
+                            s.charge_storage_read(objects + packages)
+                        });
+                        let split = run(&config, units, |s| {
+                            s.charge_storage_read(objects)?;
+                            s.charge_package_object_read(packages)
+                        });
+                        assert_eq!(
+                            split, combined,
+                            "v{version} objects={objects} packages={packages} units={units}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // With a package rate, a package read deducts exactly `package_read_internal_gas`, in both gas
+    // model implementations, and fails with no gas left when the budget is short by one unit.
+    #[test]
+    fn package_rate_charges_package_read_internal_gas() {
+        let mut v137 = config(137);
+        v137.set_obj_access_cost_read_per_package_kb_for_testing(150);
+        for config in [v137, config(139)] {
+            for &size in SIZES {
+                let cost = package_read_internal_gas(size, 150);
+                let units = cost.div_ceil(1000);
+                let (ok, left) = run(&config, units, |s| s.charge_package_object_read(size));
+                assert!(ok);
+                assert_eq!(left, units * 1000 - cost, "size={size}");
+                if units > 0 && cost > (units - 1) * 1000 {
+                    let (ok, left) =
+                        run(&config, units - 1, |s| s.charge_package_object_read(size));
+                    assert!(!ok);
+                    assert_eq!(left, 0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn configured_rates() {
+        assert_eq!(config(138).obj_access_cost_read_per_byte(), 15);
+        assert_eq!(
+            config(138).obj_access_cost_read_per_package_kb_as_option(),
+            None
+        );
+        assert_eq!(config(139).obj_access_cost_read_per_byte(), 15);
+        // 1% of 15 internal units per byte.
+        assert_eq!(config(139).obj_access_cost_read_per_package_kb(), 150);
+    }
 }
