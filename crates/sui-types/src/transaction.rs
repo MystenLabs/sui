@@ -5624,7 +5624,7 @@ impl Display for CertifiedTransaction {
             "Signed Authorities Bitmap : {:?}",
             self.auth_sig().signers_map
         )?;
-        write!(writer, "{}", &self.data().intent_message().value.kind())?;
+        write!(writer, "{}", self.data().intent_message().value.kind())?;
         write!(f, "{}", writer)
     }
 }

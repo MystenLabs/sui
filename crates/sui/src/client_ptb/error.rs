@@ -32,6 +32,9 @@ pub struct PTBError {
 
 #[macro_export]
 macro_rules! sp {
+    (_, _) => {
+        $crate::client_ptb::error::Spanned { .. }
+    };
     (_, $value:pat) => {
         $crate::client_ptb::error::Spanned { value: $value, .. }
     };

@@ -95,7 +95,7 @@ pub(super) fn format_param<S: fmt::Display>(
 
             secondary.push((
                 type_param.1,
-                format!("Type parameter '{}' is defined here", &type_param.0),
+                format!("Type parameter '{}' is defined here", type_param.0),
             ));
             type_param.0.to_string()
         }

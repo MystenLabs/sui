@@ -65,7 +65,7 @@ fn extract_struct_info(input: ItemStruct) -> ExtractedStructInfo {
                     panic!("All struct members must be of type DBMap");
                 };
 
-            let type_str = format!("{}", &type_info.ident);
+            let type_str = format!("{}", type_info.ident);
             if type_str == "DBMap" {
                 let field_name = f.ident.as_ref().unwrap().clone();
                 let cf_name = if let Some(rename) = attrs.get(DB_OPTIONS_RENAME) {

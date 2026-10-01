@@ -547,7 +547,7 @@ mod field_piplines_tests {
     fn macro_invocation_matches_schema(registry: &Registry) {
         let type_fields = &TYPE_FIELD_DELEGATIONS;
 
-        for ((type_name, field_name), _) in type_fields.iter() {
+        for (type_name, field_name) in type_fields.keys() {
             let fields = match registry.types.get(*type_name) {
                 Some(MetaType::Object { fields, .. } | MetaType::Interface { fields, .. }) => {
                     fields
