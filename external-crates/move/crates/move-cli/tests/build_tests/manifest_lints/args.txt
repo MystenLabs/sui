@@ -128,6 +128,10 @@ build
 > cp Move.duplicate_key.error.toml Move.toml
 build
 
+> printf '\n# ===== [FAILURE] ======================================\n# == Duplicate keys in an inactive diagnostic profile are rejected\n'
+> cp Move.duplicate_profile_key.error.toml Move.toml
+build
+
 > printf '\n# ===== [FAILURE] ======================================\n# == Invalid lint levels are rejected\n'
 > cp Move.invalid_level.error.toml Move.toml
 build
