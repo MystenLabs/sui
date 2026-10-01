@@ -26,9 +26,8 @@ const path = require("path");
 const glob = require("glob");
 
 // ── Paths ────────────────────────────────────────────────────────────────────
-const SITE_ROOT = path.resolve(__dirname, "../");
-const REPO_ROOT = path.resolve(SITE_ROOT, "../../");
-const CONTENT_DIR = path.join(REPO_ROOT, "docs/content");
+const { SITE_ROOT, CONTENT_ROOT, SOURCE_ROOT } = require("./lib/roots.cjs");
+const CONTENT_DIR = CONTENT_ROOT;
 const SNIPPETS_DIR = path.join(CONTENT_DIR, "snippets");
 const OUT_DIR = path.join(SITE_ROOT, ".resolved");
 
@@ -124,7 +123,7 @@ function resolveCode(attrs) {
   }
 
   const cleaned = (source || "").replace(/^\/+/, "").replace(/^\.\//, "");
-  const abs = path.join(REPO_ROOT, cleaned);
+  const abs = path.join(SOURCE_ROOT, cleaned);
   let content = readText(abs);
   if (content == null) {
     return `<!-- [unresolved code: ${cleaned}] -->`;

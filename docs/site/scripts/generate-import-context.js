@@ -7,12 +7,11 @@ const fs = require("fs");
 const path = require("path");
 const glob = require("glob");
 
-const SITE_ROOT = path.resolve(__dirname, "../"); // docusaurus site root
-const REPO_ROOT = path.resolve(SITE_ROOT, "../../"); // monorepo root
+const { SITE_ROOT, CONTENT_ROOT, SOURCE_ROOT } = require("./lib/roots.cjs");
 const OUT_FILE = path.join(SITE_ROOT, ".generated/ImportContentMap.ts");
 
 // Where to look for MDX that might use <ImportContent>
-const MDX_GLOBS = [path.join(REPO_ROOT, "docs/content/**/*.{md,mdx}")];
+const MDX_GLOBS = [path.join(CONTENT_ROOT, "**/*.{md,mdx}")];
 
 // Optionally constrain which repo roots are permitted for mode="code"
 const ALLOWED_ROOTS = new Set(["crates", "external-crates", "examples"]);
@@ -73,7 +72,7 @@ for (const mdxPath of mdxFiles) {
 
 const entries = [];
 for (const rel of Array.from(wanted).sort()) {
-  const abs = path.join(REPO_ROOT, rel);
+  const abs = path.join(SOURCE_ROOT, rel);
   if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
     console.warn(`[warn] Missing file for ImportContent: ${rel}`);
     continue;

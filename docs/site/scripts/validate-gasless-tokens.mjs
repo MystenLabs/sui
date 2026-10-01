@@ -10,17 +10,21 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createRequire } from "module";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+// Roots are shared with the CJS scripts; see scripts/lib/roots.cjs.
+const require_ = createRequire(import.meta.url);
+const { CONTENT_ROOT, SOURCE_ROOT, DOCS_ROOT, SITE_ROOT } = require_("./lib/roots.cjs");
 
 const LIB_RS = path.resolve(
-  __dirname,
-  "../../../crates/sui-protocol-config/src/lib.rs",
+  SOURCE_ROOT,
+  "crates/sui-protocol-config/src/lib.rs",
 );
 const MDX_FILE = path.resolve(
-  __dirname,
-  "../../content/develop/transaction-payment/gasless-stablecoin-transfers.mdx",
+  CONTENT_ROOT,
+  "develop/transaction-payment/gasless-stablecoin-transfers.mdx",
 );
 
 // Human-readable issuer names keyed by the Rust constant name.

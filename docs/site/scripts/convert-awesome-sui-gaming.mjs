@@ -4,19 +4,24 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createRequire } from "module";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Roots are shared with the CJS scripts; see scripts/lib/roots.cjs.
+const require_ = createRequire(import.meta.url);
+const { CONTENT_ROOT, DOCS_ROOT } = require_("./lib/roots.cjs");
+
 // Paths (adjusted for new location)
 const readmePath = path.join(
-  __dirname,
-  "../../subtree/awesome-sui-gaming/README.md",
+  DOCS_ROOT,
+  "subtree/awesome-sui-gaming/README.md",
 );
 const readmeTargetPath = path.join(
-  __dirname,
-  "../../content/references/awesome-sui-gaming.mdx",
+  CONTENT_ROOT,
+  "references/awesome-sui-gaming.mdx",
 );
 
 // Process the content for the awesome-sui-gaming README structure:

@@ -19,6 +19,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { createRequire } from 'module';
 import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import matter from 'gray-matter';
@@ -26,9 +27,11 @@ import matter from 'gray-matter';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SITE_ROOT = path.resolve(__dirname, '..');
-const CONTENT_ROOT = path.resolve(SITE_ROOT, '..', 'content');
-const REPO_ROOT = path.resolve(SITE_ROOT, '..', '..');
+// CJS so the other five scripts and docusaurus.config.js can share it.
+const require_ = createRequire(import.meta.url);
+const roots = require_('./lib/roots.cjs');
+
+const { SITE_ROOT, CONTENT_ROOT, SOURCE_ROOT, MONOREPO_ROOT } = roots;
 const CONCEPT_MAP_PATH = path.resolve(SITE_ROOT, '..', 'concept-map.yaml');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -83,7 +86,7 @@ function getGitLastModified(filePath) {
   try {
     const ts = execFileSync(
       'git', ['log', '-1', '--format=%at', '--', filePath],
-      { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
+      { cwd: MONOREPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
     ).trim();
     if (!ts) return null;
     return new Date(parseInt(ts, 10) * 1000);
@@ -188,10 +191,11 @@ function checkBrokenImports(body, filePath) {
     // Skip snippet-mode imports (short names without paths)
     if (!source.includes('/') && !source.includes('.')) continue;
 
-    // Try resolving from repo root and content root
+    // An ImportContent source is either a code path, which resolves against
+    // the source checkout, or a page path, which resolves against content.
     const candidates = [
-      path.resolve(REPO_ROOT, source),
-      path.resolve(REPO_ROOT, source.replace(/^\//, '')),
+      path.resolve(SOURCE_ROOT, source),
+      path.resolve(SOURCE_ROOT, source.replace(/^\//, '')),
       path.resolve(CONTENT_ROOT, source),
       path.resolve(CONTENT_ROOT, source.replace(/^\//, '')),
       path.resolve(path.dirname(filePath), source),

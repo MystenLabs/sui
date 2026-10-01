@@ -3,11 +3,12 @@
 
 const fs = require("fs");
 const path = require("path");
+const { SOURCE_ROOT } = require("./lib/roots.cjs");
 
 const SPECS = [
-  { network: "mainnet", relPath: "../../crates/sui-indexer-alt-jsonrpc/openrpc.json", strictJson: true },
-  { network: "testnet", relPath: "../../crates/sui-indexer-alt-jsonrpc/openrpc.json", strictJson: true },
-  { network: "devnet", relPath: "../../crates/sui-indexer-alt-jsonrpc/openrpc.json", strictJson: true },
+  { network: "mainnet", relPath: "crates/sui-indexer-alt-jsonrpc/openrpc.json", strictJson: true },
+  { network: "testnet", relPath: "crates/sui-indexer-alt-jsonrpc/openrpc.json", strictJson: true },
+  { network: "devnet", relPath: "crates/sui-indexer-alt-jsonrpc/openrpc.json", strictJson: true },
 ];
 
 // Treat these as "expected non-JSON stubs".
@@ -78,7 +79,8 @@ function validateOpenRpcShape(doc, absPath) {
 }
 
 function main() {
-  const repoRoot = process.cwd();
+  // Was process.cwd(), so this only worked when invoked from docs/site.
+  const repoRoot = SOURCE_ROOT;
 
   let validCount = 0;
   const warnings = [];

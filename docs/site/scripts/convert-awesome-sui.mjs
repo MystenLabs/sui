@@ -4,31 +4,35 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createRequire } from "module";
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+// Roots are shared with the CJS scripts; see scripts/lib/roots.cjs.
+const require_ = createRequire(import.meta.url);
+const { CONTENT_ROOT, SOURCE_ROOT, DOCS_ROOT, SITE_ROOT } = require_("./lib/roots.cjs");
 
 // Paths (adjusted for new location)
 const readmePath = path.join(
-  __dirname,
-  "../../subtree/awesome-sui/README.md",
+  DOCS_ROOT,
+  "subtree/awesome-sui/README.md",
 );
 const detailsSourceDir = path.join(
-  __dirname,
-  "../../subtree/awesome-sui/details",
+  DOCS_ROOT,
+  "subtree/awesome-sui/details",
 );
 const mediaSourceDir = path.join(
-  __dirname,
-  "../../subtree/awesome-sui/media",
+  DOCS_ROOT,
+  "subtree/awesome-sui/media",
 );
 const readmeTargetPath = path.join(
-  __dirname,
-  "../../content/references/awesome-sui.mdx",
+  CONTENT_ROOT,
+  "references/awesome-sui.mdx",
 );
 const mediaTargetDir = path.join(
-  __dirname,
-  "../../static/awesome-sui/media",
+  SITE_ROOT,
+  "static/awesome-sui/media",
 );
 
 const MAX_PAGE_CHARS = 49500;

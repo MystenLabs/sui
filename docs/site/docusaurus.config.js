@@ -19,7 +19,10 @@ const darkCodeTheme = require("prism-react-renderer").themes.nightOwl;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SIDEBARS_PATH = fileURLToPath(new URL("../content/sidebars.js", import.meta.url));
+// The pages and the code the pages quote, named separately.
+const { CONTENT_ROOT, SOURCE_ROOT } = require("./scripts/lib/roots.cjs");
+
+const SIDEBARS_PATH = path.join(CONTENT_ROOT, "sidebars.js");
 
 require("dotenv").config();
 
@@ -124,7 +127,7 @@ const config = {
           if (isServer) return {};
           const fs = require('fs');
           const grayMatter = require('gray-matter');
-          const contentDir = path.resolve(__dirname, '../content');
+          const contentDir = CONTENT_ROOT;
 
           function cleanForMarkdown(raw) {
             const { content } = grayMatter(raw);
@@ -233,7 +236,7 @@ const config = {
                   enforce: "pre", // make sure it runs BEFORE @docusaurus/mdx-loader
                   include: [
                     // adjust these to match where your Markdown lives
-                    path.resolve(__dirname, "../content"),
+                    CONTENT_ROOT,
                   ],
                   use: [
                     {
@@ -254,8 +257,8 @@ const config = {
             },
             resolve: {
               alias: {
-                "@repo": path.resolve(__dirname, "../../"),
-                "@docs": path.resolve(__dirname, "../content/"),
+                "@repo": SOURCE_ROOT,
+                "@docs": CONTENT_ROOT,
               },
             },
           };

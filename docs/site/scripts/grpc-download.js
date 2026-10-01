@@ -4,6 +4,7 @@
 const { writeFile } = require("fs/promises");
 const axios = require("axios");
 const path = require("path");
+const { CONTENT_ROOT } = require("./lib/roots.cjs");
 
 const repo = {
   owner: "MystenLabs",
@@ -12,8 +13,8 @@ const repo = {
   filePath: "documentation.json",
 };
 const PROTOCOL_PATH = path.join(
-  __dirname,
-  "../../content/documentation.json",
+  CONTENT_ROOT,
+  "documentation.json",
 );
 
 const url = `https://raw.githubusercontent.com/${repo.owner}/${repo.name}/${repo.branch}/${repo.filePath}`;
