@@ -1874,7 +1874,6 @@ checksum = "46fdb647ebde000f43b5b53f773c30cf9b0cb4300453208713fa38b2c70935a0"
 dependencies = [
  "console",
  "once_cell",
- "regex",
  "serde",
  "similar",
 ]
@@ -3066,7 +3065,6 @@ dependencies = [
  "async-trait",
  "clap 4.5.28",
  "datatest-stable",
- "insta",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",
