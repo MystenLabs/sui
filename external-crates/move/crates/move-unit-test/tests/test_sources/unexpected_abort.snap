@@ -28,9 +28,9 @@ Failures in 0x6::M:
 
 ┌── unexpected_abort_in_native_function ──────
 │ error[EC11001]: test failure
-│     ┌─ string.move:117:12
+│     ┌─ string.move:113:12
 │     │
-│ 117 │ native fun internal_sub_string(v: &vector<u8>, i: u64, j: u64): vector<u8>;
+│ 113 │ native fun internal_sub_string(v: &vector<u8>, i: u64, j: u64): vector<u8>;
 │     │            ^^^^^^^^^^^^^^^^^^^
 │     │            │
 │     │            Test was not expected to error, but it aborted with code 1 originating in the module std::string rooted here
