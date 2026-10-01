@@ -4,16 +4,26 @@ title: Module `sui::forwarding_address`
 
 Registry and resolution for forwarding addresses.
 
-The prototype layout is <code>[8-byte master ID][8 bytes of 0xfd][16-byte tag]</code>.
-Integer fields use little-endian BCS encoding.
+Address layout, all integers little-endian:
+<code>[u32 <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>][10 bytes of 0xfa][u8 variant][u8 reserved][u128 tag]</code>.
+The master ID and magic positions are fixed for every variant; the variant only decides what
+the tag bytes mean. Variant 0 is an opaque tag and requires the reserved byte to be zero.
 
 
 -  [Struct `ForwardingAddressRegistry`](#sui_forwarding_address_ForwardingAddressRegistry)
+-  [Struct `MasterCap`](#sui_forwarding_address_MasterCap)
+-  [Struct `MasterRecord`](#sui_forwarding_address_MasterRecord)
+-  [Struct `MasterIdCounter`](#sui_forwarding_address_MasterIdCounter)
 -  [Struct `ForwardingDeposit`](#sui_forwarding_address_ForwardingDeposit)
+-  [Struct `MasterRegistered`](#sui_forwarding_address_MasterRegistered)
 -  [Constants](#@Constants_0)
 -  [Function `register`](#sui_forwarding_address_register)
+-  [Function `master_id`](#sui_forwarding_address_master_id)
 -  [Function `resolve`](#sui_forwarding_address_resolve)
 -  [Function `resolve_impl`](#sui_forwarding_address_resolve_impl)
+-  [Function `allocate_master_id`](#sui_forwarding_address_allocate_master_id)
+-  [Function `mix_master_id`](#sui_forwarding_address_mix_master_id)
+-  [Function `mul_mod_2_32`](#sui_forwarding_address_mul_mod_2_32)
 -  [Function `create`](#sui_forwarding_address_create)
 
 
@@ -45,7 +55,7 @@ Integer fields use little-endian BCS encoding.
 
 ## Struct `ForwardingAddressRegistry`
 
-Singleton shared object whose UID owns immutable master ID registrations.
+Singleton shared object whose UID owns the master ID records and the allocation counter.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">ForwardingAddressRegistry</a> <b>has</b> key
@@ -63,6 +73,88 @@ Singleton shared object whose UID owns immutable master ID registrations.
 </dt>
 <dd>
 </dd>
+</dl>
+
+
+</details>
+
+<a name="sui_forwarding_address_MasterCap"></a>
+
+## Struct `MasterCap`
+
+Ownership of a master ID, handed to the registrant. Keep it cold; it is what a later
+rotation or pause will require.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterCap">MasterCap</a> <b>has</b> key, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="../sui/object.md#sui_object_UID">sui::object::UID</a></code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code><a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>: u32</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_forwarding_address_MasterRecord"></a>
+
+## Struct `MasterRecord`
+
+Dynamic field on the registry, keyed by master ID.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterRecord">MasterRecord</a> <b>has</b> store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>master: <b>address</b></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_forwarding_address_MasterIdCounter"></a>
+
+## Struct `MasterIdCounter`
+
+Dynamic field key for the next master ID counter (a <code>u64</code>, so the last <code>u32</code> is allocatable).
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterIdCounter">MasterIdCounter</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
 </dl>
 
 
@@ -101,7 +193,49 @@ Emitted when a balance deposit is redirected from a forwarding address to its ma
 <dd>
 </dd>
 <dt>
+<code>variant: u8</code>
+</dt>
+<dd>
+</dd>
+<dt>
 <code>tag: u128</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_forwarding_address_MasterRegistered"></a>
+
+## Struct `MasterRegistered`
+
+Emitted when a master ID is allocated.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterRegistered">MasterRegistered</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code><a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>: u32</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>master: <b>address</b></code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>cap_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
 </dd>
@@ -135,19 +269,55 @@ Emitted when a balance deposit is redirected from a forwarding address to its ma
 
 
 
+<a name="sui_forwarding_address_EForwardingAddressVariantUnsupported"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_EForwardingAddressVariantUnsupported">EForwardingAddressVariantUnsupported</a>: vector&lt;u8&gt; = b"The forwarding <b>address</b> variant is not supported by this protocol version.";
+</code></pre>
+
+
+
+<a name="sui_forwarding_address_EForwardingAddressNotCanonical"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_EForwardingAddressNotCanonical">EForwardingAddressNotCanonical</a>: vector&lt;u8&gt; = b"The forwarding <b>address</b> is not a canonical encoding.";
+</code></pre>
+
+
+
+<a name="sui_forwarding_address_EMasterIdsExhausted"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_EMasterIdsExhausted">EMasterIdsExhausted</a>: vector&lt;u8&gt; = b"All master IDs have been allocated.";
+</code></pre>
+
+
+
+<a name="sui_forwarding_address_MAX_MASTER_ID"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_MAX_MASTER_ID">MAX_MASTER_ID</a>: u64 = 4294967295;
+</code></pre>
+
+
+
 <a name="sui_forwarding_address_register"></a>
 
 ## Function `register`
 
-Claim an unregistered <code>master_id</code> for <code>ctx.sender()</code>.
+Allocate a fresh master ID for <code>ctx.sender()</code> and return the capability for it.
 
-Master IDs are a first-come namespace; they have no external owner. Senders must construct
-forwarding addresses only after confirming the intended master registered the ID.
-
-Aborts if <code>master_id</code> is already registered.
+Aborts once every master ID has been allocated; IDs are never reused.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_register">register</a>(registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">sui::forwarding_address::ForwardingAddressRegistry</a>, master_id: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_register">register</a>(registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">sui::forwarding_address::ForwardingAddressRegistry</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterCap">sui::forwarding_address::MasterCap</a>
 </code></pre>
 
 
@@ -156,8 +326,37 @@ Aborts if <code>master_id</code> is already registered.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_register">register</a>(registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">ForwardingAddressRegistry</a>, master_id: u64, ctx: &TxContext) {
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_add">sui::dynamic_field::add</a>(&<b>mut</b> registry.id, master_id, ctx.sender());
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_register">register</a>(registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">ForwardingAddressRegistry</a>, ctx: &<b>mut</b> TxContext): <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterCap">MasterCap</a> {
+    <b>let</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a> = <a href="../sui/forwarding_address.md#sui_forwarding_address_allocate_master_id">allocate_master_id</a>(registry);
+    <b>let</b> master = ctx.sender();
+    <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> registry.id, <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>, <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterRecord">MasterRecord</a> { master });
+    <b>let</b> cap = <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterCap">MasterCap</a> { id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx), <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a> };
+    <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/forwarding_address.md#sui_forwarding_address_MasterRegistered">MasterRegistered</a> { <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>, master, cap_id: <a href="../sui/object.md#sui_object_id">object::id</a>(&cap) });
+    cap
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_forwarding_address_master_id"></a>
+
+## Function `master_id`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>(cap: &<a href="../sui/forwarding_address.md#sui_forwarding_address_MasterCap">sui::forwarding_address::MasterCap</a>): u32
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>(cap: &<a href="../sui/forwarding_address.md#sui_forwarding_address_MasterCap">MasterCap</a>): u32 {
+    cap.<a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>
 }
 </code></pre>
 
@@ -182,12 +381,13 @@ Resolve <code>recipient</code> and emit an attribution event when it is a forwar
 
 
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve">resolve</a>&lt;T&gt;(recipient: <b>address</b>, amount: u64): <b>address</b> {
-    <b>let</b> (master, tag, forwarded) = <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient);
+    <b>let</b> (master, variant, tag, forwarded) = <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient);
     <b>if</b> (forwarded) {
-        <a href="../sui/event.md#sui_event_emit">sui::event::emit</a>(<a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingDeposit">ForwardingDeposit</a>&lt;T&gt; {
+        <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingDeposit">ForwardingDeposit</a>&lt;T&gt; {
             <a href="../sui/forwarding_address.md#sui_forwarding_address">forwarding_address</a>: recipient,
             master,
             amount,
+            variant,
             tag,
         });
     };
@@ -205,7 +405,7 @@ Resolve <code>recipient</code> and emit an attribution event when it is a forwar
 
 
 
-<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient: <b>address</b>): (<b>address</b>, u128, bool)
+<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient: <b>address</b>): (<b>address</b>, u8, u128, bool)
 </code></pre>
 
 
@@ -214,7 +414,97 @@ Resolve <code>recipient</code> and emit an attribution event when it is a forwar
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient: <b>address</b>): (<b>address</b>, u128, bool);
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient: <b>address</b>): (<b>address</b>, u8, u128, bool);
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_forwarding_address_allocate_master_id"></a>
+
+## Function `allocate_master_id`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_allocate_master_id">allocate_master_id</a>(registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">sui::forwarding_address::ForwardingAddressRegistry</a>): u32
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_allocate_master_id">allocate_master_id</a>(registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">ForwardingAddressRegistry</a>): u32 {
+    <b>if</b> (!<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">dynamic_field::exists</a>(&registry.id, <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterIdCounter">MasterIdCounter</a> {})) {
+        // Counter 0 is never allocated so that master ID 0 stays reserved.
+        <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> registry.id, <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterIdCounter">MasterIdCounter</a> {}, 1u64);
+    };
+    <b>let</b> next = <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>&lt;<a href="../sui/forwarding_address.md#sui_forwarding_address_MasterIdCounter">MasterIdCounter</a>, u64&gt;(
+        &<b>mut</b> registry.id,
+        <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterIdCounter">MasterIdCounter</a> {},
+    );
+    <b>assert</b>!(*next &lt;= <a href="../sui/forwarding_address.md#sui_forwarding_address_MAX_MASTER_ID">MAX_MASTER_ID</a>, <a href="../sui/forwarding_address.md#sui_forwarding_address_EMasterIdsExhausted">EMasterIdsExhausted</a>);
+    <b>let</b> counter = (*next <b>as</b> u32);
+    *next = *next + 1;
+    <a href="../sui/forwarding_address.md#sui_forwarding_address_mix_master_id">mix_master_id</a>(counter)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_forwarding_address_mix_master_id"></a>
+
+## Function `mix_master_id`
+
+lowbias32: a permutation of <code>u32</code> built from xor-shifts and odd multiplications, so distinct
+counters always give distinct IDs and 0 is the only preimage of 0. IDs look mixed but are not
+secret; the counter is public and the function is invertible.
+
+
+<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_mix_master_id">mix_master_id</a>(x: u32): u32
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_mix_master_id">mix_master_id</a>(x: u32): u32 {
+    <b>let</b> x = x ^ (x &gt;&gt; 16);
+    <b>let</b> x = <a href="../sui/forwarding_address.md#sui_forwarding_address_mul_mod_2_32">mul_mod_2_32</a>(x, 0x7feb352d);
+    <b>let</b> x = x ^ (x &gt;&gt; 15);
+    <b>let</b> x = <a href="../sui/forwarding_address.md#sui_forwarding_address_mul_mod_2_32">mul_mod_2_32</a>(x, 0x846ca68b);
+    x ^ (x &gt;&gt; 16)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_forwarding_address_mul_mod_2_32"></a>
+
+## Function `mul_mod_2_32`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_mul_mod_2_32">mul_mod_2_32</a>(a: u32, b: u32): u32
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_mul_mod_2_32">mul_mod_2_32</a>(a: u32, b: u32): u32 {
+    (((a <b>as</b> u64) * (b <b>as</b> u64)) & <a href="../sui/forwarding_address.md#sui_forwarding_address_MAX_MASTER_ID">MAX_MASTER_ID</a>) <b>as</b> u32
+}
 </code></pre>
 
 

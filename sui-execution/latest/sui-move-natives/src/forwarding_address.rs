@@ -5,7 +5,9 @@ use std::collections::VecDeque;
 
 use move_binary_format::{checked_as, safe_assert_eq, safe_unwrap};
 use move_core_types::{
-    account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
+    account_address::AccountAddress,
+    gas_algebra::InternalGas,
+    language_storage::{StructTag, TypeTag},
     vm_status::StatusCode,
 };
 use move_vm_runtime::{
@@ -16,10 +18,12 @@ use move_vm_runtime::{
 };
 use smallvec::smallvec;
 use sui_types::{
-    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_ADDRESS,
     base_types::MoveObjectType,
     dynamic_field::{DynamicFieldInfo, derive_dynamic_field_id},
-    forwarding_address::ForwardingAddress,
+    forwarding_address::{
+        FORWARDING_ADDRESS_MODULE_NAME, ForwardingAddress, MASTER_RECORD_STRUCT_NAME,
+    },
 };
 
 use crate::{
@@ -31,6 +35,8 @@ use crate::{
 };
 
 const E_FORWARDING_ADDRESS_UNREGISTERED: u64 = 1;
+const E_FORWARDING_ADDRESS_VARIANT_UNSUPPORTED: u64 = 2;
+const E_FORWARDING_ADDRESS_NOT_CANONICAL: u64 = 3;
 
 #[derive(Clone)]
 pub struct ForwardingAddressResolveCostParams {
@@ -47,12 +53,11 @@ pub fn resolve_impl(
     safe_assert_eq!(args.len(), 1);
 
     let recipient = pop_arg!(args, AccountAddress);
-    if !get_extension!(context, ObjectRuntime)?
-        .protocol_config
-        .enable_forwarding_addresses()
-    {
+    let protocol_config = get_extension!(context, ObjectRuntime)?.protocol_config;
+    if !protocol_config.enable_forwarding_addresses() {
         return Ok(not_forwarded(context, recipient));
     }
+    let max_variant = safe_unwrap!(protocol_config.forwarding_address_max_variant_as_option());
 
     let ForwardingAddressResolveCostParams { base, per_byte } =
         get_extension!(context, NativesCostTable)?
@@ -62,9 +67,22 @@ pub fn resolve_impl(
     let per_byte = safe_unwrap!(per_byte);
     native_charge_gas_early_exit!(context, base);
 
-    let Some(forwarding_address) = ForwardingAddress::parse(recipient.into()) else {
-        return Ok(not_forwarded(context, recipient));
+    let forwarding_address = match ForwardingAddress::parse(recipient.into()) {
+        Ok(None) => return Ok(not_forwarded(context, recipient)),
+        Ok(Some(forwarding_address)) => forwarding_address,
+        Err(_) => {
+            return Ok(NativeResult::err(
+                context.gas_used(),
+                E_FORWARDING_ADDRESS_NOT_CANONICAL,
+            ));
+        }
     };
+    if u64::from(forwarding_address.variant) > max_variant {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_FORWARDING_ADDRESS_VARIANT_UNSUPPORTED,
+        ));
+    }
 
     let Some(registry_object) = get_extension_mut!(context, ObjectRuntime)?
         .load_runtime_system_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)?
@@ -82,8 +100,14 @@ pub fn resolve_impl(
         per_byte * checked_as!(registry_object.object_size_for_gas_metering(), u64)?.into()
     );
 
-    let key_type = TypeTag::U64;
-    let field_type = DynamicFieldInfo::dynamic_field_type(key_type.clone(), TypeTag::Address);
+    let key_type = TypeTag::U32;
+    let record_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: FORWARDING_ADDRESS_MODULE_NAME.to_owned(),
+        name: MASTER_RECORD_STRUCT_NAME.to_owned(),
+        type_params: vec![],
+    }));
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type.clone(), record_type);
     let type_tag = TypeTag::Struct(Box::new(field_type.clone()));
     let layout = context.type_tag_to_type_layout(&type_tag).ok_or_else(|| {
         move_binary_format::errors::PartialVMError::new(
@@ -130,7 +154,8 @@ pub fn resolve_impl(
         };
         let master = if field.exists()? {
             let field_value = field.borrow_global()?.value_as::<Reference>()?.read_ref()?;
-            Some(get_nested_struct_field(field_value, &[2])?.value_as::<AccountAddress>()?)
+            // Field { id, name, value: MasterRecord { master } }
+            Some(get_nested_struct_field(field_value, &[2, 0])?.value_as::<AccountAddress>()?)
         } else {
             None
         };
@@ -150,6 +175,7 @@ pub fn resolve_impl(
         context.gas_used(),
         smallvec![
             Value::address(master),
+            Value::u8(forwarding_address.variant),
             Value::u128(forwarding_address.tag),
             Value::bool(true),
         ],
@@ -161,6 +187,7 @@ fn not_forwarded(context: &NativeContext, recipient: AccountAddress) -> NativeRe
         context.gas_used(),
         smallvec![
             Value::address(recipient),
+            Value::u8(0),
             Value::u128(0),
             Value::bool(false)
         ],

@@ -1,21 +1,42 @@
 # Forwarding Address Registry: ownership, rotation, brakes
 
-Status: proposal for the Move team, 2026-09-30. Applies on top of #27989 (merged) and #27990.
+Status: proposal for the Move team, 2026-09-30, updated 2026-10-01 with the address format and
+ID allocation now implemented in #27990 (step 1 below). #27989 is merged.
 
 ## Where we are
 
-The prototype works end to end on devnet, but the registry has no ownership model, so it is not
-safe to leave on for long. #27989 makes the registry an implicitly read system object, i.e.
-consensus pins its version per transaction and the native reads it at that version. #27990 adds
-the Move side: `balance::send_funds` resolves a forwarding address
-`[u64 master_id][0xfd x 8][u128 tag]` through the registry, credits the master, emits
-`ForwardingDeposit<T>`, and aborts if the id is not registered.
+#27989 makes the registry an implicitly read system object, i.e. consensus pins its version per
+transaction and the native reads it at that version. #27990 adds the Move side:
+`balance::send_funds` resolves a forwarding address through the registry, credits the master,
+emits `ForwardingDeposit<T>`, and aborts if the id is not registered. The registry assigns master
+IDs and hands the registrant a `MasterCap`, so there is no id to front-run.
 
-Today `register(registry, master_id, ctx)` just does `dynamic_field::add(master_id, ctx.sender())`.
-That gives us three problems:
+Address layout (`crates/sui-types/src/forwarding_address.rs`, all integers little-endian):
 
-- Anyone can claim any id, so a master that publishes addresses before its registration lands (or
-  gets front-run) loses all future deposits to that id, permanently.
+```
+[u32 master_id][0xfa x 10][u8 variant][u8 reserved][u128 tag]
+ 0..4           4..14      14          15           16..32
+```
+
+- The master id and magic positions are fixed for every variant; the variant only decides what the
+  tag bytes mean. Variant 0 is an opaque `u128` tag and requires the reserved byte to be zero.
+- Absent magic means an ordinary address. Present magic with a non-zero reserved byte, or a variant
+  above `forwarding_address_max_variant` in protocol config (0 in version 139), aborts the deposit
+  (codes 3 and 2); it is never treated as an ordinary recipient, and the gas-coin `send_funds` guard
+  in the interpreter rejects anything with the magic for the same reason.
+- Trade-off against the earlier `[u64 id][0xfd x 8][u128 tag]`: an ordinary address collides with
+  the magic with probability 2^-80 instead of 2^-64, and grinding a key for some forwarding-shaped
+  address costs 2^80 instead of 2^64, but grinding one for a specific master's id costs 2^112
+  instead of 2^128 because the id shrank. Both are far out of reach; the id space is 2^32 masters.
+- IDs: the registry keeps a `u64` counter in a dynamic field (starting at 1) and maps it through
+  lowbias32, a permutation of `u32` (xor-shifts and odd multiplications), so counters never collide,
+  id 0 is reserved (its only preimage is counter 0, never allocated), and allocation aborts with
+  `EMasterIdsExhausted` after the last `u32` instead of wrapping. IDs look mixed but are not secret:
+  the counter is public and the mix is invertible, which is fine because nothing depends on an id
+  being unguessable.
+
+What is still missing:
+
 - The mapping is write-once, so there is no rotation and no revoke. If the master key leaks, every
   already published address keeps paying the attacker.
 - No way to stop the bleed. Nothing pauses an id, and turning the feature flag off makes the pattern
@@ -23,17 +44,19 @@ That gives us three problems:
 
 ## Proposed design
 
-I think the fix is for the registry to assign the id and hand back a capability, keep enough state
-on the record to survive a compromise, and add a protocol level brake. We don't need mining or a fee
-token for this.
+I think the fix is for the registry to assign the id and hand back a capability (done), keep
+enough state on the record to survive a compromise, and add a protocol level brake. We don't need
+mining or a fee token for this.
 
 ```move
 module sui::forwarding_address;
 
-public struct ForwardingAddressRegistry has key { id: UID, next: u64 }
+// Layout is frozen on this object (it exists on every chain since 132); the counter lives in a
+// dynamic field keyed by `MasterIdCounter {}`.
+public struct ForwardingAddressRegistry has key { id: UID }
 
 // Held cold. Needed to rotate; either the cap or the current master can pause/cancel.
-public struct MasterCap has key, store { id: UID, master_id: u64 }
+public struct MasterCap has key, store { id: UID, master_id: u32 }
 
 // Dynamic field on the registry: master_id -> MasterRecord
 public struct MasterRecord has store {
@@ -42,7 +65,7 @@ public struct MasterRecord has store {
     paused: bool,
 }
 
-// id = hash(next) truncated to u64, loop on collision; charged via a native with its own cost param
+// id = lowbias32(counter); charged via a native with its own cost param
 public fun register(registry: &mut ForwardingAddressRegistry, ctx: &mut TxContext): MasterCap;
 
 public fun pause(registry: &mut ForwardingAddressRegistry, cap: &MasterCap);
@@ -54,13 +77,14 @@ public fun cancel_rotation(registry: &mut ForwardingAddressRegistry, cap: &Maste
 public fun cancel_rotation_by_master(registry: &mut ForwardingAddressRegistry, master_id: u64, ctx: &TxContext);
 public fun finalize_rotation(registry: &mut ForwardingAddressRegistry, cap: &MasterCap, ctx: &TxContext);
 
-// Native. Reads `master` and `paused`, ignores `pending`. Aborts when paused or unregistered.
-native fun resolve_impl(recipient: address): (address, u128, bool);
+// Native. Reads `master` and `paused`, ignores `pending`. Aborts when paused, unregistered,
+// non-canonical, or of an unsupported variant.
+native fun resolve_impl(recipient: address): (address, u8, u128, bool);
 ```
 
 Why each piece:
 
-- Assigned ids kill front-running outright, since there is nothing to race for. Hashing the counter
+- Assigned ids kill front-running outright, since there is nothing to race for. Mixing the counter
   only makes ids non-enumerable; sequential would be just as safe. Deriving from the master address
   is worse because it ties the id to the exact key we want to be able to replace.
 - Registration cost goes through gas: `register` calls a native with a large base cost in protocol
@@ -111,15 +135,15 @@ for it.
 
 | Who asks | Question | Source of truth | Have it? |
 | --- | --- | --- | --- |
-| Payment app | Which deposits landed for master M, and from which forwarding address / tag? | `ForwardingDeposit<T> { forwarding_address, master, amount, tag }` event | Yes (#27990) |
+| Payment app | Which deposits landed for master M, and from which forwarding address / tag? | `ForwardingDeposit<T> { forwarding_address, master, amount, variant, tag }` event | Yes (#27990) |
 | Payment app | Given a tag, did invoice X get paid, how much, in which tx? | Same event, indexed by `(master, tag)` | Yes, needs an index |
 | Wallet / sender | Is this forwarding address registered, and to whom, right now? | Registry dynamic field `master_id -> MasterRecord` (derive the field id from the registry and the u64 key) | Yes, plain object read; GraphQL `dynamicField` works today |
-| Master | My record: master, paused, pending rotation, and its history | `MasterRecord` object plus lifecycle events | Object yes; events no |
+| Master | My record: master, paused, pending rotation, and its history | `MasterRecord` object plus lifecycle events | Object yes; `MasterRegistered` yes, the rest no |
 | Master | Where is my `MasterCap`? | Owned object of type `MasterCap` | Yes, standard object index |
 | Anyone | Balances | Master's address balance; a forwarding address always stays at 0 | Yes, existing balance indexing |
 
-Events to add so an indexer never has to diff objects: `MasterRegistered { master_id, master, cap_id }`,
-`RotationProposed { master_id, new_master, effective_epoch }`, `RotationFinalized { master_id, master }`,
+Events to add so an indexer never has to diff objects (`MasterRegistered { master_id, master, cap_id }`
+already exists): `RotationProposed { master_id, new_master, effective_epoch }`, `RotationFinalized { master_id, master }`,
 `RotationCancelled { master_id }`, `Paused { master_id }`, `Unpaused { master_id }`.
 
 Implementation is one sui-indexer-alt pipeline over these events writing two tables,
@@ -137,9 +161,9 @@ none touch consensus or the core changes again. 139 is open and devnet only, and
 empty everywhere except devnet (wiped weekly), so changing the record layout between steps costs
 nothing.
 
-1. `MasterCap` + assigned ids. `register` returns the cap, record becomes `MasterRecord { master }`,
-   native reads `.master` through the struct layout instead of a field offset. This one removes
-   front-running and is the smallest step, so it goes first.
+1. `MasterCap` + assigned ids + the versioned address format. Done in #27990: `register` returns
+   the cap, the record is `MasterRecord { master }`, ids come from the mixed counter, and the native
+   gates the variant through `forwarding_address_max_variant`.
 2. Pause + two-step rotation. Record gains `pending` and `paused`, the entry functions above, native
    checks `paused`. Lifecycle events land here.
 3. Registration fee. `register_impl` native with a cost param in 139.
@@ -157,7 +181,8 @@ nothing.
   business.
 - Brake semantics: abort every deposit to a pattern address, or only resolution (i.e. strand)? I
   think abort.
-- Is the u64 master_id + u128 tag split still the right layout once ids are assigned, or should the
-  tag get more bits?
+- Is 2^32 master ids enough for good, or do we want a 6-byte id (2^48, and 2^128 targeted
+  grinding again) at the cost of a custom 48-bit mixer?
+- Should the reserved byte stay zero for every variant, or become part of a future variant's tag?
 - Do we want `MasterRecord` and the events readable from other Move packages (a
   `master_of(registry, id)` view), or is off-chain lookup enough for now?

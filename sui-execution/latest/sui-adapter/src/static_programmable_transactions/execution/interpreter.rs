@@ -202,7 +202,7 @@ fn execute_command<Mode: ExecutionMode>(
                 assert_invariant!(arguments.len() == 2, "coin::send_funds should have 2 args");
                 let recipient = arguments.last().unwrap().to_address()?;
                 if context.env.protocol_config.enable_forwarding_addresses()
-                    && ForwardingAddress::parse(recipient.into()).is_some()
+                    && ForwardingAddress::has_magic(recipient.into())
                 {
                     return Err(Mode::Error::new_with_source(
                         ExecutionErrorKind::FeatureNotYetSupported,
