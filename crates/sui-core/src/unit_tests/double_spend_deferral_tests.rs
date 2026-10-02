@@ -211,6 +211,8 @@ async fn test_duplicate_winner_preserves_first_author_attribution() {
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
     protocol_config.set_defer_owned_object_double_spend_for_testing(false);
+    // Attribution goes to the first block processed, so keep the blocks in submission order.
+    protocol_config.set_shuffle_consensus_commit_blocks_for_testing(false);
 
     let mut setup = DoubleSpendTestSetup::new_with_committee_size(protocol_config, 2, 3).await;
     let mut consensus_txns = setup.build_competing_consensus_txns().await;
