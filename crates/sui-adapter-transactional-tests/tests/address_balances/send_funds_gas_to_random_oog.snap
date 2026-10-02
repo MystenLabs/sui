@@ -59,7 +59,7 @@ task 7, lines 42-46:
 // smashing -- that side-effect persists across reset, so the coin's value
 // deposit-back is still emitted. Net to A: +deposit_back - net_gas.
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
-100998187901
+100998197901
 
 task 8, lines 48-50:
 // C's AB should not exist: send_funds was rolled back and override was

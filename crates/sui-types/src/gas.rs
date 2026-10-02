@@ -48,6 +48,7 @@ pub mod checked {
         fn gas_used(&self) -> u64;
         fn reset_storage_cost_and_rebate(&mut self);
         fn charge_storage_read(&mut self, size: usize) -> Result<(), ExecutionError>;
+        fn charge_package_object_read(&mut self, size: usize) -> Result<(), ExecutionError>;
         fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError>;
         fn track_storage_mutation(
             &mut self,

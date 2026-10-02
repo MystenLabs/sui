@@ -274,6 +274,11 @@ impl GasStatus {
         self.gas_left.to_unit_round_down()
     }
 
+    #[cfg(test)]
+    pub(crate) fn remaining_internal_gas(&self) -> u64 {
+        u64::from(self.gas_left)
+    }
+
     /// Charge a given amount of gas and fail if not enough gas units are left.
     pub fn deduct_gas(&mut self, amount: InternalGas) -> PartialVMResult<()> {
         if !self.charge {
