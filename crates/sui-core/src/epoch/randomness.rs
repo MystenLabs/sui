@@ -18,8 +18,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Weak};
 use std::time::Instant;
-use sui_macros::fail_point_if;
+use sui_macros::{fail_point, fail_point_if};
 use sui_network::randomness;
+use sui_protocol_config::assert_reachable_gated;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, EpochId, StakeUnit};
 use sui_types::crypto::{AuthorityKeyPair, RandomnessRound};
@@ -600,6 +601,10 @@ impl RandomnessManager {
                     "random beacon: re-sending DKG Confirmation with {} complaints",
                     confirmation.num_of_complaints()
                 );
+                assert_reachable_gated!(
+                    "random beacon: re-sent own DKG Confirmation after restart",
+                    |pc| pc.allow_dkg_completion_after_timeout()
+                );
                 self.submit_dkg_confirmation(&epoch_store, &confirmation)?;
             } else {
                 debug_fatal!(
@@ -803,6 +808,13 @@ impl RandomnessManager {
                         .metrics
                         .epoch_random_beacon_dkg_completed_after_timeout
                         .set(i64::from(completed_after_timeout));
+                    if completed_after_timeout {
+                        assert_reachable_gated!(
+                            "random beacon: DKG completed after its timeout",
+                            |pc| pc.allow_dkg_completion_after_timeout()
+                        );
+                        fail_point!("rb-dkg-completed-after-timeout");
+                    }
 
                     match self.role.as_ref() {
                         DkgRole::Party(party) => {
@@ -1026,6 +1038,10 @@ impl RandomnessManager {
         }
 
         if !self.dkg_timeout_reported {
+            assert_reachable_gated!(
+                "random beacon: DKG timed out while still allowed to complete later",
+                |pc| pc.allow_dkg_completion_after_timeout()
+            );
             error!(
                 "random beacon: DKG timed out; randomness-using transactions will be canceled unless/until DKG completes"
             );
