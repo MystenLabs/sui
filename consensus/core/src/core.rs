@@ -52,11 +52,6 @@ use crate::{
     },
 };
 
-/// Accepted blocks are flushed to storage once this many bytes of them are buffered. A flush
-/// costs a few ms per MB on the core thread, so this bounds what the flush before a proposal
-/// has to write, while keeping small blocks batched into a few writes per round.
-const MAX_UNFLUSHED_BLOCKS_BYTES: usize = 512 * 1024;
-
 pub(crate) struct Core {
     context: Arc<Context>,
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
@@ -408,17 +403,6 @@ impl Core {
                     .map(|b| b.reference().to_string())
                     .join(",")
             );
-
-            // The flush before broadcasting a proposal is on the critical path of the round,
-            // and writes every block accepted since the previous flush: with large blocks, a
-            // whole round of them. Persist accepted blocks as they accumulate instead, while
-            // the round is still waiting on the network, so that flush stays small.
-            {
-                let mut dag_state = self.dag_state.write();
-                if dag_state.unflushed_blocks_bytes() >= MAX_UNFLUSHED_BLOCKS_BYTES {
-                    dag_state.flush();
-                }
-            }
 
             // Try to commit the new blocks if possible.
             self.try_commit_local()?;
@@ -1864,53 +1848,6 @@ mod test {
             .filter(|block| block.round() > cutoff_round)
             .count();
         assert_eq!(proposed.transaction_votes().len(), expected_targets);
-    }
-
-    #[tokio::test]
-    async fn test_accepted_blocks_are_flushed_once_enough_bytes_accumulate() {
-        telemetry_subscribers::init_for_testing();
-        let (context, _key_pairs) = Context::new_for_test(4);
-        let mut core_fixture = CoreTestFixture::new(
-            context.clone(),
-            vec![1, 1, 1, 1],
-            AuthorityIndex::new_for_test(0),
-            false,
-        )
-        .await;
-        let store = &core_fixture.store;
-        let dag_state = &core_fixture.dag_state;
-        let core = &mut core_fixture.core;
-        let last_proposed_round = core.last_proposed_round();
-
-        // A small block is accepted and stays buffered: without a proposal or a commit there is
-        // nothing to flush it. No proposal happens because min round delay has not passed.
-        let small_block = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
-        _ = core.add_blocks(vec![small_block.clone()]);
-        assert!(dag_state.read().unflushed_blocks_bytes() > 0);
-        assert_eq!(
-            store.read_blocks(&[small_block.reference()]).unwrap(),
-            vec![None]
-        );
-
-        // Accepting a block that takes the buffered bytes over the limit flushes all of them.
-        let large_block = VerifiedBlock::new_for_test(
-            TestBlock::new(1, 2)
-                .set_transactions(vec![crate::Transaction::new(
-                    vec![0; MAX_UNFLUSHED_BLOCKS_BYTES],
-                )])
-                .build(),
-        );
-        _ = core.add_blocks(vec![large_block.clone()]);
-        assert_eq!(dag_state.read().unflushed_blocks_bytes(), 0);
-        assert_eq!(
-            store
-                .read_blocks(&[small_block.reference(), large_block.reference()])
-                .unwrap(),
-            vec![Some(small_block), Some(large_block)]
-        );
-
-        // The flushes above came from accepting blocks, not from a proposal.
-        assert_eq!(core.last_proposed_round(), last_proposed_round);
     }
 
     #[tokio::test]
