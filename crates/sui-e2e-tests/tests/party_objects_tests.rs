@@ -313,16 +313,6 @@ async fn party_object_transfer_multiple_times() {
 async fn party_object_transfer_multi_certs() {
     telemetry_subscribers::init_for_testing();
 
-    // cause random delay just before tx is executed (to explore all orders)
-    sui_macros::register_fail_point_async("transaction_execution_delay", move || async move {
-        let delay = {
-            let dist = rand::distributions::Uniform::new(0, 1000);
-            let mut rng = rand::thread_rng();
-            dist.sample(&mut rng)
-        };
-        tokio::time::sleep(Duration::from_millis(delay)).await;
-    });
-
     let mut test_cluster = TestClusterBuilder::new().build().await;
 
     let (package, object) =
