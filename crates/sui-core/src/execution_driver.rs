@@ -109,13 +109,17 @@ async fn pop(
             // concurrency limit when there is room, taking a slot if one is free.
             Some(None) => {
                 let cert = waiting.pop().unwrap().0.0;
-                debug_assert!(
-                    cert.certificate
-                        .transaction_data()
-                        .kind()
-                        .is_accumulator_settle_tx(),
-                    "only settlement transactions may bypass causal admission"
-                );
+                if !cert
+                    .certificate
+                    .transaction_data()
+                    .kind()
+                    .is_accumulator_settle_tx()
+                {
+                    debug_fatal!(
+                        "only settlement transactions may bypass causal admission: {:?}",
+                        cert.certificate.digest()
+                    );
+                }
                 return (cert, causal_admission.try_take_slot());
             }
             Some(Some(index)) => {
