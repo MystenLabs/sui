@@ -13,7 +13,7 @@ use parking_lot::Mutex;
 use tokio::{
     sync::oneshot,
     task::{JoinError, JoinHandle, JoinSet},
-    time::sleep,
+    time::{Instant, sleep, timeout},
 };
 use tracing::{debug, info, warn};
 
@@ -45,9 +45,29 @@ const RESUBSCRIBE_LAG_BATCHES: u32 = 1;
 /// How often a suspended subscription re-evaluates commit lag.
 const SUSPENSION_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 
+/// Maximum time establishing a stream may take before the attempt is considered stalled
+/// and dropped. Bounds the case where the peer accepts connections (so no network error
+/// surfaces) but never responds, e.g. a wedged runtime; without it the subscription would
+/// hang until the http2 keepalive gives up, or forever.
+const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How long an established stream may go without delivering a block before it is dropped
+/// and re-established. Longer than `SUBSCRIPTION_TIMEOUT`: a quiet stream can be a
+/// transient network issue rather than a peer failure, so give it extra grace before
+/// tearing it down. Doubles as the failure budget for rotating to the next configured
+/// peer: when the current peer has delivered nothing for this long — across reconnection
+/// attempts, excluding time suspended on commit lag — the subscription rotates, so a
+/// silent stall rotates as soon as it is detected, while fast-failing connection attempts
+/// get the immediate retries and first backoff delays on the current peer first.
+const STREAM_STALL_TIMEOUT: Duration = SUBSCRIPTION_TIMEOUT.saturating_mul(2);
+
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
 /// taking care of retrying when subscription streams break. Blocks returned from peers are sent
-/// to the observer service for processing. The `ObserverSubscriber` can only subscribe to one peer at a time.
+/// to the observer service for processing. The `ObserverSubscriber` streams from one peer at a
+/// time: it subscribes to the first peer of the provided list and fails over to the next one
+/// (in list order, wrapping around) when the current peer stops making progress for
+/// `STREAM_STALL_TIMEOUT`. Failover is sticky — the subscription stays on the peer it rotated to
+/// until that peer fails in turn, and never switches back just because an earlier peer recovered.
 ///
 /// While the local commit index lags the quorum commit index too much, streamed blocks
 /// would be rejected by the observer service and re-fetched later via commit sync, so the
@@ -124,9 +144,15 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         }
     }
 
-    /// Subscribe to a peer (validator or observer) to receive block streams. The `ObserverSubscriber` can only subscribe to one peer at a time.
-    /// The method will stop the existing subscription (if any) and start a new one.
-    pub(crate) fn subscribe(&self, peer: PeerId) {
+    /// Subscribes to the given peers (validators or observers) to receive block streams,
+    /// streaming from one peer at a time: the first peer in the list is tried first, and the
+    /// subscription rotates to the next one (in list order) when the current peer stops making
+    /// progress. The method will stop the existing subscription (if any) and start a new one.
+    pub(crate) fn subscribe(&self, peers: Vec<PeerId>) {
+        if peers.is_empty() {
+            warn!("No observer peers provided to subscribe to, ignoring");
+            return;
+        }
         let context = self.context.clone();
         let network_client = self.network_client.clone();
         // ObserverSubscriber already holds these resources strongly. Give subscription tasks weak
@@ -143,7 +169,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             observer_service,
             commit_vote_monitor,
             dag_state,
-            peer,
+            peers,
             randomness_signature_handler,
             shutdown_receiver,
         ));
@@ -186,7 +212,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         observer_service: Weak<S>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         dag_state: Weak<parking_lot::RwLock<DagState>>,
-        peer: PeerId,
+        peers: Vec<PeerId>,
         randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
         mut shutdown_receiver: oneshot::Receiver<()>,
     ) {
@@ -204,7 +230,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                 observer_service,
                 commit_vote_monitor,
                 dag_state,
-                peer,
+                peers,
                 randomness_signature_handler,
                 &mut tasks,
             );
@@ -233,7 +259,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         observer_service: Weak<S>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         dag_state: Weak<parking_lot::RwLock<DagState>>,
-        peer: PeerId,
+        peers: Vec<PeerId>,
         randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
         tasks: &mut JoinSet<()>,
     ) {
@@ -244,8 +270,33 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             Duration::from_secs(10),
         );
         let mut retries: i64 = 0;
+        let mut peer_index: usize = 0;
+        // When the current peer last delivered a block (or became current), shifted forward
+        // past commit-lag suspensions so suspended time does not count against the peer.
+        let mut last_progress = Instant::now();
 
         'subscription: loop {
+            // Rotate to the next configured peer when the current one has delivered nothing
+            // for the whole failure budget despite the retries below. Sticky: rotation only
+            // moves forward on failure, never back to an earlier peer that recovered.
+            if peers.len() > 1 && last_progress.elapsed() >= STREAM_STALL_TIMEOUT {
+                let previous_peer = &peers[peer_index];
+                peer_index = (peer_index + 1) % peers.len();
+                info!(
+                    "Rotating block stream subscription from peer {} to peer {}: no progress for {:?}",
+                    previous_peer,
+                    peers[peer_index],
+                    last_progress.elapsed(),
+                );
+                context.metrics.node_metrics.observer_peer_failovers.inc();
+                // The new peer starts with fresh immediate retries and a full failure budget.
+                retries = 0;
+                backoff.reset();
+                last_progress = Instant::now();
+            }
+            let peer = peers[peer_index].clone();
+            let peer_label = peer.labelname(&context);
+
             let mut delay = Duration::ZERO;
             if retries > IMMEDIATE_RETRIES {
                 delay = backoff.next().unwrap();
@@ -263,9 +314,13 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
 
             // Hold off (re)connecting while commit-lagging: streamed blocks would be
             // rejected by the observer service and later re-fetched via commit sync.
+            let suspension_start = Instant::now();
             if !Self::wait_while_commit_lagging(&context, &commit_vote_monitor, &dag_state).await {
                 return;
             }
+            // Suspension is local commit lag, not peer failure: shift the failure budget
+            // window forward by the time spent waiting.
+            last_progress += suspension_start.elapsed();
 
             // Recompute highest rounds from DagState before each connection attempt
             // so reconnections resume from where we left off rather than re-fetching
@@ -289,16 +344,52 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
 
             // Subscribe to stream blocks from the peer.
             let request_timeout = MIN_TIMEOUT.max(delay);
-            let mut blocks = match network_client
-                .stream_blocks(peer.clone(), highest_round_per_authority, request_timeout)
-                .await
-            {
-                Ok(blocks) => {
+            // `request_timeout` only bounds acquiring the channel, and the channel is usually
+            // cached, so establishing the stream can otherwise block indefinitely waiting for
+            // the peer's response headers, e.g. when the peer accepts connections but its
+            // runtime is stalled. Bound it here rather than with a gRPC deadline on the
+            // request, which would cap the lifetime of the whole subscription.
+            let subscribe = timeout(
+                SUBSCRIPTION_TIMEOUT,
+                network_client.stream_blocks(
+                    peer.clone(),
+                    highest_round_per_authority,
+                    request_timeout,
+                ),
+            )
+            .await;
+            let mut blocks = match subscribe {
+                Ok(Ok(blocks)) => {
                     debug!("Subscribed to peer {:?} after {} attempts", peer, retries);
+                    context
+                        .metrics
+                        .node_metrics
+                        .observer_subscription_attempts
+                        .with_label_values(&[peer_label.as_str(), "success"])
+                        .inc();
                     blocks
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     debug!("Failed to subscribe to blocks from peer {:?}: {}", peer, e);
+                    context
+                        .metrics
+                        .node_metrics
+                        .observer_subscription_attempts
+                        .with_label_values(&[peer_label.as_str(), "failure"])
+                        .inc();
+                    continue 'subscription;
+                }
+                Err(_) => {
+                    debug!(
+                        "Timed out subscribing to blocks from peer {:?} after {:?}",
+                        peer, SUBSCRIPTION_TIMEOUT
+                    );
+                    context
+                        .metrics
+                        .node_metrics
+                        .observer_subscription_attempts
+                        .with_label_values(&[peer_label.as_str(), "failure"])
+                        .inc();
                     continue 'subscription;
                 }
             };
@@ -308,15 +399,34 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                 let _scope = monitored_scope("ObserverSubscriberStreamConsumer");
 
                 let next_item = tokio::select! {
+                    biased;
                     result = tasks.join_next(), if !tasks.is_empty() => {
                         Self::handle_task_result(result);
                         continue 'stream;
                     }
-                    item = blocks.next(), if tasks.len() < max_parallel_tasks => item,
+                    // The stream is only polled (and the stall timer only runs) while there is
+                    // handler capacity: a quiet stream under handler backpressure is a local
+                    // processing problem, not a peer stall. `timeout` polls the stream before
+                    // checking the timer, so an already-buffered item wins over an expired
+                    // deadline.
+                    item = timeout(STREAM_STALL_TIMEOUT, blocks.next()), if tasks.len() < max_parallel_tasks => {
+                        match item {
+                            Ok(item) => item,
+                            Err(_) => {
+                                info!(
+                                    "Subscription to blocks from peer {:?} made no progress for {:?}",
+                                    peer, STREAM_STALL_TIMEOUT
+                                );
+                                retries += 1;
+                                break 'stream;
+                            }
+                        }
+                    }
                 };
 
                 match next_item {
                     Some(item) => {
+                        last_progress = Instant::now();
                         context
                             .metrics
                             .node_metrics
@@ -504,30 +614,52 @@ mod tests {
 
     struct ObserverSubscriberTestClient {
         stream_blocks_calls: std::sync::atomic::AtomicU32,
+        call_peers: Mutex<Vec<PeerId>>,
         // `None` streams blocks forever, so a subscription can only end through the
         // subscriber's own logic (e.g. the in-stream commit lag check), never because
         // the fake stream hung up on its own.
         stream_limit: Option<usize>,
+        // Peers whose stream_blocks calls fail with a connection error.
+        unreachable_peers: Vec<PeerId>,
+        // Peers whose streams connect successfully but never yield an item.
+        stalled_peers: Vec<PeerId>,
     }
 
     impl ObserverSubscriberTestClient {
         fn new() -> Self {
             Self {
                 stream_blocks_calls: std::sync::atomic::AtomicU32::new(0),
+                call_peers: Mutex::new(Vec::new()),
                 stream_limit: Some(10),
+                unreachable_peers: Vec::new(),
+                stalled_peers: Vec::new(),
             }
         }
 
         fn new_never_ending() -> Self {
             Self {
-                stream_blocks_calls: std::sync::atomic::AtomicU32::new(0),
                 stream_limit: None,
+                ..Self::new()
             }
+        }
+
+        fn with_unreachable_peers(mut self, peers: Vec<PeerId>) -> Self {
+            self.unreachable_peers = peers;
+            self
+        }
+
+        fn with_stalled_peers(mut self, peers: Vec<PeerId>) -> Self {
+            self.stalled_peers = peers;
+            self
         }
 
         fn stream_blocks_calls(&self) -> u32 {
             self.stream_blocks_calls
                 .load(std::sync::atomic::Ordering::Relaxed)
+        }
+
+        fn stream_blocks_calls_for(&self, peer: &PeerId) -> usize {
+            self.call_peers.lock().iter().filter(|p| *p == peer).count()
         }
     }
 
@@ -541,6 +673,15 @@ mod tests {
         ) -> ConsensusResult<ObserverBlockStream> {
             self.stream_blocks_calls
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.call_peers.lock().push(peer.clone());
+            if self.unreachable_peers.contains(&peer) {
+                return Err(ConsensusError::NetworkClientConnection(
+                    "peer unreachable".to_string(),
+                ));
+            }
+            if self.stalled_peers.contains(&peer) {
+                return Ok(Box::pin(stream::pending()));
+            }
             // Return different block content based on peer to distinguish them in tests
             let block_value = match peer {
                 PeerId::Validator(idx) => idx.value() as u8 + 1,
@@ -668,7 +809,7 @@ mod tests {
 
         // Subscribe to a validator peer
         let peer = PeerId::Validator(context.committee.to_authority_index(2).unwrap());
-        subscriber.subscribe(peer.clone());
+        subscriber.subscribe(vec![peer.clone()]);
 
         // Wait for enough blocks to be received
         for _ in 0..10 {
@@ -711,7 +852,7 @@ mod tests {
 
         // Subscribe to first peer (validator 0)
         let peer1 = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
-        subscriber.subscribe(peer1.clone());
+        subscriber.subscribe(vec![peer1.clone()]);
 
         // Wait for some blocks to be received from peer1
         sleep(Duration::from_millis(50)).await;
@@ -730,7 +871,7 @@ mod tests {
 
         // Subscribe to second peer (validator 2) - this should override the first subscription
         let peer2 = PeerId::Validator(context.committee.to_authority_index(2).unwrap());
-        subscriber.subscribe(peer2.clone());
+        subscriber.subscribe(vec![peer2.clone()]);
 
         // Wait for blocks from the new peer
         sleep(Duration::from_millis(100)).await;
@@ -784,7 +925,7 @@ mod tests {
         );
 
         let peer = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
-        subscriber.subscribe(peer);
+        subscriber.subscribe(vec![peer]);
         timeout(
             Duration::from_secs(1),
             observer_service.handler_started.notified(),
@@ -832,7 +973,7 @@ mod tests {
             None,
         );
         let peer = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
-        subscriber.subscribe(peer.clone());
+        subscriber.subscribe(vec![peer.clone()]);
 
         // Blocks flow while not lagging.
         for _ in 0..100 {
@@ -1000,7 +1141,7 @@ mod tests {
             None,
         );
         let peer = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
-        subscriber.subscribe(peer.clone());
+        subscriber.subscribe(vec![peer.clone()]);
 
         // Blocks flow while not lagging.
         for _ in 0..100 {
@@ -1115,7 +1256,7 @@ mod tests {
         );
         let authority_0 = context.committee.to_authority_index(0).unwrap();
         let authority_1 = context.committee.to_authority_index(1).unwrap();
-        subscriber.subscribe(PeerId::Validator(authority_0));
+        subscriber.subscribe(vec![PeerId::Validator(authority_0)]);
         for _ in 0..100 {
             sleep(Duration::from_millis(100)).await;
             if network_client.stream_blocks_calls() > 0 {
@@ -1149,7 +1290,7 @@ mod tests {
         // replacement task's level-triggered write (and the exit reset), not stay
         // stuck at 1 on a healthy streaming node.
         let calls_before_switch = network_client.stream_blocks_calls();
-        subscriber.subscribe(PeerId::Validator(authority_1));
+        subscriber.subscribe(vec![PeerId::Validator(authority_1)]);
         let leader_ref = BlockRef::new(100, authority_0, BlockDigest::MIN);
         dag_state
             .write()
@@ -1200,5 +1341,264 @@ mod tests {
             0,
             "Gauge must be reset when the subscription stops while suspended"
         );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_failover_when_peer_unreachable() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let observer_service = Arc::new(ObserverSubscriberTestService::new());
+        let peer1 = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
+        let peer2 = PeerId::Validator(context.committee.to_authority_index(2).unwrap());
+        let network_client = Arc::new(
+            ObserverSubscriberTestClient::new().with_unreachable_peers(vec![peer1.clone()]),
+        );
+        let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+
+        let subscriber = ObserverSubscriber::new(
+            context.clone(),
+            network_client.clone(),
+            observer_service.clone(),
+            commit_vote_monitor,
+            dag_state,
+            None,
+        );
+        subscriber.subscribe(vec![peer1.clone(), peer2.clone()]);
+
+        // The first peer never connects: once the failure budget elapses the subscription
+        // must rotate to the second peer and stream from it.
+        for _ in 0..100 {
+            sleep(Duration::from_secs(1)).await;
+            if !observer_service.handle_block_calls.lock().is_empty() {
+                break;
+            }
+        }
+        {
+            let calls = observer_service.handle_block_calls.lock();
+            assert!(
+                !calls.is_empty(),
+                "Should stream from the second peer after failover"
+            );
+            for (p, block) in calls.iter() {
+                assert_eq!(*p, peer2);
+                assert_eq!(*block, Bytes::from(vec![3u8; 8])); // Peer index 2 + 1 = 3
+            }
+        }
+        assert!(
+            network_client.stream_blocks_calls_for(&peer1) > 1,
+            "The unreachable peer should have been retried before rotating"
+        );
+        assert_eq!(
+            context.metrics.node_metrics.observer_peer_failovers.get(),
+            1,
+            "Exactly one failover should have happened"
+        );
+
+        subscriber.stop().await;
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_failover_when_stream_stalls() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let observer_service = Arc::new(ObserverSubscriberTestService::new());
+        let peer1 = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
+        let peer2 = PeerId::Validator(context.committee.to_authority_index(2).unwrap());
+        let network_client = Arc::new(
+            ObserverSubscriberTestClient::new_never_ending()
+                .with_stalled_peers(vec![peer1.clone()]),
+        );
+        let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+
+        let subscriber = ObserverSubscriber::new(
+            context.clone(),
+            network_client.clone(),
+            observer_service.clone(),
+            commit_vote_monitor,
+            dag_state,
+            None,
+        );
+        subscriber.subscribe(vec![peer1.clone(), peer2.clone()]);
+
+        // The first peer connects but never sends anything: the stall timeout must drop
+        // the stream, and since the failure budget is exhausted at that point, the
+        // subscription must rotate to the second peer without retrying the first.
+        for _ in 0..100 {
+            sleep(Duration::from_secs(1)).await;
+            if !observer_service.handle_block_calls.lock().is_empty() {
+                break;
+            }
+        }
+        {
+            let calls = observer_service.handle_block_calls.lock();
+            assert!(
+                !calls.is_empty(),
+                "Should stream from the second peer after the stalled stream is dropped"
+            );
+            for (p, block) in calls.iter() {
+                assert_eq!(*p, peer2);
+                assert_eq!(*block, Bytes::from(vec![3u8; 8]));
+            }
+        }
+        assert_eq!(
+            network_client.stream_blocks_calls_for(&peer1),
+            1,
+            "The stall timeout coincides with the failure budget, so the stalled peer should be tried exactly once"
+        );
+        assert_eq!(
+            context.metrics.node_metrics.observer_peer_failovers.get(),
+            1
+        );
+
+        subscriber.stop().await;
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_stall_timeout_reconnects_with_single_peer() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let observer_service = Arc::new(ObserverSubscriberTestService::new());
+        let peer = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
+        let network_client =
+            Arc::new(ObserverSubscriberTestClient::new().with_stalled_peers(vec![peer.clone()]));
+        let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+
+        let subscriber = ObserverSubscriber::new(
+            context.clone(),
+            network_client.clone(),
+            observer_service.clone(),
+            commit_vote_monitor,
+            dag_state,
+            None,
+        );
+        subscriber.subscribe(vec![peer.clone()]);
+
+        // With a single configured peer there is nothing to rotate to: the stall timeout
+        // must keep dropping and reconnecting the stalled stream instead of hanging forever.
+        sleep(STREAM_STALL_TIMEOUT * 3 + Duration::from_secs(10)).await;
+        assert!(
+            network_client.stream_blocks_calls() >= 3,
+            "The stalled stream should have been dropped and reconnected repeatedly, got {} attempts",
+            network_client.stream_blocks_calls()
+        );
+        assert_eq!(
+            context.metrics.node_metrics.observer_peer_failovers.get(),
+            0,
+            "No failover should happen with a single configured peer"
+        );
+
+        subscriber.stop().await;
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_suspension_does_not_trigger_failover() {
+        use consensus_config::Parameters;
+        use consensus_types::block::BlockDigest;
+
+        use crate::{
+            block::TestBlock,
+            commit::{CommitDigest, CommitRef},
+        };
+
+        telemetry_subscribers::init_for_testing();
+        let (mut context, _keys) = Context::new_for_test(4);
+        // Suspension threshold is batch_size * 5 = 25 commits of lag, resume at <= 5.
+        context.parameters = Parameters {
+            commit_sync_batch_size: 5,
+            ..context.parameters
+        };
+        let context = Arc::new(context);
+        let observer_service = Arc::new(ObserverSubscriberTestService::new());
+        let network_client = Arc::new(ObserverSubscriberTestClient::new_never_ending());
+        let store = Arc::new(MemStore::new());
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+
+        let subscriber = ObserverSubscriber::new(
+            context.clone(),
+            network_client.clone(),
+            observer_service.clone(),
+            commit_vote_monitor.clone(),
+            dag_state.clone(),
+            None,
+        );
+        let peer1 = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
+        let peer2 = PeerId::Validator(context.committee.to_authority_index(2).unwrap());
+        subscriber.subscribe(vec![peer1.clone(), peer2.clone()]);
+
+        // Blocks flow from the first peer while not lagging.
+        for _ in 0..100 {
+            sleep(Duration::from_millis(100)).await;
+            if !observer_service.handle_block_calls.lock().is_empty() {
+                break;
+            }
+        }
+        assert!(!observer_service.handle_block_calls.lock().is_empty());
+
+        // A quorum votes for commit 100 while the local commit index is 0: the in-stream
+        // lag check drops the stream and the subscription is suspended.
+        for author in 0..3 {
+            let block = VerifiedBlock::new_for_test(
+                TestBlock::new(10, author)
+                    .set_commit_votes(vec![CommitRef::new(100, CommitDigest::MIN)])
+                    .build(),
+            );
+            commit_vote_monitor.observe_block(&block);
+        }
+        let suspended_metric = &context.metrics.node_metrics.observer_subscription_suspended;
+        for _ in 0..100 {
+            sleep(Duration::from_secs(1)).await;
+            if suspended_metric.get() == 1 {
+                break;
+            }
+        }
+        assert_eq!(suspended_metric.get(), 1);
+
+        // Stay suspended for much longer than the failure budget: suspension is local
+        // commit lag, not peer failure, so it must not count against the peer.
+        sleep(Duration::from_secs(120)).await;
+
+        // Commit sync catches up: lag 100 - 96 = 4 <= 5, so the subscription resumes.
+        let calls_while_suspended = network_client.stream_blocks_calls();
+        let leader_ref = BlockRef::new(
+            96,
+            context.committee.to_authority_index(0).unwrap(),
+            BlockDigest::MIN,
+        );
+        dag_state
+            .write()
+            .set_last_commit(TrustedCommit::new_for_test(
+                96,
+                CommitDigest::MIN,
+                0,
+                leader_ref,
+                vec![],
+            ));
+        for _ in 0..100 {
+            sleep(Duration::from_secs(1)).await;
+            if network_client.stream_blocks_calls() > calls_while_suspended {
+                break;
+            }
+        }
+        assert!(network_client.stream_blocks_calls() > calls_while_suspended);
+
+        // The resumed subscription must still target the first peer.
+        assert_eq!(network_client.stream_blocks_calls_for(&peer2), 0);
+        assert_eq!(
+            context.metrics.node_metrics.observer_peer_failovers.get(),
+            0,
+            "Time spent suspended must not exhaust the failure budget"
+        );
+
+        subscriber.stop().await;
     }
 }
