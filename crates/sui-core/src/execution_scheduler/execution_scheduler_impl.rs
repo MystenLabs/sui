@@ -432,12 +432,8 @@ impl ExecutionScheduler {
                         ScheduleStatus::SkipSchedule => {
                             assert_reachable!("tx withdrawal scheduling skipped");
                             debug!(?tx_digest, "Skip scheduling funds withdraw");
-                            // The tx will not execute via this enqueue; retire its
-                            // causal index here since it will never reach the driver.
-                            let (_, env) = cert_map.remove(&tx_digest).expect("cert must exist");
-                            if let Some(index) = env.causal_index {
-                                scheduler.causal_admission.mark_done(index);
-                            }
+                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
+                            scheduler.spawn_transaction_scheduling(vec![(cert, env)], &epoch_store);
                         }
                     },
                     Err(e) => {
