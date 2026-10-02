@@ -287,7 +287,7 @@ async fn test_publish_extraneous_bytes_modules() {
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
-async fn test_publish_max_packages() {
+async fn test_publish_max_packages_exceeds_computation_budget() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas_object_id)]).await;
@@ -310,7 +310,15 @@ async fn test_publish_max_packages() {
         .unwrap()
         .1;
     let effects = result.into_data();
-    assert_eq!(effects.status(), &ExecutionStatus::Success);
+    // The high publish precharge is computation gas. At the five-command PTB limit, the fixed
+    // charge alone exhausts the maximum computation budget before any package work runs.
+    assert_eq!(
+        effects.status(),
+        &ExecutionStatus::Failure(ExecutionFailure {
+            error: ExecutionErrorKind::InsufficientGas,
+            command: None,
+        })
+    );
 }
 
 #[tokio::test]

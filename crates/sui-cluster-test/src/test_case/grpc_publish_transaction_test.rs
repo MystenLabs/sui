@@ -40,8 +40,7 @@ impl TestCaseImpl for GrpcPublishTransactionTest {
                 compiled_modules,
                 dependencies,
                 Some(gas_ref.0),
-                // Doesn't need to be scaled by RGP since most of the cost is storage
-                500_000_000,
+                2_000_000_000,
             )
             .await?;
 

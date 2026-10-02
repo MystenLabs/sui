@@ -140,7 +140,7 @@ async fn publish_package(
         payment: vec![(gas_object.0, gas_object.1, gas_object.2)],
         owner: address,
         price: gas_price,
-        budget: 100_000_000,
+        budget: 5_000_000_000,
     };
 
     let kind = TransactionKind::ProgrammableTransaction(ptb);

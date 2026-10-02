@@ -34,7 +34,7 @@ sender=$(on_localnet active-address)
 
 echo "=== localnet: publish, create, and fill the registry before forking ==="
 add_env_to_toml registry localnet on_localnet
-run_json publish.json on_localnet publish registry --gas-budget 100000000
+run_json publish.json on_localnet publish registry --gas-budget 2000000000
 package=$(published_package_id publish.json)
 run_json create.json on_localnet call --package "$package" --module registry --function create \
   --gas-budget 50000000

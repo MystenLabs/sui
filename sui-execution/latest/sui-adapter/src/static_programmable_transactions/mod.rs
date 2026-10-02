@@ -49,6 +49,16 @@ pub fn execute<Mode: ExecutionMode>(
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, Mode::Error> {
     let gas_payment = gas_charger.gas_payment_amount();
+    let mut translation_meter =
+        translation_meter::TranslationMeter::new(protocol_config, gas_charger);
+    if protocol_config.package_publish_precharge() {
+        metering::pre_translation::publish_upgrade_precharge::<Mode::Error>(
+            &mut translation_meter,
+            &txn,
+        )
+        .map_err(|e| (e, vec![]))?;
+    }
+
     let package_store = CachedPackageStore::new(vm, TransactionPackageStore::new(package_store));
     let linkage_analysis =
         LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;
@@ -73,9 +83,6 @@ pub fn execute<Mode: ExecutionMode>(
         &linkage_analysis,
         &resolution_vm,
     );
-    let mut translation_meter =
-        translation_meter::TranslationMeter::new(protocol_config, gas_charger);
-
     let txn = {
         let tx_context_ref = tx_context.borrow();
         loading::translate::transaction::<Mode>(
