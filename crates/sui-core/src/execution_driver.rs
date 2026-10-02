@@ -9,8 +9,8 @@
 //! transaction's execution will produce (the blocking primitives in
 //! `mysten_common::sync`). Declared inputs never cause this - the scheduler sends a
 //! transaction only once they are available; blocking happens only for *undeclared*
-//! dependencies on system objects (the clock, and the implicitly read system objects:
-//! the accumulator root and the forwarding address registry). With bounded
+//! dependencies on the implicitly read system objects (the accumulator root and the
+//! forwarding address registry). With bounded
 //! concurrency this could deadlock: every slot parked on a value whose writer was
 //! never admitted.
 //!
@@ -35,7 +35,9 @@
 //! transaction bypassing admission must be unable to block.
 //!
 //! Execution occupies at most K+1 threads of the shared tokio blocking pool (whose
-//! exhaustion by other subsystems would halt much of the node regardless). Parked
+//! exhaustion by other subsystems would halt much of the node regardless), plus any
+//! settlement transactions that found no free slot. The settlement queue runs one
+//! settlement at a time, so those add at most one settlement's transactions. Parked
 //! transactions hold their concurrency slot; if that ever limits throughput, the
 //! escalation path is releasing the slot on park - see the deleted
 //! `mysten_common::sync::execution_permit` for the prior mechanism.
