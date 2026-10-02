@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["verify_personal_message_signature"]};

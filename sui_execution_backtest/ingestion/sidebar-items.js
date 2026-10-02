@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["remote_store_client"],"struct":["FixedChainId"]};

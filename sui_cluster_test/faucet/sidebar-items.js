@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["FaucetClientFactory","LocalFaucetClient","RemoteFaucetClient"],"trait":["FaucetClient"]};

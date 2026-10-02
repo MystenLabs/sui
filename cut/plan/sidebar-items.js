@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error","WorkspaceState"],"fn":["discover_root","format_array_of_strings","package_name","path_to_toml_value","toml_path_array_to_set"],"struct":["CutPackage","CutPlan","Workspace"]};

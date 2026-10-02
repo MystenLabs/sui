@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DomainFormat","NameServiceError"],"fn":["validate_label"],"struct":["Domain","NameRecord","NameServiceConfig","Registry","SubDomainRegistration","SuinsRegistration","Table"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["verify_signed_bridge_action"],"struct":["BridgeAuthorityPublicKeyBytes","BridgeAuthoritySignInfo","ConciseBridgeAuthorityPublicKeyBytesRef"],"type":["BridgeAuthorityKeyPair","BridgeAuthorityPublicKey","BridgeAuthorityRecoverableSignature"]};

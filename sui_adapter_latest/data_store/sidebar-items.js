@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["cached_package_store","transaction_package_store"],"trait":["PackageMetadata","PackageStore"],"type":["VerifiedPackageStore"]};

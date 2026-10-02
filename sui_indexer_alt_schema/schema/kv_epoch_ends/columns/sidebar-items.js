@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["cp_hi","end_timestamp_ms","epoch","epoch_commitments","leftover_storage_fund_inflow","safe_mode","stake_subsidy_amount","star","storage_charge","storage_fund_balance","storage_fund_reinvestment","storage_rebate","total_gas_fees","total_stake","total_stake_rewards_distributed","tx_hi"]};

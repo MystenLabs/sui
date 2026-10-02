@@ -1,0 +1,219 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/sui-fork-e2e-tests/src/source.rs`."><title>source.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-17e0aaed.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_fork_e2e_tests" data-themes="" data-resource-suffix="" data-rustdoc-version="1.96.1 (31fca3adb 2026-06-26)" data-channel="1.96.1" data-search-js="search-b5634cc7.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">sui_fork_e2e_tests/</div>source.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Mysten Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="doccomment">//! A local Sui network with the GraphQL stack a fork reads from.
+<a href=#5 id=5 data-nosnippet>5</a>//!
+<a href=#6 id=6 data-nosnippet>6</a>//! `sui-fork` resolves everything it does not hold locally through GraphQL pinned at the fork
+<a href=#7 id=7 data-nosnippet>7</a>//! checkpoint, so a source network needs a fullnode, an indexer writing to PostgreSQL, a
+<a href=#8 id=8 data-nosnippet>8</a>//! consistent store for the owned-object and balance enumerations that seeding relies on, and a
+<a href=#9 id=9 data-nosnippet>9</a>//! GraphQL server over both. That is what `sui start --with-graphql` assembles, so
+<a href=#10 id=10 data-nosnippet>10</a>//! [`SourceNetwork`] spawns the `sui` binary under test with that command on ports the harness
+<a href=#11 id=11 data-nosnippet>11</a>//! allocates. The shell harness creates a localnet-only client config for that RPC URL, and
+<a href=#12 id=12 data-nosnippet>12</a>//! `localnet_setup` in `tests/shell_lib/lib.sh` copies it and funds a new address through the same
+<a href=#13 id=13 data-nosnippet>13</a>//! binary.
+<a href=#14 id=14 data-nosnippet>14</a>//!
+<a href=#15 id=15 data-nosnippet>15</a>//! Two habits of `--force-regenesis` are sandboxed. It keeps its config directory under the
+<a href=#16 id=16 data-nosnippet>16</a>//! system temp dir without printing or removing it, so the child runs with `TMPDIR` inside the
+<a href=#17 id=17 data-nosnippet>17</a>//! network's own temp dir, which goes away with the network. And it rewrites the localnet RPC
+<a href=#18 id=18 data-nosnippet>18</a>//! URL of whatever `client.yaml` sits in `SUI_CONFIG_DIR`, so the child gets an empty directory
+<a href=#19 id=19 data-nosnippet>19</a>//! there rather than the developer's `~/.sui/sui_config`.
+<a href=#20 id=20 data-nosnippet>20</a>
+<a href=#21 id=21 data-nosnippet>21</a></span><span class="kw">use </span>std::fs::File;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>std::path::Path;
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>std::path::PathBuf;
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>std::process::Child;
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>std::process::Command;
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>std::process::Stdio;
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>std::time::Duration;
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>std::time::Instant;
+<a href=#29 id=29 data-nosnippet>29</a>
+<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>anyhow::Context;
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>anyhow::Result;
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>anyhow::anyhow;
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>sui_config::local_ip_utils::get_available_port;
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>tempfile::TempDir;
+<a href=#35 id=35 data-nosnippet>35</a>
+<a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span><span class="kw">crate</span>::script::release_group;
+<a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span><span class="kw">crate</span>::script::signal_process;
+<a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span><span class="kw">crate</span>::script::spawn_in_group;
+<a href=#39 id=39 data-nosnippet>39</a>
+<a href=#40 id=40 data-nosnippet>40</a><span class="doccomment">/// Epoch length of the source network, long enough that no test straddles an epoch change.
+<a href=#41 id=41 data-nosnippet>41</a></span><span class="kw">const </span>EPOCH_DURATION_MS: u64 = <span class="number">60 </span>* <span class="number">60 </span>* <span class="number">1_000</span>;
+<a href=#42 id=42 data-nosnippet>42</a>
+<a href=#43 id=43 data-nosnippet>43</a><span class="doccomment">/// Longest wait for `sui start` to exit after SIGINT before its process group is killed. A minute,
+<a href=#44 id=44 data-nosnippet>44</a>/// because a group kill cannot reach the PostgreSQL that `sui start` runs in a session of its own,
+<a href=#45 id=45 data-nosnippet>45</a>/// and with a dozen localnets shutting down at once on one machine twenty seconds proved too short.
+<a href=#46 id=46 data-nosnippet>46</a></span><span class="kw">const </span>STOP_GRACE: Duration = Duration::from_secs(<span class="number">60</span>);
+<a href=#47 id=47 data-nosnippet>47</a>
+<a href=#48 id=48 data-nosnippet>48</a><span class="doccomment">/// Time between the SIGINTs sent to `sui start` while it is still running.
+<a href=#49 id=49 data-nosnippet>49</a></span><span class="kw">const </span>INTERRUPT_INTERVAL: Duration = Duration::from_secs(<span class="number">2</span>);
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a><span class="doccomment">/// Interval between checks for the child's exit.
+<a href=#52 id=52 data-nosnippet>52</a></span><span class="kw">const </span>POLL: Duration = Duration::from_millis(<span class="number">200</span>);
+<a href=#53 id=53 data-nosnippet>53</a>
+<a href=#54 id=54 data-nosnippet>54</a><span class="doccomment">/// Lines of `sui start` output quoted in errors.
+<a href=#55 id=55 data-nosnippet>55</a></span><span class="kw">const </span>LOG_TAIL_LINES: usize = <span class="number">40</span>;
+<a href=#56 id=56 data-nosnippet>56</a>
+<a href=#57 id=57 data-nosnippet>57</a><span class="doccomment">/// A running `sui start --force-regenesis --with-graphql --with-faucet`.
+<a href=#58 id=58 data-nosnippet>58</a>///
+<a href=#59 id=59 data-nosnippet>59</a>/// [`Self::stop`] interrupts the child and waits for it, so PostgreSQL and the node databases are
+<a href=#60 id=60 data-nosnippet>60</a>/// shut down before the directory holding them is removed. Dropping a network that is still
+<a href=#61 id=61 data-nosnippet>61</a>/// running kills its process group instead, which covers every early return in the harness.
+<a href=#62 id=62 data-nosnippet>62</a></span><span class="kw">pub struct </span>SourceNetwork {
+<a href=#63 id=63 data-nosnippet>63</a>    child: Child,
+<a href=#64 id=64 data-nosnippet>64</a>    group: u32,
+<a href=#65 id=65 data-nosnippet>65</a>    rpc_url: String,
+<a href=#66 id=66 data-nosnippet>66</a>    graphql_url: String,
+<a href=#67 id=67 data-nosnippet>67</a>    faucet_url: String,
+<a href=#68 id=68 data-nosnippet>68</a>    log_path: PathBuf,
+<a href=#69 id=69 data-nosnippet>69</a>    _dir: TempDir,
+<a href=#70 id=70 data-nosnippet>70</a>}
+<a href=#71 id=71 data-nosnippet>71</a>
+<a href=#72 id=72 data-nosnippet>72</a><span class="kw">impl </span>SourceNetwork {
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="doccomment">/// Spawn `sui start` from the `sui` binary at `sui` and return without waiting for it, since
+<a href=#74 id=74 data-nosnippet>74</a>    /// the scripts poll the faucet until the network answers.
+<a href=#75 id=75 data-nosnippet>75</a>    </span><span class="kw">pub fn </span>start(sui: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#76 id=76 data-nosnippet>76</a>        <span class="kw">let </span>dir = tempfile::tempdir().context(<span class="string">"failed to create the source network directory"</span>)<span class="question-mark">?</span>;
+<a href=#77 id=77 data-nosnippet>77</a>        <span class="kw">let </span>tmp_dir = dir.path().join(<span class="string">"tmp"</span>);
+<a href=#78 id=78 data-nosnippet>78</a>        <span class="kw">let </span>sui_config_dir = dir.path().join(<span class="string">"sui_config"</span>);
+<a href=#79 id=79 data-nosnippet>79</a>        <span class="kw">for </span>subdir <span class="kw">in </span>[<span class="kw-2">&amp;</span>tmp_dir, <span class="kw-2">&amp;</span>sui_config_dir] {
+<a href=#80 id=80 data-nosnippet>80</a>            std::fs::create_dir(subdir)
+<a href=#81 id=81 data-nosnippet>81</a>                .with_context(|| <span class="macro">format!</span>(<span class="string">"failed to create {}"</span>, subdir.display()))<span class="question-mark">?</span>;
+<a href=#82 id=82 data-nosnippet>82</a>        }
+<a href=#83 id=83 data-nosnippet>83</a>        <span class="kw">let </span>log_path = dir.path().join(<span class="string">"sui-start.log"</span>);
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="kw">let </span>log = File::create(<span class="kw-2">&amp;</span>log_path).context(<span class="string">"failed to create the sui start log"</span>)<span class="question-mark">?</span>;
+<a href=#85 id=85 data-nosnippet>85</a>
+<a href=#86 id=86 data-nosnippet>86</a>        <span class="kw">let </span>rpc_port = free_loopback_port();
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">let </span>graphql_port = free_loopback_port();
+<a href=#88 id=88 data-nosnippet>88</a>        <span class="kw">let </span>consistent_store_port = free_loopback_port();
+<a href=#89 id=89 data-nosnippet>89</a>        <span class="kw">let </span>faucet_port = free_loopback_port();
+<a href=#90 id=90 data-nosnippet>90</a>
+<a href=#91 id=91 data-nosnippet>91</a>        <span class="comment">// The `--with-*` flags take `=` and an explicit host, because a bare port binds 0.0.0.0.
+<a href=#92 id=92 data-nosnippet>92</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>command = Command::new(sui);
+<a href=#93 id=93 data-nosnippet>93</a>        command
+<a href=#94 id=94 data-nosnippet>94</a>            .arg(<span class="string">"start"</span>)
+<a href=#95 id=95 data-nosnippet>95</a>            .arg(<span class="string">"--force-regenesis"</span>)
+<a href=#96 id=96 data-nosnippet>96</a>            .args([<span class="string">"--epoch-duration-ms"</span>, <span class="kw-2">&amp;</span>EPOCH_DURATION_MS.to_string()])
+<a href=#97 id=97 data-nosnippet>97</a>            .args([<span class="string">"--fullnode-rpc-port"</span>, <span class="kw-2">&amp;</span>rpc_port.to_string()])
+<a href=#98 id=98 data-nosnippet>98</a>            .arg(<span class="macro">format!</span>(<span class="string">"--with-graphql=127.0.0.1:{graphql_port}"</span>))
+<a href=#99 id=99 data-nosnippet>99</a>            .arg(<span class="macro">format!</span>(
+<a href=#100 id=100 data-nosnippet>100</a>                <span class="string">"--with-consistent-store=127.0.0.1:{consistent_store_port}"
+<a href=#101 id=101 data-nosnippet>101</a>            </span>))
+<a href=#102 id=102 data-nosnippet>102</a>            .arg(<span class="macro">format!</span>(<span class="string">"--with-faucet=127.0.0.1:{faucet_port}"</span>))
+<a href=#103 id=103 data-nosnippet>103</a>            .env(<span class="string">"TMPDIR"</span>, <span class="kw-2">&amp;</span>tmp_dir)
+<a href=#104 id=104 data-nosnippet>104</a>            .env(<span class="string">"SUI_CONFIG_DIR"</span>, <span class="kw-2">&amp;</span>sui_config_dir)
+<a href=#105 id=105 data-nosnippet>105</a>            <span class="comment">// The binary logs at `error` by default. The `sui` target adds the lines that name
+<a href=#106 id=106 data-nosnippet>106</a>            // each service as it comes up, which is what a failed start needs to be diagnosed.
+<a href=#107 id=107 data-nosnippet>107</a>            </span>.env(<span class="string">"RUST_LOG"</span>, <span class="string">"error,sui=info"</span>)
+<a href=#108 id=108 data-nosnippet>108</a>            .env(<span class="string">"RUST_BACKTRACE"</span>, <span class="string">"0"</span>)
+<a href=#109 id=109 data-nosnippet>109</a>            .stdin(Stdio::null())
+<a href=#110 id=110 data-nosnippet>110</a>            .stdout(
+<a href=#111 id=111 data-nosnippet>111</a>                log.try_clone()
+<a href=#112 id=112 data-nosnippet>112</a>                    .context(<span class="string">"failed to clone the sui start log handle"</span>)<span class="question-mark">?</span>,
+<a href=#113 id=113 data-nosnippet>113</a>            )
+<a href=#114 id=114 data-nosnippet>114</a>            .stderr(log);
+<a href=#115 id=115 data-nosnippet>115</a>        <span class="kw">let </span>child = spawn_in_group(<span class="kw-2">&amp;mut </span>command).context(<span class="string">"failed to spawn sui start"</span>)<span class="question-mark">?</span>;
+<a href=#116 id=116 data-nosnippet>116</a>        <span class="kw">let </span>group = child.id();
+<a href=#117 id=117 data-nosnippet>117</a>
+<a href=#118 id=118 data-nosnippet>118</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#119 id=119 data-nosnippet>119</a>            child,
+<a href=#120 id=120 data-nosnippet>120</a>            group,
+<a href=#121 id=121 data-nosnippet>121</a>            rpc_url: <span class="macro">format!</span>(<span class="string">"http://127.0.0.1:{rpc_port}"</span>),
+<a href=#122 id=122 data-nosnippet>122</a>            graphql_url: <span class="macro">format!</span>(<span class="string">"http://127.0.0.1:{graphql_port}/graphql"</span>),
+<a href=#123 id=123 data-nosnippet>123</a>            faucet_url: <span class="macro">format!</span>(<span class="string">"http://127.0.0.1:{faucet_port}/v2/gas"</span>),
+<a href=#124 id=124 data-nosnippet>124</a>            log_path,
+<a href=#125 id=125 data-nosnippet>125</a>            _dir: dir,
+<a href=#126 id=126 data-nosnippet>126</a>        })
+<a href=#127 id=127 data-nosnippet>127</a>    }
+<a href=#128 id=128 data-nosnippet>128</a>
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="doccomment">/// Return the fullnode RPC URL, which scripts register as their `localnet` env.
+<a href=#130 id=130 data-nosnippet>130</a>    </span><span class="kw">pub fn </span>rpc_url(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+<a href=#131 id=131 data-nosnippet>131</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.rpc_url
+<a href=#132 id=132 data-nosnippet>132</a>    }
+<a href=#133 id=133 data-nosnippet>133</a>
+<a href=#134 id=134 data-nosnippet>134</a>    <span class="doccomment">/// Return the GraphQL endpoint, which is what a fork passes as `--network`.
+<a href=#135 id=135 data-nosnippet>135</a>    </span><span class="kw">pub fn </span>graphql_url(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+<a href=#136 id=136 data-nosnippet>136</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.graphql_url
+<a href=#137 id=137 data-nosnippet>137</a>    }
+<a href=#138 id=138 data-nosnippet>138</a>
+<a href=#139 id=139 data-nosnippet>139</a>    <span class="doccomment">/// Return the faucet endpoint scripts fund their address from.
+<a href=#140 id=140 data-nosnippet>140</a>    </span><span class="kw">pub fn </span>faucet_url(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+<a href=#141 id=141 data-nosnippet>141</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.faucet_url
+<a href=#142 id=142 data-nosnippet>142</a>    }
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a>    <span class="doccomment">/// Interrupt `sui start` and wait for it to exit, so its services shut down in order and
+<a href=#145 id=145 data-nosnippet>145</a>    /// PostgreSQL is stopped by the process that started it.
+<a href=#146 id=146 data-nosnippet>146</a>    ///
+<a href=#147 id=147 data-nosnippet>147</a>    /// Fails if the child had already exited, because a script then ran against a dead network.
+<a href=#148 id=148 data-nosnippet>148</a>    </span><span class="kw">pub async fn </span>stop(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#149 id=149 data-nosnippet>149</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(status) = <span class="self">self</span>.try_wait()<span class="question-mark">? </span>{
+<a href=#150 id=150 data-nosnippet>150</a>            release_group(<span class="self">self</span>.group);
+<a href=#151 id=151 data-nosnippet>151</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
+<a href=#152 id=152 data-nosnippet>152</a>                <span class="string">"sui start exited with {status} during the test:\n{}"</span>,
+<a href=#153 id=153 data-nosnippet>153</a>                <span class="self">self</span>.log_tail()
+<a href=#154 id=154 data-nosnippet>154</a>            ));
+<a href=#155 id=155 data-nosnippet>155</a>        }
+<a href=#156 id=156 data-nosnippet>156</a>
+<a href=#157 id=157 data-nosnippet>157</a>        <span class="comment">// `sui start` listens for SIGINT only between the validator health checks of its main
+<a href=#158 id=158 data-nosnippet>158</a>        // loop, and a signal that lands during a check is lost, so the interrupt is repeated until
+<a href=#159 id=159 data-nosnippet>159</a>        // the child exits. Once it is shutting down, the extra signals are ignored.
+<a href=#160 id=160 data-nosnippet>160</a>        </span><span class="kw">let </span>deadline = Instant::now() + STOP_GRACE;
+<a href=#161 id=161 data-nosnippet>161</a>        <span class="kw">let </span><span class="kw-2">mut </span>next_interrupt = Instant::now();
+<a href=#162 id=162 data-nosnippet>162</a>        <span class="kw">let </span>status = <span class="kw">loop </span>{
+<a href=#163 id=163 data-nosnippet>163</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(status) = <span class="self">self</span>.try_wait()<span class="question-mark">? </span>{
+<a href=#164 id=164 data-nosnippet>164</a>                <span class="kw">break </span><span class="prelude-val">Some</span>(status);
+<a href=#165 id=165 data-nosnippet>165</a>            }
+<a href=#166 id=166 data-nosnippet>166</a>            <span class="kw">let </span>now = Instant::now();
+<a href=#167 id=167 data-nosnippet>167</a>            <span class="kw">if </span>now &gt;= deadline {
+<a href=#168 id=168 data-nosnippet>168</a>                <span class="kw">break </span><span class="prelude-val">None</span>;
+<a href=#169 id=169 data-nosnippet>169</a>            }
+<a href=#170 id=170 data-nosnippet>170</a>            <span class="kw">if </span>now &gt;= next_interrupt {
+<a href=#171 id=171 data-nosnippet>171</a>                signal_process(<span class="self">self</span>.child.id(), <span class="string">"INT"</span>);
+<a href=#172 id=172 data-nosnippet>172</a>                next_interrupt = now + INTERRUPT_INTERVAL;
+<a href=#173 id=173 data-nosnippet>173</a>            }
+<a href=#174 id=174 data-nosnippet>174</a>            tokio::time::sleep(POLL).<span class="kw">await</span>;
+<a href=#175 id=175 data-nosnippet>175</a>        };
+<a href=#176 id=176 data-nosnippet>176</a>        <span class="comment">// After a clean exit the group holds at most a PostgreSQL the child failed to stop; after
+<a href=#177 id=177 data-nosnippet>177</a>        // a timeout it still holds the child.
+<a href=#178 id=178 data-nosnippet>178</a>        </span>release_group(<span class="self">self</span>.group);
+<a href=#179 id=179 data-nosnippet>179</a>        <span class="kw">match </span>status {
+<a href=#180 id=180 data-nosnippet>180</a>            <span class="prelude-val">Some</span>(status) <span class="kw">if </span>status.success() =&gt; <span class="prelude-val">Ok</span>(()),
+<a href=#181 id=181 data-nosnippet>181</a>            <span class="prelude-val">Some</span>(status) =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
+<a href=#182 id=182 data-nosnippet>182</a>                <span class="string">"sui start exited with {status} on SIGINT:\n{}"</span>,
+<a href=#183 id=183 data-nosnippet>183</a>                <span class="self">self</span>.log_tail()
+<a href=#184 id=184 data-nosnippet>184</a>            )),
+<a href=#185 id=185 data-nosnippet>185</a>            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
+<a href=#186 id=186 data-nosnippet>186</a>                <span class="string">"sui start did not exit within {STOP_GRACE:?} of SIGINT and was killed:\n{}"</span>,
+<a href=#187 id=187 data-nosnippet>187</a>                <span class="self">self</span>.log_tail()
+<a href=#188 id=188 data-nosnippet>188</a>            )),
+<a href=#189 id=189 data-nosnippet>189</a>        }
+<a href=#190 id=190 data-nosnippet>190</a>    }
+<a href=#191 id=191 data-nosnippet>191</a>
+<a href=#192 id=192 data-nosnippet>192</a>    <span class="kw">fn </span>try_wait(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;std::process::ExitStatus&gt;&gt; {
+<a href=#193 id=193 data-nosnippet>193</a>        <span class="self">self</span>.child
+<a href=#194 id=194 data-nosnippet>194</a>            .try_wait()
+<a href=#195 id=195 data-nosnippet>195</a>            .context(<span class="string">"failed to wait for sui start"</span>)
+<a href=#196 id=196 data-nosnippet>196</a>    }
+<a href=#197 id=197 data-nosnippet>197</a>
+<a href=#198 id=198 data-nosnippet>198</a>    <span class="doccomment">/// The last lines of the child's output, for error messages.
+<a href=#199 id=199 data-nosnippet>199</a>    </span><span class="kw">fn </span>log_tail(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+<a href=#200 id=200 data-nosnippet>200</a>        <span class="kw">let </span>log = std::fs::read_to_string(<span class="kw-2">&amp;</span><span class="self">self</span>.log_path).unwrap_or_default();
+<a href=#201 id=201 data-nosnippet>201</a>        <span class="kw">let </span>lines: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = log.lines().collect();
+<a href=#202 id=202 data-nosnippet>202</a>        lines[lines.len().saturating_sub(LOG_TAIL_LINES)..].join(<span class="string">"\n"</span>)
+<a href=#203 id=203 data-nosnippet>203</a>    }
+<a href=#204 id=204 data-nosnippet>204</a>}
+<a href=#205 id=205 data-nosnippet>205</a>
+<a href=#206 id=206 data-nosnippet>206</a><span class="kw">impl </span>Drop <span class="kw">for </span>SourceNetwork {
+<a href=#207 id=207 data-nosnippet>207</a>    <span class="doccomment">/// Kill the process group of a network that was never stopped, before its directory goes.
+<a href=#208 id=208 data-nosnippet>208</a>    </span><span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#209 id=209 data-nosnippet>209</a>        <span class="kw">if </span><span class="macro">matches!</span>(<span class="self">self</span>.child.try_wait(), <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)) {
+<a href=#210 id=210 data-nosnippet>210</a>            release_group(<span class="self">self</span>.group);
+<a href=#211 id=211 data-nosnippet>211</a>        }
+<a href=#212 id=212 data-nosnippet>212</a>    }
+<a href=#213 id=213 data-nosnippet>213</a>}
+<a href=#214 id=214 data-nosnippet>214</a>
+<a href=#215 id=215 data-nosnippet>215</a><span class="doccomment">/// Reserve a free loopback port the way `sui start` picks its own internal ports.
+<a href=#216 id=216 data-nosnippet>216</a></span><span class="kw">pub fn </span>free_loopback_port() -&gt; u16 {
+<a href=#217 id=217 data-nosnippet>217</a>    get_available_port(<span class="string">"127.0.0.1"</span>)
+<a href=#218 id=218 data-nosnippet>218</a>}
+</code></pre></div></section></main></body></html>
