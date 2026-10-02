@@ -208,7 +208,7 @@ impl Parameters {
     }
 
     pub(crate) fn default_live_sync_fetch_delay() -> Duration {
-        Duration::from_millis(10)
+        Duration::from_millis(30)
     }
 
     pub(crate) fn default_commit_sync_batch_size() -> u32 {
