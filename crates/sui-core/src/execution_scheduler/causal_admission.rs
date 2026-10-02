@@ -8,9 +8,8 @@
 //! enqueue in causal order, so anything a transaction can wait for during execution
 //! is produced by a unit with a lower index. The execution driver admits
 //! transactions by index (see `execution_driver.rs`) and retires them - on completing
-//! execution, or on dropping a stale transaction. (One exception: a funds-withdraw
-//! whose scheduling is skipped retires at the scheduler, as it never reaches the
-//! driver.)
+//! execution, or on dropping a transaction it does not need to run (stale, or already
+//! executed). Every index retires in the driver.
 //!
 //! Enqueues are deduplicated by accumulator root version: all transactions of a
 //! version are enqueued together, so a unit at or below the enqueue watermark was
@@ -266,8 +265,7 @@ impl CausalAdmission {
         self.notify.notified().await;
     }
 
-    /// Marks `index` done - its transaction finished executing, or was dropped as no
-    /// longer needed. Called exactly once per index.
+    #[cfg(test)]
     pub fn mark_done(&self, index: u64) {
         let mut inner = self.inner.lock();
         Self::mark_done_locked(&mut inner, index);
