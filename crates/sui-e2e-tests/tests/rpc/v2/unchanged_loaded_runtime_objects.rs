@@ -429,6 +429,7 @@ async fn test_tto_receive_twice() {
 async fn test_tto_success() {
     let cluster = TestClusterBuilder::new()
         .with_num_validators(1)
+        .disable_fullnode_pruning()
         .build()
         .await;
 
