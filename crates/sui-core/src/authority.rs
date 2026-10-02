@@ -3058,7 +3058,7 @@ impl AuthorityState {
             version: accumulator_version,
         };
         let with_root_version = |assigned: shared_object_version_manager::AssignedVersions| {
-            assigned.with_accumulator_version(root_version)
+            assigned.with_accumulator_version_for_testing(root_version)
         };
 
         let assigned_versions = epoch_store

@@ -211,7 +211,7 @@ pub async fn submit_and_execute_with_error(
     // helper assigns none, and execution reads the root implicitly for object funds
     // withdraws, even when the transaction has no shared inputs.
     let assigned_versions = match authority.accumulator_version_for_testing() {
-        Some(version) => assigned_versions.with_accumulator_version(version),
+        Some(version) => assigned_versions.with_accumulator_version_for_testing(version),
         None => assigned_versions,
     };
 
