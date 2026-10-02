@@ -4390,6 +4390,24 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all)]
+    fn create_package_config_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if (!epoch_store
+            .protocol_config()
+            .enable_package_version_forbid_list()
+            && !epoch_store.protocol_config().enable_package_minversion())
+            || epoch_store.package_config_exists()
+        {
+            return None;
+        }
+
+        info!("Creating PackageConfigCreate tx");
+        Some(EndOfEpochTransactionKind::new_package_config_create())
+    }
+
+    #[instrument(level = "debug", skip_all)]
     fn create_address_alias_state_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -4579,6 +4597,9 @@ impl AuthorityState {
             txns.push(tx);
         }
         if let Some(tx) = self.create_deny_list_state_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.create_package_config_tx(epoch_store) {
             txns.push(tx);
         }
         if let Some(tx) = self.create_execution_time_observations_tx(

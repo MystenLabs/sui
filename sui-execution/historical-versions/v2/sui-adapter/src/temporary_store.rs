@@ -1204,6 +1204,21 @@ impl Storage for TemporaryStore<'_> {
         unreachable!("Coin denylist v2 is not supported in sui-execution v2");
     }
 
+    fn read_minversion(
+        &self,
+        _original_id: ObjectID,
+    ) -> SuiResult<Option<sui_types::package_config::MinVersion>> {
+        unreachable!("minversion is not supported by sui-execution v2")
+    }
+
+    fn is_package_version_forbidden(
+        &self,
+        _original_id: ObjectID,
+        _package_version: u64,
+    ) -> SuiResult<bool> {
+        unreachable!("package policy is not supported by sui-execution v2")
+    }
+
     fn record_generated_object_ids(&mut self, _generated_ids: BTreeSet<ObjectID>) {
         unreachable!(
             "Generated object IDs are not recorded in ExecutionResults in sui-execution v2"

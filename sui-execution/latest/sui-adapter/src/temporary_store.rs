@@ -31,11 +31,12 @@ use sui_types::execution::{
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
+use sui_types::package_config::{self, MinVersion};
 use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsResolver, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_PACKAGE_CONFIG_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -146,6 +147,9 @@ pub struct TemporaryStore<'backing> {
     /// Interior-mutable because reads happen behind `&self` (`RuntimeObjectResolver`).
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 
+    /// The single package-policy root version used by every policy lookup in this transaction.
+    package_config_root_version: RefCell<Option<SequenceNumber>>,
+
     unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
 }
 
@@ -255,6 +259,7 @@ impl<'backing> TemporaryStore<'backing> {
             invariants: InvariantChecker::default(),
             system_object_versions,
             loaded_system_objects: RefCell::new(BTreeMap::new()),
+            package_config_root_version: RefCell::new(None),
             unsettled_object_funds,
         }
     }
@@ -286,6 +291,30 @@ impl<'backing> TemporaryStore<'backing> {
             .borrow_mut()
             .insert(*object_id, (object.version(), object.digest()));
         Some(object)
+    }
+
+    fn package_config_root_version(&self) -> SuiResult<Option<SequenceNumber>> {
+        // Callers apply their feature gates; keeping this helper ungated makes one selected root
+        // version shared by minversion and forbid-list lookups.
+        if let Some(object) = self.input_objects.get(&SUI_PACKAGE_CONFIG_OBJECT_ID) {
+            return Ok(Some(object.version()));
+        }
+        if let Some(version) = *self.package_config_root_version.borrow() {
+            return Ok(Some(version));
+        }
+        if self
+            .system_object_versions
+            .get(&SUI_PACKAGE_CONFIG_OBJECT_ID)
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let object = self
+            .load_implicitly_read_system_object(&SUI_PACKAGE_CONFIG_OBJECT_ID)
+            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?;
+        let version = object.version();
+        *self.package_config_root_version.borrow_mut() = Some(version);
+        Ok(Some(version))
     }
 
     pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {
@@ -736,6 +765,7 @@ impl<'backing> TemporaryStore<'backing> {
             runtime_packages_loaded_from_db,
             loaded_per_epoch_config_objects,
             loaded_system_objects,
+            package_config_root_version,
             unsettled_object_funds,
             // Execution outcomes can be discarded.
             execution_results: _,
@@ -758,6 +788,7 @@ impl<'backing> TemporaryStore<'backing> {
             post_execution_check_inputs,
             system_object_versions,
             loaded_system_objects,
+            package_config_root_version,
             unsettled_object_funds,
             execution_results: ExecutionResultsV2::default(),
             invariants: InvariantChecker::default(),
@@ -1446,6 +1477,20 @@ impl Storage for TemporaryStore<'_> {
                 .insert(SUI_DENY_LIST_OBJECT_ID);
         }
         result
+    }
+
+    fn read_minversion(&self, original_id: ObjectID) -> SuiResult<Option<MinVersion>> {
+        let Some(root_version) = self.package_config_root_version()? else {
+            return Ok(None);
+        };
+        package_config::read_minversion(original_id, root_version, self)
+    }
+
+    fn is_package_version_forbidden(&self, original_id: ObjectID, version: u64) -> SuiResult<bool> {
+        let Some(root_version) = self.package_config_root_version()? else {
+            return Ok(false);
+        };
+        package_config::is_version_forbidden(original_id, version, root_version, self)
     }
 
     fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>) {

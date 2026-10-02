@@ -19,6 +19,7 @@ use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
 use crate::full_checkpoint_content::ObjectSet;
 use crate::message_envelope::Message;
 use crate::move_package::MovePackage;
+use crate::package_config::MinVersion;
 use crate::storage::error::Error as StorageError;
 use crate::transaction::TransactionData;
 use crate::transaction::{InputObjects, SenderSignedData, TransactionDataAPI};
@@ -288,6 +289,16 @@ pub trait Storage {
         &self,
         receiving_funds_type_and_owners: BTreeMap<TypeTag, BTreeSet<SuiAddress>>,
     ) -> DenyListResult;
+
+    /// Read the minversion selection from the transaction's package-policy snapshot.
+    fn read_minversion(&self, original_id: ObjectID) -> SuiResult<Option<MinVersion>>;
+
+    /// Read version-forbid policy from the transaction's package-policy snapshot.
+    fn is_package_version_forbidden(
+        &self,
+        original_id: ObjectID,
+        package_version: u64,
+    ) -> SuiResult<bool>;
 
     fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>);
 }

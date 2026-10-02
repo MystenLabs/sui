@@ -307,11 +307,8 @@ async fn test_receiving_object_higher_version() {
         .unwrap();
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_load_implicitly_read_system_object() {
+async fn assert_load_implicitly_read_system_object(object_id: ObjectID) {
     let cache = create_writeback_cache().await;
-
-    let object_id = sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
     let init_version = SequenceNumber::from(1);
     let target_version = SequenceNumber::from(3);
 
@@ -373,6 +370,13 @@ async fn test_load_implicitly_read_system_object() {
         )
         .unwrap();
     assert_eq!(object.version(), target_version);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_load_implicitly_read_system_objects() {
+    for &object_id in sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS {
+        assert_load_implicitly_read_system_object(object_id).await;
+    }
 }
 
 /// A dry-run pins the latest version before execution, and that version can be pruned
