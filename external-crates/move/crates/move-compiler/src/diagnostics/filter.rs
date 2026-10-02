@@ -14,7 +14,7 @@
 //!
 //! ## Allocation strategy
 //!
-//! Each [`FilterScope`] wraps an `Arc<FilterScopeData>`. Singletons (empty, all,
+//! Each [`FilterScope`] wraps an `Arc<FilterScopeData>`. Singletons (empty, all, test,
 //! dependency-drop) are shared via `LazyLock`; per-item scopes are allocated individually.
 //! Scopes are *not* deduplicated: each item gets its own `Arc` even when filters are
 //! identical. This preserves per-item source locations on filter entries (needed for
@@ -244,8 +244,6 @@ pub(crate) fn dependency_drop_filter_scope() -> FilterScope {
 // Known filter registration
 //**************************************************************************************************
 
-const UNUSED_ITEM_CATEGORY: u8 = Category::UnusedItem as u8;
-
 /// Expansion of a known filter name into the set of [`DiagnosticsID`] triples it covers.
 /// Wildcard sentinels in the IDs are converted to [`FilterTarget`] variants at the filter
 /// boundary. Kind is supplied at attribute-resolution time, not stored here.
@@ -258,8 +256,8 @@ pub static COMPILER_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpans
             (all) => {
                 DiagnosticsID::all(DiagnosticOrigin::Compiler)
             };
-            (UnusedItem) => {
-                DiagnosticsID::category(DiagnosticOrigin::Compiler, UNUSED_ITEM_CATEGORY)
+            ($cat:ident) => {
+                DiagnosticsID::category(DiagnosticOrigin::Compiler, Category::$cat as u8)
             };
             ($cat:ident :: $code:ident) => {
                 DiagnosticsID::exact(
@@ -462,13 +460,41 @@ impl FilterScope {
     /// shared
     /// [`EMPTY_FILTER_SCOPE`] singleton.
     pub(crate) fn new(input: BTreeMap<DiagnosticsID, Spanned<FilterKind>>) -> Self {
-        if input.is_empty() {
-            return EMPTY_FILTER_SCOPE.clone();
-        }
-        let filter_entries: BTreeMap<FilterTarget, Spanned<FilterKind>> = input
+        let filter_entries = input
             .into_iter()
             .map(|(id, sp!(loc, kind))| (FilterTarget::from(id), sp(loc, kind)))
             .collect();
+        Self::from_filter_entries(filter_entries)
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.filter_entries.is_empty()
+    }
+
+    /// Combines root settings before diagnostic reporting starts.
+    pub(crate) fn merge_root(self, other: &Self) -> Self {
+        if self.is_empty() {
+            return other.clone();
+        }
+        if other.is_empty() {
+            return self;
+        }
+        let mut entries = self.0.filter_entries.clone();
+        for (target, kind) in &other.0.filter_entries {
+            entries
+                .entry(*target)
+                .and_modify(|entry| {
+                    entry.value = entry.value.resolve_conflict(kind.value);
+                })
+                .or_insert(*kind);
+        }
+        Self::from_filter_entries(entries)
+    }
+
+    fn from_filter_entries(filter_entries: BTreeMap<FilterTarget, Spanned<FilterKind>>) -> Self {
+        if filter_entries.is_empty() {
+            return EMPTY_FILTER_SCOPE.clone();
+        }
         let expects = filter_entries
             .iter()
             .filter(|(_, sp!(_, kind))| *kind == FilterKind::Expect)

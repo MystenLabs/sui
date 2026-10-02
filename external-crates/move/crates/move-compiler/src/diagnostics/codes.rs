@@ -426,6 +426,16 @@ codes!(
     ],
 );
 
+pub(crate) const UNUSED_ITEM_CATEGORY: u8 = Category::UnusedItem as u8;
+pub(crate) const UNUSED_ITEM_CODES: [u8; 6] = [
+    UnusedItem::Function as u8,
+    UnusedItem::StructField as u8,
+    UnusedItem::FunTypeParam as u8,
+    UnusedItem::Constant as u8,
+    UnusedItem::MutReference as u8,
+    UnusedItem::MutParam as u8,
+];
+
 //**************************************************************************************************
 // impls
 //**************************************************************************************************
