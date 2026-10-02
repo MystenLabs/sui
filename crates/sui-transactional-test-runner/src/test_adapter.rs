@@ -93,7 +93,7 @@ use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
 use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_FRAMEWORK_ADDRESS, SUI_PACKAGE_CONFIG_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SUI_ADDRESS_LENGTH, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair_from_rng},
     event::Event,
@@ -115,7 +115,7 @@ use sui_types::{
 };
 use sui_types::{
     move_package::MovePackage,
-    transaction::{Argument, CallArg, TransactionDataAPI, TransactionExpiration},
+    transaction::{CallArg, TransactionDataAPI, TransactionExpiration},
 };
 use tempfile::{NamedTempFile, tempdir};
 
@@ -139,6 +139,7 @@ const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_CLOCK_OBJECT_ID,
     SUI_DENY_LIST_OBJECT_ID,
+    SUI_PACKAGE_CONFIG_OBJECT_ID,
     SUI_RANDOMNESS_STATE_OBJECT_ID,
     SUI_COIN_REGISTRY_OBJECT_ID,
     SUI_DISPLAY_REGISTRY_OBJECT_ID,
@@ -1292,6 +1293,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 syntax,
                 policy,
                 gas_price,
+                minversion,
             }) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
                 // zero out the package name
@@ -1379,6 +1381,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                             policy,
                             gas_price,
                             address_balance_gas,
+                            minversion,
                         ).await?;
                         Ok((output, modules))
                     },
@@ -1801,6 +1804,7 @@ impl SuiTestAdapter {
         policy: u8,
         gas_price: u64,
         address_balance_gas: bool,
+        minversion: bool,
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
@@ -1818,7 +1822,7 @@ impl SuiTestAdapter {
 
         // Argument::Input(0)
         let sender_address = self.get_sender(Some(sender.clone())).address;
-        SuiValue::Object(upgrade_capability, None).into_argument(
+        let upgrade_capability = SuiValue::Object(upgrade_capability, None).into_argument(
             &mut builder,
             self,
             sender_address,
@@ -1831,26 +1835,61 @@ impl SuiTestAdapter {
         )
         .into();
         let digest_arg = builder.pure(digest).unwrap();
+        let minversion_authorization = minversion.then(|| {
+            builder.programmable_move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                ident_str!("package").to_owned(),
+                ident_str!("prepare_minversion_upgrade").to_owned(),
+                vec![],
+                vec![upgrade_capability],
+            )
+        });
 
         let upgrade_ticket = builder.programmable_move_call(
             SUI_FRAMEWORK_PACKAGE_ID,
             ident_str!("package").to_owned(),
             ident_str!("authorize_upgrade").to_owned(),
             vec![],
-            vec![Argument::Input(0), upgrade_arg, digest_arg],
+            vec![upgrade_capability, upgrade_arg, digest_arg],
         );
 
         let package_id = before_upgrade.into_inner().into();
         let upgrade_receipt =
             builder.upgrade(package_id, upgrade_ticket, dependencies, modules_bytes);
 
-        builder.programmable_move_call(
-            SUI_FRAMEWORK_PACKAGE_ID,
-            ident_str!("package").to_owned(),
-            ident_str!("commit_upgrade").to_owned(),
-            vec![],
-            vec![Argument::Input(0), upgrade_receipt],
-        );
+        if let Some(minversion_authorization) = minversion_authorization {
+            let package_config = SuiValue::Object(
+                FakeID::Known(SUI_PACKAGE_CONFIG_OBJECT_ID),
+                None,
+            )
+            .into_argument(&mut builder, self, sender_address)?;
+            let minversion_upgrade = builder.programmable_move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                ident_str!("package").to_owned(),
+                ident_str!("commit_minversion_upgrade").to_owned(),
+                vec![],
+                vec![
+                    upgrade_capability,
+                    upgrade_receipt,
+                    minversion_authorization,
+                ],
+            );
+            builder.programmable_move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                ident_str!("package_config").to_owned(),
+                ident_str!("record_minversion_upgrade").to_owned(),
+                vec![],
+                vec![package_config, minversion_upgrade],
+            );
+        } else {
+            builder.programmable_move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                ident_str!("package").to_owned(),
+                ident_str!("commit_upgrade").to_owned(),
+                vec![],
+                vec![upgrade_capability, upgrade_receipt],
+            );
+        }
 
         let pt = builder.finish();
         let expiration = if address_balance_gas {

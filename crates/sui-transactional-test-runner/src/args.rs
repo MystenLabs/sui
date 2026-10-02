@@ -201,6 +201,9 @@ pub struct UpgradePackageCommand {
     pub policy: u8,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
+    /// Complete the upgrade through the enrolled-cap minversion flow.
+    #[clap(long = "minversion", action = clap::ArgAction::SetTrue)]
+    pub minversion: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -264,6 +267,8 @@ pub struct AdvanceEpochCommand {
     pub create_authenticator_state_expire: bool,
     #[clap(long = "create-deny-list-state")]
     pub create_deny_list_state: bool,
+    #[clap(long = "create-package-config")]
+    pub create_package_config: bool,
     #[clap(long = "create-bridge-state")]
     pub create_bridge_state: bool,
     #[clap(long = "create-bridge-committee")]
@@ -279,6 +284,7 @@ impl From<&AdvanceEpochCommand> for simulacrum::AdvanceEpochConfig {
             create_authenticator_state: cmd.create_authenticator_state,
             create_authenticator_state_expire: cmd.create_authenticator_state_expire,
             create_deny_list_state: cmd.create_deny_list_state,
+            create_package_config: cmd.create_package_config,
             create_bridge_state: cmd.create_bridge_state,
             create_bridge_committee: cmd.create_bridge_committee,
             system_packages_snapshot: cmd.system_packages_snapshot,
