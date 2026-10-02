@@ -159,7 +159,7 @@ impl ExecutionScheduler {
             transaction_cache_read,
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
-            causal_admission: CausalAdmission::new_with_default_sizing(),
+            causal_admission: CausalAdmission::new_with_default_sizing(prometheus_registry),
             address_funds_withdraw_scheduler: Arc::new(Mutex::new(
                 address_funds_withdraw_scheduler,
             )),
