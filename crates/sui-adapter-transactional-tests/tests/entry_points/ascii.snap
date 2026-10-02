@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 937
 ---
 processed 6 tasks
 
@@ -18,6 +17,7 @@ gas summary: computation_cost: 1000000, storage_cost: 5760800,  storage_rebate: 
 task 2, line 27:
 //# run Test::M::ascii_arg --sender A --args b"SomeString"
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 // string of ASCII characters as UTF8 string
@@ -25,6 +25,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0
 task 3, line 32:
 //# run Test::M::ascii_arg --sender A --args "SomeString"
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 // vector of ASCII character strings as byte strings
@@ -32,6 +33,7 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 task 4, line 37:
 //# run Test::M::ascii_vec_arg --sender A --args vector[b"Some",b"String"]
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 // vector of ASCII character strings as UTF8 strings

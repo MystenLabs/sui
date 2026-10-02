@@ -22,6 +22,7 @@ task 2, lines 54-55:
 events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 53, 50, 102, 50, 51, 99, 57, 97, 51, 53, 56, 99, 49, 50, 52, 102, 54, 54, 51, 49, 99, 53, 57, 57, 50, 52, 99, 49, 51, 54, 55, 97, 49, 52, 50, 53, 100, 49, 102, 97, 54, 57, 102, 52, 57, 102, 54, 98, 51, 51, 99, 102, 55, 49, 97, 51, 98, 100, 98, 102, 100, 57, 56, 101, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 120, 101, 245, 33, 166, 3, 229, 112, 67, 65, 88, 144, 38, 82, 63, 187, 151, 44, 176, 199, 240, 155, 235, 159, 168, 192, 23, 199, 90, 252, 212, 63] }
 created: object(2,0), object(2,1), object(2,2)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 12190400,  storage_rebate: 2746260, non_refundable_storage_fee: 27740
 
 task 3, lines 57-58:
@@ -29,6 +30,7 @@ task 3, lines 57-58:
 //# run sui::coin::deny_list_v2_enable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
 created: object(3,0)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 4356396, non_refundable_storage_fee: 44004
 
 task 4, lines 60-61:
@@ -104,12 +106,14 @@ task 7, lines 67-68:
 // Undeny account B.
 //# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 6794172, non_refundable_storage_fee: 68628
 
 task 8, lines 70-71:
 // Disable global pause.
 //# run sui::coin::deny_list_v2_disable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 6591024, non_refundable_storage_fee: 66576
 
 task 9, lines 73-74:
@@ -186,6 +190,7 @@ task 12, lines 80-81:
 //# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
 deleted: object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4400400,  storage_rebate: 6794172, non_refundable_storage_fee: 68628
 
 task 13, lines 83-84:
@@ -193,6 +198,7 @@ task 13, lines 83-84:
 //# run sui::coin::deny_list_v2_disable_global_pause --args object(0x403) object(1,3) --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
 deleted: object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4400400,  storage_rebate: 6591024, non_refundable_storage_fee: 66576
 
 task 14, lines 86-87:
@@ -208,12 +214,12 @@ task 16, lines 91-92:
 // Assert that the address is no longer denied.
 //# run test::regulated_coin::assert_address_deny_status --args immshared(0x403) @B false --sender A
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 17, lines 94-95:
 // Assert that global pause is disabled.
 //# run test::regulated_coin::assert_global_pause_status --args immshared(0x403) false --sender A
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

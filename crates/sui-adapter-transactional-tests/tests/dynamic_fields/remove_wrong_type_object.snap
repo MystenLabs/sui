@@ -20,6 +20,7 @@ task 2, line 36:
 //# run a::m::t1 --sender A
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 38:

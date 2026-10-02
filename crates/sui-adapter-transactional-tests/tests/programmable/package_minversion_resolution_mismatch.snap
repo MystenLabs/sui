@@ -1,0 +1,79 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+// Upgrade resolution must match the cap's minversion state. Both failures are atomic.
+
+init:
+A: object(0,0)
+
+task 1, lines 8-11:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6262400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-15:
+//# programmable --sender A --inputs object(1,1) object(0x426)
+//> 0: sui::package::enable_minversion(Input(0));
+//> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(2,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 17-21:
+// An enrolled cap rejects an ordinary upgrade emitted without --minversion.
+//# upgrade --package EnrolledV1 --upgrade-capability 1,1 --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::commit_upgrade (function index 30) at offset 9, Abort Code: 8
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 30, instruction: 9, function_name: Some("commit_upgrade") }, 8), source: Some(VMError { major_status: ABORTED, sub_status: Some(8), message: Some("sui::package::commit_upgrade at offset 9"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(30), 9)] }), command: Some(2) } }
+
+task 4, lines 23-24:
+// The failed upgrade is atomic: the historical v1 call still emits version 1.
+//# run EnrolledV1::enrolled::ping --sender A
+events: Event { package_id: EnrolledV1, transaction_module: Identifier("enrolled"), sender: A, type_: StructTag { address: EnrolledV1, module: Identifier("enrolled"), name: Identifier("Ping"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 26-29:
+//# publish --upgradeable --sender A
+created: object(5,0), object(5,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6262400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 31-35:
+// An unenrolled cap rejects a minversion upgrade emitted by --minversion.
+//# upgrade --package OrdinaryV1 --upgrade-capability 5,1 --sender A --minversion
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::prepare_minversion_upgrade (function index 31) at offset 7, Abort Code: 7
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 31, instruction: 7, function_name: Some("prepare_minversion_upgrade") }, 7) at command Some(0)
+
+task 7, lines 37-42:
+// Both failed upgrades are atomic. The enrolled cap can still upgrade through the minversion
+// path, and its historical v1 reference then emits version 2 from the upgraded implementation.
+//# upgrade --package EnrolledV1 --upgrade-capability 1,1 --sender A --minversion
+created: object(7,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 10472800,  storage_rebate: 6764076, non_refundable_storage_fee: 68324
+
+task 8, line 44:
+//# run EnrolledV1::enrolled::ping --sender A
+events: Event { package_id: EnrolledV2, transaction_module: Identifier("enrolled"), sender: A, type_: StructTag { address: EnrolledV1, module: Identifier("enrolled"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, lines 46-50:
+// The ordinary cap likewise still upgrades through the ordinary path.
+//# upgrade --package OrdinaryV1 --upgrade-capability 5,1 --sender A
+created: object(9,0)
+mutated: object(0,0), object(5,1)
+gas summary: computation_cost: 1000000, storage_cost: 6262400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 10, lines 52-53:
+// The direct new-version call emits version 2.
+//# run OrdinaryV2::ordinary::ping --sender A
+events: Event { package_id: OrdinaryV2, transaction_module: Identifier("ordinary"), sender: A, type_: StructTag { address: OrdinaryV1, module: Identifier("ordinary"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

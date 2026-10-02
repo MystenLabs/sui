@@ -18,12 +18,14 @@ task 2, line 74:
 //# run test::m::parent --sender A
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2470000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 76:
 //# run test::m::child --sender A
 created: object(3,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 78-79:

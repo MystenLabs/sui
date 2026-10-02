@@ -23,6 +23,7 @@ task 2, line 38:
 //# run test::m::create --sender A
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2439600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 40:
@@ -30,4 +31,5 @@ task 3, line 40:
 mutated: object(0,0)
 unwrapped: object(3,0)
 deleted: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2415204, non_refundable_storage_fee: 24396

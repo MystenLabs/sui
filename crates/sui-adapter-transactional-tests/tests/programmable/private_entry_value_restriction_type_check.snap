@@ -20,6 +20,7 @@ task 2, lines 17-19:
 //> TransferObjects([Result(0)], Input(0))
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, lines 21-23:

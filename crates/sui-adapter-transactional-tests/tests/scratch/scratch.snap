@@ -20,6 +20,7 @@ task 2, lines 37-39:
 // Basic coverage: add/read/remove all succeed within one transaction.
 //> test::scratch_test::add_read_remove();
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, lines 41-43:
@@ -27,6 +28,7 @@ task 3, lines 41-43:
 // Add an entry in this transaction and leave it in the store to be dropped.
 //> test::scratch_test::add_only();
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 45-47:
@@ -34,4 +36,5 @@ task 4, lines 45-47:
 // A fresh transaction cannot see the previous transaction's entry.
 //> test::scratch_test::assert_absent();
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

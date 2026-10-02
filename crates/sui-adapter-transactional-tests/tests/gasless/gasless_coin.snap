@@ -23,7 +23,7 @@ task 3, lines 34-39:
 //> TransferObjects([Result(0), Result(1), Result(2)], Input(2));
 created: object(3,0), object(3,1), object(3,2)
 mutated: object(0,0), object(1,1)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
 task 4, line 41:
@@ -37,7 +37,7 @@ task 5, lines 45-47:
 // Gasless: send a coin object to B via coin::send_funds
 //> 0: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(1));
 deleted: object(3,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(5,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 5000)
 gas summary: computation_cost: 1309176, storage_cost: 0,  storage_rebate: 1309176, non_refundable_storage_fee: 13224
 
@@ -57,7 +57,7 @@ task 8, lines 55-58:
 //> 0: MergeCoins(Input(0), [Input(1)]);
 //> 1: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(2));
 deleted: object(3,1), object(3,2)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(8,0), C, sui::balance::Balance<test::usdc::USDC>, Merge, 10000)
 gas summary: computation_cost: 2618352, storage_cost: 0,  storage_rebate: 2618352, non_refundable_storage_fee: 26448
 
@@ -78,7 +78,7 @@ task 11, lines 66-69:
 //> TransferObjects([Result(0)], Input(2));
 created: object(11,0)
 mutated: object(0,0), object(1,1)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
 task 12, line 71:
@@ -92,7 +92,7 @@ task 13, lines 73-77:
 //> 1: sui::coin::send_funds<test::usdc::USDC>(NestedResult(0, 0), Input(2));
 //> 2: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(3));
 deleted: object(11,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(5,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 3000), (object(8,0), C, sui::balance::Balance<test::usdc::USDC>, Merge, 6000)
 gas summary: computation_cost: 1309176, storage_cost: 0,  storage_rebate: 1309176, non_refundable_storage_fee: 13224
 
@@ -117,6 +117,7 @@ task 17, lines 87-90:
 //> test::usdc::freeze_coin(Result(0));
 created: object(17,0)
 mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
 task 18, lines 92-94:
@@ -134,6 +135,7 @@ task 19, lines 98-101:
 //> test::usdc::share_coin(Result(0));
 created: object(19,0)
 mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
 task 20, lines 103-105:
@@ -161,7 +163,7 @@ task 22, lines 114-120:
 //> sui::transfer::public_party_transfer<sui::coin::Coin<test::usdc::USDC>>(Result(1), Result(2));
 created: object(22,0), object(22,1)
 mutated: object(0,0), object(1,1)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 5335200,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
 task 23, lines 122-124:
@@ -169,7 +171,7 @@ task 23, lines 122-124:
 // Success: party coin input used
 //> 0: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(1));
 deleted: object(22,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(5,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 2000)
 gas summary: computation_cost: 1309176, storage_cost: 0,  storage_rebate: 1309176, non_refundable_storage_fee: 13224
 

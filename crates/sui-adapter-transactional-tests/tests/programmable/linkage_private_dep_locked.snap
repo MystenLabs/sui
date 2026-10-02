@@ -22,12 +22,14 @@ task 2, lines 25-30:
 //# publish --upgradeable --dependencies Dep_V1 --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6042000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, line 32:
 //# run Dep_V1::d::make --sender A
 created: object(3,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 34-45:
@@ -41,6 +43,7 @@ task 5, lines 47-49:
 // Locked: entry call pins `Dep` exact(1) => runs v1 => writes 1, even though v2 exists.
 //> Root::m::go(Input(0));
 mutated: object(0,0), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
 
 task 6, line 51:

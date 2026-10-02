@@ -23,6 +23,7 @@ task 2, lines 28-32:
 //> TransferObjects([Result(0), Result(1), Result(2)], Input(0))
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, lines 34-38:
@@ -33,6 +34,7 @@ task 3, lines 34-38:
 //> test::m1::priv2(Result(2))
 mutated: object(0,0)
 deleted: object(2,0), object(2,1), object(2,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 4589640, non_refundable_storage_fee: 46360
 
 task 4, lines 40-43:
@@ -41,4 +43,5 @@ task 4, lines 40-43:
 //> 1: MakeMoveVec<u64>([Input(0), Input(1), Input(2)]);
 //> test::m1::priv3(Result(1))
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

@@ -19,6 +19,7 @@ task 2, line 42:
 //# run test::event_streams::emit_event --sender A --args 10
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [10, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0])
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
@@ -37,6 +38,7 @@ task 5, lines 48-49:
 //# run test::event_streams::emit_event --sender A --args 20
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0])
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
@@ -55,6 +57,7 @@ task 8, lines 55-56:
 //# run test::event_streams::emit_event --sender A --args 30
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [30, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0])
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
@@ -73,6 +76,7 @@ task 11, lines 62-63:
 //# run test::event_streams::emit_event --sender A --args 40
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [40, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0])
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
@@ -92,6 +96,7 @@ task 14, lines 69-70:
 events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [50, 0, 0, 0, 0, 0, 0, 0] }
 created: object(14,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(2,0), test, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0])
 gas summary: computation_cost: 1000000, storage_cost: 2416800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 

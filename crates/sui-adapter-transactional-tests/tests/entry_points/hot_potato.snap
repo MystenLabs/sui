@@ -22,6 +22,7 @@ task 2, lines 40-44:
 //> sui::transfer::public_transfer<test::m::A>(Result(2), Input(0));
 created: object(2,0), object(2,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3404800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, lines 46-51:
@@ -33,6 +34,7 @@ task 3, lines 46-51:
 //> test::m::play(Result(1));
 mutated: object(0,0)
 deleted: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
 task 4, lines 53-59:

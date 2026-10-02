@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 937
 ---
 processed 18 tasks
 
@@ -23,24 +22,28 @@ task 3, lines 36-47:
 //# publish --upgradeable --dependencies Test_DepV1 --sender A
 created: object(3,0), object(3,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6923600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 49-60:
 //# upgrade --package Test_V1 --upgrade-capability 3,1 --dependencies Test_DepV1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(3,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6923600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 5, lines 62-73:
 //# upgrade --package Test_V2 --upgrade-capability 3,1 --dependencies Test_DepV2 --sender A
 created: object(5,0)
 mutated: object(0,0), object(3,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6923600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 6, line 76:
 //# run Test_DepV1::DepM1::foo
 created: object(6,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 7, line 78:
@@ -69,12 +72,14 @@ task 9, lines 85-87:
 // call functions from two different versions of the same module modifying the same object
 //> Test_DepV1::DepM1::mod_obj(Input(0));
 mutated: object(0,0), object(6,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
 
 task 10, lines 89-90:
 //# programmable --sender A --inputs object(6,0)
 //> Test_DepV2::DepM1::mod_obj(Input(0));
 mutated: object(0,0), object(6,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
 
 task 11, line 92:
@@ -97,12 +102,14 @@ task 12, lines 97-98:
 //# programmable --sender A --inputs object(6,0)
 //> Test_V1::M1::mod_dep_obj(Input(0));
 mutated: object(0,0), object(6,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
 
 task 13, lines 100-101:
 //# programmable --sender A --inputs object(6,0)
 //> Test_V2::M1::mod_dep_obj(Input(0));
 mutated: object(0,0), object(6,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
 
 task 14, line 103:
@@ -125,12 +132,14 @@ task 15, lines 108-109:
 //# programmable --sender A --inputs object(6,0)
 //> Test_V2::M1::mod_dep_obj(Input(0));
 mutated: object(0,0), object(6,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
 
 task 16, lines 111-112:
 //# programmable --sender A --inputs object(6,0)
 //> Test_V3::M1::mod_dep_obj(Input(0));
 mutated: object(0,0), object(6,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
 
 task 17, line 114:

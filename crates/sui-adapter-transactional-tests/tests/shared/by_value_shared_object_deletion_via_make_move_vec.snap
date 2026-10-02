@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 937
 ---
 processed 10 tasks
 
@@ -14,12 +13,14 @@ task 2, line 47:
 //# run t2::o2::create
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, line 49:
 //# run t2::o2::create
 created: object(3,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, line 51:
@@ -53,12 +54,14 @@ task 6, lines 55-58:
 //> 1: t2::o2::delete(Result(0));
 mutated: object(0,0), object(2,0)
 deleted: object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
 
 task 7, line 60:
 //# run t2::o2::mint_shared_coin
 created: object(7,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8, line 62:
@@ -86,4 +89,5 @@ task 9, lines 64-70:
 //> 4: t2::o2::share_coin(Result(1));
 created: object(9,0)
 mutated: object(0,0), object(7,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760

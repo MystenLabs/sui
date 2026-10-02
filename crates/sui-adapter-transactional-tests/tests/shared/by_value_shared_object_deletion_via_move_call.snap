@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 937
 ---
 processed 11 tasks
 
@@ -14,12 +13,14 @@ task 2, line 37:
 //# run t2::o2::create
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, line 39:
 //# run t2::o2::create
 created: object(3,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, line 41:
@@ -53,12 +54,14 @@ task 6, lines 45-48:
 //> 1: t2::o2::deleter(Result(0));
 mutated: object(0,0), object(2,0)
 deleted: object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
 
 task 7, line 50:
 //# run t2::o2::mint_shared_coin
 created: object(7,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8, line 52:
@@ -85,6 +88,7 @@ task 9, lines 54-59:
 //> 3: t2::o2::share_coin(Result(0));
 created: object(9,0)
 mutated: object(0,0), object(7,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
 task 10, lines 61-66:
@@ -96,4 +100,5 @@ task 10, lines 61-66:
 //> 3: sui::transfer::public_share_object<sui::coin::Coin<sui::sui::SUI>>(Result(0));
 created: object(10,0)
 mutated: object(0,0), object(7,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760

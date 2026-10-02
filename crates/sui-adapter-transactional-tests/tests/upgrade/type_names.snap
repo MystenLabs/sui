@@ -28,96 +28,112 @@ task 4, line 71:
 //# run A2::m::canary --type-args A0::m::A --args true --sender A
 created: object(4,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, line 73:
 //# run A2::m::canary --type-args A1::m::B --args true --sender A
 created: object(5,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 6, line 75:
 //# run A2::m::canary --type-args A0::m::A --args false --sender A
 created: object(6,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, line 77:
 //# run A2::m::canary --type-args A1::m::B --args false --sender A
 created: object(7,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8, line 79:
 //# run A2::m::canary --type-args A0::m::EA --args true --sender A
 created: object(8,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 9, line 81:
 //# run A2::m::canary --type-args A1::m::EB --args true --sender A
 created: object(9,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 10, line 83:
 //# run A2::m::canary --type-args A0::m::EA --args false --sender A
 created: object(10,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 11, line 85:
 //# run A2::m::canary --type-args A1::m::EB --args false --sender A
 created: object(11,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 12, line 87:
 //# run A2::m::canary --type-args A2::m::A --args true --sender A
 created: object(12,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 13, line 89:
 //# run A2::m::canary --type-args A2::m::B --args true --sender A
 created: object(13,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 14, line 91:
 //# run A2::m::canary --type-args A2::m::A --args false --sender A
 created: object(14,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 15, line 93:
 //# run A2::m::canary --type-args A2::m::B --args false --sender A
 created: object(15,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 16, line 95:
 //# run A2::m::canary --type-args A2::m::EA --args true --sender A
 created: object(16,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 17, line 97:
 //# run A2::m::canary --type-args A2::m::EB --args true --sender A
 created: object(17,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 18, line 99:
 //# run A2::m::canary --type-args A2::m::EA --args false --sender A
 created: object(18,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 19, line 101:
 //# run A2::m::canary --type-args A2::m::EB --args false --sender A
 created: object(19,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 20, line 103:

@@ -19,6 +19,7 @@ task 2, line 79:
 //# run test::m::mint_s --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 81:
@@ -51,12 +52,14 @@ task 5, lines 85-87:
 //> 1: test::m::destroy_s(Result(0));
 mutated: object(0,0), object(2,0)
 deleted: object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3408372, non_refundable_storage_fee: 34428
 
 task 6, line 89:
 //# run test::m::mint_cup --sender A --type-args u64
 created: object(6,0), object(6,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, line 91:
@@ -89,6 +92,7 @@ task 9, lines 95-97:
 //> 1: test::m::destroy_cup<u64>(Result(0));
 mutated: object(0,0), object(6,0)
 deleted: object(6,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
 
 // Try to directly call `public_receive` and `receive` on an object without public transfer.
@@ -97,6 +101,7 @@ task 10, line 101:
 //# run test::m::mint_s --sender A
 created: object(10,0), object(10,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 11, line 103:
@@ -147,6 +152,7 @@ task 15, line 121:
 //# run test::m::mint_store --sender A
 created: object(15,0), object(15,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3473200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 16, line 123:
@@ -191,4 +197,5 @@ task 19, lines 133-138:
 //> 3: sui::object::delete(Result(0));
 mutated: object(0,0)
 deleted: object(15,0), object(15,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 3438468, non_refundable_storage_fee: 34732

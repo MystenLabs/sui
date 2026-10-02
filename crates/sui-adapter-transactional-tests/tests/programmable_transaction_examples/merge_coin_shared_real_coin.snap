@@ -18,6 +18,7 @@ task 2, line 19:
 //# run test::m1::mint_shared
 created: object(2,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, line 21:

@@ -24,6 +24,7 @@ task 3, lines 33-51:
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 created: object(3,0), object(3,1)
 mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 8618400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 4, line 53:

@@ -19,12 +19,14 @@ gas summary: computation_cost: 1000000, storage_cost: 12722400,  storage_rebate:
 task 2, line 113:
 //# run Test::M::prim_vec_len --sender A --args vector[7,42]
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 115:
 //# run Test::M::mint --sender A --args 42
 created: object(3,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 // create a parent/child object pair, pass child by-value and parent as a single element of a vector
@@ -34,18 +36,21 @@ task 4, line 121:
 //# run Test::M::obj_vec_destroy --sender A --args vector[object(3,0)]
 mutated: object(0,0)
 deleted: object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
 
 task 5, line 123:
 //# run Test::M::mint --sender A --args 42
 created: object(5,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 6, line 125:
 //# run Test::M::mint_child --sender A --args 42 object(5,0)
 created: object(6,0), object(6,1)
 mutated: object(0,0), object(5,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6011600,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
 
 task 7, line 127:
@@ -59,6 +64,7 @@ task 8, line 133:
 //# run Test::M::mint_another --sender A --args 42
 created: object(8,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 9, line 135:
@@ -72,12 +78,14 @@ task 10, line 140:
 //# run Test::M::mint_another --sender A --args 42
 created: object(10,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 11, line 142:
 //# run Test::M::mint --sender A --args 42
 created: object(11,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 12, line 144:
@@ -91,12 +99,14 @@ task 13, line 149:
 //# run Test::M::mint_shared --sender A --args 42
 created: object(13,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 14, line 151:
 //# run Test::M::obj_vec_destroy --sender A --args vector[object(13,0)]
 mutated: object(0,0)
 deleted: object(13,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
 
 // create an object and pass it both by-value and as element of a vector (failure)
@@ -105,6 +115,7 @@ task 15, line 156:
 //# run Test::M::mint --sender A --args 42
 created: object(15,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 16, line 158:
@@ -118,6 +129,7 @@ task 17, line 163:
 //# run Test::M::mint --sender A --args 42
 created: object(17,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 18, line 165:

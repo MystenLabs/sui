@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 7 tasks
+processed 10 tasks
 
 // Type-argument packages are pinned `at_least` (version from the type's defining id), for both
 // MoveCall type args and the MakeMoveVec element type.
@@ -46,3 +46,24 @@ task 6, lines 34-39:
 //> TransferObjects([Result(0)], Input(0))
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Exact/AtLeast conflicting resolutions for package: linkage requires exactly this package DepV1 (version 1) and also at least the following version of the package DepV2 at version 2. However DepV1 is at version 1 which is less than 2."), command: Some(1) } }
+
+task 7, lines 41-44:
+// Type-only references remain at-least after minversion selection.
+//# programmable --sender A --inputs object(1,1) object(0x426)
+//> 0: sui::package::enable_minversion(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(7,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 8, line 46:
+//# advance-epoch
+Epoch advanced: 1
+
+task 9, lines 48-50:
+// `A` has a v1 defining ID, but its type-only linkage is raised to the stable v2 package.
+//# programmable --sender A
+//> Gen::m::id<DepV1::M1::A>();
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

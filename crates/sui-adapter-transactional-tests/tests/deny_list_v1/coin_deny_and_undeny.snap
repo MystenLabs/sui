@@ -152,7 +152,7 @@ task 8, lines 49-50:
 //# run sui::pay::split_and_transfer --args object(1,5) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 created: object(8,0)
 mutated: object(0,0), object(1,5)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
 task 9, lines 52-53:
@@ -160,6 +160,7 @@ task 9, lines 52-53:
 //# run sui::coin::deny_list_add --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 created: object(9,0), object(9,1)
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 11415200,  storage_rebate: 2723688, non_refundable_storage_fee: 27512
 
 task 10, lines 55-56:
@@ -177,11 +178,12 @@ task 12, lines 61-62:
 //# run sui::coin::deny_list_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(9,1)
 deleted: object(9,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 9522800,  storage_rebate: 11301048, non_refundable_storage_fee: 114152
 
 task 13, lines 64-65:
 // This time the transfer should work.
 //# transfer-object 8,0 --sender B --recipient A
 mutated: object(0,1), object(8,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 1459656, non_refundable_storage_fee: 14744

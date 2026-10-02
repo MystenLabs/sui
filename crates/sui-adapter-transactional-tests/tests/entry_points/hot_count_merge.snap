@@ -62,6 +62,7 @@ task 3, lines 80-101:
 //> test::m::play<test::m::D>(Result(3));
 //> test::m::close(Result(0), Result(1), Result(2), Result(3));
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 103-121:
@@ -111,6 +112,7 @@ task 5, lines 123-144:
 //> test::m::play<test::m::D>(Result(3));
 //> test::m::close(Result(0), Result(1), Result(2), Result(3));
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 6, lines 146-164:
@@ -160,4 +162,5 @@ task 7, lines 166-187:
 //> test::m::play<test::m::D>(Result(3));
 //> test::m::close(Result(0), Result(1), Result(2), Result(3));
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

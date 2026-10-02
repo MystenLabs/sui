@@ -31,7 +31,7 @@ task 3, lines 30-34:
 //> 0: sui::coin::mint<test::foo::FOO>(Input(0), Input(1));
 //> 1: sui::coin::send_funds<test::foo::FOO>(Result(0), Input(2));
 mutated: object(0,0), object(1,1)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::foo::FOO>, Merge, 500)
 gas summary: computation_cost: 1000000, storage_cost: 2675200,  storage_rebate: 2648448, non_refundable_storage_fee: 26752
 

@@ -20,12 +20,14 @@ task 2, line 112:
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 114:
 //# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(2,0)]
 mutated: object(0,0)
 deleted: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
 
 // create a parent/child object pair, pass child by-value and parent as a single element of a vector
@@ -35,12 +37,14 @@ task 4, line 120:
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 created: object(4,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, line 122:
 //# run Test::M::mint_child_any --sender A --type-args Test::M::Any --args 42 object(4,0)
 created: object(5,0), object(5,1)
 mutated: object(0,0), object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6665200,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
 
 task 6, line 124:
@@ -54,6 +58,7 @@ task 7, line 130:
 //# run Test::M::mint_another_any --type-args Test::M::Any --sender A --args 42
 created: object(7,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2652400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8, line 132:
@@ -67,12 +72,14 @@ task 9, line 137:
 //# run Test::M::mint_another_any --sender A --type-args Test::M::Any --args 42
 created: object(9,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2652400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 10, line 139:
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 created: object(10,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 11, line 141:
@@ -86,12 +93,14 @@ task 12, line 146:
 //# run Test::M::mint_shared_any --sender A --type-args Test::M::Any --args 42
 created: object(12,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 13, line 148:
 //# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(12,0)]
 mutated: object(0,0)
 deleted: object(12,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
 
 // create an object and pass it both by-value and as element of a vector
@@ -100,6 +109,7 @@ task 14, line 153:
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 created: object(14,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 15, line 155:
@@ -113,6 +123,7 @@ task 16, line 160:
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
 created: object(16,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 17, line 162:

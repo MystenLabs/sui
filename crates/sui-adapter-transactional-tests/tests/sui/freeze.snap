@@ -18,11 +18,13 @@ task 2, line 69:
 //# run test::object_basics::create --args 10 @A --sender A
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2386400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 71:
 //# run test::object_basics::freeze_object --args object(2,0) --sender A
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2386400,  storage_rebate: 2362536, non_refundable_storage_fee: 23864
 
 task 4, line 73:

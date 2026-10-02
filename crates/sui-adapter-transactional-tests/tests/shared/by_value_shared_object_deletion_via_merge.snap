@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 937
 ---
 processed 21 tasks
 
@@ -24,12 +23,14 @@ task 2, line 62:
 //# run t2::o2::mint_shared_coin
 created: object(2,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, line 64:
 //# run t2::o2::mint_owned_coin
 created: object(3,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, line 66:
@@ -70,6 +71,7 @@ task 6, lines 70-74:
 //> 1: t2::o2::transferer(Input(1));
 mutated: object(0,0), object(3,0)
 deleted: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
 
 // **Merge owned into shared**
@@ -78,18 +80,21 @@ task 7, line 78:
 //# run t2::o2::mint_owned_coin
 created: object(7,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8, line 80:
 //# run t2::o2::mint_shared_coin
 created: object(8,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 9, line 82:
 //# run t2::o2::mint_shared_obj
 created: object(9,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 10, line 84:
@@ -141,6 +146,7 @@ task 13, lines 90-93:
 //> 1: t2::o2::deleter(Input(1));
 mutated: object(0,0), object(9,0)
 deleted: object(7,0), object(8,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 4160772, non_refundable_storage_fee: 42028
 
 // **Merge shared into shared**
@@ -149,18 +155,21 @@ task 14, line 97:
 //# run t2::o2::mint_shared_coin
 created: object(14,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 15, line 99:
 //# run t2::o2::mint_shared_coin
 created: object(15,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 16, line 101:
 //# run t2::o2::mint_shared_obj
 created: object(16,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 17, line 103:
@@ -212,4 +221,5 @@ task 20, lines 109-112:
 //> 1: t2::o2::deleter(Input(1));
 mutated: object(0,0), object(16,0)
 deleted: object(14,0), object(15,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 4160772, non_refundable_storage_fee: 42028

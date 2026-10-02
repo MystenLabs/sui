@@ -21,6 +21,7 @@ task 2, lines 50-52:
 //> sui::transfer::public_transfer<test::m::A>(Result(0), Input(0));
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 4, lines 56-58:
@@ -29,6 +30,7 @@ task 4, lines 56-58:
 //> sui::transfer::public_transfer<test::m::A>(Result(0), Input(0));
 created: object(4,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 60-68:
@@ -42,6 +44,7 @@ task 5, lines 60-68:
 //> test::m::cool(Result(1));
 //> test::m::cool(Result(2));
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 6, lines 70-74:
@@ -51,4 +54,5 @@ task 6, lines 70-74:
 //> test::m::play_receiving(Input(0));
 //> test::m::cool(Result(0));
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

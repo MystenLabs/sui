@@ -17,6 +17,7 @@ task 2, lines 17-19:
 // success, gas price(800) higher than reference gas price(700) + 100
 //> test::gas_test::gas_checks(Input(0), Input(1))
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 800000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, lines 21-23:
@@ -24,6 +25,7 @@ task 3, lines 21-23:
 // success, gas price(2000) higher than reference gas price(700) + 100
 //> test::gas_test::gas_checks(Input(0), Input(1))
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 2000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 25-27:

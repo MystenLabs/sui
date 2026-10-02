@@ -19,6 +19,7 @@ task 2, line 52:
 //# run test::m1::create --sender A
 created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 11400000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 54:
@@ -50,29 +51,35 @@ Contents: test::m1::Object {
 task 5, line 60:
 //# run test::m1::borrow_mut --sender A --args object(2,1)
 mutated: object(0,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 2219580, non_refundable_storage_fee: 22420
 
 task 6, line 62:
 //# run test::m1::borrow_mut --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 2219580, non_refundable_storage_fee: 22420
 
 task 7, line 64:
 //# run test::m1::add_remove --sender A --args object(2,1)
 mutated: object(0,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 2219580, non_refundable_storage_fee: 22420
 
 task 8, line 66:
 //# run test::m1::add_remove --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 2219580, non_refundable_storage_fee: 22420
 
 task 9, line 68:
 //# run test::m1::write_back --sender A --args object(2,1)
 mutated: object(0,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 2219580, non_refundable_storage_fee: 22420
 
 task 10, line 70:
 //# run test::m1::write_back --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 2219580, non_refundable_storage_fee: 22420

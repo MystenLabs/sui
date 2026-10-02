@@ -16,6 +16,7 @@ task 2, line 41:
 //# run ex::m::mint
 created: object(2,0), object(2,1)
 mutated: object(0,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 43-44:
@@ -23,6 +24,7 @@ task 3, lines 43-44:
 //# run ex::m::create_party
 created: object(3,0)
 mutated: object(0,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 46-47:
@@ -57,6 +59,7 @@ task 6, lines 52-55:
 //> 0: sui::party::single_owner(Input(1));
 //> ex::m::priv_party(Input(0), Result(0))
 mutated: object(0,2), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
 
 task 7, line 57:
@@ -77,6 +80,7 @@ task 8, lines 59-62:
 //> 0: sui::party::single_owner(Input(1));
 //> ex::m::pub_party(Input(0), Result(0))
 mutated: object(0,2), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
 
 task 9, line 64:
@@ -104,6 +108,7 @@ task 11, lines 71-74:
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::Pub>(Input(0), Result(0))
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 1211364, non_refundable_storage_fee: 12236
 
 task 12, line 76:
@@ -124,6 +129,7 @@ task 13, lines 78-81:
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::Pub>(Input(0), Result(0))
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
 
 task 14, line 83:
@@ -147,6 +153,7 @@ task 16, lines 88-89:
 // Transfers party object back to fastpath using transfer-object
 //# transfer-object 2,0 --sender B --recipient B
 mutated: object(0,1), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 1211364, non_refundable_storage_fee: 12236
 
 task 17, line 91:
@@ -172,6 +179,7 @@ task 19, lines 97-99:
 //# programmable --inputs object(2,1) @B --sender A
 //> ex::m::priv_fastpath(Input(0), Input(1));
 mutated: object(0,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
 
 task 20, line 101:

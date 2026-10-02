@@ -24,7 +24,7 @@ task 2, lines 45-48:
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 mutated: object(0,0), object(1,5)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(2,0), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 1)
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
@@ -34,6 +34,7 @@ task 3, lines 50-51:
 events: Event { package_id: sui, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 96, 50, 100, 55, 53, 101, 55, 100, 49, 98, 49, 52, 57, 55, 53, 99, 97, 57, 97, 53, 55, 52, 52, 52, 100, 57, 99, 52, 52, 97, 57, 100, 51, 97, 51, 55, 50, 99, 48, 101, 48, 56, 50, 57, 50, 100, 98, 48, 52, 50, 56, 100, 53, 97, 57, 99, 56, 53, 101, 100, 99, 99, 49, 49, 52, 58, 58, 114, 101, 103, 117, 108, 97, 116, 101, 100, 95, 99, 111, 105, 110, 58, 58, 82, 69, 71, 85, 76, 65, 84, 69, 68, 95, 67, 79, 73, 78, 241, 39, 142, 254, 87, 3, 187, 3, 29, 228, 85, 213, 100, 153, 121, 76, 210, 68, 152, 222, 104, 254, 204, 208, 60, 211, 90, 246, 76, 130, 108, 225] }
 created: object(3,0), object(3,1), object(3,2)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 12190400,  storage_rebate: 2746260, non_refundable_storage_fee: 27740
 
 task 4, lines 53-56:
@@ -42,7 +43,7 @@ task 4, lines 53-56:
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 mutated: object(0,0), object(1,5)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(2,0), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 1)
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 
@@ -73,6 +74,7 @@ task 9, lines 72-73:
 // Undeny account B.
 //# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3), object(3,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 6794172, non_refundable_storage_fee: 68628
 
 task 10, lines 75-78:
@@ -93,6 +95,6 @@ task 12, lines 82-85:
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 mutated: object(0,0), object(1,5)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000426
 accumulators_written: (object(2,0), B, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 1)
 gas summary: computation_cost: 1000000, storage_cost: 2462400,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
