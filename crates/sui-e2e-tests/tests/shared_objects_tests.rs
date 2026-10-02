@@ -200,16 +200,6 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
 /// get the same effects regardless of the order. (checkpoint fork detection will also test this).
 #[sim_test]
 async fn shared_object_deletion_multi_certs() {
-    // cause random delay just before tx is executed
-    register_fail_point_async("transaction_execution_delay", move || async move {
-        let delay = {
-            let dist = rand::distributions::Uniform::new(0, 1000);
-            let mut rng = rand::thread_rng();
-            dist.sample(&mut rng)
-        };
-        sleep(Duration::from_millis(delay)).await;
-    });
-
     let mut test_cluster = TestClusterBuilder::new().build().await;
 
     let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
@@ -227,6 +217,16 @@ async fn shared_object_deletion_multi_certs() {
     let gas1 = accounts_and_gas[0].1[0];
     let gas2 = accounts_and_gas[0].1[1];
     let gas3 = accounts_and_gas[0].1[2];
+
+    // Cause random delays only for the transactions under test, after setup is complete.
+    register_fail_point_async("transaction_execution_delay", move || async move {
+        let delay = {
+            let dist = rand::distributions::Uniform::new(0, 1000);
+            let mut rng = rand::thread_rng();
+            dist.sample(&mut rng)
+        };
+        sleep(Duration::from_millis(delay)).await;
+    });
 
     // Make a transaction to delete the counter.
     let delete_tx = test_cluster
