@@ -18,7 +18,7 @@ task 2, line 31:
 //# run t2::o2::create
 created: object(2,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, line 33:
 //# view-object 2,0
@@ -38,4 +38,4 @@ task 4, lines 35-37:
 //> t2::o2::consume(Result(0))
 mutated: object(0,0)
 deleted: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 1226412, non_refundable_storage_fee: 12388
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 1238676, non_refundable_storage_fee: 124

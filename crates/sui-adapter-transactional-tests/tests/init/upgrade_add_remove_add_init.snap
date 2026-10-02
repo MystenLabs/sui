@@ -20,7 +20,7 @@ task 2, lines 14-15:
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 4810800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 4810800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 3, lines 17-21:
 //# upgrade --package v1 --upgrade-capability 1,1 --sender A
