@@ -734,6 +734,8 @@ mod test {
     async fn test_simulated_load_dkg_failure() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
             config.set_random_beacon_dkg_timeout_round_for_testing(0);
+            // Late completion is not enabled on every chain yet.
+            config.set_allow_dkg_completion_after_timeout_for_testing(true);
             config
         });
 
