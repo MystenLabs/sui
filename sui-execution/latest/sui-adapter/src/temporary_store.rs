@@ -4,7 +4,7 @@
 use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::GasCharger;
 use move_vm_runtime::runtime::MoveRuntime;
-use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::cell::RefCell;
@@ -31,7 +31,7 @@ use sui_types::execution::{
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
-use sui_types::storage::{BackingStore, DenyListResult, ExecutionObjectResolver, PackageObject};
+use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsResolver, PackageObject};
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
@@ -257,35 +257,6 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_system_objects: RefCell::new(BTreeMap::new()),
             unsettled_object_funds,
         }
-    }
-
-    /// Checks that the system object `object_id` is available at the version this transaction
-    /// requires, and records the read so it can be emitted into effects
-    /// and reproduced on replay.
-    /// This is expected to return Some in normal cases. If it ever returns None, it should be
-    /// treated as an invariant violation.
-    pub fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> Option<Object> {
-        let version = match self.system_object_versions.get(object_id) {
-            Some(version) => version,
-            None => {
-                debug_fatal!(
-                    "system_object_versions must contain entry for object_id: {:?}",
-                    object_id
-                );
-                return None;
-            }
-        };
-        let object = self
-            .store
-            // If this transaction needs to read an implicit system object,
-            // the version must be assigned before execution.
-            .load_implicitly_read_system_object(object_id, version)?;
-        // Record the read version so it can be emitted into effects as a read-only consensus object and
-        // reproduced on replay.
-        self.loaded_system_objects
-            .borrow_mut()
-            .insert(*object_id, (object.version(), object.digest()));
-        Some(object)
     }
 
     pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {
@@ -1200,22 +1171,33 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
     }
 }
 
-impl ExecutionObjectResolver for TemporaryStore<'_> {
-    fn load_runtime_system_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
-        if self.system_object_versions.get(object_id).is_none() {
+impl ObjectFundsResolver for TemporaryStore<'_> {
+    /// Loads the system object at the version consensus assigned to this transaction and records
+    /// the read so it can be emitted into effects and reproduced on replay.
+    fn load_implicitly_read_system_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> SuiResult<Option<Object>> {
+        let Some(version) = self.system_object_versions.get(object_id) else {
             return Ok(None);
-        }
-        TemporaryStore::load_implicitly_read_system_object(self, object_id)
-            .map(Some)
-            .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
+        };
+        let object = self
+            .store
+            .load_implicitly_read_system_object(object_id, version)
+            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?;
+        self.loaded_system_objects
+            .borrow_mut()
+            .insert(*object_id, (object.version(), object.digest()));
+        Ok(Some(object))
     }
 
     /// Loads the object balance at the required version and subtracts withdrawals from the same
     /// checkpoint that have not settled yet.
     /// This function is expected never to fail; an error indicates an invariant violation.
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128> {
+        // Funds withdrawals are only admitted with an assigned accumulator root version.
         let required_version = self
-            .load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)?
             .ok_or(SuiErrorKind::ExecutionInvariantViolation)?
             .version();
 
@@ -1502,7 +1484,7 @@ mod system_object_resolver_tests {
     use sui_types::in_memory_storage::InMemoryStorage;
 
     #[test]
-    fn runtime_system_object_requires_an_assigned_version() {
+    fn implicitly_read_system_object_requires_an_assigned_version() {
         let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
         let initial_shared_version = SequenceNumber::from_u64(1);
         let version = SequenceNumber::from_u64(10);
@@ -1533,7 +1515,7 @@ mod system_object_resolver_tests {
                 PostExecutionCheckInputs::default(),
                 &EmptyUnsettledObjectFunds,
             )
-            .load_runtime_system_object(&id)
+            .load_implicitly_read_system_object(&id)
         };
 
         assert!(load(None).unwrap().is_none());

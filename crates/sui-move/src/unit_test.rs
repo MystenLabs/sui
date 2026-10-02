@@ -228,6 +228,7 @@ impl VMTestSetup for SuiVMTestSetup {
         let protocol_config = builder.protocol_config;
         ext.add(ObjectRuntime::new(
             &builder.store,
+            &builder.store,
             BTreeMap::new(),
             false,
             protocol_config,

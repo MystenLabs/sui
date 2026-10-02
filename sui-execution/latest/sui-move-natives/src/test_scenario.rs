@@ -51,7 +51,7 @@ use sui_types::{
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
-    storage::{BackingPackageStore, ExecutionObjectResolver, PackageObject, RuntimeObjectResolver},
+    storage::{BackingPackageStore, ObjectFundsResolver, PackageObject, RuntimeObjectResolver},
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -165,7 +165,7 @@ impl BackingPackageStore for InMemoryTestStore {
     }
 }
 
-impl ExecutionObjectResolver for InMemoryTestStore {
+impl ObjectFundsResolver for InMemoryTestStore {
     fn object_available_balance(
         &self,
         owner: SuiAddress,
@@ -175,7 +175,7 @@ impl ExecutionObjectResolver for InMemoryTestStore {
     }
 
     // Move unit tests have no sequencer; native reads use the scenario's current committed state.
-    fn load_runtime_system_object(
+    fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
     ) -> sui_types::error::SuiResult<Option<Object>> {

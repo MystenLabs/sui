@@ -250,12 +250,14 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
     }
 }
 
-/// Resolves object reads against the transaction's sequenced state and pending withdrawals.
-pub trait ExecutionObjectResolver: RuntimeObjectResolver {
+/// Resolves the transaction-scoped funds state during execution: available object balances and
+/// the system objects whose versions consensus assigned to this transaction.
+pub trait ObjectFundsResolver {
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
-    /// Execution stores return `None` only when the transaction has no assigned version.
-    /// An assigned version that cannot be loaded is an execution invariant violation.
-    fn load_runtime_system_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>>;
+    /// `Ok(None)` only when the transaction has no assigned version for `object_id`. An assigned
+    /// version that cannot be loaded is an execution invariant violation.
+    fn load_implicitly_read_system_object(&self, object_id: &ObjectID)
+    -> SuiResult<Option<Object>>;
 }
 
 pub struct DenyListResult {

@@ -10,9 +10,9 @@ use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI, UnchangedConsensusKind},
     execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus},
     forwarding_address::{
-        FORWARDING_ADDRESS_MODULE_NAME, FORWARDING_ADDRESS_VARIANT_OPAQUE,
+        FORWARDING_ADDRESS_MODULE_NAME, FORWARDING_ADDRESS_PAYLOAD_LENGTH,
         FORWARDING_DEPOSIT_STRUCT_NAME, ForwardingAddress, ForwardingDeposit,
-        MASTER_REGISTERED_STRUCT_NAME, MasterRegistered,
+        MASTER_REGISTERED_STRUCT_NAME, MasterRecord, MasterRecordKey, MasterRegistered,
     },
     gas_coin::GAS,
     object::Owner,
@@ -27,7 +27,15 @@ use test_cluster::{
 
 const E_UNREGISTERED: u64 = 1;
 const E_VARIANT_UNSUPPORTED: u64 = 2;
-const E_NOT_CANONICAL: u64 = 3;
+
+/// Starts with the high bit set so the tests cover a payload no integer encoding would produce.
+const PAYLOAD: [u8; FORWARDING_ADDRESS_PAYLOAD_LENGTH] = [
+    0x80, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0xff,
+];
+/// lowbias32(1): the id the registry assigns to its first registration (the Move unit test
+/// `master_id_mixing_is_invertible_and_keeps_zero_reserved` pins the same constant).
+const FIRST_MASTER_ID: u32 = 0x688990c0;
 
 /// The registry must be created by the end-of-epoch transaction when a chain jumps directly from a
 /// protocol version without the object to one that enables forwarding. Genesis at protocol version
@@ -83,7 +91,7 @@ async fn test_create_forwarding_address_registry_object_at_upgrade() {
         .await
         .unwrap()
         .unwrap();
-    let forwarding_address = ForwardingAddress::derive_opaque(7, 42);
+    let forwarding_address = ForwardingAddress::derive_opaque(7, PAYLOAD);
     let transaction =
         TestTransactionBuilder::new(sender, gas, test_cluster.get_reference_gas_price().await)
             .transfer_sui_to_address_balance(
@@ -185,11 +193,24 @@ async fn register_master(env: &mut TestEnv, master: SuiAddress) -> Registration 
     assert_eq!(registered.master, master);
     assert_ne!(registered.master_id, 0, "master ID 0 is reserved");
 
-    let cap = env.cluster.fullnode_handle.sui_node.with(|node| {
-        node.state()
+    let (cap, record) = env.cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let cap = state
             .get_object_cache_reader()
             .get_object(&registered.cap_id)
-            .expect("MasterCap must exist")
+            .expect("MasterCap must exist");
+        let registry_version = state
+            .get_object_cache_reader()
+            .get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+            .expect("registry must exist")
+            .version();
+        let record = MasterRecordKey(registered.master_id)
+            .load(
+                state.get_runtime_object_resolver().as_ref(),
+                registry_version,
+            )
+            .unwrap();
+        (cap, record)
     });
     assert_eq!(cap.owner, Owner::AddressOwner(master));
     assert!(
@@ -197,6 +218,7 @@ async fn register_master(env: &mut TestEnv, master: SuiAddress) -> Registration 
             .is_some_and(|t| t.name().as_str() == "MasterCap"),
         "{cap:?}"
     );
+    assert_eq!(record, Some(MasterRecord { master }));
 
     Registration {
         digest,
@@ -263,11 +285,18 @@ fn assert_forwarding_deposit_event(
     forwarding_address: SuiAddress,
     master: SuiAddress,
     amount: u64,
-    tag: u128,
 ) {
     let events = get_events(env, digest);
     assert_eq!(events.len(), 1, "{events:?}");
-    let event = &events[0];
+    assert_forwarding_deposit(&events[0], forwarding_address, master, amount);
+}
+
+fn assert_forwarding_deposit(
+    event: &sui_types::event::Event,
+    forwarding_address: SuiAddress,
+    master: SuiAddress,
+    amount: u64,
+) {
     assert_eq!(
         event.type_.module.as_ident_str(),
         FORWARDING_ADDRESS_MODULE_NAME
@@ -276,15 +305,19 @@ fn assert_forwarding_deposit_event(
         event.type_.name.as_ident_str(),
         FORWARDING_DEPOSIT_STRUCT_NAME
     );
+    let deposit = bcs::from_bytes::<ForwardingDeposit>(&event.contents).unwrap();
     assert_eq!(
-        bcs::from_bytes::<ForwardingDeposit>(&event.contents).unwrap(),
+        deposit,
         ForwardingDeposit {
             forwarding_address,
             master,
             amount,
-            variant: FORWARDING_ADDRESS_VARIANT_OPAQUE,
-            tag,
         }
+    );
+    assert_eq!(
+        ForwardingAddress::parse(deposit.forwarding_address).map(|parsed| parsed.payload),
+        Some(PAYLOAD),
+        "the event carries the whole address, so the payload survives untouched"
     );
 }
 
@@ -307,23 +340,16 @@ fn assert_forwarding_abort(status: &ExecutionStatus, code: u64, context: &str) {
     }
 }
 
-fn with_reserved_byte(address: SuiAddress, reserved: u8) -> SuiAddress {
-    let mut bytes = address.to_inner();
-    bytes[15] = reserved;
-    SuiAddress::from_bytes(bytes).unwrap()
-}
-
 #[sim_test]
 async fn test_forwarding_address_deposit() {
     let mut env = forwarding_address_test_env(true).build().await;
     let master = env.get_sender(0);
     let depositor = env.get_sender(1);
-    let tag = 42;
     let amount = 1_000_000;
     let initial_master_balance = env.get_sui_balance_ab(master);
 
     let registration = register_master(&mut env, master).await;
-    let forwarding_address = ForwardingAddress::derive_opaque(registration.master_id, tag);
+    let forwarding_address = ForwardingAddress::derive_opaque(registration.master_id, PAYLOAD);
 
     // A deposit from the master itself, simulated first so the registry read is visible to
     // dry-run, then executed.
@@ -348,7 +374,7 @@ async fn test_forwarding_address_deposit() {
         initial_master_balance + amount
     );
     assert_eq!(env.get_sui_balance_ab(forwarding_address), 0);
-    assert_forwarding_deposit_event(&env, &digest, forwarding_address, master, amount, tag);
+    assert_forwarding_deposit_event(&env, &digest, forwarding_address, master, amount);
 
     // Deposits from another sender keep resolving after later registrations advance the registry.
     for _ in 0..3 {
@@ -364,20 +390,14 @@ async fn test_forwarding_address_deposit() {
         initial_master_balance + amount * 2
     );
     assert_eq!(env.get_sui_balance_ab(forwarding_address), 0);
-    assert_forwarding_deposit_event(
-        &env,
-        &stored_deposit,
-        forwarding_address,
-        master,
-        amount,
-        tag,
-    );
+    assert_forwarding_deposit_event(&env, &stored_deposit, forwarding_address, master, amount);
 
-    // Sending the gas coin itself to any forwarding-shaped address is rejected, canonical or not.
+    // Sending the gas coin itself to any forwarding-shaped address is rejected, whether or not
+    // the variant is supported.
     let master_balance_before_gas_coin_send = env.get_sui_balance_ab(master);
     for recipient in [
         forwarding_address,
-        with_reserved_byte(forwarding_address, 1),
+        ForwardingAddress::derive(registration.master_id, 1, PAYLOAD),
     ] {
         let mut builder = ProgrammableTransactionBuilder::new();
         let recipient_arg = builder.pure(recipient).unwrap();
@@ -420,7 +440,6 @@ async fn test_registrations_get_distinct_ids_and_route_separately() {
     let first_master = env.get_sender(0);
     let second_master = env.get_sender(1);
     let depositor = env.get_sender(2);
-    let tag = 42;
     let amount = 1_000_000;
 
     let first = register_master(&mut env, first_master).await;
@@ -429,9 +448,9 @@ async fn test_registrations_get_distinct_ids_and_route_separately() {
     assert_ne!(first.cap_id, second.cap_id);
     assert_ne!(first.digest, second.digest);
 
-    // Both masters derive addresses with the same tag; deposits still route by master ID.
-    let first_address = ForwardingAddress::derive_opaque(first.master_id, tag);
-    let second_address = ForwardingAddress::derive_opaque(second.master_id, tag);
+    // Both masters derive addresses with the same payload; deposits still route by master ID.
+    let first_address = ForwardingAddress::derive_opaque(first.master_id, PAYLOAD);
+    let second_address = ForwardingAddress::derive_opaque(second.master_id, PAYLOAD);
     assert_ne!(first_address, second_address);
 
     let (digest, effects) =
@@ -441,7 +460,7 @@ async fn test_registrations_get_distinct_ids_and_route_separately() {
     assert_eq!(env.get_sui_balance_ab(second_master), amount);
     assert_eq!(env.get_sui_balance_ab(first_master), 0);
     assert_eq!(env.get_sui_balance_ab(second_address), 0);
-    assert_forwarding_deposit_event(&env, &digest, second_address, second_master, amount, tag);
+    assert_forwarding_deposit_event(&env, &digest, second_address, second_master, amount);
 
     let fullnode = env.cluster.spawn_new_fullnode().await.sui_node;
     let replayed_effects = fullnode
@@ -466,23 +485,17 @@ async fn test_malformed_forwarding_addresses_abort_instead_of_stranding() {
     let amount = 1_000_000;
 
     let registration = register_master(&mut env, master).await;
-    let registered = ForwardingAddress::derive_opaque(registration.master_id, 42);
 
     let cases = [
         (
-            ForwardingAddress::derive_opaque(0, 42),
+            ForwardingAddress::derive_opaque(0, PAYLOAD),
             E_UNREGISTERED,
             "reserved master ID 0",
         ),
         (
-            ForwardingAddress::derive(registration.master_id, 1, 42),
+            ForwardingAddress::derive(registration.master_id, 1, PAYLOAD),
             E_VARIANT_UNSUPPORTED,
             "variant 1 above the protocol maximum",
-        ),
-        (
-            with_reserved_byte(registered, 0x80),
-            E_NOT_CANONICAL,
-            "non-zero reserved byte",
         ),
     ];
     for (recipient, code, context) in cases {
@@ -501,11 +514,75 @@ async fn test_malformed_forwarding_addresses_abort_instead_of_stranding() {
     }
 }
 
+/// Registering and depositing in one transaction: the deposit must see the record `register`
+/// wrote earlier in the same transaction, and the registry is both a mutated input and the
+/// object the native read.
+#[sim_test]
+async fn test_register_and_deposit_in_the_same_transaction() {
+    let mut env = forwarding_address_test_env(true).build().await;
+    let master = env.get_sender(0);
+    let amount = 1_000_000;
+    let initial_master_balance = env.get_sui_balance_ab(master);
+    let forwarding_address = ForwardingAddress::derive_opaque(FIRST_MASTER_ID, PAYLOAD);
+
+    let initial_shared_version = forwarding_address_registry_initial_shared_version(&env);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let registry = builder
+        .obj(ObjectArg::SharedObject {
+            id: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+            initial_shared_version,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+    let cap = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("forwarding_address").unwrap(),
+        Identifier::new("register").unwrap(),
+        vec![],
+        vec![registry],
+    );
+    builder.transfer_arg(master, cap);
+    add_gas_coin_balance_deposit(&mut builder, forwarding_address, amount);
+    let transaction = TransactionData::new_programmable(
+        master,
+        vec![env.get_gas_for_sender(master)[0]],
+        builder.finish(),
+        10_000_000,
+        env.rgp,
+    );
+    let (digest, effects) = env.exec_tx_directly(transaction).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+
+    assert_eq!(
+        env.get_sui_balance_ab(master),
+        initial_master_balance + amount
+    );
+    assert_eq!(env.get_sui_balance_ab(forwarding_address), 0);
+    assert!(
+        effects
+            .mutated()
+            .iter()
+            .any(|(object_ref, _)| object_ref.0 == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID),
+        "{effects:?}"
+    );
+    assert!(
+        forwarding_address_registry_read_only_version(&effects).is_none(),
+        "a mutated registry is not also recorded as read-only: {effects:?}"
+    );
+
+    let events = get_events(&env, &digest);
+    assert_eq!(events.len(), 2, "{events:?}");
+    let registered: MasterRegistered = bcs::from_bytes(&events[0].contents).unwrap();
+    assert_eq!(registered.master_id, FIRST_MASTER_ID);
+    assert_forwarding_deposit(&events[1], forwarding_address, master, amount);
+}
+
 #[sim_test]
 async fn test_forwarding_address_registry_without_feature_routes_to_address_balance() {
     let mut env = forwarding_address_test_env(false).build().await;
     let sender = env.get_sender(0);
-    let forwarding_address = ForwardingAddress::derive_opaque(7, 42);
+    let forwarding_address = ForwardingAddress::derive_opaque(7, PAYLOAD);
     let amount = 1_000_000;
 
     forwarding_address_registry_initial_shared_version(&env);
@@ -597,8 +674,8 @@ async fn test_simulate_forwarding_address_deposits_return_read_only_registry() {
     let amount = 1_000_000;
 
     let registration = register_master(&mut env, master).await;
-    let registered_address = ForwardingAddress::derive_opaque(registration.master_id, 42);
-    let unregistered_address = ForwardingAddress::derive_opaque(0, 42);
+    let registered_address = ForwardingAddress::derive_opaque(registration.master_id, PAYLOAD);
+    let unregistered_address = ForwardingAddress::derive_opaque(0, PAYLOAD);
 
     let registered_transaction =
         forwarding_address_deposit_transaction(&env, depositor, registered_address, amount);

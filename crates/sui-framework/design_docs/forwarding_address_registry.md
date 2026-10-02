@@ -1,6 +1,6 @@
 # Forwarding Address Registry: ownership, rotation, brakes
 
-Status: proposal for the Move team, 2026-09-30, updated 2026-10-01 with the address format and
+Status: proposal for the Move team, 2026-09-30, updated 2026-10-02 with the address format and
 ID allocation now implemented in #27990 (step 1 below). #27989 is merged.
 
 ## Where we are
@@ -14,16 +14,22 @@ IDs and hands the registrant a `MasterCap`, so there is no id to front-run.
 Address layout (`crates/sui-types/src/forwarding_address.rs`, all integers little-endian):
 
 ```
-[u32 master_id][0xfa x 10][u8 variant][u8 reserved][u128 tag]
- 0..4           4..14      14          15           16..32
+[u32 master_id][0xfa x 10][u8 variant][17 payload bytes]
+ 0..4           4..14      14          15..32
 ```
 
-- The master id and magic positions are fixed for every variant; the variant only decides what the
-  tag bytes mean. Variant 0 is an opaque `u128` tag and requires the reserved byte to be zero.
-- Absent magic means an ordinary address. Present magic with a non-zero reserved byte, or a variant
-  above `forwarding_address_max_variant` in protocol config (0 in version 139), aborts the deposit
-  (codes 3 and 2); it is never treated as an ordinary recipient, and the gas-coin `send_funds` guard
-  in the interpreter rejects anything with the magic for the same reason.
+- The master id, magic and variant positions are fixed; the variant alone decides what the payload
+  bytes mean. Variant 0 gives them no on-chain meaning: the native never reads them, so there is no
+  canonical encoding to enforce, and the only thing an invoice tag has to be is distinct.
+- Absent magic means an ordinary address. Present magic with a variant above
+  `forwarding_address_max_variant` in protocol config (0 in version 139) aborts the deposit (code 2),
+  so nobody can fund an address whose meaning a later variant would define differently; it is never
+  treated as an ordinary recipient, and the gas-coin `send_funds` guard in the interpreter rejects
+  anything with the magic for the same reason.
+- The deposit event is `ForwardingDeposit<T> { forwarding_address, master, amount }`. The address
+  is the lossless record of the variant and payload; `sui-types` publishes the layout and the typed
+  registry schema (`MasterRecordKey`), so indexers slice bytes instead of depending on a parsed
+  field whose meaning variant 0 does not define.
 - Trade-off against the earlier `[u64 id][0xfd x 8][u128 tag]`: an ordinary address collides with
   the magic with probability 2^-80 instead of 2^-64, and grinding a key for some forwarding-shaped
   address costs 2^80 instead of 2^64, but grinding one for a specific master's id costs 2^112
@@ -78,8 +84,8 @@ public fun cancel_rotation_by_master(registry: &mut ForwardingAddressRegistry, m
 public fun finalize_rotation(registry: &mut ForwardingAddressRegistry, cap: &MasterCap, ctx: &TxContext);
 
 // Native. Reads `master` and `paused`, ignores `pending`. Aborts when paused, unregistered,
-// non-canonical, or of an unsupported variant.
-native fun resolve_impl(recipient: address): (address, u8, u128, bool);
+// or of an unsupported variant.
+native fun resolve_impl(recipient: address): (address, bool);
 ```
 
 Why each piece:
@@ -135,9 +141,9 @@ for it.
 
 | Who asks | Question | Source of truth | Have it? |
 | --- | --- | --- | --- |
-| Payment app | Which deposits landed for master M, and from which forwarding address / tag? | `ForwardingDeposit<T> { forwarding_address, master, amount, variant, tag }` event | Yes (#27990) |
-| Payment app | Given a tag, did invoice X get paid, how much, in which tx? | Same event, indexed by `(master, tag)` | Yes, needs an index |
-| Wallet / sender | Is this forwarding address registered, and to whom, right now? | Registry dynamic field `master_id -> MasterRecord` (derive the field id from the registry and the u64 key) | Yes, plain object read; GraphQL `dynamicField` works today |
+| Payment app | Which deposits landed for master M, and from which forwarding address / payload? | `ForwardingDeposit<T> { forwarding_address, master, amount }` event; payload = bytes 15..32 of the address | Yes (#27990) |
+| Payment app | Given a payload, did invoice X get paid, how much, in which tx? | Same event, indexed by `(master, payload)` | Yes, needs an index |
+| Wallet / sender | Is this forwarding address registered, and to whom, right now? | Registry dynamic field `master_id -> MasterRecord` (`MasterRecordKey` in `sui-types` derives the field id and decodes it) | Yes, plain object read; GraphQL `dynamicField` works today |
 | Master | My record: master, paused, pending rotation, and its history | `MasterRecord` object plus lifecycle events | Object yes; `MasterRegistered` yes, the rest no |
 | Master | Where is my `MasterCap`? | Owned object of type `MasterCap` | Yes, standard object index |
 | Anyone | Balances | Master's address balance; a forwarding address always stays at 0 | Yes, existing balance indexing |
@@ -147,10 +153,10 @@ already exists): `RotationProposed { master_id, new_master, effective_epoch }`, 
 `RotationCancelled { master_id }`, `Paused { master_id }`, `Unpaused { master_id }`.
 
 Implementation is one sui-indexer-alt pipeline over these events writing two tables,
-`forwarding_deposits(master, forwarding_address, tag, amount, coin_type, tx_digest, checkpoint)` and
-`forwarding_masters(master_id, master, paused, pending_master, effective_epoch, cap_id)`, plus
+`forwarding_deposits(master, forwarding_address, payload, amount, coin_type, tx_digest, checkpoint)`
+and `forwarding_masters(master_id, master, paused, pending_master, effective_epoch, cap_id)`, plus
 GraphQL fields `forwardingMaster(masterId)` and
-`forwardingDeposits(master | forwardingAddress | tag, cursor)`. The registry read itself shows up in
+`forwardingDeposits(master | forwardingAddress | payload, cursor)`. The registry read itself shows up in
 effects as a read only consensus object, so replay and RPC already return it; nothing new needed
 there.
 
@@ -162,8 +168,8 @@ empty everywhere except devnet (wiped weekly), so changing the record layout bet
 nothing.
 
 1. `MasterCap` + assigned ids + the versioned address format. Done in #27990: `register` returns
-   the cap, the record is `MasterRecord { master }`, ids come from the mixed counter, and the native
-   gates the variant through `forwarding_address_max_variant`.
+   the cap, the record is `MasterRecord { master }`, ids come from the mixed counter, the payload is
+   opaque, and the native gates the variant through `forwarding_address_max_variant`.
 2. Pause + two-step rotation. Record gains `pending` and `paused`, the entry functions above, native
    checks `paused`. Lifecycle events land here.
 3. Registration fee. `register_impl` native with a cost param in 139.
@@ -183,6 +189,5 @@ nothing.
   think abort.
 - Is 2^32 master ids enough for good, or do we want a 6-byte id (2^48, and 2^128 targeted
   grinding again) at the cost of a custom 48-bit mixer?
-- Should the reserved byte stay zero for every variant, or become part of a future variant's tag?
 - Do we want `MasterRecord` and the events readable from other Move packages (a
   `master_of(registry, id)` view), or is off-chain lookup enough for now?
