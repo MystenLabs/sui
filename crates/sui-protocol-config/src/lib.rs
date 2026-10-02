@@ -415,7 +415,7 @@ const MAINNET_USDB: &str =
 //              instead of overwriting (which stranded the displaced transactions).
 // Version 139: Enable forwarding addresses on devnet.
 //              Reduce the non-refundable storage fee from 1% to 0.01%.
-//              Allow random beacon DKG to complete after its timeout.
+//              Allow random beacon DKG to complete after its timeout on devnet and testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4812,7 +4812,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_forwarding_addresses = true;
                     }
                     cfg.storage_rebate_rate = Some(9999);
-                    cfg.feature_flags.allow_dkg_completion_after_timeout = true;
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.allow_dkg_completion_after_timeout = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
