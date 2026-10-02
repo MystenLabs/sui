@@ -86,7 +86,7 @@ impl AssignedVersions {
     /// Sets the accumulator root as a system object read during execution. For test paths
     /// that execute directly: the test version-assignment helper assigns no root version,
     /// but execution reads the root implicitly for any object funds withdraw.
-    pub fn with_accumulator_version(mut self, version: ConsensusObjectVersion) -> Self {
+    pub fn with_accumulator_version_for_testing(mut self, version: ConsensusObjectVersion) -> Self {
         self.system_object_versions = SystemObjectVersions::new(
             Some(version),
             self.system_object_versions
