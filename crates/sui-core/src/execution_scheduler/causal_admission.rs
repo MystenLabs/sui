@@ -238,6 +238,10 @@ impl CausalAdmission {
     /// lane for the rest of the process since the watermark can never pass it. State
     /// is deliberately not reset: indices are process-global, and a straggling slot
     /// retiring into reset bookkeeping would corrupt the watermark.
+    ///
+    /// Must run after `epoch_terminated`: the driver drops a slot only after its
+    /// transaction's effects are visible, so an earlier check can see slots that are
+    /// about to retire.
     pub fn check_quiescent_at_epoch_boundary(&self) {
         let inner = self.inner.lock();
         if !Self::is_quiescent_locked(&inner) {

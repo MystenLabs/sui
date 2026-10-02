@@ -660,18 +660,6 @@ impl ExecutionScheduler {
             .settle_funds(settlement);
     }
 
-    /// Checks that nothing is left in the scheduler just before the change epoch
-    /// transaction is enqueued. Scheduling tasks are not cancelled at epoch end, so a
-    /// transaction still pending here would carry its causal index across the boundary
-    /// and stall the causal-next lane for the rest of the process.
-    ///
-    /// Quiescence is the precise measure: the executing-certificates gauge lags, since
-    /// the driver drops the in-flight slot when execution ends but the executing guard
-    /// only when its task does.
-    pub fn check_empty_before_change_epoch(&self) {
-        self.causal_admission.check_quiescent_at_epoch_boundary();
-    }
-
     /// Reconfigure internal state at epoch start. This resets the funds withdraw scheduler
     /// to the current accumulator root object version.
     pub fn reconfigure(
