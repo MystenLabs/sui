@@ -109,6 +109,18 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
         self.charge(amount)
     }
 
+    pub fn publish_upgrade_precharge<E: ExecutionErrorTrait>(
+        &mut self,
+        num_modules: usize,
+        num_dependencies: usize,
+    ) -> Result<(), E> {
+        self.charge(package_publish_precharge_amount(
+            self.protocol_config,
+            num_modules,
+            num_dependencies,
+        ))
+    }
+
     pub fn charge_package_load<E: ExecutionErrorTrait>(
         &mut self,
         payload: &PackagePayload,
@@ -166,4 +178,21 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
     {
         E::new_with_source(ExecutionErrorKind::InsufficientGas, e)
     }
+}
+
+fn package_publish_precharge_amount(
+    protocol_config: &ProtocolConfig,
+    num_modules: usize,
+    num_dependencies: usize,
+) -> u64 {
+    protocol_config
+        .package_publish_precharge_cost_fixed()
+        .saturating_add(
+            (num_modules as u64)
+                .saturating_mul(protocol_config.package_publish_precharge_cost_per_module()),
+        )
+        .saturating_add(
+            (num_dependencies as u64)
+                .saturating_mul(protocol_config.package_publish_precharge_cost_per_dependency()),
+        )
 }

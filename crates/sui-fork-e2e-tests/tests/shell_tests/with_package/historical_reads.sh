@@ -25,7 +25,7 @@ sender=$(on_localnet active-address)
 
 echo "=== localnet: publish, create, and increment before forking ==="
 add_env_to_toml counter localnet on_localnet
-run_json publish.json on_localnet publish counter --gas-budget 100000000
+run_json publish.json on_localnet publish counter --gas-budget 2000000000
 package=$(published_package_id publish.json)
 run_json create.json on_localnet call --package "$package" --module counter --function create \
   --gas-budget 50000000

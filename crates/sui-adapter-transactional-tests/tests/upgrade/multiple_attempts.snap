@@ -13,7 +13,7 @@ task 1, lines 9-11:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4810800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 4810800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, lines 23-28:
 //# programmable --sender A --inputs 10 @A object(1,1) 0u8 digest(v1_0)
@@ -29,7 +29,7 @@ task 4, lines 30-48:
 //# upgrade --package v0 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 7356800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1041000000, storage_cost: 7356800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 5, lines 50-51:
 //# programmable --sender A

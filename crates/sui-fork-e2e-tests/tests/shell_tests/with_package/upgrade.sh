@@ -14,7 +14,7 @@ fork_env
 add_env_to_toml counter fork on_fork
 gas=$(gas_coin on_fork)
 
-run_json publish.json on_fork publish counter --gas "$gas" --gas-budget 100000000
+run_json publish.json on_fork publish counter --gas "$gas" --gas-budget 2000000000
 assert_eq "$(tx_status_of publish.json)" success "publish executed on the fork"
 package_v1=$(published_package_id publish.json)
 cap=$(created_object_id publish.json "::package::UpgradeCap")
@@ -23,7 +23,7 @@ extract_published counter/Published.toml
 
 echo 'module counter::v2; public fun two(): u64 { 2 }' > counter/sources/v2.move
 tip_before=$(fork_status_field checkpoint_sequence_number)
-run_json upgrade.json on_fork upgrade counter --gas "$gas" --gas-budget 100000000
+run_json upgrade.json on_fork upgrade counter --gas "$gas" --gas-budget 2000000000
 assert_eq "$(tx_status_of upgrade.json)" success "upgrade executed on the fork"
 package_v2=$(published_package_id upgrade.json)
 assert_ne "$package_v2" "$package_v1" "the upgrade produced a new package id"
@@ -40,7 +40,7 @@ extract_published counter/Published.toml
 
 echo "=== an incompatible upgrade is rejected ==="
 echo 'module counter::v2; public fun two(): bool { true }' > counter/sources/v2.move
-if on_fork upgrade counter --gas "$gas" --gas-budget 100000000 > incompatible.log 2>&1; then
+if on_fork upgrade counter --gas "$gas" --gas-budget 2000000000 > incompatible.log 2>&1; then
   fail "an incompatible upgrade must fail"
   cat incompatible.log
 else

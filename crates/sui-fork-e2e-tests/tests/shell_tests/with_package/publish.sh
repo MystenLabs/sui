@@ -22,7 +22,7 @@ add_env_to_toml counter fork on_fork
 
 gas=$(gas_coin on_fork)
 tip_before=$(fork_status_field checkpoint_sequence_number)
-run_json publish.json on_fork publish counter --gas "$gas" --gas-budget 100000000
+run_json publish.json on_fork publish counter --gas "$gas" --gas-budget 2000000000
 assert_eq "$(tx_status_of publish.json)" success "publish executed on the fork"
 package=$(published_package_id publish.json)
 cap=$(created_object_id publish.json "::package::UpgradeCap")

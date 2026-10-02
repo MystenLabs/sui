@@ -19,7 +19,7 @@ use sui_types::transaction::{
 };
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag};
 
-const DEFAULT_GAS_BUDGET: u64 = 900_000_000;
+const DEFAULT_GAS_BUDGET: u64 = 2_000_000_000;
 pub const TEST_COIN_DECIMALS: u64 = 6;
 
 #[derive(Debug, Clone)]

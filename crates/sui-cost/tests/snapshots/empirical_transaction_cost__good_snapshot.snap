@@ -10,7 +10,7 @@ expression: common_costs_actual
     "nonRefundableStorageFee": "0"
   },
   "Publish": {
-    "computationCost": "1000000",
+    "computationCost": "1031000000",
     "storageCost": "13520400",
     "storageRebate": "978120",
     "nonRefundableStorageFee": "9880"

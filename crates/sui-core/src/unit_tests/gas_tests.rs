@@ -31,6 +31,8 @@ static MAX_GAS_BUDGET: Lazy<u64> =
 static MIN_GAS_BUDGET_PRE_RGP: Lazy<u64> =
     Lazy::new(|| ProtocolConfig::get_for_max_version_UNSAFE().base_tx_cost_fixed());
 
+const TEST_PUBLISH_BUDGET: u64 = 2_000_000_000;
+
 #[test]
 fn test_gas_invariants() {
     let max_tx_gas = ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas();
@@ -115,7 +117,6 @@ async fn publish_move_random_package(
     sender_key: &AccountKeyPair,
     gas_object_id: &ObjectID,
 ) -> ObjectID {
-    const PUBLISH_BUDGET: u64 = 10_000_000;
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
     let response = build_and_try_publish_test_package(
@@ -124,7 +125,7 @@ async fn publish_move_random_package(
         sender_key,
         gas_object_id,
         "move_random",
-        PUBLISH_BUDGET,
+        TEST_PUBLISH_BUDGET,
         rgp,
         /* with_unpublished_deps */ false,
     )
@@ -1081,7 +1082,8 @@ async fn test_gas_price_capping_for_aborted_transactions() {
     let budget = high_gas_price * 1000; // Sufficient budget
 
     // Create gas coins
-    let gas_amount = budget * 10;
+    // The package publish needs the fixture's high budget before this test's transaction runs.
+    let gas_amount = (budget * 10).max(TEST_PUBLISH_BUDGET);
     let gas_object_id = ObjectID::random();
     let gas_coin = Object::with_id_owner_gas_for_testing(gas_object_id, sender, gas_amount);
     authority_state.insert_genesis_object(gas_coin);

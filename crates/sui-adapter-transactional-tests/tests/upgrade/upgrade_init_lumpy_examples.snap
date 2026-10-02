@@ -12,49 +12,49 @@ task 1, lines 8-12:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 5236400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 14-18:
 //# upgrade --package Dep_V1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1031000000, storage_cost: 5236400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 3, lines 20-25:
 //# publish --dependencies Dep_V1 --sender A
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4324400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1041000000, storage_cost: 4324400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 27-30:
 //# publish --sender A
 created: object(4,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 3389600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1031000000, storage_cost: 3389600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 32-37:
 //# publish --upgradeable --dependencies Dep_V1 --sender A
 created: object(5,0), object(5,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5897600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1041000000, storage_cost: 5897600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 6, lines 39-42:
 //# publish --upgradeable --sender A
 created: object(6,0), object(6,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1031000000, storage_cost: 5023600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, lines 44-47:
 //# publish --upgradeable --sender A
 created: object(7,0), object(7,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1031000000, storage_cost: 5023600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8, lines 49-52:
 //# publish --upgradeable --sender A
 created: object(8,0), object(8,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1031000000, storage_cost: 5023600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 14, lines 124-130:
 //# programmable --sender A --inputs object(5,1) 0u8 digest(Agree_V1)
@@ -66,7 +66,7 @@ task 14, lines 124-130:
 //> sui::package::commit_upgrade(Input(0), Result(2))
 created: object(14,0), object(14,1)
 mutated: object(0,0), object(5,1)
-gas summary: computation_cost: 1000000, storage_cost: 10267600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1061000000, storage_cost: 10267600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 15, lines 132-140:
 //# programmable --sender A --inputs object(6,1) 0u8 digest(A1_Dep1) object(7,1) 0u8 digest(D1_Dep2)
@@ -92,7 +92,7 @@ task 16, lines 142-149:
 //> sui::package::commit_upgrade(Input(3), Result(4))
 created: object(16,0), object(16,1), object(16,2), object(16,3)
 mutated: object(0,0), object(6,1), object(7,1)
-gas summary: computation_cost: 1000000, storage_cost: 18452800,  storage_rebate: 4213440, non_refundable_storage_fee: 42560
+gas summary: computation_cost: 2101000000, storage_cost: 18452800,  storage_rebate: 4213440, non_refundable_storage_fee: 42560
 
 task 17, lines 151-157:
 //# programmable --sender A --inputs object(8,1) 0u8 digest(Refine_V1_Dep2)
@@ -104,7 +104,7 @@ task 17, lines 151-157:
 //> sui::package::commit_upgrade(Input(0), Result(2))
 created: object(17,0), object(17,1)
 mutated: object(0,0), object(8,1)
-gas summary: computation_cost: 1000000, storage_cost: 9720400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1051000000, storage_cost: 9720400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 18, line 159:
 //# view-object 17,1

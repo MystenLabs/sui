@@ -35,6 +35,27 @@ pub fn meter<E: ExecutionErrorTrait>(
     Ok(())
 }
 
+/// Charge publish and upgrade commands from their raw PTB representation. This runs before
+/// linkage analysis or package loading so expensive invalid packages pay for the work they cause.
+pub fn publish_upgrade_precharge<E: ExecutionErrorTrait>(
+    meter: &mut TranslationMeter,
+    transaction: &ProgrammableTransaction,
+) -> Result<(), E> {
+    for command in &transaction.commands {
+        let (modules, dependencies) = match command {
+            Command::Publish(modules, dependencies)
+            | Command::Upgrade(modules, dependencies, _, _) => (modules, dependencies),
+            Command::MoveCall(_)
+            | Command::TransferObjects(_, _)
+            | Command::SplitCoins(_, _)
+            | Command::MergeCoins(_, _)
+            | Command::MakeMoveVec(_, _) => continue,
+        };
+        meter.publish_upgrade_precharge(modules.len(), dependencies.len())?;
+    }
+    Ok(())
+}
+
 fn arguments_len(cmd: &Command) -> usize {
     match cmd {
         Command::MoveCall(call) => call

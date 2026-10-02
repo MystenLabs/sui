@@ -82,7 +82,10 @@ mod transaction_serialization_tests;
 
 pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 10_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 50_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 70_000;
+// This covers the package publish precharge as well as the execution and storage costs of the
+// fixture package. It is deliberately higher than the production transaction minimum so test
+// fixtures continue to exercise their intended behavior as protocol publish costs evolve.
+pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 2_000_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_STAKING: u64 = 50_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_GENERIC: u64 = 50_000;
 pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 10_000;

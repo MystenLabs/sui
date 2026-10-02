@@ -414,6 +414,7 @@ const MAINNET_USDB: &str =
 //              Merge colliding deferred-transaction entries in the consensus handler
 //              instead of overwriting (which stranded the displaced transactions).
 // Version 139: Enable forwarding addresses on devnet.
+//              Charge publish and upgrade commands before package linkage and loading.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1286,6 +1287,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_unified_linkage: bool,
 
+    // Charge publish and upgrade commands before package linkage and loading.
+    #[serde(skip_serializing_if = "is_false")]
+    package_publish_precharge: bool,
+
     // Enable allowance-sourced funds withdrawals (`WithdrawFrom::SenderAllowance`).
     // Requires `enable_accumulators`.
     #[serde(skip_serializing_if = "is_false")]
@@ -1696,6 +1701,15 @@ pub struct ProtocolConfig {
 
     /// Cost per byte for a transaction that publishes a package
     package_publish_cost_per_byte: Option<u64>,
+
+    /// Fixed computation cost charged before loading a published or upgraded package.
+    package_publish_precharge_cost_fixed: Option<u64>,
+
+    /// Computation cost per serialized module charged before package loading.
+    package_publish_precharge_cost_per_module: Option<u64>,
+
+    /// Computation cost per declared dependency charged before package loading.
+    package_publish_precharge_cost_per_dependency: Option<u64>,
 
     // Per-byte cost of reading an object during transaction execution
     obj_access_cost_read_per_byte: Option<u64>,
@@ -2702,6 +2716,9 @@ impl ProtocolConfig {
             package_publish_cost_fixed: Some(1_000),
             base_tx_cost_per_byte: Some(0),
             package_publish_cost_per_byte: Some(80),
+            package_publish_precharge_cost_fixed: None,
+            package_publish_precharge_cost_per_module: None,
+            package_publish_precharge_cost_per_dependency: None,
             obj_access_cost_read_per_byte: Some(15),
             obj_access_cost_mutate_per_byte: Some(40),
             obj_access_cost_delete_per_byte: Some(40),
@@ -4805,6 +4822,10 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_forwarding_addresses = true;
                     }
+                    cfg.feature_flags.package_publish_precharge = true;
+                    cfg.package_publish_precharge_cost_fixed = Some(1_000_000_000);
+                    cfg.package_publish_precharge_cost_per_module = Some(10_000_000);
+                    cfg.package_publish_precharge_cost_per_dependency = Some(10_000_000);
                 }
                 // Use this template when making changes:
                 //

@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 937
 ---
 processed 15 tasks
 
@@ -11,14 +10,14 @@ task 1, lines 6-10:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5662000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 5662000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 12-16:
 // Compatible -- this is fine
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1031000000, storage_cost: 5023600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 3, line 18:
 //# run sui::package::only_additive_upgrades --args object(1,1) --sender A
@@ -36,14 +35,14 @@ task 5, lines 26-30:
 //# upgrade --package V1 --upgrade-capability 1,1 --sender A --policy additive
 created: object(5,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1031000000, storage_cost: 5023600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 6, lines 32-36:
 // dep_only: this is fine
 //# upgrade --package V2 --upgrade-capability 1,1 --sender A --policy dep_only
 created: object(6,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1031000000, storage_cost: 5023600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 7, line 38:
 //# run sui::package::only_dep_upgrades --args object(1,1) --sender A
@@ -67,7 +66,7 @@ task 10, lines 52-56:
 //# upgrade --package V3 --upgrade-capability 1,1 --sender A --policy dep_only
 created: object(10,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1031000000, storage_cost: 5023600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 11, lines 58-59:
 // Can't go back to a less restrictive policy

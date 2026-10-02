@@ -717,7 +717,7 @@ async fn publish_managed_coin_package(
             compiled_modules,
             dependencies,
             Some(gas_ref.0),
-            500_000_000,
+            2_000_000_000,
         )
         .await?;
     let response = ctx.sign_and_execute(data, "publish ft package").await;

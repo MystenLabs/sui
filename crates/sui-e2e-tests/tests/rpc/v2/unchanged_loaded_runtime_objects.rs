@@ -198,7 +198,7 @@ async fn test_tto_receive_twice() {
         )],
         owner: address,
         price: 1000,
-        budget: 100_000_000,
+        budget: 5_000_000_000,
     };
 
     let kind = TransactionKind::ProgrammableTransaction(ptb);
@@ -476,7 +476,7 @@ async fn test_tto_success() {
         )],
         owner: address,
         price: 1000,
-        budget: 100_000_000,
+        budget: 5_000_000_000,
     };
 
     let kind = TransactionKind::ProgrammableTransaction(ptb);
@@ -840,7 +840,7 @@ async fn test_receive_input() {
         )],
         owner: address,
         price: 1000,
-        budget: 100_000_000,
+        budget: 5_000_000_000,
     };
 
     let kind = TransactionKind::ProgrammableTransaction(ptb);

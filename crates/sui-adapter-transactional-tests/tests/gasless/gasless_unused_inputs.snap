@@ -17,7 +17,7 @@ task 1, lines 13-27:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 10776800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 10776800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, lines 31-34:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs withdraw<sui::balance::Balance<test::usdc::USDC>>(500) @B 42u64 99u64
