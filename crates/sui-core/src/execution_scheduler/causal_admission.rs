@@ -34,6 +34,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 use parking_lot::Mutex;
+use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
 use sui_types::base_types::SequenceNumber;
 use tokio::sync::Notify;
 
@@ -50,6 +51,53 @@ pub struct CausalAdmission {
     notify: Notify,
     /// Max transactions admitted for execution concurrently via the capacity branch (K).
     concurrency_limit: usize,
+    metrics: Option<CausalAdmissionMetrics>,
+}
+
+pub struct CausalAdmissionMetrics {
+    watermark: IntGauge,
+    next_index: IntGauge,
+    in_flight: IntGauge,
+    done_above: IntGauge,
+    next_admitted: IntGauge,
+}
+
+impl CausalAdmissionMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            watermark: register_int_gauge_with_registry!(
+                "causal_admission_watermark",
+                "Causal index watermark C: every index at or below it is done",
+                registry,
+            )
+            .unwrap(),
+            next_index: register_int_gauge_with_registry!(
+                "causal_admission_next_index",
+                "Next causal index to assign; next_index - 1 - watermark is the number of \
+                 unretired indices",
+                registry,
+            )
+            .unwrap(),
+            in_flight: register_int_gauge_with_registry!(
+                "causal_admission_in_flight",
+                "Transactions admitted for execution and not yet finished, including parked ones",
+                registry,
+            )
+            .unwrap(),
+            done_above: register_int_gauge_with_registry!(
+                "causal_admission_done_above",
+                "Indices done above the watermark, waiting for the gap below them to fill",
+                registry,
+            )
+            .unwrap(),
+            next_admitted: register_int_gauge_with_registry!(
+                "causal_admission_next_admitted",
+                "1 while a causal-next admission over the concurrency limit is outstanding",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
 }
 
 struct AdmissionInner {
@@ -77,7 +125,7 @@ impl CausalAdmission {
     /// `execution-concurrency-limit` fail point overrides it, letting selected tests
     /// explore admission interleavings, including limits small enough to force
     /// transactions through the causal-next lane.
-    pub fn new_with_default_sizing() -> Arc<Self> {
+    pub fn new_with_default_sizing(registry: &Registry) -> Arc<Self> {
         #[allow(unused_mut)]
         let mut concurrency_limit = if mysten_common::in_test_configuration() {
             TEST_CONCURRENCY_LIMIT
@@ -88,12 +136,19 @@ impl CausalAdmission {
             concurrency_limit = limit;
         });
         tracing::info!("execution concurrency limit: {concurrency_limit}");
-        Self::new(concurrency_limit)
+        Self::build(
+            concurrency_limit,
+            Some(CausalAdmissionMetrics::new(registry)),
+        )
     }
 
     pub fn new(concurrency_limit: usize) -> Arc<Self> {
+        Self::build(concurrency_limit, None)
+    }
+
+    fn build(concurrency_limit: usize, metrics: Option<CausalAdmissionMetrics>) -> Arc<Self> {
         assert!(concurrency_limit > 0);
-        Arc::new(Self {
+        let admission = Arc::new(Self {
             inner: Mutex::new(AdmissionInner {
                 next_index: 1,
                 enqueue_watermark: None,
@@ -104,7 +159,20 @@ impl CausalAdmission {
             }),
             notify: Notify::new(),
             concurrency_limit,
-        })
+            metrics,
+        });
+        admission.publish(&admission.inner.lock());
+        admission
+    }
+
+    fn publish(&self, inner: &AdmissionInner) {
+        if let Some(metrics) = &self.metrics {
+            metrics.watermark.set(inner.watermark as i64);
+            metrics.next_index.set(inner.next_index as i64);
+            metrics.in_flight.set(inner.in_flight as i64);
+            metrics.done_above.set(inner.done_above.len() as i64);
+            metrics.next_admitted.set(inner.next_admitted as i64);
+        }
     }
 
     /// Deduplicates an enqueue batch and assigns causal indices to the survivors, in
@@ -138,6 +206,7 @@ impl CausalAdmission {
             })
             .collect();
         inner.enqueue_watermark = max_version;
+        self.publish(&inner);
         certs
     }
 
@@ -164,6 +233,7 @@ impl CausalAdmission {
         };
         assert_sometimes!(is_next, "admitted via the causal-next lane over the limit");
         inner.in_flight += 1;
+        self.publish(&inner);
         Some(InFlightSlot {
             admission: self.clone(),
             is_next,
@@ -182,6 +252,7 @@ impl CausalAdmission {
             return None;
         }
         inner.in_flight += 1;
+        self.publish(&inner);
         Some(InFlightSlot {
             admission: self.clone(),
             is_next: false,
@@ -200,6 +271,7 @@ impl CausalAdmission {
     pub fn mark_done(&self, index: u64) {
         let mut inner = self.inner.lock();
         Self::mark_done_locked(&mut inner, index);
+        self.publish(&inner);
         drop(inner);
         self.notify.notify_one();
     }
@@ -289,6 +361,7 @@ impl Drop for InFlightSlot {
         if let Some(index) = self.retire_on_drop {
             CausalAdmission::mark_done_locked(&mut inner, index);
         }
+        self.admission.publish(&inner);
         drop(inner);
         self.admission.notify.notify_one();
     }
