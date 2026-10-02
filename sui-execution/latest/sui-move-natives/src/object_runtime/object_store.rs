@@ -18,7 +18,7 @@ use sui_types::{
     metrics::ExecutionMetrics,
     move_package::MovePackage,
     object::{Data, MoveObject, Object, Owner},
-    storage::ExecutionObjectResolver,
+    storage::RuntimeObjectResolver,
 };
 
 pub(super) struct ChildObject {
@@ -68,7 +68,7 @@ pub(crate) type ChildObjectEffects = BTreeMap<ObjectID, ChildObjectEffect>;
 
 struct Inner<'a> {
     // used for loading child objects
-    resolver: &'a dyn ExecutionObjectResolver,
+    resolver: &'a dyn RuntimeObjectResolver,
     // The version of the root object in ownership at the beginning of the transaction.
     // If it was a child object, it resolves to the root parent's sequence number.
     // Otherwise, it is just the sequence number at the beginning of the transaction.
@@ -90,7 +90,7 @@ struct Inner<'a> {
 }
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
-// from storage, through the `ExecutionObjectResolver`
+// from storage, through the `RuntimeObjectResolver`
 pub(super) struct ChildObjectStore<'a> {
     // contains object resolver and object cache
     // kept as a separate struct to deal with lifetime issues where the `store` is accessed
@@ -411,7 +411,7 @@ fn deserialize_move_object(
 
 impl<'a> ChildObjectStore<'a> {
     pub(super) fn new(
-        resolver: &'a dyn ExecutionObjectResolver,
+        resolver: &'a dyn RuntimeObjectResolver,
         root_version: BTreeMap<ObjectID, SequenceNumber>,
         wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
         is_metered: bool,
@@ -436,38 +436,27 @@ impl<'a> ChildObjectStore<'a> {
         }
     }
 
-    pub(super) fn load_runtime_system_object(
+    /// Makes `object_id` a root for child lookups at `version`, the version a system object was
+    /// implicitly read at. The object may also be a transaction input, in which case the two
+    /// versions must agree.
+    pub(super) fn track_system_root_version(
         &mut self,
-        object_id: &ObjectID,
-    ) -> PartialVMResult<Option<Object>> {
-        let Some(object) = self
-            .inner
-            .resolver
-            .load_runtime_system_object(object_id)
-            .map_err(|err| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!("Failed to load assigned system object {object_id}: {err}"),
-                )
-            })?
-        else {
-            return Ok(None);
-        };
-        match self.inner.root_version.get(object_id) {
-            Some(version) if *version != object.version() => {
-                return Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!(
-                            "System object {object_id} version {} differs from input version {version}",
-                            object.version()
-                        )),
-                );
-            }
-            Some(_) => {}
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> PartialVMResult<()> {
+        match self.inner.root_version.get(&object_id) {
+            Some(input_version) if *input_version != version => Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message(format!(
+                "System object {object_id} version {version} differs from input version {input_version}"
+            ))),
+            Some(_) => Ok(()),
             None => {
-                self.inner.root_version.insert(*object_id, object.version());
+                self.inner.root_version.insert(object_id, version);
+                Ok(())
             }
         }
-        Ok(Some(object))
     }
 
     /// When `parent` has a tracked root version, record the same root version for `id`.
@@ -880,14 +869,7 @@ mod system_object_tests {
     fn conflicting_system_root_versions_are_invariant_errors() {
         let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
         let input_version = SequenceNumber::from_u64(9);
-        let object = Object::with_id_owner_version_for_testing(
-            id,
-            SequenceNumber::from_u64(10),
-            Owner::Shared {
-                initial_shared_version: SequenceNumber::from_u64(1),
-            },
-        );
-        let resolver = InMemoryTestStore::new_for_testing(InMemoryStorage::new(vec![object]));
+        let resolver = InMemoryTestStore::new_for_testing(InMemoryStorage::new(vec![]));
         let config = ProtocolConfig::get_for_max_version_UNSAFE();
         let metrics = Arc::new(ExecutionMetrics::new(&Default::default()));
         let mut store = ChildObjectStore::new(
@@ -899,9 +881,10 @@ mod system_object_tests {
             metrics,
             0,
         );
+        store.track_system_root_version(id, input_version).unwrap();
         assert_eq!(
             store
-                .load_runtime_system_object(&id)
+                .track_system_root_version(id, SequenceNumber::from_u64(10))
                 .unwrap_err()
                 .major_status(),
             StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,

@@ -3,10 +3,9 @@
 
 /// Registry and resolution for forwarding addresses.
 ///
-/// Address layout, all integers little-endian:
-/// `[u32 master_id][10 bytes of 0xfa][u8 variant][u8 reserved][u128 tag]`.
-/// The master ID and magic positions are fixed for every variant; the variant only decides what
-/// the tag bytes mean. Variant 0 is an opaque tag and requires the reserved byte to be zero.
+/// Address layout: `[u32 master_id, little-endian][10 bytes of 0xfa][u8 variant][17 payload bytes]`.
+/// The master ID, magic and variant positions are fixed; the variant alone decides what the
+/// payload bytes mean. Variant 0 gives them no on-chain meaning.
 module sui::forwarding_address;
 
 use sui::dynamic_field;
@@ -26,12 +25,7 @@ const EForwardingAddressUnregistered: vector<u8> =
 const EForwardingAddressVariantUnsupported: vector<u8> =
     b"The forwarding address variant is not supported by this protocol version.";
 
-#[allow(unused_const)]
 #[error(code = 3)]
-const EForwardingAddressNotCanonical: vector<u8> =
-    b"The forwarding address is not a canonical encoding.";
-
-#[error(code = 4)]
 const EMasterIdsExhausted: vector<u8> = b"All master IDs have been allocated.";
 
 const MAX_MASTER_ID: u64 = 0xFFFF_FFFF;
@@ -61,8 +55,6 @@ public struct ForwardingDeposit<phantom T> has copy, drop {
     forwarding_address: address,
     master: address,
     amount: u64,
-    variant: u8,
-    tag: u128,
 }
 
 /// Emitted when a master ID is allocated.
@@ -90,20 +82,14 @@ public fun master_id(cap: &MasterCap): u32 {
 
 /// Resolve `recipient` and emit an attribution event when it is a forwarding address.
 public(package) fun resolve<T>(recipient: address, amount: u64): address {
-    let (master, variant, tag, forwarded) = resolve_impl(recipient);
+    let (master, forwarded) = resolve_impl(recipient);
     if (forwarded) {
-        event::emit(ForwardingDeposit<T> {
-            forwarding_address: recipient,
-            master,
-            amount,
-            variant,
-            tag,
-        });
+        event::emit(ForwardingDeposit<T> { forwarding_address: recipient, master, amount });
     };
     master
 }
 
-native fun resolve_impl(recipient: address): (address, u8, u128, bool);
+native fun resolve_impl(recipient: address): (address, bool);
 
 fun allocate_master_id(registry: &mut ForwardingAddressRegistry): u32 {
     if (!dynamic_field::exists(&registry.id, MasterIdCounter {})) {

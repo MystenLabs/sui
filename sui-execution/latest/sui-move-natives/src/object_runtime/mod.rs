@@ -24,7 +24,7 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
-use move_vm_runtime::execution::values::{GlobalValue, Value};
+use move_vm_runtime::execution::values::{GlobalValue, Reference, Value};
 use move_vm_runtime::natives::extensions::NativeExtensionMarker;
 use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
@@ -47,7 +47,7 @@ use sui_types::{
     metrics::ExecutionMetrics,
     move_package::MovePackage,
     object::{MoveObject, Object, Owner},
-    storage::{ExecutionObjectResolver, ObjectFundsSufficiency},
+    storage::{ObjectFundsResolver, ObjectFundsSufficiency, RuntimeObjectResolver},
 };
 use tracing::error;
 
@@ -138,7 +138,7 @@ pub(crate) struct ObjectRuntimeState {
 #[derive(Tid)]
 pub struct ObjectRuntime<'a> {
     child_object_store: ChildObjectStore<'a>,
-    object_resolver: &'a dyn ExecutionObjectResolver,
+    object_funds_resolver: &'a dyn ObjectFundsResolver,
     // inventories for test scenario
     pub(crate) test_inventories: TestInventories,
     // the internal state
@@ -186,7 +186,8 @@ impl ObjectFundsAvailable {
 
 impl<'a> ObjectRuntime<'a> {
     pub fn new(
-        object_resolver: &'a dyn ExecutionObjectResolver,
+        object_resolver: &'a dyn RuntimeObjectResolver,
+        object_funds_resolver: &'a dyn ObjectFundsResolver,
         input_objects: BTreeMap<ObjectID, InputObject>,
         is_metered: bool,
         protocol_config: &'a ProtocolConfig,
@@ -222,7 +223,7 @@ impl<'a> ObjectRuntime<'a> {
                 metrics.clone(),
                 epoch_id,
             ),
-            object_resolver,
+            object_funds_resolver,
             test_inventories: TestInventories::new(),
             state: ObjectRuntimeState {
                 input_objects: input_object_owners,
@@ -260,13 +261,15 @@ impl<'a> ObjectRuntime<'a> {
             .entry(key)
             .or_insert_with(ObjectFundsAvailable::init);
         if entry.needs_store_read(amount) {
-            let settled_available =
-                match self.object_resolver.object_available_balance(owner, type_) {
-                    Ok(balance) => balance,
-                    Err(e) => {
-                        return ObjectFundsSufficiency::LoadError(e.to_string());
-                    }
-                };
+            let settled_available = match self
+                .object_funds_resolver
+                .object_available_balance(owner, type_)
+            {
+                Ok(balance) => balance,
+                Err(e) => {
+                    return ObjectFundsSufficiency::LoadError(e.to_string());
+                }
+            };
             let Some(available) = entry.available.checked_add(U256::from(settled_available)) else {
                 return ObjectFundsSufficiency::Overflow;
             };
@@ -493,12 +496,61 @@ impl<'a> ObjectRuntime<'a> {
         std::mem::take(&mut self.state.events)
     }
 
-    pub fn load_runtime_system_object(
+    /// Loads a system object at the version consensus assigned to this transaction and makes it
+    /// a root for child lookups. `None` when the transaction has no assigned version for it.
+    pub fn load_implicitly_read_system_object(
         &mut self,
         object_id: &ObjectID,
     ) -> PartialVMResult<Option<Object>> {
+        let Some(object) = self
+            .object_funds_resolver
+            .load_implicitly_read_system_object(object_id)
+            .map_err(|err| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("Failed to load assigned system object {object_id}: {err}"),
+                )
+            })?
+        else {
+            return Ok(None);
+        };
         self.child_object_store
-            .load_runtime_system_object(object_id)
+            .track_system_root_version(*object_id, object.version())?;
+        Ok(Some(object))
+    }
+
+    /// BCS contents of a child object as this transaction sees it, including a value written
+    /// earlier in the same transaction. `None` when the child does not exist.
+    pub(crate) fn load_child_object_bytes(
+        &mut self,
+        parent: ObjectID,
+        child: ObjectID,
+        child_layout: &R::MoveTypeLayout,
+        child_fully_annotated_layout: &MoveTypeLayout,
+        child_move_type: MoveObjectType,
+    ) -> PartialVMResult<ObjectResult<CacheMetadata<Option<Vec<u8>>>>> {
+        let (cache_info, value) = match self.get_or_fetch_child_object(
+            parent,
+            child,
+            child_layout,
+            child_fully_annotated_layout,
+            child_move_type,
+        )? {
+            ObjectResult::MismatchedType => return Ok(ObjectResult::MismatchedType),
+            ObjectResult::Loaded(loaded) => loaded,
+        };
+        if !value.exists()? {
+            return Ok(ObjectResult::Loaded((cache_info, None)));
+        }
+        let bytes = value
+            .borrow_global()?
+            .value_as::<Reference>()?
+            .read_ref()?
+            .typed_serialize(child_layout)
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Failed to serialize child object {child}"))
+            })?;
+        Ok(ObjectResult::Loaded((cache_info, Some(bytes))))
     }
 
     // TODO: Eventually we may want to allow larger types for accumulators,

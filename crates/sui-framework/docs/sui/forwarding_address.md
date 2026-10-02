@@ -4,10 +4,9 @@ title: Module `sui::forwarding_address`
 
 Registry and resolution for forwarding addresses.
 
-Address layout, all integers little-endian:
-<code>[u32 <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>][10 bytes of 0xfa][u8 variant][u8 reserved][u128 tag]</code>.
-The master ID and magic positions are fixed for every variant; the variant only decides what
-the tag bytes mean. Variant 0 is an opaque tag and requires the reserved byte to be zero.
+Address layout: <code>[u32 <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>, little-endian][10 bytes of 0xfa][u8 variant][17 payload bytes]</code>.
+The master ID, magic and variant positions are fixed; the variant alone decides what the
+payload bytes mean. Variant 0 gives them no on-chain meaning.
 
 
 -  [Struct `ForwardingAddressRegistry`](#sui_forwarding_address_ForwardingAddressRegistry)
@@ -192,16 +191,6 @@ Emitted when a balance deposit is redirected from a forwarding address to its ma
 </dt>
 <dd>
 </dd>
-<dt>
-<code>variant: u8</code>
-</dt>
-<dd>
-</dd>
-<dt>
-<code>tag: u128</code>
-</dt>
-<dd>
-</dd>
 </dl>
 
 
@@ -275,16 +264,6 @@ Emitted when a master ID is allocated.
 
 <pre><code>#[error]
 <b>const</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_EForwardingAddressVariantUnsupported">EForwardingAddressVariantUnsupported</a>: vector&lt;u8&gt; = b"The forwarding <b>address</b> variant is not supported by this protocol version.";
-</code></pre>
-
-
-
-<a name="sui_forwarding_address_EForwardingAddressNotCanonical"></a>
-
-
-
-<pre><code>#[error]
-<b>const</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_EForwardingAddressNotCanonical">EForwardingAddressNotCanonical</a>: vector&lt;u8&gt; = b"The forwarding <b>address</b> is not a canonical encoding.";
 </code></pre>
 
 
@@ -381,15 +360,9 @@ Resolve <code>recipient</code> and emit an attribution event when it is a forwar
 
 
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve">resolve</a>&lt;T&gt;(recipient: <b>address</b>, amount: u64): <b>address</b> {
-    <b>let</b> (master, variant, tag, forwarded) = <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient);
+    <b>let</b> (master, forwarded) = <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient);
     <b>if</b> (forwarded) {
-        <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingDeposit">ForwardingDeposit</a>&lt;T&gt; {
-            <a href="../sui/forwarding_address.md#sui_forwarding_address">forwarding_address</a>: recipient,
-            master,
-            amount,
-            variant,
-            tag,
-        });
+        <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingDeposit">ForwardingDeposit</a>&lt;T&gt; { <a href="../sui/forwarding_address.md#sui_forwarding_address">forwarding_address</a>: recipient, master, amount });
     };
     master
 }
@@ -405,7 +378,7 @@ Resolve <code>recipient</code> and emit an attribution event when it is a forwar
 
 
 
-<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient: <b>address</b>): (<b>address</b>, u8, u128, bool)
+<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient: <b>address</b>): (<b>address</b>, bool)
 </code></pre>
 
 
@@ -414,7 +387,7 @@ Resolve <code>recipient</code> and emit an attribution event when it is a forwar
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient: <b>address</b>): (<b>address</b>, u8, u128, bool);
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient: <b>address</b>): (<b>address</b>, bool);
 </code></pre>
 
 
