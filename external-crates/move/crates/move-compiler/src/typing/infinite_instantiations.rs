@@ -346,7 +346,7 @@ fn cycle_error(
     let call_loc = arg_info.loc;
     let call_msg = format!(
         "Invalid call to '{}::{}'",
-        &context.current_module, &arg_info.name,
+        context.current_module, arg_info.name,
     );
     let ty_loc = arg_info.type_argument.loc;
     let ty_str = core::error_format(&arg_info.type_argument, &Subst::empty());
@@ -359,11 +359,11 @@ fn cycle_error(
         "The type parameter '{param_n}::{param_t}' was instantiated with the type {ty}, which \
          contains the type parameter '{arg_n}::{arg_t}'. {case} causes the instantiation to \
          recurse infinitely",
-        param_n = &param_info.name,
-        param_t = &critical_head.user_specified_name,
+        param_n = param_info.name,
+        param_t = critical_head.user_specified_name,
         ty = ty_str,
-        arg_n = &arg_info.name,
-        arg_t = &critical_tail.user_specified_name,
+        arg_n = arg_info.name,
+        arg_t = critical_tail.user_specified_name,
         case = case,
     );
 
@@ -377,7 +377,7 @@ fn cycle_error(
             let ftparam_ty = {
                 let qualified_ = Symbol::from(format!(
                     "{}::{}",
-                    &init_state.name, &ftparam.user_specified_name
+                    init_state.name, ftparam.user_specified_name
                 ));
                 let qualified = sp(ftparam.user_specified_name.loc, qualified_);
                 let qualified_tp = TParam {
@@ -470,5 +470,5 @@ fn make_call_string(
     } else {
         format!("<{}>", targs)
     };
-    (cur.loc, format!("{}{}", &cur.name, targs))
+    (cur.loc, format!("{}{}", cur.name, targs))
 }

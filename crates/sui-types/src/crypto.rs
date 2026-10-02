@@ -1629,13 +1629,12 @@ impl<'a> VerificationObligation<'a> {
         .map_err(|e| {
             let message = format!(
                 "pks: {:?}, messages: {:?}, sigs: {:?}",
-                &self.public_keys,
+                self.public_keys,
                 self.messages
                     .iter()
                     .map(Base64::encode)
                     .collect::<Vec<String>>(),
-                &self
-                    .signatures
+                self.signatures
                     .iter()
                     .map(|s| Base64::encode(s.as_ref()))
                     .collect::<Vec<String>>()

@@ -268,7 +268,7 @@ where
                         ExecutionErrorKind::FunctionNotFound,
                         format!(
                             "Could not resolve function '{}' in module '{}'",
-                            name, &version_mid,
+                            name, version_mid,
                         ),
                     )
                 } else {

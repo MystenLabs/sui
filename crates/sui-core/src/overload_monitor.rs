@@ -166,27 +166,26 @@ fn check_overload_signals(
 ) -> (bool, u32) {
     // First, we calculate based on the current `txn_ready_rate` and `execution_rate`,
     // what's the percentage of traffic to shed from `txn_ready_rate`.
-    let additional_load_shedding_percentage;
-    if queueing_latency > config.execution_queue_latency_hard_limit {
-        let calculated_load_shedding_percentage =
-            calculate_load_shedding_percentage(txn_ready_rate, execution_rate);
+    let additional_load_shedding_percentage =
+        if queueing_latency > config.execution_queue_latency_hard_limit {
+            let calculated_load_shedding_percentage =
+                calculate_load_shedding_percentage(txn_ready_rate, execution_rate);
 
-        additional_load_shedding_percentage = if calculated_load_shedding_percentage > 0
-            || txn_ready_rate >= config.safe_transaction_ready_rate as f64
-        {
-            max(
-                calculated_load_shedding_percentage,
-                config.min_load_shedding_percentage_above_hard_limit,
-            )
+            if calculated_load_shedding_percentage > 0
+                || txn_ready_rate >= config.safe_transaction_ready_rate as f64
+            {
+                max(
+                    calculated_load_shedding_percentage,
+                    config.min_load_shedding_percentage_above_hard_limit,
+                )
+            } else {
+                0
+            }
+        } else if queueing_latency > config.execution_queue_latency_soft_limit {
+            calculate_load_shedding_percentage(txn_ready_rate, execution_rate)
         } else {
             0
         };
-    } else if queueing_latency > config.execution_queue_latency_soft_limit {
-        additional_load_shedding_percentage =
-            calculate_load_shedding_percentage(txn_ready_rate, execution_rate);
-    } else {
-        additional_load_shedding_percentage = 0;
-    }
 
     // Next, we calculate the new load shedding percentage.
     let load_shedding_percentage = if additional_load_shedding_percentage > 0 {

@@ -358,7 +358,7 @@ fn inferred_numerical_value(
     use BuiltinTypeName_ as BT;
     let bt = match ty.value.builtin_name() {
         Some(sp!(_, bt)) if bt.is_numeric() => bt,
-        _ => panic!("ICE inferred num failed {:?}", &ty.value),
+        _ => panic!("ICE inferred num failed {:?}", ty.value),
     };
     let u8_max = U256::from(u8::MAX);
     let u16_max = U256::from(u16::MAX);
@@ -507,7 +507,7 @@ fn inferred_string_value(
             let exp = T::exp(ty.clone(), sp(value_loc, call));
             Some(exp)
         }
-        _ => panic!("ICE inferred string failed {:?}", &ty.value),
+        _ => panic!("ICE inferred string failed {:?}", ty.value),
     }
 }
 

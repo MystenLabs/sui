@@ -1202,7 +1202,7 @@ mod checked {
                 ExecutionErrorKind::FunctionNotFound,
                 format!(
                     "Could not resolve function '{}' in module {}",
-                    function, &module_id,
+                    function, module_id,
                 ),
             ));
         };

@@ -140,7 +140,7 @@ fn run_bytecode_test(file_path: &Path) -> datatest_stable::Result<()> {
     insta_assert! {
         input_path: file_path,
         contents: decompiled,
-        name: format!("{}", name),
+        name: name.to_string(),
     };
     Ok(())
 }

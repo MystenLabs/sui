@@ -78,17 +78,17 @@ pub fn save_trace_output(
             let compiled_mod =
                 CompiledModule::deserialize_with_defaults(serialized_mod).context(format!(
                     "Failed to deserialize module {:?} in package {}",
-                    mod_name, &pkg_addr,
+                    mod_name, pkg_addr,
                 ))?;
             let d = Disassembler::from_module(&compiled_mod, Spanned::unsafe_no_loc(()).loc)
                 .context(format!(
                     "Failed to create disassembler for module {:?} in package {}",
-                    mod_name, &pkg_addr,
+                    mod_name, pkg_addr,
                 ))?;
             let (disassemble_string, mut bcode_map) =
                 d.disassemble_with_source_map().context(format!(
                     "Failed to disassemble module {:?} in package {}",
-                    mod_name, &pkg_addr,
+                    mod_name, pkg_addr,
                 ))?;
             // need version ID here (for potentially upgraded package) rather than original ID
             // (for the original version of the package), otherwise we won't be able to
@@ -96,7 +96,7 @@ pub fn save_trace_output(
             bcode_map.module_name.0 = pkg.id().into();
             let bcode_map_json = serialize_to_json_string(&bcode_map).context(format!(
                 "Failed to serialize bytecode source map for module {:?} in package {}",
-                mod_name, &pkg_addr,
+                mod_name, pkg_addr,
             ))?;
             fs::write(
                 bcode_pkg_dir.join(format!("{}.{}", mod_name, MOVE_BYTECODE_EXTENSION)),
@@ -104,7 +104,7 @@ pub fn save_trace_output(
             )
             .context(format!(
                 "Failed to write disassembled bytecode for module {:?} in package {}",
-                mod_name, &pkg_addr,
+                mod_name, pkg_addr,
             ))?;
             fs::write(
                 bcode_pkg_dir.join(format!("{}.json", mod_name)),
@@ -112,7 +112,7 @@ pub fn save_trace_output(
             )
             .context(format!(
                 "Failed to write bytecode source map for module {:?} in package {}",
-                mod_name, &pkg_addr,
+                mod_name, pkg_addr,
             ))?;
         }
         // create empty sources directory as a known placeholder for the users

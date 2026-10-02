@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use prometheus::Registry;
-use sui_types::transaction_executor::ProposerSelector as _;
 
 use super::*;
 use crate::authority_aggregator::AuthorityAggregatorBuilder;

@@ -1111,7 +1111,7 @@ impl<'env> Docgen<'env> {
             self.end_collapsed();
 
             self.gen_call_diagram(env, module_env.id(), name, false);
-            self.begin_collapsed(&format!("Show all the functions that call \"{}\"", &name));
+            self.begin_collapsed(&format!("Show all the functions that call \"{}\"", name));
             self.image(&format!("img/{}_backward_call_graph.svg", file_prefix));
             self.end_collapsed();
         }

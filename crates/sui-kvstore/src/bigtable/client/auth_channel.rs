@@ -124,9 +124,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use base64::Engine as _;
-    use prost::Message as _;
-
     use super::*;
 
     #[test]
