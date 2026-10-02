@@ -86,7 +86,7 @@ impl Context {
 
         let kv_loader = KvLoader::new(
             kv_args
-                .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry, None, None)
+                .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry, None, None, 1)
                 .await?
                 .context("--ledger-grpc-url must be configured")?,
         );
