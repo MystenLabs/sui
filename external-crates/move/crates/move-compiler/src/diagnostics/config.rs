@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::LazyLock};
+
+use move_ir_types::location::{Loc, sp};
 
 use crate::{
     command_line::compiler::{Visitor, VisitorConstructor},
     diagnostics::{
-        codes::DiagnosticsID,
+        codes::{DiagnosticOrigin, DiagnosticsID, UNUSED_ITEM_CATEGORY, UNUSED_ITEM_CODES},
         filter::{
-            FILTER_ALL, FILTER_UNUSED_CONST, FILTER_UNUSED_FUNCTION,
-            FILTER_UNUSED_FUNCTION_TYPE_PARAMETER, FILTER_UNUSED_MUT_PARAM, FILTER_UNUSED_MUT_REF,
-            FILTER_UNUSED_STRUCT_FIELD, FilterKind, FilterName, FilterPrefix, FilterScope,
+            FILTER_ALL, FilterKind, FilterName, FilterPrefix, FilterScope, empty_filter_scope,
             resolve_filter_names,
         },
     },
@@ -33,7 +33,25 @@ pub struct DiagnosticFilterSettings {
 pub struct DiagnosticFilterConfig {
     all: Option<FilterKind>,
     filters: BTreeMap<FilterName, FilterKind>,
+    code_scope: Option<FilterScope>,
 }
+
+static TESTING_DIAGNOSTIC_FILTERS: LazyLock<DiagnosticFilterSettings> = LazyLock::new(|| {
+    let entries = UNUSED_ITEM_CODES
+        .into_iter()
+        .map(|code| {
+            let id = DiagnosticsID::exact(DiagnosticOrigin::Compiler, UNUSED_ITEM_CATEGORY, code);
+            (id, sp(Loc::invalid(), FilterKind::Allow))
+        })
+        .collect();
+    DiagnosticFilterSettings {
+        warnings: Some(DiagnosticFilterConfig {
+            code_scope: Some(FilterScope::new(entries)),
+            ..DiagnosticFilterConfig::default()
+        }),
+        lints: None,
+    }
+});
 
 pub fn known_diagnostic_filters(flavor: Flavor) -> KnownDiagnosticFilters {
     let mut known = vec![linters::known_filters()];
@@ -45,29 +63,15 @@ pub fn known_diagnostic_filters(flavor: Flavor) -> KnownDiagnosticFilters {
 }
 
 impl DiagnosticFilterSettings {
-    /// Allows unused functions, fields, function type parameters, constants, mutable references, and
-    /// mutable parameters in test fixtures.
+    /// Create a diagnostic filter that allows for unused functions, fields, function type
+    /// parameters, constants, mutable references, and mutable parameters in test fixtures.
     pub fn for_testing() -> Self {
-        let warnings = [
-            FILTER_UNUSED_FUNCTION,
-            FILTER_UNUSED_STRUCT_FIELD,
-            FILTER_UNUSED_FUNCTION_TYPE_PARAMETER,
-            FILTER_UNUSED_CONST,
-            FILTER_UNUSED_MUT_REF,
-            FILTER_UNUSED_MUT_PARAM,
-        ]
-        .into_iter()
-        .map(|name| (FilterName::from(name), FilterKind::Allow))
-        .collect();
-        Self {
-            warnings: Some(warnings),
-            lints: None,
-        }
+        TESTING_DIAGNOSTIC_FILTERS.clone()
     }
 
     /// Builds the scope for settings validated against the supplied registry.
     pub(crate) fn filter_scope(&self, known: &KnownDiagnosticFilters) -> FilterScope {
-        let configured = [
+        let mut configured = [
             (None, &self.warnings),
             (Some(DiagnosticAttribute::LINT_SYMBOL), &self.lints),
         ]
@@ -77,17 +81,31 @@ impl DiagnosticFilterSettings {
                 .iter()
                 .flat_map(|config| config.iter())
                 .map(move |(name, kind)| (prefix, name, kind))
-        });
-        resolve_filter_names(configured, known.iter())
-            .expect("diagnostic settings must be validated against the supplied registry")
+        })
+        .peekable();
+        let mut scope = if configured.peek().is_none() {
+            empty_filter_scope()
+        } else {
+            resolve_filter_names(configured, known.iter())
+                .expect("diagnostic settings must be validated against the supplied registry")
+        };
+        for config in [&self.warnings, &self.lints].into_iter().flatten() {
+            if let Some(code_scope) = &config.code_scope {
+                scope = scope.merge_root(code_scope);
+            }
+        }
+        scope
     }
 }
 
 impl DiagnosticFilterConfig {
     pub fn is_empty(&self) -> bool {
-        self.all.is_none() && self.filters.is_empty()
+        self.all.is_none()
+            && self.filters.is_empty()
+            && self.code_scope.as_ref().is_none_or(FilterScope::is_empty)
     }
 
+    /// Returns the named filter settings.
     pub fn iter(&self) -> impl Iterator<Item = (FilterName, FilterKind)> + '_ {
         self.all
             .map(|kind| (FilterName::from(FILTER_ALL), kind))
