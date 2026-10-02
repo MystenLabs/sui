@@ -24,7 +24,7 @@ use move_core_types::{
     u256::U256,
     vm_status::StatusCode,
 };
-use move_vm_runtime::execution::values::{GlobalValue, Value};
+use move_vm_runtime::execution::values::{GlobalValue, Reference, Value};
 use move_vm_runtime::natives::extensions::NativeExtensionMarker;
 use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
@@ -46,7 +46,7 @@ use sui_types::{
     id::UID,
     metrics::ExecutionMetrics,
     move_package::MovePackage,
-    object::{MoveObject, Owner},
+    object::{MoveObject, Object, Owner},
     storage::{ObjectFundsResolver, ObjectFundsSufficiency, RuntimeObjectResolver},
 };
 use tracing::error;
@@ -494,6 +494,60 @@ impl<'a> ObjectRuntime<'a> {
 
     pub fn take_user_events(&mut self) -> Vec<(StructTag, Value)> {
         std::mem::take(&mut self.state.events)
+    }
+
+    /// Loads a system object at the version consensus assigned to this transaction and makes it
+    /// a root for child lookups.
+    pub fn load_implicitly_read_system_object(
+        &mut self,
+        object_id: &ObjectID,
+    ) -> PartialVMResult<Object> {
+        let object = self
+            .object_funds_resolver
+            .load_implicitly_read_system_object(object_id)
+            .map_err(|err| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!("Failed to load assigned system object {object_id}: {err}"),
+                )
+            })?;
+        self.child_object_store
+            .track_system_root_version(*object_id, object.version())?;
+        Ok(object)
+    }
+
+    /// BCS contents of a child object as this transaction sees it, including a value written
+    /// earlier in the same transaction. `None` when the child does not exist.
+    pub(crate) fn load_child_object_bytes(
+        &mut self,
+        parent: ObjectID,
+        child: ObjectID,
+        child_layout: &R::MoveTypeLayout,
+        child_fully_annotated_layout: &MoveTypeLayout,
+        child_move_type: MoveObjectType,
+    ) -> PartialVMResult<ObjectResult<CacheMetadata<Option<Vec<u8>>>>> {
+        let (cache_info, value) = match self.get_or_fetch_child_object(
+            parent,
+            child,
+            child_layout,
+            child_fully_annotated_layout,
+            child_move_type,
+        )? {
+            ObjectResult::MismatchedType => return Ok(ObjectResult::MismatchedType),
+            ObjectResult::Loaded(loaded) => loaded,
+        };
+        if !value.exists()? {
+            return Ok(ObjectResult::Loaded((cache_info, None)));
+        }
+        let bytes = value
+            .borrow_global()?
+            .value_as::<Reference>()?
+            .read_ref()?
+            .typed_serialize(child_layout)
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Failed to serialize child object {child}"))
+            })?;
+        Ok(ObjectResult::Loaded((cache_info, Some(bytes))))
     }
 
     // TODO: Eventually we may want to allow larger types for accumulators,

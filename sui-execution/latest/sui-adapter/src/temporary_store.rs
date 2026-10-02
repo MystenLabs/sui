@@ -259,35 +259,6 @@ impl<'backing> TemporaryStore<'backing> {
         }
     }
 
-    /// Checks that the system object `object_id` is available at the version this transaction
-    /// requires, and records the read so it can be emitted into effects
-    /// and reproduced on replay.
-    /// This is expected to return Some in normal cases. If it ever returns None, it should be
-    /// treated as an invariant violation.
-    pub fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> Option<Object> {
-        let version = match self.system_object_versions.get(object_id) {
-            Some(version) => version,
-            None => {
-                debug_fatal!(
-                    "system_object_versions must contain entry for object_id: {:?}",
-                    object_id
-                );
-                return None;
-            }
-        };
-        let object = self
-            .store
-            // If this transaction needs to read an implicit system object,
-            // the version must be assigned before execution.
-            .load_implicitly_read_system_object(object_id, version)?;
-        // Record the read version so it can be emitted into effects as a read-only consensus object and
-        // reproduced on replay.
-        self.loaded_system_objects
-            .borrow_mut()
-            .insert(*object_id, (object.version(), object.digest()));
-        Some(object)
-    }
-
     pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {
         self.unsettled_object_funds
     }
@@ -1201,13 +1172,34 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
 }
 
 impl ObjectFundsResolver for TemporaryStore<'_> {
+    /// Loads the system object at the version consensus assigned to this transaction and records
+    /// the read so it can be emitted into effects and reproduced on replay.
+    fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> SuiResult<Object> {
+        let Some(version) = self.system_object_versions.get(object_id) else {
+            debug_fatal!(
+                "system_object_versions must contain entry for object_id: {:?}",
+                object_id
+            );
+            return Err(SuiErrorKind::ExecutionInvariantViolation.into());
+        };
+        // The store blocks until the assigned version is available during execution; only a
+        // dry run against pruned state can come back empty.
+        let object = self
+            .store
+            .load_implicitly_read_system_object(object_id, version)
+            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?;
+        self.loaded_system_objects
+            .borrow_mut()
+            .insert(*object_id, (object.version(), object.digest()));
+        Ok(object)
+    }
+
     /// Loads the object balance at the required version and subtracts withdrawals from the same
     /// checkpoint that have not settled yet.
     /// This function is expected never to fail; an error indicates an invariant violation.
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128> {
         let required_version = self
-            .load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?
+            .load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)?
             .version();
 
         let settled = AccumulatorRootValue::load(self, Some(required_version), owner, type_)?
@@ -1482,5 +1474,76 @@ impl BackingPackageStore for TemporaryStore<'_> {
                 }
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod system_object_resolver_tests {
+    use super::*;
+    use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+    use sui_types::base_types::ConsensusObjectVersion;
+    use sui_types::in_memory_storage::InMemoryStorage;
+
+    const ID: ObjectID = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
+    const INITIAL_SHARED_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
+    const STORED_VERSION: SequenceNumber = SequenceNumber::from_u64(10);
+
+    fn stored_registry() -> Object {
+        Object::with_id_owner_version_for_testing(
+            ID,
+            STORED_VERSION,
+            Owner::Shared {
+                initial_shared_version: INITIAL_SHARED_VERSION,
+            },
+        )
+    }
+
+    fn load_registry(assigned_version: Option<SequenceNumber>) -> SuiResult<Object> {
+        let backing_store = InMemoryStorage::new(vec![stored_registry()]);
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        TemporaryStore::new_with_input_objects(
+            &backing_store,
+            InputObjects::new(vec![]),
+            vec![],
+            TransactionDigest::default(),
+            &config,
+            0,
+            SystemObjectVersions::new(
+                None,
+                assigned_version.map(|version| ConsensusObjectVersion {
+                    initial_shared_version: INITIAL_SHARED_VERSION,
+                    version,
+                }),
+            ),
+            PostExecutionCheckInputs::default(),
+            &EmptyUnsettledObjectFunds,
+        )
+        .load_implicitly_read_system_object(&ID)
+    }
+
+    #[test]
+    fn implicitly_read_system_object_loads_the_assigned_version() {
+        assert_eq!(
+            load_registry(Some(STORED_VERSION))
+                .unwrap()
+                .compute_object_reference(),
+            stored_registry().compute_object_reference(),
+        );
+    }
+
+    // Outside the test configuration the same read returns `ExecutionInvariantViolation`.
+    #[test]
+    #[should_panic(expected = "system_object_versions must contain entry")]
+    fn implicitly_read_system_object_without_an_assigned_version_is_an_invariant_violation() {
+        let _ = load_registry(None);
+    }
+
+    #[test]
+    fn implicitly_read_system_object_missing_at_the_assigned_version_is_an_invariant_violation() {
+        let error = load_registry(Some(STORED_VERSION.next())).unwrap_err();
+        assert!(
+            matches!(error.as_inner(), SuiErrorKind::ExecutionInvariantViolation),
+            "{error:?}"
+        );
     }
 }

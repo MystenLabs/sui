@@ -84,6 +84,14 @@ pub struct InMemoryTestStore {
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
 impl InMemoryTestStore {
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(storage: InMemoryStorage) -> Self {
+        Self {
+            storage: RefCell::new(storage),
+            ..Default::default()
+        }
+    }
+
     fn settled_funds(&self, owner: SuiAddress, type_: &TypeTag) -> u128 {
         self.funds
             .borrow()
@@ -164,6 +172,18 @@ impl ObjectFundsResolver for InMemoryTestStore {
         type_: &TypeTag,
     ) -> sui_types::error::SuiResult<u128> {
         Ok(self.settled_funds(owner, type_))
+    }
+
+    // Move unit tests have no sequencer; native reads use the scenario's current committed state.
+    fn load_implicitly_read_system_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> sui_types::error::SuiResult<Object> {
+        self.storage
+            .borrow()
+            .get_object(object_id)
+            .cloned()
+            .ok_or_else(|| sui_types::error::SuiErrorKind::ExecutionInvariantViolation.into())
     }
 }
 

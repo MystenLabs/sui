@@ -250,9 +250,14 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
     }
 }
 
-/// Resolves the balance available for object-funds withdrawals during execution.
+/// Resolves the transaction-scoped funds state during execution: available object balances and
+/// the system objects whose versions consensus assigned to this transaction.
 pub trait ObjectFundsResolver {
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
+    /// Execution may only request an implicit system-object read for which consensus assigned
+    /// this transaction a version. A missing assignment, or an assigned version that cannot be
+    /// loaded, is an execution invariant violation, never an ordinary absence.
+    fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> SuiResult<Object>;
 }
 
 pub struct DenyListResult {
