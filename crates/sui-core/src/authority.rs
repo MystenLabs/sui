@@ -849,6 +849,13 @@ pub struct ExecutionEnv {
     /// Transactions that must finish before this transaction can be executed.
     /// Used to schedule barrier transactions after non-exclusive writes.
     pub barrier_dependencies: Vec<TransactionDigest>,
+    /// The transaction's position in causal order, assigned by the ExecutionScheduler
+    /// at enqueue time and used by the execution driver for admission. The driver
+    /// retires the index when the transaction finishes executing or is dropped as no
+    /// longer needed. None at the driver means the transaction is admitted
+    /// unconditionally (settlement transactions - see
+    /// `execution_scheduler::causal_admission`).
+    pub(crate) causal_index: Option<u64>,
 }
 
 impl Default for ExecutionEnv {
@@ -858,6 +865,7 @@ impl Default for ExecutionEnv {
             expected_effects_digest: None,
             funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
+            causal_index: None,
         }
     }
 }
@@ -879,6 +887,14 @@ impl ExecutionEnv {
 
     pub fn with_insufficient_funds(mut self) -> Self {
         self.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
+        self
+    }
+
+    /// For tests that drive scheduler-internal paths directly, standing in for the
+    /// index the ExecutionScheduler assigns at enqueue time.
+    #[cfg(test)]
+    pub(crate) fn with_causal_index(mut self, index: u64) -> Self {
+        self.causal_index = Some(index);
         self
     }
 
@@ -1546,12 +1562,7 @@ impl AuthorityState {
             (execution_start_time.elapsed().as_micros() as f64) / 1000.0
         );
 
-        let commit_result = self.commit_certificate(certificate, transaction_outputs, epoch_store);
-        if let Err(err) = commit_result {
-            error!(?tx_digest, "Error committing transaction: {err}");
-            tx_guard.release();
-            return ExecutionOutput::Fatal(err);
-        }
+        self.commit_certificate(certificate, transaction_outputs, epoch_store);
 
         if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
             certificate.data().transaction_data().kind()
@@ -1768,7 +1779,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         transaction_outputs: Arc<TransactionOutputs>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
+    ) {
         let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
             monitored_scope("Execution::commit_certificate");
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
@@ -1780,7 +1791,7 @@ impl AuthorityState {
         epoch_store.insert_executed_in_epoch(tx_digest);
         let key = certificate.key();
         if !matches!(key, TransactionKey::Digest(_)) {
-            epoch_store.insert_tx_key(key, *tx_digest)?;
+            epoch_store.insert_tx_key(key, *tx_digest);
         }
 
         // Allow testing what happens if we crash here.
@@ -1807,8 +1818,6 @@ impl AuthorityState {
             self.get_object_cache_reader()
                 .force_reload_system_packages(&BuiltInFramework::all_package_ids());
         }
-
-        Ok(())
     }
 
     fn update_metrics(
@@ -2686,10 +2695,12 @@ impl AuthorityState {
 
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
+        let causal_admission = state.execution_scheduler.causal_admission().clone();
         spawn_monitored_task!(execution_process(
             authority_state,
             rx_ready_certificates,
             rx_execution_shutdown,
+            causal_admission,
         ));
         if epoch_store
             .protocol_config()
@@ -2977,6 +2988,24 @@ impl AuthorityState {
         }
     }
 
+    /// The accumulator root version a transaction executed right now would read, or
+    /// None when accumulators are not enabled. Test paths that execute directly attach
+    /// this to their assigned versions: the test version-assignment helper assigns no
+    /// root version, but execution reads the root implicitly for object funds withdraws.
+    pub fn accumulator_version_for_testing(
+        &self,
+    ) -> Option<sui_types::base_types::ConsensusObjectVersion> {
+        let initial_shared_version = self
+            .epoch_store_for_testing()
+            .epoch_start_config()
+            .accumulator_root_obj_initial_shared_version()?;
+        let version = self.get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)?.version();
+        Some(sui_types::base_types::ConsensusObjectVersion {
+            initial_shared_version,
+            version,
+        })
+    }
+
     /// Executes accumulator settlement for testing purposes.
     /// Returns a list of (transaction, execution_env) pairs that can be replayed on another
     /// AuthorityState (e.g., a fullnode) using `replay_settlement_for_testing`.
@@ -3022,6 +3051,16 @@ impl AuthorityState {
             })
             .collect();
 
+        // The test version-assignment helper assigns no accumulator root version, and
+        // the barrier settles object funds at the version it writes.
+        let root_version = sui_types::base_types::ConsensusObjectVersion {
+            initial_shared_version: accumulator_root_obj_initial_shared_version,
+            version: accumulator_version,
+        };
+        let with_root_version = |assigned: shared_object_version_manager::AssignedVersions| {
+            assigned.with_accumulator_version_for_testing(root_version)
+        };
+
         let assigned_versions = epoch_store
             .assign_shared_object_versions_for_tests(
                 self.get_object_cache_reader().as_ref(),
@@ -3033,7 +3072,7 @@ impl AuthorityState {
         let mut replay_txns = Vec::new();
         let mut settlement_effects = Vec::with_capacity(settlements.len());
         for tx in settlements {
-            let assigned = version_map.get(&tx.key()).unwrap().clone();
+            let assigned = with_root_version(version_map.get(&tx.key()).unwrap().clone());
             let env = ExecutionEnv::new().with_assigned_versions(assigned);
             let (effects, _) = self
                 .try_execute_immediately(&tx.clone(), env.clone(), &epoch_store)
@@ -3062,7 +3101,7 @@ impl AuthorityState {
             .unwrap();
         let version_map = assigned_versions.into_map();
 
-        let barrier_assigned = version_map.get(&barrier.key()).unwrap().clone();
+        let barrier_assigned = with_root_version(version_map.get(&barrier.key()).unwrap().clone());
         let env = ExecutionEnv::new().with_assigned_versions(barrier_assigned);
         let (effects, _) = self
             .try_execute_immediately(&barrier.clone(), env.clone(), &epoch_store)

@@ -953,6 +953,15 @@ impl CheckpointExecutor {
             ),
         );
 
+        // When a randomness update arrives via checkpoint rather than being constructed
+        // locally from the round's signature, nothing else resolves its transaction key,
+        // and the keyed placeholder enqueued by consensus would wait forever.
+        for (txn, _) in &unexecuted_txns {
+            if let Some(key) = txn.non_digest_key() {
+                self.epoch_store.insert_tx_key(key, *txn.digest());
+            }
+        }
+
         // Enqueue unexecuted transactions with their expected effects digests
         self.execution_scheduler
             .enqueue_transactions(unexecuted_txns, &self.epoch_store);

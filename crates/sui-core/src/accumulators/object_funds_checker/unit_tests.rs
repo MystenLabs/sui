@@ -398,18 +398,22 @@ async fn test_should_commit_early_exits() {
     let withdraws = BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]);
 
     // Normal path that triggers object funds check. Should not commit since insufficient funds.
-    assert!(!checker.should_commit_object_funds_withdraws(
-        &tx,
-        &TestEffectsBuilder::new(tx.data()).build(),
-        &withdraws,
-        &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
-            vec![],
-            Some(SequenceNumber::from_u64(0))
-        )),
-        state.get_account_funds_read(),
-        state.execution_scheduler(),
-        &epoch_store,
-    ));
+    assert!(
+        !checker.should_commit_object_funds_withdraws(
+            &tx,
+            &TestEffectsBuilder::new(tx.data()).build(),
+            &withdraws,
+            &ExecutionEnv::new()
+                .with_assigned_versions(AssignedVersions::new_for_testing(
+                    vec![],
+                    Some(SequenceNumber::from_u64(0))
+                ))
+                .with_causal_index(1),
+            state.get_account_funds_read(),
+            state.execution_scheduler(),
+            &epoch_store,
+        )
+    );
 
     // Failed execution should always commit.
     assert!(
@@ -422,10 +426,12 @@ async fn test_should_commit_early_exits() {
                 )))
                 .build(),
             &withdraws,
-            &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
-                vec![],
-                Some(SequenceNumber::from_u64(0))
-            )),
+            &ExecutionEnv::new()
+                .with_assigned_versions(AssignedVersions::new_for_testing(
+                    vec![],
+                    Some(SequenceNumber::from_u64(0))
+                ))
+                .with_causal_index(1),
             state.get_account_funds_read(),
             state.execution_scheduler(),
             &epoch_store,
@@ -481,18 +487,22 @@ async fn test_should_commit_ignores_zero_net_withdraws() {
         ])
         .build();
 
-    assert!(checker.should_commit_object_funds_withdraws(
-        &tx,
-        &effects,
-        &running_max_withdraws,
-        &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new_for_testing(
-            vec![],
-            Some(SequenceNumber::from_u64(0))
-        )),
-        &funds_read,
-        state.execution_scheduler(),
-        &epoch_store,
-    ));
+    assert!(
+        checker.should_commit_object_funds_withdraws(
+            &tx,
+            &effects,
+            &running_max_withdraws,
+            &ExecutionEnv::new()
+                .with_assigned_versions(AssignedVersions::new_for_testing(
+                    vec![],
+                    Some(SequenceNumber::from_u64(0))
+                ))
+                .with_causal_index(1),
+            &funds_read,
+            state.execution_scheduler(),
+            &epoch_store,
+        )
+    );
 }
 
 #[tokio::test]
