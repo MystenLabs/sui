@@ -90,6 +90,7 @@ static_symbols!(
     "receive",
     "loop",
     "deny_list",
+    "package_config",
     "DenyList",
     "%implicit",
     "%macro",
