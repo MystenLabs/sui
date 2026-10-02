@@ -10,7 +10,7 @@ task 1, lines 6-31:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 7896400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 7896400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 33:
 //# run Test::f::create_and_test
@@ -55,7 +55,7 @@ task 6, lines 41-70:
 //# upgrade --package Test --upgrade-capability 1,1 --sender A
 created: object(6,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 8314400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1031000000, storage_cost: 8314400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 7, line 72:
 //# view-object 2,0

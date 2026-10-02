@@ -34,7 +34,7 @@ task 6, lines 72-81:
 //# publish
 created: object(6,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 3990000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1031000000, storage_cost: 3990000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8, lines 85-95:
 //# publish --dependencies test

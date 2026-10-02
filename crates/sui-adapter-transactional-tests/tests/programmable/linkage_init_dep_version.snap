@@ -20,19 +20,19 @@ task 1, lines 16-21:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 5236400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 23-28:
 //# publish --upgradeable --dependencies Dep_V1 --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5958400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1041000000, storage_cost: 5958400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 30-39:
 //# publish --dependencies Dep_V1 --sender A
 created: object(3,0), object(3,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 7235200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1041000000, storage_cost: 7235200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, line 41:
 //# view-object 3,1
@@ -51,19 +51,19 @@ task 5, lines 43-48:
 //# upgrade --package Dep_V1 --upgrade-capability 1,1 --sender A
 created: object(5,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1031000000, storage_cost: 5236400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 6, lines 50-55:
 //# upgrade --package ConsumerV1 --upgrade-capability 2,1 --dependencies Dep_V2 --sender A
 created: object(6,0)
 mutated: object(0,0), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 5958400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1041000000, storage_cost: 5958400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 7, lines 57-66:
 //# publish --dependencies Dep_V1 --sender A
 created: object(7,0), object(7,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 7235200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1041000000, storage_cost: 7235200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 8, line 68:
 //# view-object 7,1
@@ -85,7 +85,7 @@ task 10, lines 80-83:
 //> 1: TransferObjects([Result(0)], Input(0));
 created: object(10,0), object(10,1), object(10,2)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 8869200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1041000000, storage_cost: 8869200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 11, line 85:
 //# view-object 10,1
@@ -118,7 +118,7 @@ task 13, lines 93-98:
 //> 2: TransferObjects([Result(0)], Input(0));
 created: object(13,0), object(13,1), object(13,2)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 8869200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1041000000, storage_cost: 8869200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 14, line 100:
 //# view-object 13,1

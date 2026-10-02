@@ -12,7 +12,7 @@ task 1, lines 8-30:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 11567200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1031000000, storage_cost: 11567200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, lines 34-39:
 //# programmable --sender A --inputs 5000 object(1,1) @A
