@@ -178,8 +178,12 @@ impl ObjectFundsResolver for InMemoryTestStore {
     fn load_implicitly_read_system_object(
         &self,
         object_id: &ObjectID,
-    ) -> sui_types::error::SuiResult<Option<Object>> {
-        Ok(self.storage.borrow().get_object(object_id).cloned())
+    ) -> sui_types::error::SuiResult<Object> {
+        self.storage
+            .borrow()
+            .get_object(object_id)
+            .cloned()
+            .ok_or_else(|| sui_types::error::SuiErrorKind::ExecutionInvariantViolation.into())
     }
 }
 

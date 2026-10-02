@@ -82,32 +82,6 @@ async fn test_create_forwarding_address_registry_object_at_upgrade() {
     }
 
     test_cluster.wait_for_protocol_version(139.into()).await;
-    // A direct jump activates the native before the registry can be created. Forwarding-shaped
-    // recipients must fail closed during this epoch instead of receiving funds as ordinary
-    // addresses.
-    let (sender, gas) = test_cluster
-        .wallet
-        .get_one_gas_object()
-        .await
-        .unwrap()
-        .unwrap();
-    let forwarding_address = ForwardingAddress::derive_opaque(7, PAYLOAD);
-    let transaction =
-        TestTransactionBuilder::new(sender, gas, test_cluster.get_reference_gas_price().await)
-            .transfer_sui_to_address_balance(
-                FundSource::coin(gas),
-                vec![(1_000_000, forwarding_address)],
-            )
-            .build();
-    let (_, transition_effects) = test_cluster
-        .sign_and_execute_transaction_directly(&transaction)
-        .await
-        .unwrap();
-    assert_forwarding_abort(
-        transition_effects.status(),
-        E_UNREGISTERED,
-        "deposit before the registry exists",
-    );
 
     // The registry object is created at the end of the first epoch in which it is supported.
     test_cluster.wait_for_epoch_all_nodes(2).await; // protocol upgrade completes in epoch 1

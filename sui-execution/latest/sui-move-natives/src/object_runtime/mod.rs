@@ -497,25 +497,22 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     /// Loads a system object at the version consensus assigned to this transaction and makes it
-    /// a root for child lookups. `None` when the transaction has no assigned version for it.
+    /// a root for child lookups.
     pub fn load_implicitly_read_system_object(
         &mut self,
         object_id: &ObjectID,
-    ) -> PartialVMResult<Option<Object>> {
-        let Some(object) = self
+    ) -> PartialVMResult<Object> {
+        let object = self
             .object_funds_resolver
             .load_implicitly_read_system_object(object_id)
             .map_err(|err| {
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
                     format!("Failed to load assigned system object {object_id}: {err}"),
                 )
-            })?
-        else {
-            return Ok(None);
-        };
+            })?;
         self.child_object_store
             .track_system_root_version(*object_id, object.version())?;
-        Ok(Some(object))
+        Ok(object)
     }
 
     /// BCS contents of a child object as this transaction sees it, including a value written

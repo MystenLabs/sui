@@ -254,10 +254,10 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
 /// the system objects whose versions consensus assigned to this transaction.
 pub trait ObjectFundsResolver {
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
-    /// `Ok(None)` only when the transaction has no assigned version for `object_id`. An assigned
-    /// version that cannot be loaded is an execution invariant violation.
-    fn load_implicitly_read_system_object(&self, object_id: &ObjectID)
-    -> SuiResult<Option<Object>>;
+    /// Execution may only request an implicit system-object read for which consensus assigned
+    /// this transaction a version. A missing assignment, or an assigned version that cannot be
+    /// loaded, is an execution invariant violation, never an ordinary absence.
+    fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> SuiResult<Object>;
 }
 
 pub struct DenyListResult {

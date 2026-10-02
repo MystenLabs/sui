@@ -74,17 +74,8 @@ pub fn resolve_impl(
         ));
     }
 
-    let Some(registry) = get_extension_mut!(context, ObjectRuntime)?
-        .load_implicitly_read_system_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)?
-    else {
-        // Direct protocol-version jumps can enable forwarding one epoch before the registry is
-        // created. Reject reserved forwarding addresses during that transition rather than
-        // transferring funds to an address the master does not control.
-        return Ok(NativeResult::err(
-            context.gas_used(),
-            E_FORWARDING_ADDRESS_UNREGISTERED,
-        ));
-    };
+    let registry = get_extension_mut!(context, ObjectRuntime)?
+        .load_implicitly_read_system_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)?;
     native_charge_gas_early_exit!(
         context,
         per_byte * checked_as!(registry.object_size_for_gas_metering(), u64)?.into()
