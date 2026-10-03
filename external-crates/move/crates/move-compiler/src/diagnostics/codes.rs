@@ -85,6 +85,26 @@ pub struct DiagnosticInfo {
     message: &'static str,
 }
 
+pub(crate) struct DiagnosticDescription {
+    pub info: DiagnosticInfo,
+    pub explanation: Option<&'static str>,
+    pub lint_filter: Option<&'static str>,
+}
+
+impl DiagnosticDescription {
+    pub const fn new(
+        info: DiagnosticInfo,
+        explanation: Option<&'static str>,
+        lint_filter: Option<&'static str>,
+    ) -> Self {
+        Self {
+            info,
+            explanation,
+            lint_filter,
+        }
+    }
+}
+
 pub(crate) trait DiagnosticCode: Copy {
     const CATEGORY: Category;
 
@@ -186,6 +206,20 @@ macro_rules! codes {
                 }
             }
         )*
+
+        pub(crate) const COMPILER_DIAGNOSTICS: &[DiagnosticDescription] = &[
+            $($(DiagnosticDescription::new(
+                DiagnosticInfo {
+                    severity: Severity::$sev,
+                    category: Category::$cat as u8,
+                    code: $cat::$code as u8,
+                    origin: DiagnosticOrigin::Compiler,
+                    message: $code_msg,
+                },
+                None,
+                None,
+            ),)*)*
+        ];
 
     };
 }
