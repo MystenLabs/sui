@@ -38,7 +38,6 @@ use crate::handlers::obj_versions::ObjVersions;
 use crate::handlers::sum_displays::SumDisplays;
 use crate::handlers::tx_affected_addresses::TxAffectedAddresses;
 use crate::handlers::tx_affected_objects::TxAffectedObjects;
-use crate::handlers::tx_balance_changes::TxBalanceChanges;
 use crate::handlers::tx_calls::TxCalls;
 use crate::handlers::tx_digests::TxDigests;
 use crate::handlers::tx_kinds::TxKinds;
@@ -87,7 +86,6 @@ pub async fn setup_indexer(
         obj_versions,
         tx_affected_addresses,
         tx_affected_objects,
-        tx_balance_changes,
         tx_calls,
         tx_digests,
         tx_kinds,
@@ -195,7 +193,6 @@ pub async fn setup_indexer(
     add_concurrent!(ObjVersions, obj_versions);
     add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
     add_concurrent!(TxAffectedObjects, tx_affected_objects);
-    add_concurrent!(TxBalanceChanges, tx_balance_changes);
     add_concurrent!(TxCalls, tx_calls);
     add_concurrent!(TxDigests, tx_digests);
     add_concurrent!(TxKinds, tx_kinds);

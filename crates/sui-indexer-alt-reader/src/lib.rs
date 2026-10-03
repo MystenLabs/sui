@@ -21,5 +21,4 @@ pub mod packages;
 pub mod pg_reader;
 pub mod system_package_task;
 pub mod transactions;
-pub mod tx_balance_changes;
 pub mod tx_digests;
