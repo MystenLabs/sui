@@ -9,6 +9,7 @@ use consensus_types::block::BlockTimestampMs;
 use tempfile::TempDir;
 use tokio::time::Instant;
 
+use crate::adaptive_block_cap::AdaptiveBlockCap;
 use crate::metrics::Metrics;
 use crate::metrics::test_metrics;
 
@@ -30,6 +31,8 @@ pub struct Context {
     pub metrics: Arc<Metrics>,
     /// Access to local clock
     pub clock: Arc<Clock>,
+    /// Adaptive damper on proposed block bytes. `None` when disabled.
+    pub(crate) adaptive_block_cap: Option<Arc<AdaptiveBlockCap>>,
 }
 
 impl Context {
@@ -49,11 +52,14 @@ impl Context {
             AuthorityIndex::MAX
         };
 
+        let adaptive_block_cap = AdaptiveBlockCap::new(&parameters, &protocol_config).map(Arc::new);
+
         Self {
             epoch_start_timestamp_ms,
             own_index,
             committee,
             parameters,
+            adaptive_block_cap,
             protocol_config,
             metrics,
             clock,
@@ -111,11 +117,17 @@ impl Context {
 
     pub fn with_parameters(mut self, parameters: Parameters) -> Self {
         self.parameters = parameters;
-        self
+        self.rebuild_adaptive_block_cap()
     }
 
     pub fn with_protocol_config(mut self, protocol_config: ConsensusProtocolConfig) -> Self {
         self.protocol_config = protocol_config;
+        self.rebuild_adaptive_block_cap()
+    }
+
+    fn rebuild_adaptive_block_cap(mut self) -> Self {
+        self.adaptive_block_cap =
+            AdaptiveBlockCap::new(&self.parameters, &self.protocol_config).map(Arc::new);
         self
     }
 
