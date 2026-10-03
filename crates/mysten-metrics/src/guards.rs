@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use pin_project_lite::pin_project;
 use prometheus::IntGauge;
 use std::future::Future;
 use std::pin::Pin;
@@ -46,21 +47,24 @@ pub trait InflightGuardFutureExt: Future + Sized {
 impl<F: Future> InflightGuardFutureExt for F {
     fn count_in_flight(self, g: IntGauge) -> InflightGuardFuture<Self> {
         InflightGuardFuture {
-            f: Box::pin(self),
+            f: self,
             _guard: InflightGuard::acquire(g),
         }
     }
 }
 
-pub struct InflightGuardFuture<F: Sized> {
-    f: Pin<Box<F>>,
-    _guard: InflightGuard,
+pin_project! {
+    pub struct InflightGuardFuture<F: Sized> {
+        #[pin]
+        f: F,
+        _guard: InflightGuard,
+    }
 }
 
 impl<F: Future> Future for InflightGuardFuture<F> {
     type Output = F::Output;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.f.as_mut().poll(cx)
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.project().f.poll(cx)
     }
 }
