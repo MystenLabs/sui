@@ -51,6 +51,10 @@ pub(crate) fn cohorts(
 
 #[cfg(test)]
 mod tests {
+    use tokio::sync::mpsc;
+
+    use crate::service::Service;
+
     use super::*;
 
     /// A pipeline resuming exactly `distance` checkpoints behind the tip. Tests fix the tip at
@@ -60,7 +64,8 @@ mod tests {
         PendingPipeline {
             name: "test",
             next_checkpoint: u64::MAX - distance,
-            build: Box::new(|_| unreachable!("cohort grouping never builds pipelines")),
+            tx: mpsc::channel(1).0,
+            service: Service::new(),
         }
     }
 
