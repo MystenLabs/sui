@@ -892,210 +892,248 @@ async fn test_access_types() {
     info!("peer_id_10: {:?}", peer_id_10);
     info!("peer_id_11: {:?}", peer_id_11);
 
-    // Let them fully connect
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    let expected_peers = [
+        // Node 1 is connected to everyone. But it only "knows" public nodes (2, 9).
+        (
+            "Node 1",
+            &network_1,
+            &state_1,
+            PeerState {
+                network_known_peers: HashSet::from_iter(vec![]),
+                network_connected_peers: HashSet::from_iter(vec![
+                    peer_id_2, peer_id_3, peer_id_4, peer_id_5, peer_id_6, peer_id_7, peer_id_8,
+                    peer_id_9, peer_id_10, peer_id_11,
+                ]),
+                discovery_known_peers: HashSet::from_iter(vec![peer_id_2, peer_id_9]),
+                discovery_connected_peers: HashSet::from_iter(vec![
+                    peer_id_2, peer_id_3, peer_id_4, peer_id_5, peer_id_6, peer_id_7, peer_id_8,
+                    peer_id_9, peer_id_10, peer_id_11,
+                ]),
+            },
+        ),
+        // Node 2 is connected to everyone. But it does not "know" private nodes except the allowlisted ones 7 and 8.
+        (
+            "Node 2",
+            &network_2,
+            &state_2,
+            PeerState {
+                network_known_peers: HashSet::from_iter(vec![peer_id_1, peer_id_7, peer_id_8]),
+                network_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_3, peer_id_4, peer_id_5, peer_id_6, peer_id_7, peer_id_8,
+                    peer_id_9, peer_id_10, peer_id_11,
+                ]),
+                discovery_known_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_7, peer_id_8, peer_id_9,
+                ]),
+                discovery_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_3, peer_id_4, peer_id_5, peer_id_6, peer_id_7, peer_id_8,
+                    peer_id_9, peer_id_10, peer_id_11,
+                ]),
+            },
+        ),
+        // Node 3 connects to seeds 1, 4, 5 and discovers more via gossip.
+        (
+            "Node 3",
+            &network_3,
+            &state_3,
+            PeerState {
+                network_known_peers: HashSet::from_iter(vec![peer_id_1, peer_id_4, peer_id_5]),
+                network_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_4, peer_id_5, peer_id_9,
+                ]),
+                discovery_known_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_4, peer_id_5, peer_id_9,
+                ]),
+                discovery_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_4, peer_id_5, peer_id_9,
+                ]),
+            },
+        ),
+        // Node 4 connects to seed 3 and discovers more via gossip.
+        (
+            "Node 4",
+            &network_4,
+            &state_4,
+            PeerState {
+                network_known_peers: HashSet::from_iter(vec![peer_id_3, peer_id_5, peer_id_6]),
+                network_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_3, peer_id_5, peer_id_6, peer_id_9,
+                ]),
+                discovery_known_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_3, peer_id_5, peer_id_6, peer_id_9,
+                ]),
+                discovery_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_3, peer_id_5, peer_id_6, peer_id_9,
+                ]),
+            },
+        ),
+        // Node 5 connects to seed 4 and discovers more via gossip.
+        (
+            "Node 5",
+            &network_5,
+            &state_5,
+            PeerState {
+                network_known_peers: HashSet::from_iter(vec![peer_id_3, peer_id_4]),
+                network_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_3, peer_id_4, peer_id_9,
+                ]),
+                discovery_known_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_3, peer_id_4, peer_id_9,
+                ]),
+                discovery_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_3, peer_id_4, peer_id_9,
+                ]),
+            },
+        ),
+        // Node 6 connects to seed 4 and discovers more via gossip.
+        (
+            "Node 6",
+            &network_6,
+            &state_6,
+            PeerState {
+                network_known_peers: HashSet::from_iter(vec![peer_id_4]),
+                network_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_4, peer_id_9,
+                ]),
+                discovery_known_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_4, peer_id_9,
+                ]),
+                discovery_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_4, peer_id_9,
+                ]),
+            },
+        ),
+        // Node 7 connects to seeds 2 and 8 and discovers more via gossip.
+        // Node 7 is private so its info is NOT shared via gossip - Node 11 can't discover it.
+        (
+            "Node 7",
+            &network_7,
+            &state_7,
+            PeerState {
+                network_known_peers: HashSet::from_iter(vec![peer_id_2, peer_id_8]),
+                network_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_8, peer_id_9,
+                ]),
+                discovery_known_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_8, peer_id_9,
+                ]),
+                discovery_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_8, peer_id_9,
+                ]),
+            },
+        ),
+        // Node 8 has seeds 7 and 9, but max_concurrent_connections is 0 so it can't accept more connections.
+        // Node 8 is private so its info is NOT shared via gossip.
+        (
+            "Node 8",
+            &network_8,
+            &state_8,
+            PeerState {
+                network_known_peers: HashSet::from_iter(vec![peer_id_7, peer_id_9]),
+                network_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_7, peer_id_9,
+                ]),
+                discovery_known_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_7, peer_id_9,
+                ]),
+                discovery_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_7, peer_id_9,
+                ]),
+            },
+        ),
+        // Node 9 (public, no seeds) is connected by many nodes that discover it.
+        (
+            "Node 9",
+            &network_9,
+            &state_9,
+            PeerState {
+                network_known_peers: HashSet::from_iter(vec![]),
+                network_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_3, peer_id_4, peer_id_5, peer_id_6, peer_id_7,
+                    peer_id_8, peer_id_10, peer_id_11,
+                ]),
+                discovery_known_peers: HashSet::from_iter(vec![peer_id_1, peer_id_2]),
+                discovery_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_3, peer_id_4, peer_id_5, peer_id_6, peer_id_7,
+                    peer_id_8, peer_id_10, peer_id_11,
+                ]),
+            },
+        ),
+        // Node 10 connects to Node 9 (seed) and discovers more.
+        (
+            "Node 10",
+            &network_10,
+            &state_10,
+            PeerState {
+                network_known_peers: HashSet::from_iter(vec![peer_id_9]),
+                network_connected_peers: HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
+                discovery_known_peers: HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
+                discovery_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_9,
+                ]),
+            },
+        ),
+        // Node 11 connects to seed 1 and discovers more.
+        // Node 11 allowlists 7 and 8 (no addresses), but they're private so their info isn't shared via gossip.
+        // Node 11 can't discover them.
+        (
+            "Node 11",
+            &network_11,
+            &state_11,
+            PeerState {
+                network_known_peers: HashSet::from_iter(vec![peer_id_1, peer_id_7, peer_id_8]),
+                network_connected_peers: HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
+                discovery_known_peers: HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
+                discovery_connected_peers: HashSet::from_iter(vec![
+                    peer_id_1, peer_id_2, peer_id_9,
+                ]),
+            },
+        ),
+    ];
 
-    // Node 1 is connected to everyone. But it only "knows" public nodes (2, 9).
-    assert_peers(
-        "Node 1",
-        &network_1,
-        &state_1,
-        HashSet::from_iter(vec![]),
-        HashSet::from_iter(vec![
-            peer_id_2, peer_id_3, peer_id_4, peer_id_5, peer_id_6, peer_id_7, peer_id_8, peer_id_9,
-            peer_id_10, peer_id_11,
-        ]),
-        HashSet::from_iter(vec![peer_id_2, peer_id_9]),
-        HashSet::from_iter(vec![
-            peer_id_2, peer_id_3, peer_id_4, peer_id_5, peer_id_6, peer_id_7, peer_id_8, peer_id_9,
-            peer_id_10, peer_id_11,
-        ]),
-    );
-
-    // Node 2 is connected to everyone. But it does not "know" private nodes except the allowlisted ones 7 and 8.
-    assert_peers(
-        "Node 2",
-        &network_2,
-        &state_2,
-        HashSet::from_iter(vec![peer_id_1, peer_id_7, peer_id_8]),
-        HashSet::from_iter(vec![
-            peer_id_1, peer_id_3, peer_id_4, peer_id_5, peer_id_6, peer_id_7, peer_id_8, peer_id_9,
-            peer_id_10, peer_id_11,
-        ]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_7, peer_id_8, peer_id_9]),
-        HashSet::from_iter(vec![
-            peer_id_1, peer_id_3, peer_id_4, peer_id_5, peer_id_6, peer_id_7, peer_id_8, peer_id_9,
-            peer_id_10, peer_id_11,
-        ]),
-    );
-
-    // Node 3 connects to seeds 1, 4, 5 and discovers more via gossip.
-    assert_peers(
-        "Node 3",
-        &network_3,
-        &state_3,
-        HashSet::from_iter(vec![peer_id_1, peer_id_4, peer_id_5]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_4, peer_id_5, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_4, peer_id_5, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_4, peer_id_5, peer_id_9]),
-    );
-
-    // Node 4 connects to seed 3 and discovers more via gossip.
-    assert_peers(
-        "Node 4",
-        &network_4,
-        &state_4,
-        HashSet::from_iter(vec![peer_id_3, peer_id_5, peer_id_6]),
-        HashSet::from_iter(vec![
-            peer_id_1, peer_id_2, peer_id_3, peer_id_5, peer_id_6, peer_id_9,
-        ]),
-        HashSet::from_iter(vec![
-            peer_id_1, peer_id_2, peer_id_3, peer_id_5, peer_id_6, peer_id_9,
-        ]),
-        HashSet::from_iter(vec![
-            peer_id_1, peer_id_2, peer_id_3, peer_id_5, peer_id_6, peer_id_9,
-        ]),
-    );
-
-    // Node 5 connects to seed 4 and discovers more via gossip.
-    assert_peers(
-        "Node 5",
-        &network_5,
-        &state_5,
-        HashSet::from_iter(vec![peer_id_3, peer_id_4]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_3, peer_id_4, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_3, peer_id_4, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_3, peer_id_4, peer_id_9]),
-    );
-
-    // Node 6 connects to seed 4 and discovers more via gossip.
-    assert_peers(
-        "Node 6",
-        &network_6,
-        &state_6,
-        HashSet::from_iter(vec![peer_id_4]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_4, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_4, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_4, peer_id_9]),
-    );
-
-    // Node 7 connects to seeds 2 and 8 and discovers more via gossip.
-    // Node 7 is private so its info is NOT shared via gossip - Node 11 can't discover it.
-    assert_peers(
-        "Node 7",
-        &network_7,
-        &state_7,
-        HashSet::from_iter(vec![peer_id_2, peer_id_8]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_8, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_8, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_8, peer_id_9]),
-    );
-
-    // Node 8 has seeds 7 and 9, but max_concurrent_connections is 0 so it can't accept more connections.
-    // Node 8 is private so its info is NOT shared via gossip.
-    assert_peers(
-        "Node 8",
-        &network_8,
-        &state_8,
-        HashSet::from_iter(vec![peer_id_7, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_7, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_7, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_7, peer_id_9]),
-    );
-
-    // Node 9 (public, no seeds) is connected by many nodes that discover it.
-    assert_peers(
-        "Node 9",
-        &network_9,
-        &state_9,
-        HashSet::from_iter(vec![]),
-        HashSet::from_iter(vec![
-            peer_id_1, peer_id_2, peer_id_3, peer_id_4, peer_id_5, peer_id_6, peer_id_7, peer_id_8,
-            peer_id_10, peer_id_11,
-        ]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2]),
-        HashSet::from_iter(vec![
-            peer_id_1, peer_id_2, peer_id_3, peer_id_4, peer_id_5, peer_id_6, peer_id_7, peer_id_8,
-            peer_id_10, peer_id_11,
-        ]),
-    );
-
-    // Node 10 connects to Node 9 (seed) and discovers more.
-    assert_peers(
-        "Node 10",
-        &network_10,
-        &state_10,
-        HashSet::from_iter(vec![peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
-    );
-
-    // Node 11 connects to seed 1 and discovers more.
-    // Node 11 allowlists 7 and 8 (no addresses), but they're private so their info isn't shared via gossip.
-    // Node 11 can't discover them.
-    assert_peers(
-        "Node 11",
-        &network_11,
-        &state_11,
-        HashSet::from_iter(vec![peer_id_1, peer_id_7, peer_id_8]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
-    );
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        let mut converged = true;
+        for (name, network, state, expected) in &expected_peers {
+            let actual = peer_state(network, state);
+            if actual != *expected {
+                if tokio::time::Instant::now() >= deadline {
+                    assert_eq!(&actual, expected, "{name} peers failed to converge");
+                }
+                converged = false;
+                break;
+            }
+        }
+        if converged {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
-fn assert_peers(
-    self_name: &str,
-    network: &Network,
-    state: &Arc<RwLock<State>>,
-    expected_network_known_peers: HashSet<PeerId>,
-    expected_network_connected_peers: HashSet<PeerId>,
-    expected_discovery_known_peers: HashSet<PeerId>,
-    expected_discovery_connected_peers: HashSet<PeerId>,
-) {
-    let actual = network
+#[derive(Debug, PartialEq, Eq)]
+struct PeerState {
+    network_known_peers: HashSet<PeerId>,
+    network_connected_peers: HashSet<PeerId>,
+    discovery_known_peers: HashSet<PeerId>,
+    discovery_connected_peers: HashSet<PeerId>,
+}
+
+fn peer_state(network: &Network, state: &Arc<RwLock<State>>) -> PeerState {
+    let network_known_peers = network
         .known_peers()
         .get_all()
-        .iter()
+        .into_iter()
         .map(|pi| pi.peer_id)
-        .collect::<HashSet<_>>();
-    assert_eq!(
-        actual, expected_network_known_peers,
-        "{} network known peers mismatch. Expected: {:#?}, actual: {:#?}",
-        self_name, expected_network_known_peers, actual,
-    );
-    let actual = network.peers().iter().copied().collect::<HashSet<_>>();
-    assert_eq!(
-        actual, expected_network_connected_peers,
-        "{} network connected peers mismatch. Expected: {:#?}, actual: {:#?}",
-        self_name, expected_network_connected_peers, actual,
-    );
-    let actual = state
-        .read()
-        .unwrap()
-        .known_peers
-        .keys()
-        .cloned()
-        .collect::<HashSet<_>>();
-    assert_eq!(
-        actual, expected_discovery_known_peers,
-        "{} discovery known peers mismatch. Expected: {:#?}, actual: {:#?}",
-        self_name, expected_discovery_known_peers, actual,
-    );
-
-    let actual = state
-        .read()
-        .unwrap()
-        .connected_peers
-        .keys()
-        .cloned()
-        .collect::<HashSet<_>>();
-    assert_eq!(
-        actual, expected_discovery_connected_peers,
-        "{} discovery connected peers mismatch. Expected: {:#?}, actual: {:#?}",
-        self_name, expected_discovery_connected_peers, actual,
-    );
+        .collect();
+    let network_connected_peers = network.peers().into_iter().collect();
+    let state = state.read().unwrap();
+    PeerState {
+        network_known_peers,
+        network_connected_peers,
+        discovery_known_peers: state.known_peers.keys().copied().collect(),
+        discovery_connected_peers: state.connected_peers.keys().copied().collect(),
+    }
 }
 
 fn unwrap_new_peer_event(event: PeerEvent) -> PeerId {
