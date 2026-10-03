@@ -22,7 +22,7 @@ use sui_core::{
     transaction_driver::{
         ReconfigObserver, SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics,
     },
-    validator_client_monitor::ValidatorClientMetrics,
+    validator_client_monitor::{TransactionClass, ValidatorClientMetrics},
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_rpc_api::{Client, client::ExecutedTransaction};
@@ -43,7 +43,7 @@ use sui_types::{
     base_types::TransactionDigest,
     messages_grpc::{
         RawSubmitTxRequest, SubmitTxRequest, SubmitTxResult, SubmitTxType, WaitForEffectsRequest,
-        WaitForEffectsResponse,
+        WaitForEffectsResponse, WaitForEffectsStatus,
     },
     programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
@@ -566,7 +566,10 @@ impl LocalValidatorAggregatorProxy {
             }
             ValidatorSelection::HighestPerformance => self
                 .td
-                .select_preferred_validators(preferred_validator_latency_delta)
+                .select_preferred_validators(
+                    preferred_validator_latency_delta,
+                    TransactionClass::Unrestricted,
+                )
                 .into_iter()
                 .filter(|name| self.clients.contains_key(name))
                 .take(num_validators)
@@ -807,9 +810,12 @@ async fn execute_soft_bundle_with_retries(
                 } => {
                     // Transaction was already executed - return the effects directly
                     outcomes.push(SubmissionOutcome::ImmediateResponse(
-                        WaitForEffectsResponse::Executed {
-                            effects_digest,
-                            details,
+                        WaitForEffectsResponse {
+                            staggering: None,
+                            status: WaitForEffectsStatus::Executed {
+                                effects_digest,
+                                details,
+                            },
                         },
                     ));
                 }
@@ -825,7 +831,10 @@ async fn execute_soft_bundle_with_retries(
                     }
                     // Non-retriable rejection - record as rejected response
                     outcomes.push(SubmissionOutcome::ImmediateResponse(
-                        WaitForEffectsResponse::Rejected { error: Some(error) },
+                        WaitForEffectsResponse {
+                            staggering: None,
+                            status: WaitForEffectsStatus::Rejected { error: Some(error) },
+                        },
                     ));
                 }
             }
@@ -876,12 +885,14 @@ async fn execute_soft_bundle_with_retries(
         // before giving up — our chosen validator didn't vote reject so won't
         // have one cached, but a different validator may.
         let retriable_wait_failure = wait_responses.iter().find_map(|r| match r {
-            Ok(WaitForEffectsResponse::Rejected { error: Some(e) }) if e.is_retryable().0 => {
-                Some(format!("rejected: {e:?}"))
-            }
-            Ok(WaitForEffectsResponse::Expired { epoch, round }) => {
-                Some(format!("expired (epoch {epoch}, round {round:?})"))
-            }
+            Ok(WaitForEffectsResponse {
+                status: WaitForEffectsStatus::Rejected { error: Some(e) },
+                ..
+            }) if e.is_retryable().0 => Some(format!("rejected: {e:?}")),
+            Ok(WaitForEffectsResponse {
+                status: WaitForEffectsStatus::Expired { epoch, round },
+                ..
+            }) => Some(format!("expired (epoch {epoch}, round {round:?})")),
             _ => None,
         });
         if let Some(reason) = retriable_wait_failure

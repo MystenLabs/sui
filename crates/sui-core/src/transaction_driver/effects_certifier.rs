@@ -18,7 +18,7 @@ use sui_types::{
     messages_consensus::ConsensusPosition,
     messages_grpc::{
         ExecutedData, PingType, RawWaitForEffectsRequest, SubmitTxResult, TxType,
-        WaitForEffectsRequest, WaitForEffectsResponse,
+        WaitForEffectsRequest, WaitForEffectsResponse, WaitForEffectsStatus,
     },
     transaction_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
@@ -113,8 +113,14 @@ impl EffectsCertifier {
             }
         };
 
-        let mut retrier =
-            RequestRetrier::new(authority_aggregator, client_monitor, vec![], vec![], None);
+        let mut retrier = RequestRetrier::new(
+            authority_aggregator,
+            client_monitor,
+            vec![],
+            vec![],
+            None,
+            None,
+        );
         let ping_type = get_ping_type(&tx_digest);
 
         // Channel for wait_for_acknowledgments to notify which validators have acked.
@@ -153,6 +159,7 @@ impl EffectsCertifier {
                 full_effects_start_time = Some(Instant::now());
                 self.get_full_effects_with_fallback(
                     authority_aggregator,
+                    client_monitor,
                     client,
                     name,
                     tx_digest,
@@ -188,6 +195,7 @@ impl EffectsCertifier {
                             authority_name: current_target,
                             display_name,
                             operation: OperationType::Effects,
+                            tx_class: None,
                             ping_type,
                             result: Err(()),
                         });
@@ -198,6 +206,7 @@ impl EffectsCertifier {
                                 authority_name: current_target,
                                 display_name,
                                 operation: OperationType::Effects,
+                                tx_class: None,
                                 ping_type,
                                 result: Ok(latency),
                             });
@@ -213,6 +222,7 @@ impl EffectsCertifier {
                         authority_name: current_target,
                         display_name,
                         operation: OperationType::Effects,
+                        tx_class: None,
                         ping_type,
                         result: Err(()),
                     });
@@ -232,7 +242,15 @@ impl EffectsCertifier {
             current_target = name;
             full_effects_start_time = Some(Instant::now());
             full_effects_result = self
-                .get_full_effects(client, tx_digest, tx_type, consensus_position, options)
+                .get_full_effects(
+                    client,
+                    name,
+                    client_monitor,
+                    tx_digest,
+                    tx_type,
+                    consensus_position,
+                    options,
+                )
                 .await;
         }
     }
@@ -241,6 +259,8 @@ impl EffectsCertifier {
     async fn get_full_effects<A>(
         &self,
         client: Arc<SafeClient<A>>,
+        name: AuthorityName,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: Option<TransactionDigest>,
         _tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
@@ -263,32 +283,36 @@ impl EffectsCertifier {
         )
         .await
         {
-            Ok(Ok(response)) => match response {
-                WaitForEffectsResponse::Executed {
-                    effects_digest,
-                    details,
-                } => {
-                    if let Some(details) = details {
-                        tracing::Span::current()
-                            .record("ret_effects_digest", format!("{:?}", effects_digest));
-                        Ok((effects_digest, details))
-                    } else {
-                        tracing::debug!("Execution data not found, retrying...");
-                        Err(TransactionRequestError::ValidatorInternal(
-                            "Execution data not found".to_string(),
-                        ))
+            Ok(Ok(response)) => {
+                // The report rides every outcome; record it before acting on the status.
+                client_monitor.record_staggering_report(name, response.staggering);
+                match response.status {
+                    WaitForEffectsStatus::Executed {
+                        effects_digest,
+                        details,
+                    } => {
+                        if let Some(details) = details {
+                            tracing::Span::current()
+                                .record("ret_effects_digest", format!("{:?}", effects_digest));
+                            Ok((effects_digest, details))
+                        } else {
+                            tracing::debug!("Execution data not found, retrying...");
+                            Err(TransactionRequestError::ValidatorInternal(
+                                "Execution data not found".to_string(),
+                            ))
+                        }
                     }
+                    WaitForEffectsStatus::Rejected { error } => match error {
+                        Some(e) => Err(TransactionRequestError::RejectedAtValidator(e)),
+                        // Even though this response is not an error, returning an error which is required
+                        // by the function signature. This will get ignored by the caller as a retriable error.
+                        None => Err(TransactionRequestError::RejectedByConsensus),
+                    },
+                    WaitForEffectsStatus::Expired { epoch, round } => Err(
+                        TransactionRequestError::StatusExpired(epoch, round.unwrap_or(0)),
+                    ),
                 }
-                WaitForEffectsResponse::Rejected { error } => match error {
-                    Some(e) => Err(TransactionRequestError::RejectedAtValidator(e)),
-                    // Even though this response is not an error, returning an error which is required
-                    // by the function signature. This will get ignored by the caller as a retriable error.
-                    None => Err(TransactionRequestError::RejectedByConsensus),
-                },
-                WaitForEffectsResponse::Expired { epoch, round } => Err(
-                    TransactionRequestError::StatusExpired(epoch, round.unwrap_or(0)),
-                ),
-            },
+            }
             Ok(Err(e)) => Err(TransactionRequestError::Aborted(e)),
             Err(_) => Err(TransactionRequestError::TimedOutGettingFullEffectsAtValidator),
         }
@@ -306,6 +330,7 @@ impl EffectsCertifier {
     async fn get_full_effects_with_fallback<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         initial_client: Arc<SafeClient<A>>,
         initial_target: AuthorityName,
         tx_digest: Option<TransactionDigest>,
@@ -324,6 +349,8 @@ impl EffectsCertifier {
         // Add initial request to the pending set alongside fallbacks for uniform handling
         let initial_request = self.get_full_effects(
             initial_client,
+            initial_target,
+            client_monitor,
             tx_digest,
             tx_type,
             consensus_position,
@@ -363,6 +390,8 @@ impl EffectsCertifier {
 
                         let fut = self.get_full_effects(
                             client.clone(),
+                            acked_validator,
+                            client_monitor,
                             tx_digest,
                             tx_type,
                             consensus_position,
@@ -444,6 +473,7 @@ impl EffectsCertifier {
                             authority_name: name,
                             display_name,
                             operation: OperationType::Effects,
+                            tx_class: None,
                             ping_type,
                             result: Err(()),
                         });
@@ -474,8 +504,12 @@ impl EffectsCertifier {
 
         // Every validator returns at most one WaitForEffectsResponse.
         while let Some((name, response)) = futures.next().await {
-            match response {
-                Ok(WaitForEffectsResponse::Executed {
+            if let Ok(response) = &response {
+                // The report rides every outcome; record it before acting on the status.
+                client_monitor.record_staggering_report(name, response.staggering);
+            }
+            match response.map(|response| response.status) {
+                Ok(WaitForEffectsStatus::Executed {
                     effects_digest,
                     details: _,
                 }) => {
@@ -517,7 +551,7 @@ impl EffectsCertifier {
                         return Ok(effects_digest);
                     }
                 }
-                Ok(WaitForEffectsResponse::Rejected { error }) => {
+                Ok(WaitForEffectsStatus::Rejected { error }) => {
                     if let Some(e) = error {
                         tracing::trace!(name = ?name.concise(), "Rejected at validator: {:?}", e);
                         let error = TransactionRequestError::RejectedAtValidator(e);
@@ -535,7 +569,7 @@ impl EffectsCertifier {
                         .with_label_values(&[tx_type.as_str(), ping_label])
                         .inc();
                 }
-                Ok(WaitForEffectsResponse::Expired { epoch, round }) => {
+                Ok(WaitForEffectsStatus::Expired { epoch, round }) => {
                     let error = TransactionRequestError::StatusExpired(epoch, round.unwrap_or(0));
                     // Expired status is submission retriable.
                     retriable_errors_aggregator.insert(name, error);
@@ -698,6 +732,7 @@ impl EffectsCertifier {
                         authority_name: name,
                         display_name: display_name.clone(),
                         operation: OperationType::Effects,
+                        tx_class: None,
                         ping_type,
                         result: Ok(latency),
                     });
@@ -708,6 +743,7 @@ impl EffectsCertifier {
                         authority_name: name,
                         display_name: display_name.clone(),
                         operation: OperationType::Effects,
+                        tx_class: None,
                         ping_type,
                         result: Err(()),
                     });
