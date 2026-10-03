@@ -290,6 +290,7 @@ anyhow = "1.0.71"
 arrow = "57.3"
 arrow-array = "57.3"
 arc-swap = { version = "1.5.1", features = ["serde"] }
+argon2 = { version = "0.6.0", default-features = false }
 assert_cmd = "2.0.6"
 async-graphql = "=7.0.1"
 async-graphql-axum = "=7.0.1"
