@@ -317,7 +317,7 @@ Builder-code creation is the only permissionless function in the registry that c
 
 Anyone can call it. The resulting `BuilderCode` is a shared object derived from the registry UID and keyed by the caller address plus the index you pass, so its address is deterministic and one address can hold many codes. The call returns the code ID and emits `BuilderCodeCreated`.
 
-An account attaches a code with `predict_account::set_builder_code` and detaches it with `predict_account::unset_builder_code`. Builder fees accrue to the code address through the funds accumulator, and only the owner can call `builder_code::claim_all_builder_fees`, which returns a `Coin<USDC>`.
+An account attaches a code with `predict_account::set_builder_code` and detaches it with `predict_account::unset_builder_code`. Builder fees accrue to the code address through the funds accumulator, and only the owner can call `builder_code::claim_all_builder_fees`, which returns a `Coin<USDC>`. [Builder codes](/onchain-finance/deepbook/deepbook-predict/design#builder-codes) covers the fee, the attachment rules, and the events, and [Predict Accounts SDK](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#operate-builder-code) creates a code and claims its fees from TypeScript.
 
 ## Protocol configuration {#protocol-config}
 

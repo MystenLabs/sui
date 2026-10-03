@@ -409,7 +409,7 @@ To value a position, pass its order ID to the market: `expiry_market::live_order
 
 ### Builder codes {#builder-codes}
 
-An account can carry one builder code, which routes an add-on fee to the code's owner on every trade the account makes:
+An account can carry one builder code, which adds a builder fee to each mint and live close the account makes:
 
 ```move title='packages/predict/sources/predict_account.move'
 public fun set_builder_code(
@@ -422,7 +422,7 @@ public fun set_builder_code(
 public fun unset_builder_code(wrapper: &mut AccountWrapper, auth: Auth, ctx: &mut TxContext)
 ```
 
-Both consume an `Auth` and both emit `BuilderCodeSet` from `deepbook_predict::builder_code_events`, with `builder_code_id` set on one and absent on the other. Attribution is sticky: it applies to trades made after the call, not retroactively. The SDK exposes `client.predict.tx.setBuilderCode(owner, builderCodeId)` and `client.predict.tx.unsetBuilderCode(owner)`.
+Both consume an `Auth` and both emit `BuilderCodeSet` from `deepbook_predict::builder_code_events`, with `builder_code_id` set on one and absent on the other. Attribution is sticky: it applies to trades made after the call, not retroactively. [Builder codes](/onchain-finance/deepbook/deepbook-predict/design#builder-codes) covers what the fee is and how the code's owner collects it. The SDK exposes `client.predict.tx.setBuilderCode(owner, builderCodeId)` and `client.predict.tx.unsetBuilderCode(owner)`.
 
 <details>
 <summary>Predict account function source</summary>
