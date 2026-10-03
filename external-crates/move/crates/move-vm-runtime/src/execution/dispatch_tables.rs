@@ -14,11 +14,11 @@ use crate::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Package, Type, TypeSubst,
     },
     shared::{
-        TypeSize,
         constants::TYPE_DEPTH_LRU_SIZE,
         linkage_context::LinkageContext,
         types::{DefiningTypeId, OriginalId},
         vm_pointer::VMPointer,
+        TypeSize,
     },
 };
 
@@ -41,7 +41,7 @@ use tracing::instrument;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -80,6 +80,10 @@ pub struct VMDispatchTables {
     ///
     /// However, the contents of the cache do not affect execution correctness, only performance.
     pub(crate) type_depths: QCache<VirtualTableKey, DepthFormula>,
+    /// Cache for fully annotated type layouts to avoid recomputing the same layout repeatedly.
+    /// Shared via `Arc` so it persists across `VMDispatchTables` clones.
+    pub(crate) type_fully_annotated_layout_cache:
+        Arc<Mutex<HashMap<Type, annotated_value::MoveTypeLayout>>>,
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -188,6 +192,7 @@ impl VMDispatchTables {
             defining_id_origins,
             link_context,
             type_depths: QCache::new(TYPE_DEPTH_LRU_SIZE),
+            type_fully_annotated_layout_cache: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -947,10 +952,24 @@ impl VMDispatchTables {
         &self,
         ty: &Type,
     ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
-        self.type_to_fully_annotated_layout_impl(
+        if let Some(layout) = self
+            .type_fully_annotated_layout_cache
+            .lock()
+            .unwrap()
+            .get(ty)
+            .cloned()
+        {
+            return Ok(layout);
+        }
+        let layout = self.type_to_fully_annotated_layout_impl(
             ty,
             &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config),
-        )
+        )?;
+        self.type_fully_annotated_layout_cache
+            .lock()
+            .unwrap()
+            .insert(ty.clone(), layout.clone());
+        Ok(layout)
     }
 
     // -------------------------------------------
