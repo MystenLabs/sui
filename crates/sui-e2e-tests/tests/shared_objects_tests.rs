@@ -348,8 +348,8 @@ async fn assert_checkpoint_order_with_effects_dependencies(
     let gas = &accounts_and_gas[0].1;
     let rgp = test_cluster.get_reference_gas_price().await;
 
-    // The soft bundle submits this shared schedule in one consensus request. The failpoint in the
-    // caller delays execution, so the independent transfer can finish in a different order.
+    // The soft bundle submits this shared schedule in one consensus request. The failpoint below
+    // delays execution, so the independent transfer can finish in a different order.
     let read_a = TestTransactionBuilder::new(sender, gas[0], rgp)
         .move_call(
             package_id,
@@ -390,6 +390,17 @@ async fn assert_checkpoint_order_with_effects_dependencies(
         test_cluster.sign_transaction(&independent_transfer).await,
     ];
     let expected_digests = signed_txs.iter().map(|tx| *tx.digest()).collect::<Vec<_>>();
+
+    // Cause random delays only for the transactions under test, after setup is complete.
+    register_fail_point_async("transaction_execution_delay", move || async move {
+        let delay = {
+            let dist = rand::distributions::Uniform::new(0, 1000);
+            let mut rng = rand::thread_rng();
+            dist.sample(&mut rng)
+        };
+        sleep(Duration::from_millis(delay)).await;
+    });
+
     let effects = test_cluster
         .execute_signed_txns_in_soft_bundle(&signed_txs)
         .await
@@ -501,15 +512,6 @@ async fn assert_checkpoint_order_with_effects_dependencies(
 /// order; checkpoint construction and settlement must nevertheless retain the shared schedule.
 #[sim_test]
 async fn shared_checkpoint_order_without_effects_dependencies() {
-    register_fail_point_async("transaction_execution_delay", move || async move {
-        let delay = {
-            let dist = rand::distributions::Uniform::new(0, 1000);
-            let mut rng = rand::thread_rng();
-            dist.sample(&mut rng)
-        };
-        sleep(Duration::from_millis(delay)).await;
-    });
-
     // Mainnet simulation runs retain the flag-off protocol configuration.
     let flag_enabled = sui_types::digests::ChainIdentifier::default().chain()
         != sui_protocol_config::Chain::Mainnet;
