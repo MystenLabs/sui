@@ -15,7 +15,7 @@ use sui_pg_db::Db;
 /// Collects information about the database connection pool.
 pub struct DbConnectionStatsCollector {
     db: Db,
-    desc: Vec<(MetricType, Desc)>,
+    desc: [(MetricType, Desc); 7],
 }
 
 impl DbConnectionStatsCollector {
@@ -23,7 +23,7 @@ impl DbConnectionStatsCollector {
         let prefix = prefix.unwrap_or("db");
         let name = |n| format!("{prefix}_{n}");
 
-        let desc = vec![
+        let desc = [
             (
                 MetricType::GAUGE,
                 desc(
