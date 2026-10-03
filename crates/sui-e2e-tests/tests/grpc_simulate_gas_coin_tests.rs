@@ -67,6 +67,198 @@ fn build_no_gas_coin_ptb(
     TransactionData::new_programmable(sender, gas_payment, pt, gas_budget, gas_price)
 }
 
+async fn gas_selection_limit_env(
+    max_gas: u32,
+    max_inputs: u64,
+    corrected: bool,
+) -> test_cluster::addr_balance_test_env::TestEnv {
+    use sui_swarm_config::genesis_config::AccountConfig;
+
+    TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(move |_, mut config| {
+            config.enable_coin_reservation_for_testing();
+            config.set_max_gas_payment_objects_for_testing(max_gas);
+            config.set_max_input_objects_for_testing(max_inputs);
+            config.set_correct_gas_payment_limit_check_for_testing(corrected);
+            config
+        }))
+        .with_test_cluster_builder_cb(Box::new(|builder| {
+            builder.with_accounts(vec![AccountConfig {
+                address: None,
+                gas_amounts: vec![10 * MIST_PER_SUI; 12],
+            }])
+        }))
+        .build()
+        .await
+}
+
+async fn check_gas_payment_limit(corrected: bool) {
+    let mut env = gas_selection_limit_env(8, 20, corrected).await;
+    let payment_limit = if corrected { 8 } else { 7 };
+    for with_address_balance in [false, true] {
+        let (sender, _) = env.get_sender_and_gas(0);
+        if with_address_balance {
+            env.fund_one_address_balance(sender, MIST_PER_SUI).await;
+        }
+        let transaction = build_split_gas_coin_ptb(
+            sender,
+            1_000_000,
+            SuiAddress::random_for_testing_only(),
+            None,
+            50_000_000,
+            env.rgp,
+        );
+        let response = env
+            .cluster
+            .grpc_client()
+            .simulate_transaction(&transaction, true, true)
+            .await
+            .unwrap();
+        assert!(response.transaction.effects.status().is_ok());
+        let resolved = &response.transaction.transaction;
+        let payment = &resolved.gas_data().payment;
+        // A single coin is sufficient, but selection should fill all usable slots.
+        assert_eq!(payment.len(), payment_limit);
+        assert_eq!(
+            ParsedDigest::is_coin_reservation_digest(&payment[0].2),
+            with_address_balance,
+        );
+        assert_eq!(
+            resolved.input_objects().unwrap().len(),
+            payment_limit - usize::from(with_address_balance),
+        );
+        assert_eq!(resolved.gas_data().budget, 50_000_000);
+    }
+}
+
+#[sim_test]
+async fn test_gas_selection_payment_limit_current() {
+    check_gas_payment_limit(true).await;
+}
+
+#[sim_test]
+async fn test_gas_selection_payment_limit_legacy() {
+    check_gas_payment_limit(false).await;
+}
+
+fn build_object_input_gas_selection_ptb(
+    sender: SuiAddress,
+    coins: &[sui_types::base_types::ObjectRef],
+    gas_price: u64,
+) -> TransactionData {
+    use sui_types::transaction::{CallArg, Command, ObjectArg};
+
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let owned = ptb.obj(ObjectArg::ImmOrOwnedObject(coins[0])).unwrap();
+    // Receiving inputs must reduce headroom and must not be selected as gas even
+    // when the same address's coin index returns them as candidates.
+    ptb.obj(ObjectArg::Receiving(coins[1])).unwrap();
+    let recipient = ptb.pure(sender).unwrap();
+    ptb.command(Command::TransferObjects(vec![owned], recipient));
+    let amount = ptb.pure(1_000_000u64).unwrap();
+    let split = ptb.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
+    ptb.command(Command::TransferObjects(vec![split], recipient));
+    // Repeated calls share their package and clock inputs; pure inputs do not
+    // consume the real-object headroom.
+    for _ in 0..2 {
+        ptb.move_call(
+            sui_types::SUI_FRAMEWORK_PACKAGE_ID,
+            "clock".parse().unwrap(),
+            "timestamp_ms".parse().unwrap(),
+            vec![],
+            vec![CallArg::CLOCK_IMM],
+        )
+        .unwrap();
+    }
+    TransactionData::new_programmable(sender, vec![], ptb.finish(), 50_000_000, gas_price)
+}
+
+#[sim_test]
+async fn test_gas_selection_input_headroom() {
+    let mut env = gas_selection_limit_env(8, 6, true).await;
+    for with_address_balance in [false, true] {
+        let (sender, _) = env.get_sender_and_gas(0);
+        if with_address_balance {
+            env.fund_one_address_balance(sender, MIST_PER_SUI).await;
+        }
+        let (_, coins) = env.get_sender_and_all_gas(0);
+        let transaction = build_object_input_gas_selection_ptb(sender, &coins, env.rgp);
+        assert_eq!(transaction.input_objects().unwrap().len(), 3);
+        assert_eq!(transaction.receiving_objects().len(), 1);
+        let client = env.cluster.grpc_client();
+        let response = client
+            .simulate_transaction(&transaction, true, true)
+            .await
+            .unwrap();
+        assert!(response.transaction.effects.status().is_ok());
+        let resolved = &response.transaction.transaction;
+        let payment = &resolved.gas_data().payment;
+        // The reservation occupies a payment slot, not one of the two remaining
+        // real-input slots, so both cases must still select two coins.
+        assert_eq!(payment.len(), 2 + usize::from(with_address_balance));
+        assert_eq!(
+            resolved.input_objects().unwrap().len() + resolved.receiving_objects().len(),
+            6,
+        );
+        assert!(!payment.contains(&coins[0]));
+        assert!(!payment.contains(&coins[1]));
+        assert_eq!(
+            ParsedDigest::is_coin_reservation_digest(&payment[0].2),
+            with_address_balance,
+        );
+
+        let mut explicit = transaction.clone();
+        explicit.gas_data_mut().payment = vec![coins[2]];
+        let response = client
+            .simulate_transaction(&explicit, true, true)
+            .await
+            .unwrap();
+        assert!(response.transaction.effects.status().is_ok());
+        assert_eq!(
+            response.transaction.transaction.gas_data().payment,
+            vec![coins[2]]
+        );
+    }
+}
+
+#[sim_test]
+async fn test_gas_selection_no_real_input_headroom() {
+    let mut env = gas_selection_limit_env(8, 4, true).await;
+    let (sender, coins) = env.get_sender_and_all_gas(0);
+    let transaction = build_object_input_gas_selection_ptb(sender, &coins, env.rgp);
+    let error = env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&transaction, true, true)
+        .await
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("Unable to perform gas selection")
+    );
+
+    env.fund_one_address_balance(sender, MIST_PER_SUI).await;
+    let (_, coins) = env.get_sender_and_all_gas(0);
+    let transaction = build_object_input_gas_selection_ptb(sender, &coins, env.rgp);
+    let response = env
+        .cluster
+        .grpc_client()
+        .simulate_transaction(&transaction, true, true)
+        .await
+        .unwrap();
+    assert!(response.transaction.effects.status().is_ok());
+    let resolved = &response.transaction.transaction;
+    assert_eq!(resolved.gas_data().payment.len(), 1);
+    assert!(ParsedDigest::is_coin_reservation_digest(
+        &resolved.gas_data().payment[0].2
+    ));
+    assert_eq!(
+        resolved.input_objects().unwrap().len() + resolved.receiving_objects().len(),
+        4
+    );
+}
+
 // =============================================================================
 // Test 1: Has AB + has coins + GasCoin used
 // Expected: Coin reservation FIRST in gas payment (smashes coins into AB)
