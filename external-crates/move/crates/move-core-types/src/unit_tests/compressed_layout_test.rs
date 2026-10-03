@@ -4,6 +4,8 @@
 use crate::{
     account_address::AccountAddress,
     annotated_value::{self as A, compressed_layouts as AC},
+    compressed::annotated::BackendBuilder as _,
+    compressed::runtime::BackendBuilder as _,
     ident_str,
     identifier::Identifier,
     language_storage::StructTag,
@@ -872,4 +874,68 @@ fn annotated_deser_parity_vector() {
         A::MoveTypeLayout::Vector(Box::new(A::MoveTypeLayout::Struct(Box::new(struct_layout))));
     let blob = bcs::to_bytes(&vec![(1u8,), (2u8,)]).unwrap();
     assert_annotated_deser_parity(&vec_struct_layout, &blob);
+}
+
+// =============================================================================
+// BoxPool backend: build/inflate/deserialize parity vs ArcPool
+// =============================================================================
+
+#[test]
+fn runtime_box_pool_build_inflate_deserialize() {
+    use crate::compressed::backend::box_pool::{RuntimeBoxPool, RuntimeBoxPoolBuilder};
+
+    // enum { V0(u64), V1(bool, u64) }
+    let layout = R::MoveTypeLayout::Enum(Box::new(R::MoveEnumLayout(Box::new(vec![
+        vec![R::MoveTypeLayout::U64],
+        vec![R::MoveTypeLayout::Bool, R::MoveTypeLayout::U64],
+    ]))));
+
+    // Build via the BoxPool builder directly.
+    let mut b = RuntimeBoxPoolBuilder::default();
+    let root = b.intern_tree(&layout).unwrap();
+    let box_layout: RC::MoveTypeLayout<RuntimeBoxPool> = b.build(root);
+
+    // Inflate parity with the original tree.
+    let inflated = box_layout.inflate().unwrap();
+    assert_eq!(format!("{inflated}"), format!("{layout}"));
+
+    // node_count agrees with the ArcPool roundtrip on the same layout.
+    let arc_layout = RC::MoveTypeLayout::try_from(&layout).unwrap();
+    assert_eq!(box_layout.node_count(), arc_layout.node_count());
+
+    // Deserialization parity: a BCS-encoded variant decodes to the same value
+    // through both backends.
+    let blob = bcs::to_bytes(&(1u8, (true, 7u64))).unwrap();
+    let v_box: R::MoveValue = bcs::from_bytes_seed(&box_layout, &blob).unwrap();
+    let v_arc: R::MoveValue = bcs::from_bytes_seed(&arc_layout, &blob).unwrap();
+    assert_eq!(v_box, v_arc);
+}
+
+#[test]
+fn annotated_box_pool_build_inflate_deserialize() {
+    use crate::compressed::backend::box_pool::{AnnotatedBoxPool, AnnotatedBoxPoolBuilder};
+
+    let struct_layout = A::MoveStructLayout {
+        type_: test_struct_tag("Item"),
+        fields: vec![
+            A::MoveFieldLayout::new(ident_str!("x").to_owned(), A::MoveTypeLayout::U8),
+            A::MoveFieldLayout::new(ident_str!("y").to_owned(), A::MoveTypeLayout::U64),
+        ],
+    };
+    let layout = A::MoveTypeLayout::Struct(Box::new(struct_layout));
+
+    let mut b = AnnotatedBoxPoolBuilder::default();
+    let root = b.intern_tree(&layout).unwrap();
+    let box_layout: AC::MoveTypeLayout<AnnotatedBoxPool> = b.build(root);
+
+    let inflated = box_layout.inflate().unwrap();
+    assert_eq!(format!("{inflated}"), format!("{layout}"));
+
+    let arc_layout = AC::MoveTypeLayout::try_from(&layout).unwrap();
+    assert_eq!(box_layout.node_count(), arc_layout.node_count());
+
+    let blob = bcs::to_bytes(&(9u8, 123u64)).unwrap();
+    let v_box: A::MoveValue = bcs::from_bytes_seed(&box_layout, &blob).unwrap();
+    let v_arc: A::MoveValue = bcs::from_bytes_seed(&arc_layout, &blob).unwrap();
+    assert_eq!(v_box, v_arc);
 }
