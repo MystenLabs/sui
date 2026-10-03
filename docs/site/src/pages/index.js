@@ -8,11 +8,9 @@ import Head from "@docusaurus/Head";
 import Link from "@docusaurus/Link";
 import styles from "./index.module.css";
 
-// Target for the "Developer Updates" hero link. That page does not exist yet,
-// so this points at the external Sui blog as an interim (external links are not
-// route-checked, so the strict build passes). Swap this single constant to
-// "/developer-updates" when the dedicated page ships.
-export const DEVELOPER_UPDATES_URL = "https://blog.sui.io";
+// Target for the "Developer Updates" hero link. The page is generated from the
+// posts in release-notes/updates/ by docs/site/scripts/convert-developer-updates.cjs.
+export const DEVELOPER_UPDATES_URL = "/developer-updates";
 
 export default function Home() {
   const developerResources = [
