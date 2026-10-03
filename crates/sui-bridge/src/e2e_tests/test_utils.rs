@@ -70,7 +70,6 @@ use sui_types::{BRIDGE_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID};
 use tap::TapFallible;
 use tempfile::tempdir;
 use test_cluster::{TestCluster, TestClusterBuilder};
-use tokio::join;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::{error, info};
@@ -94,7 +93,7 @@ pub struct BridgeTestCluster {
     pub num_validators: usize,
     pub test_cluster: TestClusterWrapper,
     bridge_client: SuiBridgeClient,
-    eth_environment: EthBridgeEnvironment,
+    eth_environment: Option<EthBridgeEnvironment>,
     bridge_node_handles: Option<Vec<JoinHandle<()>>>,
     approved_governance_actions_for_next_start: Option<Vec<Vec<BridgeAction>>>,
     events_cursor: Option<u64>,
@@ -177,10 +176,14 @@ impl BridgeTestClusterBuilder {
             bridge_keys_copy.push(kp);
         }
         let start_cluster_task = tokio::task::spawn(Self::start_test_cluster(bridge_keys));
-        let start_eth_env_task = tokio::task::spawn(Self::start_eth_env(bridge_keys_copy));
-        let (start_cluster_res, start_eth_env_res) = join!(start_cluster_task, start_eth_env_task);
-        let test_cluster = start_cluster_res.unwrap();
-        let eth_environment = start_eth_env_res.unwrap();
+        let start_eth_env_task = self
+            .with_eth_env
+            .then(|| tokio::task::spawn(Self::start_eth_env(bridge_keys_copy)));
+        let test_cluster = start_cluster_task.await.unwrap();
+        let eth_environment = match start_eth_env_task {
+            Some(task) => Some(task.await.unwrap()),
+            None => None,
+        };
 
         let mut bridge_node_handles = None;
         if self.with_bridge_cluster {
@@ -189,8 +192,14 @@ impl BridgeTestClusterBuilder {
                 .clone()
                 .unwrap_or(vec![vec![]; self.num_validators]);
             bridge_node_handles = Some(
-                start_bridge_cluster(&test_cluster, &eth_environment, approved_governance_actions)
-                    .await,
+                start_bridge_cluster(
+                    &test_cluster,
+                    eth_environment
+                        .as_ref()
+                        .expect("bridge cluster requires an Ethereum environment"),
+                    approved_governance_actions,
+                )
+                .await,
             );
         }
         let bridge_client =
@@ -253,7 +262,7 @@ impl BridgeTestClusterBuilder {
 
 impl BridgeTestCluster {
     pub fn get_eth_signer_and_private_key(&self) -> anyhow::Result<(EthSignerProvider, String)> {
-        self.eth_environment.get_signer_provider(TEST_PK)
+        self.eth_env().get_signer_provider(TEST_PK)
     }
 
     pub fn get_eth_signer_and_address(&self) -> anyhow::Result<(EthSignerProvider, EthAddress)> {
@@ -289,15 +298,17 @@ impl BridgeTestCluster {
     }
 
     pub fn eth_env(&self) -> &EthBridgeEnvironment {
-        &self.eth_environment
+        self.eth_environment
+            .as_ref()
+            .expect("Ethereum environment was not enabled")
     }
 
     pub fn contracts(&self) -> &DeployedSolContracts {
-        self.eth_environment.contracts()
+        self.eth_env().contracts()
     }
 
     pub fn sui_bridge_address(&self) -> String {
-        self.eth_environment.contracts().sui_bridge_addrress_hex()
+        self.eth_env().contracts().sui_bridge_addrress_hex()
     }
 
     pub fn wallet_mut(&mut self) -> &mut WalletContext {
@@ -317,7 +328,7 @@ impl BridgeTestCluster {
     }
 
     pub fn eth_rpc_url(&self) -> String {
-        self.eth_environment.rpc_url.clone()
+        self.eth_env().rpc_url.clone()
     }
 
     pub async fn get_mut_bridge_arg(&self) -> Option<ObjectArg> {
@@ -367,7 +378,7 @@ impl BridgeTestCluster {
         self.bridge_node_handles = Some(
             start_bridge_cluster(
                 &self.test_cluster,
-                &self.eth_environment,
+                self.eth_env(),
                 approved_governance_actions,
             )
             .await,
