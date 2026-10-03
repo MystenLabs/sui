@@ -77,7 +77,7 @@ use serde_with::serde_as;
 use shared_crypto::intent::HashingIntentScope;
 use std::borrow::Cow;
 use std::cmp::max;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::fmt;
 use std::str::FromStr;
 use sui_protocol_config::ProtocolConfig;
@@ -1415,7 +1415,7 @@ impl TxContext {
 
     /// Return the transaction digest, to include in new objects
     pub fn digest(&self) -> TransactionDigest {
-        TransactionDigest::new(self.digest.clone().try_into().unwrap())
+        TransactionDigest::new(<[u8; 32]>::try_from(self.digest.as_slice()).unwrap())
     }
 
     pub fn sponsor(&self) -> Option<SuiAddress> {
@@ -1703,7 +1703,7 @@ impl ObjectID {
 
     /// Incremenent the ObjectID by usize IDs, assuming the ObjectID hex is a number represented as an array of bytes
     pub fn advance(&self, step: usize) -> Result<ObjectID, anyhow::Error> {
-        let mut curr_vec = self.to_vec();
+        let mut curr_vec = self.into_bytes();
         let mut step_copy = step;
 
         let mut carry = 0;
@@ -1724,12 +1724,12 @@ impl ObjectID {
         if carry > 0 {
             return Err(anyhow!("Increment will cause overflow"));
         }
-        ObjectID::try_from(curr_vec).map_err(|w| w.into())
+        Ok(ObjectID::new(curr_vec))
     }
 
     /// Increment the ObjectID by one, assuming the ObjectID hex is a number represented as an array of bytes
     pub fn next_increment(&self) -> Result<ObjectID, anyhow::Error> {
-        let mut prev_val = self.to_vec();
+        let mut prev_val = self.into_bytes();
         let mx = [0xFF; Self::LENGTH];
 
         if prev_val == mx {
@@ -1745,7 +1745,7 @@ impl ObjectID {
                 break;
             };
         }
-        ObjectID::try_from(prev_val.clone()).map_err(|w| w.into())
+        Ok(ObjectID::new(prev_val))
     }
 
     /// Create `count` object IDs starting with one at `offset`
