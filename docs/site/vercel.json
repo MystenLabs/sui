@@ -1241,11 +1241,6 @@
       "permanent": true
     },
     {
-      "source": "/references/sui-glossary",
-      "destination": "/references",
-      "permanent": true
-    },
-    {
       "source": "/references/sui-move-examples",
       "destination": "/develop/write-move",
       "permanent": true
@@ -1456,11 +1451,6 @@
       "permanent": true
     },
     {
-      "source": "/references/cli/client",
-      "destination": "/references/cli",
-      "permanent": true
-    },
-    {
       "source": "/contribute/faq",
       "destination": "/references/contribute/contribution-process",
       "permanent": true
@@ -1497,7 +1487,7 @@
     },
     {
       "source": "/localize-sui-docs",
-      "destination": "/references/contribute/localize-sui-docs",
+      "destination": "/references/contribute/contribution-process",
       "permanent": true
     },
     {
@@ -1887,7 +1877,7 @@
     },
     {
       "source": "/guides/developer/transactions/ptbs/sign-and-send-txn",
-      "destination": "/develop/transactions/ptbs/sign-and-send-txn",
+      "destination": "/develop/transactions/ptbs/ts-sdk-ptb-template",
       "permanent": true
     },
     {
@@ -2307,7 +2297,7 @@
     },
     {
       "source": "/guides/developer/digital-assets/fungible-tokens/integrating-with-stablecoins",
-      "destination": "/onchain-finance/fungible-tokens/integrating-with-stablecoins",
+      "destination": "/onchain-finance/pas/integrating-pas",
       "permanent": true
     },
     {
@@ -2322,7 +2312,7 @@
     },
     {
       "source": "/guides/developer/digital-assets/gasless-transactions",
-      "destination": "/develop/transaction-payment/gasless-transactions",
+      "destination": "/develop/transaction-payment/gasless-stablecoin-transfers",
       "permanent": true
     },
     {
