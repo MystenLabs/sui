@@ -92,7 +92,7 @@ A `MarginManager` borrows from one margin pool at a time, base or quote, which k
 
 ## Set up the client
 
-The client references pools, coins, and margin pools by SDK key. On Testnet it auto-loads the margin package IDs and Pyth config. Read-only calls work without a manager; borrowing and trading need one.
+The client references pools, coins, and margin pools by SDK key. On Testnet it auto-loads the margin package IDs and Pyth config. Read-only calls work without a manager; borrowing and trading need one that is associated with the correct DeepBook pool.
 
 <ImportContent source="examples/deepbook-margin/src/client.ts" mode="code" tag="client" />
 

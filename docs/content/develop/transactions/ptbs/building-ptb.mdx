@@ -164,7 +164,7 @@ tx.transferObjects([mintMany[0], mintMany[1]], tx.pure.address(address));
 
 ## Use the gas coin
 
-For most transactions, reach for [`tx.coin()` and `tx.balance()`](https://sdk.mystenlabs.com/sui/transactions/coins-and-balances) rather than the gas coin. They are the recommended way to source tokens, and they draw from coin objects and address balances without you selecting either.
+For most transactions, reach for [`tx.coin()` and `tx.balance()`](https://sdk.mystenlabs.com/sui/transactions/coins-and-balances) rather than the gas coin. They are the recommended way to source tokens, and they draw from coin objects and address balances without you needing to select either.
 
 `tx.gas` still matters when you want the gas coin specifically, and it is valid as input for any argument.
 
@@ -226,7 +226,7 @@ tx.objectRef({ objectId, version, digest });
 tx.sharedObjectRef({ objectId, initialSharedVersion, mutable });
 ```
 
-Every offline build must also set the sender, gas price, gas budget, and gas payment. When the transaction uses no owned objects for gas or inputs, such as when `setGasPayment([])` draws gas from an address balance, set a `ValidDuring` expiration as well.
+Every offline build must also set the sender, gas price, gas budget, gas payment, and ValidDuring expiration. When the transaction uses no owned objects for gas or inputs, such as when `setGasPayment([])` draws gas from an address balance, set a `ValidDuring` expiration as well. When the transaction uses no owned objects for gas or inputs, such as when `setGasPayment([])` draws gas from an address balance, set a `ValidDuring` expiration as well.
 
 You can then omit the `client` argument when calling `build` on the transaction. If any required data is missing, `build` throws an error.
 

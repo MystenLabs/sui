@@ -73,7 +73,7 @@ Abilities control what operations you can perform on a type. Every struct has a 
 | `copy` | The type can be copied (duplicated in memory) |
 | `drop` | The type can be discarded when it goes out of scope |
 
-A struct with `key` but without `drop` must be explicitly transferred or destroyed. This is the foundation of resource safety in Move. See [The Move Book: Abilities](https://move-book.com/move-basics/abilities-introduction.html).
+A struct with `key` but without `store` must be explicitly transferred or destroyed. This is the foundation of resource safety in Move. See [The Move Book: Abilities](https://move-book.com/move-basics/abilities-introduction.html).
 
 ## Functions
 

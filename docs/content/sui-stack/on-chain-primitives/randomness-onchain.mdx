@@ -189,7 +189,7 @@ public fun attack(t: Ticket): Ticket {
 }
 ```
 
-The attack takes advantage of the atomic nature of PTBs and always reverts the entire transaction if the guess was incorrect without paying the fee. Sending multiple transactions can repeat the attack, each one executed with different randomness and reverted if the guess is incorrect.
+The attack takes advantage of the atomic nature of PTBs and reverts the entire transaction if the guess was incorrect without paying the fee. Sending multiple transactions can repeat the attack, each one executed with different randomness and reverted if the guess is incorrect.
 
 :::tip
 
