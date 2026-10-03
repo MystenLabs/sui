@@ -1,0 +1,47 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+// A returned reference extends every mutable argument of its call (all arguments, when
+// immutable), regardless of which one the callee actually returned.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-25:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6748800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 27-38:
+//# programmable --inputs 1
+// VALID: both sources usable once the result is dead
+//> 0: test::m::new();
+//> 1: test::m::new();
+//> 2: test::m::inner_mut(Result(0));
+//> 3: test::m::inner_mut(Result(1));
+//> 4: test::m::pick(Result(2), Result(3));
+//> 5: test::m::write(Result(4), Input(0));
+//> 6: test::m::use_mut<test::m::Inner>(Result(2));
+//> 7: test::m::use_mut<test::m::Inner>(Result(3));
+//> 8: test::m::delete(Result(0));
+//> 9: test::m::delete(Result(1));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 40-50:
+//# programmable --inputs 1
+// VALID: a mutable result of a mixed call does not extend the immutable argument
+//> 0: test::m::new();
+//> 1: test::m::new();
+//> 2: test::m::inner_mut(Result(0));
+//> 3: test::m::inner_mut(Result(1));
+//> 4: test::m::pick_mixed(Result(2), Result(3));
+//> 5: test::m::use_mut<test::m::Inner>(Result(3));
+//> 6: test::m::write(Result(4), Input(0));
+//> 7: test::m::delete(Result(0));
+//> 8: test::m::delete(Result(1));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

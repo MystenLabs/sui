@@ -1,0 +1,31 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-16:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6285200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 18-22:
+//# programmable --inputs 1
+// INVALID: CannotMoveBorrowedValue at arg 0 of command 2, the root is moved before the read releases the reference
+//> 0: test::m::no_copy(Input(0));
+//> 1: test::m::value_ref(Result(0));
+//> 2: test::m::take_then_read(Result(0), Result(1));
+Error: Transaction Effects Status: Invalid command argument at 0. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotMoveBorrowedValue }, source: None, command: Some(2) } }
+
+task 3, lines 24-28:
+//# programmable --sender A --inputs @A
+// INVALID: CannotMoveBorrowedValue at arg 0 of command 2, objects are processed before the recipient read
+//> 0: test::m::new(Input(0));
+//> 1: test::m::to(Result(0));
+//> 2: TransferObjects([Result(0)], Result(1));
+Error: Transaction Effects Status: Invalid command argument at 0. Cannot move a borrowed value. The value's type does resulted in this argument usage being inferred as a move. This is likely due to the type not having the `copy` ability; although in rare cases, it could also be this is the last usage of a value without the `drop` ability.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: CannotMoveBorrowedValue }, source: None, command: Some(2) } }

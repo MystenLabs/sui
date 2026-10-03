@@ -1,0 +1,24 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+// `coin::send_funds` is the one Move call that may take the gas coin by value.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-12:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 3625200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 14-18:
+//# programmable --sender A --inputs @B
+// INVALID: ArgumentWithoutValue at arg 0 of command 1, the gas coin borrowed after it was transferred
+//> 0: TransferObjects([Gas], Input(0));
+//> 1: test::m::id_mut<sui::coin::Coin<sui::sui::SUI>>(Gas);
+//> 2: test::m::use_mut<sui::coin::Coin<sui::sui::SUI>>(Result(1));
+Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue }, source: None, command: Some(1) } }

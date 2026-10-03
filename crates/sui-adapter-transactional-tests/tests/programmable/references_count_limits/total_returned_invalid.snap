@@ -1,0 +1,37 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-11:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5540400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-32:
+//# programmable --inputs 0
+// INVALID: InsufficientGas, "Transaction returns 257 references, exceeding the maximum of 256"
+//> 0: MakeMoveVec<u64>([Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0), Input(0)]);
+//> 1: test::m::refs16(Result(0));
+//> 2: test::m::refs16(Result(0));
+//> 3: test::m::refs16(Result(0));
+//> 4: test::m::refs16(Result(0));
+//> 5: test::m::refs16(Result(0));
+//> 6: test::m::refs16(Result(0));
+//> 7: test::m::refs16(Result(0));
+//> 8: test::m::refs16(Result(0));
+//> 9: test::m::refs16(Result(0));
+//> 10: test::m::refs16(Result(0));
+//> 11: test::m::refs16(Result(0));
+//> 12: test::m::refs16(Result(0));
+//> 13: test::m::refs16(Result(0));
+//> 14: test::m::refs16(Result(0));
+//> 15: test::m::refs16(Result(0));
+//> 16: test::m::refs16(Result(0));
+//> 17: test::m::one(Result(0));
+Error: Transaction Effects Status: Insufficient Gas.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientGas, source: Some("Transaction returns 257 references, exceeding the maximum of 256"), command: Some(17) } }

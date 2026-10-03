@@ -1,0 +1,37 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-19:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6513200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 21-22:
+//# programmable --sender A
+//> 0: test::m::share();
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 24-28:
+//# programmable --sender A --inputs object(0,0)
+// INVALID: the input check rejects the gas coin as an object input
+//> 0: test::m::id_mut<sui::coin::Coin<sui::sui::SUI>>(Gas);
+//> 1: test::m::id_mut<sui::coin::Coin<sui::sui::SUI>>(Input(0));
+//> 2: test::m::two_mut<sui::coin::Coin<sui::sui::SUI>>(Result(0), Result(1));
+Error: Error checking transaction input objects: Mutable object object(0,0) cannot appear more than one in one transaction
+
+task 4, lines 30-35:
+//# programmable --sender A --inputs object(2,0) immshared(2,0) 7
+// INVALID: the input check rejects one shared object as two inputs
+//> 0: test::m::f_mut(Input(0));
+//> 1: test::m::f(Input(1));
+//> 2: test::m::write(Result(0), Input(2));
+//> 3: test::m::check(Result(1), Input(2));
+Error: Error checking transaction input objects: The transaction inputs contain duplicated ObjectRef's
