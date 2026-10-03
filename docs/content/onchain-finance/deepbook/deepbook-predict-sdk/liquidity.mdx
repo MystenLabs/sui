@@ -192,7 +192,7 @@ It takes this parameter:
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="982-982" />
 
-It reads the account balance accessor for the deployment's PLP coin type, `client.predict.cfg.coinTypes.plp`. That accessor counts stored balance plus funds that reach the account before it settles them, so shares from a filled supply appear without a separate settle. For the account's USDC, use [`read.balance`](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#balance). The read loads the owner's wrapper, so call it for an account that exists.
+It reads the account balance accessor for the deployment's PLP coin type, `client.predict.cfg.coinTypes.plp`. That accessor counts stored balance plus funds that reach the account before it settles them, so shares from a filled supply appear without a separate settle. For the account's USDC, use [`read.balance`](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#balance). For the account's USDC, use [`read.balance`](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#balance). The read loads the owner's wrapper, so call it for an account that exists.
 
 ## Decoder functions {#decode}
 
