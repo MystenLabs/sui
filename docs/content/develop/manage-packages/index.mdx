@@ -38,7 +38,7 @@ answer: >-
   source code.
 ---
 
-Package management on Sui covers the tools and workflows for maintaining Move packages after initial development. This includes resolving dependencies, managing package addresses across networks, and verifying that deployed packages match their published source code.
+Package management on Sui covers the tools and workflows for maintaining Move packages after initial development. This includes resolving dependencies, managing package addresses across networks, and verifying that deployed packages match their published source code. Sui packages are immutable once published; if a package is upgradeable, the `UpgradeCap` controls publication of newer versions, so audit both the current package and its upgrade policy.
 
 :::caution Package security
 
