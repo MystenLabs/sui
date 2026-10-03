@@ -1811,6 +1811,11 @@
       "permanent": true
     },
     {
+      "source": "/concepts/sui-move-concepts/derived-objects",
+      "destination": "/develop/objects/derived-objects",
+      "permanent": true
+    },
+    {
       "source": "/guides/developer/objects/versioning",
       "destination": "/develop/objects/versioning",
       "permanent": true

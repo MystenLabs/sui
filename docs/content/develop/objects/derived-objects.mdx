@@ -110,6 +110,14 @@ The following matrix highlights some of the differences between using dynamic fi
 
 ## `derived_object`
 
+:::info Availability
+
+`sui::derived_object` was added to the Sui framework in `testnet-v1.56.1` and `mainnet-v1.56.2`. It is not gated behind a protocol feature flag, so it is available on any network running that framework version or later.
+
+If your build fails with `Invalid use. Unbound module sui::derived_object`, your project is resolving an older Sui framework. Update the `Sui` dependency in `Move.toml` to a revision at or after that release, then rebuild. Check which framework your project resolves with `sui move build` output, and your CLI version with `sui --version`.
+
+:::
+
 If you know the parent ID, you can compute the ID of the derived object through offchain logic using the [TypeScript](https://sdk.mystenlabs.com/typescript/utils/derived_objects) or [Rust SDK](https://mystenlabs.github.io/sui/sui_types/derived_object) helper functions. This functionality means your client logic can treat unclaimed IDs as if they already exist.
 
 To claim an ID using the `derived_object` module, pass the parent object and key. The `derived_object` module prevents duplication in such situations through the use of a `ClaimedStatus` enum, setting its value to `Reserved` when an ID is claimed. If 2 transactions tried to claim an ID, each using the same digit as its key, the second transaction fails because the first transaction already reserved the ID.
