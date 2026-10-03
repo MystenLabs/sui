@@ -29,13 +29,12 @@ impl Processor for PackagesByCheckpointPipeline {
                     continue;
                 };
 
-                let original_id = package.original_package_id().to_vec();
                 let version = obj.version().value();
 
                 let entry = tables::make_entry(
                     tables::packages_by_checkpoint::encode_key(
                         cp_sequence_number,
-                        &original_id,
+                        package.original_package_id().as_ref(),
                         version,
                     ),
                     tables::packages_by_checkpoint::encode(),
