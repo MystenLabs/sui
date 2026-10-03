@@ -52,6 +52,7 @@ use std::{
 use vfs::{VfsError, VfsPath};
 
 pub mod ast_debug;
+pub mod builtin_types;
 pub mod files;
 pub mod ide;
 pub mod known_attributes;
@@ -65,13 +66,10 @@ pub mod unique_set;
 
 pub use ast_debug::AstDebug;
 
-//**************************************************************************************************
-// Numbers
-//**************************************************************************************************
-
-pub use move_core_types::parsing::parser::{
-    NumberFormat, parse_address_number as parse_address, parse_u8, parse_u16, parse_u32, parse_u64,
-    parse_u128, parse_u256,
+pub use builtin_types::{
+    NumberFormat, SIGNED_INT_SUFFIXES, UNSIGNED_INT_SUFFIXES, has_signed_suffix,
+    has_unsigned_suffix, parse_address, parse_i8, parse_i16, parse_i32, parse_i64, parse_i128,
+    parse_i256, parse_u8, parse_u16, parse_u32, parse_u64, parse_u128, parse_u256,
 };
 
 //**************************************************************************************************

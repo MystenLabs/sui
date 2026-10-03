@@ -1,0 +1,68 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: development
+  lint: false
+---
+error[EC04003]: built-in operation not supported
+  ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:4:19
+  │
+4 │         let _x = -1u8;
+  │                   ^^^
+  │                   │
+  │                   Invalid argument to '-'
+  │                   Found: 'u8'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+
+error[EC04003]: built-in operation not supported
+  ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:8:19
+  │
+8 │         let _x = -1u16;
+  │                   ^^^^
+  │                   │
+  │                   Invalid argument to '-'
+  │                   Found: 'u16'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+
+error[EC04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:12:19
+   │
+12 │         let _x = -1u32;
+   │                   ^^^^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Found: 'u32'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+
+error[EC04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:16:19
+   │
+16 │         let _x = -1u64;
+   │                   ^^^^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Found: 'u64'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+
+error[EC04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:20:19
+   │
+20 │         let _x = -1u128;
+   │                   ^^^^^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Found: 'u128'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+
+error[EC04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:24:19
+   │
+24 │         let _x = -1u256;
+   │                   ^^^^^
+   │                   │
+   │                   Invalid argument to '-'
+   │                   Found: 'u256'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+
+error[EC04003]: built-in operation not supported
+   ┌─ tests/development/signed_ints/invalid/signed_int_neg_unsigned_literal.move:30:19
+   │
+29 │         let x: u64 = 5;
+   │                --- Found: 'u64'. But expected: 'i8', 'i16', 'i32', 'i64', 'i128', 'i256'
+30 │         let _y = -x;
+   │                   ^ Invalid argument to '-'
