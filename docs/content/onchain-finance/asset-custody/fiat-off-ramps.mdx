@@ -63,3 +63,23 @@ When you choose off-ramp providers, be aware of the following limitations:
 - **SUI sell limits:** Off-ramp providers might enforce sell limits. Confirm limitations with the provider directly. 
 
 - **KYC requirements:** Off-ramp flows likely require Know Your Customer (KYC) verification. Factor this into your user experience design.
+
+## How does a fiat off-ramp integration work?
+
+Most off-ramp providers follow a similar integration pattern:
+
+1. Your app collects the user's wallet address and the asset they want to sell.
+2. Your backend generates a signed session or redirect URL using the provider's API and your API credentials.
+3. The user completes the off-ramp flow in a hosted widget or redirect, including KYC verification if required.
+4. The provider transfers fiat to the user's bank account or card.
+
+The specific parameters, authentication method, and webhook events differ by provider. Review the provider's documentation before building.
+
+## Which off-ramp provider should you choose?
+
+Provider selection depends on your users' geography, the assets you support, and your integration preferences. Consider the following when evaluating:
+
+- **Asset coverage:** Only some providers support assets beyond SUI. If your app uses USDC, DEEP, or other tokens, confirm the provider supports those assets on Sui specifically.
+- **Regional availability:** Off-ramp payouts (bank transfers, card withdrawals) are subject to local financial regulations. Confirm the provider supports your target markets.
+- **Integration model:** Some providers offer embeddable widgets; others use redirect-based flows or headless APIs. Choose the model that fits your app's user experience.
+- **KYC handling:** All fiat off-ramp flows require identity verification. Some providers handle KYC entirely within their hosted flow; others require you to collect and pass user data. Understand your compliance obligations before integrating.
