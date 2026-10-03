@@ -8,6 +8,7 @@ use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typi
 use move_binary_format::{CompiledModule, file_format::Visibility};
 use sui_types::error::ExecutionError;
 use sui_types::execution_status::ExecutionErrorKind;
+use sui_verifier::INIT_FN_NAME;
 
 /// Checks the following
 /// - valid visibility for move function calls
@@ -91,6 +92,16 @@ fn check_visibility<Mode: ExecutionMode>(
     env: &Env,
     function: &T::LoadedFunction,
 ) -> Result<(), ExecutionError> {
+    if env.protocol_config.ban_entry_init()
+        && function.name.as_ident_str() == INIT_FN_NAME
+        && !Mode::allow_arbitrary_function_calls()
+    {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            "Cannot call 'init'",
+        ));
+    }
+
     let module = env.module_definition(&function.runtime_id, &function.linkage)?;
     let module: &CompiledModule = module.as_ref();
     let Some((_index, fdef)) = module.find_function_def_by_name(function.name.as_str()) else {
