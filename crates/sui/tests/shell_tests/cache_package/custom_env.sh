@@ -1,0 +1,7 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Run `cache-package` against an env that is declared in the dep's manifest but
+# is not one of the flavor's default envs; should return the publication for
+# that env (NOT testnet's).
+sui move --client.config $CONFIG cache-package custom_env c057011d "{ local="\"$(pwd -W 2>/dev/null || pwd)/a\"" }"
