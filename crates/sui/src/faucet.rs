@@ -74,8 +74,8 @@ pub(crate) enum FaucetEndpoint {
     /// A faucet serving the proof-of-work API, identified by its base URL. The path always ends
     /// in `/` so that API paths can be joined onto it.
     ProofOfWork(Url),
-    /// A `/v1/gas` or `/v2/gas` endpoint that pays without proof of work, such as the local faucet
-    /// that `sui start --with-faucet` runs.
+    /// A `/gas`, `/v1/gas`, or `/v2/gas` endpoint that pays without proof of work, such as the
+    /// local faucet that `sui start --with-faucet` runs.
     WithoutProofOfWork(String),
 }
 
@@ -146,11 +146,12 @@ struct Rejection {
 struct CancelOnDrop(Arc<AtomicBool>);
 
 impl FaucetEndpoint {
-    /// Accepts a faucet's base URL, its `/v3/gas` URL, or a `/v1/gas` or `/v2/gas` URL.
+    /// Accepts a faucet's base URL, its `/v3/gas` URL, or any other URL ending in `/gas`, such as
+    /// a `/v2/gas` URL.
     pub(crate) fn parse(url: &str) -> anyhow::Result<Self> {
         let mut parsed = Url::parse(url).with_context(|| format!("Invalid faucet URL: {url}"))?;
         let path = parsed.path().trim_end_matches('/');
-        if path.ends_with("/v1/gas") || path.ends_with("/v2/gas") {
+        if path.ends_with("/gas") && !path.ends_with("/v3/gas") {
             return Ok(Self::WithoutProofOfWork(url.to_owned()));
         }
         let base = format!("{}/", path.strip_suffix("/v3/gas").unwrap_or(path));
@@ -340,13 +341,21 @@ pub(crate) async fn request_gas(base_url: &Url, recipient: SuiAddress) -> anyhow
         .timeout(REQUEST_TIMEOUT)
         .build()
         .context("Failed to build the faucet's HTTP client")?;
+    request_gas_with(&client, base_url, recipient).await
+}
+
+async fn request_gas_with(
+    client: &reqwest::Client,
+    base_url: &Url,
+    recipient: SuiAddress,
+) -> anyhow::Result<Payout> {
     let gas_url = base_url.join("v3/gas")?;
-    let mut raw = fetch_challenge(&client, base_url, recipient).await?;
+    let mut raw = fetch_challenge(client, base_url, recipient).await?;
     let mut attempt = 1;
     loop {
         let challenge = Challenge::parse(raw, recipient)?;
         let proof = challenge.solve().await?;
-        let rejection = match submit_proof(&client, &gas_url, &challenge, &proof).await? {
+        let rejection = match submit_proof(client, &gas_url, &challenge, &proof).await? {
             Ok(payout) => return Ok(payout),
             Err(rejection) => rejection,
         };
@@ -368,7 +377,7 @@ pub(crate) async fn request_gas(base_url: &Url, recipient: SuiAddress) -> anyhow
         raw = match rejection.challenge {
             Some(fresh) => serde_json::from_value(fresh)
                 .context("The faucet returned a challenge this CLI cannot read")?,
-            None => fetch_challenge(&client, base_url, recipient).await?,
+            None => fetch_challenge(client, base_url, recipient).await?,
         };
     }
 }
@@ -540,6 +549,8 @@ fn format_sui(mist: u64) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::Mutex;
     use std::sync::atomic::AtomicBool;
     use std::time::Duration;
 
@@ -547,12 +558,14 @@ mod tests {
     use fastcrypto::encoding::Encoding;
     use fastcrypto::encoding::Hex;
     use reqwest::Url;
+    use serde_json::json;
     use sui_types::base_types::SuiAddress;
     use tokio::io::AsyncBufReadExt;
     use tokio::io::AsyncReadExt;
     use tokio::io::AsyncWriteExt;
     use tokio::io::BufReader;
     use tokio::net::TcpListener;
+    use tokio::net::TcpStream;
 
     use super::ARGON2_ALGORITHM;
     use super::ARGON2_ITERATIONS;
@@ -562,6 +575,7 @@ mod tests {
     use super::Challenge;
     use super::FaucetEndpoint;
     use super::HASH_LEN;
+    use super::MAX_PROOF_ATTEMPTS;
     use super::MAX_RESPONSE_BYTES;
     use super::POW_DOMAIN;
     use super::POW_SALT;
@@ -574,6 +588,7 @@ mod tests {
     use super::pow_hash;
     use super::pow_hasher;
     use super::read_body;
+    use super::request_gas_with;
     use super::submit_proof;
     use super::threshold;
 
@@ -622,35 +637,104 @@ mod tests {
         pow_hash(&hasher, &challenge.preimage(nonce), &mut blocks)
     }
 
-    /// Answers one connection with `response`, then either holds it open or closes it. The whole
-    /// request is read first, because closing a socket with unread input resets the connection.
+    fn challenge_json(difficulty: &str) -> serde_json::Value {
+        json!({
+            "version": POW_VERSION,
+            "domain": POW_DOMAIN,
+            "salt": POW_SALT,
+            "algorithm": ARGON2_ALGORITHM,
+            "argon2Version": ARGON2_VERSION,
+            "memorySize": ARGON2_MEMORY_KIB,
+            "iterations": ARGON2_ITERATIONS,
+            "parallelism": ARGON2_PARALLELISM,
+            "hashLength": HASH_LEN,
+            "chainId": CHAIN_ID,
+            "checkpointSeq": CHECKPOINT_SEQ,
+            "checkpointDigest": CHECKPOINT_DIGEST,
+            "randomBytes": RANDOM_BYTES,
+            "faucetAddress": FAUCET_ADDRESS,
+            "recipient": RECIPIENT,
+            "difficulty": difficulty,
+        })
+    }
+
+    /// An HTTP response that closes its connection, so that the client opens a new one for its
+    /// next request.
+    fn response(status: &str, body: &serde_json::Value) -> String {
+        let body = body.to_string();
+        format!(
+            "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\
+             connection: close\r\n\r\n{body}",
+            body.len()
+        )
+    }
+
+    fn loopback_client(timeout: Duration) -> reqwest::Client {
+        reqwest::Client::builder()
+            .no_proxy()
+            .timeout(timeout)
+            .build()
+            .unwrap()
+    }
+
+    /// Reads a whole request and returns its method and path without the query. The body is read
+    /// too, because closing a socket with unread input resets the connection.
+    async fn read_request(socket: &mut TcpStream) -> String {
+        let mut request = BufReader::new(socket);
+        let mut request_line = String::new();
+        request.read_line(&mut request_line).await.unwrap();
+        let mut content_length = 0;
+        loop {
+            let mut line = String::new();
+            request.read_line(&mut line).await.unwrap();
+            if line == "\r\n" {
+                break;
+            }
+            if let Some(len) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                content_length = len.trim().parse().unwrap();
+            }
+        }
+        request
+            .read_exact(&mut vec![0; content_length])
+            .await
+            .unwrap();
+        let mut parts = request_line.split_whitespace();
+        let method = parts.next().unwrap();
+        let path = parts.next().unwrap().split('?').next().unwrap();
+        format!("{method} {path}")
+    }
+
+    /// Answers one connection with `response`, then either holds it open or closes it.
     async fn serve_once(response: &'static str, hold_open: bool) -> Url {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = Url::parse(&format!("http://{}/v3/gas", listener.local_addr().unwrap())).unwrap();
         tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
-            let mut request = BufReader::new(&mut socket);
-            let mut content_length = 0;
-            loop {
-                let mut line = String::new();
-                request.read_line(&mut line).await.unwrap();
-                if line == "\r\n" {
-                    break;
-                }
-                if let Some(len) = line.to_ascii_lowercase().strip_prefix("content-length:") {
-                    content_length = len.trim().parse().unwrap();
-                }
-            }
-            request
-                .read_exact(&mut vec![0; content_length])
-                .await
-                .unwrap();
+            read_request(&mut socket).await;
             socket.write_all(response.as_bytes()).await.unwrap();
             if hold_open {
                 std::future::pending::<()>().await;
             }
         });
         url
+    }
+
+    /// Answers one connection per response, in order, and returns the faucet's base URL with the
+    /// requests it has received so far. Once the responses run out, connections are refused.
+    async fn serve_sequence(responses: Vec<String>) -> (Url, Arc<Mutex<Vec<String>>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
+        let requests = Arc::new(Mutex::new(vec![]));
+        let received = requests.clone();
+        tokio::spawn(async move {
+            for response in responses {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let request = read_request(&mut socket).await;
+                received.lock().unwrap().push(request);
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+        (url, requests)
     }
 
     #[test]
@@ -843,11 +927,7 @@ mod tests {
             nonce: 201,
             hash: [0; HASH_LEN],
         };
-        let client = reqwest::Client::builder()
-            .no_proxy()
-            .timeout(Duration::from_secs(1))
-            .build()
-            .unwrap();
+        let client = loopback_client(Duration::from_secs(1));
         let cases = [
             (
                 "HTTP/1.1 200 OK\r\ncontent-length: 8\r\n\r\nnot json",
@@ -877,6 +957,93 @@ mod tests {
                 "{message}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn request_gas_retries_rejected_proofs() {
+        // A stale rejection carries the next challenge, while an insufficient-work one does not,
+        // so the client must fetch it.
+        let (base_url, requests) = serve_sequence(vec![
+            response("200 OK", &challenge_json("2")),
+            response(
+                "400 Bad Request",
+                &json!({"code": "stale_checkpoint", "challenge": challenge_json("2")}),
+            ),
+            response("400 Bad Request", &json!({"code": "insufficient_work"})),
+            response("200 OK", &challenge_json("2")),
+            response(
+                "200 OK",
+                &json!({"digest": "D", "recipient": RECIPIENT, "amountMist": "1000000000"}),
+            ),
+        ])
+        .await;
+        let payout = request_gas_with(
+            &loopback_client(Duration::from_secs(10)),
+            &base_url,
+            RECIPIENT.parse().unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(payout.digest, "D");
+        assert_eq!(
+            *requests.lock().unwrap(),
+            [
+                "GET /v3/challenge",
+                "POST /v3/gas",
+                "POST /v3/gas",
+                "GET /v3/challenge",
+                "POST /v3/gas",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn request_gas_stops_after_max_attempts() {
+        let stale = response(
+            "400 Bad Request",
+            &json!({"code": "stale_checkpoint", "challenge": challenge_json("2")}),
+        );
+        let mut responses = vec![response("200 OK", &challenge_json("2"))];
+        responses.extend(std::iter::repeat_n(stale, MAX_PROOF_ATTEMPTS));
+        let (base_url, requests) = serve_sequence(responses).await;
+        let error = request_gas_with(
+            &loopback_client(Duration::from_secs(10)),
+            &base_url,
+            RECIPIENT.parse().unwrap(),
+        )
+        .await
+        .unwrap_err();
+        let message = format!("{error:#}");
+        assert!(message.contains("Every proof went stale"), "{message}");
+        assert_eq!(requests.lock().unwrap().len(), 1 + MAX_PROOF_ATTEMPTS);
+    }
+
+    #[tokio::test]
+    async fn request_gas_reports_possible_payout_without_retrying() {
+        let (base_url, requests) = serve_sequence(vec![
+            response("200 OK", &challenge_json("2")),
+            response(
+                "409 Conflict",
+                &json!({"code": "already_used", "error": "Proof already used", "digest": "D"}),
+            ),
+        ])
+        .await;
+        let error = request_gas_with(
+            &loopback_client(Duration::from_secs(10)),
+            &base_url,
+            RECIPIENT.parse().unwrap(),
+        )
+        .await
+        .unwrap_err();
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("may already have paid out in transaction D"),
+            "{message}"
+        );
+        assert_eq!(
+            *requests.lock().unwrap(),
+            ["GET /v3/challenge", "POST /v3/gas"]
+        );
     }
 
     #[test]
@@ -911,6 +1078,14 @@ mod tests {
             (
                 "http://127.0.0.1:9123/v1/gas",
                 without_pow("http://127.0.0.1:9123/v1/gas"),
+            ),
+            (
+                "http://127.0.0.1:9123/gas",
+                without_pow("http://127.0.0.1:9123/gas"),
+            ),
+            (
+                "http://127.0.0.1:5003/gas/",
+                without_pow("http://127.0.0.1:5003/gas/"),
             ),
         ];
         for (url, expected) in cases {
