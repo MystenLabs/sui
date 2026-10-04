@@ -226,7 +226,7 @@ library BridgeUtils {
         // At this point, offset = 35, recipientAddressLength = 20. `mload(add(payload, 55))`
         // reads the next 32 bytes from bytes 23 in paylod, because the first 32 bytes
         // of payload stores its length. So in reality, bytes 23 - 54 is loaded. During
-        // casting to address (20 bytes), the least sigificiant bytes are retained, namely
+        // casting to address (20 bytes), the least significant bytes are retained, namely
         // `recipientAddress` is bytes 35-54
         assembly {
             recipientAddress := mload(add(_payload, add(recipientAddressLength, offset)))
@@ -246,7 +246,7 @@ library BridgeUtils {
         // At this point, offset = 56, amountLength = 8. `mload(add(payload, 64))`
         // reads the next 32 bytes from bytes 32 in paylod, because the first 32 bytes
         // of payload stores its length. So in reality, bytes 32 - 63 is loaded. During
-        // casting to uint64 (8 bytes), the least sigificiant bytes are retained, namely
+        // casting to uint64 (8 bytes), the least significant bytes are retained, namely
         // `recipientAddress` is bytes 56-63
         assembly {
             amount := mload(add(_payload, add(amountLength, offset)))
