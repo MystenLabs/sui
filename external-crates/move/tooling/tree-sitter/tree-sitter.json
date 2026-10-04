@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "move",
+      "scope": "source.move",
+      "injection-regex": "move",
+      "file-types": ["move"],
+      "highlights": "queries/highlights.scm",
+      "path": "."
+    }
+  ],
+  "metadata": {
+      "version": "1.0.0"
+  }
+}
