@@ -89,7 +89,7 @@ The cheat sheet highlights common Sui CLI commands.
 
 :::info Faucet availability
 
-`sui client faucet` works on **Devnet and Localnet only**. It does not work on Testnet. For Testnet tokens, use the web faucet at [faucet.sui.io](https://faucet.sui.io), Discord (`#testnet-faucet`), or the TypeScript SDK. All faucets are rate-limited. If you hit a limit, wait or try a different method. There is no faucet for Mainnet; SUI tokens on Mainnet have real monetary value.
+`sui client faucet` works on **Devnet, Testnet, and Localnet**. On Devnet and Testnet, the CLI solves a proof-of-work challenge from the faucet before it pays out, so the command can take a while to finish. You can also use the web faucet at [faucet.sui.io](https://faucet.sui.io), Discord, or the TypeScript SDK. All faucets are rate-limited. If you hit a limit, wait or try a different method. There is no faucet for Mainnet; SUI tokens on Mainnet have real monetary value.
 
 :::
 
@@ -103,7 +103,7 @@ The cheat sheet highlights common Sui CLI commands.
 	<tbody>
 		<tr>
 			<td class="w-2/3">`sui client faucet`</td>
-			<td class="w-1/3">Get a SUI coin from the faucet (Devnet and Localnet only)</td>
+			<td class="w-1/3">Get SUI from the faucet (Devnet, Testnet, and Localnet)</td>
 		</tr>
 		<tr>
 			<td class="w-2/3">`sui client faucet --address ADDRESS`</td>
@@ -409,7 +409,7 @@ The cheat sheet highlights common Sui CLI commands.
 		<tr>
 			<td>`Cannot find gas coin for signer address`</td>
 			<td>Active address has no SUI tokens</td>
-			<td>Fund the address with the faucet (Devnet/Localnet) or web faucet (Testnet)</td>
+			<td>Fund the address with `sui client faucet` or the web faucet</td>
 		</tr>
 		<tr>
 			<td>`Client/server API version mismatch`</td>
@@ -437,9 +437,9 @@ The cheat sheet highlights common Sui CLI commands.
 			<td>Verify your environment with `sui client active-env` and that dependencies are published on that network</td>
 		</tr>
 		<tr>
-			<td>`sui client faucet` fails on Testnet</td>
-			<td>`sui client faucet` only supports Devnet and Localnet</td>
-			<td>Use the web faucet at [faucet.sui.io](https://faucet.sui.io) or Discord for Testnet tokens</td>
+			<td>`sui client faucet` fails on Testnet with `please use the Web UI`</td>
+			<td>Older CLI versions do not support the Testnet faucet</td>
+			<td>Run `suiup update` to update the CLI, or use the web faucet at [faucet.sui.io](https://faucet.sui.io)</td>
 		</tr>
 	</tbody>
 </table>
