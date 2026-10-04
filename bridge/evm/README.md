@@ -58,4 +58,4 @@ All deployments are saved in the `broadcast` directory.
 #### External Resources
 
 - [Writing OpenZeppelin Upgrades with Foundry](https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades?tab=readme-ov-file)
-- [OpenZeppelin Upgrade Requirements](https://docs.openzeppelin.com/upgrades-plugins/1.x/api-core#define-reference-contracts)
+- [OpenZeppelin Upgrade Requirements](https://docs.openzeppelin.com/upgrades-plugins/api-core#define-reference-contracts)
