@@ -1,0 +1,49 @@
+```ts
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const client = new SuiGrpcClient({
+  network: 'mainnet',
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+});
+
+// Mainnet SuiLink packages. See the package ID table for Testnet values.
+const SUILINK_PACKAGE_ID_ETH_SOL = '0xf857fa9df5811e6df2a0240a1029d365db24b5026896776ddd1c3c70803bccd3';
+const SUILINK_PACKAGE_ID_SUI = '0x73f5ab2461c5993408fff21354fa9831d4f4a66cc81382419ec29e3c80c384b5';
+
+// listOwnedObjects returns one page at a time, so walk every page. An address
+// with more links or assets than a single page holds otherwise looks empty.
+async function listAllOwnedObjects(owner: string, type: string) {
+  const all = [];
+  let cursor: string | null = null;
+
+  do {
+    const page = await client.listOwnedObjects({
+      owner,
+      type,
+      cursor,
+      include: { json: true },
+    });
+
+    all.push(...page.objects);
+    cursor = page.hasNextPage ? page.cursor : null;
+  } while (cursor);
+
+  return all;
+}
+
+// Every address the user has proven they own, read from their SuiLink NFTs
+async function getLinkedAddresses(suiAddress: string) {
+  const links = [
+    ...(await listAllOwnedObjects(suiAddress, `${SUILINK_PACKAGE_ID_ETH_SOL}::suilink::SuiLink`)),
+    ...(await listAllOwnedObjects(suiAddress, `${SUILINK_PACKAGE_ID_SUI}::suilink::SuiLink`)),
+  ];
+
+  return links.map((link) => ({
+    address: link.json.network_address as string,
+    // The full type string carries the network, for example
+    // "...::SuiLink<...::ethereum::Ethereum>"
+    type: link.type,
+    timestampMs: link.json.timestamp_ms as string,
+  }));
+}
+```

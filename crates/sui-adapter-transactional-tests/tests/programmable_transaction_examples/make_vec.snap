@@ -21,7 +21,7 @@ task 2, lines 51-57:
 //> 2: MakeMoveVec<vector<u64>>([Result(0), Result(0)]);
 //> 3: test::m1::vec_vec_u64(Result(2));
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, lines 59-65:
 //# programmable --inputs vector[226u8,157u8,164u8,239u8,184u8,143u8]
@@ -32,7 +32,7 @@ task 3, lines 59-65:
 //> 2: MakeMoveVec<vector<std::string::String>>([Result(0), Result(0)]);
 //> 3: test::m1::vec_vec_string(Result(2));
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 67-70:
 //# programmable --inputs vector[vector[226u8,157u8,164u8,239u8,184u8,143u8]] vector[]
@@ -40,7 +40,7 @@ task 4, lines 67-70:
 //> 0: MakeMoveVec<std::option::Option<std::string::String>>([Input(0), Input(1)]);
 //> 1: test::m1::vec_option_string(Result(0));
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, lines 72-75:
 //# programmable --inputs vector[255u8,157u8,164u8,239u8,184u8,143u8]

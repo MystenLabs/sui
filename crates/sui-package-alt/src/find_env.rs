@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, path::Path};
 use anyhow::bail;
 use indexmap::IndexMap;
 use move_compiler::format_oxford_list;
-use move_package_alt::{
+use move_package::{
     RootPackage,
     schema::{Environment, EnvironmentID, EnvironmentName},
 };

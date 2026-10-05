@@ -16,13 +16,13 @@ task 2, lines 12-16:
 //# upgrade --package Dep_V1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 3, lines 18-23:
 //# publish --upgradeable --dependencies Dep_V1 --sender A
 created: object(3,0), object(3,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5897600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 5897600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, lines 41-45:
 //# programmable --sender A --inputs object(3,1) 0u8 digest(Consumer_V1)

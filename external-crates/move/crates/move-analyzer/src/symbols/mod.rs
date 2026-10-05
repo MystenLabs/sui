@@ -99,7 +99,7 @@ use move_compiler::{
     typing::ast::ModuleDefinition,
 };
 use move_ir_types::location::*;
-use move_package_alt::MoveFlavor;
+use move_package::MoveFlavor;
 use move_symbol_pool::Symbol;
 
 pub mod compilation;

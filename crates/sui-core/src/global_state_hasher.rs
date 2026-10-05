@@ -400,22 +400,22 @@ impl GlobalStateHasher {
         effects: &[TransactionEffects],
         checkpoint_seq_num: CheckpointSequenceNumber,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<GlobalStateHash> {
+    ) -> GlobalStateHash {
         let _scope = monitored_scope("AccumulateCheckpoint");
-        if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
-            return Ok(acc);
+        if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num) {
+            return acc;
         }
 
         let acc = self.accumulate_effects(effects, epoch_store.protocol_config());
 
-        epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
+        epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc);
         debug!("Accumulated checkpoint {}", checkpoint_seq_num);
 
         epoch_store
             .checkpoint_state_notify_read
             .notify(&checkpoint_seq_num, &acc);
 
-        Ok(acc)
+        acc
     }
 
     pub fn accumulate_cached_live_object_set_for_testing(
@@ -513,7 +513,7 @@ impl GlobalStateHasher {
         }
 
         if let Some(prior_running_root) =
-            epoch_store.get_running_root_state_hash(checkpoint_seq_num - 1)?
+            epoch_store.get_running_root_state_hash(checkpoint_seq_num - 1)
         {
             return Ok(prior_running_root);
         }
@@ -548,7 +548,7 @@ impl GlobalStateHasher {
 
         // Idempotency.
         if epoch_store
-            .get_running_root_state_hash(checkpoint_seq_num)?
+            .get_running_root_state_hash(checkpoint_seq_num)
             .is_some()
         {
             debug!(
@@ -564,7 +564,6 @@ impl GlobalStateHasher {
         let checkpoint_acc = checkpoint_acc.unwrap_or_else(|| {
             epoch_store
                 .get_state_hash_for_checkpoint(&checkpoint_seq_num)
-                .expect("Failed to get checkpoint accumulator from disk")
                 .expect("Expected checkpoint accumulator to exist")
         });
         running_root.union(&checkpoint_acc);
@@ -583,7 +582,7 @@ impl GlobalStateHasher {
     ) -> SuiResult<GlobalStateHash> {
         let _scope = monitored_scope("AccumulateEpochV2");
         let running_root = epoch_store
-            .get_running_root_state_hash(last_checkpoint_of_epoch)?
+            .get_running_root_state_hash(last_checkpoint_of_epoch)
             .expect("Expected running root accumulator to exist up to last checkpoint of epoch");
 
         self.store.insert_state_hash_for_epoch(
