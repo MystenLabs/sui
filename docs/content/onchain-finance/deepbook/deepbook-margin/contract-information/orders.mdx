@@ -49,13 +49,13 @@ There are two primary order types:
 
 Regular limit and market orders require margin trading to be enabled for the pool, and abort with `EPoolNotEnabledForMarginTrading` otherwise. When the margin manager carries debt, the order must also leave the post-trade risk ratio at or above the pool's minimum open risk ratio.
 
-**Reduce-only orders** are a variant of both types. Reduce-only is a direction guard rather than a size limit: a bid requires base (short-side) debt, and an ask requires quote (long-side) debt and can sell up to the base the manager holds. The order must also leave the post-trade risk ratio no worse than it was before the trade. Reduce-only orders skip the margin-trading-enabled check, so you can still wind a position down after an admin disables margin trading for the pool.
+**Reduce-only orders** are a variant of both types. Reduce-only is a direction guard rather than a size limit: a bid requires base (short-side) debt, and an ask requires quote (long-side) debt and can sell up to the base the manager holds. The order must also leave the post-trade risk ratio no worse than it was before the trade. Reduce-only orders skip the margin-trading-enabled check, so you can still wind a position down after an admin disables margin trading for the pool. Reduce-only *limit* orders additionally require the manager to be at or above the liquidation risk ratio when placed (`EReduceOnlyBelowLiquidation`). A manager that is already liquidatable closes through `place_reduce_only_market_order_and_repay_loan` instead, or is liquidated.
 
 Placing an order never borrows. Debt changes only through the `borrow_*` and `repay_*` functions on the margin manager. To close a position and repay in the same call, use `place_reduce_only_market_order_and_repay_loan` or `place_reduce_only_limit_order_and_repay_loan`.
 
 ## How do I place an order using a margin manager?
 
-Call `place_limit_order_v2` or `place_market_order_v2` in the `pool_proxy_upgraded` module, passing the margin registry, your margin manager, the DeepBook pool, both margin pools, and the base and quote Pyth `PriceInfoObject`s. The margin manager checks ownership against the transaction sender, so there is no capability object to pass.
+Call `place_limit_order_v2` or `place_market_order_v2` in the `pool_proxy_upgraded` module, passing the margin registry, your margin manager, the DeepBook pool, both margin pools, and the base and quote `PriceInfoObject`s from Pyth's upgraded package (`pyth_upgraded::price_info::PriceInfoObject`). That is a different Move type from the legacy Pyth `PriceInfoObject`, so legacy price objects won't type-check. The margin manager checks ownership against the transaction sender, so there is no capability object to pass.
 
 The following example shows how to call `place_limit_order_v2` in a Move transaction:
 
@@ -88,7 +88,7 @@ To place a reduce-only order, call `place_reduce_only_limit_order_v2` or `place_
 
 :::info
 
-The original `place_limit_order`, `place_market_order`, and `place_reduce_only_*` entries in `pool_proxy`, along with their legacy-Pyth `_v2` twins in the same module, all abort. Call the `_v2` functions in `pool_proxy_upgraded` instead.
+The original `place_limit_order`, `place_market_order`, and `place_reduce_only_*` entries in `pool_proxy` abort with `EDeprecatedUseV2`. `pool_proxy` also has `_v2` twins that read the legacy Pyth feed. They still work in the deployed package but are being retired, so call the `_v2` functions in `pool_proxy_upgraded` instead.
 
 :::
 
