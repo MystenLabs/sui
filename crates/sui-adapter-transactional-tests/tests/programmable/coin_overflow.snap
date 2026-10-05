@@ -21,7 +21,7 @@ task 2, lines 23-25:
 created: object(2,0)
 mutated: object(0,0), object(1,1)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2690131, non_refundable_storage_fee: 269
 
 task 3, lines 27-29:
 //# programmable --sender A --inputs object(1,1) 1 @A

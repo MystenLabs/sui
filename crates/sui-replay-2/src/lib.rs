@@ -10,7 +10,7 @@ use crate::{
 use anyhow::{Result, anyhow, bail};
 use clap::{Parser, ValueEnum};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use move_package_alt::schema::EnvironmentName;
+use move_package::schema::EnvironmentName;
 use serde::Deserialize;
 use similar::{ChangeTag, TextDiff};
 use std::{

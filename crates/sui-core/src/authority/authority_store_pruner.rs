@@ -3,7 +3,6 @@
 
 use super::authority_store_tables::AuthorityPerpetualTables;
 use crate::checkpoints::{CheckpointStore, CheckpointWatermark};
-use crate::jsonrpc_index::IndexStore;
 use anyhow::anyhow;
 use mysten_metrics::monitored_scope;
 #[cfg(not(tidehunter))]
@@ -82,9 +81,9 @@ pub struct AuthorityStorePruningMetrics {
     pub num_pruned_objects: IntCounter,
     pub num_pruned_tombstones: IntCounter,
     pub last_pruned_effects_checkpoint: IntGauge,
-    pub last_pruned_indexes_transaction: IntGauge,
     pub num_epochs_to_retain_for_objects: IntGauge,
     pub num_epochs_to_retain_for_checkpoints: IntGauge,
+    pub last_pruned_executed_tx_digests_epoch: IntGauge,
 }
 
 impl AuthorityStorePruningMetrics {
@@ -114,12 +113,6 @@ impl AuthorityStorePruningMetrics {
                 registry
             )
             .unwrap(),
-            last_pruned_indexes_transaction: register_int_gauge_with_registry!(
-                "last_pruned_indexes_transaction",
-                "Last pruned indexes transaction",
-                registry
-            )
-            .unwrap(),
             num_epochs_to_retain_for_objects: register_int_gauge_with_registry!(
                 "num_epochs_to_retain_for_objects",
                 "Number of epochs to retain for objects",
@@ -129,6 +122,12 @@ impl AuthorityStorePruningMetrics {
             num_epochs_to_retain_for_checkpoints: register_int_gauge_with_registry!(
                 "num_epochs_to_retain_for_checkpoints",
                 "Number of epochs to retain for checkpoints",
+                registry
+            )
+            .unwrap(),
+            last_pruned_executed_tx_digests_epoch: register_int_gauge_with_registry!(
+                "last_pruned_executed_tx_digests_epoch",
+                "Highest epoch whose executed_transaction_digests entries have been pruned",
                 registry
             )
             .unwrap(),
@@ -675,92 +674,77 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
-    #[cfg(not(tidehunter))]
-    fn prune_indexes(
-        indexes: Option<&IndexStore>,
-        config: &AuthorityStorePruningConfig,
-        epoch_duration_ms: u64,
+    /// Deletes `executed_transaction_digests` entries for every epoch <= current_epoch - 2.
+    ///
+    /// Only the current and previous epochs are ever read from this table
+    /// (`was_transaction_executed_in_last_epoch` and the startup check in
+    /// `AuthorityState::new`), so this runs on every node independently of the
+    /// history-retention settings (`num_epochs_to_retain*`). Without it the table grows
+    /// without bound; on tidehunter each epoch additionally pins ~4096 cells with an
+    /// in-memory bloom filter each, which is what exhausts memory on unpruned nodes.
+    ///
+    /// The cutoff is derived from the highest *executed* checkpoint, whose epoch never
+    /// exceeds the epoch store's current epoch (checkpoints of epoch N+1 are only executed
+    /// after reconfiguring to N+1), so epoch `epoch_store.epoch() - 1` always survives even
+    /// though the first tick fires before the startup check. On tidehunter the relocation
+    /// filter on this table (`AuthorityPerpetualTables::open`) independently removes
+    /// entries below the checkpoint-retention watermark; that is a subset of what is
+    /// dropped here and both keep the current and previous epoch intact.
+    ///
+    /// `last_pruned_epoch` short-circuits the call when the epoch has not advanced since
+    /// the previous invocation, so the delete is issued once per epoch rather than on
+    /// every tick, and narrows later deletes to the epochs that became eligible since.
+    fn prune_executed_tx_digests(
+        perpetual_db: &Arc<AuthorityPerpetualTables>,
+        checkpoint_store: &Arc<CheckpointStore>,
         metrics: &AuthorityStorePruningMetrics,
+        last_pruned_epoch: &mut Option<EpochId>,
     ) -> anyhow::Result<()> {
-        if let (Some(mut epochs_to_retain), Some(indexes)) =
-            (config.num_epochs_to_retain_for_indexes, indexes)
+        let current_epoch = checkpoint_store
+            .get_highest_executed_checkpoint()?
+            .map(|c| c.epoch)
+            .unwrap_or_default();
+
+        if current_epoch < 2 || last_pruned_epoch.is_some_and(|e| e >= current_epoch) {
+            return Ok(());
+        }
+
+        // Epochs strictly below this one are deleted; this one and later are preserved.
+        let retain_from_epoch = current_epoch - 1;
+        // Everything below the previous cutoff is already gone, so only cover the epochs
+        // that became eligible since then. A fresh process starts from epoch 0.
+        let from_epoch = last_pruned_epoch.map_or(0, |e| e - 1);
+        info!(
+            "Pruning executed_transaction_digests for epochs {}..{} (current epoch: {})",
+            from_epoch, retain_from_epoch, current_epoch
+        );
+
+        #[cfg(tidehunter)]
         {
-            if epochs_to_retain < 7 {
-                warn!("num_epochs_to_retain_for_indexes is too low. Reseting it to 7");
-                epochs_to_retain = 7;
-            }
-            let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
-            if let Some(cut_time_ms) =
-                u64::try_from(now)?.checked_sub(epochs_to_retain * epoch_duration_ms)
-            {
-                let transaction_id = indexes.prune(cut_time_ms)?;
-                metrics
-                    .last_pruned_indexes_transaction
-                    .set(transaction_id as i64);
-            }
+            let from_key = (from_epoch, TransactionDigest::ZERO);
+            let to_key = (retain_from_epoch - 1, TransactionDigest::new([0xff; 32]));
+            perpetual_db
+                .executed_transaction_digests
+                .drop_cells_in_range(&from_key, &to_key)?;
         }
-        Ok(())
-    }
-
-    #[cfg(not(tidehunter))]
-    async fn prune_executed_tx_digests(
-        perpetual_db: &Arc<AuthorityPerpetualTables>,
-        checkpoint_store: &Arc<CheckpointStore>,
-    ) -> anyhow::Result<()> {
-        let current_epoch = checkpoint_store
-            .get_highest_executed_checkpoint()?
-            .map(|c| c.epoch)
-            .unwrap_or_default();
-
-        if current_epoch < 2 {
-            return Ok(());
+        #[cfg(not(tidehunter))]
+        {
+            let start_key = (from_epoch, TransactionDigest::ZERO);
+            // `to` is non-inclusive so retain_from_epoch and all later epochs are preserved
+            let end_key = (retain_from_epoch, TransactionDigest::ZERO);
+            let mut batch = perpetual_db.executed_transaction_digests.batch();
+            batch.schedule_delete_range(
+                &perpetual_db.executed_transaction_digests,
+                &start_key,
+                &end_key,
+            )?;
+            batch.write()?;
         }
 
-        let target_epoch = current_epoch - 1;
-
-        let start_key = (0u64, TransactionDigest::ZERO);
-        let end_key = (target_epoch, TransactionDigest::ZERO);
-
-        info!(
-            "Pruning executed_transaction_digests for epochs < {} (current epoch: {})",
-            target_epoch, current_epoch
-        );
-
-        let mut batch = perpetual_db.executed_transaction_digests.batch();
-        batch.schedule_delete_range(
-            &perpetual_db.executed_transaction_digests,
-            &start_key,
-            // `to` is non-inclusive so target_epoch and all later epochs are preserved
-            &end_key,
-        )?;
-        batch.write()?;
-        Ok(())
-    }
-
-    #[cfg(tidehunter)]
-    fn prune_executed_tx_digests_th(
-        perpetual_db: &Arc<AuthorityPerpetualTables>,
-        checkpoint_store: &Arc<CheckpointStore>,
-    ) -> anyhow::Result<()> {
-        let current_epoch = checkpoint_store
-            .get_highest_executed_checkpoint()?
-            .map(|c| c.epoch)
-            .unwrap_or_default();
-
-        if current_epoch < 2 {
-            return Ok(());
-        }
-
-        let last_epoch_to_delete = current_epoch - 2;
-        let from_key = (0u64, TransactionDigest::ZERO);
-        let to_key = (last_epoch_to_delete, TransactionDigest::new([0xff; 32]));
-        info!(
-            "Pruning executed_transaction_digests for epochs 0 to {} (current epoch: {})",
-            last_epoch_to_delete, current_epoch
-        );
-        perpetual_db
-            .executed_transaction_digests
-            .drop_cells_in_range(&from_key, &to_key)?;
+        metrics
+            .last_pruned_executed_tx_digests_epoch
+            .set((retain_from_epoch - 1) as i64);
+        *last_pruned_epoch = Some(current_epoch);
         Ok(())
     }
 
@@ -841,7 +825,6 @@ impl AuthorityStorePruner {
         }
         perpetual_db.objects.db.start_relocation()?;
         checkpoint_store.tables.watermarks.db.start_relocation()?;
-        Self::prune_executed_tx_digests_th(perpetual_db, checkpoint_store)?;
         Ok(())
     }
 
@@ -932,7 +915,6 @@ impl AuthorityStorePruner {
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
         rpc_store: Option<RpcStore>,
-        jsonrpc_index: Option<Arc<IndexStore>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
         pruner_watermarks: Arc<PrunerWatermarks>,
     ) -> Sender<()> {
@@ -961,52 +943,60 @@ impl AuthorityStorePruner {
 
         #[cfg(tidehunter)]
         {
-            // Index pruning is only implemented for the rocksdb backend.
-            let _ = jsonrpc_index;
-            if let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints() {
-                let prune_objects = config.num_epochs_to_retain != u64::MAX;
-                let prune_loop = async move {
-                    let mut retraction_cursors = RetractionCursors::default();
-                    let mut objects_prune_interval = tokio::time::interval_at(
-                        Instant::now() + pruning_initial_delay,
-                        tick_duration,
-                    );
-                    let mut checkpoints_prune_interval = tokio::time::interval_at(
-                        Instant::now() + pruning_initial_delay,
-                        tick_duration,
-                    );
-                    loop {
-                        tokio::select! {
-                            _ = objects_prune_interval.tick(), if prune_objects => {
-                                if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_ref(), &mut retraction_cursors, config.clone(), metrics.clone(), epoch_duration_ms).await {
-                                    error!("Failed to prune objects: {:?}", err);
-                                }
-                            },
-                            _ = checkpoints_prune_interval.tick() => {
-                                if let Err(err) = Self::prune_th(&perpetual_db, &checkpoint_store, num_epochs_to_retain, pruner_watermarks.clone(), !prune_objects) {
-                                    error!("Failed to prune checkpoints: {:?}", err);
-                                }
-                            },
-                            _ = &mut recv => break,
-                        }
+            // Object and checkpoint pruning (relocation) are only active when checkpoint
+            // retention is configured. The executed-transaction-digest cleanup below runs
+            // regardless, so the loop is always spawned.
+            let checkpoint_retention = config.num_epochs_to_retain_for_checkpoints();
+            let prune_objects =
+                checkpoint_retention.is_some() && config.num_epochs_to_retain != u64::MAX;
+            let prune_loop = async move {
+                let mut retraction_cursors = RetractionCursors::default();
+                let mut last_pruned_tx_digests_epoch = None;
+                let mut objects_prune_interval =
+                    tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
+                let mut checkpoints_prune_interval =
+                    tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
+                // No initial delay: a node that accumulated many epochs of digests while
+                // this cleanup was disabled must reclaim them right after startup.
+                let mut tx_digests_prune_interval =
+                    tokio::time::interval_at(Instant::now(), tick_duration);
+                loop {
+                    tokio::select! {
+                        _ = objects_prune_interval.tick(), if prune_objects => {
+                            if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_ref(), &mut retraction_cursors, config.clone(), metrics.clone(), epoch_duration_ms).await {
+                                error!("Failed to prune objects: {:?}", err);
+                            }
+                        },
+                        _ = checkpoints_prune_interval.tick(), if checkpoint_retention.is_some() => {
+                            let Some(num_epochs_to_retain) = checkpoint_retention else { continue };
+                            if let Err(err) = Self::prune_th(&perpetual_db, &checkpoint_store, num_epochs_to_retain, pruner_watermarks.clone(), !prune_objects) {
+                                error!("Failed to prune checkpoints: {:?}", err);
+                            }
+                        },
+                        _ = tx_digests_prune_interval.tick() => {
+                            if let Err(err) = Self::prune_executed_tx_digests(&perpetual_db, &checkpoint_store, &metrics, &mut last_pruned_tx_digests_epoch) {
+                                error!("Failed to prune executed_transaction_digests: {:?}", err);
+                            }
+                        },
+                        _ = &mut recv => break,
                     }
-                };
+                }
+            };
 
-                #[cfg(not(msim))]
-                std::thread::Builder::new()
-                    .name("authority-store-pruner".to_string())
-                    .spawn(move || {
-                        let runtime = tokio::runtime::Builder::new_current_thread()
-                            .enable_all()
-                            .build()
-                            .expect("Failed to build pruner tokio runtime");
-                        runtime.block_on(prune_loop);
-                    })
-                    .expect("Failed to spawn authority store pruner thread");
+            #[cfg(not(msim))]
+            std::thread::Builder::new()
+                .name("authority-store-pruner".to_string())
+                .spawn(move || {
+                    let runtime = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("Failed to build pruner tokio runtime");
+                    runtime.block_on(prune_loop);
+                })
+                .expect("Failed to spawn authority store pruner thread");
 
-                #[cfg(msim)]
-                tokio::task::spawn(prune_loop);
-            }
+            #[cfg(msim)]
+            tokio::task::spawn(prune_loop);
         }
         #[cfg(not(tidehunter))]
         {
@@ -1037,20 +1027,25 @@ impl AuthorityStorePruner {
 
             let prune_loop = async move {
                 let mut retraction_cursors = RetractionCursors::default();
+                let mut last_pruned_tx_digests_epoch = None;
                 let mut objects_prune_interval =
                     tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
                 let mut checkpoints_prune_interval =
                     tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
-                let mut indexes_prune_interval =
-                    tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
+                // Not gated on any retention setting and without initial delay; see
+                // `prune_executed_tx_digests`.
+                let mut tx_digests_prune_interval =
+                    tokio::time::interval_at(Instant::now(), tick_duration);
                 loop {
                     tokio::select! {
                         _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
                             if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_store.as_ref(), &mut retraction_cursors, config.clone(), metrics.clone(), epoch_duration_ms).await {
                                 error!("Failed to prune objects: {:?}", err);
                             }
-                            if let Err(err) = Self::prune_executed_tx_digests(&perpetual_db, &checkpoint_store).await {
-                                error!("Failed to prune executed_tx_digests: {:?}", err);
+                        },
+                        _ = tx_digests_prune_interval.tick() => {
+                            if let Err(err) = Self::prune_executed_tx_digests(&perpetual_db, &checkpoint_store, &metrics, &mut last_pruned_tx_digests_epoch) {
+                                error!("Failed to prune executed_transaction_digests: {:?}", err);
                             }
                         },
                         _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
@@ -1058,11 +1053,6 @@ impl AuthorityStorePruner {
                                 error!("Failed to prune checkpoints: {:?}", err);
                             }
                         },
-                        _ = indexes_prune_interval.tick(), if config.num_epochs_to_retain_for_indexes.is_some() => {
-                            if let Err(err) = Self::prune_indexes(jsonrpc_index.as_deref(), &config, epoch_duration_ms, &metrics) {
-                                error!("Failed to prune indexes: {:?}", err);
-                            }
-                        }
                         _ = &mut recv => break,
                     }
                 }
@@ -1090,7 +1080,6 @@ impl AuthorityStorePruner {
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
         rpc_store: Option<RpcStore>,
-        jsonrpc_index: Option<Arc<IndexStore>>,
         mut pruning_config: AuthorityStorePruningConfig,
         is_validator: bool,
         epoch_duration_ms: u64,
@@ -1137,7 +1126,6 @@ impl AuthorityStorePruner {
                 perpetual_db,
                 checkpoint_store,
                 rpc_store,
-                jsonrpc_index,
                 AuthorityStorePruningMetrics::new(registry),
                 pruner_watermarks,
             ),

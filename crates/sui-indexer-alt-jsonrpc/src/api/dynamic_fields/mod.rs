@@ -8,8 +8,6 @@ use mysten_common::ZipDebugEqIteratorExt;
 use sui_json_rpc_types::DynamicFieldInfo as DynamicFieldInfoResponse;
 use sui_json_rpc_types::Page;
 use sui_json_rpc_types::SuiObjectResponse;
-use sui_open_rpc::Module;
-use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::ObjectID;
 use sui_types::dynamic_field::DynamicFieldName;
 
@@ -21,16 +19,15 @@ use crate::error::InternalContext;
 mod error;
 mod response;
 
-#[open_rpc(namespace = "suix", tag = "Dynamic Fields API")]
 #[rpc(server, namespace = "suix")]
 trait DynamicFieldsApi {
     /// Return the information from a dynamic field based on its parent ID and name.
     #[method(name = "getDynamicFieldObject")]
     async fn get_dynamic_field_object(
         &self,
-        /// The ID of the parent object
+        // The ID of the parent object
         parent_object_id: ObjectID,
-        /// The Name of the dynamic field
+        // The Name of the dynamic field
         name: DynamicFieldName,
     ) -> RpcResult<SuiObjectResponse>;
 
@@ -44,11 +41,11 @@ trait DynamicFieldsApi {
     #[method(name = "getDynamicFields")]
     async fn get_dynamic_fields(
         &self,
-        /// The ID of the parent object
+        // The ID of the parent object
         parent_object_id: ObjectID,
-        /// Cursor to start paginating from.
+        // Cursor to start paginating from.
         cursor: Option<String>,
-        /// Maximum number of objects to return per page.
+        // Maximum number of objects to return per page.
         limit: Option<usize>,
     ) -> RpcResult<Page<DynamicFieldInfoResponse, String>>;
 }
@@ -102,10 +99,6 @@ impl DynamicFieldsApiServer for DynamicFields {
 }
 
 impl RpcModule for DynamicFields {
-    fn schema(&self) -> Module {
-        DynamicFieldsApiOpenRpc::module_doc()
-    }
-
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }

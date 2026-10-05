@@ -13,8 +13,8 @@ use anyhow::Result;
 use clap::Parser;
 use move_core_types::parsing::values::ParsedValue;
 use move_core_types::{language_storage::TypeTag, runtime_value::MoveValue};
-use move_package_alt::MoveFlavor;
-use move_package_alt_compilation::layout::CompiledPackageLayout;
+use move_package::MoveFlavor;
+use move_package_compilation::layout::CompiledPackageLayout;
 use move_unit_test::vm_test_setup::VMTestSetup;
 use move_vm_runtime::shared::types::VersionId;
 use std::{

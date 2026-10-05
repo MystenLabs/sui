@@ -26,7 +26,7 @@ use move_analyzer::{
 };
 use move_command_line_common::testing::insta_assert;
 use move_compiler::{editions::Flavor, linters::LintLevel};
-use move_package_alt::{MoveFlavor, Vanilla};
+use move_package::{MoveFlavor, Vanilla};
 use serde::{Deserialize, Serialize};
 use url::Url;
 use vfs::{MemoryFS, VfsPath};

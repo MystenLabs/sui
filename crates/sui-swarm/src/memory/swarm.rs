@@ -13,11 +13,12 @@ use std::{
     ops,
     path::{Path, PathBuf},
 };
-use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 #[cfg(msim)]
 use sui_config::node::ExecutionTimeObserverConfig;
-use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
+use sui_config::node::{
+    AuthorityOverloadConfig, ConsensusTransactionPoolConfig, DBCheckpointConfig, RunWithRange,
+};
 use sui_config::{ExecutionCacheConfig, NodeConfig};
 use sui_macros::nondeterministic;
 use sui_node::SuiNodeHandle;
@@ -57,11 +58,10 @@ pub struct SwarmBuilder<R = OsRng> {
     jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
     authority_overload_config: Option<AuthorityOverloadConfig>,
+    consensus_transaction_pool_config: Option<ConsensusTransactionPoolConfig>,
     execution_cache_config: Option<ExecutionCacheConfig>,
     data_ingestion_dir: Option<PathBuf>,
     fullnode_run_with_range: Option<RunWithRange>,
-    fullnode_policy_config: Option<PolicyConfig>,
-    fullnode_fw_config: Option<RemoteFirewallConfig>,
     global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
     funds_withdraw_scheduler_type_config: Option<FundsWithdrawSchedulerTypeConfig>,
     disable_fullnode_pruning: bool,
@@ -95,11 +95,10 @@ impl SwarmBuilder {
             jwk_fetch_interval: None,
             num_unpruned_validators: None,
             authority_overload_config: None,
+            consensus_transaction_pool_config: None,
             execution_cache_config: None,
             data_ingestion_dir: None,
             fullnode_run_with_range: None,
-            fullnode_policy_config: None,
-            fullnode_fw_config: None,
             global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig::Global(true),
             funds_withdraw_scheduler_type_config: None,
             disable_fullnode_pruning: false,
@@ -134,11 +133,10 @@ impl<R> SwarmBuilder<R> {
             jwk_fetch_interval: self.jwk_fetch_interval,
             num_unpruned_validators: self.num_unpruned_validators,
             authority_overload_config: self.authority_overload_config,
+            consensus_transaction_pool_config: self.consensus_transaction_pool_config,
             execution_cache_config: self.execution_cache_config,
             data_ingestion_dir: self.data_ingestion_dir,
             fullnode_run_with_range: self.fullnode_run_with_range,
-            fullnode_policy_config: self.fullnode_policy_config,
-            fullnode_fw_config: self.fullnode_fw_config,
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
             funds_withdraw_scheduler_type_config: self.funds_withdraw_scheduler_type_config,
             disable_fullnode_pruning: self.disable_fullnode_pruning,
@@ -324,6 +322,15 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_consensus_transaction_pool_config(
+        mut self,
+        consensus_transaction_pool_config: ConsensusTransactionPoolConfig,
+    ) -> Self {
+        assert!(self.network_config.is_none());
+        self.consensus_transaction_pool_config = Some(consensus_transaction_pool_config);
+        self
+    }
+
     pub fn with_execution_cache_config(
         mut self,
         execution_cache_config: ExecutionCacheConfig,
@@ -354,16 +361,6 @@ impl<R> SwarmBuilder<R> {
         if let Some(run_with_range) = run_with_range {
             self.fullnode_run_with_range = Some(run_with_range);
         }
-        self
-    }
-
-    pub fn with_fullnode_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
-        self.fullnode_policy_config = config;
-        self
-    }
-
-    pub fn with_fullnode_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
-        self.fullnode_fw_config = config;
         self
     }
 
@@ -415,6 +412,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             if let Some(authority_overload_config) = self.authority_overload_config {
                 config_builder =
                     config_builder.with_authority_overload_config(authority_overload_config);
+            }
+
+            if let Some(config) = self.consensus_transaction_pool_config {
+                config_builder = config_builder.with_consensus_transaction_pool_config(config);
             }
 
             if let Some(execution_cache_config) = self.execution_cache_config {
@@ -483,9 +484,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .with_config_directory(dir.as_ref().into())
             .with_db_checkpoint_config(self.db_checkpoint_config.clone())
             .with_run_with_range(self.fullnode_run_with_range)
-            .with_policy_config(self.fullnode_policy_config)
             .with_data_ingestion_dir(ingest_data)
-            .with_fw_config(self.fullnode_fw_config)
             .with_disable_pruning(self.disable_fullnode_pruning);
 
         if let Some(state_sync_config) = self.state_sync_config.clone() {

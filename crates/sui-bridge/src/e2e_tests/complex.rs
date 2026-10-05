@@ -12,7 +12,7 @@ use crate::sui_transaction_builder::build_sui_transaction;
 use crate::types::{BridgeAction, BridgeActionStatus, EmergencyAction, EmergencyActionType};
 use alloy::primitives::{Address as EthAddress, U256};
 use std::sync::Arc;
-use sui_types::bridge::{BridgeChainId, TOKEN_ID_ETH};
+use sui_types::bridge::BridgeChainId;
 use sui_types::coin::Coin;
 use sui_types::effects::TransactionEffectsAPI;
 use tracing::info;
@@ -60,21 +60,7 @@ async fn test_sui_bridge_paused() {
         .await
         .unwrap();
     // verify Eth was transferred to Sui address
-    let eth_coin_type = sui_token_type_tags.get(&TOKEN_ID_ETH).unwrap();
-    let eth_coin = bridge_test_cluster
-        .test_cluster
-        .inner
-        .grpc_client()
-        .get_owned_objects(
-            sui_address,
-            Some(Coin::type_(eth_coin_type.clone())),
-            None,
-            None,
-        )
-        .await
-        .unwrap()
-        .items;
-    assert_eq!(1, eth_coin.len());
+    let eth_coin = wait_for_eth_coin_owned_by(&bridge_test_cluster, sui_address, None).await;
 
     // get pause bridge signatures from committee
     let bridge_committee = Arc::new(bridge_client.get_bridge_committee().await.unwrap());
@@ -127,7 +113,7 @@ async fn test_sui_bridge_paused() {
     let sui_to_eth_bridge_action = initiate_bridge_sui_to_eth(
         &bridge_test_cluster,
         EthAddress::random(),
-        eth_coin.first().unwrap().compute_object_reference(),
+        eth_coin.compute_object_reference(),
         0,
         10,
     )
