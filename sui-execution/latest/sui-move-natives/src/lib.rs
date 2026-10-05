@@ -27,7 +27,7 @@ use self::{
         DynamicFieldHashTypeAndKeyCostParams, DynamicFieldRemoveChildObjectCostParams,
     },
     event::EventEmitCostParams,
-    forwarding_address::ForwardingAddressResolveCostParams,
+    forwarding_address::{ForwardingAddressRegisterCostParams, ForwardingAddressResolveCostParams},
     object::{BorrowUidCostParams, DeleteImplCostParams, RecordNewIdCostParams},
     package::PackageVersioningOriginalPackageIdImplCostParams,
     scratch::{
@@ -123,6 +123,7 @@ pub struct NativesCostTable {
 
     // Forwarding address
     pub forwarding_address_resolve_cost_params: ForwardingAddressResolveCostParams,
+    pub forwarding_address_register_cost_params: ForwardingAddressRegisterCostParams,
 
     // Dynamic field natives
     pub dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams,
@@ -271,8 +272,14 @@ impl NativesCostTable {
                 base: protocol_config
                     .forwarding_address_resolve_cost_base_as_option()
                     .map(Into::into),
-                per_byte: protocol_config
-                    .forwarding_address_resolve_cost_per_byte_as_option()
+                lookup: protocol_config
+                    .forwarding_address_resolve_lookup_cost_base_as_option()
+                    .map(Into::into),
+            },
+
+            forwarding_address_register_cost_params: ForwardingAddressRegisterCostParams {
+                base: protocol_config
+                    .forwarding_address_register_cost_base_as_option()
                     .map(Into::into),
             },
 
@@ -1148,6 +1155,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "forwarding_address",
             "resolve_impl",
             make_native!(forwarding_address::resolve_impl),
+        ),
+        (
+            "forwarding_address",
+            "charge_registration_fee",
+            make_native!(forwarding_address::charge_registration_fee),
         ),
         (
             "groth16",

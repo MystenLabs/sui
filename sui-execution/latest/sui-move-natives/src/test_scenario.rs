@@ -42,12 +42,13 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
 };
 use sui_types::{
-    TypeTag,
+    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     config,
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
     execution::DynamicallyLoadedObjectMetadata,
+    forwarding_address::MasterRecordKey,
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
@@ -84,14 +85,6 @@ pub struct InMemoryTestStore {
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
 impl InMemoryTestStore {
-    #[cfg(test)]
-    pub(crate) fn new_for_testing(storage: InMemoryStorage) -> Self {
-        Self {
-            storage: RefCell::new(storage),
-            ..Default::default()
-        }
-    }
-
     fn settled_funds(&self, owner: SuiAddress, type_: &TypeTag) -> u128 {
         self.funds
             .borrow()
@@ -174,16 +167,17 @@ impl ObjectFundsResolver for InMemoryTestStore {
         Ok(self.settled_funds(owner, type_))
     }
 
-    // Move unit tests have no sequencer; native reads use the scenario's current committed state.
-    fn load_implicitly_read_system_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> sui_types::error::SuiResult<Object> {
-        self.storage
+    // Move unit tests have no sequencer; reads see the scenario's latest committed registry.
+    fn forwarding_master(&self, master_id: u32) -> sui_types::error::SuiResult<Option<SuiAddress>> {
+        let registry_version = self
+            .storage
             .borrow()
-            .get_object(object_id)
-            .cloned()
-            .ok_or_else(|| sui_types::error::SuiErrorKind::ExecutionInvariantViolation.into())
+            .get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+            .ok_or(sui_types::error::SuiErrorKind::ExecutionInvariantViolation)?
+            .version();
+        Ok(MasterRecordKey(master_id)
+            .load(self, registry_version)?
+            .map(|record| record.master))
     }
 }
 

@@ -20,6 +20,7 @@ payload bytes mean. Variant 0 gives them no on-chain meaning.
 -  [Function `master_id`](#sui_forwarding_address_master_id)
 -  [Function `resolve`](#sui_forwarding_address_resolve)
 -  [Function `resolve_impl`](#sui_forwarding_address_resolve_impl)
+-  [Function `charge_registration_fee`](#sui_forwarding_address_charge_registration_fee)
 -  [Function `allocate_master_id`](#sui_forwarding_address_allocate_master_id)
 -  [Function `mix_master_id`](#sui_forwarding_address_mix_master_id)
 -  [Function `mul_mod_2_32`](#sui_forwarding_address_mul_mod_2_32)
@@ -293,6 +294,7 @@ Emitted when a master ID is allocated.
 
 Allocate a fresh master ID for <code>ctx.sender()</code> and return the capability for it.
 
+Charges a deliberately high gas fee, since every registration permanently grows the registry.
 Aborts once every master ID has been allocated; IDs are never reused.
 
 
@@ -306,6 +308,7 @@ Aborts once every master ID has been allocated; IDs are never reused.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_register">register</a>(registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">ForwardingAddressRegistry</a>, ctx: &<b>mut</b> TxContext): <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterCap">MasterCap</a> {
+    <a href="../sui/forwarding_address.md#sui_forwarding_address_charge_registration_fee">charge_registration_fee</a>();
     <b>let</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a> = <a href="../sui/forwarding_address.md#sui_forwarding_address_allocate_master_id">allocate_master_id</a>(registry);
     <b>let</b> master = ctx.sender();
     <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> registry.id, <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>, <a href="../sui/forwarding_address.md#sui_forwarding_address_MasterRecord">MasterRecord</a> { master });
@@ -388,6 +391,28 @@ Resolve <code>recipient</code> and emit an attribution event when it is a forwar
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_resolve_impl">resolve_impl</a>(recipient: <b>address</b>): (<b>address</b>, bool);
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_forwarding_address_charge_registration_fee"></a>
+
+## Function `charge_registration_fee`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_charge_registration_fee">charge_registration_fee</a>()
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_charge_registration_fee">charge_registration_fee</a>();
 </code></pre>
 
 

@@ -251,13 +251,12 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
 }
 
 /// Resolves the transaction-scoped funds state during execution: available object balances and
-/// the system objects whose versions consensus assigned to this transaction.
+/// forwarding-address masters, both read as of the system-object versions consensus assigned to
+/// this transaction. Neither sees writes made earlier in the same transaction.
 pub trait ObjectFundsResolver {
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
-    /// Execution may only request an implicit system-object read for which consensus assigned
-    /// this transaction a version. A missing assignment, or an assigned version that cannot be
-    /// loaded, is an execution invariant violation, never an ordinary absence.
-    fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> SuiResult<Object>;
+    /// The master address registered for `master_id`, or `None` if it is unregistered.
+    fn forwarding_master(&self, master_id: u32) -> SuiResult<Option<SuiAddress>>;
 }
 
 pub struct DenyListResult {

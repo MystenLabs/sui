@@ -2590,6 +2590,9 @@ resolve
 resolve_impl
 	fun
 	0x2::forwarding_address
+charge_registration_fee
+	fun
+	0x2::forwarding_address
 allocate_master_id
 	fun
 	0x2::forwarding_address

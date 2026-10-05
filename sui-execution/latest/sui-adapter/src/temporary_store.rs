@@ -29,6 +29,7 @@ use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
+use sui_types::forwarding_address::MasterRecordKey;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
 use sui_types::storage::{BackingStore, DenyListResult, ObjectFundsResolver, PackageObject};
@@ -36,6 +37,7 @@ use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapp
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     digests::ObjectDigest,
     effects::EffectsObjectChange,
@@ -257,6 +259,28 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_system_objects: RefCell::new(BTreeMap::new()),
             unsettled_object_funds,
         }
+    }
+
+    /// Loads the system object at the version consensus assigned to this transaction and records
+    /// the read so it can be emitted into effects and reproduced on replay.
+    pub fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> SuiResult<Object> {
+        let Some(version) = self.system_object_versions.get(object_id) else {
+            debug_fatal!(
+                "system_object_versions must contain entry for object_id: {:?}",
+                object_id
+            );
+            return Err(SuiErrorKind::ExecutionInvariantViolation.into());
+        };
+        // The store blocks until the assigned version is available during execution; only a
+        // dry run against pruned state can come back empty.
+        let object = self
+            .store
+            .load_implicitly_read_system_object(object_id, version)
+            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?;
+        self.loaded_system_objects
+            .borrow_mut()
+            .insert(*object_id, (object.version(), object.digest()));
+        Ok(object)
     }
 
     pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {
@@ -1172,28 +1196,6 @@ impl RuntimeObjectResolver for TemporaryStore<'_> {
 }
 
 impl ObjectFundsResolver for TemporaryStore<'_> {
-    /// Loads the system object at the version consensus assigned to this transaction and records
-    /// the read so it can be emitted into effects and reproduced on replay.
-    fn load_implicitly_read_system_object(&self, object_id: &ObjectID) -> SuiResult<Object> {
-        let Some(version) = self.system_object_versions.get(object_id) else {
-            debug_fatal!(
-                "system_object_versions must contain entry for object_id: {:?}",
-                object_id
-            );
-            return Err(SuiErrorKind::ExecutionInvariantViolation.into());
-        };
-        // The store blocks until the assigned version is available during execution; only a
-        // dry run against pruned state can come back empty.
-        let object = self
-            .store
-            .load_implicitly_read_system_object(object_id, version)
-            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?;
-        self.loaded_system_objects
-            .borrow_mut()
-            .insert(*object_id, (object.version(), object.digest()));
-        Ok(object)
-    }
-
     /// Loads the object balance at the required version and subtracts withdrawals from the same
     /// checkpoint that have not settled yet.
     /// This function is expected never to fail; an error indicates an invariant violation.
@@ -1213,6 +1215,15 @@ impl ObjectFundsResolver for TemporaryStore<'_> {
         settled
             .checked_sub(unsettled)
             .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
+    }
+
+    fn forwarding_master(&self, master_id: u32) -> SuiResult<Option<SuiAddress>> {
+        let registry_version = self
+            .load_implicitly_read_system_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)?
+            .version();
+        Ok(MasterRecordKey(master_id)
+            .load(self, registry_version)?
+            .map(|record| record.master))
     }
 }
 
@@ -1480,7 +1491,6 @@ impl BackingPackageStore for TemporaryStore<'_> {
 #[cfg(test)]
 mod system_object_resolver_tests {
     use super::*;
-    use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
     use sui_types::base_types::ConsensusObjectVersion;
     use sui_types::in_memory_storage::InMemoryStorage;
 

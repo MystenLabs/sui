@@ -436,29 +436,6 @@ impl<'a> ChildObjectStore<'a> {
         }
     }
 
-    /// Makes `object_id` a root for child lookups at `version`, the version a system object was
-    /// implicitly read at. The object may also be a transaction input, in which case the two
-    /// versions must agree.
-    pub(super) fn track_system_root_version(
-        &mut self,
-        object_id: ObjectID,
-        version: SequenceNumber,
-    ) -> PartialVMResult<()> {
-        match self.inner.root_version.get(&object_id) {
-            Some(input_version) if *input_version != version => Err(PartialVMError::new(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            )
-            .with_message(format!(
-                "System object {object_id} version {version} differs from input version {input_version}"
-            ))),
-            Some(_) => Ok(()),
-            None => {
-                self.inner.root_version.insert(object_id, version);
-                Ok(())
-            }
-        }
-    }
-
     /// When `parent` has a tracked root version, record the same root version for `id`.
     /// Note that this is not observable at this time, but will be if we either allow for the
     /// re-creation of derived objects, or if we grant access to the `id: UID` of a dynamic field.
@@ -854,40 +831,5 @@ impl<'a> ChildObjectStore<'a> {
                 copied_value: copied_child_value,
             }
         })
-    }
-}
-
-#[cfg(test)]
-mod system_object_tests {
-    use super::*;
-    use crate::test_scenario::InMemoryTestStore;
-    use sui_types::{
-        SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, in_memory_storage::InMemoryStorage,
-    };
-
-    #[test]
-    fn conflicting_system_root_versions_are_invariant_errors() {
-        let id = SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
-        let input_version = SequenceNumber::from_u64(9);
-        let resolver = InMemoryTestStore::new_for_testing(InMemoryStorage::new(vec![]));
-        let config = ProtocolConfig::get_for_max_version_UNSAFE();
-        let metrics = Arc::new(ExecutionMetrics::new(&Default::default()));
-        let mut store = ChildObjectStore::new(
-            &resolver,
-            BTreeMap::from([(id, input_version)]),
-            BTreeMap::new(),
-            false,
-            &config,
-            metrics,
-            0,
-        );
-        store.track_system_root_version(id, input_version).unwrap();
-        assert_eq!(
-            store
-                .track_system_root_version(id, SequenceNumber::from_u64(10))
-                .unwrap_err()
-                .major_status(),
-            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-        );
     }
 }

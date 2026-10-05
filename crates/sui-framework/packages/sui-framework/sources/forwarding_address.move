@@ -66,8 +66,10 @@ public struct MasterRegistered has copy, drop {
 
 /// Allocate a fresh master ID for `ctx.sender()` and return the capability for it.
 ///
+/// Charges a deliberately high gas fee, since every registration permanently grows the registry.
 /// Aborts once every master ID has been allocated; IDs are never reused.
 public fun register(registry: &mut ForwardingAddressRegistry, ctx: &mut TxContext): MasterCap {
+    charge_registration_fee();
     let master_id = allocate_master_id(registry);
     let master = ctx.sender();
     dynamic_field::add(&mut registry.id, master_id, MasterRecord { master });
@@ -90,6 +92,8 @@ public(package) fun resolve<T>(recipient: address, amount: u64): address {
 }
 
 native fun resolve_impl(recipient: address): (address, bool);
+
+native fun charge_registration_fee();
 
 fun allocate_master_id(registry: &mut ForwardingAddressRegistry): u32 {
     if (!dynamic_field::exists(&registry.id, MasterIdCounter {})) {

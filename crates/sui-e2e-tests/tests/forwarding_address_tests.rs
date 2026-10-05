@@ -3,6 +3,7 @@
 
 use move_core_types::identifier::Identifier;
 use sui_macros::sim_test;
+use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
@@ -20,12 +21,13 @@ use sui_types::{
     supported_protocol_versions::SupportedProtocolVersions,
     transaction::{Argument, ObjectArg, SharedObjectMutability, TransactionData},
 };
-use test_cluster::{
-    TestClusterBuilder,
-    addr_balance_test_env::{TestEnv, TestEnvBuilder},
-};
+use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
 
 const E_UNREGISTERED: u64 = 1;
+/// The production registration price, in internal gas units.
+const REGISTER_COST: u64 = 900_000_000;
+/// Registration lands in the 1M-unit computation bucket.
+const REGISTER_COMPUTATION_UNITS: u64 = 1_000_000;
 const E_VARIANT_UNSUPPORTED: u64 = 2;
 
 /// Starts with the high bit set so the tests cover a payload no integer encoding would produce.
@@ -37,13 +39,14 @@ const PAYLOAD: [u8; FORWARDING_ADDRESS_PAYLOAD_LENGTH] = [
 /// `master_id_mixing_is_invertible_and_keeps_zero_reserved` pins the same constant).
 const FIRST_MASTER_ID: u32 = 0x688990c0;
 
-/// The registry must be created by the end-of-epoch transaction when a chain jumps directly from a
-/// protocol version without the object to one that enables forwarding. Genesis at protocol version
-/// 130 uses the frozen v130 framework snapshot, which predates the `forwarding_address` module.
+/// Forwarding ships in two steps: one release creates the registry, a later one enables
+/// resolution. The registry must exist by the first epoch that enables forwarding, and a deposit
+/// in that epoch must resolve. Genesis at protocol version 130 uses the frozen v130 framework
+/// snapshot, which predates the `forwarding_address` module.
 #[sim_test]
-async fn test_create_forwarding_address_registry_object_at_upgrade() {
-    let _guard =
-        sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|version, mut config| {
+async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
+    let mut env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|version, mut config| {
             // The registry is created from protocol version 132 onwards. This matches the
             // production configuration, but we need to set it explicitly here because
             // apply_overrides_for_testing may be used to override the chain to Unknown.
@@ -51,24 +54,25 @@ async fn test_create_forwarding_address_registry_object_at_upgrade() {
                 config.set_create_forwarding_address_registry_for_testing(true);
             }
             if version.as_u64() >= 139 {
-                config.set_enable_forwarding_addresses_for_testing(true);
-                config.set_forwarding_address_resolve_cost_base_for_testing(52);
-                config.set_forwarding_address_resolve_cost_per_byte_for_testing(
-                    config.obj_access_cost_read_per_byte(),
-                );
-                config.set_forwarding_address_max_variant_for_testing(0);
+                set_forwarding_address_config_for_testing(&mut config);
             }
             config
-        });
-
-    let test_cluster = TestClusterBuilder::new()
-        .with_protocol_version(130.into())
-        .with_epoch_duration_ms(10000)
-        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(130, 139))
+        }))
+        .with_test_cluster_builder_cb(Box::new(|builder| {
+            builder
+                .with_protocol_version(130.into())
+                .with_epoch_duration_ms(10000)
+                .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                    130, 138,
+                ))
+                .with_fullnode_supported_protocol_versions_config(
+                    SupportedProtocolVersions::new_for_testing(130, 139),
+                )
+        }))
         .build()
         .await;
 
-    let handles = test_cluster.all_node_handles();
+    let handles = env.cluster.all_node_handles();
     for h in &handles {
         h.with(|node| {
             assert!(
@@ -81,13 +85,9 @@ async fn test_create_forwarding_address_registry_object_at_upgrade() {
         });
     }
 
-    test_cluster.wait_for_protocol_version(139.into()).await;
-
-    // The registry object is created at the end of the first epoch in which it is supported.
-    test_cluster.wait_for_epoch_all_nodes(2).await; // protocol upgrade completes in epoch 1
-
-    // Checking through the epoch start config also verifies that the registry's initial
-    // shared version is registered there at the start of the following epoch.
+    env.cluster.wait_for_protocol_version(138.into()).await;
+    // The registry is created at the end of the first epoch that supports it.
+    env.cluster.wait_for_epoch_all_nodes(2).await;
     for h in &handles {
         h.with(|node| {
             node.state()
@@ -97,17 +97,46 @@ async fn test_create_forwarding_address_registry_object_at_upgrade() {
                 .expect("forwarding address registry object should exist");
         });
     }
+
+    env.cluster
+        .update_validator_supported_versions(SupportedProtocolVersions::new_for_testing(130, 139))
+        .await;
+    env.cluster.wait_for_all_nodes_upgrade_to(139).await;
+    env.update_all_gas().await;
+
+    let master = env.get_sender(0);
+    let depositor = env.get_sender(1);
+    let amount = 1_000_000;
+    let initial_master_balance = env.get_sui_balance_ab(master);
+    let registration = register_master(&mut env, master).await;
+    let forwarding_address = ForwardingAddress::derive_opaque(registration.master_id, PAYLOAD);
+    let transaction =
+        forwarding_address_deposit_transaction(&env, depositor, forwarding_address, amount);
+    let (digest, effects) = env.exec_tx_directly(transaction).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+    assert_eq!(
+        env.get_sui_balance_ab(master),
+        initial_master_balance + amount
+    );
+    assert_forwarding_deposit_event(&env, &digest, forwarding_address, master, amount);
+}
+
+fn set_forwarding_address_config_for_testing(config: &mut ProtocolConfig) {
+    config.set_enable_forwarding_addresses_for_testing(true);
+    config.set_forwarding_address_resolve_cost_base_for_testing(52);
+    config.set_forwarding_address_resolve_lookup_cost_base_for_testing(
+        512 * config.obj_access_cost_read_per_byte(),
+    );
+    config.set_forwarding_address_register_cost_base_for_testing(REGISTER_COST);
+    config.set_forwarding_address_max_variant_for_testing(0);
 }
 
 fn forwarding_address_test_env(enable_forwarding_addresses: bool) -> TestEnvBuilder {
     TestEnvBuilder::new().with_proto_override_cb(Box::new(move |_, mut config| {
         config.set_create_forwarding_address_registry_for_testing(true);
+        set_forwarding_address_config_for_testing(&mut config);
         config.set_enable_forwarding_addresses_for_testing(enable_forwarding_addresses);
-        config.set_forwarding_address_resolve_cost_base_for_testing(52);
-        config.set_forwarding_address_resolve_cost_per_byte_for_testing(
-            config.obj_access_cost_read_per_byte(),
-        );
-        config.set_forwarding_address_max_variant_for_testing(0);
         config
     }))
 }
@@ -151,11 +180,16 @@ async fn register_master(env: &mut TestEnv, master: SuiAddress) -> Registration 
         master,
         vec![env.get_gas_for_sender(master)[0]],
         builder.finish(),
-        10_000_000,
+        register_gas_budget(env),
         env.rgp,
     );
     let (digest, effects) = env.exec_tx_directly(transaction).await.unwrap();
     assert!(effects.status().is_ok(), "{effects:?}");
+    assert_eq!(
+        effects.gas_cost_summary().computation_cost,
+        REGISTER_COMPUTATION_UNITS * env.rgp,
+        "registration must pay the registration fee"
+    );
     env.cluster.wait_for_tx_settlement(&[digest]).await;
 
     let events = get_events(env, &digest);
@@ -199,6 +233,10 @@ async fn register_master(env: &mut TestEnv, master: SuiAddress) -> Registration 
         master_id: registered.master_id,
         cap_id: registered.cap_id,
     }
+}
+
+fn register_gas_budget(env: &TestEnv) -> u64 {
+    REGISTER_COMPUTATION_UNITS * env.rgp + 10_000_000
 }
 
 fn get_events(env: &TestEnv, digest: &TransactionDigest) -> Vec<sui_types::event::Event> {
@@ -488,11 +526,11 @@ async fn test_malformed_forwarding_addresses_abort_instead_of_stranding() {
     }
 }
 
-/// Registering and depositing in one transaction: the deposit must see the record `register`
-/// wrote earlier in the same transaction, and the registry is both a mutated input and the
-/// object the native read.
+/// Registering and depositing in one transaction: resolution reads the registry as of the version
+/// consensus assigned, so it does not see the record `register` wrote earlier in the same
+/// transaction, and the whole transaction aborts.
 #[sim_test]
-async fn test_register_and_deposit_in_the_same_transaction() {
+async fn test_register_and_deposit_in_the_same_transaction_aborts() {
     let mut env = forwarding_address_test_env(true).build().await;
     let master = env.get_sender(0);
     let amount = 1_000_000;
@@ -521,35 +559,24 @@ async fn test_register_and_deposit_in_the_same_transaction() {
         master,
         vec![env.get_gas_for_sender(master)[0]],
         builder.finish(),
-        10_000_000,
+        register_gas_budget(&env),
         env.rgp,
     );
     let (digest, effects) = env.exec_tx_directly(transaction).await.unwrap();
-    assert!(effects.status().is_ok(), "{effects:?}");
+    assert_forwarding_abort(
+        effects.status(),
+        E_UNREGISTERED,
+        "deposit to an id registered in the same transaction",
+    );
     env.cluster.wait_for_tx_settlement(&[digest]).await;
 
-    assert_eq!(
-        env.get_sui_balance_ab(master),
-        initial_master_balance + amount
-    );
+    assert_eq!(env.get_sui_balance_ab(master), initial_master_balance);
     assert_eq!(env.get_sui_balance_ab(forwarding_address), 0);
-    assert!(
-        effects
-            .mutated()
-            .iter()
-            .any(|(object_ref, _)| object_ref.0 == SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID),
-        "{effects:?}"
-    );
-    assert!(
-        forwarding_address_registry_read_only_version(&effects).is_none(),
-        "a mutated registry is not also recorded as read-only: {effects:?}"
-    );
+    assert!(get_events(&env, &digest).is_empty());
 
-    let events = get_events(&env, &digest);
-    assert_eq!(events.len(), 2, "{events:?}");
-    let registered: MasterRegistered = bcs::from_bytes(&events[0].contents).unwrap();
-    assert_eq!(registered.master_id, FIRST_MASTER_ID);
-    assert_forwarding_deposit(&events[1], forwarding_address, master, amount);
+    // The aborted registration allocated nothing, so the first id is still available.
+    let registration = register_master(&mut env, master).await;
+    assert_eq!(registration.master_id, FIRST_MASTER_ID);
 }
 
 #[sim_test]
