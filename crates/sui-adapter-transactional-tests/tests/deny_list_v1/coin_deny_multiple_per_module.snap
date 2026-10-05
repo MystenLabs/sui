@@ -273,7 +273,7 @@ task 13, lines 80-81:
 //# run sui::coin::deny_list_add --args object(0x403) object(1,3) @A --type-args test::first_coin::FIRST_COIN --sender A
 created: object(13,0), object(13,1)
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(1,3)
-gas summary: computation_cost: 1000000, storage_cost: 11293600,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+gas summary: computation_cost: 1000000, storage_cost: 11293600,  storage_rebate: 2690131, non_refundable_storage_fee: 269
 
 task 14, lines 83-84:
 // Sending away first coin from A should fail.
@@ -285,4 +285,4 @@ task 15, lines 86-87:
 //# transfer-object 1,10 --sender A --recipient A
 mutated: object(0,0), object(1,10)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1000000, storage_cost: 2416800,  storage_rebate: 2392632, non_refundable_storage_fee: 24168
+gas summary: computation_cost: 1000000, storage_cost: 2416800,  storage_rebate: 2416558, non_refundable_storage_fee: 242

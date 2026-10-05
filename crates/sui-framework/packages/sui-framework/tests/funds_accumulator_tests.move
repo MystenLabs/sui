@@ -288,6 +288,23 @@ fun test_settled_balance_overflow() {
 }
 
 #[test]
+#[expected_failure(abort_code = test_scenario::EUnbackedWithdrawal)]
+fun test_withdrawal_kept_across_transactions_is_unbacked() {
+    let mut scenario = test_scenario::begin(@0xA);
+    balance::create_for_testing<TestToken>(1000).send_funds(@0xA);
+
+    scenario.next_tx(@0xA);
+    let kept = test_scenario::withdraw_balance_from_address<TestToken>(@0xA, 1000);
+
+    scenario.next_tx(@0xA);
+    let reserved = test_scenario::withdraw_balance_from_address<TestToken>(@0xA, 1000);
+    balance::redeem_funds(kept).destroy_for_testing();
+    balance::redeem_funds(reserved).destroy_for_testing();
+    scenario.next_tx(@0xA);
+    abort
+}
+
+#[test]
 #[expected_failure(abort_code = test_scenario::EInsufficientFunds)]
 fun test_address_funds_withdraw_insufficient() {
     let mut scenario = test_scenario::begin(@0xA);

@@ -37,7 +37,7 @@ task 4, line 45:
 created: object(4,0)
 mutated: object(0,0)
 wrapped: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2439600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2439600,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 5, line 47:
 //# view-object 4,0
@@ -63,7 +63,7 @@ task 6, line 49:
 mutated: object(0,0)
 unwrapped: object(2,0)
 deleted: object(4,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2415204, non_refundable_storage_fee: 24396
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2439356, non_refundable_storage_fee: 244
 
 task 7, line 51:
 //# view-object 2,0

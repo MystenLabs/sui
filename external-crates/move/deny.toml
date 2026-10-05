@@ -55,7 +55,7 @@ ignore = [
     # migration of rand 0.8 -> 0.9.
     "RUSTSEC-2026-0097",
     # `proc-macro-error2` is unmaintained, no safe upgrade — transitive via
-    # aquamarine (doc diagrams), dev-dependency of move-package-alt
+    # aquamarine (doc diagrams), dev-dependency of move-package
     "RUSTSEC-2026-0173",
     # `bitmaps` is unmaintained (all versions). It is a transitive dependency of
     # `imbl`, which is the RUSTSEC-recommended replacement for the unmaintained
