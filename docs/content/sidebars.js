@@ -516,6 +516,7 @@ export default {
                 'onchain-finance/deepbook/deepbook-predict-sdk/accounts',
                 'onchain-finance/deepbook/deepbook-predict-sdk/markets',
                 'onchain-finance/deepbook/deepbook-predict-sdk/positions',
+                'onchain-finance/deepbook/deepbook-predict-sdk/cost',
                 'onchain-finance/deepbook/deepbook-predict-sdk/liquidity',
                 'onchain-finance/deepbook/deepbook-predict-sdk/sessions',
               ],

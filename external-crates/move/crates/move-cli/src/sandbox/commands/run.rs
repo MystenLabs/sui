@@ -13,7 +13,7 @@ use move_core_types::{
     language_storage::TypeTag,
     runtime_value::{MoveValue, serialize_values},
 };
-use move_package_alt_compilation::compiled_package::CompiledPackage;
+use move_package_compilation::compiled_package::CompiledPackage;
 use move_trace_format::format::{MoveTraceBuilder, TRACE_FILE_EXTENSION};
 use move_unit_test::{TRACE_DIR, vm_test_setup::VMTestSetup};
 use move_vm_runtime::{

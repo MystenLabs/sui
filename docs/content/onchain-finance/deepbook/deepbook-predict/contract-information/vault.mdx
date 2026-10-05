@@ -43,7 +43,7 @@ answer: >-
   return a queue index, and a flush started by a PoolValuationCap holder freezes
   every market's pricer in one snapshot transaction, values each market in later
   transactions, and then fills both queues at that single frozen pool NAV.
-last_verified: 2026-09-14
+last_verified: 2026-09-23
 verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
 ---
 
@@ -81,7 +81,7 @@ The struct declares those fields in this order:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="PoolVault"
 />
 
@@ -99,7 +99,7 @@ A queue is a paged list. Each `RequestPage` holds up to 64 entries, and each `Re
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="LpBook,RequestQueue,RequestEntry"
 />
 
@@ -117,7 +117,7 @@ A queue is a paged list. Each `RequestPage` holds up to 64 entries, and each `Re
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="Ledger,ActiveExpiry,RegisteredExpiry"
 />
 
@@ -159,7 +159,7 @@ Whether a flush is in flight is a `ProtocolConfig` read, `protocol_config::valua
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="idle_balance,protocol_reserve_balance,fee_incentive_reserve,plp_total_supply,supply_requests_pending,withdraw_requests_pending,active_expiry_markets,active_live_expiry_count,profit_basis_debits,profit_basis_credits,pending_protocol_profit"
 	noComments
 />
@@ -224,7 +224,7 @@ Minimum sizes apply per request:
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="request_supply,request_withdraw,cancel_supply_request,cancel_withdraw_request"
 	noComments
 />
@@ -329,6 +329,7 @@ The valuation flag no longer gates trading. Trades on a stamped market cannot re
 | `request_supply`, `request_withdraw` | Open | Open, but a request lands beyond this flush's cutoff |
 | `cancel_supply_request`, `cancel_withdraw_request` | Blocked with `EValuationInProgress` | Blocked with `EValuationInProgress` |
 | `sponsor_fee_incentives` | Blocked with `EValuationInProgress` | Blocked with `EValuationInProgress` |
+| `add_usdc_to_plp` | Blocked with `EValuationInProgress` | Blocked with `EValuationInProgress` |
 | `rebalance_expiry_cash` | Blocked with `ESnapshotStageOpen` | Open |
 | `set_reference_tick`, `create_and_share_expiry_market` | Open | Open |
 | Config setters the mark reads, such as fee rates, freshness windows, `max_lp_pool_value`, and `max_valuation_window_ms` | Blocked with `EValuationInProgress` | Blocked with `EValuationInProgress` |
@@ -343,7 +344,7 @@ A market created mid-flush is not in the frozen expected set and joins the next 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="PoolValuationProof,SnapshotStage,PoolValuation"
 />
 
@@ -357,7 +358,7 @@ A market created mid-flush is not in the frozen expected set and joins the next 
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="start_pool_valuation,snapshot_expiry_pricer,seal_valuation_snapshot,value_expiry,finish_flush"
 	noComments
 />
@@ -500,7 +501,7 @@ Call `expiry_market::try_settle` first in the same transaction when settlement m
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="rebalance_expiry_cash"
 	noComments
 />
@@ -552,7 +553,7 @@ public fun fee_incentive_balance(market: &ExpiryMarket): u64
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="ExpiryCash"
 />
 
@@ -570,7 +571,7 @@ PLP is the Predict pool share token, registered as a 6-decimal currency to match
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="PLP"
 />
 
@@ -580,17 +581,65 @@ Fixed-point ratios throughout the pool use 1e9 scaling, while USDC and PLP amoun
 
 ## Bootstrap, sponsorship, and capacity {#initialization-and-access-control}
 
-You have 3 operations outside the ordinary supply and withdraw path:
+You have 4 operations outside the ordinary supply and withdraw path:
 
 | **Operation** | **Call** | **Authorization** |
 |---|---|---|
 | Bootstrap the pool once | `lock_capital` | `AdminCap`, and only while total supply is zero |
 | Sponsor taker fee incentives | `sponsor_fee_incentives` | Permissionless, and blocked while a flush is in flight |
+| Add USDC without minting shares | `add_usdc_to_plp` | Permissionless, and blocked while a flush is in flight. Needs `predict` protocol version 3 |
 | Start a flush | `start_pool_valuation` | An allowlisted `PoolValuationCap`, through a `PoolValuationProof` from `registry::generate_pool_valuation_proof` |
 
 `lock_capital` permanently locks a minimum of 10 USDC, mints matching PLP one to one into the book's locked balance, and joins the USDC into idle. The caller receives no shares. This lock keeps total supply above zero for the vault's lifetime and assigns rounding dust to a holder that can never withdraw. Supply, withdraw, and flush flows all abort with `ENotBootstrapped` until it has run, and a second call aborts with `EAlreadyBootstrapped`.
 
 `sponsor_fee_incentives` accepts USDC from anyone, with a minimum of 10 USDC. The payment joins the pool-level fee incentive reserve, which PLP NAV excludes and which the ordinary rebalance flow allocates out to expiry markets. Read the pool-level balance with `fee_incentive_reserve` and the per-market balance with `expiry_market::fee_incentive_balance`.
+
+### Add USDC without minting shares {#add-usdc}
+
+`add_usdc_to_plp` donates USDC into the pool's idle balance and mints nothing. Supply is unchanged and the payer receives no claim, so the whole amount accrues to existing holders as a rise in the mark. That is the difference from `sponsor_fee_incentives`, whose USDC sits in the fee incentive reserve and is excluded from NAV: a contribution here *is* NAV.
+
+:::info
+
+`add_usdc_to_plp` arrived in `predict` protocol version 3, which both networks run. Reach it through the current call target, not a superseded one: a client pinned to an older `predict` address cannot see it. See [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#two-ids).
+
+:::
+
+Three admission rules apply, in this order:
+
+1. **The pool must be bootstrapped.** A contribution before `lock_capital` aborts with `ENotBootstrapped`, because a donation into a zero-supply pool has no holders to accrue to.
+2. **At least 10 USDC.** Below `min_usdc_contribution`, which is `10_000_000` base units, the call aborts with `EBelowMinUsdcContribution`. It is the same floor as a supply request but a separate constant, so the 2 policies can diverge.
+3. **Pool cash after the contribution must stay under 10 USDC per PLP.** The call requires `ceil(cash_after / 10) <= total_supply`, where `cash_after` is idle plus `deployed_expiry_cash` plus the contribution, and otherwise aborts with `EContributionExceedsPriceCeiling`. The next 2 subsections explain the 2 halves of that: why the bound counts deployed cash, and why the ceiling is 10 rather than the band's own 100.
+
+#### Why the bound counts deployed cash {#contribution-cash}
+
+A flush marks every dollar the pool owns, including the cash `rebalance_expiry_cash` has moved out of idle and into a market. A bound that read idle alone could therefore be walked around: rebalancing is permissionless, so a contributor could fill the idle ceiling, park the cash in a market, and contribute again — or simply contribute into the idle headroom of a pool whose markets are already funded.
+
+So the guard tests pool cash: idle, plus `pool_accounting::deployed_expiry_cash`, which sums the net USDC funded into each active expiry, sent minus received and floored at zero per expiry. Moving idle into a market leaves that sum unchanged, so parking reopens no headroom. Cash is an upper bound on the pool's own contribution to the mark, because a market's marked liabilities only pull its NAV below its cash.
+
+#### Why the ceiling is a tenth of the band {#contribution-ceiling}
+
+A flush fills only at a mark inside the executable band, within `executable_price_band_factor` of unit parity in each direction, which is 0.01 to 100 USDC per PLP. Both coins use 6 decimals, so unit parity is raw-unit parity.
+
+Contributions are held to `contribution_price_ceiling_factor`, which is `executable_price_band_factor / 10`, so 10 USDC per PLP. The gap is not slack. Every LP fill after a contribution pushes the price up and never down: `quote_supply_shares` floors the shares it mints, and the supply and withdraw fees stay in the pool. A pool filled exactly to the band would be carried out of it by the very next uneven or fee-charged fill, and once the mark is above the band every LP request refunds and `total_supply` can never grow to bring it back down. The tenth leaves LP activity 9 times the pool's cash of room.
+
+A flush in progress blocks the call with `EValuationInProgress`, rather than letting a donation move the pool under a snapshot, as [What a flush blocks](#flush-gates) lists. Success emits [`UsdcAddedToPlp`](#events).
+
+<details>
+<summary>Source for `add_usdc_to_plp`</summary>
+
+<ImportContent
+	source="packages/predict/sources/plp/plp.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
+	fun="add_usdc_to_plp"
+	noComments
+/>
+
+</details>
+
+## Capacity {#capacity}
 
 The vault bounds capacity when a market registers, not when it trades. Registering a market whose expiry is still ahead of the clock aborts with `EMaxLiveExpiryMarketsExceeded` once the vault already holds 24 registered live pre-expiry markets. That ceiling bounds how many `snapshot_expiry_pricer` commands one snapshot transaction can need. Settled or expired markets still sitting in the active set do not count against it, because the ceiling counts only expiries still ahead of the clock.
 
@@ -602,7 +651,7 @@ The vault bounds capacity when a market registers, not when it trades. Registeri
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	fun="lock_capital,sponsor_fee_incentives"
 	noComments
 />
@@ -611,7 +660,7 @@ The vault bounds capacity when a market registers, not when it trades. Registeri
 
 ## Pool events {#events}
 
-`vault_events` declares 15 events, all with `copy`, `drop`, and `store`. The table lists fields in declaration order, which is also their Binary Canonical Serialization (BCS) order:
+`vault_events` declares 16 events, all with `copy`, `drop`, and `store`. The table lists fields in declaration order, which is also their Binary Canonical Serialization (BCS) order:
 
 | **Event** | **Fields** |
 |---|---|
@@ -627,6 +676,7 @@ The vault bounds capacity when a market registers, not when it trades. Registeri
 | `FlushExecuted` | `pool_vault_id`, `epoch`, `pool_value`, `total_supply`, `supply_fee_rate`, `withdraw_fee_rate`, `active_market_nav`, `market_count`, `idle_balance_before`, `frozen_idle_balance`, `supplies_filled`, `withdrawals_filled`, `requests_processed`, `idle_balance_after`, `total_supply_after`, `supply_request_cutoff`, `withdraw_request_cutoff`, `snapshot_timestamp_ms` |
 | `FlushRestarted` | `pool_vault_id`, `expected_market_count`, `valued_market_count` |
 | `CapitalLocked` | `pool_vault_id`, `amount` |
+| `UsdcAddedToPlp` | `pool_vault_id`, `contributor`, `amount` |
 | `FeeIncentivesSponsored` | `pool_vault_id`, `sponsor`, `amount`, `reserve_after` |
 | `FeeIncentivesAllocated` | `pool_vault_id`, `expiry_market_id`, `amount`, `pool_reserve_after`, `expiry_incentive_balance_after`, `expiry_incentives_allocated_after` |
 | `FeeIncentivesReturned` | `pool_vault_id`, `expiry_market_id`, `amount`, `pool_reserve_after` |
@@ -649,7 +699,7 @@ One `FlushExecuted` per flush carries the priced mark and its breakdown, so `poo
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	branch="76b11922f3144be5bdaacb66c38c7c3524a02ff3"
+	branch="abb4cfd93b2e51f7925941fe5d53b3fe70fc140c"
 	struct="FlushExecuted,FlushRestarted"
 />
 
@@ -657,7 +707,7 @@ One `FlushExecuted` per flush carries the priced mark and its breakdown, so `poo
 
 ## Read and write the pool from a client {#read-vault-state-from-a-client}
 
-`@mysten/deepbook-v3` version 2.5.0 queues and cancels supply and withdraw requests, reads the pool and a PLP balance, and decodes request receipts on its `/predict` subpath, running every read through the Sui client's core API. See [Predict Liquidity SDK](/onchain-finance/deepbook/deepbook-predict-sdk/liquidity) for each function, the units each floor takes, and examples.
+`@mysten/deepbook-v3` version 2.6.1 queues and cancels supply and withdraw requests, reads the pool and a PLP balance, and decodes request receipts on its `/predict` subpath, running every read through the Sui client's core API. See [Predict Liquidity SDK](/onchain-finance/deepbook/deepbook-predict-sdk/liquidity) for each function, the units each floor takes, and examples.
 
 ## Error codes {#error-codes}
 
@@ -677,6 +727,8 @@ One `FlushExecuted` per flush carries the priced mark and its breakdown, so `poo
 | `9` | `EExpiredMarketNotSettled` | `snapshot_expiry_pricer` met a market past its expiry that has not settled. |
 | `10` | `EValuationWindowExpired` | `finish_flush` ran at or after `started_at_ms + max_valuation_window_ms`. |
 | `11` | `ESnapshotStageOpen` | `rebalance_expiry_cash` ran between `start_pool_valuation` and `seal_valuation_snapshot`. |
+| `12` | `EBelowMinUsdcContribution` | `add_usdc_to_plp` ran with less than 10 USDC. |
+| `13` | `EContributionExceedsPriceCeiling` | `add_usdc_to_plp` would push the mark above the executable price band. |
 
 `lp_book` raises these through the queue calls:
 

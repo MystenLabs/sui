@@ -4,7 +4,7 @@
 
 use crate::sandbox::utils::on_disk_state_view::OnDiskStateView;
 use anyhow::{Result, bail};
-use move_package_alt_compilation::compiled_package::CompiledPackage;
+use move_package_compilation::compiled_package::CompiledPackage;
 use move_unit_test::vm_test_setup::VMTestSetup;
 use move_vm_runtime::{
     dev_utils::storage::StoredPackage,
