@@ -29,7 +29,7 @@ use std::{
 use sui_config::node::{AuthorityOverloadConfig, FundsWithdrawSchedulerType};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    base_types::{FullObjectID, ObjectID},
+    base_types::{FullObjectID, ObjectID, SequenceNumber},
     digests::TransactionDigest,
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
@@ -356,17 +356,20 @@ impl ExecutionScheduler {
         let _ = self.tx_ready_certificates.send(pending_cert);
     }
 
-    fn schedule_funds_withdraws(
-        &self,
-        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        if certs.is_empty() {
-            return;
-        }
+    /// Groups the funds withdraw reservations of `certs` by accumulator version.
+    fn collect_withdraw_reservations(
+        certs: &[(Schedulable, ExecutionEnv)],
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> BTreeMap<SequenceNumber, Vec<TxFundsWithdraw>> {
         let mut withdraws = BTreeMap::new();
         let mut prev_version = None;
-        for (cert, env) in &certs {
+        for (schedulable, env) in certs {
+            let Schedulable::Transaction(cert) = schedulable else {
+                continue;
+            };
+            if !cert.transaction_data().has_funds_withdrawals() {
+                continue;
+            }
             let tx_withdraws = cert
                 .transaction_data()
                 .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier());
@@ -380,14 +383,28 @@ impl ExecutionScheduler {
                 assert!(prev_version <= accumulator_version);
             }
             prev_version = Some(accumulator_version);
-            let tx_digest = *cert.digest();
             withdraws
                 .entry(accumulator_version)
                 .or_insert(Vec::new())
                 .push(TxFundsWithdraw {
-                    tx_digest,
+                    tx_digest: *cert.digest(),
                     reservations: tx_withdraws,
                 });
+        }
+        withdraws
+    }
+
+    /// Submits `reservations` to the funds withdraw scheduler and schedules `certs` as their
+    /// results arrive. `certs` holds only the transactions that survived dedup; results for
+    /// the others are ignored, since those transactions execute from their checkpoint copy.
+    fn schedule_funds_withdraws(
+        &self,
+        reservations: BTreeMap<SequenceNumber, Vec<TxFundsWithdraw>>,
+        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if reservations.is_empty() {
+            return;
         }
         let mut receivers = FuturesUnordered::new();
         {
@@ -395,13 +412,16 @@ impl ExecutionScheduler {
             let withdraw_scheduler = guard
                 .as_ref()
                 .expect("Funds withdraw scheduler must be enabled if there are withdraws");
-            for (version, tx_withdraws) in withdraws {
+            for (version, tx_withdraws) in reservations {
                 receivers.extend(withdraw_scheduler.schedule_withdraws(WithdrawReservations {
                     accumulator_version: version,
                     withdraws: tx_withdraws,
                 }));
             }
             // guard will be dropped here
+        }
+        if certs.is_empty() {
+            return;
         }
         let scheduler = self.clone();
         let epoch_store = epoch_store.clone();
@@ -412,30 +432,32 @@ impl ExecutionScheduler {
             }
             while let Some(result) = receivers.next().await {
                 match result {
-                    Ok((tx_digest, status)) => match status {
-                        ScheduleStatus::InsufficientFunds => {
-                            assert_reachable!("tx cancelled, insufficient funds");
-                            debug!(
-                                ?tx_digest,
-                                "Funds withdraw scheduling result: Insufficient funds"
-                            );
-                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
-                            let env = env.with_insufficient_funds();
-                            scheduler.spawn_transaction_scheduling(vec![(cert, env)], &epoch_store);
-                        }
-                        ScheduleStatus::SufficientFunds => {
-                            assert_reachable!("tx scheduled, sufficient funds");
-                            debug!(?tx_digest, "Funds withdraw scheduling result: Success");
-                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
-                            scheduler.spawn_transaction_scheduling(vec![(cert, env)], &epoch_store);
-                        }
-                        ScheduleStatus::SkipSchedule => {
-                            assert_reachable!("tx withdrawal scheduling skipped");
-                            debug!(?tx_digest, "Skip scheduling funds withdraw");
-                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
-                            scheduler.spawn_transaction_scheduling(vec![(cert, env)], &epoch_store);
-                        }
-                    },
+                    Ok((tx_digest, status)) => {
+                        let Some((cert, env)) = cert_map.remove(&tx_digest) else {
+                            continue;
+                        };
+                        let env = match status {
+                            ScheduleStatus::InsufficientFunds => {
+                                assert_reachable!("tx cancelled, insufficient funds");
+                                debug!(
+                                    ?tx_digest,
+                                    "Funds withdraw scheduling result: Insufficient funds"
+                                );
+                                env.with_insufficient_funds()
+                            }
+                            ScheduleStatus::SufficientFunds => {
+                                assert_reachable!("tx scheduled, sufficient funds");
+                                debug!(?tx_digest, "Funds withdraw scheduling result: Success");
+                                env
+                            }
+                            ScheduleStatus::SkipSchedule => {
+                                assert_reachable!("tx withdrawal scheduling skipped");
+                                debug!(?tx_digest, "Skip scheduling funds withdraw");
+                                env
+                            }
+                        };
+                        scheduler.spawn_transaction_scheduling(vec![(cert, env)], &epoch_store);
+                    }
                     Err(e) => {
                         // A sender drops unsent only if its withdraw is still pending when
                         // reconfigure replaces the scheduler, but every settlement in an
@@ -517,6 +539,11 @@ impl ExecutionScheduler {
         // order, for every unit - including keys whose transactions materialize only
         // later. A key's transactions must run under the key's index: units enqueued
         // after it may already be parked waiting for its outputs.
+        //
+        // Withdraw reservations are collected first: the funds scheduler must see every
+        // consensus version, including groups dedup rejects because their checkpoint copy
+        // arrived first, as its balances account for reservations of unsettled versions.
+        let reservations = Self::collect_withdraw_reservations(&certs, epoch_store);
         let certs = self.causal_admission.dedup_and_assign(certs);
 
         // schedule all transactions immediately
@@ -550,7 +577,7 @@ impl ExecutionScheduler {
 
         self.spawn_transaction_scheduling(ordinary_txns, epoch_store);
         self.schedule_tx_keys(tx_with_keys, epoch_store);
-        self.schedule_funds_withdraws(tx_with_withdraws, epoch_store);
+        self.schedule_funds_withdraws(reservations, tx_with_withdraws, epoch_store);
     }
 
     /// Enqueues digest-carrying transactions. A transaction with a non-digest key (e.g.
