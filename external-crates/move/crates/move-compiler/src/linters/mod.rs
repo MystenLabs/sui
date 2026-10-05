@@ -20,6 +20,7 @@ pub mod constant_naming;
 pub mod equal_operands;
 pub mod loop_without_exit;
 pub mod meaningless_math_operation;
+pub mod mutation_in_match_guard;
 pub mod redundant_ref_deref;
 pub mod self_assignment;
 pub mod unnecessary_conditional;
@@ -27,6 +28,7 @@ pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
 pub mod unused_return_value;
+pub(crate) mod utils;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -202,6 +204,12 @@ lints!(
         "unused_return_value",
         "return value of a non-mutating call is discarded"
     ),
+    (
+        MutationInMatchGuard,
+        Suspicious,
+        "mutation_in_match_guard",
+        "mutation in match guard"
+    ),
 );
 
 pub(crate) fn filters_from_table(
@@ -246,6 +254,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 equal_operands::EqualOperands.visitor(),
                 combinable_comparisons::CombinableComparisons.visitor(),
                 unused_return_value::UnusedReturnValue.visitor(),
+                mutation_in_match_guard::MutationInMatchGuard.visitor(),
             ]
         }
     }

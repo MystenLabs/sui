@@ -24,7 +24,7 @@ task 3, lines 34-39:
 created: object(3,0), object(3,1), object(3,2)
 mutated: object(0,0), object(1,1)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 2690131, non_refundable_storage_fee: 269
 
 task 4, line 41:
 //# create-checkpoint
@@ -39,7 +39,7 @@ task 5, lines 45-47:
 deleted: object(3,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(5,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 5000)
-gas summary: computation_cost: 1309176, storage_cost: 0,  storage_rebate: 1309176, non_refundable_storage_fee: 13224
+gas summary: computation_cost: 1322268, storage_cost: 0,  storage_rebate: 1322268, non_refundable_storage_fee: 132
 
 task 6, line 49:
 //# create-checkpoint
@@ -59,7 +59,7 @@ task 8, lines 55-58:
 deleted: object(3,1), object(3,2)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(8,0), C, sui::balance::Balance<test::usdc::USDC>, Merge, 10000)
-gas summary: computation_cost: 2618352, storage_cost: 0,  storage_rebate: 2618352, non_refundable_storage_fee: 26448
+gas summary: computation_cost: 2644536, storage_cost: 0,  storage_rebate: 2644536, non_refundable_storage_fee: 264
 
 task 9, line 60:
 //# create-checkpoint
@@ -79,7 +79,7 @@ task 11, lines 66-69:
 created: object(11,0)
 mutated: object(0,0), object(1,1)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2690131, non_refundable_storage_fee: 269
 
 task 12, line 71:
 //# create-checkpoint
@@ -94,7 +94,7 @@ task 13, lines 73-77:
 deleted: object(11,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(5,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 3000), (object(8,0), C, sui::balance::Balance<test::usdc::USDC>, Merge, 6000)
-gas summary: computation_cost: 1309176, storage_cost: 0,  storage_rebate: 1309176, non_refundable_storage_fee: 13224
+gas summary: computation_cost: 1322268, storage_cost: 0,  storage_rebate: 1322268, non_refundable_storage_fee: 132
 
 task 14, line 79:
 //# create-checkpoint
@@ -117,7 +117,7 @@ task 17, lines 87-90:
 //> test::usdc::freeze_coin(Result(0));
 created: object(17,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2690131, non_refundable_storage_fee: 269
 
 task 18, lines 92-94:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(17,0) @B
@@ -134,7 +134,7 @@ task 19, lines 98-101:
 //> test::usdc::share_coin(Result(0));
 created: object(19,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2690131, non_refundable_storage_fee: 269
 
 task 20, lines 103-105:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(19,0) @B
@@ -162,7 +162,7 @@ task 22, lines 114-120:
 created: object(22,0), object(22,1)
 mutated: object(0,0), object(1,1)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1000000, storage_cost: 5335200,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+gas summary: computation_cost: 1000000, storage_cost: 5335200,  storage_rebate: 2690131, non_refundable_storage_fee: 269
 
 task 23, lines 122-124:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(22,0) @B
@@ -171,7 +171,7 @@ task 23, lines 122-124:
 deleted: object(22,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(5,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 2000)
-gas summary: computation_cost: 1309176, storage_cost: 0,  storage_rebate: 1309176, non_refundable_storage_fee: 13224
+gas summary: computation_cost: 1322268, storage_cost: 0,  storage_rebate: 1322268, non_refundable_storage_fee: 132
 
 task 24, lines 126-129:
 //# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(22,1) @B 1

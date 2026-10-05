@@ -51,29 +51,29 @@ Contents: test::m1::GreatGrandParent {
 task 5, line 96:
 //# run test::m1::borrow_mut --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2294820, non_refundable_storage_fee: 23180
+gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2317768, non_refundable_storage_fee: 232
 
 task 6, line 98:
 //# run test::m1::borrow_mut --sender A --args object(2,1)
 mutated: object(0,0), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2294820, non_refundable_storage_fee: 23180
+gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2317768, non_refundable_storage_fee: 232
 
 task 7, line 100:
 //# run test::m1::add_remove --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2294820, non_refundable_storage_fee: 23180
+gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2317768, non_refundable_storage_fee: 232
 
 task 8, line 102:
 //# run test::m1::add_remove --sender A --args object(2,1)
 mutated: object(0,0), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2294820, non_refundable_storage_fee: 23180
+gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2317768, non_refundable_storage_fee: 232
 
 task 9, line 104:
 //# run test::m1::write_back --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2294820, non_refundable_storage_fee: 23180
+gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2317768, non_refundable_storage_fee: 232
 
 task 10, line 106:
 //# run test::m1::write_back --sender A --args object(2,1)
 mutated: object(0,0), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2294820, non_refundable_storage_fee: 23180
+gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2317768, non_refundable_storage_fee: 232

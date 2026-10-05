@@ -9,9 +9,9 @@ use move_coverage::{
     lcov, source_coverage::SourceCoverageBuilder, summary::summarize_inst_cov,
 };
 use move_disassembler::disassembler::Disassembler;
-use move_package_alt_compilation::{build_config::BuildConfig, find_env};
+use move_package_compilation::{build_config::BuildConfig, find_env};
 
-use move_package_alt::{MoveFlavor, schema::Environment};
+use move_package::{MoveFlavor, schema::Environment};
 use move_trace_format::format::MoveTraceReader;
 use move_unit_test::TRACE_DIR;
 use std::{

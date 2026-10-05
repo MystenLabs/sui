@@ -5,9 +5,7 @@ use anyhow::Result;
 use fs_extra::dir::CopyOptions;
 use move_binary_format::{CompiledModule, file_format::Visibility};
 use move_compiler::editions::{Edition, Flavor};
-use move_package_alt_compilation::{
-    build_config::BuildConfig as MoveBuildConfig, lint_flag::LintFlag,
-};
+use move_package_compilation::{build_config::BuildConfig as MoveBuildConfig, lint_flag::LintFlag};
 use std::{
     collections::BTreeMap,
     env, fs,
