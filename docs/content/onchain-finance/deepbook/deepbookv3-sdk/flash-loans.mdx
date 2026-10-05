@@ -65,8 +65,8 @@ import { deepbook } from '@mysten/deepbook-v3';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 
 const client = new SuiGrpcClient({
-	network: 'mainnet',
-	baseUrl: 'https://fullnode.mainnet.sui.io:443',
+	network: 'testnet',
+	baseUrl: 'https://fullnode.testnet.sui.io:443',
 }).$extend(
 	deepbook({
 		address: '<YOUR_ADDRESS>',
@@ -74,7 +74,7 @@ const client = new SuiGrpcClient({
 );
 ```
 
-Reach the functions on this page through `client.deepbook.flashLoans`. Each one returns a callback that accepts a `Transaction` object, making it compatible with PTB composition. The example later on this page uses `this.flashLoans`, which is the same object aliased inside the `DeepBookMarketMaker` class from the [DeepBookV3 SDK](/onchain-finance/deepbook/deepbookv3-sdk/deepbookv3-sdk) overview.
+Reach the functions on this page through `client.deepbook.flashLoans`. Each one returns a callback that accepts a `Transaction` object, making it compatible with PTB composition. The example later on this page runs inside the `DeepBookMarketMaker` class from the [DeepBookV3 SDK](/onchain-finance/deepbook/deepbookv3-sdk) overview, where the same extended client is `this.client`.
 
 ## Flash loan functions
 
@@ -171,11 +171,11 @@ The following example demonstrates flash loan usage in `DeepBookMarketMaker` cla
 // Return 1 DEEP to DEEP_SUI pool
 flashLoanExample = async (tx: Transaction) => {
   const borrowAmount = 1;
-  const [deepCoin, flashLoan] = tx.add(this.flashLoans.borrowBaseAsset('DEEP_SUI', borrowAmount));
+  const [deepCoin, flashLoan] = tx.add(this.client.deepbook.flashLoans.borrowBaseAsset('DEEP_SUI', borrowAmount));
 
   // Execute trade using borrowed DEEP
   const [baseOut, quoteOut, deepOut] = tx.add(
-    this.deepBook.swapExactQuoteForBase({
+    this.client.deepbook.deepBook.swapExactQuoteForBase({
       poolKey: 'SUI_DBUSDC',
       amount: 0.5,
       deepAmount: 1,
@@ -188,7 +188,7 @@ flashLoanExample = async (tx: Transaction) => {
 
   // Execute second trade to get back DEEP for repayment
   const [baseOut2, quoteOut2, deepOut2] = tx.add(
-    this.deepBook.swapExactQuoteForBase({
+    this.client.deepbook.deepBook.swapExactQuoteForBase({
       poolKey: 'DEEP_SUI',
       amount: 10,
       deepAmount: 0,
@@ -200,7 +200,7 @@ flashLoanExample = async (tx: Transaction) => {
 
   // Return borrowed DEEP
   const loanRemain = tx.add(
-    this.flashLoans.returnBaseAsset('DEEP_SUI', borrowAmount, baseOut2, flashLoan),
+    this.client.deepbook.flashLoans.returnBaseAsset('DEEP_SUI', borrowAmount, baseOut2, flashLoan),
   );
   
   // Send the remaining coin to user's address
