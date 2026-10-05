@@ -80,6 +80,7 @@ use sui_types::{
     event::Event,
     execution::{ExecutionResults, ExecutionResultsV2},
     execution_status::{CommandArgumentError, ExecutionErrorKind, PackageUpgradeError},
+    forwarding_address::ForwardingAddress,
     metrics::ExecutionMetrics,
     move_package::{
         MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
@@ -1965,6 +1966,32 @@ fn finish_gas_coin<OType>(
     Ok(())
 }
 
+/// Nothing can sign for a forwarding address, so an object it owns or funds credited to it would
+/// be stranded. `balance::send_funds` resolves deposits to the master before crediting, so any
+/// credit still targeting a forwarding address bypassed resolution, e.g. the gas budget refund
+/// when the gas coin itself is sent.
+fn check_no_forwarding_address_recipients(
+    written_objects: &BTreeMap<ObjectID, Object>,
+    accumulator_events: &[MoveAccumulatorEvent],
+) -> Result<(), ExecutionError> {
+    let object_owners = written_objects
+        .values()
+        .filter_map(|object| object.owner.get_owner_address().ok());
+    let funds_recipients = accumulator_events
+        .iter()
+        .map(|event| SuiAddress::from(event.target_addr));
+    match object_owners
+        .chain(funds_recipients)
+        .find(|recipient| ForwardingAddress::has_magic(*recipient))
+    {
+        Some(recipient) => Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::FeatureNotYetSupported,
+            format!("Objects and funds cannot be sent to forwarding address {recipient}"),
+        )),
+        None => Ok(()),
+    }
+}
+
 fn balance_change_accumulator_event(
     accumulator_events: &mut Vec<MoveAccumulatorEvent>,
     address: AccountAddress,
@@ -2392,6 +2419,10 @@ pub fn finish(
         //
         // Deletions can be detected with:
         // let deleted = deleted_object_ids.contains(&id);
+    }
+
+    if protocol_config.enable_forwarding_addresses() {
+        check_no_forwarding_address_recipients(&written_objects, &accumulator_events)?;
     }
 
     let user_events: Vec<Event> = user_events

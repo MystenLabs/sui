@@ -6,6 +6,17 @@
 
 //# init --addresses test=0x0 --accounts A B
 
+//# publish --sender B
+module test::thing;
+
+public struct Thing has key, store {
+    id: UID,
+}
+
+public fun send(recipient: address, ctx: &mut TxContext) {
+    transfer::public_transfer(Thing { id: object::new(ctx) }, recipient);
+}
+
 //# programmable --sender B --inputs mutshared(250) 1000 @0xc0908968fafafafafafafafafafa000101010101010101010101010101010101 --gas-budget 2000000000
 // Registering and depositing in one transaction: resolution reads the registry at the version
 // assigned to the transaction, so it does not see the new record and aborts as unregistered (1).
@@ -33,6 +44,19 @@
 //# programmable --sender B --inputs @0xc0908968fafafafafafafafafafa000101010101010101010101010101010101 --gas-budget 10000000
 // Sending the gas coin itself to a forwarding address is rejected, even when it would resolve.
 //> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
+
+//# programmable --sender B --inputs 1000 @0xc0908968fafafafafafafafafafa000101010101010101010101010101010101
+// Transferring a coin object to a forwarding address fails: the coin would be stranded.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1));
+
+//# programmable --sender B --inputs @0xc0908968fafafafafafafafafafa000101010101010101010101010101010101
+// So does transferring the gas coin itself.
+//> TransferObjects([Gas], Input(0));
+
+//# programmable --sender B --inputs @0x01000000fafafafafafafafafafa000101010101010101010101010101010101
+// And any other object, from Move, whether or not the forwarding address is registered.
+//> test::thing::send(Input(0));
 
 //# programmable --sender B --inputs 1000 @0x0000000000fafafafafafafafafafa0001010101010101010101010101010101
 // Magic at the wrong offset is an ordinary address and is credited directly.

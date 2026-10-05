@@ -404,12 +404,16 @@ async fn test_forwarding_address_deposit() {
     assert_eq!(env.get_sui_balance_ab(forwarding_address), 0);
     assert_forwarding_deposit_event(&env, &stored_deposit, forwarding_address, master, amount);
 
-    // Sending the gas coin itself to any forwarding-shaped address is rejected, whether or not
-    // the variant is supported.
+    // Sending the gas coin itself to a forwarding address is rejected: with a supported variant
+    // because the gas budget refund would credit the forwarding address itself, and with an
+    // unsupported variant because resolution aborts first.
     let master_balance_before_gas_coin_send = env.get_sui_balance_ab(master);
-    for recipient in [
-        forwarding_address,
-        ForwardingAddress::derive(registration.master_id, 1, PAYLOAD),
+    for (recipient, supported) in [
+        (forwarding_address, true),
+        (
+            ForwardingAddress::derive(registration.master_id, 1, PAYLOAD),
+            false,
+        ),
     ] {
         let mut builder = ProgrammableTransactionBuilder::new();
         let recipient_arg = builder.pure(recipient).unwrap();
@@ -428,16 +432,24 @@ async fn test_forwarding_address_deposit() {
             env.rgp,
         );
         let (_, effects) = env.exec_tx_directly(direct_gas_coin_send).await.unwrap();
-        assert!(
-            matches!(
+        if supported {
+            assert!(
+                matches!(
+                    effects.status(),
+                    ExecutionStatus::Failure(ExecutionFailure {
+                        error: ExecutionFailureStatus::FeatureNotYetSupported,
+                        ..
+                    })
+                ),
+                "{effects:?}"
+            );
+        } else {
+            assert_forwarding_abort(
                 effects.status(),
-                ExecutionStatus::Failure(ExecutionFailure {
-                    error: ExecutionFailureStatus::FeatureNotYetSupported,
-                    ..
-                })
-            ),
-            "{effects:?}"
-        );
+                E_VARIANT_UNSUPPORTED,
+                "gas coin to an unsupported variant",
+            );
+        }
     }
     assert_eq!(
         env.get_sui_balance_ab(master),
