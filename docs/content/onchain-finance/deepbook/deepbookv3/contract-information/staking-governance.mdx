@@ -144,11 +144,12 @@ With sufficient active stake, you pay a reduced taker fee and earn maker rebates
 
 ## Example: stake, vote, and claim rebates
 
-The following example shows the sequence of calls a user makes to stake DEEP tokens, submit a governance proposal, vote on a proposal, and claim rebates at the end of an epoch.
+The following example shows the sequence of calls a user makes to stake DEEP tokens, submit a governance proposal, vote on a proposal, and claim rebates at the end of an epoch. The steps span epochs, because a stake does not become active until the epoch after you place it, so they run as separate transactions rather than as one programmable transaction block.
 
 ```move
-// Each call needs a TradeProof for the BalanceManager. The owner
-// generates one directly; a delegated trader uses generate_proof_as_trader.
+// Each transaction generates its own TradeProof. The struct has `drop`, so a
+// proof cannot outlive the transaction that creates it. The owner generates one
+// directly; a delegated trader uses generate_proof_as_trader.
 let proof = balance_manager.generate_proof_as_owner(ctx);
 
 // 1. Stake DEEP tokens from your BalanceManager into the pool.
