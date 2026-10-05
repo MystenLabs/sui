@@ -34,7 +34,7 @@ answer: There are some best practices to consider when developing for SuiPlay0X1
 
 <ImportContent source="suiplay" mode="snippet" />
 
-There are some best practices to consider when developing for SuiPlay0X1. 
+Developing for SuiPlay0X1 requires careful decisions around transaction frequency, gas management, and data storage. Apply these practices to keep gameplay smooth, reduce costs, and protect players.
 
 ## Handling transactions
 
@@ -42,9 +42,20 @@ Avoid frequent micro-transactions: If players are using their self-custody walle
 
 Many onchain actions do not require explicit user approval. For example, dropping rewards to a user, incrementing their currency, and so on. The game can handle these whenever appropriate, even silently in the background during gameplay.
 
+### How do I batch transactions to reduce interruptions?
+
+Use [programmable transaction blocks (PTBs)](/develop/transactions/ptbs/building-ptb) to group multiple operations into a single transaction. This reduces the number of times a player must approve an action and lowers the total gas cost.
+Grouping related state changes into a single PTB means players approve one transaction instead of several, and the game submits less work to the network overall.
+
 ## Managing gas
 
 If using a third-party wallet service ([Beamable](https://beamable.com/), [Shinami](https://www.shinami.com/)), leverage gas sponsorship for custodial implementations to abstract from users. Consider tradeoffs between aggregated and individual wallets and batch transactions whenever possible to reduce gas costs.
+
+### How does gas sponsorship work for SuiPlay0X1 games?
+
+[Gas sponsorship](/develop/transaction-payment/sponsor-txn) lets your game pay transaction fees on behalf of players. The player signs the transaction but a sponsor address covers the gas. Services like Shinami provide sponsorship APIs that integrate directly into your transaction flow. When you enable sponsorship, players interact with onchain features without needing to hold SUI in their wallets.
+
+Batch transactions whenever possible regardless of whether you use sponsorship. Fewer transactions mean lower cumulative gas costs and a faster experience for players.
 
 ## Data management
 
@@ -57,7 +68,23 @@ Consider where best to store your data:
 - **Onchain:** Assets and currencies that can be traded or sold.  
 - **Offchain:** Game state, progress, and so on using traditional game servers.
 
-While you can store any information onchain, consider whether it’s important to your game for that data to exist there. If not, leverage traditional game server backends, which makes data syncing and updating easier.
+While you can store any information onchain, consider whether it's important to your game for that data to exist there. If not, leverage traditional game server backends, which makes data syncing and updating easier.
+
+### What data should I store onchain versus offchain?
+
+Store onchain only what needs to be player-owned, tradeable, or independently verifiable. Storing unnecessary data onchain increases gas costs and adds complexity to reads and writes.
+
+| **Data type** | **Recommended storage** |
+|---|---|
+| In-game currency (tradeable) | Onchain |
+| NFT items and cosmetics | Onchain |
+| Player level and XP | Offchain |
+| Match history and replays | Offchain |
+| Leaderboard scores | Offchain (or a hybrid with onchain proof) |
+| Achievement badges (tradeable) | Onchain |
+| Temporary session state | Offchain |
+
+For hybrid scenarios, store a commitment or proof onchain and keep the full data offchain. This keeps costs low while preserving verifiability for items that matter.
 
 ### Session start protocol
 

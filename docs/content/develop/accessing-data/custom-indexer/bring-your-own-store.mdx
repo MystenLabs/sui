@@ -238,6 +238,8 @@ The example includes 3 main components:
 
 ## Deserializing Move events {#deserialize}
 
+Decoding BCS yourself makes dependency currency a requirement rather than a preference. See [Keep the framework dependency current](/develop/accessing-data/custom-indexer/custom-indexers#dependency-currency).
+
 When Move smart contracts execute on Sui, they can emit events using the `sui::event` module. These events are stored in checkpoints as **BCS-serialized bytes** that your indexer needs to deserialize to extract meaningful data.
 
 ### Why deserialization is needed

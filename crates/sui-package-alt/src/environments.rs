@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_package_alt::schema::Environment;
+use move_package::schema::Environment;
 use sui_sdk::types::{
     digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
     supported_protocol_versions::Chain,

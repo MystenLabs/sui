@@ -287,7 +287,7 @@
     },
     {
       "source": "/learn/about-sui",
-      "destination": "/develop/sui-architecture/index",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
@@ -547,7 +547,7 @@
     },
     {
       "source": "/build/cli-client",
-      "destination": "/references/cli/client",
+      "destination": "/references/cli",
       "permanent": true
     },
     {
@@ -672,12 +672,12 @@
     },
     {
       "source": "/learn/how-sui-works",
-      "destination": "/develop/sui-architecture/index",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/learn/sui-compared",
-      "destination": "/develop/sui-architecture/index",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
@@ -1637,7 +1637,7 @@
     },
     {
       "source": "/sui-glossary",
-      "destination": "/references/sui-glossary",
+      "destination": "/references",
       "permanent": true
     },
     {
@@ -3297,7 +3297,7 @@
     },
     {
       "source": "/learn/sui-glossary",
-      "destination": "/references/sui-glossary",
+      "destination": "/references",
       "permanent": true
     },
     {

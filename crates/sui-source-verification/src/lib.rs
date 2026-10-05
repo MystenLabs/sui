@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use colored::Colorize;
-use move_package_alt::schema::{Environment, Publication};
+use move_package::schema::{Environment, Publication};
 use serde::Serialize;
 use sui_package_alt::SuiFlavor;
 use sui_rpc_api::Client;

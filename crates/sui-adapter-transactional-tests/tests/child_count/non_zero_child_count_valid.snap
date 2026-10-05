@@ -45,12 +45,12 @@ task 4, line 55:
 //# run test::m::mint --sender A
 created: object(4,0), object(4,1), object(4,2)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, line 57:
 //# run test::m::transfer --sender A --args object(4,0) @B
 mutated: object(0,0), object(4,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 6, line 59:
 //# view-object 4,0
@@ -72,12 +72,12 @@ task 7, line 65:
 //# run test::m::mint --sender A
 created: object(7,0), object(7,1), object(7,2)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 8, line 67:
 //# transfer-object 7,0 --sender A --recipient B
 mutated: object(0,0), object(7,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 9, line 69:
 //# view-object 7,0

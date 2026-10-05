@@ -14,7 +14,7 @@ pub mod summary;
 pub mod test;
 pub mod update_deps;
 
-use move_package_alt::SourcePackageLayout;
+use move_package::SourcePackageLayout;
 use std::path::{Path, PathBuf};
 
 /// Reroot the path if none is given
