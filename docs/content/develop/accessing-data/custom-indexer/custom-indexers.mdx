@@ -131,9 +131,7 @@ sui-indexer-alt-framework = { git = "https://github.com/MystenLabs/sui.git", bra
 
 This applies to anyone using the indexing framework, and to any code that performs Binary Canonical Serialization (BCS) deserialization. BCS cannot skip a value it does not recognize, so when a release adds a variant or a field to a type reachable from `CheckpointData`, a consumer built against an older version fails to deserialize the first checkpoint that carries the new shape.
 
-The failure arrives as a deserialization error at ingestion rather than as a compile error, so an indexer that built and ran yesterday stops today with no change on your side. Mainnet began producing transactions with `ValidFrom` expirations, and indexers that had not kept their dependencies current stopped ingesting.
-
-New shapes reach the `testnet` branch before they reach Mainnet, so tracking that branch gives you the type definitions ahead of the transactions that use them. Rebuild on each release, and treat a deserialization error at ingestion as a sign that the dependency is behind rather than a bug in your pipeline.
+The failure arrives as a deserialization error at ingestion rather than as a compile error, so an indexer that built and ran yesterday stops today with no change on your side. New shapes reach the `testnet` branch before they reach Mainnet, so tracking that branch gives you the type definitions ahead of the transactions that use them. Rebuild on each release, and treat a deserialization error at ingestion as a sign that the dependency is behind rather than a bug in your pipeline.
 
 ## Building custom indexers
 
