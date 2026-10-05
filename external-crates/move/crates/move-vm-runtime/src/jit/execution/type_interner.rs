@@ -8,8 +8,9 @@ use crate::{
     shared::vm_pointer::VMPointer,
 };
 use indexmap::IndexMap;
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, partial_vm_error};
 
+/// Stable index into [`ArenaTypeInterner::types`].
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct TypeId(usize);
 
@@ -40,6 +41,7 @@ enum TypeNodeKey {
     },
 }
 
+/// Canonical arena type paired with its stable index in the interner.
 pub(crate) struct InternedType {
     id: TypeId,
     ptr: VMPointer<ArenaType>,
@@ -178,7 +180,12 @@ impl ArenaTypeInterner {
         let ty = arena.alloc_box(ty)?;
         let ptr = VMPointer::from_ref(ty.inner_ref());
         let replaced = self.types.insert(key, ty);
-        debug_assert!(replaced.is_none());
+        if replaced.is_some() {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "type interner replaced an existing entry"
+            ));
+        }
         Ok(InternedType { id, ptr })
     }
 
