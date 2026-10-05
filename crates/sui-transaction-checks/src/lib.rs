@@ -773,6 +773,9 @@ mod checked {
     /// Only the read-only Clock and the allowances backing this transaction's withdrawals (written
     /// by `balance_spend`) may be shared inputs. Anything else would fail execution, and failed
     /// gasless transactions are free.
+    ///
+    /// `check_objects` already rejects a shared object passed as owned and a mutable Clock. Those
+    /// cases are re-checked here so this function does not depend on call order.
     fn check_gasless_shared_input(
         obj_read: &ObjectReadResult,
         object: &Object,
