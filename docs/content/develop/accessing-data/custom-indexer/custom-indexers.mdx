@@ -120,6 +120,19 @@ Both the indexing framework and your code manage the processing layer, which is 
 
 The indexing framework abstracts database operations through a flexible storage layer. PostgreSQL comes with built-in support using Diesel ORM, providing production-ready database operations, connection pooling, migrations, and watermark management out of the box. PostgreSQL is the default supported path, not a requirement. For custom database implementations, you can implement the framework's storage interfaces to use any database, for example, [MongoDB](https://www.mongodb.com/) for document storage or [ClickHouse](https://clickhouse.com/) for analytics.
 
+## Keep the framework dependency current {#dependency-currency}
+
+Keep the dependency up to date with every release, and track the `testnet` branch of the Sui repository rather than pinning:
+
+```toml
+[dependencies]
+sui-indexer-alt-framework = { git = "https://github.com/MystenLabs/sui.git", branch = "testnet" }
+```
+
+This applies to anyone using the indexing framework, and to any code that performs Binary Canonical Serialization (BCS) deserialization. BCS cannot skip a value it does not recognize, so when a release adds a variant or a field to a type reachable from `CheckpointData`, a consumer built against an older version fails to deserialize the first checkpoint that carries the new shape.
+
+The failure arrives as a deserialization error at ingestion rather than as a compile error, so an indexer that built and ran yesterday stops today with no change on your side. New shapes reach the `testnet` branch before they reach Mainnet, so tracking that branch gives you the type definitions ahead of the transactions that use them. Rebuild on each release, and treat a deserialization error at ingestion as a sign that the dependency is behind rather than a bug in your pipeline.
+
 ## Building custom indexers
 
 To build your own pipelines for application-specific data, see [Building Your First Custom Indexer](/develop/accessing-data/custom-indexer/build). You can also reach out to a [data indexer operator](/references/awesome-sui) that might already have set one up for your needs.

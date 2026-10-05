@@ -24,7 +24,7 @@ task 6, lines 38-40:
 //> 0: q::m::x();
 //> p::m::foo(Result(0))
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 7, lines 42-47:
 //# publish --dependencies p q
@@ -35,4 +35,4 @@ gas summary: computation_cost: 1000000, storage_cost: 5228800,  storage_rebate: 
 task 8, line 49:
 //# run r::all::foo_x
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
