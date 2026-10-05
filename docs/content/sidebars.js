@@ -345,17 +345,27 @@ export default {
           'onchain-finance/tokenized-assets/create-nft',
         ],
       },
-    {
-      type: 'category',
-      label: 'Payments',
-      link: { type: 'doc', id: 'onchain-finance/payments' },
-      items: [
-        'onchain-finance/choose-payments-model',
-        'onchain-finance/payment-kit',
-        'onchain-finance/payment-intents',
-        'onchain-finance/funding-wallets',
-      ],
-    },
+      {
+        type: 'category',
+        label: 'Payments',
+        link: { type: 'doc', id: 'onchain-finance/payments' },
+        items: [
+          'onchain-finance/choose-payments-model',
+          'onchain-finance/payment-kit',
+          'onchain-finance/payment-intents',
+          'onchain-finance/funding-wallets',
+        ],
+      },
+      {
+        type: 'category',
+        label: 'Allowances',
+        link: { type: 'doc', id: 'onchain-finance/allowances/index' },
+        items: [
+          'onchain-finance/allowances/allowances-overview',
+          'onchain-finance/allowances/using-allowances',
+          'onchain-finance/allowances/allowances-faq',
+        ],
+      },
       {
         type: 'category',
         label: 'Example Asset Patterns',
@@ -506,6 +516,7 @@ export default {
                 'onchain-finance/deepbook/deepbook-predict-sdk/accounts',
                 'onchain-finance/deepbook/deepbook-predict-sdk/markets',
                 'onchain-finance/deepbook/deepbook-predict-sdk/positions',
+                'onchain-finance/deepbook/deepbook-predict-sdk/cost',
                 'onchain-finance/deepbook/deepbook-predict-sdk/liquidity',
                 'onchain-finance/deepbook/deepbook-predict-sdk/sessions',
               ],

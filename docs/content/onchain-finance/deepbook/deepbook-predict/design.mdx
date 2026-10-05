@@ -15,8 +15,10 @@ keywords:
   - pool valuation
   - tick grid
   - prediction market
-last_verified: 2026-09-14
-verified_against: deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8
+  - referral
+  - referrer
+last_verified: 2026-09-28
+verified_against: deepbookv3 abb4cfd9 (predict protocol version 3 on both networks); deepbook-predict-mainnet 7b169bde; deepbook-predict-testnet 4d752fb8; live referral_fee_rate read from both ProtocolConfig objects on 2026-09-28
 goal:
   description: >-
     Reader can explain how DeepBook Predict splits state across the Registry,
@@ -41,6 +43,8 @@ questions:
   - How does DeepBook Predict represent strikes and ranges?
   - How do DeepBook Predict PLP supply and withdraw requests get filled?
   - Does a DeepBook Predict pool flush block trading?
+  - How does the DeepBook Predict referral system work?
+  - Does a referred DeepBook Predict trader pay more?
 answer: >-
   DeepBook Predict splits its onchain state across a Registry, a ProtocolConfig,
   a PoolVault, and one ExpiryMarket per expiry. Trader balances and positions
@@ -48,7 +52,10 @@ answer: >-
   the separate propbook package, and PLP supply and withdraw requests queue until
   a flush fills them. A PoolValuationCap holder snapshots every live market's
   pricer in one transaction, then permissionless calls value each market and
-  finish the flush at that frozen mark while trading continues.
+  finish the flush at that frozen mark while trading continues. An account
+  created with a referrer routes a protocol-wide share of its mint fees to that
+  referrer, at no extra cost to the trader. A referred trader pays exactly the
+  same total as an unreferred trader.
 ---
 
 DeepBook Predict keeps its protocol state in 4 kinds of shared object, custodies user funds in the DeepBook `account` package, and reads every price from feeds that belong to a separate `propbook` package. Knowing which object owns which piece of state is enough to follow any Predict transaction. The same contracts run on Sui Mainnet and Sui Testnet; the only difference a reader of this page meets is the quote coin, which is native USDC on Mainnet and a mintable test coin with the same `usdc::USDC` module path on Testnet, where it displays as DUSDC.
@@ -150,7 +157,88 @@ A quote reports every charge separately, and a mint debits the premium plus the 
 
 For example, take a two-sided range with a 0.8 probability of settling above its lower strike and a 0.2 probability of settling above its higher strike. Its range probability is 0.6, so the premium is 0.6 USDC per contract. At a 10 percent base fee and outside the expiry ramp, each boundary's rate is `0.1 * sqrt(0.8 * 0.2) = 0.04`, so the range pays 0.08 USDC per contract in trading fee. Each boundary pays at least the per-unit floor, so a two-sided range always pays at least twice the floor.
 
-A referral share is not another charge. Its basis is the trading fee net of the incentive subsidy, plus the congestion surcharge, and the protocol computes it only after `all_in_cost` is final, then splits it out of the payment the trader has already made. It comes out of fees the trader paid anyway, it never adds a debit, and it never changes `cost`. The SDK reports it as `fees.referral`. The Move `MintQuote` carries no referral field, because the split happens after the quote.
+A referral share is not another charge: it is split out of fees the trader has already paid, and it never changes `cost`. [Referrals](#referrals) covers the whole mechanism.
+
+## Referrals {#referrals}
+
+Predict pays referrers out of protocol fees. When an account created with a referrer mints a position, a fixed share of the fees that mint paid goes to the referrer's account instead of into the pool. The referred trader pays exactly what an unreferred trader pays for the same trade, so the referral is a redistribution of protocol revenue, not a surcharge.
+
+The system has no registration, no codes to issue, and no claim step. Any existing account can be a referrer, and earnings arrive in the referrer's account balance on the transaction that earns them.
+
+### Set the referrer at account creation {#referral-attribution}
+
+A referral is a property of the referred account, fixed when the account is created. `account::account_registry::new_with_referrer` takes the referrer's shared `AccountWrapper` and creates the sender's account with 2 fields copied from it: the referrer's canonical account ID, which identifies the referrer in events, and the referrer's wrapper address, which receives the payments. [Create an account](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#create-a-manager) gives the signature alongside the other 2 constructors.
+
+Nothing can change that attribution afterwards. The account package has no setter for either field, so a referrer can never be swapped, removed, or added later, and an account created with the plain `account_registry::new` has no referrer for its whole life. Each owner address has exactly one account, which makes the choice permanent for that address. An onboarding flow that wants to credit a referrer must use `new_with_referrer` on the user's first account creation, because an owner address can create an account only once. `new_self_owned`, which creates an account owned by an object, has no referral form.
+
+Three more rules follow from the call's signature:
+
+- **Any account can refer.** The referrer needs only to exist as a shared `AccountWrapper`. It does not register, does not need to have traded, and does not need to hold a balance.
+- **A new account cannot refer itself.** The referrer wrapper must exist before the call runs, and the account being created does not. Beyond that, the registry does not check who controls the referrer, so nothing stops one person from creating an account at a second address with their first account as its referrer.
+- **Referral is one level deep.** A mint pays only the minting account's own referrer. The protocol never follows that referrer's referrer, so there are no multi-level payouts.
+
+### What a referrer earns {#referral-fee}
+
+On every mint by a referred account, the protocol computes:
+
+```text
+referral_fee_basis = (trading_fee - fee_incentive_subsidy) + penalty_fee
+referral_fee       = floor(referral_fee_basis * referral_fee_rate / 1e9)
+```
+
+The basis is what the trader actually paid the protocol in fees on that mint: the trading fee net of the sponsor-funded subsidy, which the trader did not pay, plus the congestion surcharge. The basis excludes two other amounts:
+
+- **The builder fee:** It already belongs to the builder the account routes through.
+- **The inventory-impact charge:** It is isolated risk escrow held against the book, not fee revenue.
+
+`referral_fee_rate` is a single protocol-wide value on `ProtocolConfig`, not a per-referrer or per-account rate. It ships at `100_000_000`, which is 10 percent, and a chain read on 2026-09-28 found it at that value on both networks. An admin can set it anywhere from 0 to 25 percent with `protocol_config::set_referral_fee_rate`. The protocol reads the current rate on each mint rather than snapshotting it into the account or the market, so a rate change reaches every referred account from its next mint onward. The setter emits no event, so read the live value with `protocol_config::referral_fee_rate` rather than tracking changes.
+
+Every mint shape pays referrals: `mint_exact_quantity`, `mint_exact_amount`, and `mint_exact_cost` all go through the same charging path. Nothing else does. A live redeem and a settled redeem both charge or pay out with no referral share, so a referrer earns on the positions a referred trader opens, and not when that trader closes them.
+
+For example, take a referred directional mint that pays 0.25 USDC of trading fee, of which the sponsor subsidy covers 0.05 USDC, and no congestion surcharge. The referral basis is 0.20 USDC, and at 10 percent the referrer receives 0.02 USDC. An unreferred trader making the same mint pays the same 0.20 USDC of fees, all of which stays with the pool. The protocol rounds the referral down to the USDC base unit, and when that rounds to zero it sends nothing.
+
+### Where the referral comes from {#referral-funding}
+
+The trader does not pay for the referral. The protocol computes the referral only after the mint's `all_in_cost` is final, then splits it out of the payment the trader has already made, so `all_in_cost`, the `max_cost` guard, and the account debit are identical with or without a referrer. The Move `MintQuote` has no referral field for that reason.
+
+The referral reduces what the pool keeps. Without a referrer, the trader-paid fee and the congestion surcharge land in the expiry's cash and accrue to the pool, that is, to PLP holders and the protocol's profit share. With a referrer, the referral share is split off first and only the rest lands there. Sponsor incentives never fund it: the basis excludes the subsidy, and the protocol splits the referral from the trader's payment before the subsidy joins. [The referral split](/onchain-finance/deepbook/deepbook-predict/contract-information/predict#referral-split) gives the Move-level formula.
+
+### How the referrer receives it {#referral-delivery}
+
+The protocol sends each referral payment to the referrer's wrapper address with `balance::send_funds`, through the balance accumulator, in the same transaction as the mint. There is no claim to make:
+
+- **It counts at once.** `account::balance<USDC>`, and therefore `read.balance` in the SDK, includes accumulator funds that have not been settled yet, so the payment shows in the referrer's balance as soon as the mint lands. The one exception is a referrer whose USDC already settled at the same millisecond timestamp: the settlement latch defers both the read and the fold to the next timestamp.
+- **It becomes spendable on the next call.** Every mint entrypoint and `account::withdraw_funds` settle the account's USDC before they debit it, so the referrer can trade or withdraw the earnings directly. Anyone can also fold them into stored balance with the permissionless `account::settle<USDC>`.
+
+The settled earnings are then ordinary account balance, spendable under the same authority as any other funds in the account.
+
+### Tracking referrals {#referral-events}
+
+Two events carry the referral across three fields, all keyed on the canonical account ID rather than the wrapper ID:
+
+| **Event** | **Field** | **Meaning** |
+| --- | --- | --- |
+| `account_events::AccountCreated` | `referrer_account_id` | The referrer an account was created with, or none. Emitted once, at creation. |
+| `order_events::OrderMinted` | `referrer_account_id` | The minting account's referrer, recorded on every mint. It is present even when the rate is 0 or the payment rounds to 0. |
+| `order_events::OrderMinted` | `referral_fee` | The USDC, in base units, sent to that referrer on this mint. |
+
+A referrer's total earnings are the sum of `referral_fee` over `OrderMinted` events whose `referrer_account_id` is the referrer's canonical account ID. Onchain, `account::referrer_account_id` and `account::referrer_receive_address` read the attribution from any account.
+
+The SDK reports the amount but not the recipient. `MintQuote.fees.referral` and `MintReceipt.fees.referral` carry the referral payment, with the exact integer in the receipt's `raw.referralFee`, but neither receipt nor `CreateManagerReceipt` carries `referrer_account_id`. Read attribution from the raw events. [Predict Accounts SDK](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#create-with-referrer) shows how to create a referred account from TypeScript.
+
+### Referrals, builder codes, and DeepBook spot referrals {#referrals-vs-builder-codes}
+
+Predict has a second way to reward the party that brings in a trader, and DeepBook's spot order book has a referral system of its own. They do not interact:
+
+| **Property** | **Predict referral** | **Predict builder code** |
+| --- | --- | --- |
+| Who is paid | The referrer's account | The builder code's object address |
+| Cost to the trader | None: carved out of protocol fees | An add-on on top of the trading fee |
+| Charged on | Mints only | Mints and live redeems |
+| How it is attached | Once, at account creation, permanently | Set or cleared at any time, under the account's owner or app authorization |
+| Rate | Protocol-wide `referral_fee_rate` | Protocol-wide builder multiplier, capped per quantity |
+
+An account can carry both, and a mint then pays both independently. DeepBook spot referrals attach to a balance manager and pay out of spot trading fees; the `ReferralQueries` methods on the `@mysten/deepbook-v3` package root read those, and they do not apply to Predict accounts or mints.
 
 ## Pool liquidity and PLP {#vault-and-plp}
 

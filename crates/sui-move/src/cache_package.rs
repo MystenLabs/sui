@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use move_package_alt::{
+use move_package::{
     cache_package,
     schema::{Environment, ManifestDependencyInfo},
 };

@@ -306,12 +306,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "843867be96c8daad0d758b57df9392b6d8d271134fce549de6ce169ff98a92af"
 
 [[package]]
-name = "bitmaps"
-version = "3.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1d084b0137aaa901caf9f1e8b21daa6aa24d41cd806e111335541eff9683bd6"
-
-[[package]]
 name = "bitvec"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1125,12 +1119,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dissimilar"
-version = "1.0.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59f8e79d1fbf76bdfbde321e902714bf6c49df88a7dda6fc682fc2979226962d"
-
-[[package]]
 name = "document-features"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1248,16 +1236,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1a05365e3b1c6d1650318537c7460c6923f1abdd272ad6842baa2b509957a06"
 dependencies = [
  "num-traits",
-]
-
-[[package]]
-name = "expect-test"
-version = "1.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63af43ff4431e848fb47472a920f14fa71c24de13255a5692e93d4e90302acb0"
-dependencies = [
- "dissimilar",
- "once_cell",
 ]
 
 [[package]]
@@ -1809,12 +1787,11 @@ dependencies = [
 
 [[package]]
 name = "imbl"
-version = "7.0.1"
+version = "7.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43ea8d4c37ee560727e824d62804183624d371e632019b0e9e3532bce64a33e5"
+checksum = "46bad832b9b463ed9398b8506488cc2e3b897a9d44f13af115f382aac71f4fec"
 dependencies = [
  "archery",
- "bitmaps",
  "equivalent",
  "imbl-sized-chunks",
  "rand_core 0.9.5",
@@ -1825,12 +1802,9 @@ dependencies = [
 
 [[package]]
 name = "imbl-sized-chunks"
-version = "0.1.3"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f4241005618a62f8d57b2febd02510fb96e0137304728543dfc5fd6f052c22d"
-dependencies = [
- "bitmaps",
-]
+checksum = "2a0813be332553f857953298749fa19549e8b61b80589757c29b4e2a804fa9c6"
 
 [[package]]
 name = "impl-codec"
@@ -2402,8 +2376,8 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-ir-types",
- "move-package-alt",
- "move-package-alt-compilation",
+ "move-package",
+ "move-package-compilation",
  "move-symbol-pool",
  "serde",
  "serde_json",
@@ -2591,8 +2565,8 @@ dependencies = [
  "move-docgen",
  "move-ir-types",
  "move-model-2",
- "move-package-alt",
- "move-package-alt-compilation",
+ "move-package",
+ "move-package-compilation",
  "move-stdlib",
  "move-symbol-pool",
  "move-trace-format",
@@ -2742,8 +2716,8 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-model-2",
- "move-package-alt",
- "move-package-alt-compilation",
+ "move-package",
+ "move-package-compilation",
  "move-stackless-bytecode-2",
  "move-stdlib",
  "move-symbol-pool",
@@ -2796,8 +2770,8 @@ dependencies = [
  "datatest-stable",
  "move-command-line-common",
  "move-docgen",
- "move-package-alt",
- "move-package-alt-compilation",
+ "move-package",
+ "move-package-compilation",
  "tempfile",
 ]
 
@@ -2888,42 +2862,6 @@ name = "move-package"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 4.5.28",
- "colored",
- "datatest-stable",
- "dunce",
- "expect-test",
- "itertools 0.10.5",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-bytecode-utils",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-disassembler",
- "move-docgen",
- "move-model-2",
- "move-symbol-pool",
- "named-lock",
- "petgraph",
- "regex",
- "serde",
- "serde_yaml",
- "sha2 0.9.9",
- "tempfile",
- "toml",
- "toml_edit",
- "treeline",
- "vfs",
- "walkdir",
- "whoami",
-]
-
-[[package]]
-name = "move-package-alt"
-version = "0.1.0"
-dependencies = [
- "anyhow",
  "append-only-vec",
  "aquamarine",
  "async-trait",
@@ -2964,7 +2902,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-package-alt-compilation"
+name = "move-package-compilation"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2980,7 +2918,7 @@ dependencies = [
  "move-disassembler",
  "move-docgen",
  "move-model-2",
- "move-package-alt",
+ "move-package",
  "move-symbol-pool",
  "serde",
  "serde_yaml",
@@ -3023,8 +2961,8 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-model-2",
- "move-package-alt",
- "move-package-alt-compilation",
+ "move-package",
+ "move-package-compilation",
  "move-stdlib",
  "move-symbol-pool",
  "tempfile",
@@ -3042,8 +2980,8 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
- "move-package-alt",
- "move-package-alt-compilation",
+ "move-package",
+ "move-package-compilation",
  "move-unit-test",
  "tempfile",
  "tokio",
@@ -3376,20 +3314,6 @@ dependencies = [
  "proptest",
  "serde",
  "smallvec",
-]
-
-[[package]]
-name = "named-lock"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40a3eb6b7c682b65d1f631ec3176829d72ab450b3aacdd3f719bf220822e59ac"
-dependencies = [
- "libc",
- "once_cell",
- "parking_lot 0.12.3",
- "thiserror 1.0.69",
- "widestring",
- "winapi",
 ]
 
 [[package]]
@@ -5236,12 +5160,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "treeline"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
-
-[[package]]
 name = "typeid"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5456,12 +5374,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasite"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8dad83b4f25e74f184f64c43b150b91efe7647395b42289f38e50566d82855b"
-
-[[package]]
 name = "wasm-bindgen"
 version = "0.2.100"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5636,17 +5548,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "whoami"
-version = "1.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "372d5b87f58ec45c384ba03563b03544dc5fadc3983e434b286913f5b4a9bb6d"
-dependencies = [
- "redox_syscall 0.5.8",
- "wasite",
- "web-sys",
-]
-
-[[package]]
 name = "wide"
 version = "0.7.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5655,12 +5556,6 @@ dependencies = [
  "bytemuck",
  "safe_arch",
 ]
-
-[[package]]
-name = "widestring"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17882f045410753661207383517a6f62ec3dbeb6a4ed2acce01f0728238d1983"
 
 [[package]]
 name = "winapi"

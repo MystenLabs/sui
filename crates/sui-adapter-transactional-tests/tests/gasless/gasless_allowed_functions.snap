@@ -26,7 +26,7 @@ task 3, lines 29-33:
 mutated: object(0,0), object(1,1)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(3,0), A, sui::balance::Balance<test::usdc::USDC>, Merge, 10000)
-gas summary: computation_cost: 1000000, storage_cost: 2690400,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+gas summary: computation_cost: 1000000, storage_cost: 2690400,  storage_rebate: 2690131, non_refundable_storage_fee: 269
 
 task 4, line 35:
 //# create-checkpoint

@@ -39,7 +39,7 @@ task 4, lines 74-75:
 //# programmable --sender A --inputs object(2,0) 1 2 3
 //> test::m::set(Input(0), Input(1), Input(2), Input(3))
 mutated: object(0,0), object(2,0), object(2,1), object(2,2)
-gas summary: computation_cost: 1000000, storage_cost: 4841200,  storage_rebate: 4792788, non_refundable_storage_fee: 48412
+gas summary: computation_cost: 1000000, storage_cost: 4841200,  storage_rebate: 4840716, non_refundable_storage_fee: 484
 
 task 5, line 77:
 //# view-object 2,0
@@ -59,7 +59,7 @@ task 6, lines 79-80:
 //> test::m::remove(Input(0))
 mutated: object(0,0), object(2,0)
 deleted: object(2,2), object(2,3)
-gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 5951484, non_refundable_storage_fee: 60116
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 6010999, non_refundable_storage_fee: 601
 
 task 7, line 82:
 //# view-object 2,0
@@ -80,19 +80,19 @@ task 8, lines 87-88:
 //# programmable --sender A --inputs object(2,0)@2 0 0 vector[0] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 mutated: object(_), object(2,0)
-gas summary: computation_cost: 500000, storage_cost: 2272400,  storage_rebate: 1271556, non_refundable_storage_fee: 12844
+gas summary: computation_cost: 500000, storage_cost: 2272400,  storage_rebate: 1284272, non_refundable_storage_fee: 128
 
 task 9, lines 90-91:
 //# programmable --sender A --inputs object(2,0)@3 1 2 vector[3] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 mutated: object(_), object(2,0)
-gas summary: computation_cost: 500000, storage_cost: 2272400,  storage_rebate: 1271556, non_refundable_storage_fee: 12844
+gas summary: computation_cost: 500000, storage_cost: 2272400,  storage_rebate: 1284272, non_refundable_storage_fee: 128
 
 task 10, lines 93-94:
 //# programmable --sender A --inputs object(2,0)@4 1 2 vector[] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 mutated: object(_), object(2,0)
-gas summary: computation_cost: 500000, storage_cost: 2272400,  storage_rebate: 1271556, non_refundable_storage_fee: 12844
+gas summary: computation_cost: 500000, storage_cost: 2272400,  storage_rebate: 1284272, non_refundable_storage_fee: 128
 
 // dev-inspect with 'check' and _incorrect_ values
 
