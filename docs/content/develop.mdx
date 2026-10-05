@@ -33,7 +33,13 @@ answer: >-
   architecture, how to write Move packages, and how to build transactions.
 ---
 
-Learn the developer essentials for building on Sui, including its architecture, how to write Move packages, and how to build transactions.
+Sui development centers on three areas: understanding the Sui architecture, writing Move packages, and building transactions. Each area builds on the previous one. You write Move packages to define onchain logic, then construct transactions to call that logic, and the Sui architecture determines how those transactions execute and reach finality.
+
+A Move package contains one or more modules. Each module defines types, functions, and the rules that govern how objects are created, transferred, and destroyed. Sui uses an object model where assets are explicit objects with defined ownership, rather than entries in a shared ledger.
+
+Transactions on Sui are programmable transaction blocks (PTBs). A single PTB can call multiple Move functions, transfer objects, and split or merge coins, all in one atomic operation. This composability reduces the number of round trips between your app and the network.
+
+If you are new to Sui development, start with the architecture overview to understand how Sui processes transactions and manages state. Then move to writing your first Move package, and finally explore PTBs to learn how to compose complex onchain operations from your app.
 
 import DocCardList from '@theme/DocCardList';
 

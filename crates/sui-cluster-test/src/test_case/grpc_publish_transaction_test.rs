@@ -23,7 +23,7 @@ impl TestCaseImpl for GrpcPublishTransactionTest {
         let signer = ctx.get_wallet_address();
         // Fund a gas coin and supply it explicitly so the gRPC publish builder
         // stays on `LedgerService`.
-        let gas = ctx.get_sui_from_faucet(Some(1)).await.swap_remove(0);
+        let gas = ctx.get_sui(Some(1)).await.swap_remove(0);
         let gas_ref = ctx.current_object_ref(*gas.id()).await;
 
         // Compile the package and pass its module bytes + dependencies to the

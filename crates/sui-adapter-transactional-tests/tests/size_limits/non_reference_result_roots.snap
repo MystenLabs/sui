@@ -1041,4 +1041,4 @@ task 2, lines 528-1551:
 //> 1021: test::amplifier::r255();
 //> 1022: test::amplifier::r255();
 mutated: object(0,1)
-gas summary: computation_cost: 13400000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 13400000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

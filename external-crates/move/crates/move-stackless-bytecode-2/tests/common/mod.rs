@@ -3,8 +3,8 @@
 
 use anyhow::Context;
 use move_command_line_common::insta_assert;
-use move_package_alt::{RootPackage, Vanilla};
-use move_package_alt_compilation::build_config::BuildConfig;
+use move_package::{RootPackage, Vanilla};
+use move_package_compilation::build_config::BuildConfig;
 use move_stackless_bytecode_2::ast::Module;
 use move_symbol_pool::Symbol;
 use std::{

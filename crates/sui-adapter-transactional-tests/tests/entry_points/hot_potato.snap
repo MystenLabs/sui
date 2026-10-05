@@ -33,7 +33,7 @@ task 3, lines 46-51:
 //> test::m::play(Result(1));
 mutated: object(0,0)
 deleted: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 4, lines 53-59:
 //# programmable --sender A --inputs @A object(2,1)

@@ -38,8 +38,8 @@ use move_core_types::{
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
 };
-use move_package_alt::{PackageLoader, read_publication, schema::ModeName};
-use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
+use move_package::{PackageLoader, read_publication, schema::ModeName};
+use move_package_compilation::build_config::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -107,7 +107,7 @@ use tabled::{
     },
 };
 
-use move_package_alt::{
+use move_package::{
     RootPackage,
     schema::{OriginalID, Publication, PublishAddresses, PublishedID},
 };
@@ -2094,11 +2094,13 @@ pub(crate) async fn compile_package(
     // This will direct the pkg-system to set all unpublished dependencies to address 0x0
     build_config.set_unpublished_deps_to_zero = with_unpublished_deps;
 
-    let package = move_package_alt_compilation::compile_from_root_package::<
-        std::io::Stderr,
-        SuiFlavor,
-    >(root_pkg, &build_config, &mut std::io::stderr())
-    .unwrap();
+    let package =
+        move_package_compilation::compile_from_root_package::<std::io::Stderr, SuiFlavor>(
+            root_pkg,
+            &build_config,
+            &mut std::io::stderr(),
+        )
+        .unwrap();
 
     let published_at = root_pkg
         .publication()

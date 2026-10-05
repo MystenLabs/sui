@@ -34,7 +34,7 @@ Contents: Test::f::S {
 task 4, line 37:
 //# run Test::f::update_inner --args object(2,0)
 mutated: object(0,1), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 2203780, non_refundable_storage_fee: 220
 
 task 5, line 39:
 //# view-object 2,0

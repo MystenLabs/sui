@@ -13,7 +13,7 @@ task 2, line 33:
 //# run tto::M1::start
 created: object(2,0), object(2,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, line 35:
 //# view-object 2,0
@@ -42,7 +42,7 @@ Contents: tto::M1::B {
 task 5, line 39:
 //# run tto::M1::receiver --args object(2,0) receiving(2,1)
 mutated: object(0,0), object(2,0), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 3385800, non_refundable_storage_fee: 34200
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 3419658, non_refundable_storage_fee: 342
 
 task 6, line 41:
 //# view-object 2,0
