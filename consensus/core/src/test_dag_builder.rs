@@ -686,11 +686,14 @@ impl<'a> LayerBuilder<'a> {
                 authorities_to_shuffle.shuffle(&mut rng);
 
                 // TODO: handle quroum threshold properly with stake
-                let mut selected_authorities = authorities_to_shuffle
-                    .iter()
-                    .take(quorum_threshold)
-                    .cloned()
-                    .collect::<Vec<_>>();
+                let mut selected_authorities = vec![*authority];
+                selected_authorities.extend(
+                    authorities_to_shuffle
+                        .iter()
+                        .filter(|ancestor_author| **ancestor_author != *authority)
+                        .take(quorum_threshold - 1)
+                        .cloned(),
+                );
                 for leader in &leaders {
                     if !selected_authorities.contains(leader) {
                         selected_authorities.push(*leader);

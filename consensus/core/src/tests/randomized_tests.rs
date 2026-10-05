@@ -13,6 +13,8 @@ use crate::{
 
 const NUM_RUNS: u32 = 100;
 const MAX_STEP: u32 = 3;
+// The last two leader rounds are undecidable; allow one further round for randomized links.
+const TRAILING_UNDECIDED_SLACK: u32 = 3;
 
 /// Test builds a randomized dag with the following conditions:
 /// - Links to 2f+1 minimum ancestors
@@ -126,64 +128,67 @@ async fn test_randomized_dag_and_decision_sequence() {
 async fn test_randomized_dag_with_equivocations() {
     let num_authorities = 7;
     let num_rounds = 100;
-    let include_leader_percentage = 100;
     // Fixed seeds make failures reproducible while exercising distinct choices of
     // equivocating authorities and minimal-parent links.
-    for equivocations_per_authority in [1, 2] {
-        let equivocation_config = RandomDagEquivocationConfig {
-            equivocation_rate: 100,
-            // Deliberately above F: the generator must cap this at F.
-            max_equivocators: usize::MAX,
-            equivocations_per_authority,
-        };
+    for include_leader_percentage in [100, 50] {
+        for equivocations_per_authority in [1, 2] {
+            let equivocation_config = RandomDagEquivocationConfig {
+                equivocation_rate: 100,
+                // Deliberately above F: the generator must cap this at F.
+                max_equivocators: usize::MAX,
+                equivocations_per_authority,
+            };
 
-        for seed in [7, 42, 2026] {
-            let context = CommitTestFixture::context_with_options(num_authorities, 0, Some(6));
-            let dag_builder = create_random_dag(
-                seed,
-                include_leader_percentage,
-                num_rounds,
-                context.clone(),
-                equivocation_config,
-            );
-            let all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
-            let dag = RandomDag::from_blocks(context.clone(), all_blocks);
-            let mut delivery_rng = StdRng::seed_from_u64(seed);
-            let mut commit_sequences = vec![];
-            let mut skipped_leaders = 0;
+            for seed in [7, 42, 2026] {
+                let context = CommitTestFixture::context_with_options(num_authorities, 0, Some(6));
+                let dag_builder = create_random_dag(
+                    seed,
+                    include_leader_percentage,
+                    num_rounds,
+                    context.clone(),
+                    equivocation_config,
+                );
+                let all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
+                let dag = RandomDag::from_blocks(context.clone(), all_blocks);
+                let mut delivery_rng = StdRng::seed_from_u64(seed);
+                let mut commit_sequences = vec![];
+                let mut skipped_leaders = 0;
 
-            for _ in 0..NUM_RUNS {
-                let mut fixture = CommitTestFixture::new(context.clone());
-                let mut finalized_commits = vec![];
-                let mut last_decided = Slot::new_for_test(0, 0);
+                for _ in 0..NUM_RUNS {
+                    let mut fixture = CommitTestFixture::new(context.clone());
+                    let mut finalized_commits = vec![];
+                    let mut last_decided = Slot::new_for_test(0, 0);
 
-                for block in dag.random_iter(&mut delivery_rng, MAX_STEP) {
-                    fixture.try_accept_blocks(vec![block]);
-                    let (finalized, new_last_decided, skipped) =
-                        fixture.try_commit_with_skip_count(last_decided).await;
-                    finalized_commits.extend(finalized);
-                    last_decided = new_last_decided;
-                    skipped_leaders += skipped;
+                    for block in dag.random_iter(&mut delivery_rng, MAX_STEP) {
+                        fixture.try_accept_blocks(vec![block]);
+                        let (finalized, new_last_decided, skipped) =
+                            fixture.try_commit_with_skip_count(last_decided).await;
+                        finalized_commits.extend(finalized);
+                        last_decided = new_last_decided;
+                        skipped_leaders += skipped;
+                    }
+
+                    assert!(fixture.has_no_suspended_blocks());
+                    commit_sequences.push(finalized_commits);
                 }
 
-                assert!(fixture.has_no_suspended_blocks());
-                commit_sequences.push(finalized_commits);
+                let commits = assert_commit_sequences_match(commit_sequences);
+                assert!(
+                    skipped_leaders > 0,
+                    "equivocations did not cause any leader to be skipped for seed {seed}"
+                );
+                let last_commit_round = commits
+                    .last()
+                    .expect("honest quorum did not make progress")
+                    .leader
+                    .round;
+                if include_leader_percentage == 100 {
+                    assert!(
+                        last_commit_round >= num_rounds - 2 - TRAILING_UNDECIDED_SLACK,
+                        "honest quorum stopped making progress at round {last_commit_round} for seed {seed}"
+                    );
+                }
             }
-
-            let commits = assert_commit_sequences_match(commit_sequences);
-            assert!(
-                skipped_leaders > 0,
-                "equivocations did not cause any leader to be skipped for seed {seed}"
-            );
-            let last_commit_round = commits
-                .last()
-                .expect("honest quorum did not make progress")
-                .leader
-                .round;
-            assert!(
-                last_commit_round >= num_rounds - 2 - MAX_STEP,
-                "honest quorum stopped making progress at round {last_commit_round} for seed {seed}"
-            );
         }
     }
 }

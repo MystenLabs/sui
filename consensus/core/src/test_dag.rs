@@ -143,7 +143,7 @@ pub(crate) fn create_random_dag(
 
     for r in 1..=num_rounds {
         let random_num = rng.gen_range(0..100);
-        let include_leader = random_num <= include_leader_percentage;
+        let include_leader = random_num < include_leader_percentage;
         let min_ancestor_links_seed = rng.r#gen();
         let should_equivocate_this_round =
             rng.gen_range(0..100) < equivocation_config.equivocation_rate;
@@ -233,6 +233,12 @@ mod tests {
                 .ancestors()
                 .iter()
                 .all(|ancestor| ancestor_authors.insert(ancestor.author))
+        }));
+        assert!(dag_builder.blocks.values().all(|block| {
+            block
+                .ancestors()
+                .first()
+                .is_some_and(|ancestor| ancestor.author == block.author())
         }));
         assert!(
             dag_builder
