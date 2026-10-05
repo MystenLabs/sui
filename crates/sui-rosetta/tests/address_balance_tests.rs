@@ -11,6 +11,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use prost_types::FieldMask;
+use rand::rngs::OsRng;
 use serde_json::json;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::CoinMetadataCache;
@@ -23,7 +24,7 @@ use sui_rpc::client::Client as GrpcClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::{GetBalanceRequest, GetEpochRequest, GetTransactionRequest};
 use sui_sdk_types::{Address, TypeTag as SdkTypeTag};
-use sui_swarm_config::genesis_config::AccountConfig;
+use sui_swarm_config::genesis_config::{AccountConfig, ValidatorGenesisConfigBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::rpc_proto_conversions::ObjectReferenceExt;
@@ -587,6 +588,86 @@ async fn test_pay_sui_ab_gas_coin_payment() {
     assert!(
         after_balance < initial_balance
             && after_balance >= initial_balance - 1_000_000_000 - 50_000_000,
+        "Balance should decrease by ~payment + gas. Before: {initial_balance}, after: {after_balance}"
+    );
+}
+
+/// Mainnet's reference gas price (RGP) in MIST, as of epoch 1261.
+const MAINNET_REFERENCE_GAS_PRICE: u64 = 100;
+
+/// Path A (address-balance gas) at mainnet's reference gas price.
+///
+/// The sender holds one large SUI coin plus 0.5 SUI of address balance, so PaySui picks Path A and
+/// `/construction/metadata` succeeds with an estimated budget. `/construction/submit` then
+/// simulates the signed transaction with `do_gas_selection = false`, which must run it with
+/// address-balance gas, as it executes. The metadata budget estimate excludes the storage of the
+/// simulator's synthetic gas coin (~988_000 MIST) and keeps only `1000 * RGP` of margin (100_000
+/// MIST at RGP 100), so a submit simulation that charged a synthetic gas coin would fail with
+/// `InsufficientGas`. The test-cluster default RGP of 1000 leaves enough margin to hide that.
+#[tokio::test]
+async fn test_pay_sui_ab_gas_at_mainnet_reference_gas_price() {
+    let validator = ValidatorGenesisConfigBuilder::new()
+        .with_gas_price(MAINNET_REFERENCE_GAS_PRICE)
+        .build(&mut OsRng);
+    let test_cluster = TestClusterBuilder::new()
+        .with_validators(vec![validator])
+        .with_accounts(single_coin_accounts())
+        .with_epoch_duration_ms(60000)
+        .build()
+        .await;
+    let sender = test_cluster.get_address_0();
+    let recipient = test_cluster.get_address_1();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    assert_eq!(
+        client.get_reference_gas_price().await.unwrap(),
+        MAINNET_REFERENCE_GAS_PRICE
+    );
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    // 0.5 SUI of address balance next to the sender's single coin object.
+    deposit_to_address_balance(
+        &test_cluster,
+        &mut client,
+        keystore,
+        sender,
+        500_000_000,
+        None,
+    )
+    .await;
+
+    let initial_balance = get_total_balance(&mut client, sender, SUI_COIN_TYPE).await;
+    let payment = 1_000_000_000u64;
+    let ops = pay_sui_ops(sender, recipient, &payment.to_string());
+
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    let metadata = flow
+        .metadata
+        .as_ref()
+        .unwrap()
+        .as_ref()
+        .expect("Metadata failed");
+    assert!(
+        metadata.metadata.gas_coins.is_empty(),
+        "Path A: gas_coins should be empty (AB gas), got {:?}",
+        metadata.metadata.gas_coins
+    );
+
+    let response: TransactionIdentifierResponse = flow
+        .submit
+        .expect("Submit was None")
+        .expect("Submit failed");
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    let after_balance = get_total_balance(&mut client, sender, SUI_COIN_TYPE).await;
+    assert!(
+        after_balance < initial_balance && after_balance >= initial_balance - payment - 50_000_000,
         "Balance should decrease by ~payment + gas. Before: {initial_balance}, after: {after_balance}"
     );
 }

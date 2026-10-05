@@ -1,5 +1,0 @@
-[package]
-name = "OtherDep"
-
-[addresses]
-B = "0x1"

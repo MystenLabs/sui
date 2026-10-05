@@ -23,9 +23,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -52,7 +49,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -75,10 +71,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -189,6 +181,9 @@ validator_configs:
       sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
+    consensus-transaction-pool:
+      enabled: true
+      max-pending-transactions: ~
   - protocol-key-pair:
       value: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1Bhvo=
     worker-key-pair:
@@ -209,9 +204,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -238,7 +230,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -261,10 +252,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -375,6 +362,9 @@ validator_configs:
       sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
+    consensus-transaction-pool:
+      enabled: true
+      max-pending-transactions: ~
   - protocol-key-pair:
       value: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+I=
     worker-key-pair:
@@ -395,9 +385,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -424,7 +411,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -447,10 +433,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -561,6 +543,9 @@ validator_configs:
       sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
+    consensus-transaction-pool:
+      enabled: true
+      max-pending-transactions: ~
   - protocol-key-pair:
       value: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2s=
     worker-key-pair:
@@ -581,9 +566,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -610,7 +592,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -633,10 +614,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -747,6 +724,9 @@ validator_configs:
       sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
+    consensus-transaction-pool:
+      enabled: true
+      max-pending-transactions: ~
   - protocol-key-pair:
       value: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY0=
     worker-key-pair:
@@ -767,9 +747,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -796,7 +773,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -819,10 +795,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -933,6 +905,9 @@ validator_configs:
       sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
+    consensus-transaction-pool:
+      enabled: true
+      max-pending-transactions: ~
   - protocol-key-pair:
       value: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnU=
     worker-key-pair:
@@ -953,9 +928,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -982,7 +954,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -1005,10 +976,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -1119,6 +1086,9 @@ validator_configs:
       sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
+    consensus-transaction-pool:
+      enabled: true
+      max-pending-transactions: ~
   - protocol-key-pair:
       value: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjs=
     worker-key-pair:
@@ -1139,9 +1109,6 @@ validator_configs:
       db-pruner-period-secs: ~
       max-pending-transactions: ~
       parameters: ~
-    enable-index-processing: true
-    sync-post-process-one-tx: false
-    jsonrpc-server-type: ~
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000000000
     p2p-config:
@@ -1168,7 +1135,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-secondary-index-checks: false
     transaction-deny-config:
       object-deny-list: []
       package-deny-list: []
@@ -1191,10 +1157,6 @@ validator_configs:
     state-snapshot-write-config:
       concurrency: 0
       archive-interval-epochs: 0
-    indexer-max-subscriptions: ~
-    transaction-kv-store-read-config:
-      base-url: "https://transactions.sui.io/"
-      cache-size: 100000
     jwk-fetch-interval-seconds: 3600
     zklogin-oauth-providers:
       Mainnet:
@@ -1305,6 +1267,9 @@ validator_configs:
       sanity-check-with-regex-reference-safety: ~
     transaction-driver-config:
       enable-early-validation: true
+    consensus-transaction-pool:
+      enabled: true
+      max-pending-transactions: ~
 account_keys:
   - Hloy4pnf8pWEHGP+4OFsXz56bLdIJhkD2O+OdKMqCA4=
   - pvMScjoMR/DaN0M5IOxS2VpGC59N6kv6gDm63ufLQ5w=

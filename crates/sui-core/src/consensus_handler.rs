@@ -978,9 +978,9 @@ impl CommitHandlerState {
             let randomness_manager = randomness_manager
                 .as_mut()
                 .expect("randomness manager should exist if randomness is enabled");
-            match randomness_manager.dkg_status() {
+            match randomness_manager.dkg_status_for_commit_round(commit_info.round) {
                 DkgStatus::Pending => None,
-                DkgStatus::Failed => {
+                DkgStatus::TimedOut => {
                     dkg_failed = true;
                     None
                 }
@@ -1760,8 +1760,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 "Writing pending checkpoint",
             );
             self.epoch_store
-                .write_pending_checkpoint(&mut state.output, &pending_checkpoint)
-                .expect("failed to write pending checkpoint");
+                .write_pending_checkpoint(&mut state.output, &pending_checkpoint);
         }
 
         state.output.set_checkpoint_queue_drained(queue_drained);
@@ -2104,7 +2103,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &mut state.output,
                 commit_info.round,
             )
-            .expect("db error")
             .into_iter()
             .flat_map(|(key, txns)| txns.into_iter().map(move |tx| (key, tx)))
             .map(|(key, tx)| {
@@ -2121,7 +2119,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let txns: Vec<_> = self
                 .epoch_store
                 .load_deferred_transactions_for_randomness_v2(&mut state.output)
-                .expect("db error")
                 .into_iter()
                 .flat_map(|(key, txns)| txns.into_iter().map(move |tx| (key, tx)))
                 .map(|(key, tx)| {
@@ -2161,8 +2158,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     commit_info.round,
                     for_randomness,
                     txns,
-                )
-                .expect("db error"),
+                ),
             self.epoch_store.protocol_config(),
             for_randomness,
             self.congestion_logger.is_some(),
@@ -2315,15 +2311,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             randomness_dkg_confirmations,
         );
 
-        // Keep advancing the DKG state machine until it is resolved, regardless of
-        // whether new messages/confirmations were processed this commit. Preserve
-        // the mainnet epoch fallback until the protocol flag is active everywhere.
-        let always_advance_dkg_to_resolution = (self
-            .epoch_store
-            .protocol_config()
-            .always_advance_dkg_to_resolution()
-            || (self.epoch_store.get_chain() == Chain::Mainnet
-                && self.epoch_store.epoch() >= 1143))
+        let protocol_config = self.epoch_store.protocol_config();
+        // Once timeout failure is derived per commit, merge and completion can only make progress
+        // when new consensus material arrives.
+        let always_advance_dkg_to_resolution = !protocol_config
+            .allow_dkg_completion_after_timeout()
+            && (protocol_config.always_advance_dkg_to_resolution()
+                || (self.epoch_store.get_chain() == Chain::Mainnet
+                    && self.epoch_store.epoch() >= 1143))
             && randomness_manager.dkg_status() == DkgStatus::Pending;
 
         if randomness_dkg_updates
@@ -2665,11 +2660,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
             prefetch_refs.sort();
             prefetch_refs.dedup();
-            // On a read error fall back to an empty map (treat refs as unlocked) — the
-            // same lenient behavior the per-transaction read had.
-            self.epoch_store
-                .get_owned_object_locks_map(&prefetch_refs)
-                .unwrap_or_default()
+            self.epoch_store.get_owned_object_locks_map(&prefetch_refs)
         };
 
         for (block, parsed_transactions) in block_transactions {
@@ -3815,7 +3806,6 @@ mod tests {
         assert!(
             epoch_store
                 .get_pending_checkpoints(None)
-                .unwrap()
                 .iter()
                 .all(|(_, checkpoint)| !checkpoint.details.last_of_epoch)
         );
@@ -3881,7 +3871,7 @@ mod tests {
                 .get_reconfig_state_read_lock_guard()
                 .is_reject_all_tx()
         );
-        let checkpoints = epoch_store.get_pending_checkpoints(None).unwrap();
+        let checkpoints = epoch_store.get_pending_checkpoints(None);
         assert!(checkpoints.last().unwrap().1.details.last_of_epoch);
         assert_eq!(
             setup
@@ -4224,7 +4214,6 @@ mod tests {
 
         let state = TestAuthorityBuilder::new()
             .with_starting_objects(&all_objects)
-            .skip_genesis_owner_index()
             .build()
             .await;
         let epoch_store = state.epoch_store_for_testing();
@@ -4311,9 +4300,7 @@ mod tests {
             NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Dropped)
         ));
 
-        let locks = epoch_store
-            .get_owned_object_locks_map(&[owned_object_ref])
-            .unwrap();
+        let locks = epoch_store.get_owned_object_locks_map(&[owned_object_ref]);
         assert_eq!(locks.get(&owned_object_ref), Some(&winner_digest));
         assert!(
             epoch_store
@@ -4332,8 +4319,7 @@ mod tests {
             epoch_store.consensus_messages_processed_notify(vec![loser_key]),
         )
         .await
-        .expect("processed notification for dropped transaction should resolve")
-        .unwrap();
+        .expect("processed notification for dropped transaction should resolve");
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -4346,7 +4332,6 @@ mod tests {
 
         let state = TestAuthorityBuilder::new()
             .with_starting_objects(&[gas_object.clone(), owned_object.clone()])
-            .skip_genesis_owner_index()
             .build()
             .await;
         let epoch_store = state.epoch_store_for_testing();
@@ -4399,7 +4384,6 @@ mod tests {
 
         let state = TestAuthorityBuilder::new()
             .with_starting_objects(&[gas_object.clone(), owned_object.clone()])
-            .skip_genesis_owner_index()
             .build()
             .await;
         let epoch_store = state.epoch_store_for_testing();
@@ -4469,7 +4453,6 @@ mod tests {
 
         let state = TestAuthorityBuilder::new()
             .with_starting_objects(&[gas_object.clone(), owned_object.clone()])
-            .skip_genesis_owner_index()
             .build()
             .await;
         let epoch_store = state.epoch_store_for_testing();

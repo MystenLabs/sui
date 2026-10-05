@@ -16,4 +16,4 @@ task 2, lines 13-21:
 //# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6102800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 6102800,  storage_rebate: 2621738, non_refundable_storage_fee: 262

@@ -48,8 +48,9 @@ questions:
   - How does spending work on Sui?
   - Why should I use spending?
 answer: >-
-  Token types cannot use the `store` ability to store other objects. Instead,
-  Tokens have a `spend` method.
+  Closed-Loop Tokens lack the `store` ability, so they use a `spend` method that
+  consumes the token and moves its balance into an `ActionRequest` for
+  confirmation or burning.
 ---
 
 [Closed-Loop Tokens](/onchain-finance/closed-loop-token) differ from standard `Coin` types in a key way: `Token` types do not have the `store` ability. This means you cannot store a `Token` inside another object or add it to a balance field the way you can with a `Coin`. An application that accepts a `Token` as payment cannot keep it.
