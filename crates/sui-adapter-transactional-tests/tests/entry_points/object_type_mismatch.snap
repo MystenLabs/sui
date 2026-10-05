@@ -27,21 +27,21 @@ task 3, lines 58-59:
 //# run test::m::mint_b --sender A
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 61-62:
 // object(4,0) = Wrapper<u64>
 //# run test::m::mint_wrapper_u64 --sender A
 created: object(4,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, lines 64-65:
 // object(5,0) = Wrapper<bool>
 //# run test::m::mint_wrapper_bool --sender A
 created: object(5,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 6, lines 67-68:
 // pass ObjB where &ObjA expected
@@ -95,28 +95,28 @@ task 14, lines 91-92:
 // happy paths (immutable ref)
 //# run test::m::take_a --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2218978, non_refundable_storage_fee: 222
 
 task 15, line 94:
 //# run test::m::take_wrapper_u64 --sender A --args object(4,0)
 mutated: object(0,0), object(4,0)
-gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 2249375, non_refundable_storage_fee: 225
 
 task 16, line 96:
 //# run test::m::take_generic --type-args test::m::ObjA --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2218978, non_refundable_storage_fee: 222
 
 task 17, lines 98-99:
 // happy paths (mutable ref)
 //# run test::m::take_a_mut --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2218978, non_refundable_storage_fee: 222
 
 task 18, line 101:
 //# run test::m::take_wrapper_u64_mut --sender A --args object(4,0)
 mutated: object(0,0), object(4,0)
-gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 2249375, non_refundable_storage_fee: 225
 
 task 19, lines 103-105:
 // by-value mismatches (these consume the object, so test mismatches first)
@@ -142,22 +142,22 @@ task 22, lines 113-114:
 //# run test::m::destroy_a --sender A --args object(2,0)
 mutated: object(0,0)
 deleted: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2218978, non_refundable_storage_fee: 222
 
 task 23, line 116:
 //# run test::m::destroy_wrapper_u64 --sender A --args object(4,0)
 mutated: object(0,0)
 deleted: object(4,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2249375, non_refundable_storage_fee: 225
 
 task 24, line 118:
 //# run test::m::destroy_wrapper_bool --sender A --args object(5,0)
 mutated: object(0,0)
 deleted: object(5,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2249375, non_refundable_storage_fee: 225
 
 task 25, line 120:
 //# run test::m::destroy_b --sender A --args object(3,0)
 mutated: object(0,0)
 deleted: object(3,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2218978, non_refundable_storage_fee: 222

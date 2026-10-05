@@ -65,6 +65,6 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
         },
     },
     balance: sui::balance::Balance<sui::sui::SUI> {
-        value: 299900497002120u64,
+        value: 299900497011901u64,
     },
 }

@@ -24,7 +24,7 @@ task 3, line 76:
 //# run test::m::child --sender A
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 78-79:
 // This aborts because shared objects cannot be added as dynamic fields
