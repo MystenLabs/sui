@@ -335,6 +335,7 @@ pub struct FullnodeConfigBuilder {
     network_key_pair: Option<KeyPairWithPath>,
     run_with_range: Option<RunWithRange>,
     data_ingestion_dir: Option<PathBuf>,
+    num_epochs_to_retain: Option<u64>,
     disable_pruning: bool,
     chain_override: Option<Chain>,
     transaction_driver_config: Option<TransactionDriverConfig>,
@@ -422,6 +423,11 @@ impl FullnodeConfigBuilder {
 
     pub fn with_disable_pruning(mut self, disable_pruning: bool) -> Self {
         self.disable_pruning = disable_pruning;
+        self
+    }
+
+    pub fn with_num_epochs_to_retain(mut self, num_epochs_to_retain: u64) -> Self {
+        self.num_epochs_to_retain = Some(num_epochs_to_retain);
         self
     }
 
@@ -643,6 +649,9 @@ impl FullnodeConfigBuilder {
         };
 
         let mut pruning_config = AuthorityStorePruningConfig::default();
+        if let Some(num_epochs_to_retain) = self.num_epochs_to_retain {
+            pruning_config.set_num_epochs_to_retain(num_epochs_to_retain);
+        }
         if self.disable_pruning {
             pruning_config.set_num_epochs_to_retain_for_checkpoints(None);
             pruning_config.set_num_epochs_to_retain(u64::MAX);

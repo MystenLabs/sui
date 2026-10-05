@@ -1190,6 +1190,7 @@ pub struct TestClusterBuilder {
     validators: Option<Vec<ValidatorGenesisConfig>>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
+    fullnode_num_epochs_to_retain: Option<u64>,
     disable_fullnode_pruning: bool,
     validator_supported_protocol_versions_config: ProtocolVersionsConfig,
     // Default to validator_supported_protocol_versions_config, but can be overridden.
@@ -1239,6 +1240,7 @@ impl TestClusterBuilder {
             num_validators: None,
             validators: None,
             enable_fullnode_events: false,
+            fullnode_num_epochs_to_retain: None,
             disable_fullnode_pruning: false,
             validator_supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             fullnode_supported_protocol_versions_config: None,
@@ -1369,6 +1371,11 @@ impl TestClusterBuilder {
 
     pub fn disable_fullnode_pruning(mut self) -> Self {
         self.disable_fullnode_pruning = true;
+        self
+    }
+
+    pub fn with_fullnode_num_epochs_to_retain(mut self, num_epochs_to_retain: u64) -> Self {
+        self.fullnode_num_epochs_to_retain = Some(num_epochs_to_retain);
         self
     }
 
@@ -1747,6 +1754,10 @@ impl TestClusterBuilder {
 
         if self.disable_fullnode_pruning {
             builder = builder.with_disable_fullnode_pruning();
+        }
+
+        if let Some(num_epochs_to_retain) = self.fullnode_num_epochs_to_retain {
+            builder = builder.with_fullnode_num_epochs_to_retain(num_epochs_to_retain);
         }
 
         if let Some(validator_observer_config) = self.validator_observer_config.take() {

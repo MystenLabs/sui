@@ -64,6 +64,7 @@ pub struct SwarmBuilder<R = OsRng> {
     fullnode_run_with_range: Option<RunWithRange>,
     global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
     funds_withdraw_scheduler_type_config: Option<FundsWithdrawSchedulerTypeConfig>,
+    fullnode_num_epochs_to_retain: Option<u64>,
     disable_fullnode_pruning: bool,
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
     peer_deny_sync_config:
@@ -101,6 +102,7 @@ impl SwarmBuilder {
             fullnode_run_with_range: None,
             global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig::Global(true),
             funds_withdraw_scheduler_type_config: None,
+            fullnode_num_epochs_to_retain: None,
             disable_fullnode_pruning: false,
             state_sync_config: None,
             peer_deny_sync_config: None,
@@ -139,6 +141,7 @@ impl<R> SwarmBuilder<R> {
             fullnode_run_with_range: self.fullnode_run_with_range,
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
             funds_withdraw_scheduler_type_config: self.funds_withdraw_scheduler_type_config,
+            fullnode_num_epochs_to_retain: self.fullnode_num_epochs_to_retain,
             disable_fullnode_pruning: self.disable_fullnode_pruning,
             state_sync_config: self.state_sync_config,
             peer_deny_sync_config: self.peer_deny_sync_config,
@@ -376,6 +379,11 @@ impl<R> SwarmBuilder<R> {
         self.disable_fullnode_pruning = true;
         self
     }
+
+    pub fn with_fullnode_num_epochs_to_retain(mut self, num_epochs_to_retain: u64) -> Self {
+        self.fullnode_num_epochs_to_retain = Some(num_epochs_to_retain);
+        self
+    }
 }
 
 impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
@@ -486,6 +494,11 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .with_run_with_range(self.fullnode_run_with_range)
             .with_data_ingestion_dir(ingest_data)
             .with_disable_pruning(self.disable_fullnode_pruning);
+
+        if let Some(num_epochs_to_retain) = self.fullnode_num_epochs_to_retain {
+            fullnode_config_builder =
+                fullnode_config_builder.with_num_epochs_to_retain(num_epochs_to_retain);
+        }
 
         if let Some(state_sync_config) = self.state_sync_config.clone() {
             fullnode_config_builder =
