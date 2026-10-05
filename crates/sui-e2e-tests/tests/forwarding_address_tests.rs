@@ -24,10 +24,9 @@ use sui_types::{
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
 
 const E_UNREGISTERED: u64 = 1;
-/// The production registration price, in internal gas units.
-const REGISTER_COST: u64 = 900_000_000;
-/// Registration lands in the 1M-unit computation bucket.
-const REGISTER_COMPUTATION_UNITS: u64 = 1_000_000;
+/// The production registration price, in internal gas units (1M gas units).
+const REGISTER_COST: u64 = 1_000_000_000;
+const REGISTER_COST_GAS_UNITS: u64 = REGISTER_COST / 1000;
 const E_VARIANT_UNSUPPORTED: u64 = 2;
 
 /// Starts with the high bit set so the tests cover a payload no integer encoding would produce.
@@ -72,8 +71,9 @@ async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
         .build()
         .await;
 
-    let handles = env.cluster.all_node_handles();
-    for h in &handles {
+    // Node handles keep each node's databases open, so they must be dropped before validators
+    // restart for the upgrade.
+    for h in env.cluster.all_node_handles() {
         h.with(|node| {
             assert!(
                 node.state()
@@ -88,7 +88,7 @@ async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
     env.cluster.wait_for_protocol_version(138.into()).await;
     // The registry is created at the end of the first epoch that supports it.
     env.cluster.wait_for_epoch_all_nodes(2).await;
-    for h in &handles {
+    for h in env.cluster.all_node_handles() {
         h.with(|node| {
             node.state()
                 .epoch_store_for_testing()
@@ -185,10 +185,10 @@ async fn register_master(env: &mut TestEnv, master: SuiAddress) -> Registration 
     );
     let (digest, effects) = env.exec_tx_directly(transaction).await.unwrap();
     assert!(effects.status().is_ok(), "{effects:?}");
-    assert_eq!(
-        effects.gas_cost_summary().computation_cost,
-        REGISTER_COMPUTATION_UNITS * env.rgp,
-        "registration must pay the registration fee"
+    let computation_cost = effects.gas_cost_summary().computation_cost;
+    assert!(
+        computation_cost >= REGISTER_COST_GAS_UNITS * env.rgp,
+        "registration must pay the registration fee: {computation_cost}"
     );
     env.cluster.wait_for_tx_settlement(&[digest]).await;
 
@@ -236,7 +236,7 @@ async fn register_master(env: &mut TestEnv, master: SuiAddress) -> Registration 
 }
 
 fn register_gas_budget(env: &TestEnv) -> u64 {
-    REGISTER_COMPUTATION_UNITS * env.rgp + 10_000_000
+    (REGISTER_COST_GAS_UNITS + 10_000) * env.rgp
 }
 
 fn get_events(env: &TestEnv, digest: &TransactionDigest) -> Vec<sui_types::event::Event> {

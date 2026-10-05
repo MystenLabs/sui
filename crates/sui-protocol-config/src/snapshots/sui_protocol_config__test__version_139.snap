@@ -304,7 +304,7 @@ package_original_package_id_impl_cost_base: 52
 package_original_package_id_impl_cost_per_byte: 15
 forwarding_address_resolve_cost_base: 52
 forwarding_address_resolve_lookup_cost_base: 7680
-forwarding_address_register_cost_base: 900000000
+forwarding_address_register_cost_base: 1000000000
 forwarding_address_max_variant: 0
 dynamic_field_hash_type_and_key_cost_base: 52
 dynamic_field_hash_type_and_key_type_cost_per_byte: 2

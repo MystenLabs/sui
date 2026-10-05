@@ -11,9 +11,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     MoveTypeTagTrait, SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_ADDRESS,
-    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
-    dynamic_field::{DynamicFieldInfo, DynamicFieldKey, Field},
-    error::{SuiErrorKind, SuiResult},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    dynamic_field::DynamicFieldKey,
+    error::SuiResult,
     storage::RuntimeObjectResolver,
 };
 
@@ -86,29 +86,6 @@ impl MasterRecordKey {
             self.0,
             TypeTag::U32,
         )
-    }
-
-    pub fn object_id(self) -> SuiResult<ObjectID> {
-        self.dynamic_field_key().object_id()
-    }
-
-    /// Move type of the field object, `Field<u32, MasterRecord>`.
-    pub fn object_type() -> MoveObjectType {
-        DynamicFieldInfo::dynamic_field_type(TypeTag::U32, MasterRecord::get_type_tag()).into()
-    }
-
-    /// Decodes the BCS contents of the field object.
-    pub fn decode(self, contents: &[u8]) -> SuiResult<MasterRecord> {
-        let field: Field<u32, MasterRecord> = bcs::from_bytes(contents)
-            .map_err(|err| SuiErrorKind::DynamicFieldReadError(err.to_string()))?;
-        if field.name != self.0 {
-            return Err(SuiErrorKind::DynamicFieldReadError(format!(
-                "master record for id {} is keyed by {}",
-                self.0, field.name
-            ))
-            .into());
-        }
-        Ok(field.value)
     }
 
     /// Reads the record as of `registry_version`; `None` if the id is unregistered.
@@ -221,7 +198,7 @@ mod tests {
     }
 
     #[test]
-    fn master_record_field_round_trips_through_the_registry_schema() {
+    fn master_record_loads_through_the_registry_schema() {
         let key = MasterRecordKey(0x688990c0);
         let master = SuiAddress::random_for_testing_only();
         let field = key
@@ -231,14 +208,6 @@ mod tests {
         let move_object = field
             .into_move_object_unsafe_for_testing(SequenceNumber::from_u64(3))
             .unwrap();
-        assert_eq!(move_object.id(), key.object_id().unwrap());
-        assert_eq!(move_object.type_(), &MasterRecordKey::object_type());
-        assert_eq!(
-            key.decode(move_object.contents()).unwrap(),
-            MasterRecord { master }
-        );
-        assert!(MasterRecordKey(1).decode(move_object.contents()).is_err());
-
         let registry_version = SequenceNumber::from_u64(5);
         let registry = Object::with_id_owner_version_for_testing(
             SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,

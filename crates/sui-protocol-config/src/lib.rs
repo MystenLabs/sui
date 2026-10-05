@@ -4829,9 +4829,8 @@ impl ProtocolConfig {
                         // The registry and a master record together meter at about 490 bytes.
                         cfg.forwarding_address_resolve_lookup_cost_base =
                             Some(512 * cfg.obj_access_cost_read_per_byte());
-                        // 900K gas units, which leaves room for the rest of a registration inside
-                        // the 1M-unit computation bucket: about 1 SUI at a 1,000 MIST gas price.
-                        cfg.forwarding_address_register_cost_base = Some(900_000_000);
+                        // 1M gas units: about 1 SUI at a 1,000 MIST gas price.
+                        cfg.forwarding_address_register_cost_base = Some(1_000_000_000);
                         cfg.forwarding_address_max_variant = Some(0);
                     }
                     cfg.storage_rebate_rate = Some(9999);
