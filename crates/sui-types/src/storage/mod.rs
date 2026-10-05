@@ -253,6 +253,7 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
 /// Resolves the transaction-scoped funds state during execution: available object balances and
 /// forwarding-address masters, both read as of the system-object versions consensus assigned to
 /// this transaction. Neither sees writes made earlier in the same transaction.
+// FIXME: rename this trait now that it resolves more than object funds.
 pub trait ObjectFundsResolver {
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
     /// The master address registered for `master_id`, or `None` if it is unregistered.
