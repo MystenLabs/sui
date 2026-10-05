@@ -1,15 +1,28 @@
 # Forwarding Address Registry: ownership, rotation, brakes
 
 Status: proposal for the Move team, 2026-09-30, updated 2026-10-02 with the address format and
-ID allocation now implemented in #27990 (step 1 below). #27989 is merged.
+ID allocation now implemented in #27990 (step 1 below), and 2026-10-05 with the registration fee
+(step 3) and how resolution reads the registry. #27989 is merged.
 
 ## Where we are
 
 #27989 makes the registry an implicitly read system object, i.e. consensus pins its version per
-transaction and the native reads it at that version. #27990 adds the Move side:
-`balance::send_funds` resolves a forwarding address through the registry, credits the master,
-emits `ForwardingDeposit<T>`, and aborts if the id is not registered. The registry assigns master
-IDs and hands the registrant a `MasterCap`, so there is no id to front-run.
+transaction. #27990 adds the Move side: `balance::send_funds` resolves a forwarding address through
+the registry, credits the master, emits `ForwardingDeposit<T>`, and aborts if the id is not
+registered. The registry assigns master IDs and hands the registrant a `MasterCap`, so there is no
+id to front-run.
+
+- Resolution reads the master record the way object funds withdrawals read accumulator balances:
+  straight from the store, bounded by the registry version consensus assigned to the transaction
+  (`ObjectFundsResolver::forwarding_master`). It does not see writes made earlier in the same
+  transaction, so registering and depositing to the new id in one PTB aborts as unregistered.
+- The native charges `forwarding_address_resolve_cost_base` for every deposit, and
+  `forwarding_address_resolve_lookup_cost_base` once the address parses as a supported forwarding
+  address, before the read, so an unregistered id pays for its lookup too.
+- Rollout: the registry is created by an end-of-epoch transaction from 132, and resolution is
+  enabled in 139. A chain must reach a version that creates the registry before it reaches one that
+  enables forwarding (create and enable ship in different releases). Once enabled, a transaction
+  without an assigned registry version is an execution invariant violation, not an abort.
 
 Address layout (`crates/sui-types/src/forwarding_address.rs`, all integers little-endian):
 
@@ -72,16 +85,16 @@ public struct MasterRecord has store { master: address }
 public struct PausedKey has copy, drop, store { master_id: u32 }    // -> bool
 public struct PendingKey has copy, drop, store { master_id: u32 }   // -> Pending { new_master: address, effective_epoch: u64 }
 
-// id = lowbias32(counter); charged via a native with its own cost param
+// id = lowbias32(counter); charges `forwarding_address_register_cost_base` via a native
 public fun register(registry: &mut ForwardingAddressRegistry, ctx: &mut TxContext): MasterCap;
 
 public fun pause(registry: &mut ForwardingAddressRegistry, cap: &MasterCap);
-public fun pause_by_master(registry: &mut ForwardingAddressRegistry, master_id: u64, ctx: &TxContext);
+public fun pause_by_master(registry: &mut ForwardingAddressRegistry, master_id: u32, ctx: &TxContext);
 public fun unpause(registry: &mut ForwardingAddressRegistry, cap: &MasterCap);
 
 public fun propose_rotation(registry: &mut ForwardingAddressRegistry, cap: &MasterCap, new_master: address, ctx: &TxContext);
 public fun cancel_rotation(registry: &mut ForwardingAddressRegistry, cap: &MasterCap);
-public fun cancel_rotation_by_master(registry: &mut ForwardingAddressRegistry, master_id: u64, ctx: &TxContext);
+public fun cancel_rotation_by_master(registry: &mut ForwardingAddressRegistry, master_id: u32, ctx: &TxContext);
 public fun finalize_rotation(registry: &mut ForwardingAddressRegistry, cap: &MasterCap, ctx: &TxContext);
 
 // Native. Reads the master record and the paused field, ignores pending. Aborts when paused,
@@ -95,7 +108,7 @@ Why each piece:
   only makes ids non-enumerable; sequential would be just as safe. Deriving from the master address
   is worse because it ties the id to the exact key we want to be able to replace.
 - Registration cost goes through gas: `register` calls a native with a large base cost in protocol
-  config. Validators get paid the normal way, so no treasury or distribution question. The dynamic
+  config (1M gas units in 139). Validators get paid the normal way, so no treasury or distribution question. The dynamic
   field storage fee applies on top and never gets rebated in practice, since records are never
   deleted.
 - Rotation is two-step with a delay (one epoch to start, a registry constant so we can tune it
