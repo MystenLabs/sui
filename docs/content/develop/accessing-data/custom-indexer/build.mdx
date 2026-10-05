@@ -129,7 +129,7 @@ Replace your `Cargo.toml` code with the following configuration and save.
 
 The manifest now includes the following dependencies:
 
-- `sui-indexer-alt-framework`: Core framework providing pipeline infrastructure.
+- `sui-indexer-alt-framework`: Core framework providing pipeline infrastructure. The manifest tracks the `testnet` branch rather than pinning a release, which [Keep the framework dependency current](/develop/accessing-data/custom-indexer/custom-indexers#dependency-currency) explains. Keep it up to date with every release.
 - `diesel/diesel-async`: Type-safe database ORM with asynchronous support.
 - `tokio`: Async runtime required by the framework.
 - `clap`: Command-line argument parsing for configuration.

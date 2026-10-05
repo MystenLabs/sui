@@ -26,19 +26,19 @@ task 3, line 86:
 //# run a::m::t1 --sender A --args object(2,0)
 created: object(3,0)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 4248400,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
+gas summary: computation_cost: 1000000, storage_cost: 4248400,  storage_rebate: 2211379, non_refundable_storage_fee: 221
 
 task 4, line 88:
 //# run a::m::t2 --sender A --args object(2,0)
 mutated: object(0,0), object(2,0), object(3,0)
-gas summary: computation_cost: 1000000, storage_cost: 4248400,  storage_rebate: 4205916, non_refundable_storage_fee: 42484
+gas summary: computation_cost: 1000000, storage_cost: 4248400,  storage_rebate: 4247975, non_refundable_storage_fee: 425
 
 task 5, line 90:
 //# run a::m::t3 --sender A --args object(2,0)
 created: object(5,0)
 mutated: object(0,0)
 wrapped: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
+gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2211379, non_refundable_storage_fee: 221
 
 task 6, line 92:
 //# view-object 3,0
@@ -64,14 +64,14 @@ Contents: sui::dynamic_field::Field<u64, a::m::Counter> {
 task 7, line 94:
 //# run a::m::t4 --sender A --args object(5,0)
 mutated: object(0,0), object(5,0)
-gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2460348, non_refundable_storage_fee: 24852
+gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2484951, non_refundable_storage_fee: 249
 
 task 8, line 96:
 //# run a::m::t5 --sender A --args object(5,0)
 mutated: object(0,0)
 deleted: object(5,0)
 unwrapped_then_deleted: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2460348, non_refundable_storage_fee: 24852
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2484951, non_refundable_storage_fee: 249
 
 task 9, line 98:
 //# view-object 3,0

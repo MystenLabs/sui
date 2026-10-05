@@ -28,7 +28,7 @@ use move_compiler::{
         lexer::{Lexer, Tok},
     },
 };
-use move_package_alt::MoveFlavor;
+use move_package::MoveFlavor;
 use move_symbol_pool::Symbol;
 
 use std::{

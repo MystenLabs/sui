@@ -12,8 +12,8 @@ move-abstract-interpreter.workspace = true
 move-binary-format.workspace = true
 move-command-line-common.workspace = true
 move-model-2.workspace = true
-move-package-alt.workspace = true
-move-package-alt-compilation.workspace = true
+move-package.workspace = true
+move-package-compilation.workspace = true
 move-symbol-pool.workspace = true
 move-core-types.workspace = true
 

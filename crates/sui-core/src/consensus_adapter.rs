@@ -905,13 +905,11 @@ impl ConsensusAdapter {
             // when different transactions are observed through different paths.
             notifications.push(async move {
                 tokio::select! {
-                    processed = epoch_store.consensus_messages_processed_notify(vec![transaction_key]) => {
-                        processed.expect("Storage error when waiting for consensus message processed");
+                    _ = epoch_store.consensus_messages_processed_notify(vec![transaction_key]) => {
                         self.metrics.sequencing_certificate_processed.with_label_values(&["consensus"]).inc();
                         return ProcessedMethod::ConsensusMessageProcessed;
                     },
-                    processed = epoch_store.transactions_executed_in_checkpoint_notify(transaction_digests), if !transaction_digests.is_empty() => {
-                        processed.expect("Storage error when waiting for transaction executed in checkpoint");
+                    _ = epoch_store.transactions_executed_in_checkpoint_notify(transaction_digests), if !transaction_digests.is_empty() => {
                         self.metrics.sequencing_certificate_processed.with_label_values(&["checkpoint"]).inc();
                     }
                     _ = checkpoint_synced_future => {

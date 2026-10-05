@@ -7,8 +7,8 @@ use std::{
     path::Path,
 };
 
-use move_package_alt::MoveFlavor;
-use move_package_alt_compilation::{build_config::BuildConfig, find_env};
+use move_package::MoveFlavor;
+use move_package_compilation::{build_config::BuildConfig, find_env};
 
 use super::reroot_path;
 

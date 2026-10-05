@@ -34,6 +34,10 @@ answer: >-
 
 Fiat on-ramp providers enable you to buy Sui-native tokens (SUI, WAL, DEEP, and others) using fiat currency from a user's bank account, card, or payment method. Embedding an on-ramp provider into your app allows users to fund their Sui wallets with traditional currency without leaving your interface. Verify current provider capabilities before integrating.
 
+Multiple third-party providers support Sui on-ramp integration, including Banxa, Stripe, Coinbase, Meld, and Onramper. Each provider differs in supported assets, regional availability, and integration method. Choose a provider based on the assets your app requires, the regions your users are in, and whether you need a hosted widget or a direct API.
+
+## What fiat on-ramp providers support Sui?
+
 The following table summarizes providers with live Sui on-ramp integration as of August 2026. All columns refer to Sui chain and Sui asset support specifically.
 
 :::info
@@ -53,5 +57,17 @@ On-ramp coverage is evolving. Provider asset support and regional availability c
 | [CoinVoyage](https://www.coinvoyage.io/) | Sui Dollar | [CoinVoyage docs](https://docs.coinvoyage.io/sdk/paykit-headless#sui-payment-signatures) |
 | [Onramper](https://onramper.com/) | SUI | [Onramper docs](https://docs.onramper.com/docs/network-support) |
 | [Meld](https://www.meld.io) | SUI, USDC, CETUS, NAVI | [Meld docs](https://www.meld.io/coverage/service-providers?cryptoCurrencies=SUI) |
+
+## How do I choose an on-ramp provider?
+
+Selecting a provider depends on three factors:
+
+- **Asset support:** Confirm the provider supports the specific token your app requires. SUI is broadly supported, but tokens like WAL, DEEP, CETUS, and NAVI are available through fewer providers.
+- **Regional availability:** Most providers restrict service in certain countries due to regulatory requirements. Check the provider's coverage map before committing to an integration.
+- **Integration method:** Providers offer different integration surfaces. Some offer hosted checkout widgets you embed with a URL or iframe. Others offer REST APIs you call server-side. Choose based on how much control you need over the user experience.
+
+## How do I integrate an on-ramp provider into a Sui app?
+
+Most providers support a hosted widget approach. You construct a URL with query parameters that pre-fill the user's wallet address, preferred asset, and source currency. The user completes the purchase inside the provider's interface, and the provider delivers tokens directly to the wallet address you supplied.
 
 See [Fiat Off-Ramps](/onchain-finance/asset-custody/fiat-off-ramps) for the full off-ramp provider list.
