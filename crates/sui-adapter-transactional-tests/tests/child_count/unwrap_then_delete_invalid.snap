@@ -25,11 +25,11 @@ task 3, line 48:
 //# run test::m::add --sender A --args object(2,0) 0
 created: object(3,0), object(3,1)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 4, line 50:
 //# run test::m::wrap --sender A --args object(2,0)
 created: object(4,0)
 mutated: object(0,0)
 wrapped: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2439600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2439600,  storage_rebate: 2196180, non_refundable_storage_fee: 220

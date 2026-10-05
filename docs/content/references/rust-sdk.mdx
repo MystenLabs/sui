@@ -50,11 +50,11 @@ The legacy SDK crate lives in the [`crates/sui-sdk` directory](https://github.co
 
 ### Installation
 
-Add the crate to your `Cargo.toml`:
+Add the crate to your `Cargo.toml`, tracking the `testnet` branch so BCS type definitions stay ahead of the transactions that use them:
 
 ```toml
 [dependencies]
-sui-sdk = { git = "https://github.com/MystenLabs/sui.git", package = "sui-sdk" }
+sui-sdk = { git = "https://github.com/MystenLabs/sui.git", package = "sui-sdk", branch = "testnet" }
 ```
 
 ### SDK reference
