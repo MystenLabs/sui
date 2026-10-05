@@ -110,6 +110,10 @@ tx.moveCall({
   typeArguments: [BASE_TYPE, QUOTE_TYPE],
 });
 
+// 5. Send the remainder (your profit, or a zero-value coin) back to yourself.
+//    Every coin a PTB produces must be used, or the transaction aborts.
+tx.transferObjects([baseCoin], signer.toSuiAddress());
+
 await client.signAndExecuteTransaction({ signer, transaction: tx });
 ```
 
