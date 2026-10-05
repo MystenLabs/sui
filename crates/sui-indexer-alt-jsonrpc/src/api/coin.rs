@@ -18,8 +18,6 @@ use sui_json_rpc_types::Balance;
 use sui_json_rpc_types::Coin;
 use sui_json_rpc_types::Page as PageResponse;
 use sui_json_rpc_types::SuiCoinMetadata;
-use sui_open_rpc::Module;
-use sui_open_rpc_macros::open_rpc;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -43,7 +41,6 @@ use crate::paginate::BcsCursor;
 use crate::paginate::Cursor as _;
 use crate::paginate::Page;
 
-#[open_rpc(namespace = "suix", tag = "Coin API")]
 #[rpc(server, namespace = "suix")]
 trait CoinsApi {
     /// Return Coin objects owned by an address with a specified coin type.
@@ -51,13 +48,13 @@ trait CoinsApi {
     #[method(name = "getCoins")]
     async fn get_coins(
         &self,
-        /// the owner's Sui address
+        // the owner's Sui address
         owner: SuiAddress,
-        /// optional coin type
+        // optional coin type
         coin_type: Option<String>,
-        /// optional paging cursor
+        // optional paging cursor
         cursor: Option<String>,
-        /// maximum number of items per page
+        // maximum number of items per page
         limit: Option<usize>,
     ) -> RpcResult<PageResponse<Coin, String>>;
 
@@ -67,7 +64,7 @@ trait CoinsApi {
     #[method(name = "getCoinMetadata")]
     async fn get_coin_metadata(
         &self,
-        /// type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        // type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
         coin_type: String,
     ) -> RpcResult<Option<SuiCoinMetadata>>;
 
@@ -75,7 +72,7 @@ trait CoinsApi {
     #[method(name = "getAllBalances")]
     async fn get_all_balances(
         &self,
-        /// the owner's Sui address
+        // the owner's Sui address
         owner: SuiAddress,
     ) -> RpcResult<Vec<Balance>>;
 
@@ -84,9 +81,9 @@ trait CoinsApi {
     #[method(name = "getBalance")]
     async fn get_balance(
         &self,
-        /// the owner's Sui address
+        // the owner's Sui address
         owner: SuiAddress,
-        /// optional type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
+        // optional type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
         coin_type: Option<String>,
     ) -> RpcResult<Balance>;
 }
@@ -317,10 +314,6 @@ impl CoinsApiServer for Coins {
 }
 
 impl RpcModule for Coins {
-    fn schema(&self) -> Module {
-        CoinsApiOpenRpc::module_doc()
-    }
-
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }

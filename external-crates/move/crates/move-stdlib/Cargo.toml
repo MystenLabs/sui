@@ -18,8 +18,8 @@ move-core-types.workspace = true
 walkdir.workspace = true
 anyhow.workspace = true
 hex.workspace = true
-move-package-alt-compilation.workspace = true
-move-package-alt.workspace = true
+move-package-compilation.workspace = true
+move-package.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]

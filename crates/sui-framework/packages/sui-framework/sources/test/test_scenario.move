@@ -54,6 +54,11 @@ const EBalanceOverflow: u64 = 9;
 /// withdrawal input must
 const EZeroWithdrawal: u64 = 10;
 
+#[allow(unused_const)]
+/// A transaction withdrew more funds from an owner than it had, through a withdrawal that was not
+/// reserved against those funds (e.g. one kept from an earlier transaction)
+const EUnbackedWithdrawal: u64 = 11;
+
 /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.
 /// A `Scenario` maintains a view of the global object pool built up by the execution.
 /// These objects can be accessed via functions like `take_from_sender`, which gives the

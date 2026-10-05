@@ -21,9 +21,9 @@ gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 
 task 3, line 31:
 //# run Test::M::set_to_epoch --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2272173, non_refundable_storage_fee: 227
 
 task 4, line 33:
 //# run Test::M::check_is_epoch --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2272173, non_refundable_storage_fee: 227
