@@ -101,10 +101,11 @@ Why each piece:
 - Rotation is two-step with a delay (one epoch to start, a registry constant so we can tune it
   without a protocol bump). A thief needs both the cap and the master key to redirect funds, and
   holding either one is enough to cancel or pause. Pause is immediate; deposits abort while paused.
-- `propose_rotation` rejects a `new_master` that carries the forwarding magic. Resolution is one
-  step and never resolves the master again, so a forwarding-shaped master would strand every
-  deposit. `register` can't hit this: the master is the sender, and a key-derived address matching
-  the 10-byte magic takes about 2^80 attempts.
+- Resolution is one step and never resolves the master again, so a forwarding-shaped master
+  strands every deposit. Until chaining is decided (see open questions), `propose_rotation` must
+  reject a `new_master` that carries the forwarding magic. `register` can't hit this today: the
+  master is the sender, and a key-derived address matching the 10-byte magic takes about 2^80
+  attempts.
 - Brake: a second flag `freeze_forwarding_addresses`. When set, the native aborts for any pattern
   address. One epoch latency (protocol bump), which I think is acceptable for a brake; anything
   faster needs governance we don't have. Flag-off keeps meaning "pattern is an ordinary address"
@@ -148,7 +149,7 @@ for it.
 | --- | --- | --- | --- |
 | Payment app | Which deposits landed for master M, and from which forwarding address / payload? | `ForwardingDeposit<T> { forwarding_address, master, amount }` event; payload = bytes 15..32 of the address | Yes (#27990) |
 | Payment app | Given a payload, did invoice X get paid, how much, in which tx? | Same event, indexed by `(master, payload)` | Yes, needs an index |
-| Wallet / sender | Is this forwarding address registered, and to whom, right now? | Registry dynamic field `master_id -> MasterRecord` (`MasterRecordKey` in `sui-types` derives the field id and decodes it) | Yes, plain object read; GraphQL `dynamicField` works today |
+| Wallet / sender | Is this forwarding address registered, and to whom, right now? | Registry dynamic field `master_id -> MasterRecord` (`MasterRecordKey::load` in `sui-types` reads it at a registry version) | Yes, plain object read; GraphQL `dynamicField` works today |
 | Master | My record: master, paused, pending rotation, and its history | `MasterRecord`, `PausedKey` and `PendingKey` fields plus lifecycle events | Object yes; `MasterRegistered` yes, the rest no |
 | Master | Where is my `MasterCap`? | Owned object of type `MasterCap` | Yes, standard object index |
 | Anyone | Balances | Master's address balance; a forwarding address always stays at 0 | Yes, existing balance indexing |
@@ -178,8 +179,7 @@ registry does not make a layout change safe on a chain that already published th
 2. Pause + two-step rotation. `PausedKey` and `PendingKey` fields, the entry functions above, native
    checks `PausedKey`. Lifecycle events land here.
 3. Registration fee. Done in #27990: `register` calls `charge_registration_fee`, a native charging
-   `forwarding_address_register_cost_base` (900K gas units in 139, so a registration lands in the
-   1M-unit computation bucket).
+   `forwarding_address_register_cost_base` (1M gas units in 139).
 4. Brake flag. `freeze_forwarding_addresses`, native aborts on any pattern address when set.
 5. Indexer pipeline + GraphQL fields (can run in parallel with 2 to 4 once the events exist).
 6. Later: object transfers to pattern addresses, testnet enablement.
@@ -196,5 +196,13 @@ registry does not make a layout change safe on a chain that already published th
   think abort.
 - Is 2^32 master ids enough for good, or do we want a 6-byte id (2^48, and 2^128 targeted
   grinding again) at the cost of a custom 48-bit mixer?
+- Should `register` accept a master other than the sender (for example a custodian registering
+  on behalf of a cold wallet)? Today the master is always `ctx.sender()`, which also rules out a
+  forwarding-shaped master by construction.
+- Should chaining be allowed, i.e. a master that is itself a forwarding address? If yes, resolution
+  needs a hop limit, gas per hop and an event per hop; if no, every path that sets a master
+  (`register` with a non-sender master, `propose_rotation`) must reject the magic.
+- Can an object address (a shared or owned object's ID) be a master, given nobody can sign for it
+  and its balance is only reachable through object funds withdrawals?
 - Do we want `MasterRecord` and the events readable from other Move packages (a
   `master_of(registry, id)` view), or is off-chain lookup enough for now?
