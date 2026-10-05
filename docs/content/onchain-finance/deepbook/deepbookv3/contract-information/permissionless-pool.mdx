@@ -140,7 +140,7 @@ The following example creates a `MYCOIN`/`USDC` pool using the DeepBook TypeScri
 The SDK takes human units, not MIST: tick size is a price, and lot size and min size are whole base coins. It converts them to onchain units for you. It also addresses assets by coin key rather than by full type, so register any coin the SDK does not already know about through the `coins` option.
 
 ```typescript
-import { deepbook } from '@mysten/deepbook-v3';
+import { deepbook, mainnetCoins } from '@mysten/deepbook-v3';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
@@ -154,6 +154,7 @@ const client = new SuiGrpcClient({
 	deepbook({
 		address: keypair.toSuiAddress(),
 		coins: {
+			...mainnetCoins,
 			MYCOIN: {
 				address: '0x…',
 				type: '0x…::mycoin::MYCOIN',
