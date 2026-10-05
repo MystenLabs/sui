@@ -709,3 +709,211 @@ async fn send_to_address_balance(
     let transaction = forwarding_address_deposit_transaction(env, sender, recipient, amount);
     env.exec_tx_directly(transaction).await.unwrap()
 }
+
+/// A PTB that withdraws `amount` from the shared object-balance vault and deposits it to
+/// `recipient`, optionally registering a master for the sender first. With `register`, the
+/// registry is a mutated input as well as read for resolution, and the accumulator root is read
+/// for the object balance.
+fn vault_withdraw_to_transaction(
+    env: &TestEnv,
+    sender: SuiAddress,
+    vault: (ObjectID, ObjectID, SequenceNumber),
+    amount: u64,
+    recipient: SuiAddress,
+    register: bool,
+) -> TransactionData {
+    let (package_id, vault_id, vault_initial_shared_version) = vault;
+    let mut builder = ProgrammableTransactionBuilder::new();
+    if register {
+        let registry = builder
+            .obj(ObjectArg::SharedObject {
+                id: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                initial_shared_version: forwarding_address_registry_initial_shared_version(env),
+                mutability: SharedObjectMutability::Mutable,
+            })
+            .unwrap();
+        let cap = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("forwarding_address").unwrap(),
+            Identifier::new("register").unwrap(),
+            vec![],
+            vec![registry],
+        );
+        builder.transfer_arg(sender, cap);
+    }
+    let vault = builder
+        .obj(ObjectArg::SharedObject {
+            id: vault_id,
+            initial_shared_version: vault_initial_shared_version,
+            mutability: SharedObjectMutability::Mutable,
+        })
+        .unwrap();
+    let amount = builder.pure(amount).unwrap();
+    let balance = builder.programmable_move_call(
+        package_id,
+        Identifier::new("object_balance").unwrap(),
+        Identifier::new("withdraw_funds").unwrap(),
+        vec![GAS::type_tag()],
+        vec![vault, amount],
+    );
+    let recipient = builder.pure(recipient).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec![GAS::type_tag()],
+        vec![balance, recipient],
+    );
+    TransactionData::new_programmable(
+        sender,
+        vec![env.get_gas_for_sender(sender)[0]],
+        builder.finish(),
+        register_gas_budget(env),
+        env.rgp,
+    )
+}
+
+async fn setup_shared_vault(
+    env: &mut TestEnv,
+    amount: u64,
+) -> (ObjectID, ObjectID, SequenceNumber) {
+    let sender = env.get_sender(0);
+    let tx = env
+        .tx_builder(sender)
+        .publish_examples("object_balance")
+        .await
+        .build();
+    let (_, effects) = env.exec_tx_directly(tx).await.unwrap();
+    let package_id = effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| owner.is_immutable())
+        .unwrap()
+        .0
+        .0;
+    let tx = env
+        .tx_builder(sender)
+        .move_call(package_id, "object_balance", "new_shared", vec![])
+        .build();
+    let (_, effects) = env.exec_tx_directly(tx).await.unwrap();
+    let (vault_ref, vault_owner) = effects.created().into_iter().next().unwrap();
+    let Owner::Shared {
+        initial_shared_version,
+    } = vault_owner
+    else {
+        panic!("vault must be shared, got {vault_owner:?}");
+    };
+    let gas = env.get_sender_and_gas(0).1;
+    let tx = env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(amount, vault_ref.0.into())])
+        .build();
+    env.exec_tx_directly(tx).await.unwrap();
+    env.trigger_reconfiguration().await;
+    (package_id, vault_ref.0, initial_shared_version)
+}
+
+/// Object funds withdrawals deposited to forwarding addresses, in the same consensus commit as
+/// registrations: some transactions mutate the registry and read it for resolution while also
+/// reading the accumulator root for the object balance, and others only read both.
+#[sim_test]
+async fn test_object_funds_forwarded_alongside_registrations_in_one_commit() {
+    let mut env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut config| {
+            config.set_create_forwarding_address_registry_for_testing(true);
+            set_forwarding_address_config_for_testing(&mut config);
+            config.set_enable_object_funds_withdraw_for_testing(true);
+            config.set_check_object_funds_withdraw_in_execution_for_testing(true);
+            config
+        }))
+        .build()
+        .await;
+    let master = env.get_sender(0);
+    let registration = register_master(&mut env, master).await;
+    let forwarding_address = ForwardingAddress::derive_opaque(registration.master_id, PAYLOAD);
+    let vault = setup_shared_vault(&mut env, 1000).await;
+    let initial_master_balance = env.get_sui_balance_ab(master);
+
+    // Registering withdrawers and a plain withdrawer, all resolving to the master, within the
+    // vault balance: every transaction succeeds.
+    let transactions = [
+        vault_withdraw_to_transaction(
+            &env,
+            env.get_sender(1),
+            vault,
+            300,
+            forwarding_address,
+            true,
+        ),
+        vault_withdraw_to_transaction(
+            &env,
+            env.get_sender(2),
+            vault,
+            300,
+            forwarding_address,
+            false,
+        ),
+        vault_withdraw_to_transaction(
+            &env,
+            env.get_sender(3),
+            vault,
+            300,
+            forwarding_address,
+            true,
+        ),
+    ];
+    let results = env
+        .cluster
+        .sign_and_execute_txns_in_soft_bundle(&transactions)
+        .await
+        .unwrap();
+    env.update_all_gas().await;
+    for (digest, effects) in &results {
+        assert!(effects.status().is_ok(), "{effects:?}");
+        let events = get_events(&env, digest);
+        let deposit = events
+            .iter()
+            .find(|event| event.type_.name.as_ident_str() == FORWARDING_DEPOSIT_STRUCT_NAME)
+            .expect("each withdrawal must emit ForwardingDeposit");
+        assert_forwarding_deposit(deposit, forwarding_address, master, 300);
+    }
+    let digests: Vec<_> = results.iter().map(|(digest, _)| *digest).collect();
+    env.cluster.wait_for_tx_settlement(&digests).await;
+    assert_eq!(env.get_sui_balance_ab(master), initial_master_balance + 900);
+
+    // Overdrawing the remaining 100 in the same commit as a registration: the registering
+    // transaction fails on the object balance, and its registration and deposit roll back.
+    let transactions = [
+        vault_withdraw_to_transaction(
+            &env,
+            env.get_sender(1),
+            vault,
+            600,
+            forwarding_address,
+            true,
+        ),
+        vault_withdraw_to_transaction(
+            &env,
+            env.get_sender(2),
+            vault,
+            100,
+            forwarding_address,
+            false,
+        ),
+    ];
+    let results = env
+        .cluster
+        .sign_and_execute_txns_in_soft_bundle(&transactions)
+        .await
+        .unwrap();
+    env.update_all_gas().await;
+    assert!(results[0].1.status().is_err(), "{:?}", results[0].1);
+    assert!(get_events(&env, &results[0].0).is_empty());
+    assert!(results[1].1.status().is_ok(), "{:?}", results[1].1);
+    let digests: Vec<_> = results.iter().map(|(digest, _)| *digest).collect();
+    env.cluster.wait_for_tx_settlement(&digests).await;
+    assert_eq!(
+        env.get_sui_balance_ab(master),
+        initial_master_balance + 1000
+    );
+}

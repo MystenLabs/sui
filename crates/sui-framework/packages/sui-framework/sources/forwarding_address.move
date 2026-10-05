@@ -134,9 +134,11 @@ fun create(ctx: &TxContext) {
     });
 }
 
+/// Shares the registry at its system object ID, where deposit resolution looks it up. Must be
+/// called by the system address, like `create`.
 #[test_only]
-public fun share_for_testing(ctx: &mut TxContext) {
-    transfer::share_object(ForwardingAddressRegistry { id: object::new(ctx) });
+public fun create_for_testing(ctx: &TxContext) {
+    create(ctx);
 }
 
 #[test_only]

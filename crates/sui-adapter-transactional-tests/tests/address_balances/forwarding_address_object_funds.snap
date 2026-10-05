@@ -1,0 +1,140 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 16 tasks
+
+// Mixes forwarding-address deposits with object funds withdrawals in one transaction, so the
+// accumulator root and the forwarding registry (0xfa) are both implicitly read, and the registry
+// is also a mutable or immutable input in some transactions.
+// A's master ID is 0x688990c0, so FA = 0xc0908968 fafafafafafafafafafa 00 0101...01 forwards to A.
+// B's registration below gets the second ID, 0xd1132181; a third would get 0x53f1e9dd, so
+// FC = 0xdde9f153 fafafafafafafafafafa 00 0101...01.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 13-36:
+//# publish --sender B
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7782400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 38:
+//# run test::obj_vault::new --sender B
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 40-42:
+//# programmable --sender B --inputs 1000 object(2,0)
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::obj_vault::fund(Input(1), Result(0));
+mutated: object(0,1), object(2,0)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 4, lines 44-46:
+//# programmable --sender A --inputs mutshared(250) @A --gas-budget 2000000000
+//> 0: sui::forwarding_address::register(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: A, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("MasterRegistered"), type_params: [] }, contents: [192, 144, 137, 104, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 63, 185, 250, 183, 112, 57, 62, 170, 127, 127, 16, 13, 128, 159, 74, 49, 72, 58, 205, 34, 98, 103, 56, 104, 165, 126, 147, 57, 176, 123, 185, 169] }
+created: object(4,0), object(4,1), object(4,2)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,0)
+gas summary: computation_cost: 1001000000, storage_cost: 7980000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 5, line 48:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, lines 50-52:
+//# programmable --sender B --inputs object(2,0) 100 @0xc0908968fafafafafafafafafafa000101010101010101010101010101010101
+// Object funds withdrawn from the vault and deposited to FA reach A.
+//> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
+events: Event { package_id: test, transaction_module: Identifier("obj_vault"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [192, 144, 137, 104, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 100, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1), object(2,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa, 0x0000000000000000000000000000000000000000000000000000000000000acc
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(6,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 7, lines 54-60:
+//# programmable --sender B --inputs mutshared(250) @B object(2,0) 100 @0xc0908968fafafafafafafafafafa000101010101010101010101010101010101 --gas-budget 2000000000
+// B registers, then withdraws from the vault and deposits to FA. The registry is a mutated input
+// and also read for resolution at the same version; A's record was committed earlier, so it
+// resolves.
+//> 0: sui::forwarding_address::register(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+//> 2: test::obj_vault::withdraw_to(Input(2), Input(3), Input(4));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("MasterRegistered"), type_params: [] }, contents: [129, 33, 19, 209, 211, 27, 123, 80, 104, 177, 57, 148, 28, 237, 197, 43, 3, 111, 85, 200, 148, 253, 57, 74, 23, 14, 43, 163, 66, 69, 163, 36, 241, 209, 108, 139, 138, 130, 0, 78, 248, 204, 73, 58, 227, 42, 222, 199, 194, 160, 228, 29, 146, 130, 54, 36, 103, 250, 237, 44, 183, 142, 69, 241, 125, 231, 173, 7] }, Event { package_id: test, transaction_module: Identifier("obj_vault"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [192, 144, 137, 104, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 100, 0, 0, 0, 0, 0, 0, 0] }
+created: object(7,0), object(7,1)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,1), object(2,0), object(4,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(6,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
+gas summary: computation_cost: 1001000000, storage_cost: 9279600,  storage_rebate: 5680620, non_refundable_storage_fee: 57380
+
+task 8, lines 62-68:
+//# programmable --sender B --inputs mutshared(250) @B object(2,0) 100 @0xdde9f153fafafafafafafafafafa000101010101010101010101010101010101 --gas-budget 2000000000
+// B registers again and deposits vault funds to the id this registration gets (FC). Resolution
+// does not see the new record, so the transaction aborts as unregistered (1) and the withdrawal
+// is rolled back with it.
+//> 0: sui::forwarding_address::register(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+//> 2: test::obj_vault::withdraw_to(Input(2), Input(3), Input(4));
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::forwarding_address::resolve_impl (function index 3) at offset 0, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 3, instruction: 0, function_name: Some("resolve_impl") }, 1) at command Some(2)
+
+task 9, lines 70-72:
+//# programmable --sender B --inputs mutshared(250) object(2,0) 100 @0xc0908968fafafafafafafafafafa000101010101010101010101010101010101
+// The registry as an unused mutable input: the deposit still resolves through it.
+//> 0: test::obj_vault::withdraw_to(Input(1), Input(2), Input(3));
+events: Event { package_id: test, transaction_module: Identifier("obj_vault"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [192, 144, 137, 104, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 100, 0, 0, 0, 0, 0, 0, 0] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,1), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(6,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
+gas summary: computation_cost: 1000000, storage_cost: 3807600,  storage_rebate: 3769524, non_refundable_storage_fee: 38076
+
+task 10, lines 74-76:
+//# programmable --sender B --inputs immshared(250) object(2,0) 100 @0xc0908968fafafafafafafafafafa000101010101010101010101010101010101
+// The registry as an unused immutable input together with its implicit read.
+//> 0: test::obj_vault::withdraw_to(Input(1), Input(2), Input(3));
+events: Event { package_id: test, transaction_module: Identifier("obj_vault"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [192, 144, 137, 104, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 100, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1), object(2,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa, 0x0000000000000000000000000000000000000000000000000000000000000acc
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(6,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 11, lines 78-82:
+//# programmable --sender B --inputs object(2,0) 100 @0xc0908968fafafafafafafafafafa000101010101010101010101010101010101 5000 @A
+// The forwarded deposit succeeds, then a second withdrawal exceeds the vault balance, so the
+// whole transaction fails and the forwarded deposit does not land.
+//> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
+//> 1: test::obj_vault::withdraw_to(Input(0), Input(3), Input(4));
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::funds_accumulator::reserve_object_funds_for_withdrawal (function index 10) at offset 0, Abort Code: 5
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 10, instruction: 0, function_name: Some("reserve_object_funds_for_withdrawal") }, 5), source: Some(VMError { major_status: ABORTED, sub_status: Some(5), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("funds_accumulator") }), indices: [], offsets: [(FunctionDefinitionIndex(10), 0)] }), command: Some(1) } }
+
+task 12, lines 84-86:
+//# programmable --sender B --inputs object(2,0) 100 @0x01000000fafafafafafafafafafa000101010101010101010101010101010101
+// Vault funds sent to an unregistered forwarding address abort (1) instead of stranding.
+//> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::forwarding_address::resolve_impl (function index 3) at offset 0, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 3, instruction: 0, function_name: Some("resolve_impl") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("forwarding_address") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 0)] }), command: Some(0) } }
+
+task 13, lines 88-93:
+//# programmable --sender B --inputs 300 object(2,0) 800 @0xc0908968fafafafafafafafafafa000202020202020202020202020202020202
+// Funding the vault and withdrawing more than its settled balance in one transaction, forwarded
+// to another FA payload: the in-transaction deposit counts toward the withdrawal.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::obj_vault::fund(Input(1), Result(0));
+//> 2: test::obj_vault::withdraw_to(Input(1), Input(2), Input(3));
+events: Event { package_id: test, transaction_module: Identifier("obj_vault"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [192, 144, 137, 104, 250, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 32, 3, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1), object(2,0)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa, 0x0000000000000000000000000000000000000000000000000000000000000acc
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 500), (object(6,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 800)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 14, line 95:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 15, line 97:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+1200

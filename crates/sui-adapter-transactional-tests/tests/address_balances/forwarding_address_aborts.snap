@@ -1,0 +1,72 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+// Deposits to forwarding-shaped addresses that cannot resolve abort instead of stranding funds.
+// The first registration is assigned master ID 0x688990c0 (LE bytes c0908968).
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-16:
+//# programmable --sender B --inputs mutshared(250) 1000 @0xc0908968fafafafafafafafafafa000101010101010101010101010101010101 --gas-budget 2000000000
+// Registering and depositing in one transaction: resolution reads the registry at the version
+// assigned to the transaction, so it does not see the new record and aborts as unregistered (1).
+// The registration is rolled back with the rest of the transaction.
+//> 0: sui::forwarding_address::register(Input(0));
+//> 1: TransferObjects([Result(0)], Input(2));
+//> 2: SplitCoins(Gas, [Input(1)]);
+//> 3: sui::coin::send_funds<sui::sui::SUI>(Result(2), Input(2));
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::forwarding_address::resolve_impl (function index 3) at offset 0, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 3, instruction: 0, function_name: Some("resolve_impl") }, 1) at command Some(3)
+
+task 2, lines 18-21:
+//# programmable --sender A --inputs mutshared(250) @A --gas-budget 2000000000
+// Still the first master ID, since the aborted registration allocated nothing.
+//> 0: sui::forwarding_address::register(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: A, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("MasterRegistered"), type_params: [] }, contents: [192, 144, 137, 104, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 63, 185, 250, 183, 112, 57, 62, 170, 127, 127, 16, 13, 128, 159, 74, 49, 72, 58, 205, 34, 98, 103, 56, 104, 165, 126, 147, 57, 176, 123, 185, 169] }
+created: object(2,0), object(2,1), object(2,2)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,0)
+gas summary: computation_cost: 1001000000, storage_cost: 7980000,  storage_rebate: 1504800, non_refundable_storage_fee: 15200
+
+task 3, lines 23-26:
+//# programmable --sender B --inputs 1000 @0x01000000fafafafafafafafafafa000101010101010101010101010101010101
+// Unregistered master ID: aborts with code 1.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::forwarding_address::resolve_impl (function index 3) at offset 0, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 3, instruction: 0, function_name: Some("resolve_impl") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("forwarding_address") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 0)] }), command: Some(1) } }
+
+task 4, lines 28-31:
+//# programmable --sender B --inputs 1000 @0xc0908968fafafafafafafafafafa010101010101010101010101010101010101
+// Registered master ID with variant 1, above forwarding_address_max_variant: aborts with code 2.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::forwarding_address::resolve_impl (function index 3) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 3, instruction: 0, function_name: Some("resolve_impl") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("forwarding_address") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 0)] }), command: Some(1) } }
+
+task 5, lines 33-35:
+//# programmable --sender B --inputs @0xc0908968fafafafafafafafafafa000101010101010101010101010101010101 --gas-budget 10000000
+// Sending the gas coin itself to a forwarding address is rejected, even when it would resolve.
+//> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
+Error: Transaction Effects Status: Attempted to used feature that is not supported yet
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("Sending the gas coin directly to a forwarding address is not supported"), command: Some(0) } }
+
+task 6, lines 37-40:
+//# programmable --sender B --inputs 1000 @0x0000000000fafafafafafafafafafa0001010101010101010101010101010101
+// Magic at the wrong offset is an ordinary address and is credited directly.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+mutated: object(0,1)
+accumulators_written: (object(6,0), _, sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 42:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 8, line 44:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+No funds accumulator object found

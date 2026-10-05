@@ -31,7 +31,7 @@ use move_vm_runtime::{
 use move_vm_runtime::{
     execution::{
         Type,
-        values::{self, StructRef, Value},
+        values::{self, Struct, StructRef, Value},
     },
     pop_arg,
 };
@@ -42,13 +42,13 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
 };
 use sui_types::{
-    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, TypeTag,
+    SUI_FRAMEWORK_ADDRESS, TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     config,
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
     execution::DynamicallyLoadedObjectMetadata,
-    forwarding_address::MasterRecordKey,
+    forwarding_address::{FORWARDING_ADDRESS_MODULE_NAME, MASTER_REGISTERED_STRUCT_NAME},
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
@@ -81,6 +81,10 @@ pub struct InMemoryTestStore {
     /// for a transaction's funds withdrawal inputs. Object withdrawals are reserved by the object
     /// runtime instead, under different rules.
     address_reservations: RefCell<BTreeMap<(SuiAddress, TypeTag), U256>>,
+    /// Forwarding master per master ID, as of the end of the previous transaction. Registry
+    /// records live in the scenario's object inventories rather than in `storage`, so each
+    /// transaction's `MasterRegistered` events are applied here when it ends.
+    forwarding_masters: RefCell<BTreeMap<u32, SuiAddress>>,
 }
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
@@ -119,6 +123,27 @@ impl InMemoryTestStore {
     /// the reservations it took, which only cover that transaction. Returns false if the
     /// transaction withdrew more from an owner than it had, which only a withdrawal that was not
     /// reserved against these balances (e.g. one kept from an earlier transaction) can do.
+    fn record_forwarding_registrations(
+        &self,
+        events: &[(StructTag, Value)],
+    ) -> PartialVMResult<()> {
+        for (tag, value) in events {
+            if tag.address != SUI_FRAMEWORK_ADDRESS
+                || tag.module.as_ident_str() != FORWARDING_ADDRESS_MODULE_NAME
+                || tag.name.as_ident_str() != MASTER_REGISTERED_STRUCT_NAME
+            {
+                continue;
+            }
+            let fields: Vec<Value> = value.copy_value().value_as::<Struct>()?.unpack().collect();
+            let [master_id, master, _cap_id]: [Value; 3] = safe_unwrap!(fields.try_into().ok());
+            self.forwarding_masters.borrow_mut().insert(
+                master_id.value_as::<u32>()?,
+                master.value_as::<AccountAddress>()?.into(),
+            );
+        }
+        Ok(())
+    }
+
     fn settle_funds(&self, accumulator_events: Vec<MoveAccumulatorEvent>) -> bool {
         self.address_reservations.borrow_mut().clear();
         let mut changes: BTreeMap<(SuiAddress, TypeTag), (u128, u128)> = BTreeMap::new();
@@ -167,17 +192,8 @@ impl ObjectFundsResolver for InMemoryTestStore {
         Ok(self.settled_funds(owner, type_))
     }
 
-    // Move unit tests have no sequencer; reads see the scenario's latest committed registry.
     fn forwarding_master(&self, master_id: u32) -> sui_types::error::SuiResult<Option<SuiAddress>> {
-        let registry_version = self
-            .storage
-            .borrow()
-            .get_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
-            .ok_or(sui_types::error::SuiErrorKind::ExecutionInvariantViolation)?
-            .version();
-        Ok(MasterRecordKey(master_id)
-            .load(self, registry_version)?
-            .map(|record| record.master))
+        Ok(self.forwarding_masters.borrow().get(&master_id).copied())
     }
 }
 
@@ -388,6 +404,7 @@ pub fn end_transaction(
     if !store.settle_funds(accumulator_events) {
         return Ok(NativeResult::err(legacy_test_cost(), E_UNBACKED_WITHDRAWAL));
     }
+    store.record_forwarding_registrations(&user_events)?;
 
     // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
