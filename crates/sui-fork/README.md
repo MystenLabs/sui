@@ -178,7 +178,6 @@ builds it from the manifest by fetching the exact seeded object versions.
 
 ## Limitations
 - Sequential execution: Transactions are executed one at a time, no parallelism.
-- Simulating transactions is currently not supported, so automatic gas estimation is not available via CLI or SDKs. All transactions require explicit gas budget.
 - Staking and related operations are not supported.
 - Single validator, single authority network.
 - Object fetching overhead: First access to objects requires network download.

@@ -34,7 +34,7 @@ Contents: Test::f::S {
 task 4, line 37:
 //# run Test::f::update_inner --args object(2,0)
 mutated: object(0,1), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 2203780, non_refundable_storage_fee: 220
 
 task 5, line 39:
 //# view-object 2,0
@@ -55,7 +55,7 @@ task 6, lines 41-70:
 //# upgrade --package Test --upgrade-capability 1,1 --sender A
 created: object(6,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 8314400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 8314400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 7, line 72:
 //# view-object 2,0
@@ -75,7 +75,7 @@ Contents: fake(1,0)::f::S {
 task 8, line 74:
 //# run Test::f::update_inner2 --args object(2,0)
 mutated: object(0,1), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2242152, non_refundable_storage_fee: 22648
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2264574, non_refundable_storage_fee: 226
 
 task 9, line 76:
 //# view-object 2,0

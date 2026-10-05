@@ -28,7 +28,7 @@ task 4, lines 60-62:
 //> sui::transfer::public_transfer<test::m::A>(Result(0), Input(0));
 created: object(4,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, lines 64-68:
 //# programmable --sender A --inputs object(2,0)
@@ -37,7 +37,7 @@ task 5, lines 64-68:
 //> test::m::cool(Result(0));
 //> test::m::play_a(Input(0));
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 6, lines 70-74:
 //# programmable --sender A --inputs object(2,0)
@@ -46,7 +46,7 @@ task 6, lines 70-74:
 //> test::m::cool(Result(0));
 //> test::m::play_a(Input(0));
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 7, lines 76-80:
 //# programmable --sender A
@@ -55,7 +55,7 @@ task 7, lines 76-80:
 //> test::m::cool(Result(0));
 //> test::m::play_coin(Gas);
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 8, lines 82-86:
 //# programmable --sender A
@@ -64,7 +64,7 @@ task 8, lines 82-86:
 //> test::m::cool(Result(0));
 //> test::m::play_coin(Gas)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 9, lines 88-95:
 //# programmable --sender A --inputs object(2,0)
@@ -76,7 +76,7 @@ task 9, lines 88-95:
 //> test::m::play_a(Result(0));
 //> test::m::play_a(Input(0));
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 10, lines 97-102:
 //# programmable --sender A --inputs object(2,0)
@@ -86,7 +86,7 @@ task 10, lines 97-102:
 //> test::m::cool(Result(1));
 //> test::m::play_a(Input(0));
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 11, lines 104-111:
 //# programmable --sender A --inputs object(2,0)
@@ -98,7 +98,7 @@ task 11, lines 104-111:
 //> test::m::play_a(Result(0));
 //> test::m::play_a(Input(0));
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 12, lines 113-120:
 //# programmable --sender A --inputs object(2,0)
@@ -110,7 +110,7 @@ task 12, lines 113-120:
 //> test::m::play_a(Result(0));
 //> test::m::play_a(Input(0));
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 13, lines 122-127:
 //# programmable --sender A --inputs object(2,0)
@@ -120,7 +120,7 @@ task 13, lines 122-127:
 //> test::m::cool(Result(1));
 //> test::m::play_a(Input(0));
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 14, lines 129-133:
 //# programmable --sender A --inputs 0u64
@@ -129,7 +129,7 @@ task 14, lines 129-133:
 //> test::m::cool(NestedResult(0,1));
 //> test::m::play_u64(Input(0));
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 15, lines 135-139:
 //# programmable --sender A --inputs 0u64
@@ -138,7 +138,7 @@ task 15, lines 135-139:
 //> test::m::cool(Result(0));
 //> test::m::play_u64(Input(0));
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 16, lines 141-145:
 //# programmable --sender A --inputs 0u64
@@ -147,7 +147,7 @@ task 16, lines 141-145:
 //> test::m::cool(Result(0));
 //> test::m::play_u64(Input(0));
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 17, lines 147-151:
 //# programmable --sender A --inputs receiving(4,0)
@@ -156,7 +156,7 @@ task 17, lines 147-151:
 //> test::m::cool(Result(0));
 //> test::m::play_receiving(Input(0));
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 18, lines 153-157:
 //# programmable --sender A --inputs receiving(4,0)
@@ -165,7 +165,7 @@ task 18, lines 153-157:
 //> test::m::cool(Result(0));
 //> test::m::play_receiving(Input(0));
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 19, lines 159-163:
 //# programmable --sender A --inputs receiving(4,0)
@@ -174,4 +174,4 @@ task 19, lines 159-163:
 //> test::m::cool(NestedResult(0,1));
 //> test::m::play_receiving(NestedResult(0,0));
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

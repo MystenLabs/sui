@@ -4098,6 +4098,8 @@ async fn gas_coin_send_funds_storage_out_of_gas_charges_sender_not_receiver() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_address_balance_gas_payments_for_testing();
+            // Pin the rebate rate so the low budget below cannot cover storage.
+            cfg.set_storage_rebate_rate_for_testing(9900);
             cfg
         }))
         .with_num_validators(1)
