@@ -34,7 +34,7 @@ task 2, lines 23-26:
 //> TransferObjects([Result(0)], Input(1))
 created: object(2,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, lines 28-30:
 //# programmable --sender A --inputs 1000000000 @A
@@ -42,7 +42,7 @@ task 3, lines 28-30:
 //> TransferObjects([Result(0)], Input(1))
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 32-34:
 //# programmable --sender A --inputs 1000000000 @A
@@ -50,7 +50,7 @@ task 4, lines 32-34:
 //> TransferObjects([Result(0)], Input(1))
 created: object(4,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, line 36:
 //# create-checkpoint
@@ -113,8 +113,8 @@ task 10, lines 46-50:
 //> TransferObjects([Result(0)], Input(1))
 created: object(10,0)
 deleted: object(2,0), object(3,0), object(4,0)
-accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 3000946260)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2934360, non_refundable_storage_fee: 29640
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 3000975604)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2963704, non_refundable_storage_fee: 296
 
 task 11, line 52:
 //# create-checkpoint
@@ -124,7 +124,7 @@ task 12, lines 54-56:
 // After: A's AB should be ~ 100B + 3B (coin values) + |net_gas_refund|.
 // The three coins are gone.
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
-103000946260
+103000975604
 
 task 13, line 58:
 //# view-object 2,0

@@ -39,7 +39,7 @@ task 4, lines 38-39:
 //# programmable --sender A --inputs object(2,0) 112
 //> test::m::set(Input(0), Input(1))
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 5, line 41:
 //# view-object 2,0
@@ -60,13 +60,13 @@ task 6, lines 46-47:
 //# programmable --sender A --inputs object(2,0)@2 0 --dev-inspect
 //> test::m::check(Input(0), Input(1))
 mutated: object(_), object(2,0)
-gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1256508, non_refundable_storage_fee: 12692
+gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1269073, non_refundable_storage_fee: 127
 
 task 7, lines 49-50:
 //# programmable --sender A --inputs object(2,0)@3 112 --dev-inspect
 //> test::m::check(Input(0), Input(1))
 mutated: object(_), object(2,0)
-gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1256508, non_refundable_storage_fee: 12692
+gas summary: computation_cost: 500000, storage_cost: 2257200,  storage_rebate: 1269073, non_refundable_storage_fee: 127
 
 // dev-inspect with 'check' and _incorrect_ values
 

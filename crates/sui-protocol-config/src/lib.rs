@@ -414,6 +414,8 @@ const MAINNET_USDB: &str =
 //              Merge colliding deferred-transaction entries in the consensus handler
 //              instead of overwriting (which stranded the displaced transactions).
 // Version 139: Enable forwarding addresses on devnet.
+//              Reduce the non-refundable storage fee from 1% to 0.01%.
+//              Allow random beacon DKG to complete after its timeout on devnet and testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1052,6 +1054,10 @@ struct FeatureFlags {
     // If true, keep advancing the DKG state machine while DKG is pending.
     #[serde(skip_serializing_if = "is_false")]
     always_advance_dkg_to_resolution: bool,
+
+    // If true, keep DKG pending after its timeout so that it can complete later in the epoch.
+    #[serde(skip_serializing_if = "is_false")]
+    allow_dkg_completion_after_timeout: bool,
 
     // Enable coin registry protocol
     #[serde(skip_serializing_if = "is_false")]
@@ -4804,6 +4810,10 @@ impl ProtocolConfig {
                 139 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_forwarding_addresses = true;
+                    }
+                    cfg.storage_rebate_rate = Some(9999);
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.allow_dkg_completion_after_timeout = true;
                     }
                 }
                 // Use this template when making changes:

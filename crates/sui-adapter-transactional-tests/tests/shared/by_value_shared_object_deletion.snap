@@ -16,13 +16,13 @@ task 2, lines 28-36:
 //# publish --dependencies t2
 created: object(2,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4461200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 4461200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, line 38:
 //# run t2::o2::create
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, line 40:
 //# view-object 3,0
@@ -41,13 +41,13 @@ task 5, lines 42-43:
 //# run t1::o1::consume_o2 --args object(3,0)
 mutated: object(0,0)
 deleted: object(3,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2204532, non_refundable_storage_fee: 22268
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2226577, non_refundable_storage_fee: 223
 
 task 6, line 45:
 //# run t2::o2::create
 created: object(6,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 7, line 47:
 //# view-object 6,0
@@ -66,4 +66,4 @@ task 8, lines 49-50:
 //# run t2::o2::consume_o2 --args object(6,0)
 mutated: object(0,0)
 deleted: object(6,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2204532, non_refundable_storage_fee: 22268
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2226577, non_refundable_storage_fee: 223

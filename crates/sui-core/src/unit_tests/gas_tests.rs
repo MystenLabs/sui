@@ -451,6 +451,12 @@ async fn test_computation_ok_oog_storage_minimal_ok_multi_coins() -> SuiResult {
 // - computation ok, OOG for storage, OOG for minimal storage (e.g. computation is entire budget)
 #[tokio::test]
 async fn test_computation_ok_oog_storage_final_one_coin() -> SuiResult {
+    // Pin the rebate rate so the gas-coin-only storage charge exceeds the budget left after
+    // computation.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_storage_rebate_rate_for_testing(9900);
+        config
+    });
     const GAS_PRICE: u64 = 1001;
     const BUDGET: u64 = 1_002_000;
     let (sender, sender_key) = get_key_pair();
