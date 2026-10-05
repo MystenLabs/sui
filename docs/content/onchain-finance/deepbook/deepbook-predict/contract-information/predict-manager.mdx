@@ -121,7 +121,7 @@ public fun new_self_owned(
 ): AccountWrapper
 ```
 
-`new` and `new_with_referrer` set the owner to the transaction sender. `new_self_owned` sets it to an object's address, so a package can own an account. `new_with_referrer` permanently records the referring account's canonical ID and receive address, which is what makes later mints pay a referral share to that account.
+`new` and `new_with_referrer` set the owner to the transaction sender. `new_self_owned` sets it to an object's address, so a package can own an account. `new_with_referrer` permanently records the referring account's canonical ID and receive address, which is what makes later mints pay a referral share to that account. [Referrals](/onchain-finance/deepbook/deepbook-predict/design#referrals) covers what the referrer earns and how it arrives, and [Predict Accounts SDK](/onchain-finance/deepbook/deepbook-predict-sdk/accounts#create-with-referrer) builds the call from TypeScript.
 
 Each constructor returns the `AccountWrapper` by value. You cannot drop a `key`-only value, so the same transaction must consume it, and the only sensible consumer is:
 
