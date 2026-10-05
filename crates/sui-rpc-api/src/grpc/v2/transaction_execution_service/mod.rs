@@ -46,6 +46,13 @@ impl TransactionExecutionService for RpcService {
         request: tonic::Request<SimulateTransactionRequest>,
     ) -> Result<tonic::Response<SimulateTransactionResponse>, tonic::Status> {
         let service = self.clone();
+        if let Some(metrics) = &self.metrics {
+            metrics.observe_simulate_client_protocol_version(
+                crate::client_protocol_version::client_protocol_version_for_metrics(
+                    request.metadata(),
+                ),
+            );
+        }
         let client_protocol_version = crate::client_protocol_version(request.metadata());
         let request = request.into_inner();
         tokio::task::spawn_blocking(move || {
