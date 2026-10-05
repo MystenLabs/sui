@@ -1283,6 +1283,12 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     limit_groth16_pvk_inputs: bool,
 
+    // If true, groth16::verify_groth16_proof checks that the prepared verifying key has the
+    // length implied by the number of public inputs, and aborts with EInvalidVerifyingKey if it
+    // does not.
+    #[serde(skip_serializing_if = "is_false")]
+    check_groth16_pvk_length: bool,
+
     // If true, the funds-accumulator address-balance change invariant
     // (`TemporaryStore::check_address_balance_changes`) is enforced as a consensus check —
     // violations abort the tx via the conservation-recovery flow. When false, the check still
@@ -4874,6 +4880,7 @@ impl ProtocolConfig {
                     cfg.obj_access_cost_read_per_package_kb = Some(154);
                 }
                 140 => {
+                    cfg.feature_flags.check_groth16_pvk_length = true;
                     cfg.vector_reverse_base_cost = Some(52);
                     cfg.vector_reverse_per_elem_cost = Some(8);
                     cfg.vector_keep_range_base_cost = Some(52);
