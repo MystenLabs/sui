@@ -6,7 +6,7 @@ mod common;
 use move_stackless_bytecode_2::from_compiled_modules;
 
 use move_core_types::account_address::AccountAddress;
-use move_package_alt_compilation::build_plan::BuildPlan;
+use move_package_compilation::build_plan::BuildPlan;
 use move_symbol_pool::Symbol;
 use std::{collections::BTreeSet, path::Path};
 

@@ -29,6 +29,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::base_types::{ObjectRef, random_object_ref};
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::gas_coin::MIST_PER_SUI;
 use sui_types::transaction::Command;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use sui_types::{base_types::ObjectID, object::Owner};
@@ -38,6 +39,8 @@ use tracing::debug;
 
 /// Number of vectors to create in LargeTransientRuntimeVectors workload
 const NUM_VECTORS: u64 = 1_000;
+const ADVERSARIAL_GAS_BUDGET: u64 = 100 * MIST_PER_SUI;
+const ADVERSARIAL_PAYLOAD_GAS: u64 = 10_000 * MIST_PER_SUI;
 
 // TODO: Need to fix Large* workloads, which are currently failing due to InsufficientGas
 #[derive(Debug, EnumCountMacro, EnumIter, Clone)]
@@ -214,7 +217,7 @@ impl AdversarialTestPayload {
         let args = self.get_payload_args(payload_type, protocol_config);
         let module_name = "adversarial";
         let account = self.state.account(&self.sender).unwrap();
-        let gas_budget = protocol_config.max_tx_gas();
+        let gas_budget = ADVERSARIAL_GAS_BUDGET;
         let gas_price = self
             .system_state_observer
             .state
@@ -372,7 +375,7 @@ impl WorkloadBuilder<dyn Payload> for AdversarialWorkloadBuilder {
         for _i in 0..self.num_payloads {
             let (address, keypair) = get_key_pair();
             configs.push(GasCoinConfig {
-                amount: MAX_GAS_FOR_TESTING,
+                amount: ADVERSARIAL_PAYLOAD_GAS,
                 address,
                 keypair: Arc::new(keypair),
             });
@@ -474,7 +477,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             ..
         } = system_state_observer.state.borrow().clone();
         let protocol_config = protocol_config.unwrap();
-        let gas_budget = protocol_config.max_tx_gas();
+        let gas_budget = ADVERSARIAL_GAS_BUDGET;
         let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
             .publish_async(path)
             .await
@@ -580,7 +583,7 @@ struct AdversarialPayloadArgs {
 
 async fn get_max_package_published_compiled_package() -> CompiledPackage {
     let mut path = benchmark_move_base_dir();
-    path.push("src/workloads/data/really_big_package");
+    path.push("src/workloads/data/max_package");
     BuildConfig::new_for_testing()
         .build_async(&path)
         .await

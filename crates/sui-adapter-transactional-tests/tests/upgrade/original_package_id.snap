@@ -21,31 +21,31 @@ task 2, lines 16-19:
 //# upgrade --package test_v1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5000800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5000800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 3, lines 21-37:
 //# publish --sender A
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5814000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 5814000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 39-40:
 // Happy path after one upgrade: original ID must be the V1 package address.
 //# run helper::h::check --args object(1,1) @test_v1 --sender A
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 2622000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 2622000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 5, lines 42-45:
 //# upgrade --package test_v2 --upgrade-capability 1,1 --sender A
 created: object(5,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5000800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5000800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 6, lines 47-48:
 // Happy path after two upgrades: original ID is stable across versions.
 //# run helper::h::check --args object(1,1) @test_v1 --sender A
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 2622000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 2622000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 7, lines 50-55:
 // A package that was published but never upgraded is its own original: the
@@ -53,12 +53,12 @@ task 7, lines 50-55:
 //# publish --upgradeable --sender A
 created: object(7,0), object(7,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5000800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 5000800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 8, line 57:
 //# run helper::h::check --args object(7,1) @solo --sender A
 mutated: object(0,0), object(7,1)
-gas summary: computation_cost: 1000000, storage_cost: 2622000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 2622000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 9, lines 59-61:
 // Mid-upgrade: reading the original package ID with a pending (uncommitted)

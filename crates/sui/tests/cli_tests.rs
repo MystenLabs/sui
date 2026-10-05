@@ -13,7 +13,7 @@ use expect_test::expect;
 use fastcrypto::encoding::{Base64, Encoding};
 use futures::TryStreamExt;
 use move_bytecode_verifier_meter::Scope;
-use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
+use move_package_compilation::build_config::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use sui::client_commands::{
     GasDataArgs, PaymentArgs, PublishArgs, TestPublishArgs, TxProcessingArgs, UpgradeArgs,
@@ -38,7 +38,7 @@ use sui_types::transaction::{
 };
 use tokio::time::sleep;
 
-use move_package_alt::schema::{Environment, ParsedPublishedFile};
+use move_package::schema::{Environment, ParsedPublishedFile};
 use mysten_common::random_util::TempDir;
 use mysten_common::tempdir;
 use std::fs::OpenOptions;

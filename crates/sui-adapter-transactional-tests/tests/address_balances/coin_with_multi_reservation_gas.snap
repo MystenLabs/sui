@@ -57,7 +57,7 @@ task 5, lines 26-31:
 created: object(5,0)
 mutated: object(0,0)
 accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 1000000000)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 6, line 33:
 //# create-checkpoint
@@ -82,6 +82,6 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
         },
     },
     balance: sui::balance::Balance<sui::sui::SUI> {
-        value: 299900995914120u64,
+        value: 299900995923901u64,
     },
 }

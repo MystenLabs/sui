@@ -35,7 +35,7 @@ task 3, line 14:
 //# run sui::pay::split_and_transfer --type-args sui::sui::SUI --args object(1,0) 10 @A --sender B
 created: object(3,0)
 mutated: object(0,1), object(1,0)
-gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1975802, non_refundable_storage_fee: 198
 
 task 4, line 16:
 //# view-object 1,0

@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: true
+---
+warning[WL02014]: mutation in match guard
+   ┌─ tests/linter/move_2024/mutation_in_match_guard.move:11:15
+   │
+11 │         _ if ({ value = value + 1; false }) => 0u64,
+   │               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │               │ │
+   │               │ This may mutate state
+   │               Match guard may mutate state
+   │
+   = Match guards may be run multiple times during match decisions, and should not be used to mutate state.
+   = This warning can be suppressed with '#[allow(lint(mutation_in_match_guard))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WL02014]: mutation in match guard
+   ┌─ tests/linter/move_2024/mutation_in_match_guard.move:20:15
+   │
+20 │         _ if (bump(&mut value)) => 0u64,
+   │               ^^^^^^^^^^^^^^^^
+   │               │
+   │               Match guard may mutate state
+   │               This may mutate state
+   │
+   = Match guards may be run multiple times during match decisions, and should not be used to mutate state.
+   = This warning can be suppressed with '#[allow(lint(mutation_in_match_guard))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[WL02014]: mutation in match guard
+   ┌─ tests/linter/move_2024/mutation_in_match_guard.move:30:15
+   │
+30 │         _ if ({ *reference = *reference + 1; false }) => 0u64,
+   │               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │               │ │
+   │               │ This may mutate state
+   │               Match guard may mutate state
+   │
+   = Match guards may be run multiple times during match decisions, and should not be used to mutate state.
+   = This warning can be suppressed with '#[allow(lint(mutation_in_match_guard))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

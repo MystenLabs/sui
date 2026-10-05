@@ -165,6 +165,12 @@ impl Server {
         &self.local_addr
     }
 
+    /// Returns the handle controlling the running server. The server keeps serving until
+    /// `ServerHandle::shutdown` (or `trigger_shutdown`) is called on the returned handle.
+    pub fn into_handle(self) -> sui_http::ServerHandle {
+        self.server
+    }
+
     pub fn health_reporter(&self) -> tonic_health::server::HealthReporter {
         self.health_reporter.clone()
     }
