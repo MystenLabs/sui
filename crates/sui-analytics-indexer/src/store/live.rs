@@ -188,7 +188,7 @@ mod tests {
             sf_schema: None,
             sf_username: None,
             sf_role: None,
-            sf_password_file: None,
+            sf_private_key_file: None,
             migration_id: None,
             file_format: crate::config::FileFormat::Parquet,
             pipeline_configs: vec![PipelineConfig {

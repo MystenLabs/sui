@@ -6,11 +6,11 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
-use move_package_alt::{
+use move_package::{
     MoveFlavor, RootPackage,
     schema::{Environment, EnvironmentName},
 };
-use move_package_alt_compilation::build_config::BuildConfig;
+use move_package_compilation::build_config::BuildConfig;
 
 /// Re-pin the dependencies of this package.
 #[derive(Debug, Clone, Parser)]

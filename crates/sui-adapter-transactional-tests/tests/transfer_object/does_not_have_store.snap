@@ -57,7 +57,7 @@ task 6, line 38:
 //# run test::m::mint_cup --type-args test::m::S --sender A
 created: object(6,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2500400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2500400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 7, line 40:
 //# view-object 6,0

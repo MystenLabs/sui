@@ -12,14 +12,14 @@ expression: common_costs_actual
   "Publish": {
     "computationCost": "1000000",
     "storageCost": "13520400",
-    "storageRebate": "978120",
-    "nonRefundableStorageFee": "9880"
+    "storageRebate": "987901",
+    "nonRefundableStorageFee": "99"
   },
   "SharedCounterAssertValue": {
     "computationCost": "1000000",
     "storageCost": "2591600",
-    "storageRebate": "1587564",
-    "nonRefundableStorageFee": "16036"
+    "storageRebate": "1603440",
+    "nonRefundableStorageFee": "160"
   },
   "SharedCounterCreate": {
     "computationCost": "1000000",
@@ -30,8 +30,8 @@ expression: common_costs_actual
   "SharedCounterIncrement": {
     "computationCost": "1000000",
     "storageCost": "2591600",
-    "storageRebate": "1587564",
-    "nonRefundableStorageFee": "16036"
+    "storageRebate": "1603440",
+    "nonRefundableStorageFee": "160"
   },
   "SplitCoin": {
     "computationCost": "1000000",
@@ -54,7 +54,7 @@ expression: common_costs_actual
   "TransferWholeSuiCoin": {
     "computationCost": "1000000",
     "storageCost": "988000",
-    "storageRebate": "978120",
-    "nonRefundableStorageFee": "9880"
+    "storageRebate": "987901",
+    "nonRefundableStorageFee": "99"
   }
 }

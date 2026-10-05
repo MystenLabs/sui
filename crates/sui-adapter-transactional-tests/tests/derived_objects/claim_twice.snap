@@ -25,7 +25,7 @@ task 3, line 35:
 //# run a::m::derive_object --sender A --args object(2,0) 0
 created: object(3,0), object(3,1)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 2234177, non_refundable_storage_fee: 223
 
 task 4, line 37:
 //# run a::m::derive_object --sender A --args object(2,0) 0

@@ -19,19 +19,19 @@ task 2, lines 15-19:
 //# upgrade --package Dep_V1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 3, lines 21-24:
 //# publish --upgradeable --sender A
 created: object(3,0), object(3,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 5023600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 26-31:
 //# publish --upgradeable --dependencies Dep_V1 --sender A
 created: object(4,0), object(4,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5897600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 5897600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 8, lines 68-74:
 //# programmable --sender A --inputs object(3,1) 0u8 digest(NoInit_V1)
@@ -43,7 +43,7 @@ task 8, lines 68-74:
 //> sui::package::commit_upgrade(Input(0), Result(1))
 created: object(8,0)
 mutated: object(0,0), object(3,1)
-gas summary: computation_cost: 1000000, storage_cost: 5897600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5897600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 9, lines 76-82:
 //# programmable --sender A --inputs object(4,1) 0u8 digest(Init_V1_Dep1)
@@ -78,7 +78,7 @@ task 11, lines 93-99:
 //> sui::package::commit_upgrade(Input(0), Result(1))
 created: object(11,0), object(11,1)
 mutated: object(0,0), object(4,1)
-gas summary: computation_cost: 1000000, storage_cost: 9720400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 9720400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 12, line 101:
 //# view-object 11,1

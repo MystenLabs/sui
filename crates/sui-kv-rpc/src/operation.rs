@@ -203,17 +203,18 @@ impl KvRpcServer {
         )
     }
 
-    async fn cached_checkpoint_hi_exclusive(&self) -> Result<u64, RpcError> {
-        let checkpoint_hi_inclusive = {
-            let cache = self.cache.read().await;
-            cache.as_ref().and_then(|info| info.checkpoint_height)
-        }
-        .ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Unavailable,
-                "service info cache missing checkpoint height",
-            )
-        })?;
+    fn cached_checkpoint_hi_exclusive(&self) -> Result<u64, RpcError> {
+        let checkpoint_hi_inclusive = self
+            .cache
+            .borrow()
+            .as_ref()
+            .and_then(|info| info.checkpoint_height)
+            .ok_or_else(|| {
+                RpcError::new(
+                    tonic::Code::Unavailable,
+                    "service info cache missing checkpoint height",
+                )
+            })?;
 
         checkpoint_hi_inclusive.checked_add(1).ok_or_else(|| {
             RpcError::new(
@@ -229,7 +230,7 @@ impl KvRpcServer {
             self.package_resolver.clone(),
             self.metrics.clone(),
             operation,
-            self.cached_checkpoint_hi_exclusive().await?,
+            self.cached_checkpoint_hi_exclusive()?,
             self.ledger_history.clone(),
             self.stages.clone(),
         ))
