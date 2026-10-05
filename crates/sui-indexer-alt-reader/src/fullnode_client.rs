@@ -8,16 +8,21 @@ use futures::future::try_join_all;
 use prometheus::Registry;
 use prost_types::FieldMask;
 use sui_rpc::Client;
+use sui_rpc::client::HeadersInterceptor;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_sdk_types::Address;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
+use tonic::metadata::Ascii;
+use tonic::metadata::MetadataValue;
 use tracing::instrument;
 use url::Url;
 
 use crate::metrics::GrpcMetricsLayer;
+
+pub const X_SUI_CLIENT_PROTOCOL_VERSION: &str = "x-sui-client-protocol-version";
 
 // Programmable transaction validation requires the command count to be strictly less than the
 // protocol's 1,024-command limit.
@@ -72,6 +77,16 @@ impl FullnodeClient {
             ));
 
         Ok(Some(Self { client }))
+    }
+
+    /// Forward the caller's protocol version on requests made by this client clone.
+    pub fn with_client_protocol_version(mut self, version: MetadataValue<Ascii>) -> Self {
+        let mut headers = HeadersInterceptor::new();
+        headers
+            .headers_mut()
+            .insert(X_SUI_CLIENT_PROTOCOL_VERSION, version);
+        self.client = self.client.with_headers(headers);
+        self
     }
 
     pub fn as_data_loader(&self) -> DataLoader<Self> {

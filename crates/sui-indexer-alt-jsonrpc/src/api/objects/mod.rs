@@ -11,8 +11,6 @@ use sui_json_rpc_types::SuiGetPastObjectRequest;
 use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_json_rpc_types::SuiObjectResponse;
 use sui_json_rpc_types::SuiPastObjectResponse;
-use sui_open_rpc::Module;
-use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
@@ -27,16 +25,15 @@ mod error;
 pub(crate) mod filter;
 pub(crate) mod response;
 
-#[open_rpc(namespace = "sui", tag = "Objects API")]
 #[rpc(server, namespace = "sui")]
 trait ObjectsApi {
     /// Return the object information for the latest version of an object.
     #[method(name = "getObject")]
     async fn get_object(
         &self,
-        /// The ID of the queried obect
+        // The ID of the queried obect
         object_id: ObjectID,
-        /// Options for specifying the content to be returned
+        // Options for specifying the content to be returned
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse>;
 
@@ -44,9 +41,9 @@ trait ObjectsApi {
     #[method(name = "multiGetObjects")]
     async fn multi_get_objects(
         &self,
-        /// the IDs of the queried objects
+        // the IDs of the queried objects
         object_ids: Vec<ObjectID>,
-        /// Options for specifying the content to be returned
+        // Options for specifying the content to be returned
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>>;
 
@@ -58,11 +55,11 @@ trait ObjectsApi {
     #[method(name = "tryGetPastObject")]
     async fn try_get_past_object(
         &self,
-        /// The ID of the queried object
+        // The ID of the queried object
         object_id: ObjectID,
-        /// The version of the queried object.
+        // The version of the queried object.
         version: SequenceNumber,
-        /// Options for specifying the content to be returned
+        // Options for specifying the content to be returned
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse>;
 
@@ -74,14 +71,13 @@ trait ObjectsApi {
     #[method(name = "tryMultiGetPastObjects")]
     async fn try_multi_get_past_objects(
         &self,
-        /// A vector of object and versions to be queried
+        // A vector of object and versions to be queried
         past_objects: Vec<SuiGetPastObjectRequest>,
-        /// Options for specifying the content to be returned
+        // Options for specifying the content to be returned
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>>;
 }
 
-#[open_rpc(namespace = "suix", tag = "Query Objects API")]
 #[rpc(server, namespace = "suix")]
 trait QueryObjectsApi {
     /// Query objects by their owner's address. Returns a paginated list of objects.
@@ -100,13 +96,13 @@ trait QueryObjectsApi {
     #[method(name = "getOwnedObjects")]
     async fn get_owned_objects(
         &self,
-        /// The owner's address.
+        // The owner's address.
         address: SuiAddress,
-        /// Additional querying criteria for the object.
+        // Additional querying criteria for the object.
         query: Option<SuiObjectResponseQuery>,
-        /// Cursor to start paginating from.
+        // Cursor to start paginating from.
         cursor: Option<String>,
-        /// Maximum number of objects to return per page.
+        // Maximum number of objects to return per page.
         limit: Option<usize>,
     ) -> RpcResult<Page<SuiObjectResponse, String>>;
 }
@@ -257,20 +253,12 @@ impl QueryObjectsApiServer for QueryObjects {
 }
 
 impl RpcModule for Objects {
-    fn schema(&self) -> Module {
-        ObjectsApiOpenRpc::module_doc()
-    }
-
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }
 }
 
 impl RpcModule for QueryObjects {
-    fn schema(&self) -> Module {
-        QueryObjectsApiOpenRpc::module_doc()
-    }
-
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }

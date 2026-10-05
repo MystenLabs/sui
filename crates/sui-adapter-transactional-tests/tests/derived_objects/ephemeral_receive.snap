@@ -25,10 +25,10 @@ task 3, line 52:
 //# run a::m::transfer_obj_to_derived --sender A --args object(2,0) 0
 created: object(3,0)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 3458000,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+gas summary: computation_cost: 1000000, storage_cost: 3458000,  storage_rebate: 2234177, non_refundable_storage_fee: 223
 
 task 4, line 54:
 //# run a::m::ephemeral_receive --sender A --args object(2,0) 0 receiving(3,0)
 created: object(4,0)
 mutated: object(0,0), object(2,0), object(3,0)
-gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 3423420, non_refundable_storage_fee: 34580
+gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 3457654, non_refundable_storage_fee: 346

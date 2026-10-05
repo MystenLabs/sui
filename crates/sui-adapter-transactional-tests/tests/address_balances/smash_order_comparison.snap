@@ -52,7 +52,7 @@ task 3, lines 37-40:
 //> TransferObjects([Result(0)], Input(1))
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 42-44:
 //# programmable --sender B --inputs 1000000000 @B
@@ -60,7 +60,7 @@ task 4, lines 42-44:
 //> TransferObjects([Result(0)], Input(1))
 created: object(4,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, line 46:
 //# create-checkpoint
@@ -115,7 +115,7 @@ task 10, lines 57-62:
 created: object(10,0)
 mutated: object(3,0)
 accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 500000000)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 11, lines 64-69:
 // ===== Case B: smash [AB, Coin] =====
@@ -126,8 +126,8 @@ task 11, lines 64-69:
 //> TransferObjects([Result(0)], Input(1))
 created: object(11,0)
 deleted: object(4,0)
-accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 998990020)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 998999801)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 12, line 71:
 //# create-checkpoint
@@ -151,7 +151,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
         },
     },
     balance: sui::balance::Balance<sui::sui::SUI> {
-        value: 1498002020u64,
+        value: 1498011801u64,
     },
 }
 
@@ -159,7 +159,7 @@ task 15, lines 80-82:
 // B: AB balance shows (start - 500M + 1B - case_B_gas_cost) = start + 500M
 // minus case_B_gas. Coin 4,0 no longer exists.
 //# view-funds sui::balance::Balance<sui::sui::SUI> B
-100998990020
+100998999801
 
 task 16, line 84:
 //# view-object 4,0

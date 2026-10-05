@@ -27,7 +27,7 @@ task 3, lines 59-61:
 //# programmable --sender A --inputs @B
 //> TransferObjects([Gas], Input(0))
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 63-66:
 // Return a small amount of coin to A
@@ -67,7 +67,7 @@ task 7, lines 75-78:
 //> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(1))
 created: object(7,0), object(7,1)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 8, lines 80-82:
 // Account A now has 7,0 7,1 that are 2 gas short of the needed amount, note gas smashing rebate also occurs
@@ -89,7 +89,7 @@ task 10, lines 89-91:
 created: object(10,0)
 mutated: object(7,0)
 deleted: object(4,0), object(7,1)
-gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2934360, non_refundable_storage_fee: 29640
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2963704, non_refundable_storage_fee: 296
 
 task 11, lines 93-94:
 // Return the balance of A to zero
@@ -103,7 +103,7 @@ task 12, lines 96-99:
 //> TransferObjects([Result(0)], Input(1))
 created: object(12,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 13, lines 101-104:
 // Give A enough gas to send transaction
@@ -112,7 +112,7 @@ task 13, lines 101-104:
 //> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(1))
 created: object(13,0), object(13,1)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 14, lines 106-108:
 // Not enough gas for large_compute_func() when excluding 12,0, gas smashing rebates
@@ -133,4 +133,4 @@ task 16, lines 115-117:
 //> 0: test::m::large_compute_func(Input(0));
 mutated: object(13,0)
 deleted: object(12,0), object(13,1)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2934360, non_refundable_storage_fee: 29640
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2963704, non_refundable_storage_fee: 296

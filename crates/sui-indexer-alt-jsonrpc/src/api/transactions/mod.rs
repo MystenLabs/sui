@@ -8,8 +8,6 @@ use mysten_common::ZipDebugEqIteratorExt;
 use sui_json_rpc_types::Page;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
-use sui_open_rpc::Module;
-use sui_open_rpc_macros::open_rpc;
 use sui_types::digests::TransactionDigest;
 
 use crate::api::rpc_module::RpcModule;
@@ -24,21 +22,19 @@ mod error;
 mod filter;
 mod response;
 
-#[open_rpc(namespace = "sui", tag = "Transactions API")]
 #[rpc(server, namespace = "sui")]
 trait TransactionsApi {
     /// Fetch a transaction by its transaction digest.
     #[method(name = "getTransactionBlock")]
     async fn get_transaction_block(
         &self,
-        /// The digest of the queried transaction.
+        // The digest of the queried transaction.
         digest: TransactionDigest,
-        /// Options controlling the output format.
+        // Options controlling the output format.
         options: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse>;
 }
 
-#[open_rpc(namespace = "suix", tag = "Query Transactions API")]
 #[rpc(server, namespace = "suix")]
 trait QueryTransactionsApi {
     /// Query transactions based on their properties (sender, affected addresses, function calls,
@@ -55,13 +51,13 @@ trait QueryTransactionsApi {
     #[method(name = "queryTransactionBlocks")]
     async fn query_transaction_blocks(
         &self,
-        /// The query criteria, and the output options.
+        // The query criteria, and the output options.
         query: SuiTransactionBlockResponseQuery,
-        /// Cursor to start paginating from.
+        // Cursor to start paginating from.
         cursor: Option<String>,
-        /// Maximum number of transactions to return per page.
+        // Maximum number of transactions to return per page.
         limit: Option<usize>,
-        /// Order of results, defaulting to ascending order (false), by sequence on-chain.
+        // Order of results, defaulting to ascending order (false), by sequence on-chain.
         descending_order: Option<bool>,
     ) -> RpcResult<Page<SuiTransactionBlockResponse, String>>;
 }
@@ -162,20 +158,12 @@ impl QueryTransactionsApiServer for QueryTransactions {
 }
 
 impl RpcModule for Transactions {
-    fn schema(&self) -> Module {
-        TransactionsApiOpenRpc::module_doc()
-    }
-
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }
 }
 
 impl RpcModule for QueryTransactions {
-    fn schema(&self) -> Module {
-        QueryTransactionsApiOpenRpc::module_doc()
-    }
-
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }

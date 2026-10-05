@@ -58,7 +58,7 @@ task 8, lines 31-33:
 created: object(8,0)
 mutated: object(0,0)
 accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 5000000000)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 9, line 35:
 //# view-object 8,0
@@ -71,7 +71,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
         },
     },
     balance: sui::balance::Balance<sui::sui::SUI> {
-        value: 4998002120u64,
+        value: 4998011901u64,
     },
 }
 
@@ -82,7 +82,7 @@ task 10, lines 37-39:
 created: object(10,0)
 mutated: object(0,1)
 accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Split, 5000000000)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 11, line 41:
 //# view-object 10,0
@@ -95,7 +95,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
         },
     },
     balance: sui::balance::Balance<sui::sui::SUI> {
-        value: 4998002120u64,
+        value: 4998011901u64,
     },
 }
 
@@ -106,8 +106,8 @@ task 12, lines 43-46:
 //> 1: TransferObjects([Result(0)], Input(0))
 created: object(12,0)
 mutated: object(0,2)
-accumulators_written: (object(3,0), C, sui::balance::Balance<sui::sui::SUI>, Split, 1997880)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+accumulators_written: (object(3,0), C, sui::balance::Balance<sui::sui::SUI>, Split, 1988099)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 13, line 48:
 //# view-object 12,0
@@ -138,4 +138,4 @@ task 16, line 54:
 
 task 17, line 56:
 //# view-funds sui::balance::Balance<sui::sui::SUI> C
-9998002120
+9998011901

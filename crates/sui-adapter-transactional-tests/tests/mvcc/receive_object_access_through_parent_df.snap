@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 937
 ---
 processed 14 tasks
 
@@ -255,11 +254,11 @@ task 12, line 100:
 created: object(12,0)
 mutated: object(0,0), object(2,0)
 wrapped: object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 4278800,  storage_rebate: 3521232, non_refundable_storage_fee: 35568
+gas summary: computation_cost: 1000000, storage_cost: 4278800,  storage_rebate: 3556444, non_refundable_storage_fee: 356
 
 task 13, line 102:
 //# run tto::M1::receive_wrapped --args object(2,0) receiving(2,3) --sender A
 created: object(13,0)
 mutated: object(0,0), object(2,0)
 wrapped: object(2,3)
-gas summary: computation_cost: 1000000, storage_cost: 4856400,  storage_rebate: 4093056, non_refundable_storage_fee: 41344
+gas summary: computation_cost: 1000000, storage_cost: 4856400,  storage_rebate: 4133987, non_refundable_storage_fee: 413

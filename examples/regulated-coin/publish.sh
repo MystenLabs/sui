@@ -58,11 +58,4 @@ MODULE_NAME=regulated_coin
 COIN_NAME=REGULATED_COIN
 API_ENV
 
-cat >rust-client/.env<<-API_ENV
-SUI_FULLNODE_URL=$NETWORK
-PACKAGE_ID=$PACKAGE_ID
-MODULE_NAME=regulated_coin
-RUST_LOG=rust_client=DEBUG
-API_ENV
-
 echo "Contract deployment finished!"
