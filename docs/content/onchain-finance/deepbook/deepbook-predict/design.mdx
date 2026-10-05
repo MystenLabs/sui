@@ -262,9 +262,9 @@ The owner never changes. `BuilderCode` has no function that transfers ownership 
 
 ### Attach a code to an account {#builder-code-attach}
 
-An account attaches a code with `predict_account::set_builder_code` and removes it with `predict_account::unset_builder_code`. [Builder codes](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#builder-codes) gives both signatures. Each call takes an `Auth`, which in practice means the account owner signs it. The code's owner takes no part, and no session wrapper exists for either call, so a session key cannot change the attachment.
+An account attaches a code with `predict_account::set_builder_code` and removes it with `predict_account::unset_builder_code`. [Builder codes](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#builder-codes) gives both signatures. Each call takes an `Auth`. Owner auth satisfies it, and so does app auth, which `account_registry::generate_auth_as_app` issues to any app on the protocol's global whitelist and which carries no owner, wrapper, or operation restriction, so an authorized app can change an account's code without the account owner signing that transaction. The code's owner takes no part, and no session wrapper exists for either call, so a session key cannot change the attachment.
 
-An account carries at most one code. Attaching one affects only the trades that follow, and a later `set_builder_code` replaces it. Any app the account owner signs a `set_builder_code` transaction for can therefore switch the account to that app's own code, and the previous code earns nothing from the account's later trades.
+An account carries at most one code. Attaching one affects only the trades that follow, and a later `set_builder_code` replaces it. Any app the account owner signs a `set_builder_code` transaction for, and any whitelisted app that calls it with app auth, can therefore switch the account to its own code, and the previous code earns nothing from the account's later trades. Protocol admins, not account owners, control that whitelist.
 
 ### What the builder earns {#builder-fee}
 
