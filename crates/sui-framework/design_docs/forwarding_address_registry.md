@@ -64,12 +64,13 @@ public struct ForwardingAddressRegistry has key { id: UID }
 // Held cold. Needed to rotate; either the cap or the current master can pause/cancel.
 public struct MasterCap has key, store { id: UID, master_id: u32 }
 
-// Dynamic field on the registry: master_id -> MasterRecord
-public struct MasterRecord has store {
-    master: address,
-    pending: Option<Pending>,   // Pending { new_master: address, effective_epoch: u64 }
-    paused: bool,
-}
+// Dynamic field on the registry: master_id -> MasterRecord. Its layout is frozen once published:
+// framework upgrades reject struct layout changes even when no record exists.
+public struct MasterRecord has store { master: address }
+
+// Lifecycle state lives in separate registry dynamic fields keyed by master id, added when needed.
+public struct PausedKey has copy, drop, store { master_id: u32 }    // -> bool
+public struct PendingKey has copy, drop, store { master_id: u32 }   // -> Pending { new_master: address, effective_epoch: u64 }
 
 // id = lowbias32(counter); charged via a native with its own cost param
 public fun register(registry: &mut ForwardingAddressRegistry, ctx: &mut TxContext): MasterCap;
@@ -83,8 +84,8 @@ public fun cancel_rotation(registry: &mut ForwardingAddressRegistry, cap: &Maste
 public fun cancel_rotation_by_master(registry: &mut ForwardingAddressRegistry, master_id: u64, ctx: &TxContext);
 public fun finalize_rotation(registry: &mut ForwardingAddressRegistry, cap: &MasterCap, ctx: &TxContext);
 
-// Native. Reads `master` and `paused`, ignores `pending`. Aborts when paused, unregistered,
-// or of an unsupported variant.
+// Native. Reads the master record and the paused field, ignores pending. Aborts when paused,
+// unregistered, or of an unsupported variant.
 native fun resolve_impl(recipient: address): (address, bool);
 ```
 
@@ -100,6 +101,10 @@ Why each piece:
 - Rotation is two-step with a delay (one epoch to start, a registry constant so we can tune it
   without a protocol bump). A thief needs both the cap and the master key to redirect funds, and
   holding either one is enough to cancel or pause. Pause is immediate; deposits abort while paused.
+- `propose_rotation` rejects a `new_master` that carries the forwarding magic. Resolution is one
+  step and never resolves the master again, so a forwarding-shaped master would strand every
+  deposit. `register` can't hit this: the master is the sender, and a key-derived address matching
+  the 10-byte magic takes about 2^80 attempts.
 - Brake: a second flag `freeze_forwarding_addresses`. When set, the native aborts for any pattern
   address. One epoch latency (protocol bump), which I think is acceptable for a brake; anything
   faster needs governance we don't have. Flag-off keeps meaning "pattern is an ordinary address"
@@ -144,7 +149,7 @@ for it.
 | Payment app | Which deposits landed for master M, and from which forwarding address / payload? | `ForwardingDeposit<T> { forwarding_address, master, amount }` event; payload = bytes 15..32 of the address | Yes (#27990) |
 | Payment app | Given a payload, did invoice X get paid, how much, in which tx? | Same event, indexed by `(master, payload)` | Yes, needs an index |
 | Wallet / sender | Is this forwarding address registered, and to whom, right now? | Registry dynamic field `master_id -> MasterRecord` (`MasterRecordKey` in `sui-types` derives the field id and decodes it) | Yes, plain object read; GraphQL `dynamicField` works today |
-| Master | My record: master, paused, pending rotation, and its history | `MasterRecord` object plus lifecycle events | Object yes; `MasterRegistered` yes, the rest no |
+| Master | My record: master, paused, pending rotation, and its history | `MasterRecord`, `PausedKey` and `PendingKey` fields plus lifecycle events | Object yes; `MasterRegistered` yes, the rest no |
 | Master | Where is my `MasterCap`? | Owned object of type `MasterCap` | Yes, standard object index |
 | Anyone | Balances | Master's address balance; a forwarding address always stays at 0 | Yes, existing balance indexing |
 
@@ -163,16 +168,18 @@ there.
 ## Incremental plan
 
 Land #27990 as the base mechanism, then one small PR per step. Each is Move plus a few native lines,
-none touch consensus or the core changes again. 139 is open and devnet only, and the registry is
-empty everywhere except devnet (wiped weekly), so changing the record layout between steps costs
-nothing.
+none touch consensus or the core changes again. Every step adds dynamic fields next to the record
+instead of changing `MasterRecord`: framework upgrades check struct layouts in bytecode, so an empty
+registry does not make a layout change safe on a chain that already published the struct.
 
 1. `MasterCap` + assigned ids + the versioned address format. Done in #27990: `register` returns
    the cap, the record is `MasterRecord { master }`, ids come from the mixed counter, the payload is
    opaque, and the native gates the variant through `forwarding_address_max_variant`.
-2. Pause + two-step rotation. Record gains `pending` and `paused`, the entry functions above, native
-   checks `paused`. Lifecycle events land here.
-3. Registration fee. `register_impl` native with a cost param in 139.
+2. Pause + two-step rotation. `PausedKey` and `PendingKey` fields, the entry functions above, native
+   checks `PausedKey`. Lifecycle events land here.
+3. Registration fee. Done in #27990: `register` calls `charge_registration_fee`, a native charging
+   `forwarding_address_register_cost_base` (900K gas units in 139, so a registration lands in the
+   1M-unit computation bucket).
 4. Brake flag. `freeze_forwarding_addresses`, native aborts on any pattern address when set.
 5. Indexer pipeline + GraphQL fields (can run in parallel with 2 to 4 once the events exist).
 6. Later: object transfers to pattern addresses, testnet enablement.
@@ -183,8 +190,8 @@ nothing.
   tx from the new master (proves the new key works before we cut over)?
 - Should the current master be able to pause and cancel without the cap (as proposed), or is
   cap-only simpler to reason about?
-- Registration price: what base cost feels right? We want it to hurt for spam but not for a legit
-  business.
+- Registration price: 1M gas units (about 1 SUI at a 1,000 MIST gas price) is the starting
+  point. We want it to hurt for spam but not for a legit business.
 - Brake semantics: abort every deposit to a pattern address, or only resolution (i.e. strand)? I
   think abort.
 - Is 2^32 master ids enough for good, or do we want a 6-byte id (2^48, and 2^128 targeted
