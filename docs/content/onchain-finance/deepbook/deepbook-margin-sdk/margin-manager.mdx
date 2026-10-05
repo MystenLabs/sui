@@ -75,9 +75,9 @@ const client = new SuiGrpcClient({
 );
 ```
 
-After you extend the client, reach the functions on this page through `client.deepbook.marginManager`. Each one returns a function that takes a `Transaction` object, which you pass to `tx.add(...)`. Read-only state lives on the client itself, such as `client.deepbook.getMarginManagerState`.
+After you extend the client, reach the functions on this page through `client.deepbook.marginManager`. Each one returns a function that takes a `Transaction` object, which you pass to `tx.add(...)`. Read-only state lives on the client itself, such as `client.deepbook.getMarginManagerState`. The examples later on this page run as methods of a class that holds the same extended client, so they reach it as `this.client`.
 
-For the full client setup, including keypairs and margin manager keys, see [DeepBook Margin SDK](/onchain-finance/deepbook/deepbook-margin-sdk/deepbook-margin-sdk).
+For the full client setup, including keypairs and margin manager keys, see [DeepBook Margin SDK](/onchain-finance/deepbook/deepbook-margin-sdk).
 
 ## Margin manager functions
 
@@ -135,8 +135,11 @@ Use these functions to deposit assets into a margin manager. The call returns a 
 
 **Parameters**
 
+These functions take a single `DepositParams` object rather than positional arguments. Its fields are:
+
 - `managerKey`: String that identifies the margin manager.
-- `amount`: Number representing the amount to deposit.
+- `amount`: Number or `bigint` representing the amount to deposit, in whole coins. The SDK converts it to onchain units.
+- `coin`: `TransactionArgument` representing a coin object to deposit. Provide either `amount` or `coin`, not both.
 
 <ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="depositBase,depositQuote,depositDeep" signatureOnly />
 
@@ -269,7 +272,7 @@ createMarginManager = (tx: Transaction) => {
 // Example: Deposit 100 SUI as collateral
 depositCollateral = (tx: Transaction) => {
 	const managerKey = 'MARGIN_MANAGER_1';
-	tx.add(this.client.deepbook.marginManager.depositBase(managerKey, 100));
+	tx.add(this.client.deepbook.marginManager.depositBase({ managerKey, amount: 100 }));
 };
 ```
 
