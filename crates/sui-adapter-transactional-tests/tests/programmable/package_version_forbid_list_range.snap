@@ -1,0 +1,75 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+// Version-forbid ranges are inclusive and only accept historical versions.
+
+init:
+A: object(0,0)
+
+task 1, lines 8-11:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5069200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 13-16:
+//# upgrade --package BaseV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5069200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 18-21:
+//# upgrade --package BaseV2 --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5069200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, lines 23-26:
+//# upgrade --package BaseV3 --upgrade-capability 1,1 --sender A
+created: object(4,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5069200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 5, lines 28-29:
+// Both endpoints of the inclusive range are forbidden.
+//# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 2 --sender A
+created: object(5,0), object(5,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 8474000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 6, line 31:
+//# run BaseV1::base::ping --sender A
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: None, command: None } }
+
+task 7, line 33:
+//# run BaseV2::base::ping --sender A
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: None, command: None } }
+
+task 8, lines 35-36:
+// The adjacent historical version remains allowed.
+//# run BaseV3::base::ping --sender A
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 9, lines 38-39:
+// A range with its start above its end is invalid.
+//# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 3 2 --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::forbid_version_range (function index 1) at offset 10, Abort Code: 2
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 1, instruction: 10, function_name: Some("forbid_version_range") }, 2) at command Some(0)
+
+task 10, lines 41-42:
+// Version zero is not historical. The range must reject it rather than install a v0 entry.
+//# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 0 1 --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::forbid_version_range (function index 1) at offset 23, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 1, instruction: 23, function_name: Some("forbid_version_range") }, 1) at command Some(0)
+
+task 11, lines 44-45:
+// The current version is not historical, so it cannot be forbidden.
+//# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 4 --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::assert_historical_version (function index 10) at offset 15, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 10, instruction: 15, function_name: Some("assert_historical_version") }, 1) at command Some(0)

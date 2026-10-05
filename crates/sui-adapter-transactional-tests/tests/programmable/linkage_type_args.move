@@ -37,3 +37,14 @@ fun init(_ctx: &mut TxContext) { }
 //> 0: Publish(Test, [DepV1, sui, std]);
 //> 1: MakeMoveVec<DepV2::M1::B>([]);
 //> TransferObjects([Result(0)], Input(0))
+
+// Type-only references remain at-least after minversion selection.
+//# programmable --sender A --inputs object(1,1) object(0x426)
+//> 0: sui::package::enable_minversion(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+
+//# advance-epoch
+
+// `A` has a v1 defining ID, but its type-only linkage is raised to the stable v2 package.
+//# programmable --sender A
+//> Gen::m::id<DepV1::M1::A>();
