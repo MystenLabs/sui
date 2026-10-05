@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 139;
+const MAX_PROTOCOL_VERSION: u64 = 140;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -419,6 +419,8 @@ const MAINNET_USDB: &str =
 //              Reduce the non-refundable storage fee from 1% to 0.01%.
 //              Allow random beacon DKG to complete after its timeout on devnet and testnet.
 //              Charge package inputs 1% of the per-byte object read cost.
+// Version 140: Enable package-version forbid lists.
+//              Enable package minversion.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4859,6 +4861,10 @@ impl ProtocolConfig {
                     }
                     // Validators cache packages, so reading one costs far less than reading an object.
                     cfg.obj_access_cost_read_per_package_kb = Some(154);
+                }
+                140 => {
+                    cfg.feature_flags.enable_package_version_forbid_list = true;
+                    cfg.feature_flags.enable_package_minversion = true;
                 }
                 // Use this template when making changes:
                 //
