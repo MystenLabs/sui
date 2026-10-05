@@ -59,14 +59,14 @@ The protocol captures a portion of the interest income as fees, set by the pool'
 
 ## How do borrowers access a margin pool?
 
-A margin pool must explicitly allow a DeepBook trading pool before traders can borrow from it. The `deepbook_pool_allowed` field tracks which pools have permission. This design lets pool administrators control which markets can access the liquidity, limiting exposure to specific trading pairs.
+A margin pool must explicitly allow a DeepBook trading pool before traders can borrow from it. The pool records them in its `allowed_deepbook_pools` field, and `deepbook_pool_allowed` checks one. This design lets pool administrators control which markets can access the liquidity, limiting exposure to specific trading pairs.
 
 ## Common workflow
 
 The typical workflow for a lender interacting with a margin pool:
 
 1. Mint a `SupplierCap` using `mint_supplier_cap`. One cap works across multiple pools.
-2. Call `supply` with your `SupplierCap` and the assets you want to deposit. The pool records your shares.
+2. Call `supply` with your `SupplierCap` and the assets you want to deposit. The pool records your shares. The `referral` parameter is an `Option<ID>`: pass `some(id)` to credit a referral with its pro rata share of the 50% referral split, or `none` if you have no referral.
 3. Monitor the pool's interest rate and utilization rate using the read endpoints.
 4. Call `withdraw` when you want to reclaim your assets plus accrued interest. The `amount` parameter is an `Option<u64>` denominated in tokens, not shares. Pass `some(amount)` to take a specific amount, or `none` to withdraw everything the cap holds.
 
