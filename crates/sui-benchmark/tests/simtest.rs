@@ -11,7 +11,7 @@ mod test {
     use std::num::NonZeroUsize;
     use std::path::PathBuf;
     use std::str::FromStr;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
     use sui_benchmark::BenchmarkProxyMetrics;
@@ -435,11 +435,14 @@ mod test {
     async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
-        // Use a short DKG timeout so that if DKG is prevented from completing (e.g. by the
-        // rb-dkg fail point below), DKG failure is declared quickly rather than at round 3000.
-        // This ensures the epoch transition completes within the surfer's 120s window.
+        // In this test DKG normally completes at commit rounds 6-9. Placing the timeout inside
+        // that range means that, with `allow_dkg_completion_after_timeout`, roughly half of the
+        // epochs complete DKG on time and the rest time out first and recover a few commits
+        // later, so the cancel-then-recover transition is exercised under crashes and delays.
+        // Epochs where the rb-dkg fail point below drops sends still fail quickly rather than
+        // at round 3000, which keeps the epoch transition within the surfer's 120s window.
         let _dkg_timeout_guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_random_beacon_dkg_timeout_round_for_testing(50);
+            config.set_random_beacon_dkg_timeout_round_for_testing(6);
             config
         });
 
@@ -723,16 +726,59 @@ mod test {
         .await;
     }
 
-    // Tests cluster liveness when DKG has failed.
+    // Tests cluster liveness across a DKG timeout. With `allow_dkg_completion_after_timeout`
+    // enabled, DKG in this test completes shortly after the timeout round, so this exercises the
+    // cancellation window followed by mid-epoch randomness recovery under load. See
+    // `test_simulated_load_dkg_permanent_failure` for the case where DKG never completes.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_dkg_failure() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
             config.set_random_beacon_dkg_timeout_round_for_testing(0);
+            // Late completion is not enabled on every chain yet.
+            config.set_allow_dkg_completion_after_timeout_for_testing(true);
             config
         });
 
+        // Fires on each validator (and observing fullnode) whose DKG completes past the timeout.
+        let late_completions = Arc::new(AtomicUsize::new(0));
+        let late_completions_clone = late_completions.clone();
+        register_fail_point("rb-dkg-completed-after-timeout", move || {
+            late_completions_clone.fetch_add(1, Ordering::Relaxed);
+        });
+
         let test_cluster = build_test_cluster(4, 30_000, 1).await;
-        test_simulated_load(test_cluster, 120).await;
+        test_simulated_load(test_cluster.clone(), 120).await;
+
+        // Verify reconfiguration still completes after the DKG timeout/recovery cycles.
+        test_cluster.wait_for_epoch(None).await;
+
+        // Without this the test would also pass if DKG never recovered, which is what
+        // `test_simulated_load_dkg_permanent_failure` covers.
+        let late_completions = late_completions.load(Ordering::Relaxed);
+        assert!(
+            late_completions >= test_cluster.all_validator_handles().len(),
+            "expected DKG to complete after its timeout on every validator, \
+             saw {late_completions} late completions"
+        );
+        clear_fail_point("rb-dkg-completed-after-timeout");
+    }
+
+    // Tests cluster liveness (including epoch close) when DKG can never complete, since the
+    // fail point suppresses all DKG sends for the entire test.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_dkg_permanent_failure() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
+            config.set_random_beacon_dkg_timeout_round_for_testing(0);
+            config
+        });
+        register_fail_point_if("rb-dkg", || true);
+
+        let test_cluster = build_test_cluster(4, 30_000, 1).await;
+        test_simulated_load(test_cluster.clone(), 60).await;
+
+        // Verify epoch close is not blocked by the never-completing DKG: reconfiguration
+        // must still complete (the fail point remains active during this wait).
+        test_cluster.wait_for_epoch(None).await;
     }
 
     #[sim_test(config = "test_config()")]
