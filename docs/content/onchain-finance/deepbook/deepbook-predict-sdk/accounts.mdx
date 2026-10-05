@@ -15,6 +15,8 @@ keywords:
   - deposit USDC
   - withdraw USDC
   - builder code
+  - referral
+  - referrer
   - accountcontract
   - account subpath
 goal:
@@ -43,6 +45,7 @@ questions:
   - How do I create and fund a DeepBook Predict account with the TypeScript SDK?
   - How do I get the account wrapper ID for an owner address before the account exists?
   - Where do USDC withdrawals from a DeepBook Predict account land by default?
+  - How do I create a DeepBook Predict account with a referrer?
 answer: >-
   Call client.predict.tx.createManager() to create the signer's shared account
   wrapper, or client.predict.tx.deposit(owner, amount, { create: true }) to
@@ -51,8 +54,8 @@ answer: >-
   returns it with no chain read, even before the account exists.
   client.predict.tx.withdraw sends USDC to the owner's address balance by
   default, and { toCoinObject: true } transfers a coin object instead.
-last_verified: 2026-09-23
-verified_against: '@mysten/deepbook-v3 2.6.1 (ts-sdks 56d51645); predict protocol version 3 and sessions 2 on both networks, publication records at deepbookv3 abb4cfd9'
+last_verified: 2026-09-28
+verified_against: '@mysten/deepbook-v3 2.6.1 (ts-sdks 56d51645); predict protocol version 3 and sessions 2 on both networks, publication records at deepbookv3 abb4cfd9; referred-account recipe type-checked against ts-sdks 56d51645 and simulated on Testnet 2026-09-28'
 ---
 
 The account functions create a trader's shared `AccountWrapper`, move USDC in and out of it, and attach a builder code, and the `/account` subpath exposes the account primitive underneath for transactions you compose yourself. [Accounts and Custody](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager) explains the custody mechanism: the wrapper, the `Auth` hot potato, settlement, and the account events.
@@ -108,6 +111,8 @@ Each account builder returns a new, unsigned `Transaction` that holds only that 
 Use `tx.createManager` to create the signer's account wrapper and share it. It returns a `Transaction` that holds `account_registry::new` followed by `account::share`. The name survives from DeepBook balance managers, but the object it creates is the account wrapper.
 
 It takes no parameters. The transaction sender becomes the owner, because `account_registry::new` records the sender. The builder does no chain read, so a second creation for the same owner aborts with `EAccountAlreadyExists`, as [Create an account](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#create-a-manager) describes. To create and fund the account in the same transaction, use [`tx.deposit`](#deposit) with `{ create: true }`.
+
+Neither `tx.createManager` nor `tx.deposit` attaches a referrer, and the contract accepts a referrer only at account creation. To create an account that pays a referrer, compose the call yourself, as [Create an account with a referrer](#create-with-referrer) shows. Do this before the user creates an account any other way, because the first creation is the only chance.
 
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="608-608" />
 
@@ -442,6 +447,45 @@ It takes these parameters:
 Only the wrapper ID derives from `AccountContract`. The canonical account identity is a second, different derived object whose key is `AccountKey(owner)` rather than `AccountWrapperKey(owner)`, and the SDK derives it with [`SessionsContract.deriveAccountId`](/onchain-finance/deepbook/deepbook-predict-sdk/sessions#derive-ids) in the `/sessions` subpath. Pass the wrapper ID to Predict calls, and expect the account ID in the `account_id` field of events. A live `OrderMinted` carries the account ID, not the wrapper ID.
 
 Offchain read services make the same split, and getting it wrong fails quietly. As of 2026-09-14 the only public read services are the Testnet v4 hosts that [Contract Information](/onchain-finance/deepbook/deepbook-predict/contract-information#account-and-portfolio-data) lists, and they index `predict-8-21`, an earlier Testnet deployment, not either current deployment. No read service exists yet for either current deployment, and no SDK read needs one. On those hosts the account and position paths key on the canonical account ID. A request with a wrapper ID returns status `200` with an empty array rather than an error, so a wrong key looks like an empty portfolio until you compare both: in a 2026-09-03 check for a real trader on that deployment, the wrapper ID returned 0 balances and 0 positions while the account ID returned 2 balance rows and 5 open positions. The same wrapper-against-account trap applies to session grants, as [Sessions](/onchain-finance/deepbook/deepbook-predict/contract-information/sessions#enumerate) describes. The wrapper ID stays correct for every onchain call that takes the shared `AccountWrapper` object.
+
+### Create an account with a referrer {#create-with-referrer}
+
+No facade builder creates a referred account: `tx.createManager`, `tx.deposit` with `{ create: true }`, `createAccount`, and `createAccountAndDeposit` all call `account_registry::new`, which records no referrer. Compose `account_registry::new_with_referrer` from the generated bindings instead. [Referrals](/onchain-finance/deepbook/deepbook-predict/design#referrals) explains what the referrer earns and why the choice is permanent.
+
+The Move call takes the referrer's shared `AccountWrapper`, so the following function derives the wrapper ID from the referrer's owner address, which is what a referral link normally carries. It then shares the new wrapper, the same as `createAccount`:
+
+```ts
+import {
+	AccountContract,
+	accountMoveCalls,
+	accountRegistryMoveCalls,
+	getAccountConfig,
+} from '@mysten/deepbook-v3/account';
+import { Transaction } from '@mysten/sui/transactions';
+
+const config = getAccountConfig('mainnet');
+const account = new AccountContract(config);
+
+// `referrerOwner` is the address that owns the referring account, for example
+// taken from a referral link. The call takes that account's shared wrapper.
+export function createReferredAccount(referrerOwner: string): Transaction {
+	const tx = new Transaction();
+	const wrapper = tx.add(
+		accountRegistryMoveCalls.newWithReferrer({
+			config,
+			arguments: { referrer: account.deriveAccountWrapperId(referrerOwner) },
+		}),
+	);
+	tx.add(accountMoveCalls.share({ config, arguments: { self: wrapper } }));
+	return tx;
+}
+```
+
+The new account's owner must sign, because `new_with_referrer` creates the account for the transaction sender. The transaction aborts with `EAccountAlreadyExists` when the sender already has an account, and at that point the account can no longer take a referrer. Building it fails when no object exists at the referrer's derived wrapper ID, because the SDK cannot resolve the shared object, so check for an object at that ID before you build from an unverified link.
+
+To fund the account in the same transaction, add `accountMoveCalls.generateAuth` and `accountMoveCalls.depositFunds` against the `wrapper` result between `newWithReferrer` and `share`, in the order [`createAccountAndDeposit`](#account-contract-create-account-and-deposit) uses, and keep `share` last.
+
+Confirm the attribution from the `AccountCreated` event, whose `referrer_account_id` is set. That field holds the referrer's canonical account ID, not the wrapper ID you passed in: the call takes the wrapper, and every event names the account. [`decode.createManager`](#decode-create-manager) does not report the referrer, so read the event itself, for example with the `accountEvents.AccountCreated` BCS struct. An account created by an owner who never used `new_with_referrer` has `referrer_account_id` permanently set to `none`.
 
 ### Generated bindings {#generated-bindings}
 

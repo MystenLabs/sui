@@ -25,7 +25,7 @@ task 3, line 36:
 //# run test::m::add --sender A --args object(2,0) 0
 created: object(3,0), object(3,1)
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 4, line 38:
 //# view-object 2,0
@@ -43,4 +43,4 @@ task 5, line 40:
 //# run test::m::delete --sender A --args object(2,0)
 mutated: object(0,0)
 deleted: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2196180, non_refundable_storage_fee: 220

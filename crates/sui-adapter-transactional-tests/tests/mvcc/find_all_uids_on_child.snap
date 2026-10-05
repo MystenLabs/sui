@@ -38,7 +38,7 @@ task 4, lines 148-149:
 //# programmable --sender A --inputs object(2,0) 112
 //> test::m::set(Input(0), Input(1))
 mutated: object(0,0), object(2,0), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9)
-gas summary: computation_cost: 1000000, storage_cost: 13968800,  storage_rebate: 13829112, non_refundable_storage_fee: 139688
+gas summary: computation_cost: 1000000, storage_cost: 13968800,  storage_rebate: 13967403, non_refundable_storage_fee: 1397
 
 task 5, line 151:
 //# view-object 2,0
@@ -57,7 +57,7 @@ task 6, lines 153-154:
 //> test::m::remove(Input(0))
 mutated: object(0,0), object(2,0)
 deleted: object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8), object(2,9)
-gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 13829112, non_refundable_storage_fee: 139688
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 13967403, non_refundable_storage_fee: 1397
 
 task 7, line 156:
 //# view-object 2,0
@@ -77,19 +77,19 @@ task 8, lines 161-162:
 //# programmable --sender A --inputs object(2,0)@2 vector[0] --dev-inspect
 //> test::m::check(Input(0), Input(1))
 mutated: object(_), object(2,0)
-gas summary: computation_cost: 500000, storage_cost: 2234400,  storage_rebate: 1233936, non_refundable_storage_fee: 12464
+gas summary: computation_cost: 500000, storage_cost: 2234400,  storage_rebate: 1246275, non_refundable_storage_fee: 125
 
 task 9, lines 164-165:
 //# programmable --sender A --inputs object(2,0)@3 vector[112] --dev-inspect
 //> test::m::check(Input(0), Input(1))
 mutated: object(_), object(2,0)
-gas summary: computation_cost: 500000, storage_cost: 2234400,  storage_rebate: 1233936, non_refundable_storage_fee: 12464
+gas summary: computation_cost: 500000, storage_cost: 2234400,  storage_rebate: 1246275, non_refundable_storage_fee: 125
 
 task 10, lines 167-168:
 //# programmable --sender A --inputs object(2,0)@4 vector[] --dev-inspect
 //> test::m::check(Input(0), Input(1))
 mutated: object(_), object(2,0)
-gas summary: computation_cost: 500000, storage_cost: 2234400,  storage_rebate: 1233936, non_refundable_storage_fee: 12464
+gas summary: computation_cost: 500000, storage_cost: 2234400,  storage_rebate: 1246275, non_refundable_storage_fee: 125
 
 // dev-inspect with 'check' and _incorrect_ values
 

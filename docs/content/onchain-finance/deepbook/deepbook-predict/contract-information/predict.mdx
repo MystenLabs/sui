@@ -275,7 +275,7 @@ referral_fee       = referral_fee_basis * referral_fee_rate / 1e9
 
 The chain then splits the result out of the USDC payment the trader has already made. It comes out of fees already paid, is never an extra debit, and never changes `all_in_cost`, so a trader with a referrer and a trader without one pay exactly the same total for the same trade. The amount is zero unless `new_with_referrer` created the account.
 
-The SDK's `MintQuote.fees.referral` does report it, because that value comes from dry-running the mint and reading the `OrderMinted` event rather than from the Move quote. It is there for visibility, and the SDK deliberately does not add it into `cost`.
+The SDK's `MintQuote.fees.referral` does report it, because that value comes from dry-running the mint and reading the `OrderMinted` event rather than from the Move quote. It is there for visibility, and the SDK deliberately does not add it into `cost`. [Referrals](/onchain-finance/deepbook/deepbook-predict/design#referrals) covers how an account gets a referrer, the rate, and how the payment reaches the referrer.
 
 ## Mint a position {#mint-a-position}
 
