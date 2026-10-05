@@ -144,6 +144,10 @@ pub struct Groth16VerifyGroth16ProofInternalCostParams {
  *              + groth16_verify_groth16_proof_internal_cost_per_public_input
  *                                                   * num_public_inputs) | covers the cost of verifying each public input per input
  * Note: every other arg is fixed size, so their costs are included in the base cost.
+ *
+ * A prepared verifying key for `n` public inputs holds `n + 1` G1 elements in `vk_gamma_abc`. Any
+ * other length is rejected by fastcrypto, which surfaces as an invalid proof, so this function
+ * checks the length itself and returns `INVALID_VERIFYING_KEY` instead.
  **************************************************************************************************/
 pub fn verify_groth16_proof_internal(
     context: &mut NativeContext,
@@ -229,12 +233,22 @@ pub fn verify_groth16_proof_internal(
 
     let cost = context.gas_used();
 
+    let check_pvk_length = get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .check_groth16_pvk_length();
+
     let result;
     if curve == BLS12381 {
         if public_proof_inputs.len()
             > fastcrypto::groups::bls12381::SCALAR_LENGTH * MAX_PUBLIC_INPUTS
         {
             return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
+        }
+        if check_pvk_length
+            && vk_gamma_abc_g1.len()
+                != (num_public_inputs + 1) * fastcrypto::groups::bls12381::G1_ELEMENT_BYTE_LENGTH
+        {
+            return Ok(NativeResult::err(cost, INVALID_VERIFYING_KEY));
         }
         result = fastcrypto_zkp::bls12381::api::verify_groth16_in_bytes(
             &vk_gamma_abc_g1,
@@ -247,6 +261,12 @@ pub fn verify_groth16_proof_internal(
     } else if curve == BN254 {
         if public_proof_inputs.len() > fastcrypto_zkp::bn254::api::SCALAR_SIZE * MAX_PUBLIC_INPUTS {
             return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
+        }
+        if check_pvk_length
+            && vk_gamma_abc_g1.len()
+                != (num_public_inputs + 1) * fastcrypto_zkp::bn254::api::G1_SIZE
+        {
+            return Ok(NativeResult::err(cost, INVALID_VERIFYING_KEY));
         }
         result = fastcrypto_zkp::bn254::api::verify_groth16_in_bytes(
             &vk_gamma_abc_g1,
