@@ -16,6 +16,7 @@ task 2, line 60:
 //# run tto::M1::start --sender A
 created: object(2,0), object(2,1), object(2,2), object(2,3)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 7273200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 62:
@@ -79,6 +80,7 @@ task 7, line 70:
 //# run tto::M1::receive --args object(2,0) receiving(2,1) --sender A
 created: object(7,0)
 mutated: object(0,0), object(2,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 3541246, non_refundable_storage_fee: 354
 
 task 8, line 72:
@@ -143,6 +145,7 @@ task 12, lines 81-82:
 //# programmable --sender A --inputs object(2,0) 1 2 3
 //> tto::M1::set(Input(0), Input(1), Input(2), Input(3))
 mutated: object(0,0), object(2,0), object(2,1), object(2,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 4818400,  storage_rebate: 4817918, non_refundable_storage_fee: 482
 
 task 13, line 84:
@@ -208,6 +211,7 @@ task 17, lines 93-94:
 //> tto::M1::remove(Input(0))
 mutated: object(0,0), object(2,0)
 deleted: object(2,2), object(2,3)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 5995800, non_refundable_storage_fee: 600
 
 // dev-inspect with 'check' and correct values

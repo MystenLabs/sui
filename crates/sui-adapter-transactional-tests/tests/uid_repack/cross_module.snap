@@ -19,17 +19,20 @@ task 2, lines 48-59:
 //# publish --dependencies ex
 created: object(2,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 5456800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, line 61:
 //# run ex::a::mint --sender A
 created: object(3,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 4, line 63:
 //# run ex::c::from_a --args object(3,0) --sender A
 mutated: object(0,0), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 5, line 65:
@@ -50,6 +53,7 @@ task 6, lines 67-70:
 //> 1: ex::c::from_uid(Result(0));
 //> TransferObjects([Result(1)], Input(1))
 mutated: object(0,0), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 7, line 72:
@@ -69,6 +73,7 @@ task 8, lines 74-76:
 //> 0: ex::c::into_uid(Input(0));
 //> other::d::from_uid(Result(0))
 mutated: object(0,0), object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 9, line 78:
