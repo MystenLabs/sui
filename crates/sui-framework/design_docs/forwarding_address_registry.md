@@ -33,8 +33,12 @@ Address layout (`crates/sui-types/src/forwarding_address.rs`, all integers littl
 - Absent magic means an ordinary address. Present magic with a variant above
   `forwarding_address_max_variant` in protocol config (0 in version 139) aborts the deposit (code 2),
   so nobody can fund an address whose meaning a later variant would define differently; it is never
-  treated as an ordinary recipient, and the gas-coin `send_funds` guard in the interpreter rejects
-  anything with the magic for the same reason.
+  treated as an ordinary recipient.
+- Nothing can sign for a pattern address, so a transaction that leaves an object owned by one, or
+  credits funds to one without resolution, fails at the end of execution
+  (`check_no_forwarding_address_recipients` in the adapter). That covers object transfers of any
+  kind, including coins and the gas coin, and `coin::send_funds(Gas, pattern)`: Move resolves the
+  coin's value, but the adapter credits the gas budget refund to the raw recipient.
 - The deposit event is `ForwardingDeposit<T> { forwarding_address, master, amount }`. The address
   is the lossless record of the variant and payload; `sui-types` publishes the layout and the typed
   registry schema (`MasterRecordKey`), so indexers slice bytes instead of depending on a parsed
@@ -118,8 +122,7 @@ Why each piece:
   address. One epoch latency (protocol bump), which I think is acceptable for a brake; anything
   faster needs governance we don't have. Flag-off keeps meaning "pattern is an ordinary address"
   only for versions that never enabled the feature.
-- Out of scope for now: object transfers to a pattern address still land there (separate decision),
-  unregistered ids keep aborting.
+- Out of scope for now: unregistered ids keep aborting; there is no fallback that credits them.
 
 ## Record lifecycle
 
@@ -190,7 +193,7 @@ registry does not make a layout change safe on a chain that already published th
    `forwarding_address_register_cost_base` (1M gas units in 139).
 4. Brake flag. `freeze_forwarding_addresses`, native aborts on any pattern address when set.
 5. Indexer pipeline + GraphQL fields (can run in parallel with 2 to 4 once the events exist).
-6. Later: object transfers to pattern addresses, testnet enablement.
+6. Later: testnet enablement.
 
 ## Open questions
 
@@ -212,5 +215,10 @@ registry does not make a layout change safe on a chain that already published th
   (`register` with a non-sender master, `propose_rotation`) must reject the magic.
 - Can an object address (a shared or owned object's ID) be a master, given nobody can sign for it
   and its balance is only reachable through object funds withdrawals?
+- Should `coin::send_funds(Gas, pattern)` work? It could, by resolving the recipient to the master
+  when the adapter records the gas coin transfer, so the budget refund and the gas charge location
+  follow the master. The `ForwardingDeposit` event would then understate the deposit by the refund,
+  which is only known after gas is finalized. Rejected today so attribution is always exact; the
+  payer can split the gas coin instead.
 - Do we want `MasterRecord` and the events readable from other Move packages (a
   `master_of(registry, id)` view), or is off-chain lookup enough for now?
