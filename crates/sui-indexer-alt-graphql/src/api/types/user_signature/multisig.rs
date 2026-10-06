@@ -182,8 +182,8 @@ impl TryFrom<&PublicKey> for MultisigMemberPublicKey {
                         .unwrap_or_default(),
                 )
             }
-            PublicKey::MLDSA65(_) => {
-                anyhow::bail!("ML-DSA-65 multisig members have no GraphQL type yet")
+            PublicKey::ZkLoginV2(_) | PublicKey::MLDSA65(_) => {
+                anyhow::bail!("multisig member scheme has no GraphQL type yet")
             }
         })
     }

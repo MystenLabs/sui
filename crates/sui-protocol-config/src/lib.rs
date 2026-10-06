@@ -414,6 +414,7 @@ const MAINNET_USDB: &str =
 //              Merge colliding deferred-transaction entries in the consensus handler
 //              instead of overwriting (which stranded the displaced transactions).
 // Version 139: Enable forwarding addresses on devnet.
+//              Enable ML-DSA-65 account signatures on devnet.
 //              Reduce the non-refundable storage fee from 1% to 0.01%.
 //              Allow random beacon DKG to complete after its timeout on devnet and testnet.
 
@@ -4827,6 +4828,7 @@ impl ProtocolConfig {
                 139 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_forwarding_addresses = true;
+                        cfg.feature_flags.mldsa65_auth = true;
                     }
                     cfg.storage_rebate_rate = Some(9999);
                     if chain != Chain::Mainnet {

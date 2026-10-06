@@ -1071,6 +1071,10 @@ PublicKey:
         NEWTYPE:
           TYPENAME: ZkLoginPublicIdentifier
     5:
+      ZkLoginV2:
+        NEWTYPE:
+          TYPENAME: ZkLoginPublicIdentifier
+    6:
       MLDSA65:
         NEWTYPE:
           TUPLEARRAY:

@@ -1212,6 +1212,11 @@ impl TryFrom<crate::crypto::PublicKey> for MultisigMemberPublicKey {
             crate::crypto::PublicKey::Passkey(p) => {
                 Self::Passkey(PasskeyPublicKey::new(Secp256r1PublicKey::new(p.0)))
             }
+            crate::crypto::PublicKey::ZkLoginV2(_) => {
+                return Err(SdkTypeConversionError(
+                    "zkLogin v2 multisig members are not supported yet".to_string(),
+                ));
+            }
             crate::crypto::PublicKey::MLDSA65(_) => {
                 return Err(SdkTypeConversionError(
                     "ML-DSA-65 has no sui-sdk-types representation yet".to_string(),

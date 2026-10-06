@@ -288,7 +288,10 @@ fn mldsa65_zklogin_ephemeral_rejected() {
 
 #[test]
 fn mldsa65_bcs_variant_index_pinned() {
-    // The BCS tag is consensus-critical (serialized inside MultiSig committees).
+    // The BCS tag is consensus-critical (serialized inside MultiSig committees)
+    // and shared with the SDKs: 5 is held for zkLogin v2, ML-DSA-65 is 6.
     let kp = mldsa65_random_keypair();
-    assert_eq!(bcs::to_bytes(&kp.public()).unwrap()[0], 5);
+    assert_eq!(bcs::to_bytes(&kp.public()).unwrap()[0], 6);
+    let v2 = PublicKey::ZkLoginV2(ZkLoginPublicIdentifier(vec![0u8; 32]));
+    assert_eq!(bcs::to_bytes(&v2).unwrap()[0], 5);
 }

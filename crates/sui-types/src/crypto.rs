@@ -284,6 +284,9 @@ pub enum PublicKey {
     Secp256r1(Secp256r1PublicKeyAsBytes),
     ZkLogin(ZkLoginPublicIdentifier),
     Passkey(Secp256r1PublicKeyAsBytes),
+    // Holds index 5 for zkLogin v2, so MLDSA65 sits at 6 like in the SDKs.
+    // Nothing constructs it yet and multisig validation rejects it.
+    ZkLoginV2(ZkLoginPublicIdentifier),
     // Boxed because the 1,952-byte pk; Box is transparent to BCS.
     // Schema-only skip (serde unaffected): keeps the generated openrpc spec
     // unchanged, since deprecated JSON-RPC will never serve ML-DSA.
@@ -357,7 +360,7 @@ impl AsRef<[u8]> for PublicKey {
             PublicKey::Ed25519(pk) => &pk.0,
             PublicKey::Secp256k1(pk) => &pk.0,
             PublicKey::Secp256r1(pk) => &pk.0,
-            PublicKey::ZkLogin(z) => &z.0,
+            PublicKey::ZkLogin(z) | PublicKey::ZkLoginV2(z) => &z.0,
             PublicKey::Passkey(pk) => &pk.0,
             PublicKey::MLDSA65(pk) => &pk.0,
         }
@@ -446,6 +449,8 @@ impl PublicKey {
             PublicKey::Secp256k1(_) => Secp256k1SuiSignature::SCHEME,
             PublicKey::Secp256r1(_) => Secp256r1SuiSignature::SCHEME,
             PublicKey::ZkLogin(_) => SignatureScheme::ZkLoginAuthenticator,
+            // Until zkLogin v2 brings its own flag.
+            PublicKey::ZkLoginV2(_) => SignatureScheme::ZkLoginAuthenticator,
             PublicKey::Passkey(_) => SignatureScheme::PasskeyAuthenticator,
             PublicKey::MLDSA65(_) => MLDSA65SuiSignature::SCHEME,
         }
