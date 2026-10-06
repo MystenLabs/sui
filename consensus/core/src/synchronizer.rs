@@ -66,6 +66,26 @@ struct BlocksGuard {
     peer: PeerId,
 }
 
+impl BlocksGuard {
+    /// Unlocks the blocks that have been accepted since they got locked, as there is no need
+    /// to fetch them anymore. Returns false when no blocks are left to fetch.
+    fn retain_missing(&mut self, dag_state: &RwLock<DagState>) -> bool {
+        let block_refs = self.block_refs.iter().copied().collect::<Vec<_>>();
+        let found = dag_state.read().contains_blocks(block_refs.clone());
+        let accepted = block_refs
+            .into_iter()
+            .zip_debug_eq(found)
+            .filter_map(|(block_ref, found)| found.then_some(block_ref))
+            .collect::<BTreeSet<_>>();
+        if !accepted.is_empty() {
+            self.map.unlock_blocks(&accepted, self.peer.clone());
+            self.block_refs
+                .retain(|block_ref| !accepted.contains(block_ref));
+        }
+        !self.block_refs.is_empty()
+    }
+}
+
 impl Drop for BlocksGuard {
     fn drop(&mut self) {
         self.map.unlock_blocks(&self.block_refs, self.peer.clone());
@@ -515,12 +535,14 @@ where
 
         loop {
             tokio::select! {
-                Some(blocks_guard) = receiver.recv(), if requests.len() < FETCH_BLOCKS_CONCURRENCY => {
-                    let fetch_after_rounds = Self::get_fetch_after_rounds(&context, &dag_state);
-
-                    requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, 0))
+                Some(mut blocks_guard) = receiver.recv(), if requests.len() < FETCH_BLOCKS_CONCURRENCY => {
+                    // Blocks could have been accepted while the request was queued.
+                    if blocks_guard.retain_missing(&dag_state) {
+                        let fetch_after_rounds = Self::get_fetch_after_rounds(&context, &dag_state);
+                        requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, 0))
+                    }
                 },
-                Some((response, blocks_guard, failed_attempts, _peer, fetch_after_rounds)) = requests.next() => {
+                Some((response, mut blocks_guard, failed_attempts, _peer)) = requests.next() => {
                     match response {
                         Ok(blocks) => {
                             if let Err(err) = Self::process_fetched_blocks(blocks,
@@ -541,12 +563,15 @@ where
                         },
                         Err(_) => {
                             context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer.labelname(&context).as_str(), "live"]).inc();
-                            if failed_attempts < MAX_ATTEMPTS {
-                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, failed_attempts))
-                            } else {
+                            if failed_attempts >= MAX_ATTEMPTS {
                                 warn!("Max attempts {MAX_ATTEMPTS} reached while trying to fetch blocks from peer {}.", peer.hostname(&context));
                                 // we don't necessarily need to do, but dropping the guard here to unlock the blocks
                                 drop(blocks_guard);
+                            } else if blocks_guard.retain_missing(&dag_state) {
+                                // Retry only the blocks that are still missing, as some could have been
+                                // received via other paths since the failed request was sent.
+                                let fetch_after_rounds = Self::get_fetch_after_rounds(&context, &dag_state);
+                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, failed_attempts))
                             }
                         }
                     }
@@ -743,20 +768,14 @@ where
         fetch_missing_ancestors: bool,
         request_timeout: Duration,
         mut failed_attempts: u32,
-    ) -> (
-        ConsensusResult<Vec<Bytes>>,
-        BlocksGuard,
-        u32,
-        PeerId,
-        Vec<Round>,
-    ) {
+    ) -> (ConsensusResult<Vec<Bytes>>, BlocksGuard, u32, PeerId) {
         let start = Instant::now();
         let resp = timeout(
             request_timeout,
             network_client.fetch_blocks(
                 peer.clone(),
                 blocks_guard.block_refs.iter().copied().collect(),
-                fetch_after_rounds.clone(),
+                fetch_after_rounds,
                 fetch_missing_ancestors,
                 request_timeout,
             ),
@@ -781,13 +800,7 @@ where
             }
             Ok(result) => result,
         };
-        (
-            resp,
-            blocks_guard,
-            failed_attempts,
-            peer,
-            fetch_after_rounds,
-        )
+        (resp, blocks_guard, failed_attempts, peer)
     }
 
     fn start_fetch_own_last_block_task(&mut self) {
@@ -1282,13 +1295,15 @@ where
             let peer_name = peer.hostname(&context);
             // Fetch from the lowest round missing blocks to ensure progress.
             // This may reduce efficiency and increase the chance of duplicated data transfer in edge cases.
+            // Peers serve up to max_blocks_per_sync blocks per request, so requesting and locking
+            // more would only prevent fetching them from other peers.
             let block_refs = batch
                 .iter()
                 .flatten()
                 .cloned()
                 .collect::<BTreeSet<_>>()
                 .into_iter()
-                .take(context.parameters.max_blocks_per_fetch)
+                .take(context.parameters.max_blocks_per_sync)
                 .collect::<BTreeSet<_>>();
 
             // lock the blocks to be fetched. If no lock can be acquired for any of the blocks then don't bother
@@ -1325,7 +1340,7 @@ where
         // Stop as soon as no pending requests are left, instead of waiting for the timeout.
         while !request_futures.is_empty() {
             tokio::select! {
-                Some((response, blocks_guard, _failed_attempts, peer, fetch_after_rounds)) = request_futures.next() => {
+                Some((response, blocks_guard, _failed_attempts, peer)) = request_futures.next() => {
                     match response {
                         Ok(fetched_blocks) => {
                             results.push((blocks_guard, fetched_blocks, peer));
@@ -1336,7 +1351,11 @@ where
                             // try again if there is any peer left
                             if let Some(next_peer) = peers.next() {
                                 // do best effort to lock guards. If we can't lock then don't bother at this run.
-                                if let Some(blocks_guard) = inflight_blocks.swap_locks(blocks_guard, next_peer.clone()) {
+                                // Retry only the blocks that are still missing, as some could have been
+                                // received via other paths since the failed request was sent.
+                                if let Some(mut blocks_guard) = inflight_blocks.swap_locks(blocks_guard, next_peer.clone())
+                                    && blocks_guard.retain_missing(&dag_state)
+                                {
                                     info!(
                                         "Retrying syncing {} missing blocks from peer {:?}: {}",
                                         blocks_guard.block_refs.len(),
@@ -1351,13 +1370,13 @@ where
                                         network_client.clone(),
                                         next_peer,
                                         blocks_guard,
-                                        fetch_after_rounds,
+                                        Self::get_fetch_after_rounds(&context, &dag_state),
                                         false,
                                         FETCH_REQUEST_TIMEOUT,
                                         0,
                                     ));
                                 } else {
-                                    debug!("Couldn't acquire locks to fetch blocks from peer {:?}.", next_peer)
+                                    debug!("No blocks to fetch or couldn't acquire locks to fetch blocks from peer {:?}.", next_peer)
                                 }
                             } else {
                                 debug!("No more peers left to fetch blocks");
@@ -1661,6 +1680,40 @@ mod tests {
             assert_eq!(map.num_of_locked_blocks(), 0);
         }
 
+        // Retain missing
+        {
+            let (context, _) = Context::new_for_test(4);
+            let context = Arc::new(context);
+            let dag_state = RwLock::new(DagState::new(context, Arc::new(MemStore::new())));
+            let blocks = (1..=3)
+                .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round, 1).build()))
+                .collect::<Vec<_>>();
+            let block_refs = blocks
+                .iter()
+                .map(|block| block.reference())
+                .collect::<BTreeSet<_>>();
+            let peer = PeerId::Validator(AuthorityIndex::new_for_test(2));
+            let mut guard = map.lock_blocks(block_refs.clone(), peer).unwrap();
+
+            // Nothing is accepted yet, so all the blocks stay locked.
+            assert!(guard.retain_missing(&dag_state));
+            assert_eq!(guard.block_refs, block_refs);
+
+            // Accepted blocks get unlocked.
+            dag_state.write().accept_block(blocks[0].clone());
+            assert!(guard.retain_missing(&dag_state));
+            assert_eq!(guard.block_refs.len(), 2);
+            assert!(!guard.block_refs.contains(&blocks[0].reference()));
+            assert_eq!(map.num_of_locked_blocks(), 2);
+
+            // Once all the blocks are accepted there is nothing left to fetch.
+            dag_state.write().accept_block(blocks[1].clone());
+            dag_state.write().accept_block(blocks[2].clone());
+            assert!(!guard.retain_missing(&dag_state));
+            assert_eq!(map.num_of_locked_blocks(), 0);
+            drop(guard);
+        }
+
         // Swap locks
         {
             // acquire a lock for authority 1
@@ -1712,7 +1765,7 @@ mod tests {
         );
 
         // Create some test blocks
-        let expected_blocks = (0..10)
+        let expected_blocks = (1..=10)
             .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round, 0).build()))
             .collect::<Vec<_>>();
         let missing_blocks = expected_blocks
@@ -1777,7 +1830,7 @@ mod tests {
         );
 
         // Create some test blocks
-        let expected_blocks = (0..=2 * FETCH_BLOCKS_CONCURRENCY)
+        let expected_blocks = (1..=2 * FETCH_BLOCKS_CONCURRENCY + 1)
             .map(|round| VerifiedBlock::new_for_test(TestBlock::new(round as Round, 0).build()))
             .collect::<Vec<_>>();
 
@@ -2025,23 +2078,26 @@ mod tests {
 
         // AND stub the requests for authority 1 & 2
         // Make the first authority timeout, so the second will be called. "We" are authority = 0, so
-        // we are skipped anyways. Stub all blocks since the full set is sent in one request.
-        // Only the first max_blocks_per_sync blocks will be processed by process_fetched_blocks.
-        mock_client
-            .stub_fetch_blocks(
-                stub_blocks.clone(),
-                AuthorityIndex::new_for_test(1),
-                Some(FETCH_REQUEST_TIMEOUT),
-            )
-            .await;
-        mock_client
-            .stub_fetch_blocks(stub_blocks.clone(), AuthorityIndex::new_for_test(2), None)
-            .await;
+        // we are skipped anyways. Only the first max_blocks_per_sync blocks are requested.
         let mut expected_blocks = stub_blocks
             .iter()
             .take(context.parameters.max_blocks_per_sync)
             .cloned()
             .collect::<Vec<_>>();
+        mock_client
+            .stub_fetch_blocks(
+                expected_blocks.clone(),
+                AuthorityIndex::new_for_test(1),
+                Some(FETCH_REQUEST_TIMEOUT),
+            )
+            .await;
+        mock_client
+            .stub_fetch_blocks(
+                expected_blocks.clone(),
+                AuthorityIndex::new_for_test(2),
+                None,
+            )
+            .await;
 
         // Now create some blocks to simulate a commit lag
         let round = context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER * 2;

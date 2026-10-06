@@ -419,7 +419,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
     //    - Highest accepted rounds must be specified.
     //    - Missing block refs are optional.
     //    - fetch_missing_ancestors is false (default).
-    //    - response returns max_blocks_per_fetch blocks.
+    //    - response returns max_blocks_per_sync blocks.
     // 3. Commit sync:
     //    - Missing block refs are specified.
     //    - Highest accepted rounds are empty.
@@ -1204,7 +1204,7 @@ mod tests {
                 (block.reference(), block)
             })
             .collect();
-        assert_eq!(blocks.len(), context.parameters.max_blocks_per_fetch);
+        assert_eq!(blocks.len(), context.parameters.max_blocks_per_sync);
         // Blocks should be from all authorities, within the expected round range.
         for block_ref in blocks.keys() {
             let accepted = highest_accepted_rounds[block_ref.author];
@@ -1213,7 +1213,7 @@ mod tests {
         // Blocks should be fetched in ascending round order across authorities,
         // so blocks should have low rounds near the accepted rounds.
         let max_round_in_result = blocks.keys().map(|b| b.round).max().unwrap();
-        // With 40 authorities mostly at accepted round 1 and max_blocks_per_fetch=50,
+        // With 40 authorities mostly at accepted round 1 and max_blocks_per_sync blocks returned,
         // the min-heap fills ~1-2 rounds per authority.
         assert!(
             max_round_in_result <= 4,

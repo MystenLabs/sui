@@ -57,7 +57,7 @@ impl BlockSyncService {
     //    - Highest accepted rounds must be specified.
     //    - Missing block refs are optional.
     //    - fetch_missing_ancestors is false (default).
-    //    - response returns max_blocks_per_fetch blocks.
+    //    - response returns max_blocks_per_sync blocks.
     // 3. Commit sync:
     //    - Missing block refs are specified.
     //    - Highest accepted rounds are empty.
@@ -87,8 +87,9 @@ impl BlockSyncService {
             ));
         }
 
-        // Finds the suitable limit of # of blocks to return.
-        let max_response_num_blocks = if !fetch_after_rounds.is_empty() && !block_refs.is_empty() {
+        // Finds the suitable limit of # of blocks to return. Live and periodic sync requesters
+        // process up to max_blocks_per_sync blocks per response, so returning more is wasteful.
+        let max_response_num_blocks = if !fetch_after_rounds.is_empty() {
             self.context.parameters.max_blocks_per_sync
         } else {
             self.context.parameters.max_blocks_per_fetch
