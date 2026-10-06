@@ -1,52 +1,105 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>GraphiQL</title>
-  <link rel="stylesheet" href="https://unpkg.com/graphiql@3.9.0/graphiql.min.css" />
-</head>
-<body style="margin: 0;">
-  <div id="graphiql" style="height: 100vh;"></div>
-  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/graphiql@3.9.0/graphiql.min.js"></script>
-  <script src="https://unpkg.com/graphql-sse@2.6.0/umd/graphql-sse.min.js"></script>
-  <script type="module">
-    import { parse, getOperationAST } from "https://unpkg.com/graphql@16.14.0/index.mjs?module";
-
-    const GRAPHQL_ENDPOINT = "__GRAPHQL_PATH__";
-    const GRAPHQL_SUBSCRIPTIONS_ENDPOINT = "__GRAPHQL_SUBSCRIPTIONS_PATH__";
-
-    const sseClient = graphqlSse.createClient({ url: GRAPHQL_SUBSCRIPTIONS_ENDPOINT });
-
-    function isSubscription(params) {
-      try {
-        const document = parse(params.query || '');
-        const operation = getOperationAST(document, params.operationName);
-        return operation?.operation === 'subscription';
-      } catch {
-        return false;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="graphiql-version" content="6.0.0-rc.1" />
+    <title>Sui GraphQL</title>
+    <link
+      rel="stylesheet"
+      href="https://esm.sh/graphiql@6.0.0-rc.1/dist/style.css"
+    />
+    <style>
+      body {
+        margin: 0;
       }
-    }
 
-    const fetcher = async function*(params) {
-      if (isSubscription(params)) {
-        for await (const result of sseClient.iterate(params)) yield result;
-        return;
+      #graphiql {
+        height: 100dvh;
       }
-      const response = await fetch(GRAPHQL_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(params),
+
+      [data-theme="dark"] {
+        --bg-canvas: 11.76% 0.029 244;
+        --bg-elevated: 19.49% 0.007 258;
+        --bg-subtle: 19.49% 0.007 258;
+        --bg-overlay: 24.95% 0.014 253;
+        --border-default: 19.49% 0.007 258;
+        --border-muted: 24.95% 0.014 253;
+        --border-strong: 30.67% 0.017 256;
+        --fg-default: 65.47% 0.023 262;
+        --fg-strong: 100% 0 90;
+        --fg-muted: 56.63% 0.02 256;
+        --fg-subtle: 56.63% 0.02 256;
+        --fg-disabled: 46.5% 0.022 258;
+        --fg-dim: 38.37% 0.022 256;
+        --accent-blue: 72.33% 0.147 253;
+        --btn-primary: 49.09% 0.18 260;
+        --btn-primary-border: 64.75% 0.191 255;
+      }
+
+      [data-theme="light"] {
+        --bg-canvas: 100% 0 90;
+        --bg-elevated: 100% 0 90;
+        --bg-subtle: 97.14% 0.004 236;
+        --bg-overlay: 92.32% 0.004 237;
+        --border-default: 92.32% 0.004 237;
+        --border-muted: 87.06% 0.009 248;
+        --border-strong: 80.47% 0.014 252;
+        --fg-default: 36.27% 0.031 282;
+        --fg-strong: 0% 0 0;
+        --fg-muted: 46.5% 0.022 258;
+        --fg-subtle: 56.63% 0.02 256;
+        --fg-disabled: 56.63% 0.02 256;
+        --fg-dim: 65.47% 0.023 262;
+        --accent-blue: 49.09% 0.18 260;
+        --btn-primary: 49.09% 0.18 260;
+        --btn-primary-border: 64.75% 0.191 255;
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@19.3.0",
+          "react/": "https://esm.sh/react@19.3.0/",
+          "react-dom": "https://esm.sh/react-dom@19.3.0",
+          "react-dom/": "https://esm.sh/react-dom@19.3.0/",
+          "graphiql": "https://esm.sh/graphiql@6.0.0-rc.1?standalone&external=react,react-dom,@graphiql/react,graphql",
+          "graphiql/": "https://esm.sh/graphiql@6.0.0-rc.1/",
+          "@graphiql/react": "https://esm.sh/@graphiql/react@1.0.0-rc.1?standalone&external=react,react-dom,graphql,@graphiql/toolkit,@emotion/is-prop-valid",
+          "@graphiql/toolkit": "https://esm.sh/@graphiql/toolkit@1.0.0-rc.0?standalone&external=graphql",
+          "graphql": "https://esm.sh/graphql@17.0.2",
+          "graphql-sse": "https://esm.sh/graphql-sse@2.6.0?standalone&external=graphql",
+          "@emotion/is-prop-valid": "data:text/javascript,"
+        }
+      }
+    </script>
+    <script type="module">
+      import React from "react";
+      import ReactDOM from "react-dom/client";
+      import { GraphiQL } from "graphiql";
+      import { createTransport } from "@graphiql/toolkit";
+      import { createClient } from "graphql-sse";
+      import "https://esm.sh/@graphiql/react@1.0.0-rc.1/setup-workers/esm.sh";
+
+      const subscriptionClient = createClient({
+        url: "__GRAPHQL_SUBSCRIPTIONS_PATH__",
       });
-      yield await response.json();
-    };
+      const transport = createTransport({
+        url: "__GRAPHQL_PATH__",
+        subscriptionClient,
+      });
 
-    ReactDOM.createRoot(document.getElementById('graphiql'))
-      .render(React.createElement(GraphiQL, { fetcher }));
-  </script>
-</body>
+      ReactDOM.createRoot(document.getElementById("graphiql")).render(
+        React.createElement(GraphiQL, {
+          brand: "Sui GraphQL",
+          defaultEditorToolsVisibility: true,
+          defaultQuery: "query ChainIdentifier {\n  chainIdentifier\n}",
+          transport,
+        }),
+      );
+    </script>
+  </head>
+  <body>
+    <div id="graphiql"></div>
+  </body>
 </html>
