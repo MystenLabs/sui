@@ -114,6 +114,65 @@ Some description here.
         self.assertFalse(notes["GraphQL"].checked)
         self.assertTrue(notes["CLI"].checked)
 
+    def test_parse_notes_ignores_footer_after_unchecked_last_item(self):
+        """Text after the release notes list is not a note for the last item."""
+        body = """
+### Release notes
+- [ ] Rust SDK:
+- [ ] Indexing Framework: 
+
+Generated with some tool
+"""
+        notes = parse_notes(body)
+
+        self.assertFalse(notes["Indexing Framework"].checked)
+        self.assertEqual(notes["Indexing Framework"].note, "")
+
+    def test_parse_notes_ignores_footer_after_checked_last_item(self):
+        """Text after the release notes list does not leak into the last note."""
+        body = """
+### Release notes
+- [ ] Rust SDK:
+- [x] Indexing Framework: Added a new pipeline option
+
+Generated with some tool
+"""
+        notes = parse_notes(body)
+
+        self.assertTrue(notes["Indexing Framework"].checked)
+        self.assertEqual(notes["Indexing Framework"].note, "Added a new pipeline option")
+
+    def test_parse_notes_keeps_indented_continuation_in_last_item(self):
+        """An indented paragraph after a blank line is still part of the last note."""
+        body = """
+### Release notes
+- [ ] GraphQL:
+- [x] CLI: First paragraph.
+
+  Second paragraph.
+
+Generated with some tool
+"""
+        notes = parse_notes(body)
+
+        self.assertEqual(notes["CLI"].note, "First paragraph.\n\n  Second paragraph.")
+
+    def test_parse_notes_keeps_unindented_paragraph_before_next_item(self):
+        """Text between two checkboxes belongs to the first, even if unindented."""
+        body = """
+### Release notes
+- [x] CLI: First paragraph.
+
+Breaking change: second paragraph.
+- [ ] GraphQL:
+"""
+        notes = parse_notes(body)
+
+        self.assertEqual(
+            notes["CLI"].note, "First paragraph.\n\nBreaking change: second paragraph."
+        )
+        self.assertEqual(notes["GraphQL"].note, "")
+
 
 class TestPrHasReleaseNotes(unittest.TestCase):
     """Tests for pr_has_release_notes function."""

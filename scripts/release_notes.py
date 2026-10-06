@@ -30,6 +30,11 @@ RE_RELEASE_NOTE_LINE = re.compile(
     re.MULTILINE | re.IGNORECASE,
 )
 
+# The last note ends at a blank line followed by an unindented line: Markdown
+# only continues a list item across a blank line when the next line is
+# indented, so anything else (e.g. a trailing PR footer) is outside the list.
+RE_NOTE_PARAGRAPH_END = re.compile(r"\n\s*\n(?=\S)")
+
 # Path to the protocol config file that contains MAX_PROTOCOL_VERSION.
 PROTOCOL_CONFIG_PATH = "crates/sui-protocol-config/src/lib.rs"
 
@@ -221,13 +226,19 @@ def parse_notes(notes):
         impacted = match.group(2).strip()  # Strip whitespace from impact area
         begin = match.end()
 
-        # Find the end of the note, or the end of the commit
+        # The note runs until the next checkbox. The last note also stops where
+        # the list ends, so text after the list is not attributed to it.
         match = RE_CHECKBOX.search(notes, begin)
-        end = match.start() if match else len(notes)
+        if match:
+            end = note_end = match.start()
+        else:
+            end = len(notes)
+            match = RE_NOTE_PARAGRAPH_END.search(notes, begin)
+            note_end = match.start() if match else end
 
         result[impacted] = Note(
             checked=checked is not None and checked in "xX",
-            note=notes[begin:end].strip(),
+            note=notes[begin:note_end].strip(),
         )
         start = end
 
