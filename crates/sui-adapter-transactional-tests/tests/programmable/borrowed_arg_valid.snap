@@ -26,6 +26,7 @@ task 2, lines 26-35:
 // mix all and borrow multiple times
 //> test::m1::multiple_copy(Input(0), Input(0), Input(0), Input(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, lines 37-40:
@@ -34,4 +35,5 @@ task 3, lines 37-40:
 // double borrow without copy
 //> test::m1::double_r(Result(0), Result(0))
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
