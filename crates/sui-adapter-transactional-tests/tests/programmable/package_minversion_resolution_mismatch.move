@@ -10,7 +10,7 @@ module EnrolledV1::enrolled;
 public struct Ping has copy, drop { version: u64 }
 public fun ping() { sui::event::emit(Ping { version: 1 }) }
 
-//# programmable --sender A --inputs object(1,1) object(0x426)
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 

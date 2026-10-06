@@ -39,7 +39,7 @@ fun init(_ctx: &mut TxContext) { }
 //> TransferObjects([Result(0)], Input(0))
 
 // Type-only references remain at-least after minversion selection.
-//# programmable --sender A --inputs object(1,1) object(0x426)
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 

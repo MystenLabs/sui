@@ -22,7 +22,7 @@ public fun ping() { sui::event::emit(Ping { version: 2 }) }
 // There is no setting. This still records the implicit package-config root read.
 //# run BaseV2::base::ping --sender A
 
-//# programmable --sender A --inputs object(1,1) object(0x426)
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
@@ -32,10 +32,10 @@ public fun ping() { sui::event::emit(Ping { version: 2 }) }
 
 // Supplying package config explicitly still resolves historical BaseV1 to BaseV2, but it is an
 // input rather than an additional implicit root read.
-//# programmable --sender A --inputs object(0x426)
+//# programmable --sender A --inputs object(0xcf6)
 //> BaseV1::base::ping();
 
 // The same resolution holds for a non-mutable shared input: it is a read-only-root effect, not
 // an additional implicit root read.
-//# programmable --sender A --inputs immshared(0x426)
+//# programmable --sender A --inputs immshared(0xcf6)
 //> BaseV1::base::ping();

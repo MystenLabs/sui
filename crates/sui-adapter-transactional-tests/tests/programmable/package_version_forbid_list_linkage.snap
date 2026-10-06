@@ -20,7 +20,6 @@ task 2, lines 25-33:
 //# publish --dependencies DepV1 --sender A
 created: object(2,0)
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4658800,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, lines 35-38:
@@ -33,7 +32,6 @@ task 4, line 40:
 //# run DepV1::d::make --sender A
 created: object(4,0)
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, lines 42-58:
@@ -44,17 +42,17 @@ gas summary: computation_cost: 1000000, storage_cost: 7873600,  storage_rebate: 
 
 task 6, lines 60-61:
 // Forbid the version Root resolves when it is called alone.
-//# run sui::package_config::forbid_version --args object(0x426) object(1,1) 1 --sender A
+//# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 1 --sender A
 created: object(6,0)
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 7, lines 63-65:
 //# programmable --sender A --inputs object(4,0)
 // Root's executable dependency resolves to forbidden Dep v1, so execution rejects this.
 //> Root::r::public_go(Input(0));
-Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
-Debug of error: InvalidLinkage at command None
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 8, lines 67-70:
 //# programmable --sender A --inputs object(4,0)
@@ -62,7 +60,6 @@ task 8, lines 67-70:
 //> 0: Root::r::public_go(Input(0));
 //> 1: DepV2::d::ping();
 mutated: object(0,0), object(4,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 9, line 72:
@@ -87,16 +84,15 @@ gas summary: computation_cost: 1000000, storage_cost: 7873600,  storage_rebate: 
 
 task 11, lines 92-93:
 // Forbid v2 as well.
-//# run sui::package_config::forbid_version --args object(0x426) object(1,1) 2 --sender A
+//# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 2 --sender A
 created: object(11,0)
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 4019998, non_refundable_storage_fee: 402
 
 task 12, lines 95-96:
 // A forbidden type package remains allowed when no package code is executed from it.
 //# run Generic::g::use_type --type-args DepV2::d::B --sender A
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 13, lines 98-101:
@@ -104,8 +100,8 @@ task 13, lines 98-101:
 // The same defining-ID type argument lifts Root's executable dependency to forbidden v2.
 //> 0: Root::r::public_go(Input(0));
 //> 1: Generic::g::use_type<DepV2::d::B>();
-Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
-Debug of error: InvalidLinkage at command None
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 14, lines 103-107:
 //# programmable --sender A --inputs object(4,0)
@@ -113,8 +109,8 @@ task 14, lines 103-107:
 // executable dependency.
 //> 0: Root::r::public_go(Input(0));
 //> 1: Generic::g::use_type<DepV3::d::B>();
-Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
-Debug of error: InvalidLinkage at command None
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 15, lines 109-113:
 //# programmable --sender A --inputs object(4,0)
@@ -123,7 +119,6 @@ task 15, lines 109-113:
 //> 1: Generic::g::use_type<DepV3::d::B>();
 //> 2: DepV3::d::ping();
 mutated: object(0,0), object(4,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 16, line 115:

@@ -10,7 +10,7 @@
 module BaseV1::base;
 public fun ping() { abort 1 }
 
-//# programmable --sender A --inputs object(1,1) object(0x426)
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
@@ -18,7 +18,7 @@ public fun ping() { abort 1 }
 module BaseV2::base;
 public fun ping() {}
 
-//# programmable --sender A --inputs object(1,1) object(0x426) 0u8 digest(BaseV2)
+//# programmable --sender A --inputs object(1,1) object(0xcf6) 0u8 digest(BaseV2)
 //> 0: sui::package::prepare_minversion_upgrade(Input(0));
 //> 1: sui::package::authorize_upgrade(Input(0), Input(2), Input(3));
 //> 2: Upgrade(BaseV2, [sui,std], BaseV1, Result(1));

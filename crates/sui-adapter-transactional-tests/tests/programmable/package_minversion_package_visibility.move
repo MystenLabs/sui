@@ -52,7 +52,7 @@ module PackageV2::entry {
 
 //# view-object 3,0
 
-//# programmable --sender A --inputs object(1,1) object(0x426)
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 

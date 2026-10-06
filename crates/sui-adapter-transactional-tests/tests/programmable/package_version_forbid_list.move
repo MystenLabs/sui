@@ -31,7 +31,7 @@ public fun use_type<T>() {}
 //# run BaseV2::base::ping --sender A
 
 // The explicit package-config input is read at pre-state, so this PTB can still invoke v1.
-//# programmable --sender A --inputs object(0x426) object(1,1) 1
+//# programmable --sender A --inputs object(0xcf6) object(1,1) 1
 //> 0: sui::package_config::forbid_version(Input(0), Input(1), Input(2));
 //> 1: BaseV1::base::ping();
 

@@ -61,7 +61,7 @@ publish enabled
 sui client --client.config "$CONFIG" ptb \
   --move-call sui::package::enable_minversion "@$(< enabled.cap)" \
   --assign authorization \
-  --move-call sui::package_config::record_minversion_enrollment @0x426 authorization \
+  --move-call sui::package_config::record_minversion_enrollment @0xcf6 authorization \
   --summary > /dev/null
 echo "=== upgrade with minversion enabled ==="
 upgrade enabled
@@ -70,7 +70,7 @@ upgrade enabled
 make_package additive
 publish additive
 sui client --client.config "$CONFIG" ptb --move-call sui::package::only_additive_upgrades "@$(< additive.cap)" --summary > /dev/null
-sui client --client.config "$CONFIG" ptb --move-call sui::package::enable_minversion "@$(< additive.cap)" --assign authorization --move-call sui::package_config::record_minversion_enrollment @0x426 authorization --summary > /dev/null
+sui client --client.config "$CONFIG" ptb --move-call sui::package::enable_minversion "@$(< additive.cap)" --assign authorization --move-call sui::package_config::record_minversion_enrollment @0xcf6 authorization --summary > /dev/null
 cat >> additive/sources/main.move <<EOF
 public fun added(): u64 { 2 }
 EOF
@@ -81,6 +81,6 @@ sui client --client.config "$CONFIG" upgrade additive > /dev/null
 make_package dep_only
 publish dep_only
 sui client --client.config "$CONFIG" ptb --move-call sui::package::only_dep_upgrades "@$(< dep_only.cap)" --summary > /dev/null
-sui client --client.config "$CONFIG" ptb --move-call sui::package::enable_minversion "@$(< dep_only.cap)" --assign authorization --move-call sui::package_config::record_minversion_enrollment @0x426 authorization --summary > /dev/null
+sui client --client.config "$CONFIG" ptb --move-call sui::package::enable_minversion "@$(< dep_only.cap)" --assign authorization --move-call sui::package_config::record_minversion_enrollment @0xcf6 authorization --summary > /dev/null
 echo "=== upgrade with dependency-only minversion policy ==="
 sui client --client.config "$CONFIG" upgrade dep_only > /dev/null

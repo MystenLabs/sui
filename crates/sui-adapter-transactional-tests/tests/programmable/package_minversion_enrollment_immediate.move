@@ -16,17 +16,17 @@ public fun ping() {}
 
 // The policy write is not visible to another command in the same PTB: linkage uses the explicit
 // root input's pre-state, so this historical v1 call still aborts and the PTB rolls back.
-//# programmable --sender A --inputs object(1,1) object(0x426)
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 //> 2: BaseV1::base::ping();
 
-//# programmable --sender A --inputs object(1,1) object(0x426)
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
 // A second enrollment is rejected and leaves the original selection intact.
-//# programmable --sender A --inputs object(1,1) object(0x426)
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 

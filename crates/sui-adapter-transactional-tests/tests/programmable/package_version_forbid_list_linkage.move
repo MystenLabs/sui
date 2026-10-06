@@ -58,7 +58,7 @@ public fun stamp(s: &mut S) { s.v = 2 }
 public fun ping() {}
 
 // Forbid the version Root resolves when it is called alone.
-//# run sui::package_config::forbid_version --args object(0x426) object(1,1) 1 --sender A
+//# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 1 --sender A
 
 //# programmable --sender A --inputs object(4,0)
 // Root's executable dependency resolves to forbidden Dep v1, so execution rejects this.
@@ -90,7 +90,7 @@ public fun stamp(s: &mut S) { s.v = 3 }
 public fun ping() {}
 
 // Forbid v2 as well.
-//# run sui::package_config::forbid_version --args object(0x426) object(1,1) 2 --sender A
+//# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 2 --sender A
 
 // A forbidden type package remains allowed when no package code is executed from it.
 //# run Generic::g::use_type --type-args DepV2::d::B --sender A

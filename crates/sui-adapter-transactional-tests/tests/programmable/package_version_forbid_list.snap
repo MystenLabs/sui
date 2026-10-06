@@ -30,41 +30,37 @@ task 4, lines 27-28:
 // The base package is allowed to be used before the forbid list is changed.
 //# run BaseV1::base::ping --sender A
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, lines 30-31:
 // The upgraded version is allowed before the forbid list is changed.
 //# run BaseV2::base::ping --sender A
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 6, lines 33-36:
 // The explicit package-config input is read at pre-state, so this PTB can still invoke v1.
-//# programmable --sender A --inputs object(0x426) object(1,1) 1
+//# programmable --sender A --inputs object(0xcf6) object(1,1) 1
 //> 0: sui::package_config::forbid_version(Input(0), Input(1), Input(2));
 //> 1: BaseV1::base::ping();
 created: object(6,0)
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 7, lines 38-39:
 // The committed setting is visible to execution and rejects v1 in the next transaction.
 //# run BaseV1::base::ping --sender A
-Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: None, command: None } }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 8, lines 41-42:
 // Types from a forbidden package can still be used.
 //# run TypeUser::type_user::use_type --type-args BaseV1::base::Type --sender A
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 9, lines 44-45:
 // The newer resolved version remains allowed.
 //# run BaseV2::base::ping --sender A
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

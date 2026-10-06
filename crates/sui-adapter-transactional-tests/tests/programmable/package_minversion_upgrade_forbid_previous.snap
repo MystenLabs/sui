@@ -16,34 +16,32 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5137600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 13-15:
-//# programmable --sender A --inputs object(1,1) object(0x426)
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 created: object(2,0)
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 4, lines 21-26:
-//# programmable --sender A --inputs object(1,1) object(0x426) 0u8 digest(BaseV2)
+//# programmable --sender A --inputs object(1,1) object(0xcf6) 0u8 digest(BaseV2)
 //> 0: sui::package::prepare_minversion_upgrade(Input(0));
 //> 1: sui::package::authorize_upgrade(Input(0), Input(2), Input(3));
 //> 2: Upgrade(BaseV2, [sui,std], BaseV1, Result(1));
 //> 3: sui::package::commit_minversion_upgrade(Input(0), Result(2), Result(0));
 //> sui::package_config::record_minversion_upgrade_and_forbid_previous(Input(1), Result(3));
 created: object(4,0), object(4,1)
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1), object(2,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 11506400,  storage_rebate: 6831717, non_refundable_storage_fee: 683
 
 task 5, lines 28-29:
 // v1 immediately resolves to v2, so the v1 forbid no longer applies.
 //# run BaseV1::base::ping --sender A
-mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+Error: Transaction Effects Status: Move Runtime Abort. Location: BaseV1::base::ping (function index 0) at offset 1, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: BaseV1, name: Identifier("base") }, function: 0, instruction: 1, function_name: Some("ping") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("BaseV1::base::ping at offset 1"), exec_state: None, location: Module(ModuleId { address: BaseV1, name: Identifier("base") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
 
 task 7, lines 33-34:
 // The newly upgraded package remains directly usable.
 //# run BaseV2::base::ping --sender A
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

@@ -65,7 +65,7 @@ public struct B has drop {}
 
 public fun value(): u64 { 3 }
 
-//# run sui::package_config::forbid_version --args object(0x426) object(1,1) 2 --sender A
+//# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 2 --sender A
 
 // Leaf is still type-only here, so the forbidden version remains allowed.
 //# run Generic::g::use_type --type-args LeafV2::l::B --sender A

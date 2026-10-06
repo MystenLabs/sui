@@ -32,7 +32,7 @@ use Leaf::leaf;
 
 public fun publish_time_only() { leaf::ping() }
 
-//# run sui::package_config::forbid_version --args object(0x426) object(1,1) 1 --sender A
+//# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 1 --sender A
 
 //# publish --upgradeable --dependencies MinDependencyV1 --sender A
 module UpgradePublisherV1::publisher;
@@ -40,7 +40,7 @@ use MinDependencyV1::dependency;
 
 public fun publish_time_only() { dependency::ping() }
 
-//# programmable --sender A --inputs object(3,1) object(0x426)
+//# programmable --sender A --inputs object(3,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 

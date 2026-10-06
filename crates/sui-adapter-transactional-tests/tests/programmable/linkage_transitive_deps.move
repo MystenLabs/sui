@@ -66,7 +66,7 @@ public fun ping() {}
 //> 1: Leaf_V2::l::ping();
 
 // Enroll the upgraded leaf as the selected minimum version.
-//# programmable --sender A --inputs object(1,1) object(0x426)
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 

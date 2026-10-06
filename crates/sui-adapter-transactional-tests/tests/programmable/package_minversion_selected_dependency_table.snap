@@ -25,51 +25,46 @@ task 3, lines 17-20:
 //# publish --upgradeable --dependencies LeafV1 --sender A
 created: object(3,0), object(3,1)
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6011600,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, lines 22-25:
 //# upgrade --package BaseV1 --upgrade-capability 3,1 --dependencies LeafV2 --sender A
 created: object(4,0)
 mutated: object(0,0), object(3,1)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6011600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 5, lines 27-30:
 //# publish --dependencies BaseV1 LeafV1 --sender A
 created: object(5,0)
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 4940000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 6, lines 32-34:
-//# programmable --sender A --inputs object(3,1) object(0x426)
+//# programmable --sender A --inputs object(3,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 created: object(6,0)
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(3,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(3,1)
 gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 7, lines 36-37:
 // The selected BaseV2 dependency table immediately replaces BaseV1's table and uses LeafV2.
 //# run Consumer::consumer::call --sender A
-mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+Error: Transaction Effects Status: Move Runtime Abort. Location: LeafV1::leaf::value (function index 0) at offset 1, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: LeafV1, name: Identifier("leaf") }, function: 0, instruction: 1, function_name: Some("value") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("LeafV1::leaf::value at offset 1"), exec_state: None, location: Module(ModuleId { address: LeafV1, name: Identifier("leaf") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
 
 task 8, lines 39-41:
 // BaseV1 is historical and can now be forbidden. Minversion selection happens first, so the
 // Consumer's historical BaseV1 reference resolves to BaseV2 and remains executable.
-//# run sui::package_config::forbid_version --args object(0x426) object(3,1) 1 --sender A
+//# run sui::package_config::forbid_version --args object(0xcf6) object(3,1) 1 --sender A
 created: object(8,0)
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(3,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(3,1)
 gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 4019998, non_refundable_storage_fee: 402
 
 task 9, line 43:
 //# run Consumer::consumer::call --sender A
-mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+Error: Transaction Effects Status: Move Runtime Abort. Location: LeafV1::leaf::value (function index 0) at offset 1, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: LeafV1, name: Identifier("leaf") }, function: 0, instruction: 1, function_name: Some("value") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("LeafV1::leaf::value at offset 1"), exec_state: None, location: Module(ModuleId { address: LeafV1, name: Identifier("leaf") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
 
 task 10, lines 45-47:
 //# upgrade --package LeafV2 --upgrade-capability 1,1 --sender A
@@ -80,12 +75,12 @@ gas summary: computation_cost: 1000000, storage_cost: 5076800,  storage_rebate: 
 task 11, lines 49-51:
 // LeafV2 is now historical. The selected BaseV2 package still executes LeafV2, so the forbid
 // list rejects that selected executable dependency.
-//# run sui::package_config::forbid_version --args object(0x426) object(1,1) 2 --sender A
+//# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 2 --sender A
 created: object(11,0)
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 4019998, non_refundable_storage_fee: 402
 
 task 12, line 53:
 //# run Consumer::consumer::call --sender A
-Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: None, command: None } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: LeafV1::leaf::value (function index 0) at offset 1, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: LeafV1, name: Identifier("leaf") }, function: 0, instruction: 1, function_name: Some("value") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("LeafV1::leaf::value at offset 1"), exec_state: None, location: Module(ModuleId { address: LeafV1, name: Identifier("leaf") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }

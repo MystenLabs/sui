@@ -20,20 +20,17 @@ task 2, lines 21-31:
 //# publish --dependencies PackageV1 --sender A
 created: object(2,0)
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 6399200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, line 33:
 //# run Consumer::consumer::new --sender A
 created: object(3,0)
 mutated: object(0,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2348400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, line 35:
 //# run Consumer::consumer::call --args object(3,0) --sender A
 mutated: object(0,0), object(3,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2348400,  storage_rebate: 2348165, non_refundable_storage_fee: 235
 
 task 5, line 37:
@@ -59,7 +56,6 @@ task 7, lines 50-51:
 // The Consumer retains its exact historical PackageV1 reference before minversion enrollment.
 //# run Consumer::consumer::call --args object(3,0) --sender A
 mutated: object(0,0), object(3,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2348400,  storage_rebate: 2348165, non_refundable_storage_fee: 235
 
 task 8, line 53:
@@ -76,11 +72,11 @@ Contents: Consumer::consumer::Result {
 }
 
 task 9, lines 55-57:
-//# programmable --sender A --inputs object(1,1) object(0x426)
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 created: object(9,0)
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000426, object(0,0), object(1,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 10, lines 59-61:
@@ -88,7 +84,6 @@ task 10, lines 59-61:
 // only by the sibling entry module in the selected package.
 //# run Consumer::consumer::call --args object(3,0) --sender A
 mutated: object(0,0), object(3,0)
-unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000426
 gas summary: computation_cost: 1000000, storage_cost: 2348400,  storage_rebate: 2348165, non_refundable_storage_fee: 235
 
 task 11, line 63:
@@ -101,5 +96,5 @@ Contents: Consumer::consumer::Result {
             bytes: fake(3,0),
         },
     },
-    value: 2u64,
+    value: 1u64,
 }

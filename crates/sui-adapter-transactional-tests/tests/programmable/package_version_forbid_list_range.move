@@ -26,7 +26,7 @@ module BaseV4::base;
 public fun ping() {}
 
 // Both endpoints of the inclusive range are forbidden.
-//# run sui::package_config::forbid_version_range --args object(0x426) object(1,1) 1 2 --sender A
+//# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 2 --sender A
 
 //# run BaseV1::base::ping --sender A
 
@@ -36,10 +36,10 @@ public fun ping() {}
 //# run BaseV3::base::ping --sender A
 
 // A range with its start above its end is invalid.
-//# run sui::package_config::forbid_version_range --args object(0x426) object(1,1) 3 2 --sender A
+//# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 3 2 --sender A
 
 // Version zero is not historical. The range must reject it rather than install a v0 entry.
-//# run sui::package_config::forbid_version_range --args object(0x426) object(1,1) 0 1 --sender A
+//# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 0 1 --sender A
 
 // The current version is not historical, so it cannot be forbidden.
-//# run sui::package_config::forbid_version_range --args object(0x426) object(1,1) 1 4 --sender A
+//# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 4 --sender A

@@ -29,7 +29,7 @@ module Consumer::consumer;
 use BaseV1::base;
 public fun call() { base::call() }
 
-//# programmable --sender A --inputs object(3,1) object(0x426)
+//# programmable --sender A --inputs object(3,1) object(0xcf6)
 //> 0: sui::package::enable_minversion(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
@@ -38,7 +38,7 @@ public fun call() { base::call() }
 
 // BaseV1 is historical and can now be forbidden. Minversion selection happens first, so the
 // Consumer's historical BaseV1 reference resolves to BaseV2 and remains executable.
-//# run sui::package_config::forbid_version --args object(0x426) object(3,1) 1 --sender A
+//# run sui::package_config::forbid_version --args object(0xcf6) object(3,1) 1 --sender A
 
 //# run Consumer::consumer::call --sender A
 
@@ -48,6 +48,6 @@ public fun value() {}
 
 // LeafV2 is now historical. The selected BaseV2 package still executes LeafV2, so the forbid
 // list rejects that selected executable dependency.
-//# run sui::package_config::forbid_version --args object(0x426) object(1,1) 2 --sender A
+//# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 2 --sender A
 
 //# run Consumer::consumer::call --sender A
