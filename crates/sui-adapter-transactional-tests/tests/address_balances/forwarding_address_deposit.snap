@@ -42,7 +42,7 @@ events: Event { package_id: sui, transaction_module: Identifier("balance"), send
 mutated: object(0,1)
 unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa
 accumulators_written: (object(2,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 2000)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, line 27:
 //# create-checkpoint
