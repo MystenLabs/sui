@@ -296,6 +296,11 @@ pub mod checked {
             self.gas_status.charge_publish_package(size)
         }
 
+        /// Reserve a MIST-denominated computation charge before package linkage or VM execution.
+        pub fn reserve_pre_execution_charge(&mut self, amount: u64) -> Result<(), ExecutionError> {
+            self.gas_status.reserve_pre_execution_charge(amount)
+        }
+
         /// Charge `storage_read` for each input object (system packages excepted).
         pub fn charge_input_objects(
             &mut self,

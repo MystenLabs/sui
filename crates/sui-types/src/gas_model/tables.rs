@@ -269,6 +269,16 @@ impl GasStatus {
         &self.cost_table
     }
 
+    /// Restrict the remaining VM computation budget before execution begins.
+    pub fn restrict_budget(&mut self, budget: u64) -> bool {
+        let budget = Self::to_internal_units(budget / self.gas_price);
+        let budget = self.initial_budget.min(budget);
+        let used = self.initial_budget.saturating_sub(self.gas_left);
+        self.initial_budget = budget;
+        self.gas_left = budget.saturating_sub(used);
+        used <= budget
+    }
+
     /// Return the gas left.
     pub fn remaining_gas(&self) -> Gas {
         self.gas_left.to_unit_round_down()

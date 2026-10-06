@@ -92,7 +92,8 @@ pub struct SuiGasStatus {
     pub gas_status: GasStatus,
     // Cost table contains a set of constant/config for the gas model/charging
     cost_table: SuiCostTable,
-    // Gas budget for this gas status instance.
+    // Original signed gas budget for this transaction. Pre-execution charges reduce only the
+    // portion available to VM computation and storage, not this signed amount.
     gas_budget: u64,
     // Whether to charge or go unmetered
     charge: bool,
@@ -109,6 +110,8 @@ pub struct SuiGasStatus {
     storage: StorageGas,
     /// When set, computation cost is reported as exactly `gas_budget`.
     force_computation_cost_to_budget: bool,
+    /// MIST-denominated computation cost reserved before the VM starts.
+    pre_execution_charge: u64,
 }
 
 impl SuiGasStatus {
@@ -133,6 +136,7 @@ impl SuiGasStatus {
             storage: StorageGas::new(storage_gas_price, cost_table.storage_per_byte_cost),
             cost_table,
             force_computation_cost_to_budget: false,
+            pre_execution_charge: 0,
         }
     }
 
@@ -187,10 +191,15 @@ impl SuiGasStatus {
         self.reference_gas_price
     }
 
+    /// Budget left for VM computation and storage after pre-execution charges.
+    fn remaining_gas_budget(&self) -> u64 {
+        self.gas_budget.saturating_sub(self.pre_execution_charge)
+    }
+
     /// Meter-derived computation cost in MIST (bucketed units * effective_gas_price).
     fn uncapped_computation_cost(&self) -> u64 {
         if self.force_computation_cost_to_budget {
-            return self.gas_budget;
+            return self.remaining_gas_budget();
         }
         let raw_units = self.gas_status.gas_used_pre_gas_price();
         let bucketed_units = half_digits_rounding(raw_units);
@@ -205,7 +214,7 @@ impl SuiGasStatus {
         let storage_rebate = self.storage_rebate();
         let sender_rebate = sender_rebate(storage_rebate, self.rebate_rate);
         let net_storage = self.storage_cost().saturating_sub(sender_rebate);
-        let max_computation = self.gas_budget.saturating_sub(net_storage);
+        let max_computation = self.remaining_gas_budget().saturating_sub(net_storage);
         uncapped_cost.min(max_computation)
     }
 
@@ -227,6 +236,24 @@ impl SuiGasStatusAPI for SuiGasStatus {
         &mut self.gas_status
     }
 
+    fn reserve_pre_execution_charge(&mut self, amount: u64) -> Result<(), ExecutionError> {
+        if self.is_unmetered() {
+            return Ok(());
+        }
+
+        let available_budget = self.remaining_gas_budget();
+        let charge = amount.min(available_budget);
+        let total_charge = self.pre_execution_charge.saturating_add(charge);
+        let remaining_budget = self.gas_budget.saturating_sub(total_charge);
+        self.pre_execution_charge = total_charge;
+        let fits_remaining_budget = self.gas_status.restrict_budget(remaining_budget);
+        if charge < amount || !fits_remaining_budget {
+            Err(ExecutionErrorKind::InsufficientGas.into())
+        } else {
+            Ok(())
+        }
+    }
+
     fn bucketize_computation(&mut self, aborted: Option<bool>) -> Result<(), ExecutionError> {
         self.effective_gas_price = match self
             .cost_table
@@ -242,7 +269,7 @@ impl SuiGasStatusAPI for SuiGasStatus {
             }
             _ => self.user_gas_price,
         };
-        if self.uncapped_computation_cost() >= self.gas_budget {
+        if self.uncapped_computation_cost() >= self.remaining_gas_budget() {
             return Err(ExecutionErrorKind::InsufficientGas.into());
         }
         Ok(())
@@ -256,7 +283,9 @@ impl SuiGasStatusAPI for SuiGasStatus {
             .checked_sub(sender_rebate)
             .expect("sender rebate must not exceed storage rebate");
         GasCostSummary {
-            computation_cost: self.derived_computation_cost(),
+            computation_cost: self
+                .pre_execution_charge
+                .saturating_add(self.derived_computation_cost()),
             storage_cost: self.storage_cost(),
             storage_rebate: sender_rebate,
             non_refundable_storage_fee,
@@ -334,7 +363,7 @@ impl SuiGasStatusAPI for SuiGasStatus {
         assert!(sender_rebate <= storage_rebate);
         let net_storage_cost = storage_cost.saturating_sub(sender_rebate);
         let gas_left = self
-            .gas_budget
+            .remaining_gas_budget()
             .saturating_sub(self.uncapped_computation_cost());
         if net_storage_cost > gas_left {
             return Err(ExecutionErrorKind::InsufficientGas.into());

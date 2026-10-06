@@ -292,6 +292,12 @@ mod checked {
             &mut self.gas_status
         }
 
+        fn reserve_pre_execution_charge(&mut self, _amount: u64) -> Result<(), ExecutionError> {
+            unreachable!(
+                "pre-execution charges require gas model v15 or later and must use SuiGasStatus::V3"
+            )
+        }
+
         fn bucketize_computation(&mut self, aborted: Option<bool>) -> Result<(), ExecutionError> {
             let gas_used = self.gas_status.gas_used_pre_gas_price();
             let effective_gas_price = if let Some(max_gas_price_rgp_factor_for_aborted_transactions) =
