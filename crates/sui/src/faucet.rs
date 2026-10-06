@@ -12,7 +12,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::anyhow;
@@ -236,12 +235,8 @@ impl Challenge {
     }
 
     async fn solve(&self) -> anyhow::Result<Proof> {
-        eprintln!(
-            "Solving the faucet's proof of work (difficulty {}) on 1 thread...",
-            self.difficulty
-        );
+        eprintln!("Finding the solution to the proof of work required by the faucet, please wait.");
 
-        let started = Instant::now();
         let preimage_prefix = self.preimage_prefix.clone();
         let threshold = threshold(self.difficulty);
         let start_nonce = rand::random();
@@ -261,11 +256,7 @@ impl Challenge {
                 MAX_SOLVE_TIME.as_secs(),
             );
         };
-        let (proof, attempts) = joined?.context("The proof-of-work search was cancelled")?;
-        eprintln!(
-            "Solved after {attempts} attempts in {:.3}s.",
-            started.elapsed().as_secs_f64()
-        );
+        let (proof, _attempts) = joined?.context("The proof-of-work search was cancelled")?;
         Ok(proof)
     }
 }
