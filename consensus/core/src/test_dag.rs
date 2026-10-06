@@ -99,6 +99,12 @@ pub(crate) fn build_dag_layer(
 ///
 /// A fixed set of at most `floor((N - 1) / 3)` distinct authorities can
 /// equivocate throughout the DAG, regardless of `max_equivocators`.
+///
+/// Model limitation: all forks an equivocating authority produces in a round
+/// share the same parent set (`LayerBuilder::create_blocks` clones one
+/// `ancestors` list across every fork) and differ only in block timestamp.
+/// This does not model a Byzantine voter that references different parent
+/// sets across its own forks.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct RandomDagEquivocationConfig {
     /// Percentage of rounds in which authorities from the fixed Byzantine set equivocate.
@@ -193,7 +199,8 @@ mod tests {
             },
         );
         let max_safe_equivocators = (num_authorities - 1) / 3;
-        let max_parent_links = context.committee.quorum_threshold() as usize + 1;
+        let quorum_threshold = context.committee.quorum_threshold() as usize;
+        let max_parent_links = quorum_threshold + 1;
         let mut all_equivocators = BTreeSet::new();
         let mut saw_equivocation = false;
         let mut saw_max_equivocators = false;
@@ -240,11 +247,26 @@ mod tests {
                 .first()
                 .is_some_and(|ancestor| ancestor.author == block.author())
         }));
+        // dag_builder.blocks only ever holds non-genesis blocks (rounds 1..=num_rounds);
+        // genesis blocks live separately in dag_builder.genesis and have no ancestors.
         assert!(
             dag_builder
                 .blocks
                 .values()
-                .all(|block| block.ancestors().len() <= max_parent_links)
+                .all(|block| block.round() == 0 || block.ancestors().len() >= quorum_threshold)
         );
+        assert!(
+            dag_builder
+                .blocks
+                .values()
+                .all(|block| block.round() == 0 || block.ancestors().len() <= max_parent_links)
+        );
+        assert!(dag_builder.blocks.values().all(|block| {
+            block.round() == 0
+                || block
+                    .ancestors()
+                    .iter()
+                    .all(|ancestor| ancestor.round == block.round() - 1)
+        }));
     }
 }

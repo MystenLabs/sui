@@ -127,22 +127,32 @@ async fn test_randomized_dag_and_decision_sequence() {
 async fn test_randomized_dag_with_equivocations() {
     let num_authorities = 7;
     let num_rounds = 100;
-    // Fixed seeds make failures reproducible while exercising distinct choices of
-    // equivocating authorities and minimal-parent links.
+    // Fixed base seeds make failures reproducible while exercising distinct choices
+    // of equivocating authorities and minimal-parent links.
     let max_safe_equivocators = (num_authorities - 1) / 3;
-    for include_leader_percentage in [100, 50] {
-        for equivocations_per_authority in [1, 2] {
+    for (leader_config_index, include_leader_percentage) in [100u64, 50].into_iter().enumerate() {
+        for (equivocation_config_index, equivocations_per_authority) in
+            [1usize, 2].into_iter().enumerate()
+        {
             let equivocation_config = RandomDagEquivocationConfig {
                 equivocation_rate: 100,
                 // Deliberately above F: the generator must cap this at F.
                 max_equivocators: usize::MAX,
                 equivocations_per_authority,
             };
+            // Derive a per-configuration seed so the 4 (include_leader_percentage,
+            // equivocations_per_authority) configurations under one base seed select
+            // different (but still deterministic and reproducible) Byzantine
+            // authority sets, instead of all 4 reusing the same shuffle draw from
+            // the base seed. StdRng::seed_from_u64 hashes its input, so nearby inputs
+            // like these produce decorrelated states.
+            let config_index = (leader_config_index * 2 + equivocation_config_index) as u64;
 
-            for seed in [7, 42, 2026] {
+            for seed in [7u64, 42, 2026] {
+                let dag_seed = seed.wrapping_mul(4).wrapping_add(config_index);
                 let context = CommitTestFixture::context_with_options(num_authorities, 0, Some(6));
                 let dag_builder = create_random_dag(
-                    seed,
+                    dag_seed,
                     include_leader_percentage,
                     num_rounds,
                     context.clone(),
@@ -181,7 +191,10 @@ async fn test_randomized_dag_with_equivocations() {
                     // equivocating leader was hit.
                     assert!(
                         skipped_leaders > 0,
-                        "equivocations did not cause any leader to be skipped for seed {seed}"
+                        "equivocations did not cause any leader to be skipped for \
+                         base_seed={seed} dag_seed={dag_seed} \
+                         include_leader_percentage={include_leader_percentage} \
+                         equivocations_per_authority={equivocations_per_authority}"
                     );
                     let last_commit_round = commits
                         .last()
@@ -199,7 +212,10 @@ async fn test_randomized_dag_with_equivocations() {
                         num_rounds - 2 - DEFAULT_WAVE_LENGTH * max_safe_equivocators as u32;
                     assert!(
                         last_commit_round >= min_decidable_round,
-                        "honest quorum stopped making progress at round {last_commit_round} (expected >= {min_decidable_round}) for seed {seed}"
+                        "honest quorum stopped making progress at round {last_commit_round} \
+                         (expected >= {min_decidable_round}) for base_seed={seed} \
+                         dag_seed={dag_seed} include_leader_percentage={include_leader_percentage} \
+                         equivocations_per_authority={equivocations_per_authority}"
                     );
                 }
             }
