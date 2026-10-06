@@ -39,9 +39,10 @@ const PAYLOAD: [u8; FORWARDING_ADDRESS_PAYLOAD_LENGTH] = [
 const FIRST_MASTER_ID: u32 = 0x688990c0;
 
 /// Forwarding ships in two steps: one release creates the registry, a later one enables
-/// resolution. The registry must exist by the first epoch that enables forwarding, and a deposit
-/// in that epoch must resolve. Genesis at protocol version 130 uses the frozen v130 framework
-/// snapshot, which predates the `forwarding_address` module.
+/// resolution. The registry must exist by the first epoch that enables forwarding, and a
+/// registration and a deposit in that epoch must work. Genesis at protocol version 130 uses the
+/// frozen v130 framework snapshot, which predates the `forwarding_address` module. Epochs are
+/// closed explicitly so no transaction lands in a reconfiguration window.
 #[sim_test]
 async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
     let mut env = TestEnvBuilder::new()
@@ -60,7 +61,6 @@ async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
         .with_test_cluster_builder_cb(Box::new(|builder| {
             builder
                 .with_protocol_version(130.into())
-                .with_epoch_duration_ms(10000)
                 .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                     130, 138,
                 ))
@@ -71,8 +71,6 @@ async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
         .build()
         .await;
 
-    // Node handles keep each node's databases open, so they must be dropped before validators
-    // restart for the upgrade.
     for h in env.cluster.all_node_handles() {
         h.with(|node| {
             assert!(
@@ -85,9 +83,11 @@ async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
         });
     }
 
-    env.cluster.wait_for_protocol_version(138.into()).await;
-    // The registry is created at the end of the first epoch that supports it.
-    env.cluster.wait_for_epoch_all_nodes(2).await;
+    // Epoch 1 runs at 138, the first version that supports the registry, so the registry is
+    // created at its end and is in the epoch start configuration from epoch 2 on.
+    env.cluster.trigger_reconfiguration().await;
+    assert_protocol_version_on_all_nodes(&env, 138);
+    env.cluster.trigger_reconfiguration().await;
     for h in env.cluster.all_node_handles() {
         h.with(|node| {
             node.state()
@@ -101,7 +101,8 @@ async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
     env.cluster
         .update_validator_supported_versions(SupportedProtocolVersions::new_for_testing(130, 139))
         .await;
-    env.cluster.wait_for_all_nodes_upgrade_to(139).await;
+    env.cluster.trigger_reconfiguration().await;
+    assert_protocol_version_on_all_nodes(&env, 139);
     env.update_all_gas().await;
 
     let master = env.get_sender(0);
@@ -120,6 +121,21 @@ async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
         initial_master_balance + amount
     );
     assert_forwarding_deposit_event(&env, &digest, forwarding_address, master, amount);
+}
+
+fn assert_protocol_version_on_all_nodes(env: &TestEnv, version: u64) {
+    for h in env.cluster.all_node_handles() {
+        h.with(|node| {
+            assert_eq!(
+                node.state()
+                    .epoch_store_for_testing()
+                    .protocol_config()
+                    .version
+                    .as_u64(),
+                version
+            );
+        });
+    }
 }
 
 fn set_forwarding_address_config_for_testing(config: &mut ProtocolConfig) {
