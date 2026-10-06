@@ -479,8 +479,19 @@ async fn test_subscription_recovers_from_upstream_disconnect() {
 async fn test_subscription_resume_with_after_cursor() {
     let cluster = SubscriptionTestCluster::new().await;
 
-    let resume_seq = cluster.validator_checkpoint_tip();
-    let cursor = CheckpointToken::cursor(resume_seq).encode_cursor();
+    // Take the resume cursor from GraphQL itself. The validator can advance ahead of GraphQL's
+    // broadcast while the service starts, so its tip is not an observable subscription cursor.
+    let mut initial = cluster
+        .subscribe("subscription { checkpoints { cursor node { sequenceNumber } } }")
+        .await;
+    let initial_item = initial.next().await.unwrap();
+    let resume_seq = checkpoint_seq(&initial_item);
+    let cursor = initial_item["data"]["checkpoints"]["cursor"]
+        .as_str()
+        .expect("checkpoint edge missing cursor")
+        .to_owned();
+    drop(initial);
+
     let query = format!(
         r#"subscription {{ checkpoints(after: "{cursor}") {{ node {{ sequenceNumber }} }} }}"#,
     );
