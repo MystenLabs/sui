@@ -188,15 +188,13 @@ async fn test_randomized_dag_with_equivocations() {
                         .expect("honest quorum did not make progress")
                         .leader
                         .round;
-                    // try_indirect_decide requires an anchor at least
-                    // INDIRECT_COMMIT_DEPTH rounds above the leader slot it resolves,
-                    // and the decided sequence stops at the first undecided leader
-                    // (UniversalCommitter::try_decide takes the longest decided
-                    // prefix). Each of the up to `max_safe_equivocators` Byzantine
-                    // leaders can leave its own slot undecided until a further
-                    // DEFAULT_WAVE_LENGTH rounds of blocks arrive, so stacking all of
-                    // them one wave apart near the tip pushes the last leader round
-                    // guaranteed to be decided down to:
+                    // BaseCommitter::try_indirect_decide requires an anchor at least
+                    // one wave length above the leader slot it resolves, and stops at
+                    // the first undecided anchor. Each of the up to
+                    // `max_safe_equivocators` Byzantine leaders can leave its own slot
+                    // undecided until a further DEFAULT_WAVE_LENGTH rounds of blocks
+                    // arrive, so stacking all of them one wave apart near the tip
+                    // pushes the last leader round guaranteed to be decided down to:
                     let min_decidable_round =
                         num_rounds - 2 - DEFAULT_WAVE_LENGTH * max_safe_equivocators as u32;
                     assert!(
