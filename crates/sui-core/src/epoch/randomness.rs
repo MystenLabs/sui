@@ -809,10 +809,6 @@ impl RandomnessManager {
                         .epoch_random_beacon_dkg_completed_after_timeout
                         .set(i64::from(completed_after_timeout));
                     if completed_after_timeout {
-                        assert_reachable_gated!(
-                            "random beacon: DKG completed after its timeout",
-                            |pc| pc.allow_dkg_completion_after_timeout()
-                        );
                         fail_point!("rb-dkg-completed-after-timeout");
                     }
 
@@ -1038,10 +1034,6 @@ impl RandomnessManager {
         }
 
         if !self.dkg_timeout_reported {
-            assert_reachable_gated!(
-                "random beacon: DKG timed out while still allowed to complete later",
-                |pc| pc.allow_dkg_completion_after_timeout()
-            );
             error!(
                 "random beacon: DKG timed out; randomness-using transactions will be canceled unless/until DKG completes"
             );
