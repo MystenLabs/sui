@@ -158,9 +158,6 @@ fn get_registry() -> Result<Registry> {
     let sig_mldsa: GenericSignature = Signature::new_secure(&msg, &kp_mldsa).into();
     let hybrid_multisig = MultiSig::combine(vec![sig_mldsa, sig1.clone()], hybrid_pk).unwrap();
     tracer.trace_value(&mut samples, &hybrid_multisig).unwrap();
-    // Index 5 is held for zkLogin v2; trace it so the registry shows the slot.
-    let zklogin_v2 = PublicKey::ZkLoginV2(ZkLoginPublicIdentifier(vec![0u8; 32]));
-    tracer.trace_value(&mut samples, &zklogin_v2).unwrap();
 
     tracer.trace_value(&mut samples, &sig1).unwrap();
     tracer.trace_value(&mut samples, &sig2).unwrap();

@@ -1755,7 +1755,7 @@ impl From<&crate::crypto::PublicKey> for MultisigMemberPublicKey {
             | crate::crypto::PublicKey::MLDSA65(_) => {
                 message.public_key = Some(value.as_ref().to_vec().into());
             }
-            crate::crypto::PublicKey::ZkLogin(z) | crate::crypto::PublicKey::ZkLoginV2(z) => {
+            crate::crypto::PublicKey::ZkLogin(z) => {
                 message.zklogin = Some(z.into());
             }
         }

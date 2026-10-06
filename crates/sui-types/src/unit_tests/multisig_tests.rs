@@ -174,15 +174,6 @@ fn test_multisig_pk_new() {
     assert!(
         MultiSigPublicKey::new(vec![pk1.clone(), pk1.clone(), pk1], vec![1, 2, 3], 4,).is_err()
     );
-
-    // Fails on a zkLogin v2 member: the variant only reserves its BCS index.
-    let v2 = PublicKey::ZkLoginV2(ZkLoginPublicIdentifier(vec![0u8; 32]));
-    assert!(MultiSigPublicKey::new(vec![v2.clone(), keys[1].public()], vec![1, 1], 1).is_err());
-    assert!(
-        MultiSigPublicKey::insecure_new(vec![(v2, 1)], 1)
-            .validate()
-            .is_err()
-    );
 }
 
 #[test]

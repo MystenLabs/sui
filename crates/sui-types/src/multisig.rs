@@ -574,7 +574,6 @@ impl MultiSigPublicKey {
                 .iter()
                 .enumerate()
                 .any(|(i, pk)| pks.iter().skip(i + 1).any(|other_pk| *pk == *other_pk))
-            || pks.iter().any(|pk| matches!(pk, PublicKey::ZkLoginV2(_)))
         {
             return Err(SuiErrorKind::InvalidSignature {
                 error: "Invalid multisig public key construction".to_string(),
@@ -617,9 +616,6 @@ impl MultiSigPublicKey {
                     .skip(i + 1)
                     .any(|(other_pk, _weight)| *pk == *other_pk)
             })
-            || pk_map
-                .iter()
-                .any(|(pk, _weight)| matches!(pk, PublicKey::ZkLoginV2(_)))
         {
             return Err(FastCryptoError::InvalidInput);
         }

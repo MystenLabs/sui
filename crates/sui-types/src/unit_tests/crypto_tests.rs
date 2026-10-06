@@ -144,7 +144,7 @@ proptest! {
 // test needs it, everything else uses a fresh random keypair.
 const MLDSA65_TEST_SEED: [u8; 32] = [2; 32];
 const MLDSA65_TEST_ADDRESS: &str =
-    "0x687afa13b5510548e8ab9c57b34544c8ade5507559cfb944db0453fae2a68d4c";
+    "0xa44576e02f83a9e1bddac6fd742a77931d1689d9a61122eb3125dee425f6dd36";
 
 fn mldsa65_random_keypair() -> SuiKeyPair {
     SuiKeyPair::MLDSA65(MLDSA65KeyPair::generate(&mut rand::thread_rng()))
@@ -288,10 +288,7 @@ fn mldsa65_zklogin_ephemeral_rejected() {
 
 #[test]
 fn mldsa65_bcs_variant_index_pinned() {
-    // The BCS tag is consensus-critical (serialized inside MultiSig committees)
-    // and shared with the SDKs: 5 is held for zkLogin v2, ML-DSA-65 is 6.
+    // The BCS tag is consensus-critical (serialized inside MultiSig committees).
     let kp = mldsa65_random_keypair();
-    assert_eq!(bcs::to_bytes(&kp.public()).unwrap()[0], 6);
-    let v2 = PublicKey::ZkLoginV2(ZkLoginPublicIdentifier(vec![0u8; 32]));
-    assert_eq!(bcs::to_bytes(&v2).unwrap()[0], 5);
+    assert_eq!(bcs::to_bytes(&kp.public()).unwrap()[0], 5);
 }
