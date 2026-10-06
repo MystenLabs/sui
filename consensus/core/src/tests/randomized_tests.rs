@@ -7,14 +7,13 @@ use rand::{Rng as _, SeedableRng as _, rngs::StdRng};
 
 use crate::{
     block::Slot,
+    commit::DEFAULT_WAVE_LENGTH,
     commit_test_fixture::{CommitTestFixture, RandomDag, assert_commit_sequences_match},
     test_dag::{RandomDagEquivocationConfig, create_random_dag},
 };
 
 const NUM_RUNS: u32 = 100;
 const MAX_STEP: u32 = 3;
-// The last two leader rounds are undecidable; allow one further round for randomized links.
-const TRAILING_UNDECIDED_SLACK: u32 = 3;
 
 /// Test builds a randomized dag with the following conditions:
 /// - Links to 2f+1 minimum ancestors
@@ -130,6 +129,7 @@ async fn test_randomized_dag_with_equivocations() {
     let num_rounds = 100;
     // Fixed seeds make failures reproducible while exercising distinct choices of
     // equivocating authorities and minimal-parent links.
+    let max_safe_equivocators = (num_authorities - 1) / 3;
     for include_leader_percentage in [100, 50] {
         for equivocations_per_authority in [1, 2] {
             let equivocation_config = RandomDagEquivocationConfig {
@@ -173,19 +173,35 @@ async fn test_randomized_dag_with_equivocations() {
                 }
 
                 let commits = assert_commit_sequences_match(commit_sequences);
-                assert!(
-                    skipped_leaders > 0,
-                    "equivocations did not cause any leader to be skipped for seed {seed}"
-                );
-                let last_commit_round = commits
-                    .last()
-                    .expect("honest quorum did not make progress")
-                    .leader
-                    .round;
                 if include_leader_percentage == 100 {
+                    // With every voter linking the leader, a skip can only come from
+                    // votes splitting across an equivocating leader's forks. At lower
+                    // include_leader_percentage, honest leaders can also be skipped by
+                    // blame alone, so skipped_leaders > 0 no longer implies an
+                    // equivocating leader was hit.
                     assert!(
-                        last_commit_round >= num_rounds - 2 - TRAILING_UNDECIDED_SLACK,
-                        "honest quorum stopped making progress at round {last_commit_round} for seed {seed}"
+                        skipped_leaders > 0,
+                        "equivocations did not cause any leader to be skipped for seed {seed}"
+                    );
+                    let last_commit_round = commits
+                        .last()
+                        .expect("honest quorum did not make progress")
+                        .leader
+                        .round;
+                    // try_indirect_decide requires an anchor at least
+                    // INDIRECT_COMMIT_DEPTH rounds above the leader slot it resolves,
+                    // and the decided sequence stops at the first undecided leader
+                    // (UniversalCommitter::try_decide takes the longest decided
+                    // prefix). Each of the up to `max_safe_equivocators` Byzantine
+                    // leaders can leave its own slot undecided until a further
+                    // DEFAULT_WAVE_LENGTH rounds of blocks arrive, so stacking all of
+                    // them one wave apart near the tip pushes the last leader round
+                    // guaranteed to be decided down to:
+                    let min_decidable_round =
+                        num_rounds - 2 - DEFAULT_WAVE_LENGTH * max_safe_equivocators as u32;
+                    assert!(
+                        last_commit_round >= min_decidable_round,
+                        "honest quorum stopped making progress at round {last_commit_round} (expected >= {min_decidable_round}) for seed {seed}"
                     );
                 }
             }

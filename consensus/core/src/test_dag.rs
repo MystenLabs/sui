@@ -176,8 +176,8 @@ mod tests {
     use super::*;
     use crate::block::BlockAPI;
 
-    #[test]
-    fn random_dag_equivocations_use_a_fixed_safe_authority_set() {
+    #[tokio::test]
+    async fn random_dag_equivocations_use_a_fixed_safe_authority_set() {
         let num_authorities = 7;
         let num_rounds = 100;
         let context = Arc::new(Context::new_for_test(num_authorities).0);
