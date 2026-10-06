@@ -413,6 +413,7 @@ const MAINNET_USDB: &str =
 //              Enable allowances on mainnet.
 //              Merge colliding deferred-transaction entries in the consensus handler
 //              instead of overwriting (which stranded the displaced transactions).
+//              Reduce the non-refundable storage fee from 1% to 0.01% on mainnet.
 // Version 139: Enable forwarding addresses on devnet.
 //              Reduce the non-refundable storage fee from 1% to 0.01%.
 //              Allow random beacon DKG to complete after its timeout on devnet and testnet.
@@ -4806,6 +4807,10 @@ impl ProtocolConfig {
                         cfg.feature_flags.disable_effects_tx_dependencies = true;
                     }
                     cfg.feature_flags.merge_colliding_deferrals = true;
+                    // Testnet already runs version 138, so it gets this change in version 139.
+                    if chain == Chain::Mainnet {
+                        cfg.storage_rebate_rate = Some(9999);
+                    }
                 }
                 139 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
