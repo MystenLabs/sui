@@ -10,7 +10,6 @@ use anyhow::Result;
 use backoff::ExponentialBackoff;
 use cynic::GraphQlResponse;
 use cynic::Operation;
-use reqwest::header::RETRY_AFTER;
 use reqwest::header::USER_AGENT;
 
 use sui_protocol_config::Chain;
@@ -187,26 +186,16 @@ impl GraphQLClient {
             async move {
                 let result = Self::run_query_once(client, rpc, version, operation).await;
                 match result {
-                    Err(backoff::Error::Transient { err, retry_after }) => {
-                        if attempt >= GQL_MAX_ATTEMPTS {
-                            return Err(backoff::Error::permanent(err));
-                        }
-                        if retry_after.is_some_and(|delay| {
-                            delay >= deadline.saturating_duration_since(tokio::time::Instant::now())
-                        }) {
-                            return Err(backoff::Error::permanent(
-                                err.context("Retry-After exceeds remaining GraphQL retry budget"),
-                            ));
-                        }
-                        Err(backoff::Error::Transient { err, retry_after })
+                    Err(backoff::Error::Transient { err, .. }) if attempt >= GQL_MAX_ATTEMPTS => {
+                        Err(backoff::Error::permanent(err))
                     }
                     other => other,
                 }
             }
         });
 
-        // Explicit Retry-After delays bypass backoff's elapsed-time check. The deadline also covers
-        // requests still in flight, so neither a slow server nor rate limiting can wait indefinitely.
+        // Include in-flight requests in the deadline because backoff checks elapsed time only
+        // between attempts.
         tokio::time::timeout_at(deadline, retry)
             .await
             .context("GraphQL query exceeded its retry time budget")?
@@ -233,14 +222,7 @@ impl GraphQLClient {
             .map_err(classify_request_error)?;
         if let Err(error) = response.error_for_status_ref() {
             return Err(match response.status().as_u16() {
-                408 | 429 | 500 | 502 | 503 | 504 => backoff::Error::Transient {
-                    err: error.into(),
-                    retry_after: response
-                        .headers()
-                        .get(RETRY_AFTER)
-                        .and_then(|value| value.to_str().ok())
-                        .and_then(parse_retry_after),
-                },
+                408 | 429 | 500 | 502 | 503 | 504 => backoff::Error::transient(error.into()),
                 _ => backoff::Error::permanent(error.into()),
             });
         }
@@ -378,20 +360,6 @@ fn classify_request_error(error: reqwest::Error) -> backoff::Error<Error> {
     } else {
         backoff::Error::permanent(error.into())
     }
-}
-
-/// Parse a Retry-After delay in seconds or as an HTTP date, treating past dates as zero delay.
-fn parse_retry_after(value: &str) -> Option<Duration> {
-    let value = value.trim();
-    if let Ok(seconds) = value.parse::<u64>() {
-        return Some(Duration::from_secs(seconds));
-    }
-    let date = chrono::DateTime::parse_from_rfc2822(value).ok()?;
-    Some(
-        date.signed_duration_since(chrono::Utc::now())
-            .to_std()
-            .unwrap_or_default(),
-    )
 }
 
 #[cfg(test)]
@@ -568,10 +536,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_run_query_honors_retry_after() {
+    async fn test_run_query_ignores_retry_after() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
-            .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "1"))
+            .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "120"))
             .up_to_n_times(1)
             .with_priority(1)
             .expect(1)
@@ -590,16 +558,14 @@ mod tests {
         let operation = CheckpointQuery::build(CheckpointArgs {
             sequence_number: Some(7),
         });
-        let start = tokio::time::Instant::now();
         assert!(store.run_query(&operation).await.unwrap().data.is_some());
-        assert!(start.elapsed() >= std::time::Duration::from_secs(1));
     }
 
     #[tokio::test]
     async fn test_run_query_bounds_repeated_rate_limits() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
-            .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "0"))
+            .respond_with(ResponseTemplate::new(429))
             .expect(5)
             .mount(&server)
             .await;
@@ -651,38 +617,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_run_query_rejects_retry_after_beyond_budget() {
-        for retry_after in ["120", "Sun, 06 Nov 2095 08:49:37 GMT"] {
-            let server = MockServer::start().await;
-            Mock::given(method("POST"))
-                .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", retry_after))
-                .expect(1)
-                .mount(&server)
-                .await;
-
-            let store = mock_store(&server);
-            let operation = CheckpointQuery::build(CheckpointArgs {
-                sequence_number: Some(7),
-            });
-            let error = GraphQLClient::run_query_internal(
-                &store.client,
-                &store.rpc,
-                &store.version,
-                &operation,
-                Duration::from_secs(1),
-            )
-            .await
-            .err()
-            .unwrap();
-            assert!(format!("{error:#}").contains("Retry-After exceeds"));
-            assert_eq!(
-                error.downcast_ref::<reqwest::Error>().unwrap().status(),
-                Some(reqwest::StatusCode::TOO_MANY_REQUESTS),
-            );
-        }
-    }
-
-    #[tokio::test]
     async fn test_run_query_budget_includes_in_flight_requests() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
@@ -710,19 +644,6 @@ mod tests {
                 .downcast_ref::<tokio::time::error::Elapsed>()
                 .is_some()
         );
-    }
-
-    #[tokio::test]
-    async fn test_parse_retry_after() {
-        assert_eq!(parse_retry_after("12"), Some(Duration::from_secs(12)));
-        assert_eq!(parse_retry_after("0"), Some(Duration::ZERO));
-        assert_eq!(
-            parse_retry_after("Sun, 06 Nov 1994 08:49:37 GMT"),
-            Some(Duration::ZERO),
-        );
-        for invalid in ["", "invalid", "-1", "0.5", "18446744073709551616"] {
-            assert_eq!(parse_retry_after(invalid), None);
-        }
     }
 
     #[tokio::test]
