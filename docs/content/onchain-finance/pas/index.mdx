@@ -45,7 +45,7 @@ When a holder initiates a transfer, the system creates a Request. That Request m
 
 ## How PAS differs from closed-loop tokens
 
-The Sui Closed-Loop Token standard also restricts asset movement, but PAS extends that model with explicit Account objects and composable Policy logic. PAS Policies can chain multiple approval steps, delegate authority to external modules, and enforce rules that go beyond simple allowlists or denylist checks. This makes PAS more flexible for complex financial workflows where approval logic must evolve independently of the asset type itself.
+PAS supports a unified account model which leverages address balances, making discoverability almost free. It also uses derived objects for policy and account discovery, and PTB templates for "automated" client-side policy resolution.
 
 import DocCardList from '@theme/DocCardList';
 
