@@ -97,8 +97,18 @@ pub fn proposers_metric_label(
 /// from flipping the mode network-wide: a full-committee fan-out of a single
 /// transaction stays under it, while any sustained fan-out crosses it within one
 /// window. Identical on every validator (compiled in), so the mode moves in lockstep.
+///
+/// De-escalation additionally waits out `SIGNAL_EXIT_DWELL_COMMITS` of the ratio
+/// sitting below the active band's exit threshold. Staggering suppresses the very
+/// duplication the window measures: once active, the held copies drop on commit and
+/// the ratio collapses within one window regardless of whether the attack continues,
+/// so no exit threshold above zero can hold the band on its own. The dwell is the
+/// time-domain hysteresis that the threshold gap cannot provide; it bounds how often
+/// the signal relaxes and lets a burst through to re-measure, at the cost of
+/// staggering lingering for up to the dwell after an attack stops.
 const SIGNAL_WINDOW_COMMITS: usize = 300;
 const SIGNAL_MIN_EXCESS_COPIES: u64 = 2 * SIGNAL_WINDOW_COMMITS as u64;
+const SIGNAL_EXIT_DWELL_COMMITS: usize = 2 * SIGNAL_WINDOW_COMMITS;
 
 /// One level of the signal's proportional response.
 struct SignalBand {
@@ -114,8 +124,9 @@ struct SignalBand {
 
 /// The response is proportional to the measured attack: the signal escalates to the
 /// highest band whose `enter_ratio` the window meets (leaving band 0 also requires
-/// the `SIGNAL_MIN_EXCESS_COPIES` floor), and de-escalates one band at a time as the
-/// ratio falls below the active band's `exit_ratio`.
+/// the `SIGNAL_MIN_EXCESS_COPIES` floor), and, once the ratio has stayed below the
+/// active band's `exit_ratio` for `SIGNAL_EXIT_DWELL_COMMITS`, de-escalates to the
+/// highest band whose `exit_ratio` the ratio still meets (off if none).
 ///
 /// Only `max_delay` (H) varies across bands; the step stays fixed. Under the wrapped
 /// schedule H alone sets both sides of the trade-off: how long held traffic waits
@@ -199,6 +210,11 @@ struct SignalState {
     window: VecDeque<(u64, u64)>,
     /// The signal's band level: 0 is off, `b > 0` is `SIGNAL_BANDS[b - 1]`.
     band: usize,
+    /// Consecutive commits the ratio has spent below the active band's exit threshold;
+    /// de-escalation fires once it reaches `SIGNAL_EXIT_DWELL_COMMITS`. Reset by any
+    /// commit at or above the threshold and by every transition, so each band step
+    /// waits out its own dwell.
+    below_exit_commits: usize,
 }
 
 impl StaggeredSubmission {
@@ -209,6 +225,7 @@ impl StaggeredSubmission {
             signal: Mutex::new(SignalState {
                 window: VecDeque::new(),
                 band: 0,
+                below_exit_commits: 0,
             }),
         }
     }
@@ -243,10 +260,12 @@ impl StaggeredSubmission {
     /// dominates).
     ///
     /// Activation suppresses the very duplication it measures, so under a sustained
-    /// attack the signal oscillates between adjacent bands with a mostly-elevated duty
-    /// cycle: once the escalating evidence slides out of the window and the ratio
-    /// drops through the active band's exit threshold, a brief burst of duplication
-    /// gets through and re-escalates it within a few commits.
+    /// attack the signal still cycles, with a mostly-elevated duty cycle: once the
+    /// escalating evidence slides out of the window, the ratio sits below the active
+    /// band's exit threshold, the dwell runs out and the signal drops to the band the
+    /// collapsed ratio supports (usually off), and the brief burst of duplication that
+    /// gets through re-escalates it within a few commits. The dwell sets the period of
+    /// that cycle (a few windows rather than one).
     pub fn record_commit(
         &self,
         excess_copies: u64,
@@ -280,14 +299,28 @@ impl StaggeredSubmission {
         // Leaving band 0 additionally requires the materiality floor.
         let escalate =
             target_band > current_band && (current_band > 0 || excess >= SIGNAL_MIN_EXCESS_COPIES);
-        // De-escalate one band at a time once the ratio falls below the active band's
-        // exit threshold; each enter/exit gap absorbs boundary noise.
-        let de_escalate =
+        // De-escalate once the ratio has stayed below the active band's exit threshold
+        // for the dwell, landing on the highest band whose exit threshold the ratio
+        // still meets (band 0 if none): the enter/exit gap absorbs boundary noise and
+        // the dwell absorbs the ratio collapse that activation itself causes. Dropping
+        // to the supported band rather than one step keeps a collapsed ratio from
+        // parking the signal in a weaker band for a second dwell.
+        let below_exit =
             current_band > 0 && duplication_ratio < SIGNAL_BANDS[current_band - 1].exit_ratio;
+        signal.below_exit_commits = if below_exit {
+            signal.below_exit_commits + 1
+        } else {
+            0
+        };
+        let de_escalate = signal.below_exit_commits >= SIGNAL_EXIT_DWELL_COMMITS;
         let new_band = if escalate {
             target_band
         } else if de_escalate {
-            current_band - 1
+            SIGNAL_BANDS
+                .iter()
+                .take_while(|band| duplication_ratio >= band.exit_ratio)
+                .count()
+                .min(current_band - 1)
         } else {
             current_band
         };
@@ -300,6 +333,7 @@ impl StaggeredSubmission {
         let transition = (new_band != current_band).then_some(new_band);
         if let Some(band) = transition {
             signal.band = band;
+            signal.below_exit_commits = 0;
             if apply {
                 if band > 0 {
                     // Retune before (re)activating so no submission computes a delay
@@ -809,10 +843,11 @@ mod tests {
             assert_eq!(staggered.params.read().max_delay, SIGNAL_BANDS[0].max_delay);
             assert_eq!(staggered.record_commit(1000, 2000, true).0, Some(2));
             assert_eq!(staggered.params.read().max_delay, SIGNAL_BANDS[1].max_delay);
-            // De-escalating back into band 1 retunes the cap down again.
+            // A steady 4% dilutes the spike into band 1's range; de-escalating there
+            // (after the dwell) retunes the cap down again.
             let mut transitions = Vec::new();
-            for _ in 0..SIGNAL_WINDOW_COMMITS {
-                transitions.extend(staggered.record_commit(0, 100, true).0);
+            for _ in 0..SIGNAL_WINDOW_COMMITS + SIGNAL_EXIT_DWELL_COMMITS {
+                transitions.extend(staggered.record_commit(4, 100, true).0);
                 if !transitions.is_empty() {
                     break;
                 }
@@ -878,21 +913,20 @@ mod tests {
         }
 
         #[test]
-        fn deescalates_band_by_band_once_quiet_traffic_dilutes_the_spike() {
+        fn deescalates_straight_to_off_once_quiet_traffic_dilutes_the_spike() {
             let staggered = StaggeredSubmission::new();
             assert_eq!(staggered.record_commit(1000, 2000, true).0, Some(2));
-            // Quiet traffic dilutes the escalating spike's window ratio; each band
-            // holds until the ratio crosses its exit threshold, and the signal is off
-            // within one window at the latest (eviction of the spike).
-            let mut band = 2;
-            for _ in 0..=SIGNAL_WINDOW_COMMITS {
-                if let Some(new_band) = staggered.record_commit(0, 100, true).0 {
-                    assert_eq!(new_band, band - 1, "bands de-escalate one at a time");
-                    band = new_band;
-                }
-                assert_eq!(staggered.is_active(), band > 0);
+            // Quiet traffic dilutes the escalating spike's window ratio to zero; band 2
+            // holds until the ratio has sat below its exit threshold for the dwell and
+            // then drops straight to off (no band's exit threshold is met), within one
+            // window (eviction of the spike) plus one dwell at the latest. Band 1 is
+            // not visited on the way down.
+            let mut transitions = Vec::new();
+            for _ in 0..=SIGNAL_WINDOW_COMMITS + SIGNAL_EXIT_DWELL_COMMITS {
+                transitions.extend(staggered.record_commit(0, 100, true).0);
+                assert_eq!(staggered.is_active(), transitions.is_empty());
             }
-            assert_eq!(band, 0);
+            assert_eq!(transitions, vec![0]);
         }
 
         #[test]
@@ -900,16 +934,17 @@ mod tests {
             let staggered = StaggeredSubmission::new();
             assert_eq!(staggered.record_commit(1000, 2000, true).0, Some(2));
             // A steady 4% sits inside band 1's 3%..5% gap: as it dilutes the spike
-            // the signal settles into band 1 and then holds there indefinitely...
+            // the signal settles into band 1 (after the dwell) and then holds there
+            // indefinitely...
             let mut transitions = Vec::new();
-            for _ in 0..2 * SIGNAL_WINDOW_COMMITS {
+            for _ in 0..2 * SIGNAL_WINDOW_COMMITS + SIGNAL_EXIT_DWELL_COMMITS {
                 transitions.extend(staggered.record_commit(4, 100, true).0);
                 assert!(staggered.is_active());
             }
             assert_eq!(transitions, vec![1]);
             // ...and once deactivated by a 2% trickle, 4% does not re-activate.
             let mut transitions = Vec::new();
-            for _ in 0..SIGNAL_WINDOW_COMMITS {
+            for _ in 0..SIGNAL_WINDOW_COMMITS + SIGNAL_EXIT_DWELL_COMMITS {
                 transitions.extend(staggered.record_commit(2, 100, true).0);
             }
             assert_eq!(transitions, vec![0]);
@@ -947,12 +982,53 @@ mod tests {
             // Quiet traffic eventually reports the de-escalations too, still without
             // touching staggering.
             let mut transitions = Vec::new();
-            for _ in 0..=SIGNAL_WINDOW_COMMITS {
+            for _ in 0..=SIGNAL_WINDOW_COMMITS + SIGNAL_EXIT_DWELL_COMMITS {
                 transitions.extend(staggered.record_commit(0, 100, false).0);
                 assert!(!staggered.is_active());
             }
-            assert_eq!(transitions, vec![1, 0]);
+            assert_eq!(transitions, vec![0]);
             assert_eq!(staggered.params.read().max_delay, SIGNAL_BANDS[0].max_delay);
+        }
+
+        #[test]
+        fn exit_dwell_absorbs_transient_dips() {
+            let staggered = StaggeredSubmission::new();
+            assert_eq!(staggered.record_commit(1000, 2000, true).0, Some(2));
+            let exit_ratio = SIGNAL_BANDS[1].exit_ratio;
+
+            // Quiet traffic takes the ratio below band 2's exit threshold, but the
+            // band holds until the dwell has elapsed below it...
+            let mut below_exit = 0;
+            while below_exit < SIGNAL_EXIT_DWELL_COMMITS / 2 {
+                let (transition, ratio) = staggered.record_commit(0, 100, true);
+                assert_eq!(transition, None);
+                if ratio < exit_ratio {
+                    below_exit += 1;
+                }
+            }
+            // ...and a single commit heavy enough to lift the diluted window back
+            // above the threshold (no further escalation: band 2 is the top) restarts
+            // the dwell from scratch.
+            let (transition, ratio) = staggered.record_commit(10_000, 100, true);
+            assert_eq!(transition, None);
+            assert!(ratio >= exit_ratio);
+            assert_eq!(staggered.signal_band(), 2);
+
+            let mut below_exit = 0;
+            loop {
+                let (transition, ratio) = staggered.record_commit(0, 100, true);
+                if ratio < exit_ratio {
+                    below_exit += 1;
+                }
+                if below_exit < SIGNAL_EXIT_DWELL_COMMITS {
+                    assert_eq!(transition, None, "de-escalated before the dwell elapsed");
+                } else {
+                    assert_eq!(transition, Some(0), "dwell elapsed without de-escalating");
+                    break;
+                }
+            }
+            assert!(!staggered.is_active());
+            assert_eq!(staggered.signal_band(), 0);
         }
 
         #[test]
