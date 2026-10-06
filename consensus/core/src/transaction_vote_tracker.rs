@@ -143,13 +143,17 @@ impl TransactionVoteTracker {
     }
 
     /// Retrieves own votes on peer block transactions.
+    /// Every input block must be above the vote tracker GC round.
     pub(crate) fn get_own_votes(&self, block_refs: Vec<BlockRef>) -> Vec<BlockTransactionVotes> {
         let mut votes = vec![];
         let vote_tracker_state = self.vote_tracker_state.read();
         for block_ref in block_refs {
-            if block_ref.round <= vote_tracker_state.gc_round {
-                continue;
-            }
+            assert!(
+                block_ref.round > vote_tracker_state.gc_round,
+                "Transaction vote target {} is at or below vote tracker GC round {}",
+                block_ref,
+                vote_tracker_state.gc_round,
+            );
             let vote_info = vote_tracker_state.votes.get(&block_ref).unwrap_or_else(|| {
                 panic!(
                     "Ancestor block {} not found in vote tracker state",
@@ -183,6 +187,22 @@ impl TransactionVoteTracker {
             .map(|(idx, stake_agg)| (*idx, stake_agg.stake()))
             .collect::<Vec<_>>();
         Some(accumulated_reject_votes)
+    }
+
+    /// Snapshots reject voters so callers can combine them with other votes without counting an
+    /// authority twice. Returns None if no information is found for the block.
+    pub(crate) fn get_reject_vote_aggregators(
+        &self,
+        block_ref: &BlockRef,
+    ) -> Option<BTreeMap<TransactionIndex, StakeAggregator<QuorumThreshold>>> {
+        Some(
+            self.vote_tracker_state
+                .read()
+                .votes
+                .get(block_ref)?
+                .reject_txn_votes
+                .clone(),
+        )
     }
 
     /// Runs garbage collection on the internal state by removing data for blocks <= gc_round,
@@ -318,7 +338,7 @@ struct VoteInfo {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
+    use std::{collections::BTreeSet, sync::Arc};
 
     use consensus_config::{AuthorityIndex, Parameters};
 
@@ -464,6 +484,14 @@ mod test {
         assert_eq!(reject_votes_1.len(), 2);
         assert_eq!(reject_votes_1.get(&1).unwrap().stake(), 3);
         assert_eq!(reject_votes_1.get(&2).unwrap().stake(), 5);
+        // The V3 finalizer unions these voters with cutoff rejects, so voter identities matter.
+        assert_eq!(
+            reject_votes_1.get(&2).unwrap().authorities(),
+            &BTreeSet::from([
+                AuthorityIndex::new_for_test(1),
+                AuthorityIndex::new_for_test(2)
+            ])
+        );
 
         // block[2] and block[3] have no reject votes from others.
         let reject_votes_2 = &state
@@ -472,5 +500,24 @@ mod test {
             .unwrap()
             .reject_txn_votes;
         assert!(reject_votes_2.is_empty());
+
+        // A later reject from authority 1 must not count its stake again.
+        let block_r3_a1 = VerifiedBlock::new_for_test(
+            TestBlock::new(3, 1)
+                .set_transaction_votes(vec![BlockTransactionVotes {
+                    block_ref: round_1_blocks[0].reference(),
+                    rejects: vec![0],
+                }])
+                .build(),
+        );
+        state.add_voted_blocks(vec![(block_r3_a1, vec![])]);
+        let txn_0_votes = state
+            .votes
+            .get(&round_1_blocks[0].reference())
+            .unwrap()
+            .reject_txn_votes
+            .get(&0)
+            .unwrap();
+        assert_eq!(txn_0_votes.stake(), 3);
     }
 }
