@@ -15,6 +15,7 @@ keywords:
   - deposit USDC
   - withdraw USDC
   - builder code
+  - builder fee
   - referral
   - referrer
   - accountcontract
@@ -46,6 +47,7 @@ questions:
   - How do I get the account wrapper ID for an owner address before the account exists?
   - Where do USDC withdrawals from a DeepBook Predict account land by default?
   - How do I create a DeepBook Predict account with a referrer?
+  - How do I create a DeepBook Predict builder code and claim its fees?
 answer: >-
   Call client.predict.tx.createManager() to create the signer's shared account
   wrapper, or client.predict.tx.deposit(owner, amount, { create: true }) to
@@ -54,8 +56,8 @@ answer: >-
   returns it with no chain read, even before the account exists.
   client.predict.tx.withdraw sends USDC to the owner's address balance by
   default, and { toCoinObject: true } transfers a coin object instead.
-last_verified: 2026-09-28
-verified_against: '@mysten/deepbook-v3 2.6.1 (ts-sdks 56d51645); predict protocol version 3 and sessions 2 on both networks, publication records at deepbookv3 abb4cfd9; referred-account recipe type-checked against ts-sdks 56d51645 and simulated on Testnet 2026-09-28'
+last_verified: 2026-10-01
+verified_against: '@mysten/deepbook-v3 2.6.1 (ts-sdks 56d51645); predict protocol version 3 and sessions 2 on both networks, publication records at deepbookv3 abb4cfd9; referred-account recipe type-checked against ts-sdks 56d51645 and simulated on Testnet 2026-09-28; builder-code recipe type-checked against @mysten/deepbook-v3 2.6.6 and simulated on Testnet 2026-10-01'
 ---
 
 The account functions create a trader's shared `AccountWrapper`, move USDC in and out of it, and attach a builder code, and the `/account` subpath exposes the account primitive underneath for transactions you compose yourself. [Accounts and Custody](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager) explains the custody mechanism: the wrapper, the `Auth` hot potato, settlement, and the account events.
@@ -188,7 +190,7 @@ The returned `number` is a display value, and above `2^53` raw units it loses pr
 
 ## Builder code functions {#builder-codes}
 
-A builder code routes an add-on fee to the code's owner on every trade the account makes after you set it. Both builders mint an `Auth` from the sender, so the account owner must sign, and both emit `BuilderCodeSet`. [Builder codes](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#builder-codes) covers the Move functions and the event.
+A builder code adds a builder fee to each mint and live close the account makes after you set it, and the fee collects at the code's address for its owner to claim. [Builder codes](/onchain-finance/deepbook/deepbook-predict/design#builder-codes) explains the fee and who earns it. Both builders mint an `Auth` from the sender, so the account owner must sign, and both emit `BuilderCodeSet`. [Builder codes](/onchain-finance/deepbook/deepbook-predict/contract-information/predict-manager#builder-codes) covers the Move functions and the event.
 
 ### `tx.setBuilderCode` {#set-builder-code}
 
@@ -212,6 +214,56 @@ It takes this parameter:
 <ImportContent source="packages/deepbook-v3/src/predict/client.ts" mode="code" org="MystenLabs" repo="ts-sdks" branch="56d51645cd231010e39d96dd23583056c5266426" lines="829-829" />
 
 Decode either result with [`decode.builderCode`](#decode-builder-code).
+
+## Operate a builder code {#operate-builder-code}
+
+The functions above are for the account that carries a code. Nothing in `client.predict` serves the code's owner: no facade builder creates a code or claims its fees. Compose both from the generated bindings that the `/predict` subpath exports, `registryMoveCalls` and `builderCodeMoveCalls`, with `toGeneratedConfig` supplying the shared objects:
+
+```ts
+import {
+	builderCodeMoveCalls,
+	getConfig,
+	registryMoveCalls,
+	toGeneratedConfig,
+} from '@mysten/deepbook-v3/predict';
+import { Transaction } from '@mysten/sui/transactions';
+import { deriveObjectID } from '@mysten/sui/utils';
+
+const cfg = getConfig('mainnet');
+const config = toGeneratedConfig(cfg);
+
+// A code's ID derives from its owner and index, so you can compute it before or
+// after creation. The key type keeps Predict's original package ID.
+export function builderCodeIdFor(owner: string, index: number): string {
+	const key = builderCodeMoveCalls.BuilderCodeKey.serialize([owner, index]).toBytes();
+	return deriveObjectID(
+		cfg.objects.registry,
+		`${config.predictPackageIdV1}::builder_code::BuilderCodeKey`,
+		key,
+	);
+}
+
+export function createBuilderCode(index: number): Transaction {
+	const tx = new Transaction();
+	tx.add(registryMoveCalls.createAndShareBuilderCode({ config, arguments: { index } }));
+	return tx;
+}
+
+export function claimBuilderFees(owner: string, codeId: string): Transaction {
+	const tx = new Transaction();
+	const fees = tx.add(builderCodeMoveCalls.claimAllBuilderFees({ config, arguments: { code: codeId } }));
+	tx.transferObjects([fees], owner);
+	return tx;
+}
+```
+
+The 3 functions do the following:
+
+- **`builderCodeIdFor`** computes a code's ID from its owner and index, the same way the chain derives it. Use it to publish a code's ID before you create the code, or to recover the ID of one you already made. The key type must use Predict's original package ID, `predictPackageIdV1`, not the call target. A key type built from the call target derives a different ID, the trap that [Upgraded packages carry 2 IDs](/onchain-finance/deepbook/deepbook-predict/contract-information#two-ids) describes.
+- **`createBuilderCode`** creates a code owned by the transaction sender. Choose an index that the sender has not used yet, because reusing one aborts. Read the new ID from the `BuilderCodeCreated` event, or compute it with `builderCodeIdFor`.
+- **`claimBuilderFees`** collects every settled fee and transfers the coin to `owner`. The code's owner must sign, because the contract aborts with `ENotOwner`, abort code `0`, for any other sender.
+
+To read the balance before you claim, simulate `builderCodeMoveCalls.claimableBuilderFees` with the code's ID and read the `u64` it returns. Accounts then attach the code with [`tx.setBuilderCode`](#set-builder-code), using the ID that `builderCodeIdFor` returns.
 
 ## Account decoders {#decode}
 
