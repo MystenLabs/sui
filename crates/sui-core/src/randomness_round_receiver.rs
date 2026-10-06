@@ -297,9 +297,7 @@ impl RandomnessRoundReceiver {
             .persist_transaction(&transaction);
 
         // Notify the scheduler that the transaction key now has a known digest
-        if epoch_store.insert_tx_key(key, digest).is_err() {
-            warn!("epoch ended while handling new randomness");
-        }
+        epoch_store.insert_tx_key(key, digest);
 
         let authority_state = self.authority_state.clone();
         let executed_consensus_rounds = self.executed_consensus_rounds.clone();

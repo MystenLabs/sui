@@ -10,6 +10,7 @@ use crate::{
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
         ExecutingGuard, PendingCertificateStats,
+        causal_admission::CausalAdmission,
         funds_withdraw_scheduler::{
             AddressFundsSchedulerMetrics, FundsSettlement, ScheduleStatus, TxFundsWithdraw,
             WithdrawReservations, scheduler::FundsWithdrawScheduler,
@@ -28,7 +29,7 @@ use std::{
 use sui_config::node::{AuthorityOverloadConfig, FundsWithdrawSchedulerType};
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    base_types::{FullObjectID, ObjectID},
+    base_types::{FullObjectID, ObjectID, SequenceNumber},
     digests::TransactionDigest,
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
@@ -40,7 +41,7 @@ use sui_types::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
-use tracing::{debug, error, instrument};
+use tracing::{debug, instrument};
 
 use super::{PendingCertificate, overload_tracker::OverloadTracker};
 
@@ -92,6 +93,7 @@ pub struct ExecutionScheduler {
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
+    causal_admission: Arc<CausalAdmission>,
     address_funds_withdraw_scheduler: Arc<Mutex<Option<FundsWithdrawScheduler>>>,
     funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
     metrics: Arc<AuthorityMetrics>,
@@ -157,6 +159,7 @@ impl ExecutionScheduler {
             transaction_cache_read,
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
+            causal_admission: CausalAdmission::new_with_default_sizing(prometheus_registry),
             address_funds_withdraw_scheduler: Arc::new(Mutex::new(
                 address_funds_withdraw_scheduler,
             )),
@@ -190,6 +193,11 @@ impl ExecutionScheduler {
         );
 
         Some(address_funds_withdraw_scheduler)
+    }
+
+    /// The causal-order state shared with the execution driver.
+    pub fn causal_admission(&self) -> &Arc<CausalAdmission> {
+        &self.causal_admission
     }
 
     #[instrument(level = "debug", skip_all, fields(tx_digest = ?cert.digest()))]
@@ -309,12 +317,6 @@ impl ExecutionScheduler {
                         .transaction_manager_transaction_queue_age_s
                         .observe(enqueue_time.elapsed().as_secs_f64());
                     debug!(?tx_digest, "Input objects available");
-                    // TODO: Eventually we could fold execution_driver into the scheduler.
-                    self.send_transaction_for_execution(
-                        &cert,
-                        execution_env,
-                        enqueue_time,
-                    );
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(
                 "ExecutionScheduler::notify_read_executed_effects_digests",
@@ -323,6 +325,13 @@ impl ExecutionScheduler {
                 debug!(?tx_digest, "Transaction already executed");
             }
         };
+
+        // Send even if the transaction was already executed: the driver must retire its
+        // causal index, and it drops such a transaction before dispatching it. These
+        // sends should only happen briefly after a restart - in steady state, duplicate
+        // enqueues are removed by deduplication.
+        // TODO: Eventually we could fold execution_driver into the scheduler.
+        self.send_transaction_for_execution(&cert, execution_env, enqueue_time);
     }
 
     pub fn send_transaction_for_execution(
@@ -347,17 +356,20 @@ impl ExecutionScheduler {
         let _ = self.tx_ready_certificates.send(pending_cert);
     }
 
-    fn schedule_funds_withdraws(
-        &self,
-        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        if certs.is_empty() {
-            return;
-        }
+    /// Groups the funds withdraw reservations of `certs` by accumulator version.
+    fn collect_withdraw_reservations(
+        certs: &[(Schedulable, ExecutionEnv)],
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> BTreeMap<SequenceNumber, Vec<TxFundsWithdraw>> {
         let mut withdraws = BTreeMap::new();
         let mut prev_version = None;
-        for (cert, env) in &certs {
+        for (schedulable, env) in certs {
+            let Schedulable::Transaction(cert) = schedulable else {
+                continue;
+            };
+            if !cert.transaction_data().has_funds_withdrawals() {
+                continue;
+            }
             let tx_withdraws = cert
                 .transaction_data()
                 .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier());
@@ -371,14 +383,28 @@ impl ExecutionScheduler {
                 assert!(prev_version <= accumulator_version);
             }
             prev_version = Some(accumulator_version);
-            let tx_digest = *cert.digest();
             withdraws
                 .entry(accumulator_version)
                 .or_insert(Vec::new())
                 .push(TxFundsWithdraw {
-                    tx_digest,
+                    tx_digest: *cert.digest(),
                     reservations: tx_withdraws,
                 });
+        }
+        withdraws
+    }
+
+    /// Submits `reservations` to the funds withdraw scheduler and schedules `certs` as their
+    /// results arrive. `certs` holds only the transactions that survived dedup; results for
+    /// the others are ignored, since those transactions execute from their checkpoint copy.
+    fn schedule_funds_withdraws(
+        &self,
+        reservations: BTreeMap<SequenceNumber, Vec<TxFundsWithdraw>>,
+        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if reservations.is_empty() {
+            return;
         }
         let mut receivers = FuturesUnordered::new();
         {
@@ -386,7 +412,7 @@ impl ExecutionScheduler {
             let withdraw_scheduler = guard
                 .as_ref()
                 .expect("Funds withdraw scheduler must be enabled if there are withdraws");
-            for (version, tx_withdraws) in withdraws {
+            for (version, tx_withdraws) in reservations {
                 receivers.extend(withdraw_scheduler.schedule_withdraws(WithdrawReservations {
                     accumulator_version: version,
                     withdraws: tx_withdraws,
@@ -394,43 +420,53 @@ impl ExecutionScheduler {
             }
             // guard will be dropped here
         }
+        if certs.is_empty() {
+            return;
+        }
         let scheduler = self.clone();
         let epoch_store = epoch_store.clone();
-        spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+        spawn_monitored_task!(async move {
             let mut cert_map = HashMap::new();
             for (cert, env) in certs {
                 cert_map.insert(*cert.digest(), (cert, env));
             }
             while let Some(result) = receivers.next().await {
                 match result {
-                    Ok((tx_digest, status)) => match status {
-                        ScheduleStatus::InsufficientFunds => {
-                            assert_reachable!("tx cancelled, insufficient funds");
-                            debug!(
-                                ?tx_digest,
-                                "Funds withdraw scheduling result: Insufficient funds"
-                            );
-                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
-                            let env = env.with_insufficient_funds();
-                            scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
-                        }
-                        ScheduleStatus::SufficientFunds => {
-                            assert_reachable!("tx scheduled, sufficient funds");
-                            debug!(?tx_digest, "Funds withdraw scheduling result: Success");
-                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
-                            scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
-                        }
-                        ScheduleStatus::SkipSchedule => {
-                            assert_reachable!("tx withdrawal scheduling skipped");
-                            debug!(?tx_digest, "Skip scheduling funds withdraw");
-                        }
-                    },
+                    Ok((tx_digest, status)) => {
+                        let Some((cert, env)) = cert_map.remove(&tx_digest) else {
+                            continue;
+                        };
+                        let env = match status {
+                            ScheduleStatus::InsufficientFunds => {
+                                assert_reachable!("tx cancelled, insufficient funds");
+                                debug!(
+                                    ?tx_digest,
+                                    "Funds withdraw scheduling result: Insufficient funds"
+                                );
+                                env.with_insufficient_funds()
+                            }
+                            ScheduleStatus::SufficientFunds => {
+                                assert_reachable!("tx scheduled, sufficient funds");
+                                debug!(?tx_digest, "Funds withdraw scheduling result: Success");
+                                env
+                            }
+                            ScheduleStatus::SkipSchedule => {
+                                assert_reachable!("tx withdrawal scheduling skipped");
+                                debug!(?tx_digest, "Skip scheduling funds withdraw");
+                                env
+                            }
+                        };
+                        scheduler.spawn_transaction_scheduling(vec![(cert, env)], &epoch_store);
+                    }
                     Err(e) => {
-                        error!("Withdraw scheduler stopped: {:?}", e);
+                        // A sender drops unsent only if its withdraw is still pending when
+                        // reconfigure replaces the scheduler, but every settlement in an
+                        // epoch executes before the change epoch transaction.
+                        debug_fatal!("Withdraw scheduler stopped: {:?}", e);
                     }
                 }
             }
-        }));
+        });
     }
 
     fn schedule_tx_keys(
@@ -444,7 +480,7 @@ impl ExecutionScheduler {
 
         let scheduler = self.clone();
         let epoch_store = epoch_store.clone();
-        spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+        spawn_monitored_task!(async move {
             let tx_keys: Vec<_> = tx_with_keys.iter().map(|(key, _)| key).cloned().collect();
             let digests = epoch_store
                 .notify_read_tx_key_to_digest(&tx_keys)
@@ -460,8 +496,8 @@ impl ExecutionScheduler {
                 })
                 .zip_debug_eq(tx_with_keys.into_iter().map(|(_, env)| env))
                 .collect::<Vec<_>>();
-            scheduler.enqueue_transactions(transactions, &epoch_store);
-        }));
+            scheduler.spawn_transaction_scheduling(transactions, &epoch_store);
+        });
     }
 
     /// When we schedule a certificate, it should be impossible for it to have been executed in a
@@ -499,6 +535,17 @@ impl ExecutionScheduler {
         certs: Vec<(Schedulable, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
+        // Deduplicate and assign causal indices for the whole batch first, in enqueue
+        // order, for every unit - including keys whose transactions materialize only
+        // later. A key's transactions must run under the key's index: units enqueued
+        // after it may already be parked waiting for its outputs.
+        //
+        // Withdraw reservations are collected first: the funds scheduler must see every
+        // consensus version, including groups dedup rejects because their checkpoint copy
+        // arrived first, as its balances account for reservations of unsettled versions.
+        let reservations = Self::collect_withdraw_reservations(&certs, epoch_store);
+        let certs = self.causal_admission.dedup_and_assign(certs);
+
         // schedule all transactions immediately
         let mut ordinary_txns = Vec::with_capacity(certs.len());
         let mut tx_with_keys = Vec::new();
@@ -528,11 +575,15 @@ impl ExecutionScheduler {
             }
         }
 
-        self.enqueue_transactions(ordinary_txns, epoch_store);
+        self.spawn_transaction_scheduling(ordinary_txns, epoch_store);
         self.schedule_tx_keys(tx_with_keys, epoch_store);
-        self.schedule_funds_withdraws(tx_with_withdraws, epoch_store);
+        self.schedule_funds_withdraws(reservations, tx_with_withdraws, epoch_store);
     }
 
+    /// Enqueues digest-carrying transactions. A transaction with a non-digest key (e.g.
+    /// a randomness update) must already have its key resolved in the epoch store:
+    /// consensus enqueued it as a keyed placeholder, and this enqueue is deduplicated
+    /// against that placeholder, so only the resolved key lets it execute.
     pub fn enqueue_transactions(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
@@ -557,38 +608,71 @@ impl ExecutionScheduler {
                 }
             })
             .collect();
+
+        // Precondition: non-digest keys are already resolved (see the doc comment).
+        // Checked here because a violation is silent - the placeholder just never
+        // executes.
+        if mysten_common::in_test_configuration() {
+            for (cert, _) in &certs {
+                if let Some(key) = cert.non_digest_key() {
+                    assert!(
+                        epoch_store.tx_key_to_digest(&key).is_some(),
+                        "enqueued transaction {} with unresolved key {key:?}",
+                        cert.digest()
+                    );
+                }
+            }
+        }
+
+        // Certificates are filtered before index assignment, so dropped ones never
+        // hold an index.
         let digests: Vec<_> = certs.iter().map(|(cert, _)| *cert.digest()).collect();
         let executed = self
             .transaction_cache_read
             .multi_get_executed_effects_digests(&digests);
         let mut already_executed_certs_num = 0;
-        let pending_certs = certs.into_iter().zip_debug_eq(executed).filter_map(
-            |((cert, execution_env), executed)| {
+        let pending_certs: Vec<_> = certs
+            .into_iter()
+            .zip_debug_eq(executed)
+            .filter_map(|((cert, execution_env), executed)| {
                 if executed.is_none() {
                     Some((cert, execution_env))
                 } else {
                     already_executed_certs_num += 1;
                     None
                 }
-            },
-        );
-
-        for (cert, execution_env) in pending_certs {
-            let scheduler = self.clone();
-            let epoch_store = epoch_store.clone();
-            spawn_monitored_task!(
-                epoch_store.within_alive_epoch(scheduler.schedule_transaction(
-                    cert,
-                    execution_env,
-                    &epoch_store,
-                ))
-            );
-        }
+            })
+            .collect();
+        let pending_certs = self.causal_admission.dedup_and_assign(pending_certs);
+        self.spawn_transaction_scheduling(pending_certs, epoch_store);
 
         self.metrics
             .transaction_manager_num_enqueued_certificates
             .with_label_values(&["already_executed"])
             .inc_by(already_executed_certs_num);
+    }
+
+    /// Spawns scheduling for transactions that are past deduplication and index
+    /// assignment: fresh batches, internal re-submissions keeping their original
+    /// index, and settlement transactions - the only units allowed to be index-less
+    /// (the driver admits them unconditionally).
+    pub(crate) fn spawn_transaction_scheduling(
+        &self,
+        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        debug_assert!(certs.iter().all(|(cert, env)| {
+            env.causal_index.is_some() || cert.transaction_data().kind().is_accumulator_settle_tx()
+        }));
+        for (cert, execution_env) in certs {
+            let scheduler = self.clone();
+            let epoch_store = epoch_store.clone();
+            spawn_monitored_task!(async move {
+                scheduler
+                    .schedule_transaction(cert, execution_env, &epoch_store)
+                    .await;
+            });
+        }
     }
 
     pub fn settle_address_funds(&self, settlement: FundsSettlement) {
@@ -606,6 +690,7 @@ impl ExecutionScheduler {
         new_epoch_store: &Arc<AuthorityPerEpochStore>,
         account_funds_read: &Arc<dyn AccountFundsRead>,
     ) {
+        self.causal_admission.check_quiescent_at_epoch_boundary();
         let address_funds_withdraw_scheduler = Self::initialize_funds_withdraw_scheduler(
             new_epoch_store,
             &self.object_cache_read,
