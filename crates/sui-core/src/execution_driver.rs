@@ -53,7 +53,7 @@ use sui_macros::fail_point_async;
 use sui_types::execution::ExecutionOutput;
 use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
-use tracing::{Instrument, error_span, info, trace, warn};
+use tracing::{Instrument, debug, error_span, info, trace, warn};
 
 use crate::authority::AuthorityState;
 use crate::execution_scheduler::PendingCertificate;
@@ -213,6 +213,16 @@ pub async fn execution_process(
             continue;
         }
 
+        // Held across execution so that `epoch_terminated()` waits for it. Reconfiguration
+        // begins only after every transaction of the epoch has executed, so one admitted
+        // after that is a duplicate. Taking the guard before spawning leaves no task holding
+        // a slot outside it, and since this never waits, a dropped duplicate releases its
+        // slot before `epoch_terminated()` can return.
+        let Some(alive_guard) = epoch_store.try_enter_alive_epoch() else {
+            debug!(?digest, "Epoch ended; dropping duplicate transaction");
+            continue;
+        };
+
         if get_rng().gen_range(0.0..1.0) < QUEUEING_DELAY_SAMPLING_RATIO {
             authority
                 .metrics
@@ -240,21 +250,12 @@ pub async fn execution_process(
             // Held until execution finishes: it backs the executing-certificates gauge
             // that overload control counts as in-flight load.
             let _executing_guard = executing_guard;
+            let _alive_guard = alive_guard;
 
             // Delays execution to explore orderings that differ from the consensus
-            // schedule. Placed after admission so `slot` is held: if the epoch ends
-            // during the delay, dropping the slot retires the causal index and
-            // quiescence still holds at the boundary.
+            // schedule. The alive guard is already held, so `epoch_terminated()` waits out
+            // the delay rather than reconfiguring while this task holds its slot.
             fail_point_async!("transaction_execution_delay");
-
-            // Hold the epoch-alive guard across execution so that `epoch_terminated()` waits
-            // for in-flight execution to finish. Skip if the epoch has already ended; the
-            // slot drop retires the causal index, and the transaction is re-enqueued (and
-            // re-indexed) in the next epoch.
-            let Some(_alive_guard) = epoch_store.enter_alive_epoch().await else {
-                info!("Epoch ended before execution could start; transaction will be retried in the next epoch");
-                return;
-            };
 
             // Await unconditionally: once dispatched, execution always runs to completion
             // within the alive-epoch guard and is never detached at epoch end.

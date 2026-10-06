@@ -364,7 +364,7 @@ pub struct AuthorityPerEpochStore {
     /// Crash recovery note: we write next epoch in the database first, and then use this lock to
     /// wait for in-memory tasks for the epoch to finish. If node crashes at this stage validator
     /// will start with the new epoch(and will open instance of per-epoch store for a new epoch).
-    epoch_alive: tokio::sync::RwLock<bool>,
+    epoch_alive: Arc<tokio::sync::RwLock<bool>>,
     pub(crate) end_of_publish: Mutex<StakeAggregator<(), true>>,
 
     /// MutexTable for transaction locks (prevent concurrent execution of same transaction)
@@ -1040,7 +1040,7 @@ impl AuthorityPerEpochStore {
             db_options,
             reconfig_state_mem: RwLock::new(reconfig_state),
             epoch_alive_token,
-            epoch_alive: tokio::sync::RwLock::new(true),
+            epoch_alive: Arc::new(tokio::sync::RwLock::new(true)),
             consensus_notify_read: Arc::new(NotifyRead::new()),
             executed_transactions_to_checkpoint_notify_read: Arc::new(NotifyRead::new()),
             signature_verifier,
@@ -2906,14 +2906,15 @@ impl AuthorityPerEpochStore {
     }
 
     /// Returns a guard witnessing that the epoch is still alive. While the guard is held,
-    /// `epoch_terminated()` cannot complete. Returns `None` if the epoch has already ended.
+    /// `epoch_terminated()` cannot complete. Returns `None` once the epoch has ended or
+    /// `epoch_terminated()` has begun waiting.
     ///
-    /// This is the companion to `within_alive_epoch` for work that cannot be driven as a
-    /// cancellable future (e.g. a `spawn_blocking` task): hold the guard across the blocking
-    /// call and await it unconditionally, so the work always runs to completion within the
-    /// epoch rather than being detached at epoch end.
-    pub async fn enter_alive_epoch(&self) -> Option<tokio::sync::RwLockReadGuard<'_, bool>> {
-        let guard = self.epoch_alive.read().await;
+    /// Never waits: a queued `epoch_terminated()` takes every free permit of the lock, so
+    /// `try_read` fails from that point on. This is the companion to `within_alive_epoch`
+    /// for work that cannot be driven as a cancellable future (e.g. a `spawn_blocking`
+    /// task): hold the guard across the work, so it runs to completion within the epoch.
+    pub fn try_enter_alive_epoch(&self) -> Option<tokio::sync::OwnedRwLockReadGuard<bool>> {
+        let guard = self.epoch_alive.clone().try_read_owned().ok()?;
         if *guard { Some(guard) } else { None }
     }
 
