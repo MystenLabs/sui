@@ -1,9 +1,5 @@
 # Forwarding Address Registry: ownership, rotation, brakes
 
-Status: proposal for the Move team, 2026-09-30, updated 2026-10-02 with the address format and
-ID allocation now implemented in #27990 (step 1 below), and 2026-10-05 with the registration fee
-(step 3) and how resolution reads the registry. #27989 is merged.
-
 ## Where we are
 
 #27989 makes the registry an implicitly read system object, i.e. consensus pins its version per
@@ -64,8 +60,7 @@ What is still missing:
 ## Proposed design
 
 I think the fix is for the registry to assign the id and hand back a capability (done), keep
-enough state on the record to survive a compromise, and add a protocol level brake. We don't need
-mining or a fee token for this.
+enough state on the record to survive a compromise, and add a protocol level brake.
 
 ```move
 module sui::forwarding_address;
@@ -158,14 +153,14 @@ invoice and needs to know who paid, and a master that needs to see and manage it
 Deposits are already covered by the event; the record lifecycle is not, so the PRs below add events
 for it.
 
-| Who asks | Question | Source of truth | Have it? |
-| --- | --- | --- | --- |
-| Payment app | Which deposits landed for master M, and from which forwarding address / payload? | `ForwardingDeposit<T> { forwarding_address, master, amount }` event; payload = bytes 15..32 of the address | Yes (#27990) |
-| Payment app | Given a payload, did invoice X get paid, how much, in which tx? | Same event, indexed by `(master, payload)` | Yes, needs an index |
-| Wallet / sender | Is this forwarding address registered, and to whom, right now? | Registry dynamic field `master_id -> MasterRecord` (`MasterRecordKey::load` in `sui-types` reads it at a registry version) | Yes, plain object read; GraphQL `dynamicField` works today |
-| Master | My record: master, paused, pending rotation, and its history | `MasterRecord`, `PausedKey` and `PendingKey` fields plus lifecycle events | Object yes; `MasterRegistered` yes, the rest no |
-| Master | Where is my `MasterCap`? | Owned object of type `MasterCap` | Yes, standard object index |
-| Anyone | Balances | Master's address balance; a forwarding address always stays at 0 | Yes, existing balance indexing |
+| Who asks        | Question                                                                         | Source of truth                                                                                                            | Have it?                                                   |
+| --------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Payment app     | Which deposits landed for master M, and from which forwarding address / payload? | `ForwardingDeposit<T> { forwarding_address, master, amount }` event; payload = bytes 15..32 of the address                 | Yes (#27990)                                               |
+| Payment app     | Given a payload, did invoice X get paid, how much, in which tx?                  | Same event, indexed by `(master, payload)`                                                                                 | Yes, needs an index                                        |
+| Wallet / sender | Is this forwarding address registered, and to whom, right now?                   | Registry dynamic field `master_id -> MasterRecord` (`MasterRecordKey::load` in `sui-types` reads it at a registry version) | Yes, plain object read; GraphQL `dynamicField` works today |
+| Master          | My record: master, paused, pending rotation, and its history                     | `MasterRecord`, `PausedKey` and `PendingKey` fields plus lifecycle events                                                  | Object yes; `MasterRegistered` yes, the rest no            |
+| Master          | Where is my `MasterCap`?                                                         | Owned object of type `MasterCap`                                                                                           | Yes, standard object index                                 |
+| Anyone          | Balances                                                                         | Master's address balance; a forwarding address always stays at 0                                                           | Yes, existing balance indexing                             |
 
 Events to add so an indexer never has to diff objects (`MasterRegistered { master_id, master, cap_id }`
 already exists): `RotationProposed { master_id, new_master, effective_epoch }`, `RotationFinalized { master_id, master }`,
