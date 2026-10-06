@@ -1968,8 +1968,16 @@ fn finish_gas_coin<OType>(
 
 /// Nothing can sign for a forwarding address, so an object it owns or funds credited to it would
 /// be stranded. `balance::send_funds` resolves deposits to the master before crediting, so any
-/// credit still targeting a forwarding address bypassed resolution, e.g. the gas budget refund
-/// when the gas coin itself is sent.
+/// credit still targeting a forwarding address bypassed resolution.
+///
+/// The one legitimate way to get here is `coin::send_funds(Gas, forwarding_address)`: Move
+/// resolves the coin's value to the master, but the gas budget refund is credited by the adapter
+/// to the recorded recipient, which this check then rejects. TODO: this could be supported by
+/// resolving the recipient to the master when `GasCoinTransfer::SendFunds` is recorded, so the
+/// refund and the gas charge location follow the master. The `ForwardingDeposit` event would
+/// then understate the deposit by the refund, since Move only sees the coin after the budget was
+/// deducted and the refund is only known after gas is finalized. Rejected for now so a payment to
+/// a forwarding address is always attributed exactly; the payer can split the gas coin instead.
 fn check_no_forwarding_address_recipients(
     written_objects: &BTreeMap<ObjectID, Object>,
     accumulator_events: &[MoveAccumulatorEvent],
