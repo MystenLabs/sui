@@ -19,6 +19,7 @@ task 2, line 54:
 //# run ex::m::setup --sender A
 created: object(2,0), object(2,1), object(2,2), object(2,3)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 7356800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 56:
@@ -36,11 +37,13 @@ Contents: ex::m::A {
 task 4, line 58:
 //# run ex::m::borrow_a --args object(2,1) --sender A
 mutated: object(0,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2234177, non_refundable_storage_fee: 223
 
 task 5, line 60:
 //# run ex::m::child_a_to_b --args object(2,1) --sender A
 mutated: object(0,0), object(2,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 3442456, non_refundable_storage_fee: 344
 
 task 6, line 62:
@@ -64,6 +67,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 8, line 67:
 //# run ex::m::borrow_b --args object(2,1) --sender A
 mutated: object(0,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2234177, non_refundable_storage_fee: 223
 
 task 9, lines 69-70:
@@ -71,6 +75,7 @@ task 9, lines 69-70:
 //# run ex::m::child_b_to_a_transfer --args object(2,1) --sender A
 mutated: object(0,0), object(2,0), object(2,1)
 deleted: object(2,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 5897010, non_refundable_storage_fee: 590
 
 task 10, line 72:
@@ -88,4 +93,5 @@ Contents: ex::m::A {
 task 11, line 74:
 //# run ex::m::use_a --args object(2,0) --sender A
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220

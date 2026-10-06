@@ -30,6 +30,7 @@ task 4, lines 42-47:
 //> 2: test::m::use_mut<test::m::Obj>(Result(0));
 //> 3: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, lines 49-56:
@@ -42,6 +43,7 @@ task 5, lines 49-56:
 //> 4: test::m::use_mut<test::m::Inner>(Result(1));
 //> 5: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 6, lines 58-65:
@@ -54,6 +56,7 @@ task 6, lines 58-65:
 //> 4: test::m::cool(NestedResult(2,0));
 //> 5: test::m::delete(Result(0));
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 7, lines 67-72:
@@ -64,6 +67,7 @@ task 7, lines 67-72:
 //> 2: test::m::close_with_parent(NestedResult(1,0), Result(0));
 //> 3: test::m::delete(Result(0));
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 8, lines 74-78:
@@ -73,6 +77,7 @@ task 8, lines 74-78:
 //> 1: test::m::delete(Result(0));
 //> 2: sui::tx_context::digest();
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 9, lines 80-85:
@@ -84,4 +89,5 @@ task 9, lines 80-85:
 //> 3: sui::package::commit_upgrade(Input(0), Result(2));
 created: object(9,0)
 mutated: object(0,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 2621738, non_refundable_storage_fee: 262

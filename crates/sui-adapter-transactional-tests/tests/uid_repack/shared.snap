@@ -19,6 +19,7 @@ task 2, line 64:
 //# run ex::m::create
 created: object(2,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, line 66:
@@ -36,6 +37,7 @@ Contents: ex::m::A {
 task 4, line 68:
 //# run ex::m::repack_a_share --args object(2,0)
 mutated: object(0,1), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 5, line 70:
@@ -53,6 +55,7 @@ Contents: ex::m::A {
 task 6, line 72:
 //# run ex::m::a_to_b_share --args object(2,0)
 mutated: object(0,1), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 7, line 74:
@@ -70,6 +73,7 @@ Contents: ex::m::B {
 task 8, line 76:
 //# run ex::m::use_b --args object(2,0)
 mutated: object(0,1), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 9, lines 78-79:
@@ -103,6 +107,7 @@ Contents: ex::m::B {
 task 13, line 87:
 //# run ex::m::b_to_a_share --args object(2,0)
 mutated: object(0,1), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 14, line 89:
@@ -120,12 +125,14 @@ Contents: ex::m::A {
 task 15, line 91:
 //# run ex::m::use_a --args object(2,0)
 mutated: object(0,1), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 16, line 93:
 //# run ex::m::a_to_b_delete --args object(2,0)
 mutated: object(0,1)
 deleted: object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 17, line 95:

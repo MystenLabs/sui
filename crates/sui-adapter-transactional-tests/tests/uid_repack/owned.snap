@@ -19,6 +19,7 @@ task 2, line 42:
 //# run ex::m::mint --sender A
 created: object(2,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 44:
@@ -38,6 +39,7 @@ task 4, lines 46-47:
 // Same-type repack is a plain mutation
 //# run ex::m::repack_a --args object(2,0) --sender A
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 5, line 49:
@@ -59,6 +61,7 @@ task 6, lines 51-54:
 //> 0: ex::m::a_to_b(Input(0));
 //> TransferObjects([Result(0)], Input(1))
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 7, line 56:
@@ -83,11 +86,13 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 9, line 61:
 //# run ex::m::use_b --args object(2,0) --sender A
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 10, line 63:
 //# run ex::m::b_to_a --args object(2,0) --sender A
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
 
 task 11, line 65:
@@ -106,4 +111,5 @@ Contents: ex::m::A {
 task 12, line 67:
 //# run ex::m::use_a --args object(2,0) --sender A
 mutated: object(0,0), object(2,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226

@@ -27,6 +27,7 @@ task 4, lines 70-72:
 //> 1: TransferObjects([Result(0)], Input(0));
 created: object(4,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, lines 74-76:
@@ -35,6 +36,7 @@ task 5, lines 74-76:
 //> 1: TransferObjects([Result(0)], Input(0));
 created: object(5,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 6, lines 78-79:
@@ -42,6 +44,7 @@ task 6, lines 78-79:
 //> 0: test::m::share();
 created: object(6,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 7, lines 81-83:
@@ -50,6 +53,7 @@ task 7, lines 81-83:
 //> 1: TransferObjects([Result(0)], Input(0));
 created: object(7,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 8, lines 85-86:
@@ -57,6 +61,7 @@ task 8, lines 85-86:
 //> 0: test::m::new_child(Input(0));
 created: object(8,0)
 mutated: object(0,0), object(7,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3473200,  storage_rebate: 2234177, non_refundable_storage_fee: 223
 
 task 9, lines 88-91:
@@ -82,6 +87,7 @@ task 11, lines 97-102:
 //> 2: test::m::write(Result(1), Input(0));
 //> 3: test::m::take(Result(0));
 mutated: object(0,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 12, lines 104-108:
@@ -91,6 +97,7 @@ task 12, lines 104-108:
 //> 1: test::m::nc_f(Result(0));
 //> 2: test::m::read_then_take(Result(1), Result(0));
 mutated: object(0,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 13, lines 110-115:
@@ -102,6 +109,7 @@ task 13, lines 110-115:
 //> 3: test::m::delete(Result(0));
 mutated: object(0,0)
 deleted: object(4,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
 task 14, lines 117-122:
@@ -112,6 +120,7 @@ task 14, lines 117-122:
 //> 2: test::m::use_mut<test::m::Inner>(NestedResult(1,1));
 //> 3: test::m::close_and_delete(NestedResult(1,0), Result(0));
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 // --- object inputs ---
@@ -124,6 +133,7 @@ task 15, lines 126-131:
 //> 2: test::m::write(Result(1), Input(1));
 //> 3: TransferObjects([Input(0)], Input(2));
 mutated: object(0,0), object(5,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
 task 16, lines 133-138:
@@ -135,6 +145,7 @@ task 16, lines 133-138:
 //> 3: test::m::delete(Input(0));
 mutated: object(0,0)
 deleted: object(6,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
 task 17, lines 140-145:
@@ -146,6 +157,7 @@ task 17, lines 140-145:
 //> 3: test::m::delete_child(Result(2));
 mutated: object(0,0), object(7,0)
 deleted: object(8,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3472853, non_refundable_storage_fee: 347
 
 // --- gas, coins, withdrawals ---
@@ -160,6 +172,7 @@ task 18, lines 149-155:
 //> 4: TransferObjects([NestedResult(0,0)], Input(2));
 created: object(18,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 19, lines 157-162:
@@ -170,6 +183,7 @@ task 19, lines 157-162:
 //> 2: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
 //> 3: sui::balance::send_funds<sui::sui::SUI>(Result(2), Input(1));
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 accumulators_written: (object(9,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 500), (object(19,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 500)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
@@ -185,6 +199,7 @@ task 20, lines 166-172:
 //> 4: sui::package::commit_upgrade(Input(0), Result(3));
 created: object(20,0)
 mutated: object(0,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 // --- the gas coin, last because send_funds consumes the sender's gas object ---
@@ -196,5 +211,6 @@ task 21, lines 176-180:
 //> 1: test::m::value_at_least(Result(0), Input(1));
 //> 2: sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0));
 deleted: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 accumulators_written: (object(19,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 299999973857078)
 gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 987901, non_refundable_storage_fee: 99

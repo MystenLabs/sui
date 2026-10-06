@@ -26,12 +26,14 @@ task 3, lines 24-26:
 //> 1: p::m::sharer<sui::coin::Coin<sui::sui::SUI>>(Result(0));
 created: object(3,0)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 4, line 28:
 //# run p::m::mint_shared
 created: object(4,0)
 mutated: object(0,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 5, line 30:
