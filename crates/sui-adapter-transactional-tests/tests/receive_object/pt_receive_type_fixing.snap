@@ -13,6 +13,7 @@ task 2, line 52:
 //# run tto::M1::start
 created: object(2,0), object(2,1)
 mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 3, line 54:
@@ -46,6 +47,7 @@ task 5, lines 58-62:
 //> 0: tto::M1::pass_through(Input(1));
 //> tto::M1::receiver(Input(0), Result(0));
 mutated: object(0,0), object(2,0), object(2,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 3419658, non_refundable_storage_fee: 342
 
 task 6, lines 64-67:
