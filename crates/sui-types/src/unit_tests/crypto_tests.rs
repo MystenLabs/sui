@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::crypto::bcs_signable_test::Foo;
+use crate::signature::GenericSignature;
 use proptest::collection;
 use proptest::prelude::*;
 
@@ -137,4 +138,157 @@ proptest! {
     }
 
 
+}
+
+// Same seed as the pq-sigs-ts "digest-msg" interop vector; only the golden
+// test needs it, everything else uses a fresh random keypair.
+const MLDSA65_TEST_SEED: [u8; 32] = [2; 32];
+const MLDSA65_TEST_ADDRESS: &str =
+    "0xa44576e02f83a9e1bddac6fd742a77931d1689d9a61122eb3125dee425f6dd36";
+
+fn mldsa65_random_keypair() -> SuiKeyPair {
+    SuiKeyPair::MLDSA65(MLDSA65KeyPair::generate(&mut rand::thread_rng()))
+}
+
+#[test]
+fn mldsa65_address_golden() {
+    // Pins blake2b256(flag || pk) end to end.
+    let kp = SuiKeyPair::MLDSA65(MLDSA65KeyPair::from_bytes(&MLDSA65_TEST_SEED).unwrap());
+    let address: SuiAddress = (&kp.public()).into();
+    assert_eq!(address.to_string(), MLDSA65_TEST_ADDRESS);
+}
+
+#[test]
+fn mldsa65_keystore_blob_roundtrip() {
+    let kp = mldsa65_random_keypair();
+    let blob = kp.to_bytes();
+    // flag || 32-byte seed
+    assert_eq!(blob.len(), 33);
+    assert_eq!(blob[0], SignatureScheme::MLDSA65.flag());
+    let decoded = SuiKeyPair::from_bytes(&blob).unwrap();
+    assert_eq!(kp.public(), decoded.public());
+    assert_eq!(blob, decoded.to_bytes());
+
+    let encoded = kp.encode().unwrap();
+    let decoded = SuiKeyPair::decode(&encoded).unwrap();
+    assert_eq!(kp.public(), decoded.public());
+}
+
+#[test]
+fn mldsa65_blob_wrong_lengths_rejected() {
+    // The 4,032-byte expanded key must never be accepted as a keystore blob.
+    for len in [0usize, 31, 33, 4032] {
+        let mut blob = vec![SignatureScheme::MLDSA65.flag()];
+        blob.extend(std::iter::repeat_n(0u8, len));
+        assert!(
+            SuiKeyPair::from_bytes(&blob).is_err(),
+            "flag || {len} bytes must be rejected"
+        );
+    }
+    assert!(SuiKeyPair::from_bytes(&[]).is_err());
+    let mut blob = mldsa65_random_keypair().to_bytes();
+    blob.push(0);
+    assert!(SuiKeyPair::from_bytes(&blob).is_err());
+}
+
+#[test]
+fn mldsa65_envelope_roundtrip() {
+    let kp = mldsa65_random_keypair();
+    // Signing is hedged, so only the roundtrip can be pinned.
+    let sig = kp.sign(b"mldsa envelope roundtrip");
+    assert_eq!(sig.scheme().flag(), SignatureScheme::MLDSA65.flag());
+    // flag || sig(3,309) || pk(1,952)
+    let bytes = sig.as_ref().to_vec();
+    assert_eq!(bytes.len(), 5262);
+    let parsed = Signature::from_bytes(&bytes).unwrap();
+    assert_eq!(parsed, sig);
+    assert_eq!(parsed.as_ref(), &bytes[..]);
+}
+
+#[test]
+fn mldsa65_verify_secure_intent_message() {
+    let kp = mldsa65_random_keypair();
+    let address: SuiAddress = (&kp.public()).into();
+    let msg = IntentMessage::new(Intent::sui_transaction(), Foo("mldsa65".to_string()));
+    let sig = Signature::new_secure(&msg, &kp);
+    assert!(
+        sig.verify_secure(&msg, address, SignatureScheme::MLDSA65)
+            .is_ok()
+    );
+    assert!(
+        sig.verify_secure(&msg, SuiAddress::ZERO, SignatureScheme::MLDSA65)
+            .is_err()
+    );
+}
+
+#[test]
+fn mldsa65_parses_as_generic_signature() {
+    // Network acceptance is decided separately, by the `mldsa65_auth` gate in
+    // `check_user_signature_protocol_compatibility`.
+    let kp = mldsa65_random_keypair();
+    let sig = kp.sign(b"message");
+    let generic = GenericSignature::from_bytes(sig.as_ref()).unwrap();
+    assert!(matches!(generic, GenericSignature::Signature(_)));
+    assert_eq!(generic.as_ref(), sig.as_ref());
+
+    // Truncated or over-long envelopes still fail to parse.
+    assert!(GenericSignature::from_bytes(&sig.as_ref()[..sig.as_ref().len() - 1]).is_err());
+    let mut long = sig.as_ref().to_vec();
+    long.push(0);
+    assert!(GenericSignature::from_bytes(&long).is_err());
+}
+
+#[test]
+fn mldsa65_public_key_decode() {
+    let kp = mldsa65_random_keypair();
+    let pk = kp.public();
+    let encoded = pk.encode_base64();
+    let decoded = PublicKey::decode_base64(&encoded).unwrap();
+    assert_eq!(pk, decoded);
+    let mut bytes = vec![SignatureScheme::MLDSA65.flag()];
+    bytes.extend_from_slice(&pk.as_ref()[..1951]);
+    assert!(PublicKey::decode_base64(&Base64::encode(&bytes)).is_err());
+    assert!(PublicKey::try_from_bytes(SignatureScheme::MLDSA65, &pk.as_ref()[..1951]).is_err());
+}
+
+#[test]
+fn mldsa65_zklogin_ephemeral_rejected() {
+    // verify_claims must reject an ML-DSA ephemeral key explicitly.
+    use crate::signature::{AuthenticatorTrait, VerifyParams};
+    use crate::signature_verification::VerifiedDigestCache;
+    use crate::zk_login_authenticator::ZkLoginAuthenticator;
+    use crate::zk_login_util::get_zklogin_inputs;
+    use std::sync::Arc;
+
+    let kp = mldsa65_random_keypair();
+    let msg = IntentMessage::new(Intent::sui_transaction(), Foo("zklogin".to_string()));
+    let eph_sig = Signature::new_secure(&msg, &kp);
+    let inputs = get_zklogin_inputs();
+    let author: SuiAddress = SuiAddress::try_from_unpadded(&inputs).unwrap();
+    let authenticator = ZkLoginAuthenticator::new(inputs, 10, eph_sig);
+    let generic = GenericSignature::ZkLoginAuthenticator(authenticator);
+
+    let parsed = GenericSignature::from_bytes(generic.as_ref()).unwrap();
+    let GenericSignature::ZkLoginAuthenticator(parsed_auth) = parsed else {
+        panic!("expected zklogin authenticator");
+    };
+    let res = parsed_auth
+        .verify_claims(
+            &msg,
+            author,
+            &VerifyParams::default(),
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
+        .map_err(|e| e.into_inner());
+    assert!(
+        matches!(res, Err(crate::error::SuiErrorKind::InvalidSignature { error })
+            if error.contains("zkLogin ephemeral signature scheme not supported"))
+    );
+}
+
+#[test]
+fn mldsa65_bcs_variant_index_pinned() {
+    // The BCS tag is consensus-critical (serialized inside MultiSig committees).
+    let kp = mldsa65_random_keypair();
+    assert_eq!(bcs::to_bytes(&kp.public()).unwrap()[0], 5);
 }

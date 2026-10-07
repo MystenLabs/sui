@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::traits::ToFromBytes;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use move_core_types::account_address::AccountAddress;
@@ -146,6 +147,17 @@ fn get_registry() -> Result<Registry> {
     tracer
         .trace_value(&mut samples, &generic_sig_multi)
         .unwrap();
+
+    // A hybrid ML-DSA + Ed25519 committee pins the BCS variant index of the
+    // MLDSA65 arms of both PublicKey and CompressedSignature.
+    let kp_mldsa = SuiKeyPair::MLDSA65(
+        fastcrypto_pq::mldsa65::MLDSA65KeyPair::from_bytes(&[2u8; 32]).unwrap(),
+    );
+    let hybrid_pk =
+        MultiSigPublicKey::new(vec![kp_mldsa.public(), kp1.public()], vec![1, 1], 2).unwrap();
+    let sig_mldsa: GenericSignature = Signature::new_secure(&msg, &kp_mldsa).into();
+    let hybrid_multisig = MultiSig::combine(vec![sig_mldsa, sig1.clone()], hybrid_pk).unwrap();
+    tracer.trace_value(&mut samples, &hybrid_multisig).unwrap();
 
     tracer.trace_value(&mut samples, &sig1).unwrap();
     tracer.trace_value(&mut samples, &sig2).unwrap();

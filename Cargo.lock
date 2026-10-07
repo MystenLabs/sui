@@ -5545,6 +5545,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastcrypto-pq"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=076bf5ad8cea140dc7cf5c5861c24a36acdf64ce#076bf5ad8cea140dc7cf5c5861c24a36acdf64ce"
+dependencies = [
+ "bincode 1.3.3",
+ "digest 0.10.7",
+ "fastcrypto",
+ "fastcrypto-derive",
+ "mysten-mldsa-native-rs",
+ "once_cell",
+ "rand 0.8.5",
+ "serde",
+ "sha2 0.10.9",
+ "zeroize",
+]
+
+[[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=076bf5ad8cea140dc7cf5c5861c24a36acdf64ce#076bf5ad8cea140dc7cf5c5861c24a36acdf64ce"
@@ -9423,6 +9440,16 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "mysten-mldsa-native-rs"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/mysten-mldsa-native-rs.git?rev=ea1a9794c7ad0c68b9410121964b7439540826bc#ea1a9794c7ad0c68b9410121964b7439540826bc"
+dependencies = [
+ "cc",
+ "cpufeatures 0.2.9",
+ "zeroize",
 ]
 
 [[package]]
@@ -14541,6 +14568,7 @@ dependencies = [
  "consensus-config",
  "coset",
  "fastcrypto",
+ "fastcrypto-pq",
  "fastcrypto-zkp",
  "futures",
  "indexmap 2.8.0",
@@ -16982,6 +17010,7 @@ dependencies = [
  "expect-test",
  "eyre",
  "fastcrypto",
+ "fastcrypto-pq",
  "fastcrypto-tbls",
  "fastcrypto-zkp",
  "imbl",
