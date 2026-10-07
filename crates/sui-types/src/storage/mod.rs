@@ -250,8 +250,9 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
     }
 }
 
-/// Resolves the balance available for object-funds withdrawals during execution.
-pub trait ObjectFundsResolver {
+/// Answers queries against the implicitly read system objects, each read as of the version
+/// consensus assigned to this transaction. Never sees writes made earlier in the same transaction.
+pub trait ImplicitSystemObjectResolver {
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
 }
 
