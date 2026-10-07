@@ -63,6 +63,7 @@ impl AlphaLedgerGrpcReader {
     ) -> anyhow::Result<Self> {
         let timeout = args.statement_timeout();
         let mut client = Client::new(uri)?
+            .with_num_connections(args.ledger_grpc_num_connections)
             .with_max_decoding_message_size(args.ledger_grpc_max_decoding_message_size)
             .request_layer(GrpcMetricsLayer::new(
                 prefix.unwrap_or("ledger_grpc"),
