@@ -7,5 +7,5 @@ It is a thin wrapper around the `move-package` crate to fill in the sui-specific
 
 See also the [user guide][guide] ([generated][generated]).
 
-[guide]: /docs/content/develop/manage-packages/move-package-management.mdx
+[guide]: https://docs.sui.io/develop/manage-packages/move-package-management
 [generated]: https://docs.sui.io/guides/developer/packages/move-package-management

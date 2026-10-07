@@ -146,7 +146,7 @@ pub(super) fn collector<H: Handler>(
                 // writes by combining rows, but we will limit the number of checkpoints we try
                 // and batch together as a way to impose some limit on the size of the batch
                 // (and therefore the length of the write transaction).
-                // docs::#batch  (see docs/content/guides/developer/advanced/custom-indexer.mdx)
+                // docs::#batch  (see https://docs.sui.io/develop/accessing-data/custom-indexer/custom-indexers)
                 while batch_checkpoints < max_batch_checkpoints {
                     let Some(entry) = pending.first_entry() else {
                         break;

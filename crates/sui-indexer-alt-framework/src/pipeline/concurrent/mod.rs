@@ -282,7 +282,7 @@ pub(crate) fn pipeline<H: Handler>(
     let collector_channel_size = collector_channel_size
         .unwrap_or_else(|| num_cpus::get() / 2)
         .max(1);
-    //docs::#buff (see docs/content/guides/developer/advanced/custom-indexer.mdx)
+    //docs::#buff (see https://docs.sui.io/develop/accessing-data/custom-indexer/custom-indexers)
     let (collector_tx, committer_rx) = mpsc::channel(collector_channel_size);
     //docs::/#buff
     let committer_channel_size = committer_channel_size.unwrap_or_else(num_cpus::get).max(1);
