@@ -321,7 +321,7 @@ pub fn end_transaction(
     // calculating the effects of the transaction.
     let results = object_runtime_state.finish(received, ChildObjectEffects::new());
     let RuntimeResults {
-        writes,
+        mut writes,
         mut user_events,
         loaded_child_objects: _,
         created_object_ids,
@@ -346,7 +346,7 @@ pub fn end_transaction(
         let mut no_gas = forwarding_address::NoForwardingGas;
         let events = forwarding_address::Resolver::new(protocol_config, *store, &mut no_gas)
             .reroute(
-                writes.iter().map(|(id, (owner, _, _))| (*id, owner)),
+                writes.iter_mut().map(|(id, (owner, _, _))| (*id, owner)),
                 &mut accumulator_events,
             );
         match events {

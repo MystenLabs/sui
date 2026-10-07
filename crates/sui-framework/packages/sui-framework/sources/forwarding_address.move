@@ -7,9 +7,9 @@
 /// The master ID, magic and variant positions are fixed; the variant alone decides what the
 /// payload bytes mean. Variant 0 gives them no on-chain meaning.
 ///
-/// Resolution happens outside Move: at the end of every transaction, the adapter reroutes funds
-/// deposited to a forwarding address to the registered master and emits `ForwardingDeposit`.
-/// Objects cannot be sent to a forwarding address.
+/// Resolution happens outside Move: at the end of every transaction, the adapter reroutes objects
+/// and funds whose recipient is a forwarding address to the registered master, following the
+/// chain when the master is itself a forwarding address, and emits the events declared here.
 ///
 /// Two keys control an id. The master receives the funds and is expected to be hot. The
 /// `MasterCap` is expected to be cold and is the only thing that can move funds elsewhere, through
@@ -88,12 +88,21 @@ public struct PendingRotation has copy, drop, store {
 public struct MasterIdCounter has copy, drop, store {}
 
 /// Emitted by the adapter when funds deposited to a forwarding address are rerouted to its
-/// master. `T` is the coin type of the `Balance` deposited.
+/// master, once per hop. `T` is the coin type of the `Balance` deposited.
 #[allow(unused_field)]
 public struct ForwardingDeposit<phantom T> has copy, drop {
     forwarding_address: address,
     master: address,
     amount: u64,
+}
+
+/// Emitted by the adapter when an object sent to a forwarding address is rerouted to its master,
+/// once per hop.
+#[allow(unused_field)]
+public struct ForwardingTransfer has copy, drop {
+    forwarding_address: address,
+    master: address,
+    object_id: ID,
 }
 
 /// Emitted when a master ID is allocated.

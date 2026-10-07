@@ -244,6 +244,37 @@ fun paused_ids_reject_deposits_until_the_cap_unpauses() {
     scenario.end();
 }
 
+/// Registers from `registrant`, which may itself be a forwarding address, so that the new id's
+/// master is a forwarding address and deposits to it chain. Returns the new master id.
+fun register_from(scenario: &mut Scenario, registrant: address): u64 {
+    scenario.next_tx(registrant);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    let cap = forwarding_address::register(&mut registry, 1, scenario.ctx());
+    let master_id = cap.master_id();
+    transfer::public_transfer(cap, registrant);
+    test_scenario::return_shared(registry);
+    master_id
+}
+
+#[test]
+fun deposits_follow_a_chain_of_forwarding_addresses() {
+    let mut scenario = test_scenario::begin(@0x0);
+    forwarding_address::create_for_testing(scenario.ctx());
+    let alice_id = register_from(&mut scenario, ALICE);
+    let alice_forwarding = forwarding_address(alice_id, OPAQUE_VARIANT, 1);
+    // A master that is itself one of ALICE's forwarding addresses: two hops to ALICE.
+    let sub_id = register_from(&mut scenario, alice_forwarding);
+    let sub_forwarding = forwarding_address(sub_id, OPAQUE_VARIANT, 2);
+
+    scenario.next_tx(BOB);
+    balance::create_for_testing<SUI>(1000).send_funds(sub_forwarding);
+    scenario.next_tx(BOB);
+    assert!(test_scenario::settled_balance<SUI>(ALICE) == 1000);
+    assert!(test_scenario::settled_balance<SUI>(alice_forwarding) == 0);
+    assert!(test_scenario::settled_balance<SUI>(sub_forwarding) == 0);
+    scenario.end();
+}
+
 #[test, expected_failure(abort_code = sui::test_scenario::EForwardingAddressUnresolvable)]
 fun deposits_to_a_paused_id_abort() {
     let (mut scenario, cap) = register_alice_then_switch_to_bob();
@@ -380,6 +411,24 @@ fun registering_with_no_delay_aborts() {
     scenario.end();
 }
 
+#[test, expected_failure(abort_code = sui::test_scenario::EForwardingAddressUnresolvable)]
+fun deposits_through_more_than_the_allowed_hops_abort() {
+    let mut scenario = test_scenario::begin(@0x0);
+    forwarding_address::create_for_testing(scenario.ctx());
+    // Four hops to ALICE, one more than `forwarding_address_max_hops` allows.
+    let mut registrant = ALICE;
+    let mut i: u64 = 0;
+    while (i < 4) {
+        let id = register_from(&mut scenario, registrant);
+        registrant = forwarding_address(id, OPAQUE_VARIANT, 1);
+        i = i + 1;
+    };
+    scenario.next_tx(BOB);
+    balance::create_for_testing<SUI>(1000).send_funds(registrant);
+    scenario.next_tx(BOB);
+    scenario.end();
+}
+
 #[test]
 fun the_rotation_delay_can_only_grow() {
     let (scenario, cap) = register_alice_then_switch_to_bob();
@@ -397,5 +446,32 @@ fun shortening_the_rotation_delay_aborts() {
     forwarding_address::increase_rotation_delay(&mut registry, &cap, 1);
     test_scenario::return_shared(registry);
     transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+#[test]
+fun objects_sent_to_a_forwarding_address_reach_the_master() {
+    let (mut scenario, master_id) = register_then_switch_to(ALICE, BOB);
+    let target = forwarding_address(master_id, OPAQUE_VARIANT, 1);
+    let coin = sui::coin::mint_for_testing<SUI>(500, scenario.ctx());
+    let coin_id = object::id(&coin);
+    transfer::public_transfer(coin, target);
+
+    scenario.next_tx(ALICE);
+    let coin = scenario.take_from_sender_by_id<sui::coin::Coin<SUI>>(coin_id);
+    assert!(coin.value() == 500);
+    scenario.return_to_sender(coin);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::test_scenario::EForwardingAddressUnresolvable)]
+fun objects_sent_to_an_unregistered_forwarding_address_abort() {
+    let (mut scenario, _) = register_then_switch_to(ALICE, BOB);
+    let unregistered = forwarding_address::mix_master_id_for_testing(2);
+    transfer::public_transfer(
+        sui::coin::mint_for_testing<SUI>(500, scenario.ctx()),
+        forwarding_address(unregistered, OPAQUE_VARIANT, 1),
+    );
+    scenario.next_tx(BOB);
     scenario.end();
 }
