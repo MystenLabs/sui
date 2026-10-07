@@ -51,7 +51,9 @@ use sui_types::{
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
-    storage::{BackingPackageStore, ObjectFundsResolver, PackageObject, RuntimeObjectResolver},
+    storage::{
+        BackingPackageStore, ImplicitSystemObjectResolver, PackageObject, RuntimeObjectResolver,
+    },
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
@@ -157,7 +159,7 @@ impl BackingPackageStore for InMemoryTestStore {
     }
 }
 
-impl ObjectFundsResolver for InMemoryTestStore {
+impl ImplicitSystemObjectResolver for InMemoryTestStore {
     fn object_available_balance(
         &self,
         owner: SuiAddress,
