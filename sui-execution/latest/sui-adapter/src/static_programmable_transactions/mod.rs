@@ -49,6 +49,12 @@ pub fn execute<Mode: ExecutionMode>(
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, Mode::Error> {
     let gas_payment = gas_charger.gas_payment_amount();
+    if protocol_config.package_publish_charge() {
+        let charge = metering::pre_translation::publish_upgrade_charge(&txn, protocol_config);
+        gas_charger
+            .reserve_pre_execution_charge(charge)
+            .map_err(|error| (error.into(), vec![]))?;
+    }
     let package_store = CachedPackageStore::new(vm, TransactionPackageStore::new(package_store));
     let linkage_analysis =
         LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;

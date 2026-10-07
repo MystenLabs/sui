@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::static_programmable_transactions::metering::translation_meter::TranslationMeter;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     error::ExecutionErrorTrait,
     transaction::{CallArg, Command, ProgrammableTransaction},
@@ -33,6 +34,35 @@ pub fn meter<E: ExecutionErrorTrait>(
     }
 
     Ok(())
+}
+
+/// Calculate the MIST charge for raw Publish and Upgrade commands before linkage analysis.
+pub fn publish_upgrade_charge(
+    transaction: &ProgrammableTransaction,
+    config: &ProtocolConfig,
+) -> u64 {
+    transaction
+        .commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::Publish(modules, dependencies)
+            | Command::Upgrade(modules, dependencies, _, _) => {
+                Some((modules.len(), dependencies.len()))
+            }
+            _ => None,
+        })
+        .fold(0, |total, (modules, dependencies)| {
+            let charge = config
+                .package_publish_charge_fixed()
+                .saturating_add(
+                    (modules as u64).saturating_mul(config.package_publish_charge_per_module()),
+                )
+                .saturating_add(
+                    (dependencies as u64)
+                        .saturating_mul(config.package_publish_charge_per_dependency()),
+                );
+            total.saturating_add(charge)
+        })
 }
 
 fn arguments_len(cmd: &Command) -> usize {
