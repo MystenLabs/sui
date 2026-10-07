@@ -17,6 +17,7 @@
 //! this module, so they can be reused easily across network implementations.
 
 use std::{
+    collections::BTreeSet,
     fmt::{Display, Formatter},
     net::SocketAddrV6,
     pin::Pin,
@@ -251,6 +252,20 @@ pub trait RandomnessSignatureHandler: Send + Sync + 'static {
     fn subscribe_randomness_signatures(&self) -> tokio::sync::broadcast::Receiver<Bytes>;
 }
 
+/// Filter sent by an observer when opening a block stream, restricting which authorities'
+/// blocks the server releases on that stream. Only validated committee members appear here:
+/// the transport layer converts and checks the raw wire representation before the filter
+/// reaches the service.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) enum BlockStreamFilter {
+    /// Blocks from all authorities are streamed.
+    #[default]
+    All,
+    /// Only blocks authored by the given committee members are streamed. Must be
+    /// non-empty; the wire format cannot express an empty author set.
+    Authors(BTreeSet<AuthorityIndex>),
+}
+
 /// A single item in the observer block stream, carrying both blocks and auxiliary data.
 pub(crate) struct ObserverStreamItem {
     pub(crate) blocks: Vec<Bytes>,
@@ -272,11 +287,13 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
 
     /// Handles the block streaming request from an observer peer.
     /// Returns a stream of blocks with the highest commit index for each block.
-    /// Blocks with rounds higher than the highest_round_per_authority will be streamed.
+    /// Blocks with rounds higher than the highest_round_per_authority will be streamed,
+    /// restricted to the authors requested in the filter.
     async fn handle_stream_blocks(
         &self,
         peer: NodeId,
         highest_round_per_authority: Vec<Round>,
+        filter: BlockStreamFilter,
     ) -> ConsensusResult<ObserverBlockStream>;
 
     /// Handles the request to fetch blocks by references from an observer peer.
@@ -304,11 +321,13 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
 pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
     /// Initiates block streaming with a peer (validator or observer).
     /// Returns a stream of blocks with the highest commit index.
-    /// Blocks with rounds higher than the highest_round_per_authority will be streamed.
+    /// Blocks with rounds higher than the highest_round_per_authority will be streamed,
+    /// restricted to the authors requested in the filter.
     async fn stream_blocks(
         &self,
         peer: PeerId,
         highest_round_per_authority: Vec<Round>,
+        filter: BlockStreamFilter,
         timeout: Duration,
     ) -> ConsensusResult<ObserverBlockStream>;
 
