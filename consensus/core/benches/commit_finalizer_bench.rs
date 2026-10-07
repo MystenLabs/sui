@@ -161,7 +161,11 @@ fn process_commits_with_parameters(
                         let mut run_stats = Stats::default();
                         for sub_dag in fixture.workload_commits {
                             let index = sub_dag.commit_ref.index;
-                            let results = fixture.commit_finalizer.process_commit(sub_dag).await;
+                            let results = fixture
+                                .commit_finalizer
+                                .process_commit(sub_dag)
+                                .await
+                                .unwrap();
                             for result in results {
                                 if result.commit_ref.index == index {
                                     run_stats.direct += 1;

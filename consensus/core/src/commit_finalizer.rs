@@ -22,7 +22,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    task::join_and_propagate_panic,
+    task::{join_and_propagate_panic, spawn_blocking_join_error},
     transaction_vote_tracker::TransactionVoteTracker,
 };
 
@@ -135,7 +135,14 @@ impl CommitFinalizer {
             let already_finalized = !self.context.protocol_config.transaction_voting_enabled()
                 || committed_sub_dag.recovered_rejected_transactions;
             let finalized_commits = if !already_finalized {
-                self.process_commit(committed_sub_dag).await
+                match self.process_commit(committed_sub_dag).await {
+                    Ok(commits) => commits,
+                    Err(ConsensusError::Shutdown) => {
+                        tracing::info!("Stopping commit finalizer during runtime shutdown");
+                        return;
+                    }
+                    Err(error) => panic!("Failed to finalize commit: {error}"),
+                }
             } else {
                 vec![committed_sub_dag]
             };
@@ -171,10 +178,11 @@ impl CommitFinalizer {
         }
     }
 
+    // A shutdown error is terminal: discard this finalizer and recover from persisted commits.
     pub async fn process_commit(
         &mut self,
         committed_sub_dag: CommittedSubDag,
-    ) -> Vec<CommittedSubDag> {
+    ) -> ConsensusResult<Vec<CommittedSubDag>> {
         let _scope = monitored_scope("CommitFinalizer::process_commit");
 
         if let Some(last_processed_commit) = self.last_processed_commit {
@@ -258,7 +266,7 @@ impl CommitFinalizer {
                     break;
                 }
                 // Otherwise, try to indirectly finalize the earliest commit.
-                self.try_indirect_finalize_first_commit().await;
+                self.try_indirect_finalize_first_commit().await?;
                 let indirect_finalized_commits = self.pop_finalized_commits();
                 if indirect_finalized_commits.is_empty() {
                     // No additional commits can be indirectly finalized.
@@ -296,7 +304,7 @@ impl CommitFinalizer {
             .finalizer_buffered_commits
             .set(self.pending_commits.len() as i64);
 
-        finalized_commits
+        Ok(finalized_commits)
     }
 
     // Tries directly finalizing transactions in the commit.
@@ -494,7 +502,7 @@ impl CommitFinalizer {
     }
 
     // Tries indirectly finalizing the buffered commits at the given index.
-    async fn try_indirect_finalize_first_commit(&mut self) {
+    async fn try_indirect_finalize_first_commit(&mut self) -> ConsensusResult<()> {
         // Ensure direct finalization has been attempted for the commit.
         assert!(!self.pending_commits.is_empty());
         assert!(self.pending_commits[0].pending_blocks.is_empty());
@@ -502,12 +510,14 @@ impl CommitFinalizer {
         // Optional optimization: re-check pending transactions to see if they are rejected by a quorum now.
         self.check_pending_transactions_in_first_commit();
 
-        // Check if remaining pending transactions can be finalized.
+        // The acceptance search must complete before depth-based rejection is safe.
+        // Cancellation must stop finalization instead of treating missing results as no acceptance.
         self.try_indirect_finalize_pending_transactions_in_first_commit()
-            .await;
+            .await?;
 
         // Check if remaining pending transactions can be indirectly rejected.
         self.try_indirect_reject_pending_transactions_in_first_commit();
+        Ok(())
     }
 
     fn check_pending_transactions_in_first_commit(&mut self) {
@@ -558,7 +568,9 @@ impl CommitFinalizer {
         }
     }
 
-    async fn try_indirect_finalize_pending_transactions_in_first_commit(&mut self) {
+    async fn try_indirect_finalize_pending_transactions_in_first_commit(
+        &mut self,
+    ) -> ConsensusResult<()> {
         tracing::debug!(
             "Trying to indirectly finalize pending transactions in first commit {}",
             self.pending_commits[0].commit.commit_ref,
@@ -625,19 +637,7 @@ impl CommitFinalizer {
 
         // Collect results from all chunks
         for handle in handles {
-            let result = match handle.await {
-                Ok(chunk_results) => {
-                    all_finalized_transactions.extend(chunk_results);
-                    continue;
-                }
-                Err(e) => e,
-            };
-            if result.is_panic() {
-                std::panic::resume_unwind(result.into_panic());
-            }
-            tracing::info!("Process likely shutting down: {:?}", result);
-            // Ok to return. No potential inconsistency in state.
-            return;
+            all_finalized_transactions.extend(handle.await.map_err(spawn_blocking_join_error)?);
         }
 
         for (block_ref, finalized_transactions) in all_finalized_transactions {
@@ -651,6 +651,7 @@ impl CommitFinalizer {
             self.pending_commits[0]
                 .remove_pending_transactions(&block_ref, &finalized_transactions);
         }
+        Ok(())
     }
 
     fn try_indirect_reject_pending_transactions_in_first_commit(&mut self) {
@@ -992,8 +993,10 @@ impl BlockState {
 #[cfg(test)]
 mod tests {
     use crate::{
-        TestBlock, VerifiedBlock, block::BlockTransactionVotes,
-        commit_test_fixture::CommitTestFixture, test_dag_builder::DagBuilder,
+        CommitConsumerArgs, TestBlock, VerifiedBlock, block::BlockTransactionVotes,
+        block_verifier::NoopBlockVerifier, commit::load_committed_subdag_from_store,
+        commit_observer::CommitObserver, commit_test_fixture::CommitTestFixture,
+        test_dag_builder::DagBuilder,
     };
 
     use super::*;
@@ -1047,7 +1050,8 @@ mod tests {
         let finalized_commits = fixture
             .commit_finalizer
             .process_commit(committed_sub_dag.clone())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(finalized_commits.len(), 1);
         let finalized_commit = &finalized_commits[0];
         assert_eq!(committed_sub_dag, finalized_commit);
@@ -1143,7 +1147,8 @@ mod tests {
         let finalized_commits = fixture
             .commit_finalizer
             .process_commit(committed_sub_dag.clone())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(finalized_commits.len(), 1);
         let finalized_commit = &finalized_commits[0];
         assert_eq!(committed_sub_dag.commit_ref, finalized_commit.commit_ref);
@@ -1166,9 +1171,11 @@ mod tests {
     // 1. Reject votes on transaction does not reach quorum initially, but reach quorum later.
     // 2. Transaction is indirectly rejected.
     // 3. Transaction is indirectly finalized.
-    #[tokio::test]
-    async fn test_indirect_finalize_with_reject_votes() {
+    fn indirect_finalize_with_reject_votes_fixture(
+        last_leader_round: Round,
+    ) -> (CommitTestFixture, Vec<CommittedSubDag>, BlockRef) {
         let mut fixture = create_commit_finalizer_fixture();
+        assert!(!fixture.context.protocol_config.enable_v3());
 
         // Create round 1 blocks with 10 transactions each.
         let mut dag_builder = DagBuilder::new(fixture.context.clone());
@@ -1268,8 +1275,7 @@ mod tests {
         leaders.push(round_4_blocks[1].clone());
 
         // Create round 5-7 blocks without casting reject votes.
-        // Select the last leader from round 5. It is necessary to have round 5 leader to indirectly finalize
-        // transactions committed by round 2 leader.
+        // Round 5 is needed to indirectly finalize transactions committed by the round 2 leader.
         let mut last_round_blocks = round_4_blocks.clone();
         for r in 5..=7 {
             let ancestors: Vec<BlockRef> =
@@ -1278,23 +1284,36 @@ mod tests {
                 .map(|i| create_block(r, i, ancestors.clone(), 0, vec![]))
                 .collect();
             fixture.add_blocks(round_blocks.clone());
-            if r == 5 {
+            if r <= last_leader_round {
                 leaders.push(round_blocks[0].clone());
             }
             last_round_blocks = round_blocks;
         }
 
         // Create CommittedSubDag from leaders.
-        assert_eq!(leaders.len(), 4);
+        assert_eq!(leaders.len(), last_leader_round as usize - 1);
         let committed_sub_dags = fixture.linearizer.handle_commit(leaders);
-        assert_eq!(committed_sub_dags.len(), 4);
+        assert_eq!(committed_sub_dags.len(), last_leader_round as usize - 1);
+
+        (
+            fixture,
+            committed_sub_dags,
+            block_with_rejected_txn.reference(),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_indirect_finalize_with_reject_votes() {
+        let (mut fixture, committed_sub_dags, block_with_rejected_txn) =
+            indirect_finalize_with_reject_votes_fixture(5);
 
         // Buffering the initial 3 commits should not finalize.
         for commit in committed_sub_dags.iter().take(3) {
             let finalized_commits = fixture
                 .commit_finalizer
                 .process_commit(commit.clone())
-                .await;
+                .await
+                .unwrap();
             assert_eq!(finalized_commits.len(), 0);
         }
 
@@ -1302,16 +1321,15 @@ mod tests {
         let finalized_commits = fixture
             .commit_finalizer
             .process_commit(committed_sub_dags[3].clone())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(finalized_commits.len(), 4);
 
         // Check rejected transactions.
         let rejected_transactions = finalized_commits[0].rejected_transactions_by_block.clone();
         assert_eq!(rejected_transactions.len(), 1);
         assert_eq!(
-            rejected_transactions
-                .get(&block_with_rejected_txn.reference())
-                .unwrap(),
+            rejected_transactions.get(&block_with_rejected_txn).unwrap(),
             &vec![1, 4]
         );
 
@@ -1322,6 +1340,95 @@ mod tests {
 
         // CommitFinalizer should be empty.
         assert!(fixture.commit_finalizer.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_indirect_finalization_shutdown_recovers_without_rejecting_accepted_transaction() {
+        let (mut fixture, committed_sub_dags, block_with_rejected_txn) =
+            indirect_finalize_with_reject_votes_fixture(6);
+        let context = fixture.context.clone();
+        let dag_state = fixture.commit_finalizer.dag_state.clone();
+        let store = dag_state.read().store();
+        // Consensus has persisted the commits, but none has finalized yet.
+        dag_state.write().flush();
+        for commit in committed_sub_dags.iter().take(3) {
+            assert!(
+                fixture
+                    .commit_finalizer
+                    .process_commit(commit.clone())
+                    .await
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+
+        let (commit_sender, mut commit_receiver) = unbounded_channel("shutdown_test_output");
+        fixture.commit_finalizer.commit_sender = commit_sender;
+        let (sender, receiver) = unbounded_channel("shutdown_test_input");
+        // The fourth commit permits depth-based rejection; the fifth is queued when shutdown occurs.
+        for commit in committed_sub_dags.iter().skip(3) {
+            sender.send(commit.clone()).unwrap();
+        }
+        drop(sender);
+
+        // A task still being polled during shutdown can encounter an already closed blocking pool.
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let runtime_handle = runtime.handle().clone();
+        runtime.shutdown_background();
+        let entered = runtime_handle.enter();
+        fixture.commit_finalizer.run(receiver).await;
+        drop(entered);
+
+        assert!(commit_receiver.recv().await.is_none());
+        assert!(store.read_last_finalized_commit().unwrap().is_none());
+        for commit in &committed_sub_dags {
+            assert!(
+                store
+                    .read_rejected_transactions(commit.commit_ref)
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        for commit in store.scan_commits((1..=5).into()).unwrap() {
+            let recovered = load_committed_subdag_from_store(store.as_ref(), commit);
+            assert!(!recovered.recovered_rejected_transactions);
+        }
+
+        // Recover through the production observer with fresh DAG/vote state and a live runtime.
+        let recovered_dag = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let recovered_tracker = TransactionVoteTracker::new(
+            context.clone(),
+            Arc::new(NoopBlockVerifier {}),
+            recovered_dag.clone(),
+        );
+        let (consumer, mut receiver) = CommitConsumerArgs::new(0, 0);
+        let mut observer = tokio::time::timeout(
+            Duration::from_secs(5),
+            CommitObserver::new(context, consumer, recovered_dag, recovered_tracker),
+        )
+        .await
+        .unwrap();
+        tokio::time::timeout(Duration::from_secs(5), observer.stop())
+            .await
+            .unwrap();
+
+        let recovered = receiver.recv().await.unwrap();
+        assert_eq!(recovered.commit_ref, committed_sub_dags[0].commit_ref);
+        assert!(!recovered.recovered_rejected_transactions);
+        assert_eq!(recovered.rejected_transactions_by_block.len(), 1);
+        assert_eq!(
+            recovered.rejected_transactions_by_block[&block_with_rejected_txn],
+            vec![1, 4],
+        );
+        assert_eq!(
+            store
+                .read_rejected_transactions(recovered.commit_ref)
+                .unwrap()
+                .unwrap(),
+            recovered.rejected_transactions_by_block,
+        );
     }
 
     // Test direct finalization when a block is at or below GC round from the block's own leader.
@@ -1395,7 +1502,8 @@ mod tests {
             let finalized_commits = fixture
                 .commit_finalizer
                 .process_commit(commit.clone())
-                .await;
+                .await
+                .unwrap();
             assert_eq!(finalized_commits.len(), 0);
         }
 
@@ -1403,7 +1511,8 @@ mod tests {
         let finalized_commits = fixture
             .commit_finalizer
             .process_commit(committed_sub_dags[3].clone())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(finalized_commits.len(), 4);
 
         // Check rejected transactions.
@@ -1519,7 +1628,8 @@ mod tests {
             let finalized_commits = fixture
                 .commit_finalizer
                 .process_commit(commit.clone())
-                .await;
+                .await
+                .unwrap();
             assert_eq!(finalized_commits.len(), 0);
         }
 
@@ -1527,7 +1637,8 @@ mod tests {
         let finalized_commits = fixture
             .commit_finalizer
             .process_commit(committed_sub_dags[3].clone())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(finalized_commits.len(), 4);
 
         // Check rejected transactions.
@@ -1611,6 +1722,7 @@ mod tests {
                 .commit_finalizer
                 .process_commit(remote_commit.clone())
                 .await
+                .unwrap()
         }
 
         // Add commit 1-3 as remote commits. There should be no finalized commits.

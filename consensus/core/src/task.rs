@@ -66,7 +66,7 @@ where
 /// Converts a JoinError from a spawn_blocking task into a ConsensusError.
 /// Panics from the blocking task are resumed on the calling thread. Otherwise the task
 /// was cancelled, which only happens when the runtime is shutting down.
-fn spawn_blocking_join_error(e: tokio::task::JoinError) -> ConsensusError {
+pub(crate) fn spawn_blocking_join_error(e: tokio::task::JoinError) -> ConsensusError {
     if e.is_panic() {
         std::panic::resume_unwind(e.into_panic());
     }
