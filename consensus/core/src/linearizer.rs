@@ -10,7 +10,10 @@ use parking_lot::RwLock;
 
 use crate::{
     block::{BlockAPI, VerifiedBlock},
-    commit::{Commit, CommittedSubDag, TrustedCommit, sort_sub_dag_blocks},
+    commit::{
+        Commit, CommittedSubDag, TrustedCommit, compute_sort_seed, sort_committed_blocks,
+        sort_sub_dag_blocks,
+    },
     context::Context,
     dag_state::DagState,
 };
@@ -81,7 +84,11 @@ impl Linearizer {
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
 
         // Now linearize the sub-dag starting from the leader block
-        let to_commit = Self::linearize_sub_dag(leader_block.clone(), &mut dag_state);
+        let to_commit = Self::linearize_sub_dag(
+            leader_block.clone(),
+            &mut dag_state,
+            self.context.protocol_config.shuffle_commit_blocks(),
+        );
 
         let timestamp_ms = Self::calculate_commit_timestamp(
             &self.context,
@@ -155,9 +162,13 @@ impl Linearizer {
         timestamp_ms.max(last_commit_timestamp_ms)
     }
 
+    /// Returns the blocks of the sub-dag committed by `leader_block`, ordered by round. Within a
+    /// round, blocks are ordered by a hash seeded from the leader's digest if `shuffle_blocks`,
+    /// and by authority index otherwise. Either way the leader, the only block of its round, is last.
     pub(crate) fn linearize_sub_dag(
         leader_block: VerifiedBlock,
         dag_state: &mut impl BlockStoreAPI,
+        shuffle_blocks: bool,
     ) -> Vec<VerifiedBlock> {
         // The GC round here is calculated based on the last committed round of the leader block. The algorithm will attempt to
         // commit blocks up to this GC round. Once this commit has been processed and written to DagState, then gc round will update
@@ -165,6 +176,7 @@ impl Linearizer {
         // We just use whatever is currently in DagState.
         let gc_round: Round = dag_state.gc_round();
         let leader_block_ref = leader_block.reference();
+        let seed = shuffle_blocks.then(|| compute_sort_seed(std::slice::from_ref(&leader_block)));
         let mut buffer = vec![leader_block];
         let mut to_commit = Vec::new();
 
@@ -213,8 +225,10 @@ impl Linearizer {
             leader_block_ref
         );
 
-        // Sort the blocks of the sub-dag blocks
-        sort_sub_dag_blocks(&mut to_commit);
+        match seed {
+            Some(seed) => sort_committed_blocks(&mut to_commit, &seed),
+            None => sort_sub_dag_blocks(&mut to_commit),
+        }
 
         to_commit
     }
@@ -336,6 +350,7 @@ fn median_timestamps_by_stake_inner(
 #[cfg(test)]
 mod tests {
     use consensus_config::AuthorityIndex;
+    use mysten_common::ZipDebugEqIteratorExt as _;
     use rstest::rstest;
 
     use super::*;
@@ -416,6 +431,66 @@ mod tests {
     }
 
     #[rstest]
+    #[tokio::test]
+    async fn test_handle_commit_shuffles_blocks_within_round() {
+        telemetry_subscribers::init_for_testing();
+        let (context, _keys) = Context::new_for_test(7);
+        let num_rounds: u32 = 10;
+        let mut dag_builder = DagBuilder::new(Arc::new(context.clone()));
+        dag_builder.layers(1..=num_rounds).build();
+        let leaders: Vec<_> = dag_builder
+            .leader_blocks(1..=num_rounds)
+            .into_iter()
+            .map(Option::unwrap)
+            .collect();
+
+        let commit_all = |shuffle: bool| {
+            let mut context = context.clone();
+            context
+                .protocol_config
+                .set_shuffle_commit_blocks_for_testing(shuffle);
+            let context = Arc::new(context);
+            let dag_state = Arc::new(RwLock::new(DagState::new(
+                context.clone(),
+                Arc::new(MemStore::new()),
+            )));
+            dag_builder.persist_all_blocks(dag_state.clone());
+            Linearizer::new(context, dag_state)
+                .handle_commit(leaders.clone())
+                .into_iter()
+                .map(|subdag| {
+                    subdag
+                        .blocks
+                        .iter()
+                        .map(|b| b.reference())
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let unshuffled = commit_all(false);
+        let shuffled = commit_all(true);
+        assert_eq!(shuffled, commit_all(true));
+        assert_eq!(shuffled.len(), unshuffled.len());
+
+        let mut any_reordered = false;
+        for ((shuffled, unshuffled), leader) in shuffled
+            .iter()
+            .zip_debug_eq(&unshuffled)
+            .zip_debug_eq(&leaders)
+        {
+            assert!(unshuffled.is_sorted_by_key(|b| (b.round, b.author)));
+            assert!(shuffled.is_sorted_by_key(|b| b.round));
+            assert_eq!(shuffled.last(), Some(&leader.reference()));
+
+            let mut sorted = shuffled.clone();
+            sorted.sort_by_key(|b| (b.round, b.author));
+            assert_eq!(&sorted, unshuffled);
+            any_reordered |= shuffled != unshuffled;
+        }
+        assert!(any_reordered);
+    }
+
     #[tokio::test]
     async fn test_handle_already_committed() {
         telemetry_subscribers::init_for_testing();
@@ -520,17 +595,10 @@ mod tests {
         .unwrap();
         assert_eq!(subdag.timestamp_ms, expected_ts);
 
-        // Using the same sorting as used in CommittedSubDag::sort
-        blocks.sort_by(|a, b| a.round.cmp(&b.round).then_with(|| a.author.cmp(&b.author)));
-        assert_eq!(
-            subdag
-                .blocks
-                .clone()
-                .into_iter()
-                .map(|b| b.reference())
-                .collect::<Vec<_>>(),
-            blocks
-        );
+        let mut committed: Vec<_> = subdag.blocks.iter().map(|b| b.reference()).collect();
+        committed.sort();
+        blocks.sort();
+        assert_eq!(committed, blocks);
         for block in subdag.blocks.iter() {
             assert!(block.round() <= expected_second_commit.leader().round);
         }

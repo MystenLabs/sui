@@ -421,6 +421,7 @@ const MAINNET_USDB: &str =
 //              Charge package inputs 1% of the per-byte object read cost.
 // Version 140: Add native vector bulk operations (keep_range, copy_range, replace_range
 //              and reverse) and their gas costs.
+//              Shuffle the block order within each round of a consensus commit on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1330,6 +1331,12 @@ struct FeatureFlags {
     // silently dropped the displaced (finalized) transactions.
     #[serde(skip_serializing_if = "is_false")]
     merge_colliding_deferrals: bool,
+
+    // If true, consensus orders the blocks of each committed sub-dag within a round by a hash
+    // seeded from the leader block's digest, instead of by authority index. Rounds stay in
+    // ascending order, and transactions within a block keep their relative order.
+    #[serde(skip_serializing_if = "is_false")]
+    shuffle_consensus_commit_blocks: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4875,6 +4882,10 @@ impl ProtocolConfig {
                     cfg.vector_copy_range_base_cost = Some(52);
                     cfg.vector_replace_range_base_cost = Some(52);
                     cfg.vector_replace_range_per_elem_cost = Some(8);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.shuffle_consensus_commit_blocks = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

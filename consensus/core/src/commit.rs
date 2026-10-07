@@ -408,6 +408,32 @@ pub(crate) fn sort_sub_dag_blocks(blocks: &mut [VerifiedBlock]) {
     })
 }
 
+/// From a deterministic array of leaders, compute a deterministic digest used as seed for sort.
+pub(crate) fn compute_sort_seed(committed_leaders: &[VerifiedBlock]) -> [u8; DIGEST_LENGTH] {
+    let mut hasher = DefaultHashFunction::new();
+    for leader in committed_leaders {
+        hasher.update(leader.digest().as_ref());
+    }
+    hasher.finalize().into()
+}
+
+/// Per-block sort key:
+/// - Primary part: block round.
+/// - Secondary part: hash of seed and block digest.
+fn block_sort_key(
+    seed: &[u8; DIGEST_LENGTH],
+    block_ref: &BlockRef,
+) -> (Round, [u8; DIGEST_LENGTH]) {
+    let mut hasher = DefaultHashFunction::new();
+    hasher.update(seed);
+    hasher.update(block_ref.digest);
+    (block_ref.round, hasher.finalize().into())
+}
+
+pub(crate) fn sort_committed_blocks(blocks: &mut [VerifiedBlock], seed: &[u8; DIGEST_LENGTH]) {
+    blocks.sort_by_cached_key(|b| block_sort_key(seed, &b.reference()));
+}
+
 impl Display for CommittedSubDag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
