@@ -23,7 +23,6 @@ repository, and `sui-docs` fetches them on every build:
 | `crates/sui-framework/docs/` | the Move framework reference |
 | `crates/`, `examples/` | the code embedded in pages by `ImportContent` |
 | `release-notes/` | the release notes page |
-| `docs/subtree/` | the awesome-sui and awesome-sui-gaming lists |
 
 Two things follow.
 
@@ -36,6 +35,12 @@ other repository, and nothing here will tell you. If you need to move one,
 change
 [`sources.json`](https://github.com/MystenLabs/sui-docs/blob/main/sources.json)
 in `sui-docs` in the same change.
+
+The awesome-sui lists used to be vendored here as a git subtree under
+`docs/subtree`. `sui-docs` now fetches them from
+[sui-foundation/awesome-sui](https://github.com/sui-foundation/awesome-sui) and
+[becky-sui/awesome-sui-gaming](https://github.com/becky-sui/awesome-sui-gaming)
+directly, so there is nothing to keep in sync here.
 
 ## Why it moved
 

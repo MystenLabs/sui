@@ -56,7 +56,7 @@ runs:
           - 'rust-toolchain.toml'
           - 'rustfmt.toml'
         isDoc:
-          - 'docs/subtree/**'
+          - 'docs/**'
         isOldDoc:
           - 'doc/**'
           - '*.md'  
