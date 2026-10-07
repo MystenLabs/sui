@@ -56,9 +56,7 @@ runs:
           - 'rust-toolchain.toml'
           - 'rustfmt.toml'
         isDoc:
-          - 'docs/content/**'
-          - '*.mdx'
-          - '.github/workflows/docs.yml'
+          - 'docs/**'
         isOldDoc:
           - 'doc/**'
           - '*.md'  
