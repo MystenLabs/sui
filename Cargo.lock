@@ -5473,7 +5473,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.11"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=076bf5ad8cea140dc7cf5c5861c24a36acdf64ce#076bf5ad8cea140dc7cf5c5861c24a36acdf64ce"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=576f00e2d466593ad2c643210b09efb5b6d4aff1#576f00e2d466593ad2c643210b09efb5b6d4aff1"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5538,7 +5538,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=076bf5ad8cea140dc7cf5c5861c24a36acdf64ce#076bf5ad8cea140dc7cf5c5861c24a36acdf64ce"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=576f00e2d466593ad2c643210b09efb5b6d4aff1#576f00e2d466593ad2c643210b09efb5b6d4aff1"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -5564,7 +5564,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=076bf5ad8cea140dc7cf5c5861c24a36acdf64ce#076bf5ad8cea140dc7cf5c5861c24a36acdf64ce"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=576f00e2d466593ad2c643210b09efb5b6d4aff1#576f00e2d466593ad2c643210b09efb5b6d4aff1"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -5584,7 +5584,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=076bf5ad8cea140dc7cf5c5861c24a36acdf64ce#076bf5ad8cea140dc7cf5c5861c24a36acdf64ce"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=576f00e2d466593ad2c643210b09efb5b6d4aff1#576f00e2d466593ad2c643210b09efb5b6d4aff1"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -5601,7 +5601,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.4"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=076bf5ad8cea140dc7cf5c5861c24a36acdf64ce#076bf5ad8cea140dc7cf5c5861c24a36acdf64ce"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=576f00e2d466593ad2c643210b09efb5b6d4aff1#576f00e2d466593ad2c643210b09efb5b6d4aff1"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -7747,7 +7747,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.0",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
