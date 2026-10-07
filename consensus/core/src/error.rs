@@ -100,9 +100,6 @@ pub enum ConsensusError {
     #[error("Invalid fetch blocks request: {0}")]
     InvalidFetchBlocksRequest(String),
 
-    #[error("Invalid block stream filter: {0}")]
-    InvalidBlockStreamFilter(String),
-
     #[error("Invalid authority index at {loc}: {index} > {max}")]
     InvalidAuthorityIndex {
         loc: String,

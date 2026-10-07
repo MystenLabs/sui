@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     pin::Pin,
     sync::{Arc, Weak},
     time::Duration,
@@ -44,8 +44,8 @@ pub(crate) struct BlockStreamRequest {
     #[prost(uint32, repeated, tag = "1")]
     pub(crate) highest_round_per_authority: Vec<Round>,
     /// Committee indices of the authorities whose blocks should be streamed. Empty means
-    /// no filtering: blocks from all authorities are streamed. Unknown or duplicate
-    /// indices cause the request to be rejected.
+    /// no filtering: blocks from all authorities are streamed. Unknown indices cause the
+    /// request to be rejected.
     #[prost(uint32, repeated, tag = "2")]
     pub(crate) authors: Vec<u32>,
 }
@@ -275,9 +275,16 @@ impl ObserverNetworkClient for TonicObserverClient {
     ) -> ConsensusResult<ObserverBlockStream> {
         let mut client = self.get_client(peer.clone(), timeout).await?;
 
+        let authors = match filter {
+            BlockStreamFilter::All => vec![],
+            BlockStreamFilter::Authors(authors) => authors
+                .into_iter()
+                .map(|author| author.value_u32())
+                .collect(),
+        };
         let request = Request::new(BlockStreamRequest {
             highest_round_per_authority,
-            authors: filter.authors,
+            authors,
         });
         let response = client
             .stream_blocks(request)
@@ -407,6 +414,7 @@ impl ObserverNetworkClient for TonicObserverClient {
 /// Proxies Observer Tonic requests to ObserverNetworkService.
 /// Extracts peer NodeId from TLS certificates and delegates to the service layer.
 pub(crate) struct ObserverServiceProxy<S: ObserverNetworkService> {
+    context: Arc<Context>,
     // ObserverServiceProxy is cloned into per-connection server tasks, which complete on the
     // network's schedule during graceful shutdown, and can briefly outlive the node if it is
     // dropped without stop(). Hold the service weakly so lingering connections cannot extend
@@ -416,10 +424,34 @@ pub(crate) struct ObserverServiceProxy<S: ObserverNetworkService> {
 }
 
 impl<S: ObserverNetworkService> ObserverServiceProxy<S> {
-    pub(crate) fn new(service: Arc<S>) -> Self {
+    pub(crate) fn new(context: Arc<Context>, service: Arc<S>) -> Self {
         Self {
+            context,
             service: Arc::downgrade(&service),
         }
+    }
+
+    /// Converts the wire-level author indices into a validated filter. Empty means no
+    /// filtering, which keeps clients predating the field wire-compatible.
+    fn block_stream_filter(&self, authors: Vec<u32>) -> Result<BlockStreamFilter, tonic::Status> {
+        if authors.is_empty() {
+            return Ok(BlockStreamFilter::All);
+        }
+        let committee = &self.context.committee;
+        let authors = authors
+            .into_iter()
+            .map(|index| {
+                committee
+                    .to_authority_index(index as usize)
+                    .ok_or_else(|| {
+                        tonic::Status::invalid_argument(format!(
+                            "Unknown authority index {index} in block stream filter, committee size is {}",
+                            committee.size()
+                        ))
+                    })
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        Ok(BlockStreamFilter::Authors(authors))
     }
 
     fn service(&self) -> Result<Arc<S>, tonic::Status> {
@@ -449,20 +481,13 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
             })?;
 
         let request = request.into_inner();
-        let filter = BlockStreamFilter {
-            authors: request.authors,
-        };
+        let filter = self.block_stream_filter(request.authors)?;
 
         let block_stream = self
             .service()?
             .handle_stream_blocks(peer_id, request.highest_round_per_authority, filter)
             .await
-            .map_err(|e| match e {
-                ConsensusError::InvalidBlockStreamFilter(_) => {
-                    tonic::Status::invalid_argument(format!("{e:?}"))
-                }
-                _ => tonic::Status::internal(format!("{e:?}")),
-            })?;
+            .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
 
         let response_stream = block_stream.map(|item| {
             Ok(BlockStreamResponse {
@@ -620,7 +645,7 @@ mod tests {
         assert_eq!(blocks[99], Bytes::from(vec![100u8; 16]));
 
         assert_eq!(service.lock().handle_stream_blocks.len(), 1);
-        assert_eq!(service.lock().handle_stream_blocks[0], observer_peer_id);
+        assert_eq!(service.lock().handle_stream_blocks[0].0, observer_peer_id);
     }
 
     #[tokio::test]
@@ -657,6 +682,58 @@ mod tests {
         assert_eq!(blocks.len(), 50);
         assert_eq!(blocks[0], Bytes::from(vec![51u8; 16]));
         assert_eq!(blocks[49], Bytes::from(vec![100u8; 16]));
+    }
+
+    /// The proxy validates the wire-level author indices before they reach the service.
+    #[tokio::test]
+    async fn observer_stream_blocks_filter_validation() {
+        use super::{BlockStreamRequest, ObserverPeerInfo, ObserverServiceProxy};
+        use crate::network::tonic_gen::observer_service_server::ObserverService as _;
+        use consensus_config::AuthorityIndex;
+
+        let (context, keys) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let service = Arc::new(Mutex::new(TestService::new()));
+        let proxy = ObserverServiceProxy::new(context.clone(), service.clone());
+        let peer_info = ObserverPeerInfo {
+            public_key: keys[0].0.public(),
+        };
+        let new_request = |authors: Vec<u32>| {
+            let mut request = tonic::Request::new(BlockStreamRequest {
+                highest_round_per_authority: vec![0u32; 4],
+                authors,
+            });
+            request.extensions_mut().insert(peer_info.clone());
+            request
+        };
+
+        // An authority index outside the committee is rejected without reaching the service.
+        let Err(status) = proxy.stream_blocks(new_request(vec![0, 10])).await else {
+            panic!("expected invalid_argument for unknown authority index");
+        };
+        assert_eq!(status.code(), tonic::Code::InvalidArgument);
+        assert!(service.lock().handle_stream_blocks.is_empty());
+
+        // Valid indices, including duplicates, are converted into a set of authorities.
+        proxy
+            .stream_blocks(new_request(vec![2, 1, 2]))
+            .await
+            .unwrap();
+        let (_, filter) = service.lock().handle_stream_blocks.pop().unwrap();
+        assert_eq!(
+            filter,
+            BlockStreamFilter::Authors(
+                [1, 2]
+                    .into_iter()
+                    .map(AuthorityIndex::new_for_test)
+                    .collect()
+            )
+        );
+
+        // An empty list means no filtering.
+        proxy.stream_blocks(new_request(vec![])).await.unwrap();
+        let (_, filter) = service.lock().handle_stream_blocks.pop().unwrap();
+        assert_eq!(filter, BlockStreamFilter::All);
     }
 
     /// End-to-end test using TonicManager to set up a proper observer server and client.

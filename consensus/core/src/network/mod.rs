@@ -17,6 +17,7 @@
 //! this module, so they can be reused easily across network implementations.
 
 use std::{
+    collections::BTreeSet,
     fmt::{Display, Formatter},
     net::SocketAddrV6,
     pin::Pin,
@@ -251,15 +252,18 @@ pub trait RandomnessSignatureHandler: Send + Sync + 'static {
     fn subscribe_randomness_signatures(&self) -> tokio::sync::broadcast::Receiver<Bytes>;
 }
 
-/// Filter sent by an observer when opening a block stream, restricting what the server
-/// releases on that stream.
-#[derive(Clone, Debug, Default)]
-pub(crate) struct BlockStreamFilter {
-    /// Raw committee indices of the authorities whose blocks should be streamed, as they
-    /// appear on the wire. Empty means no filtering: blocks from all authorities are
-    /// streamed. The serving side validates the indices against its committee and rejects
-    /// the stream on unknown or duplicate entries.
-    pub(crate) authors: Vec<u32>,
+/// Filter sent by an observer when opening a block stream, restricting which authorities'
+/// blocks the server releases on that stream. Only validated committee members appear here:
+/// the transport layer converts and checks the raw wire representation before the filter
+/// reaches the service.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) enum BlockStreamFilter {
+    /// Blocks from all authorities are streamed.
+    #[default]
+    All,
+    /// Only blocks authored by the given committee members are streamed. Must be
+    /// non-empty; the wire format cannot express an empty author set.
+    Authors(BTreeSet<AuthorityIndex>),
 }
 
 /// A single item in the observer block stream, carrying both blocks and auxiliary data.

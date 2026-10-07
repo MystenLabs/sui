@@ -238,31 +238,14 @@ impl ObserverNetworkService for ObserverService {
             ));
         }
 
-        // Validate the requested author filter against the committee before establishing
-        // the stream. `None` means no filtering.
-        let author_filter: Option<Vec<bool>> = if filter.authors.is_empty() {
-            None
-        } else {
-            let mut allowed = vec![false; self.context.committee.size()];
-            for &index in &filter.authors {
-                let authority = self
-                    .context
-                    .committee
-                    .to_authority_index(index as usize)
-                    .ok_or_else(|| {
-                        ConsensusError::InvalidBlockStreamFilter(format!(
-                            "unknown authority index {index}, committee size is {}",
-                            self.context.committee.size()
-                        ))
-                    })?;
-                if std::mem::replace(&mut allowed[authority.value()], true) {
-                    return Err(ConsensusError::InvalidBlockStreamFilter(format!(
-                        "duplicate authority index {index}"
-                    )));
-                }
+        // Expand the filter into a per-authority lookup for the snapshot and live phases.
+        let mut allowed_authors = vec![true; self.context.committee.size()];
+        if let BlockStreamFilter::Authors(authors) = &filter {
+            allowed_authors.fill(false);
+            for author in authors {
+                allowed_authors[author.value()] = true;
             }
-            Some(allowed)
-        };
+        }
 
         // Subscribe before snapshotting past blocks below. This can duplicate
         // a block in both the subscription stream and snapshot, which is fine.
@@ -277,9 +260,7 @@ impl ObserverNetworkService for ObserverService {
             let mut past_blocks = Vec::new();
 
             for (authority, _) in self.context.committee.authorities() {
-                if let Some(allowed) = &author_filter
-                    && !allowed[authority.value()]
-                {
+                if !allowed_authors[authority.value()] {
                     continue;
                 }
                 // Saturate so an out-of-range round from the peer cannot wrap to 0 and
@@ -327,11 +308,7 @@ impl ObserverNetworkService for ObserverService {
         .map(move |blocks| ObserverStreamItem {
             blocks: blocks
                 .into_iter()
-                .filter(|block| {
-                    author_filter
-                        .as_ref()
-                        .is_none_or(|allowed| allowed[block.author().value()])
-                })
+                .filter(|block| allowed_authors[block.author().value()])
                 .map(|block| block.serialized().clone())
                 .collect(),
             auxiliary_data: Default::default(),
@@ -574,6 +551,7 @@ fn sort_blocks(blocks: &mut [VerifiedBlock]) {
 mod tests {
     use std::{sync::Arc, time::Duration};
 
+    use consensus_config::AuthorityIndex;
     use futures::StreamExt;
     use parking_lot::RwLock;
     use tokio::sync::broadcast;
@@ -1159,6 +1137,15 @@ mod tests {
         (observer_service, tx_accepted_block, dag_state)
     }
 
+    fn authors_filter(authors: Vec<u32>) -> BlockStreamFilter {
+        BlockStreamFilter::Authors(
+            authors
+                .into_iter()
+                .map(AuthorityIndex::new_for_test)
+                .collect(),
+        )
+    }
+
     fn deserialize_blocks(item: &ObserverStreamItem) -> Vec<VerifiedBlock> {
         item.blocks
             .iter()
@@ -1180,9 +1167,7 @@ mod tests {
 
         let highest_round_per_authority = vec![0 as Round; context.committee.size()];
         let peer = keys[0].0.public().clone();
-        let filter = BlockStreamFilter {
-            authors: vec![0, 2],
-        };
+        let filter = authors_filter(vec![0, 2]);
         let mut stream = observer_service
             .handle_stream_blocks(peer, highest_round_per_authority, filter)
             .await
@@ -1240,9 +1225,7 @@ mod tests {
 
         let highest_round_per_authority = vec![0 as Round; context.committee.size()];
         let peer = keys[0].0.public().clone();
-        let filter = BlockStreamFilter {
-            authors: vec![1, 3],
-        };
+        let filter = authors_filter(vec![1, 3]);
         let mut stream = observer_service
             .handle_stream_blocks(peer, highest_round_per_authority, filter)
             .await
@@ -1276,7 +1259,7 @@ mod tests {
 
         let highest_round_per_authority = vec![0 as Round; context.committee.size()];
         let peer = keys[0].0.public().clone();
-        let filter = BlockStreamFilter { authors: vec![1] };
+        let filter = authors_filter(vec![1]);
         let mut stream = observer_service
             .handle_stream_blocks(peer, highest_round_per_authority, filter)
             .await
@@ -1304,47 +1287,5 @@ mod tests {
                 .await
                 .is_err()
         );
-    }
-
-    #[tokio::test]
-    async fn test_observer_stream_invalid_author_filter() {
-        telemetry_subscribers::init_for_testing();
-        let (context, keys) = Context::new_for_test(4);
-        let context = Arc::new(context);
-        let (observer_service, _tx_accepted_block, _dag_state) =
-            new_test_observer_service(context.clone());
-
-        let highest_round_per_authority = vec![0 as Round; context.committee.size()];
-        let peer = keys[0].0.public().clone();
-
-        // An authority index outside the committee is rejected.
-        let result = observer_service
-            .handle_stream_blocks(
-                peer.clone(),
-                highest_round_per_authority.clone(),
-                BlockStreamFilter {
-                    authors: vec![0, 10],
-                },
-            )
-            .await;
-        assert!(matches!(
-            result,
-            Err(ConsensusError::InvalidBlockStreamFilter(_))
-        ));
-
-        // Duplicate authority indices are rejected.
-        let result = observer_service
-            .handle_stream_blocks(
-                peer,
-                highest_round_per_authority,
-                BlockStreamFilter {
-                    authors: vec![2, 1, 2],
-                },
-            )
-            .await;
-        assert!(matches!(
-            result,
-            Err(ConsensusError::InvalidBlockStreamFilter(_))
-        ));
     }
 }
