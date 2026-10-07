@@ -271,7 +271,7 @@ impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: 
         );
         let checkpoint_builder_stall_threshold_secs = if crate::in_antithesis() {
             // Antithesis faults can delay checkpoint effects throughout node recovery.
-            120
+            240
         } else {
             60
         };
