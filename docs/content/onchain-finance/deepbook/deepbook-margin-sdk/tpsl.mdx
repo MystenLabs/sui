@@ -65,7 +65,7 @@ Use `addConditionalOrder` to add a conditional order that executes when a price 
 - `conditionalOrderId`: Number representing the unique ID for this conditional order.
 - `triggerBelowPrice`: Boolean indicating whether to trigger when price falls below the trigger price.
 - `triggerPrice`: Number representing the price at which to trigger the order.
-- `pendingOrder`: Object containing the order details (either `PendingLimitOrderParams` or `PendingMarketOrderParams`).
+- `pendingOrder`: Object containing the order details (either `PendingLimitOrderParams`, which includes a `price` field for the limit price, or `PendingMarketOrderParams`, which has no `price` field).
 
 <ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="addConditionalOrder" signatureOnly />
 
@@ -96,7 +96,7 @@ Use `executeConditionalOrders` to execute conditional orders that have been trig
 
 **Parameters**
 
-- `managerAddress`: String representing the address of the margin manager whose orders to execute.
+- `managerAddress`: String representing the address of the margin manager whose orders to execute. Unlike the other functions, this one takes the manager address rather than `marginManagerKey`, the string that identifies the margin manager.
 - `poolKey`: String that identifies the DeepBook pool.
 - `maxOrdersToExecute`: Number representing the maximum number of orders to execute in this call.
 

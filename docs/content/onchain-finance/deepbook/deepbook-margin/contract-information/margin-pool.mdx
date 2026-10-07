@@ -36,7 +36,7 @@ answer: Learn about margin pools and how they enable liquidity for leveraged tra
 
 The `MarginPool` is a shared object that manages liquidity for a specific asset, enabling lenders to supply assets and margin traders to borrow them. Each margin pool tracks supply and borrow positions, accrues interest over time, and enforces risk parameters to maintain system health.
 
-Margin pools use a shares-based accounting system where suppliers receive shares representing their proportion of the total supply. Interest accrues continuously, increasing the value of these shares over time. Borrowers can only borrow from pools that have enabled their specific DeepBook trading pool.
+Margin pools use a shares-based accounting system where suppliers receive shares representing their proportion of the total supply. Interest accrues continuously, increasing the value of these shares over time. Borrowers can only borrow from pools that have enabled their specific DeepBook trading pool. The pool's current interest and risk settings, such as `interest_rate`, `max_utilization_rate`, `protocol_spread`, and `min_borrow`, are readable through the pool's read endpoints, and the pool emits `InterestParamsUpdated` when those interest rate parameters change.
 
 ## What is a margin pool?
 
@@ -79,7 +79,7 @@ Following are the different public functions that the `MarginPool` exposes.
 <details>
 <summary>Mint a `SupplierCap`</summary>
 
-Create a new `SupplierCap` that can be used to supply and withdraw from margin pools. One `SupplierCap` can be used across multiple margin pools.
+Create a new `SupplierCap` that can be used to supply and withdraw from margin pools. One `SupplierCap` can be used across multiple margin pools. The system emits a `SupplierCapMinted` event when you mint a new supplier cap.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/margin_pool.move"

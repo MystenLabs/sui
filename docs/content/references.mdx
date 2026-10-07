@@ -55,7 +55,7 @@ The reference documentation includes:
 
 Find the section that matches your current task and go directly to the relevant entry.
 
-For example, if you want to query owned objects for an address using the GraphQL RPC, you look up the `address` query in the GraphQL reference, check the available fields on the `ObjectConnection` type, and construct your query:
+For example, if you want to query owned objects for an address using the GraphQL RPC, you look up the `address` query in the GraphQL reference, check the available fields on the `objects` connection returned for that address, and construct your query:
 
 ```graphql
 query {
@@ -73,7 +73,7 @@ query {
 }
 ```
 
-If you want to publish a Move package from the CLI, you look up the `client publish` command to confirm required flags:
+If you want to publish a Move package from the CLI, you look up the `client publish` command to confirm the required flags and arguments, such as the path to the package:
 
 ```bash
 sui client publish --gas-budget 100000000
@@ -86,7 +86,7 @@ The right reference depends on how your application interacts with Sui:
 - Use the GraphQL RPC reference when querying historical or current chain state from a frontend or backend service.
 - Use the CLI reference when scripting deployments, managing keys, or running administrative commands.
 - Use the Move framework reference when writing smart contracts and looking up built-in types or functions.
-- Use the SDK reference when integrating Sui into a TypeScript or Rust application.
+- Use the SDK reference when integrating Sui into a TypeScript or Rust application, or when building a frontend with the Sui dApp Kit.
 
 import DocCardList from '@theme/DocCardList';
 

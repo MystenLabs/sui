@@ -58,7 +58,7 @@ The DeepBookV3 SDK provides the following flash loan related functions.
 
 ### borrowBaseAsset
 
-Use `borrowBaseAsset` to borrow a base asset from the pool identified by the `poolKey` value you provide. The call returns a function that takes a `Transaction` object
+Use `borrowBaseAsset` to borrow a base asset from the pool identified by the `poolKey` value you provide. The call returns a function that takes a `Transaction` object. The borrow returns a `FlashLoan` hot potato (struct with no abilities), which must be returned back to the pool by the end of the call.
 
 **Parameters**
 
@@ -112,7 +112,7 @@ Use `returnQuoteAsset` to return a quote asset to the pool identified by the `po
 
 - `poolKey`: String that identifies the pool from which to borrow.
 - `borrowAmount`: Number that represents the amount to borrow from the pool.
-- `baseCoinInput`: Coin object representing the quote asset to be returned.
+- `quoteCoinInput`: Coin object representing the quote asset to be returned.
 - `flashLoan`: Flash loan object representing the loan to be settled.
 
 ```tsx
