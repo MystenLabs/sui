@@ -418,6 +418,7 @@ const MAINNET_USDB: &str =
 //              Enable ML-DSA-65 account signatures on devnet.
 //              Reduce the non-refundable storage fee from 1% to 0.01%.
 //              Allow random beacon DKG to complete after its timeout on devnet and testnet.
+//              Charge package inputs 1% of the per-byte object read cost.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1716,6 +1717,10 @@ pub struct ProtocolConfig {
     // Per-byte cost of reading an object during transaction execution
     obj_access_cost_read_per_byte: Option<u64>,
 
+    // Cost per KiB (1,024 bytes) of reading a non-system package input. When unset, packages are
+    // charged `obj_access_cost_read_per_byte` like other input objects.
+    obj_access_cost_read_per_package_kb: Option<u64>,
+
     // Per-byte cost of writing an object during transaction execution
     obj_access_cost_mutate_per_byte: Option<u64>,
 
@@ -2728,6 +2733,7 @@ impl ProtocolConfig {
             base_tx_cost_per_byte: Some(0),
             package_publish_cost_per_byte: Some(80),
             obj_access_cost_read_per_byte: Some(15),
+            obj_access_cost_read_per_package_kb: None,
             obj_access_cost_mutate_per_byte: Some(40),
             obj_access_cost_delete_per_byte: Some(40),
             obj_access_cost_verify_per_byte: Some(200),
@@ -4839,6 +4845,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.allow_dkg_completion_after_timeout = true;
                     }
+                    // Validators cache packages, so reading one costs far less than reading an object.
+                    cfg.obj_access_cost_read_per_package_kb = Some(154);
                 }
                 // Use this template when making changes:
                 //

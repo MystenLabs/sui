@@ -80,6 +80,14 @@ pub mod checked {
     }
 
     impl SuiGasStatus {
+        /// Charge reading a package input. Earlier gas models charge packages as other inputs.
+        pub fn charge_package_object_read(&mut self, size: usize) -> Result<(), ExecutionError> {
+            match self {
+                Self::V2(status) => status.charge_storage_read(size),
+                Self::V3(status) => status.charge_package_object_read(size),
+            }
+        }
+
         pub fn new(
             gas_budget: u64,
             gas_price: u64,

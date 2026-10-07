@@ -35,7 +35,7 @@ task 2, lines 35-48:
 mutated: object(0,0), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(2,0), F1, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,1), F10, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,2), F11, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,3), F2, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,4), F3, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,5), F4, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,6), F5, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,7), F6, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,8), F7, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,9), F8, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100), (object(2,10), F9, sui::balance::Balance<test::regulated_coin::REGULATED_COIN>, Merge, 100)
-gas summary: computation_cost: 1840000, storage_cost: 2462400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
+gas summary: computation_cost: 1820000, storage_cost: 2462400,  storage_rebate: 2462154, non_refundable_storage_fee: 246
 
 task 3, line 50:
 //# create-checkpoint

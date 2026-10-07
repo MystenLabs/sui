@@ -40,7 +40,7 @@ task 4, line 59:
 created: object(4,0), object(4,1), object(4,2), object(4,3), object(4,4), object(4,5), object(4,6), object(4,7), object(4,8), object(4,9)
 mutated: object(0,0), object(1,3)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1680000, storage_cost: 15534400,  storage_rebate: 2310169, non_refundable_storage_fee: 231
+gas summary: computation_cost: 1660000, storage_cost: 15534400,  storage_rebate: 2310169, non_refundable_storage_fee: 231
 
 task 5, line 61:
 //# run test::coin::send_100 --args object(1,3) --sender A
