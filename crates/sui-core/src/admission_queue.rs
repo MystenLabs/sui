@@ -187,6 +187,9 @@ pub struct AdmissionQueueMetrics {
     pub pool_already_processed: IntCounterVec,
     pub pool_commit_latency: HistogramVec,
     pub pool_abandoned: IntCounterVec,
+    pub pool_execution_backlog_wait_ms: IntGauge,
+    pub pool_execution_pacer_admission_percentage: IntGauge,
+    pub pool_user_take_budget: IntGauge,
 }
 
 impl AdmissionQueueMetrics {
@@ -282,6 +285,24 @@ impl AdmissionQueueMetrics {
                 "consensus_transaction_pool_abandoned",
                 "Pool entries dropped at proposal time because their submitter stopped waiting",
                 &["lane"],
+                registry,
+            )
+            .unwrap(),
+            pool_execution_backlog_wait_ms: register_int_gauge_with_registry!(
+                "consensus_transaction_pool_execution_backlog_wait_ms",
+                "How long the oldest transaction waiting for execution had waited at the latest take, in milliseconds",
+                registry,
+            )
+            .unwrap(),
+            pool_execution_pacer_admission_percentage: register_int_gauge_with_registry!(
+                "consensus_transaction_pool_execution_pacer_admission_percentage",
+                "Share of this validator's executed rate the execution pacer credited to user admission at the latest take, 100 when unpaced",
+                registry,
+            )
+            .unwrap(),
+            pool_user_take_budget: register_int_gauge_with_registry!(
+                "consensus_transaction_pool_user_take_budget",
+                "Number of user transactions the latest take was allowed to include, or the block limit when unpaced",
                 registry,
             )
             .unwrap(),

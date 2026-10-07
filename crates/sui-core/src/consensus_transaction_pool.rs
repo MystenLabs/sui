@@ -26,6 +26,7 @@ use crate::consensus_adapter::{
     processing_error,
 };
 use crate::consensus_handler::{SequencedConsensusTransactionKey, tx_type_label};
+use crate::execution_backlog::ExecutionBacklog;
 use async_trait::async_trait;
 use consensus_core::{BlockStatus, ClientError, LimitReached, Transaction, TransactionPool};
 use consensus_types::block::{
@@ -39,7 +40,9 @@ use prometheus::IntGauge;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::sync::Weak;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
+use sui_config::node::ConsensusTransactionPoolConfig;
 use sui_macros::fail_point_if;
 use sui_types::base_types::EpochId;
 use sui_types::digests::TransactionDigest;
@@ -274,6 +277,7 @@ impl UserLane {
 
 struct Pool {
     user: UserLane,
+    execution_pacer: ExecutionPacer,
     // Unbounded: system transactions are correctness-critical, produced by trusted
     // internal components at bounded rates, and must never be evicted or outbid.
     system: VecDeque<PoolEntry>,
@@ -298,7 +302,7 @@ struct ProposedEntry {
 }
 
 enum Inner {
-    Open(Pool),
+    Open(Box<Pool>),
     Closed,
 }
 
@@ -313,6 +317,7 @@ pub struct ConsensusTransactionPool {
     epoch_store: Arc<AuthorityPerEpochStore>,
     metrics: Arc<AdmissionQueueMetrics>,
     adapter_metrics: ConsensusAdapterMetrics,
+    execution_backlog: Arc<ExecutionBacklog>,
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -322,6 +327,8 @@ impl ConsensusTransactionPool {
         max_pending_transactions: usize,
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
+        execution_backlog: Arc<ExecutionBacklog>,
+        config: &ConsensusTransactionPoolConfig,
     ) -> Self {
         assert!(
             max_pending_transactions > 0,
@@ -343,15 +350,17 @@ impl ConsensusTransactionPool {
             epoch_store,
             metrics: metrics.clone(),
             adapter_metrics,
-            inner: Arc::new(Mutex::new(Inner::Open(Pool {
+            execution_backlog,
+            inner: Arc::new(Mutex::new(Inner::Open(Box::new(Pool {
                 user: UserLane::Open(PriorityAdmissionQueue::new(
                     max_pending_transactions,
                     metrics,
                 )),
+                execution_pacer: ExecutionPacer::new(config),
                 system: VecDeque::new(),
                 pings: VecDeque::new(),
                 blocks: BTreeMap::new(),
-            }))),
+            })))),
         }
     }
 
@@ -366,6 +375,8 @@ impl ConsensusTransactionPool {
             max_pending_transactions,
             metrics,
             ConsensusAdapterMetrics::new_test(),
+            Arc::new(ExecutionBacklog::default()),
+            &ConsensusTransactionPoolConfig::default(),
         )
     }
 
@@ -991,13 +1002,40 @@ impl TransactionPool for ConsensusTransactionPool {
         {
             let mut pending_count = transactions.len();
             let mut pending_bytes = total_bytes;
+            // Once this validator's execution backlog is deep, user admission is paced to
+            // its own execution progress, scaled down as the backlog grows, so proposals
+            // never outrun what the fleet can execute. Everything else waits in the pool
+            // in gas price order.
+            let committee_size = self.epoch_store.committee().num_members();
+            let (user_budget, backlog_wait) = pool.execution_pacer.user_budget(
+                &self.execution_backlog,
+                committee_size,
+                user.len(),
+                max_count.saturating_sub(pending_count),
+            );
+            self.metrics
+                .pool_execution_backlog_wait_ms
+                .set(backlog_wait.map_or(0, |wait| wait.as_millis().min(i64::MAX as u128) as i64));
+            self.metrics
+                .pool_execution_pacer_admission_percentage
+                .set(i64::from(pool.execution_pacer.admission_percentage()));
+            self.metrics
+                .pool_user_take_budget
+                .set(user_budget.min(i64::MAX as usize) as i64);
+            let user_max_count = pending_count + user_budget;
             let popped;
             (popped, already_processed) = user.pop_batch_while(|entry| {
                 // An already-processed entry is excluded without consuming block budget.
                 if all_processed(&mut entry.processed).is_some() {
                     return PopAction::Exclude;
                 }
-                match entry_limit(entry, pending_count, pending_bytes, max_count, max_bytes) {
+                match entry_limit(
+                    entry,
+                    pending_count,
+                    pending_bytes,
+                    user_max_count,
+                    max_bytes,
+                ) {
                     Some(limit) => {
                         limit_reached = limit;
                         PopAction::Stop
@@ -1009,6 +1047,8 @@ impl TransactionPool for ConsensusTransactionPool {
                     }
                 }
             });
+            let taken_user: usize = popped.iter().map(|entry| entry.transactions.len()).sum();
+            pool.execution_pacer.consume(taken_user);
             for entry in popped {
                 self.decrement_lane_metrics("user", &entry);
                 transactions.extend(entry.transactions.iter().cloned());
@@ -1157,6 +1197,90 @@ impl ConsensusTransactionPool {
     }
 }
 
+/// Paces user lane admission to this validator's own execution progress while it is
+/// working off an execution backlog. Pacing engages once the oldest transaction waiting
+/// for execution has waited longer than `engage_above`, and ends once the pool's user
+/// lane has drained, so a backlog is never released faster than execution absorbs it.
+///
+/// While engaged, each executed transaction earns `g(wait)` of a credit, divided by the
+/// committee size since every validator proposes and every admitted transaction is
+/// executed by all of them, and a take may include at most the whole credits banked.
+/// `g` is 1 at zero wait and falls linearly to 0 at `admission_zero_at`, so admission
+/// matches execution when the queue is short and shrinks as it lengthens. The backlog
+/// then relaxes toward empty with time constant `admission_zero_at` rather than cycling.
+/// A floor of one credit per committee-size takes keeps the backlog moving if execution
+/// stalls.
+struct ExecutionPacer {
+    engage_above: Duration,
+    admission_zero_at: Duration,
+    engaged: bool,
+    last_executed: u64,
+    credits: f64,
+    admission: f64,
+}
+
+impl ExecutionPacer {
+    // Credits banked while the lane is empty are capped so a lull cannot fund a burst.
+    const MAX_CREDITS: f64 = 8.0;
+
+    fn new(config: &ConsensusTransactionPoolConfig) -> Self {
+        Self {
+            engage_above: config.execution_backlog_engage_above,
+            admission_zero_at: config.execution_backlog_admission_zero_at,
+            engaged: false,
+            last_executed: 0,
+            credits: 0.0,
+            admission: 1.0,
+        }
+    }
+
+    fn admission_percentage(&self) -> u32 {
+        if self.engaged {
+            (self.admission * 100.0).round() as u32
+        } else {
+            100
+        }
+    }
+
+    /// The number of user transactions this take may admit, and the backlog wait it was
+    /// derived from. `block_room` is the count the block can still hold after the system
+    /// lane and pings; it is the budget while unpaced and the ceiling while paced.
+    fn user_budget(
+        &mut self,
+        backlog: &ExecutionBacklog,
+        committee_size: usize,
+        user_lane_depth: usize,
+        block_room: usize,
+    ) -> (usize, Option<Duration>) {
+        let wait = backlog.oldest_ready_wait();
+        let executed = backlog.executed_transactions.load(Ordering::Relaxed);
+        if !self.engaged {
+            if wait.is_some_and(|wait| wait > self.engage_above) {
+                self.engaged = true;
+                self.credits = 0.0;
+                self.last_executed = executed;
+            } else {
+                return (block_room, wait);
+            }
+        } else if user_lane_depth == 0 {
+            self.engaged = false;
+            return (block_room, wait);
+        }
+        let wait_secs = wait.unwrap_or_default().as_secs_f64();
+        self.admission = (1.0 - wait_secs / self.admission_zero_at.as_secs_f64()).clamp(0.0, 1.0);
+        let delta = executed.saturating_sub(self.last_executed);
+        self.last_executed = executed;
+        let committee_size = committee_size.max(1) as f64;
+        self.credits = (self.credits + (delta as f64 * self.admission + 1.0) / committee_size)
+            .min(Self::MAX_CREDITS);
+        ((self.credits.floor() as usize).min(block_room), wait)
+    }
+
+    fn consume(&mut self, taken: usize) {
+        self.credits = (self.credits - taken as f64).max(0.0);
+    }
+}
+
 /// Which block limit the entry would exceed, if any. Entries are all-or-nothing:
 /// a bundle that does not fit stays queued in full for the next proposal.
 fn entry_limit(
@@ -1201,19 +1325,26 @@ pub struct TransactionPoolContext {
     state: watch::Sender<PoolState>,
     metrics: Arc<AdmissionQueueMetrics>,
     adapter_metrics: ConsensusAdapterMetrics,
+    execution_backlog: Arc<ExecutionBacklog>,
 }
 
 impl TransactionPoolContext {
     pub fn new(
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
+        execution_backlog: Arc<ExecutionBacklog>,
     ) -> Self {
         let (state, _) = watch::channel(PoolState::Absent);
         Self {
             state,
             metrics,
             adapter_metrics,
+            execution_backlog,
         }
+    }
+
+    pub fn execution_backlog(&self) -> &Arc<ExecutionBacklog> {
+        &self.execution_backlog
     }
 
     pub fn set_active(&self, epoch: EpochId, pool: Arc<ConsensusTransactionPool>) {
@@ -1318,7 +1449,11 @@ impl TransactionPoolContext {
 
     #[cfg(test)]
     pub(crate) fn new_for_tests(metrics: Arc<AdmissionQueueMetrics>) -> Self {
-        Self::new(metrics, ConsensusAdapterMetrics::new_test())
+        Self::new(
+            metrics,
+            ConsensusAdapterMetrics::new_test(),
+            Arc::new(ExecutionBacklog::default()),
+        )
     }
 }
 
@@ -1565,6 +1700,103 @@ mod tests {
         assert_eq!(transactions.len(), 1);
         ack(block(6));
         assert_eq!(low_receiver.await.unwrap().unwrap()[0].index, 0);
+    }
+
+    #[tokio::test]
+    async fn take_paces_user_lane_to_execution_while_backlog_is_deep() {
+        let (_state, pool) = test_state_and_pool(100).await;
+        let epoch = pool.epoch();
+        assert_eq!(pool.epoch_store.committee().num_members(), 1);
+        let config = ConsensusTransactionPoolConfig::default();
+        let backlog = pool.execution_backlog.clone();
+        let _system_receiver = pool.submit(epoch, &[transaction()]).unwrap();
+        for gas_price in [10, 20, 30, 40, 50, 60] {
+            pool.try_insert(epoch, gas_price, vec![transaction()])
+                .unwrap();
+        }
+
+        // A short wait does not engage pacing: the user lane is unpaced.
+        backlog.set_oldest_ready_wait(config.execution_backlog_engage_above / 2);
+        let (transactions, ack, _) = pool.take(3, usize::MAX);
+        assert_eq!(transactions.len(), 3);
+        assert_eq!(
+            pool.metrics.pool_execution_pacer_admission_percentage.get(),
+            100
+        );
+        drop(ack);
+        assert_eq!(pool.queue_depth("user"), 6);
+
+        // A wait past the engage threshold starts pacing. Executions before engagement
+        // do not count, so only the floor credit applies: 1 system + 1 user.
+        backlog
+            .executed_transactions
+            .fetch_add(100, Ordering::Relaxed);
+        backlog.set_oldest_ready_wait(
+            config.execution_backlog_engage_above + Duration::from_millis(200),
+        );
+        let (transactions, ack, _) = pool.take(8, usize::MAX);
+        assert_eq!(transactions.len(), 2);
+        assert_eq!(pool.metrics.pool_user_take_budget.get(), 1);
+        assert!(pool.metrics.pool_execution_backlog_wait_ms.get() > 1000);
+        ack(block(1));
+        assert_eq!(pool.queue_depth("user"), 5);
+
+        // The system transaction is now proposed in block 1, so later takes hold user
+        // transactions only. At a 1.2s wait against a 4s zero point, admission is about
+        // 70%, so 4 executions earn about 2.8 credits plus the floor: 3 user transactions.
+        backlog
+            .executed_transactions
+            .fetch_add(4, Ordering::Relaxed);
+        let (transactions, ack, _) = pool.take(8, usize::MAX);
+        assert_eq!(transactions.len(), 3);
+        assert_eq!(pool.metrics.pool_user_take_budget.get(), 3);
+        let admission = pool.metrics.pool_execution_pacer_admission_percentage.get();
+        assert!((55..=75).contains(&admission), "admission {admission}");
+        drop(ack);
+        assert_eq!(pool.queue_depth("user"), 5);
+
+        // Past the zero-admission wait, executions earn nothing and only the floor admits.
+        backlog.set_oldest_ready_wait(config.execution_backlog_admission_zero_at * 2);
+        backlog
+            .executed_transactions
+            .fetch_add(100, Ordering::Relaxed);
+        let (transactions, ack, _) = pool.take(8, usize::MAX);
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(
+            pool.metrics.pool_execution_pacer_admission_percentage.get(),
+            0
+        );
+        drop(ack);
+
+        // With nothing waiting, each execution earns a full credit while the lane still
+        // holds a backlog: 4 executions plus the floor admit 5 user transactions.
+        backlog.set_oldest_ready(None);
+        backlog
+            .executed_transactions
+            .fetch_add(4, Ordering::Relaxed);
+        let (transactions, ack, _) = pool.take(8, usize::MAX);
+        assert_eq!(transactions.len(), 5);
+        assert_eq!(
+            pool.metrics.pool_execution_pacer_admission_percentage.get(),
+            100
+        );
+        ack(block(2));
+        assert_eq!(pool.queue_depth("user"), 0);
+
+        // An empty user lane disengages pacing, so a bundle larger than any banked
+        // credits is taken whole.
+        let (_, ack, _) = pool.take(8, usize::MAX);
+        drop(ack);
+        pool.try_insert(
+            epoch,
+            70,
+            vec![transaction(), transaction(), transaction(), transaction()],
+        )
+        .unwrap();
+        let (transactions, ack, _) = pool.take(8, usize::MAX);
+        assert_eq!(transactions.len(), 4);
+        ack(block(3));
+        pool.close();
     }
 
     #[tokio::test]

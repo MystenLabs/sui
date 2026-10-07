@@ -43,16 +43,19 @@
 //! `mysten_common::sync::execution_permit` for the prior mechanism.
 
 use std::cmp::Reverse;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet, VecDeque};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
 use mysten_common::{debug_fatal, fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
 use sui_macros::fail_point_async;
+use sui_types::digests::TransactionDigest;
 use sui_types::execution::ExecutionOutput;
 use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
+use tokio::time::Instant;
 use tracing::{Instrument, debug, error_span, info, trace, warn};
 
 use crate::authority::AuthorityState;
@@ -89,6 +92,42 @@ impl PartialOrd for QueuedCertificate {
 impl Ord for QueuedCertificate {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.index().cmp(&other.index())
+    }
+}
+
+/// Tracks how long waiting transactions have been ready. The scheduler delivers
+/// certificates in ready order, so the earliest-ready transaction still waiting is the
+/// earliest arrival not yet admitted; admitted arrivals are skipped lazily from the front.
+/// The heap head is not usable for this: a dependency-released transaction carries an
+/// old causal index and a fresh ready time, and would read as no wait while older-ready
+/// transactions queue behind it.
+#[derive(Default)]
+struct WaitingAges {
+    arrivals: VecDeque<(Instant, TransactionDigest)>,
+    waiting: HashSet<TransactionDigest>,
+}
+
+impl WaitingAges {
+    fn arrived(&mut self, cert: &PendingCertificate) {
+        if let Some(ready_time) = cert.stats.ready_time {
+            let digest = *cert.certificate.digest();
+            self.arrivals.push_back((ready_time, digest));
+            self.waiting.insert(digest);
+        }
+    }
+
+    fn admitted(&mut self, digest: &TransactionDigest) {
+        self.waiting.remove(digest);
+    }
+
+    fn oldest_ready(&mut self) -> Option<Instant> {
+        while let Some((ready_time, digest)) = self.arrivals.front() {
+            if self.waiting.contains(digest) {
+                return Some(*ready_time);
+            }
+            self.arrivals.pop_front();
+        }
+        None
     }
 }
 
@@ -147,6 +186,7 @@ pub async fn execution_process(
 
     // Transactions that have arrived but are not yet admitted, ordered by causal index.
     let mut waiting: BinaryHeap<Reverse<QueuedCertificate>> = BinaryHeap::new();
+    let mut waiting_ages = WaitingAges::default();
 
     loop {
         let _scope = monitored_scope("ExecutionDriver::loop");
@@ -161,10 +201,14 @@ pub async fn execution_process(
                         info!("No more certificate will be received. Exiting executor ...");
                         return;
                     };
+                    waiting_ages.arrived(&pending_cert);
+                    waiting.push(Reverse(QueuedCertificate(pending_cert)));
                     if let Some(authority) = authority_state.upgrade() {
                         authority.metrics.execution_driver_dispatch_queue.dec();
+                        authority
+                            .execution_backlog
+                            .set_oldest_ready(waiting_ages.oldest_ready());
                     }
-                    waiting.push(Reverse(QueuedCertificate(pending_cert)));
                 }
                 next = pop(&mut waiting, &causal_admission) => break next,
                 _ = &mut rx_execution_shutdown => {
@@ -186,6 +230,11 @@ pub async fn execution_process(
             info!("Authority state has shutdown. Exiting ...");
             return;
         };
+
+        waiting_ages.admitted(certificate.digest());
+        authority
+            .execution_backlog
+            .set_oldest_ready(waiting_ages.oldest_ready());
 
         // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
         let epoch_store = authority.load_epoch_store_one_call_per_task();
@@ -270,6 +319,10 @@ pub async fn execution_process(
                             .metrics
                             .execution_driver_executed_transactions
                             .inc();
+                        authority
+                            .execution_backlog
+                            .executed_transactions
+                            .fetch_add(1, Ordering::Relaxed);
                     }
                     ExecutionOutput::EpochEnded => {
                         warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
