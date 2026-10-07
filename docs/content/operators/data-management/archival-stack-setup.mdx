@@ -459,7 +459,7 @@ The bitmap pipelines export `bitmap_watermark_lag_ms_*`, `bitmap_write_chunk_lat
 | `rpc_request_latency` | histogram | End-to-end request latency. |
 | `rpc_request_handler_latency` | histogram | Handler latency, by `path`. |
 | `rpc_first_chunk_latency` | histogram | Time to first streamed chunk, by `path`. |
-| `rpc_requests` | counter | Request count, by `status`. |
+| `rpc_requests` | counter | Request count, by `path` and `status`. For gRPC, `status` is the status the client received, taken from the trailers for streaming responses. Requests the client abandons (resets the stream or disconnects before the response completes) are counted as `canceled`. |
 | `rpc_inflight_requests` | gauge | Concurrent requests in flight, by `path`. |
 | `kv_get_latency_ms` | histogram | Bigtable read latency per batch request. |
 | `kv_get_latency_ms_per_key` | histogram | Bigtable read latency divided by batch size. |
