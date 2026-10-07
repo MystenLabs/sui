@@ -1,0 +1,177 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+// Non-moving uses of a reference result: a Copy for every use but the last, a Freeze when a
+// `&mut` is passed as `&`, and a Read when it is passed by value. Copies of a borrowed value stay
+// copies. A Read releases the reference where it appears in the argument list.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-50:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 12821200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+// --- copy and freeze of reference results ---
+
+task 2, lines 54-62:
+//# programmable
+// VALID: a `&mut` result copied, frozen, copied again, and moved on its last use
+//> 0: test::m::new();
+//> 1: test::m::inner_mut(Result(0));
+//> 2: test::m::use_mut<test::m::Inner>(Result(1));
+//> 3: test::m::use_imm<test::m::Inner>(Result(1));
+//> 4: test::m::use_mut<test::m::Inner>(Result(1));
+//> 5: test::m::use_imm<test::m::Inner>(Result(1));
+//> 6: test::m::delete(Result(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 64-70:
+//# programmable
+// VALID: an immutable result copied and moved
+//> 0: test::m::new();
+//> 1: test::m::inner(Result(0));
+//> 2: test::m::use_imm<test::m::Inner>(Result(1));
+//> 3: test::m::use_imm<test::m::Inner>(Result(1));
+//> 4: test::m::delete(Result(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 72-79:
+//# programmable --inputs 5
+// VALID: a frozen use of the `&mut` result does not end its mutability
+//> 0: test::m::new();
+//> 1: test::m::inner_mut(Result(0));
+//> 2: test::m::use_imm<test::m::Inner>(Result(1));
+//> 3: test::m::f_mut(Result(1));
+//> 4: test::m::write(Result(3), Input(0));
+//> 5: test::m::delete(Result(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 81-84:
+//# programmable --sender A --inputs 1000
+// VALID: `&Coin<SUI>` from a `&mut` gas reference
+//> 0: test::m::id_mut<sui::coin::Coin<sui::sui::SUI>>(Gas);
+//> 1: test::m::value_at_least(Result(0), Input(0));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 6, lines 86-95:
+//# programmable --inputs 7 0
+// VALID: freezing the parent permits a read while its mutable child is live; the copy keeps the old value
+//> 0: test::m::new();
+//> 1: test::m::inner_mut(Result(0));
+//> 2: test::m::f_mut(Result(1));
+//> 3: test::m::copy_inner(Result(1));
+//> 4: test::m::write(Result(2), Input(0));
+//> 5: test::m::check_inner(Result(1), Input(0));
+//> 6: test::m::check_inner(Result(3), Input(1));
+//> 7: test::m::delete(Result(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+// --- copies of a borrowed value ---
+
+task 7, lines 99-101:
+//# programmable --inputs 0 7
+// VALID: copy first, then `&mut`, in one call
+//> 0: test::m::copy_mut(Input(0), Input(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, lines 103-105:
+//# programmable --inputs 0 7
+// VALID: `&mut` first, then copy, in one call
+//> 0: test::m::mut_copy(Input(0), Input(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, lines 107-112:
+//# programmable --inputs 0 7
+// VALID: copy of a pure input while a `&mut` result into it is live, a later use sees the write
+//> 0: test::m::id_mut<u64>(Input(0));
+//> 1: test::m::take(Input(0));
+//> 2: test::m::write(Result(0), Input(1));
+//> 3: test::m::check(Input(0), Input(1));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, lines 114-118:
+//# programmable --inputs 7
+// VALID: the last copy of a borrowed value stays a copy, the reference is still usable after
+//> 0: test::m::id_mut<u64>(Input(0));
+//> 1: test::m::take(Input(0));
+//> 2: test::m::write(Result(0), Input(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, lines 120-126:
+//# programmable --inputs 7 0
+// VALID: copy of a struct result while a reference into its field is live; the copy has the old value, the original the write
+//> 0: test::m::inner_val();
+//> 1: test::m::f_mut(Result(0));
+//> 2: test::m::take_inner(Result(0), Input(1));
+//> 3: test::m::write(Result(1), Input(0));
+//> 4: test::m::check_inner(Result(0), Input(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, lines 128-134:
+//# programmable --inputs 7
+// VALID: the last by-value use of a borrowed copy-only value stays a copy, so the original is still there to consume
+//> 0: test::m::no_drop();
+//> 1: test::m::no_drop_f_mut(Result(0));
+//> 2: test::m::take_no_drop(Result(0));
+//> 3: test::m::write(Result(1), Input(0));
+//> 4: test::m::take_no_drop_check(Result(0), Input(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+// --- reads ---
+
+task 13, lines 138-143:
+//# programmable --inputs 42 7
+// VALID: the root is borrowed mutably again after a read that was the reference's last use
+//> 0: test::m::id_mut<u64>(Input(0));
+//> 1: test::m::check(Result(0), Input(0));
+//> 2: test::m::write(Input(0), Input(1));
+//> 3: test::m::check(Input(0), Input(1));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14, lines 145-150:
+//# programmable --inputs 1
+// VALID: the referent is consumed after a read that was the reference's last use
+//> 0: test::m::no_copy(Input(0));
+//> 1: test::m::value_ref(Result(0));
+//> 2: test::m::check(Result(1), Input(0));
+//> 3: test::m::take_no_copy(Result(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 15, lines 152-156:
+//# programmable --inputs 42
+// VALID: a by-reference use before the read leaves the reference in place for the read
+//> 0: test::m::id_mut<u64>(Input(0));
+//> 1: test::m::use_mut<u64>(Result(0));
+//> 2: test::m::check(Result(0), Input(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, lines 158-165:
+//# programmable --inputs 7 0
+// VALID: a by-value read of the parent while its mutable child is live, which the pre-regex bytecode verifier rejects as READREF_EXISTS_MUTABLE_BORROW_ERROR
+//> 0: test::m::inner_val();
+//> 1: test::m::id_mut<test::m::Inner>(Result(0));
+//> 2: test::m::f_mut(Result(1));
+//> 3: test::m::take_inner(Result(1), Input(1));
+//> 4: test::m::write(Result(2), Input(0));
+//> 5: test::m::check_inner(Result(1), Input(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

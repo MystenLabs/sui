@@ -1,0 +1,87 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+// A reference result that is never used is released at the end of the command that created it,
+// so it never blocks a later command. Dropping the reference does not drop the values returned
+// next to it.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-30:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8724800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 32-35:
+//# publish --upgradeable --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 42-47:
+//# programmable
+// VALID: an unused `&mut Inner`, the parent used mutably right after
+//> 0: test::m::new();
+//> 1: test::m::inner_mut(Result(0));
+//> 2: test::m::use_mut<test::m::Obj>(Result(0));
+//> 3: test::m::delete(Result(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 49-56:
+//# programmable --inputs 1
+// VALID: one of two sibling references unused, the parent of both then used
+//> 0: test::m::new();
+//> 1: test::m::inner_mut(Result(0));
+//> 2: test::m::f_g_mut(Result(1));
+//> 3: test::m::write(NestedResult(2,0), Input(0));
+//> 4: test::m::use_mut<test::m::Inner>(Result(1));
+//> 5: test::m::delete(Result(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 58-65:
+//# programmable
+// VALID: an unused reference next to a hot potato; the reference is dropped, the potato is consumed
+//> 0: test::m::new();
+//> 1: test::m::inner_mut(Result(0));
+//> 2: test::m::hot_and_ref(Result(1));
+//> 3: test::m::use_mut<test::m::Inner>(Result(1));
+//> 4: test::m::cool(NestedResult(2,0));
+//> 5: test::m::delete(Result(0));
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 67-72:
+//# programmable --sender A
+// VALID: the sibling reference unused and released, the potato closed against the parent
+//> 0: test::m::new();
+//> 1: test::m::open(Result(0));
+//> 2: test::m::close_with_parent(NestedResult(1,0), Result(0));
+//> 3: test::m::delete(Result(0));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, lines 74-78:
+//# programmable
+// VALID: an unused reference at the end of the transaction
+//> 0: test::m::new();
+//> 1: test::m::delete(Result(0));
+//> 2: sui::tx_context::digest();
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, lines 80-85:
+//# programmable --sender A --inputs object(2,1) 0u8 digest(q_2)
+// VALID: an unused reference into the ticket does not prevent Upgrade from consuming it
+//> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 1: test::m::id<sui::package::UpgradeTicket>(Result(0));
+//> 2: Upgrade(q_2, [sui, std], q, Result(0));
+//> 3: sui::package::commit_upgrade(Input(0), Result(2));
+created: object(9,0)
+mutated: object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
