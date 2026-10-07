@@ -350,7 +350,7 @@ pub fn summarize_path_cov(module: &CompiledModule, trace_map: &TraceMap) -> Modu
         BTreeMap<BTreeSet<(CodeOffset, CodeOffset)>, u64>,
     > = BTreeMap::new();
 
-    for (_, trace) in trace_map.exec_maps.iter() {
+    for trace in trace_map.exec_maps.values() {
         let mut call_stack: Vec<&FunctionInfo> = Vec::new();
         let mut path_stack: Vec<BTreeSet<(CodeOffset, CodeOffset)>> = Vec::new();
         let mut path_store: Vec<(Identifier, BTreeSet<(CodeOffset, CodeOffset)>)> = Vec::new();

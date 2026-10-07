@@ -351,7 +351,6 @@ impl<S: Send + Sync> SequentialConnection for Connection<'_, S> {}
 mod tests {
     use scoped_futures::ScopedFutureExt;
     use sui_indexer_alt_framework_store_traits::Connection as _;
-    use sui_indexer_alt_framework_store_traits::Store as _;
     use tempfile::TempDir;
 
     use super::*;

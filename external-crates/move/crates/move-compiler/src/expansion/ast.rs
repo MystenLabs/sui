@@ -880,7 +880,7 @@ impl fmt::Display for Address {
 
 impl fmt::Display for ModuleIdent_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}::{}", self.address, &self.module)
+        write!(f, "{}::{}", self.address, self.module)
     }
 }
 

@@ -1676,7 +1676,7 @@ impl KeyPairWithPath {
         let cell: OnceCell<Arc<SuiKeyPair>> = OnceCell::new();
         // OK to unwrap panic because authority should not start without all keypairs loaded.
         cell.set(Arc::new(read_keypair_from_file(&path).unwrap_or_else(
-            |e| panic!("Invalid keypair file at path {:?}: {e}", &path),
+            |e| panic!("Invalid keypair file at path {:?}: {e}", path),
         )))
         .expect("Failed to set keypair");
         Self {
@@ -1738,7 +1738,7 @@ impl AuthorityKeyPairWithPath {
         // OK to unwrap panic because authority should not start without all keypairs loaded.
         cell.set(Arc::new(
             read_authority_keypair_from_file(&path)
-                .unwrap_or_else(|_| panic!("Invalid authority keypair file at path {:?}", &path)),
+                .unwrap_or_else(|_| panic!("Invalid authority keypair file at path {:?}", path)),
         ))
         .expect("Failed to set authority keypair");
         Self {
@@ -1755,7 +1755,7 @@ impl AuthorityKeyPairWithPath {
                     // OK to unwrap panic because authority should not start without all keypairs loaded.
                     Arc::new(
                         read_authority_keypair_from_file(path).unwrap_or_else(|_| {
-                            panic!("Invalid authority keypair file {:?}", &path)
+                            panic!("Invalid authority keypair file {:?}", path)
                         }),
                     )
                 }

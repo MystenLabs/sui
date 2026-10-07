@@ -592,14 +592,9 @@ impl RuntimeObjectResolver for RestReadStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        Ok(self.get_object(child).and_then(|o| {
-            if o.version() <= child_version_upper_bound
+        Ok(self.get_object(child).filter(|o| {
+            o.version() <= child_version_upper_bound
                 && o.owner == Owner::ObjectOwner((*parent).into())
-            {
-                Some(o)
-            } else {
-                None
-            }
         }))
     }
 
@@ -878,14 +873,9 @@ impl RuntimeObjectResolver for RpcStoreReadStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        Ok(self.get_object(child).and_then(|o| {
-            if o.version() <= child_version_upper_bound
+        Ok(self.get_object(child).filter(|o| {
+            o.version() <= child_version_upper_bound
                 && o.owner == Owner::ObjectOwner((*parent).into())
-            {
-                Some(o)
-            } else {
-                None
-            }
         }))
     }
 

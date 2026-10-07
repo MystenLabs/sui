@@ -398,7 +398,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         let mut worker_id = 0;
         let mut num_workers = 0;
 
-        for (_, workloads) in workloads_by_group_id.iter() {
+        for workloads in workloads_by_group_id.values() {
             let mut workers = vec![];
 
             for workload in workloads {
@@ -492,7 +492,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 let mut num_in_flight: u64 = 0;
                 let mut num_submitted: u64 = 0;
                 let mut num_no_gas = 0;
-                for (_, v) in stat_collection.iter() {
+                for v in stat_collection.values() {
                     let duration = v.bench_stats.duration.as_secs() as f32;
 
                     // no reason to do any measurements when duration is zero as this will output NaN

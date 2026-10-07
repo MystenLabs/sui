@@ -993,9 +993,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                                 .unwrap();
 
                         let msg =
-                            format!("Owner: {}\nVersion: {}", &obj.owner, obj.version().value());
+                            format!("Owner: {}\nVersion: {}", obj.owner, obj.version().value());
                         let msg = if hide_contents {
-                            format!("{msg}\nType: {:#}", &move_struct.type_)
+                            format!("{msg}\nType: {:#}", move_struct.type_)
                         } else {
                             format!("{msg}\nContents: {move_struct:#}",)
                         };
@@ -1707,7 +1707,7 @@ impl SuiTestAdapter {
             .compiled_state
             .named_address_mapping
             .iter()
-            .map(|(name, addr)| (name.clone(), format!("{:#02x}", addr)));
+            .map(|(name, addr)| (name.clone(), format!("{:#x}", addr)));
 
         for (name, addr) in named_addrs {
             let addr = addr.to_string();

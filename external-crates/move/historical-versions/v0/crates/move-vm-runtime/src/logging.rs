@@ -15,7 +15,7 @@ pub fn expect_no_verification_errors(err: VMError) -> VMError {
             let message = format!(
                 "Unexpected verifier/deserialization error! This likely means there is code \
                 stored on chain that is unverifiable!\nError: {:?}",
-                &err
+                err
             );
             let (
                 _old_status,

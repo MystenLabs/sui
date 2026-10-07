@@ -152,13 +152,7 @@ impl ObjectStore for InMemoryStorage {
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         self.persistent
             .get(object_id)
-            .and_then(|obj| {
-                if obj.version() == version {
-                    Some(obj)
-                } else {
-                    None
-                }
-            })
+            .filter(|&obj| obj.version() == version)
             .cloned()
     }
 }
@@ -171,13 +165,7 @@ impl ObjectStore for &mut InMemoryStorage {
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
         self.persistent
             .get(object_id)
-            .and_then(|obj| {
-                if obj.version() == version {
-                    Some(obj)
-                } else {
-                    None
-                }
-            })
+            .filter(|&obj| obj.version() == version)
             .cloned()
     }
 }

@@ -89,7 +89,7 @@ impl Disassemble {
                     }
                     println!("{}", disassemble_string);
                     if debug {
-                        println!("\n{:#?}", &unit.unit.module)
+                        println!("\n{:#?}", unit.unit.module)
                     }
                 }
             }

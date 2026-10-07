@@ -729,7 +729,7 @@ impl TemporaryStore<'_> {
                     panic!(
                         "Failed to load object {to_authenticate:?}.\n \
                          If it cannot be loaded, we would expect it to be in the wrapped object map: {:#?}",
-                        &self.wrapped_object_containers
+                        self.wrapped_object_containers
                     )
                 };
 

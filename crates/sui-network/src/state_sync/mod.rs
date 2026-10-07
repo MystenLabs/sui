@@ -73,6 +73,7 @@ use tokio::{
 };
 use tracing::{debug, info, instrument, trace, warn};
 
+#[allow(clippy::result_large_err)]
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.StateSync.rs"));
 }
@@ -1775,6 +1776,9 @@ async fn sync_checkpoint_contents<S>(
     }
 }
 
+// Err hands the checkpoint back so the caller can retry it; Ok carries the same type, so boxing
+// the error would not shrink the Result.
+#[allow(clippy::result_large_err)]
 #[instrument(level = "debug", skip_all, fields(sequence_number = ?checkpoint.sequence_number()))]
 async fn sync_one_checkpoint_contents<S>(
     network: anemo::Network,
