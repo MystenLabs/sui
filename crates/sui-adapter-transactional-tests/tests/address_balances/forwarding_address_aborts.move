@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Deposits to forwarding-shaped addresses that cannot resolve fail the transaction instead of
-// stranding funds. Resolution happens at the end of execution, so every failure here is an
-// execution error without a command index, not a Move abort.
+// Deposits and objects sent to forwarding-shaped addresses that cannot resolve fail the
+// transaction instead of stranding anything. Resolution happens at the end of execution, so every
+// failure here is an execution error without a command index, not a Move abort.
 // The first registration is assigned master ID 0x52ca8647179c (LE bytes 9c174786ca52).
 
 //# init --addresses test=0x0 --accounts A B C
@@ -50,16 +50,21 @@ public fun send(recipient: address, ctx: &mut TxContext) {
 //> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
 
 //# programmable --sender B --inputs 1000 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101
-// Transferring a coin object to a forwarding address fails: objects are not rerouted yet.
+// Transferring a coin object to a forwarding address reroutes it to the master, with a
+// ForwardingTransfer event.
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1));
 
+//# view-object 7,0
+
 //# programmable --sender B --inputs @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101
-// So does transferring the gas coin itself.
-//> TransferObjects([Gas], Input(0));
+// So does an object sent from Move.
+//> test::thing::send(Input(0));
+
+//# view-object 9,0
 
 //# programmable --sender B --inputs @0x010000000000fafafafafafafafafa0001010101010101010101010101010101
-// And any other object, from Move, whether or not the forwarding address is registered.
+// An object sent to an unregistered forwarding address fails like a deposit would.
 //> test::thing::send(Input(0));
 
 //# programmable --sender B --inputs 1000 @0x00000000000000fafafafafafafafafa00010101010101010101010101010101

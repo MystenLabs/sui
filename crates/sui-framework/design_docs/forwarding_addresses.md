@@ -51,12 +51,15 @@ Defined in `crates/sui-types/src/forwarding_address.rs`; all integers little-end
 
 How the chain treats a recipient address:
 
-| Recipient                              | Balance deposit                                   | Object transfer |
-| -------------------------------------- | ------------------------------------------------- | --------------- |
-| No magic                               | Credited as today                                 | As today        |
-| Magic, variant <= max, id registered   | Credited to the master, `ForwardingDeposit` event | Fails           |
-| Magic, variant <= max, id unregistered | Aborts (code 1)                                   | Fails           |
-| Magic, variant > max                   | Aborts (code 2)                                   | Fails           |
+| Recipient                              | Balance deposit                                   | Object transfer                                      |
+| -------------------------------------- | ------------------------------------------------- | ---------------------------------------------------- |
+| No magic                               | Credited as today                                 | As today                                             |
+| Magic, variant <= max, id registered   | Credited to the master, `ForwardingDeposit` event | Owned by the master, `ForwardingTransfer` event      |
+| Magic, variant <= max, id unregistered | Transaction fails                                 | Transaction fails                                    |
+| Magic, variant > max                   | Transaction fails                                 | Transaction fails                                    |
+
+A master that is itself a forwarding address resolves again, up to `forwarding_address_max_hops`
+hops (3 at 139); a longer chain fails the transaction.
 
 Probabilities, for a key-derived address (32 random bytes): it collides with the magic with
 probability 2^-72, grinding a key whose address carries the magic costs about 2^72 hashes, and
@@ -97,24 +100,29 @@ goes to validators as gas, so there is no treasury or distribution question.
 
 ### Resolution at the end of execution
 
-Resolution is not Move code. `balance::send_funds` credits whatever address it is given; once Move
-execution has finished and the written objects and funds credits are known, the adapter
-(`execution/forwarding.rs`, called from `finish`) walks every funds credit and reroutes the ones
-whose target carries the magic:
+Resolution is not Move code. `balance::send_funds` credits whatever address it is given and
+`TransferObjects` sets whatever owner it is given; once Move execution has finished and the
+written objects and funds credits are known, the adapter (`execution/forwarding.rs`, called from
+`finish`) walks both and reroutes every recipient that carries the magic:
 
-1. Charge `forwarding_address_resolve_cost_base` for the recipient. If its variant exceeds
-   `forwarding_address_max_variant`, fail.
+1. Charge `forwarding_address_resolve_cost_base` for the recipient, once per address per
+   transaction. If its variant exceeds `forwarding_address_max_variant`, fail.
 2. Charge `forwarding_address_resolve_lookup_cost_base`, then read the master record from the
    store through `ImplicitSystemObjectResolver::forwarding_master(master_id)`. No record, or a
-   paused record: fail. A master that is itself a forwarding address: fail (chaining is the next
-   step).
-3. Rewrite the credit's target and accumulator object id to the master.
+   paused record: fail.
+3. If the master carries the magic, repeat from 1 for it, up to `forwarding_address_max_hops`
+   hops; beyond that, fail.
+4. Rewrite the recipient to the end of the chain: the object's owner, or the credit's target and
+   accumulator object id.
 
-Then emit one `ForwardingDeposit<T> { forwarding_address, master, amount }` per forwarding address
-and coin type on Move's behalf, with `amount` the sum of that address's credits in the
-transaction, charged like `event::emit` and counted against `max_num_event_emit`. The event states
-what the transaction paid to the address however many commands made up the payment, and splitting
-a payment into many credits cannot exhaust the event limit.
+Then emit events on Move's behalf, each charged like `event::emit` and counted against
+`max_num_event_emit`. Funds get one `ForwardingDeposit<T> { forwarding_address, master, amount }`
+per forwarding address passed through and coin type, with `amount` the sum of everything that
+passed through that address in the transaction: the event states what the transaction paid
+through the address however many commands made up the payment, splitting a payment into many
+credits cannot exhaust the event limit, and an intermediate master of a chain sees what flowed
+through it. Objects get one `ForwardingTransfer { forwarding_address, master, object_id }` per
+hop.
 
 `coin::send_funds(Gas, forwarding_address)` fails the transaction. The gas budget refund and the
 gas charge location follow the gas coin's recipient and are set outside `reroute`, so resolving it
@@ -123,17 +131,18 @@ budget minus gas used, which is known only after gas is charged, so no `Forwardi
 state what was paid and matching payments against invoices would have to account for gas. Payers
 split the amount off the gas coin instead. After gas charging, a post-execution invariant check
 asserts that no written object is owned by, and no accumulator write targets, a forwarding
-address. Charging happens before each read, so an unregistered id pays for its lookup,
-and every charge goes through the gas charger after Move execution, the same way the deny-list
-check charges its reads.
+address. Charging happens before each read, so an unregistered id pays for its lookup, and every
+charge goes through the gas charger after Move execution, the same way the deny-list check charges
+its reads.
 
 The policy lives in one place (`sui_move_natives::forwarding_address::Resolver`) and the adapter
 and `test_scenario` both call it; only gas, the shape of the written objects and the event type
-differ between them. Doing this in the adapter rather than in Move is what lets the same pass later reroute objects
-(`TransferObjects` never enters Move) and follow chains. It also means the failures are execution
-errors, not Move aborts: today they surface as `FeatureNotYetSupported`, because dedicated
-`ExecutionFailureStatus` variants are an on-wire change that the Rust SDK types must learn first
-(see "Path to production").
+differ between them. Doing this in the adapter rather than in Move is what makes objects and chains
+reachable at all:
+`TransferObjects` never enters Move, and a chain is a loop over registry reads. It also means the
+failures are execution errors, not Move aborts: today they surface as `FeatureNotYetSupported`,
+because dedicated `ExecutionFailureStatus` variants are an on-wire change that the Rust SDK types
+must learn first (see "Path to production").
 
 The read goes to the backing store, bounded by the registry version consensus assigned to the
 transaction, the same way object funds withdrawals read accumulator balances. The registry is an
@@ -147,14 +156,14 @@ The event carries the whole forwarding address rather than a parsed payload, so 
 record of the variant and payload; indexers slice bytes instead of depending on a parse whose
 meaning variant 0 does not define.
 
-### Objects cannot be sent to a forwarding address
+### Objects
 
-The same pass fails the transaction if any written object is owned by a forwarding address
-(`AddressOwner` or `ConsensusAddressOwner`), whether it got there through `TransferObjects`,
-`transfer::public_transfer` or a coin transfer. Nobody can sign for a forwarding address, so the
-object would be stranded. Rerouting objects to the master is the next step and needs an event of
-its own, since effects alone would lose the forwarding address. The check runs only once the
-feature flag is on, so pre-139 behaviour is untouched.
+An object whose new owner is a forwarding address (`AddressOwner` or `ConsensusAddressOwner`,
+from `TransferObjects`, `transfer::public_transfer` or a coin transfer) ends the transaction owned
+by the master, with a `ForwardingTransfer` event per hop so the issuer can tell which forwarding
+address it came through; effects alone would only show the master. A party object that grants a
+forwarding address permissions fails the transaction, since the address can never act. The pass
+runs only once the feature flag is on, so pre-139 behaviour is untouched.
 
 ### Protocol gating and rollout
 
@@ -163,6 +172,7 @@ feature flag is on, so pre-139 behaviour is untouched.
 | `create_forwarding_address_registry`              | flag     | on since 132 (devnet only)   |
 | `enable_forwarding_addresses`                     | flag     | on (devnet only)             |
 | `forwarding_address_max_variant`                  | u64      | 0                            |
+| `forwarding_address_max_hops`                     | u64      | 3                            |
 | `forwarding_address_resolve_cost_base`            | gas      | 52                           |
 | `forwarding_address_resolve_lookup_cost_base`     | gas      | 512 * `obj_access_cost_read_per_byte` |
 | `forwarding_address_register_cost_base`           | gas      | 1,000,000,000 (1M gas units) |
@@ -235,12 +245,12 @@ public fun increase_rotation_delay(registry: &mut ForwardingAddressRegistry, cap
 public fun is_forwarding_address(addr: address): bool;
 ```
 
-`ForwardingDeposit` is declared in Move so the type exists, but only the adapter emits it. Move
-aborts: 3 `EMasterIdsExhausted`, 4 `EInvalidRotationDelay` (outside 1..=30, or not an increase),
-5 `ENotMaster`, 6 `EForwardingAddressMaster`, 7 `ENoPendingRotation`, 8 `ERotationNotDue`.
-Resolution failures (unregistered id, paused id, unsupported variant, a master that is a
-forwarding address, an object sent to a forwarding address) are execution errors with no command
-index, reported as `FeatureNotYetSupported` for now.
+`ForwardingDeposit` and `ForwardingTransfer` are declared in Move so the types exist, but only the
+adapter emits them. Move aborts: 3 `EMasterIdsExhausted`, 4 `EInvalidRotationDelay` (outside
+1..=30, or not an increase), 5 `ENotMaster`, 6 `EForwardingAddressMaster`, 7 `ENoPendingRotation`,
+8 `ERotationNotDue`. Resolution failures (unregistered id, paused id, unsupported variant, chain
+longer than `forwarding_address_max_hops`) are execution errors with no command index, reported as
+`FeatureNotYetSupported` for now.
 
 ### Rust: `sui_types::forwarding_address`
 
@@ -267,9 +277,8 @@ index, reported as `FeatureNotYetSupported` for now.
 ### What a client does
 
 - Derive: `master_id` (from `MasterRegistered` or `MasterCap`), variant 0, a 16-byte payload.
-- Before sending, check for the magic. An address with the magic can only receive address-balance
-  deposits, and only if its id is registered and not paused; sending it an object fails the
-  transaction.
+- Before sending, check for the magic. Anything sent to an address with the magic reaches its
+  master if the id is registered and not paused, and fails the transaction otherwise.
 - To find who a forwarding address pays: read the registry's dynamic field `master_id ->
   MasterRecord` (GraphQL `dynamicField` works today).
 - To find what was paid: index `ForwardingDeposit<T>` by `(master, payload)`.
@@ -282,7 +291,7 @@ index, reported as `FeatureNotYetSupported` for now.
   would strand funds (the pattern becomes an ordinary address again), which is why a brake has to
   be a separate flag rather than disabling the feature.
 - **Collisions and grinding** are covered under the address format; a forwarding address is
-  worthless to control, so the only concern is accidental collision, at 2^-80 per address.
+  worthless to control, so the only concern is accidental collision, at 2^-72 per address.
 - **Spam.** Registration costs 1M gas units plus permanent storage, and the registry's id space is
   2^48.
 - **Determinism and replay.** Resolution reads a consensus-assigned version through the standard
@@ -306,8 +315,9 @@ is expected to be cold and is the only key that can redirect funds or resume dep
 - **Unpause** is cap-only. If the master key could unpause, a stolen master key would undo the
   owner's pause and keep draining during the rotation delay. A stolen cap can keep an id paused,
   but a stolen cap already controls rotation; the remedy is a new id.
-- **Rotation** is two-step. The cap proposes `new_master`, which must not carry the magic until
-  chaining lands; the proposal records `effective_epoch = current + rotation_delay_epochs`, and
+- **Rotation** is two-step. The cap proposes `new_master`, which must not carry the magic (chains
+  resolve, but whether rotation should be the way to build one is an open question); the proposal
+  records `effective_epoch = current + rotation_delay_epochs`, and
   anyone may finalize once the current epoch reaches it, so the cap can go back in the safe.
   Deposits keep going to the old master while pending: the "my key leaked" sequence is pause,
   propose, wait, finalize, unpause. Cancel is cap or current master, which is what stops a rotation
@@ -385,19 +395,16 @@ step adds dynamic fields next to the record instead of changing `MasterRecord`.
 - Registration fee through a native cost param (#28236).
 - Pause (either key, immediate) and two-step rotation (cap proposes, anyone finalizes after the
   registrant's delay, either key cancels), with lifecycle events (#28236).
-- End-of-execution rejection of objects sent to forwarding addresses (#28236).
+- Object rerouting with the `ForwardingTransfer` event, and chaining bounded by
+  `forwarding_address_max_hops` with the lookup charged per hop and deposits summed per address
+  passed through (follow-up to #28236).
 - Transactional, Move unit (`test_scenario`) and e2e coverage, including the staged upgrade and
   mixes with object funds withdrawals (#28236).
 
 ### Required before testnet
 
-- Object rerouting and chaining, in the same end-of-execution pass: objects owned by a forwarding
-  address go to the master with a `ForwardingTransfer { forwarding_address, master, object_id }`
-  event (effects alone lose the forwarding address); a master that is itself a forwarding address
-  resolves again, bounded by a protocol config `forwarding_address_max_hops`, with the lookup charged
-  per hop and an event per hop.
-- Dedicated `ExecutionFailureStatus` variants for unregistered id, unsupported variant, too many
-  hops and object-to-forwarding-address, replacing `FeatureNotYetSupported`. On-wire change: the
+- Dedicated `ExecutionFailureStatus` variants for unregistered id, unsupported variant and too
+  many hops, replacing `FeatureNotYetSupported`. On-wire change: the
   Rust SDK types (`sui-sdk-types`) and the gRPC proto must add the variants first, since this repo's
   conversions are exhaustive; produced only under the devnet guard until the SDKs ship.
 - Brake flag `freeze_forwarding_addresses`.
@@ -439,11 +446,10 @@ step adds dynamic fields next to the record instead of changing `MasterRecord`.
 - Should `register` accept a master other than the sender (for example a custodian registering
   on behalf of a cold wallet)? Today the master is always `ctx.sender()`, which also rules out a
   forwarding-shaped master by construction.
-- Chaining (a master that is itself a forwarding address) is planned, bounded by
-  `forwarding_address_max_hops`. Still open: the bound (3 to 5), and whether to emit one event per
-  hop, so intermediate masters see traffic, or one per credit with the first forwarding address,
-  the final master and the hop count. Until it lands, resolution fails on such a master, and
-  `propose_rotation` and any `register` that takes a master must reject the magic.
+- Chaining is bounded at 3 hops, with one summed `ForwardingDeposit` per address passed through.
+  Open: whether 3 is the right bound, and whether to let `propose_rotation` accept a
+  forwarding-shaped `new_master`. Today it rejects one, so no chain can be built on chain; chains
+  become reachable only through that or a `register` that takes a master.
 - Can an object address (a shared or owned object's ID) be a master, given nobody can sign for it
   and its balance is only reachable through object funds withdrawals?
 - Do issuers of regulated coins need to deny a single forwarding address, or is denying the master

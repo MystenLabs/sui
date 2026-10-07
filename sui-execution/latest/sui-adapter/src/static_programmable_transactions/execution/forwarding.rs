@@ -91,7 +91,7 @@ pub fn reroute(
     registry: &dyn ImplicitSystemObjectResolver,
     gas_charger: &mut GasCharger,
     sender: SuiAddress,
-    written_objects: &BTreeMap<ObjectID, Object>,
+    written_objects: &mut BTreeMap<ObjectID, Object>,
     accumulator_events: &mut [MoveAccumulatorEvent],
 ) -> Result<Vec<Event>, ExecutionError> {
     let mut gas = TransactionGas {
@@ -101,8 +101,8 @@ pub fn reroute(
     let events = Resolver::new(protocol_config, registry, &mut gas)
         .reroute(
             written_objects
-                .iter()
-                .map(|(id, object)| (*id, &object.owner)),
+                .iter_mut()
+                .map(|(id, object)| (*id, &mut object.owner)),
             accumulator_events,
         )
         .map_err(execution_error)?;

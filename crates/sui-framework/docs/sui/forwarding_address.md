@@ -8,9 +8,9 @@ Address layout: <code>[u48 <a href="../sui/forwarding_address.md#sui_forwarding_
 The master ID, magic and variant positions are fixed; the variant alone decides what the
 payload bytes mean. Variant 0 gives them no on-chain meaning.
 
-Resolution happens outside Move: at the end of every transaction, the adapter reroutes funds
-deposited to a forwarding address to the registered master and emits <code><a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingDeposit">ForwardingDeposit</a></code>.
-Objects cannot be sent to a forwarding address.
+Resolution happens outside Move: at the end of every transaction, the adapter reroutes objects
+and funds whose recipient is a forwarding address to the registered master, following the
+chain when the master is itself a forwarding address, and emits the events declared here.
 
 Two keys control an id. The master receives the funds and is expected to be hot. The
 <code><a href="../sui/forwarding_address.md#sui_forwarding_address_MasterCap">MasterCap</a></code> is expected to be cold and is the only thing that can move funds elsewhere, through
@@ -26,6 +26,7 @@ delay.
 -  [Struct `PendingRotation`](#sui_forwarding_address_PendingRotation)
 -  [Struct `MasterIdCounter`](#sui_forwarding_address_MasterIdCounter)
 -  [Struct `ForwardingDeposit`](#sui_forwarding_address_ForwardingDeposit)
+-  [Struct `ForwardingTransfer`](#sui_forwarding_address_ForwardingTransfer)
 -  [Struct `MasterRegistered`](#sui_forwarding_address_MasterRegistered)
 -  [Struct `Paused`](#sui_forwarding_address_Paused)
 -  [Struct `Unpaused`](#sui_forwarding_address_Unpaused)
@@ -242,7 +243,7 @@ Dynamic field key for the next master ID counter (a <code>u64</code>; the last 4
 ## Struct `ForwardingDeposit`
 
 Emitted by the adapter when funds deposited to a forwarding address are rerouted to its
-master. <code>T</code> is the coin type of the <code>Balance</code> deposited.
+master, once per hop. <code>T</code> is the coin type of the <code>Balance</code> deposited.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingDeposit">ForwardingDeposit</a>&lt;<b>phantom</b> T&gt; <b>has</b> <b>copy</b>, drop
@@ -267,6 +268,44 @@ master. <code>T</code> is the coin type of the <code>Balance</code> deposited.
 </dd>
 <dt>
 <code>amount: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_forwarding_address_ForwardingTransfer"></a>
+
+## Struct `ForwardingTransfer`
+
+Emitted by the adapter when an object sent to a forwarding address is rerouted to its master,
+once per hop.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingTransfer">ForwardingTransfer</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code><a href="../sui/forwarding_address.md#sui_forwarding_address">forwarding_address</a>: <b>address</b></code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>master: <b>address</b></code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>object_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
 </dt>
 <dd>
 </dd>
@@ -743,7 +782,11 @@ The current master can pause without the cap, so a hot key can hit the brake.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_pause_by_master">pause_by_master</a>(registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">ForwardingAddressRegistry</a>, <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>: u64, ctx: &TxContext) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_pause_by_master">pause_by_master</a>(
+    registry: &<b>mut</b> <a href="../sui/forwarding_address.md#sui_forwarding_address_ForwardingAddressRegistry">ForwardingAddressRegistry</a>,
+    <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>: u64,
+    ctx: &TxContext,
+) {
     <a href="../sui/forwarding_address.md#sui_forwarding_address_assert_master">assert_master</a>(registry, <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>, ctx);
     <a href="../sui/forwarding_address.md#sui_forwarding_address_pause_impl">pause_impl</a>(registry, <a href="../sui/forwarding_address.md#sui_forwarding_address_master_id">master_id</a>);
 }

@@ -12,9 +12,9 @@ use sui_types::{
     execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus},
     forwarding_address::{
         FORWARDING_ADDRESS_MODULE_NAME, FORWARDING_ADDRESS_PAYLOAD_LENGTH,
-        FORWARDING_DEPOSIT_STRUCT_NAME, ForwardingAddress, ForwardingDeposit,
-        MASTER_REGISTERED_STRUCT_NAME, MasterRecord, MasterRecordKey, MasterRegistered,
-        RotationFinalized,
+        FORWARDING_DEPOSIT_STRUCT_NAME, FORWARDING_TRANSFER_STRUCT_NAME, ForwardingAddress,
+        ForwardingDeposit, ForwardingTransfer, MASTER_REGISTERED_STRUCT_NAME, MasterRecord,
+        MasterRecordKey, MasterRegistered, RotationFinalized,
     },
     gas_coin::GAS,
     object::Owner,
@@ -160,6 +160,7 @@ fn set_forwarding_address_config_for_testing(config: &mut ProtocolConfig) {
     );
     config.set_forwarding_address_register_cost_base_for_testing(REGISTER_COST);
     config.set_forwarding_address_max_variant_for_testing(0);
+    config.set_forwarding_address_max_hops_for_testing(3);
 }
 
 fn forwarding_address_test_env(enable_forwarding_addresses: bool) -> TestEnvBuilder {
@@ -1084,4 +1085,71 @@ async fn test_pause_and_rotation_policy() {
     assert_eq!(env.get_sui_balance_ab(master), 2 * amount);
     assert_eq!(env.get_sui_balance_ab(new_master), amount);
     assert_forwarding_deposit_event(&env, &digest, forwarding_address, new_master, amount);
+}
+
+/// Objects sent to a forwarding address end up owned by the master, with a `ForwardingTransfer`
+/// event naming the forwarding address, whether sent by `TransferObjects` or from Move.
+#[sim_test]
+async fn test_objects_sent_to_forwarding_addresses_reach_the_master() {
+    let mut env = forwarding_address_test_env(true).build().await;
+    let master = env.get_sender(0);
+    let sender = env.get_sender(1);
+    let registration = register_master(&mut env, master).await;
+    let forwarding_address = ForwardingAddress::derive_opaque(registration.master_id, PAYLOAD);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let amount = builder.pure(1_000u64).unwrap();
+    let coin = builder.command(sui_types::transaction::Command::SplitCoins(
+        Argument::GasCoin,
+        vec![amount],
+    ));
+    builder.transfer_arg(forwarding_address, coin);
+    let transaction = TransactionData::new_programmable(
+        sender,
+        vec![env.get_gas_for_sender(sender)[0]],
+        builder.finish(),
+        10_000_000,
+        env.rgp,
+    );
+    let (digest, effects) = env.exec_tx_directly(transaction).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    let (coin_ref, owner) = effects.created().into_iter().next().unwrap();
+    assert_eq!(owner, Owner::AddressOwner(master), "{effects:?}");
+
+    let events = get_events(&env, &digest);
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(
+        events[0].type_.name.as_ident_str(),
+        FORWARDING_TRANSFER_STRUCT_NAME
+    );
+    assert_eq!(
+        bcs::from_bytes::<ForwardingTransfer>(&events[0].contents).unwrap(),
+        ForwardingTransfer {
+            forwarding_address,
+            master,
+            object_id: coin_ref.0,
+        }
+    );
+
+    // Unregistered id: the object is not stranded, the transaction fails.
+    let unregistered = ForwardingAddress::derive_opaque(0, PAYLOAD);
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let amount = builder.pure(1_000u64).unwrap();
+    let coin = builder.command(sui_types::transaction::Command::SplitCoins(
+        Argument::GasCoin,
+        vec![amount],
+    ));
+    builder.transfer_arg(unregistered, coin);
+    let transaction = TransactionData::new_programmable(
+        sender,
+        vec![env.get_gas_for_sender(sender)[0]],
+        builder.finish(),
+        10_000_000,
+        env.rgp,
+    );
+    let (_, effects) = env.exec_tx_directly(transaction).await.unwrap();
+    assert_forwarding_unresolvable(
+        effects.status(),
+        "object to an unregistered forwarding address",
+    );
 }
