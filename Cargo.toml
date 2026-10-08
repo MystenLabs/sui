@@ -617,13 +617,13 @@ move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack"
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "076bf5ad8cea140dc7cf5c5861c24a36acdf64ce" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "076bf5ad8cea140dc7cf5c5861c24a36acdf64ce" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "076bf5ad8cea140dc7cf5c5861c24a36acdf64ce", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "076bf5ad8cea140dc7cf5c5861c24a36acdf64ce", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "da61cd46013fdd65361e57f7b9d4ae2244f86430" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "da61cd46013fdd65361e57f7b9d4ae2244f86430" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "da61cd46013fdd65361e57f7b9d4ae2244f86430", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "da61cd46013fdd65361e57f7b9d4ae2244f86430", features = [
   "experimental",
 ] }
-fastcrypto-pq = { git = "https://github.com/MystenLabs/fastcrypto", rev = "076bf5ad8cea140dc7cf5c5861c24a36acdf64ce" }
+fastcrypto-pq = { git = "https://github.com/MystenLabs/fastcrypto", rev = "da61cd46013fdd65361e57f7b9d4ae2244f86430" }
 passkey-types = { version = "0.4.0" }
 passkey-client = { version = "0.4.0" }
 passkey-authenticator = { version = "0.4.0" }
@@ -645,7 +645,7 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "68adc31d
 
 # core-types from the new sdk for use in gRPC
 sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "2c5db7c2348a79582ac8ab2b03431899e4dd098d", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "2c5db7c2348a79582ac8ab2b03431899e4dd098d", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "2c5db7c2348a79582ac8ab2b03431899e4dd098d", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin", "mldsa65" ] }
 sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "2c5db7c2348a79582ac8ab2b03431899e4dd098d", features = [ "unstable" ] }
 
 ### Workspace Members ###
