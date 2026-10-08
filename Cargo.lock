@@ -15069,6 +15069,7 @@ dependencies = [
  "diesel",
  "diesel-async",
  "fastcrypto",
+ "fastcrypto-pq",
  "futures",
  "insta",
  "itertools 0.13.0",

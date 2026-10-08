@@ -22,6 +22,7 @@ bcs.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 fastcrypto.workspace = true
+fastcrypto-pq.workspace = true
 itertools.workspace = true
 prost.workspace = true
 prometheus.workspace = true

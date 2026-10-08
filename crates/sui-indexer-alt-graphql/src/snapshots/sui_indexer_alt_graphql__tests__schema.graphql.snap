@@ -4022,8 +4022,8 @@ type Query {
 	"""
 	Verify a signature is from the given `author`.
 	
-	Supports all signature types: Ed25519, Secp256k1, Secp256r1, MultiSig, ZkLogin, and
-	Passkey.
+	Supports all signature types: Ed25519, Secp256k1, Secp256r1, MultiSig, ZkLogin, Passkey,
+	and ML-DSA-65.
 	
 	Returns successfully if the signature is valid. If the signature is invalid, returns an
 	error with the reason for the failure.
