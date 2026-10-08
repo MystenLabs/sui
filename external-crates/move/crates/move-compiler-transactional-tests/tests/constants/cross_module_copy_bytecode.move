@@ -39,5 +39,5 @@ module 0x42::user {
     use 0x42::x;
     use 0x42::x_A;
 
-    public fun both(): u64 { x::A_B + x_A::B }
+    public fun both(): (u64, u64) { (x::A_B, x_A::B) }
 }

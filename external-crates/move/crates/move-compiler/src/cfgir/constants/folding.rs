@@ -438,6 +438,10 @@ fn verify_and_optimize(
         ICE_MSG
     );
 
+    // We do an initial pass to inline constants forcibly before running the optimizer to ensure
+    // constants used by other constants are always inlined (regardless of whether or the
+    // expression it is in would be folded)
+    inline_constant_values(constant_values, cfg);
     cfgir::optimize(
         context.env,
         context.reporter(),
@@ -447,6 +451,61 @@ fn verify_and_optimize(
         constant_values,
         cfg,
     );
+}
+
+/// Replaces each use of a folded constant with its value. The optimizer only inlines values it
+/// can fold into an enclosing expression, but a constant body must reduce to a single value.
+fn inline_constant_values(values: &ConstantValues, cfg: &mut MutForwardCFG) {
+    fn command_exps_mut(cmd_: &mut H::Command_) -> Vec<&mut H::Exp> {
+        use H::Command_ as C;
+
+        match cmd_ {
+            C::IgnoreAndPop { exp, .. }
+            | C::Return { exp, .. }
+            | C::Abort(_, exp)
+            | C::Assign(_, _, exp)
+            | C::JumpIf { cond: exp, .. }
+            | C::VariantSwitch { subject: exp, .. } => vec![exp],
+            C::Mutate(lhs, rhs) => vec![lhs, rhs],
+            C::Break(_) | C::Continue(_) | C::Jump { .. } => vec![],
+        }
+    }
+
+    for block in cfg.blocks_mut().values_mut() {
+        for sp!(_, cmd_) in block.iter_mut() {
+            for e in command_exps_mut(cmd_) {
+                inline_constant_values_exp(values, e);
+            }
+        }
+    }
+}
+
+#[growing_stack]
+fn inline_constant_values_exp(values: &ConstantValues, e: &mut H::Exp) {
+    use H::UnannotatedExp_ as E;
+
+    match &mut e.exp.value {
+        e_ @ E::Constant(_, _) => {
+            let E::Constant(m, c) = e_ else {
+                unreachable!()
+            };
+            if let Some(value) = values.get(&(*m, *c)) {
+                *e_ = E::Value(value.clone());
+            }
+        }
+        E::UnaryExp(_, base) | E::Cast(base, _) => inline_constant_values_exp(values, base),
+        E::BinopExp(lhs, _, rhs) => {
+            inline_constant_values_exp(values, lhs);
+            inline_constant_values_exp(values, rhs)
+        }
+        E::Vector(_, _, _, args) | E::Multiple(args) => {
+            for arg in args {
+                inline_constant_values_exp(values, arg);
+            }
+        }
+        // other forms cannot appear in constant bodies
+        _ => (),
+    }
 }
 
 fn check_constant_value(ctxt: &mut Context, module: ModuleIdent, e: &H::Exp) {

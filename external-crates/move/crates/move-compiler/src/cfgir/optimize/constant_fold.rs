@@ -106,20 +106,9 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
         | E::BorrowLocal(_, _)
         | E::Move { .. }
         | E::Copy { .. }
+        | E::Constant(_, _)
         | E::ErrorConstant { .. }
         | E::Unreachable => false,
-
-        e_ @ E::Constant(_, _) => {
-            let E::Constant(module, name) = e_ else {
-                unreachable!()
-            };
-            if let Some(value) = context.constants.get(&(*module, *name)) {
-                *e_ = E::Value(value.clone());
-                true
-            } else {
-                false
-            }
-        }
 
         E::ModuleCall(mcall) => mcall.arguments.iter_mut().any(optimize_exp),
 
@@ -140,7 +129,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 _ => unreachable!(),
             };
             let changed = optimize_exp(er);
-            let v = match foldable_exp(er) {
+            let v = match foldable_exp(context, er) {
                 Some(v) => v,
                 None => return changed,
             };
@@ -157,8 +146,8 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let changed1 = optimize_exp(e1);
             let changed2 = optimize_exp(e2);
             let changed = changed1 || changed2;
-            let v1_opt = foldable_exp(e1);
-            let v2_opt = foldable_exp(e2);
+            let v1_opt = foldable_exp(context, e1);
+            let v2_opt = foldable_exp(context, e2);
             if let (Some(v1), Some(v2)) = (v1_opt, v2_opt) {
                 if let Some(folded) = fold_binary_op(e.exp.loc, op, v1, v2) {
                     *e_ = folded;
@@ -177,7 +166,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 _ => unreachable!(),
             };
             let changed = optimize_exp(e);
-            let v = match foldable_exp(e) {
+            let v = match foldable_exp(context, e) {
                 Some(v) => v,
                 None => return changed,
             };
@@ -202,7 +191,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let mut vs = vec![];
             for earg in eargs {
                 let eloc = earg.exp.loc;
-                if let Some(v) = foldable_exp(earg) {
+                if let Some(v) = foldable_exp(context, earg) {
                     vs.push(sp(eloc, v.clone()));
                 } else {
                     return changed;
@@ -455,9 +444,15 @@ const fn evalue_(loc: Loc, v: Value_) -> UnannotatedExp_ {
 // Foldable Value
 //**************************************************************************************************
 
-fn foldable_exp(e: &Exp) -> Option<&Value_> {
+/// The value of `e` if it is statically known. Constants are not inlined, but their values are
+/// used so that enclosing expressions can be folded.
+fn foldable_exp<'a>(context: &Context<'a>, e: &'a Exp) -> Option<&'a Value_> {
     use UnannotatedExp_ as E;
     match &e.exp.value {
+        E::Constant(module, name) => context
+            .constants
+            .get(&(*module, *name))
+            .map(|sp!(_, v_)| v_),
         E::Value(sp!(_, v_)) => Some(v_),
         _ => None,
     }
@@ -520,10 +515,10 @@ fn check_cmd(context: &Context, sp!(_, cmd_): &Command) {
 /// errors is reported. If the expression cannot be evaluated statically (from an error or
 /// otherwise), returns `None`.
 #[growing_stack]
-fn check_exp<'a>(context: &Context, e: &'a Exp) -> Option<Cow<'a, Value_>> {
+fn check_exp<'a>(context: &Context<'a>, e: &'a Exp) -> Option<Cow<'a, Value_>> {
     use UnannotatedExp_ as E;
     match &e.exp.value {
-        E::Value(_) | E::Constant(_, _) => foldable_exp(e).map(Cow::Borrowed),
+        E::Value(_) | E::Constant(_, _) => foldable_exp(context, e).map(Cow::Borrowed),
 
         E::Unit { .. }
         | E::UnresolvedError

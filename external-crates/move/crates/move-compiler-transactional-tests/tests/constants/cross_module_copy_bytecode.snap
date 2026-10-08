@@ -44,12 +44,11 @@ Constants [
 // Move bytecode v7
 module 42.user {
 
-public both(): u64 {
+public both(): u64 * u64 {
 B0:
 	0: LdConst[0](u64: 3)
 	1: LdConst[1](u64: 4)
-	2: Add
-	3: Ret
+	2: Ret
 }
 
 Constants [
