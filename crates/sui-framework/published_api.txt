@@ -1807,6 +1807,12 @@ Clock
 timestamp_ms
 	public fun
 	0x2::clock
+now_ms
+	public fun
+	0x2::clock
+native_now_ms
+	fun
+	0x2::clock
 create
 	fun
 	0x2::clock

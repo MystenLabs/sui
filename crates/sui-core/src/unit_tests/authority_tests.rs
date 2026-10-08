@@ -55,7 +55,9 @@ use sui_types::{
     object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION, Owner},
     transaction::PlainTransactionWithClaims,
 };
-use sui_types::{SUI_CLOCK_OBJECT_SHARED_VERSION, digests::Digest};
+use sui_types::{
+    SUI_CLOCK_OBJECT_SHARED_VERSION, clock::Clock, digests::Digest, effects::UnchangedConsensusKind,
+};
 
 use crate::authority::authority_store::ObjectLockStatus;
 use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
@@ -2992,6 +2994,113 @@ async fn test_valid_immutable_clock_parameter() {
         .unwrap()
         .into_tx();
     handle_transaction_for_test(&authority_state, transaction).unwrap();
+}
+
+#[tokio::test]
+async fn test_implicit_clock_read_uses_pinned_version() {
+    // `clock::now_ms` reads the Clock at the version pinned for the transaction,
+    // not the latest version in the store.
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (authority_state, package_object_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
+
+    let genesis_clock = authority_state.get_object(&SUI_CLOCK_OBJECT_ID).unwrap();
+    let clock_at = |version: u64, timestamp_ms: u64| {
+        let move_object = genesis_clock.data.try_as_move().unwrap();
+        let mut clock: Clock = move_object.to_rust().unwrap();
+        clock.timestamp_ms = timestamp_ms;
+        let move_object = unsafe {
+            MoveObject::new_from_execution_with_limit(
+                move_object.type_().clone(),
+                false,
+                SequenceNumber::from_u64(version),
+                bcs::to_bytes(&clock).unwrap(),
+                u64::MAX,
+            )
+        }
+        .unwrap();
+        Object::new_move(
+            move_object,
+            genesis_clock.owner().clone(),
+            TransactionDigest::genesis_marker(),
+        )
+    };
+    let pinned_version = SequenceNumber::from_u64(2);
+    let latest_version = SequenceNumber::from_u64(3);
+    authority_state
+        .insert_objects_unsafe_for_testing_only(&[clock_at(pinned_version.value(), 200)])
+        .await
+        .unwrap();
+    authority_state
+        .insert_objects_unsafe_for_testing_only(&[clock_at(latest_version.value(), 300)])
+        .await
+        .unwrap();
+    assert_eq!(
+        authority_state
+            .get_object(&SUI_CLOCK_OBJECT_ID)
+            .unwrap()
+            .version(),
+        latest_version
+    );
+
+    let gas_ref =
+        Object::with_id_owner_for_testing(gas_object_id, sender).compute_object_reference();
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let tx_data = TransactionData::new_move_call(
+        sender,
+        package_object_ref.0,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("create_with_now_ms").to_owned(),
+        /* type_args */ vec![],
+        gas_ref,
+        vec![CallArg::Pure(bcs::to_bytes(&sender).unwrap())],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp,
+    )
+    .unwrap();
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
+    let executable =
+        VerifiedExecutableTransaction::new_from_consensus(transaction, epoch_store.epoch());
+    let env = ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
+        vec![],
+        SystemObjectVersions::from_map(BTreeMap::from([(
+            SUI_CLOCK_OBJECT_ID,
+            ConsensusObjectVersion {
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                version: pinned_version,
+            },
+        )])),
+    ));
+    let (effects, execution_error) = authority_state
+        .try_execute_executable_for_test(&executable, env)
+        .await;
+    let effects = effects.inner().data().clone();
+    assert!(
+        execution_error.is_none() && effects.status().is_ok(),
+        "{:?}",
+        effects.status()
+    );
+    assert!(
+        effects
+            .unchanged_consensus_objects()
+            .iter()
+            .any(|(id, kind)| *id == SUI_CLOCK_OBJECT_ID
+                && matches!(kind, UnchangedConsensusKind::ReadOnlyRoot((v, _)) if *v == pinned_version)),
+        "{:?}",
+        effects.unchanged_consensus_objects()
+    );
+    let ((created_id, _, _), _) = effects.created()[0];
+    let created = authority_state.get_object(&created_id).unwrap();
+    let contents = created.data.try_as_move().unwrap().contents();
+    // `object_basics::Object` is a UID followed by the u64 value.
+    let value = u64::from_le_bytes(contents[contents.len() - 8..].try_into().unwrap());
+    assert_eq!(value, 200);
 }
 
 #[tokio::test]

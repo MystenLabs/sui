@@ -419,6 +419,7 @@ const MAINNET_USDB: &str =
 //              Reduce the non-refundable storage fee from 1% to 0.01%.
 //              Allow random beacon DKG to complete after its timeout on devnet and testnet.
 //              Charge package inputs 1% of the per-byte object read cost.
+//              Add `sui::clock::now_ms`, which reads the Clock without a Clock input.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1911,6 +1912,10 @@ pub struct ProtocolConfig {
     tx_context_ids_created_cost_base: Option<u64>,
     tx_context_replace_cost_base: Option<u64>,
 
+    // `clock` module
+    // Cost params for the Move native function `native_now_ms(): u64`
+    clock_now_ms_cost_base: Option<u64>,
+
     // Types
     // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
     types_is_one_time_witness_cost_base: Option<u64>,
@@ -2854,6 +2859,9 @@ impl ProtocolConfig {
             tx_context_gas_budget_cost_base: None,
             tx_context_ids_created_cost_base: None,
             tx_context_replace_cost_base: None,
+
+            // `clock` module
+            clock_now_ms_cost_base: None,
 
             // `types` module
             // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -4841,6 +4849,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_forwarding_addresses = true;
                         cfg.feature_flags.mldsa65_auth = true;
                     }
+                    cfg.clock_now_ms_cost_base = Some(52);
                     cfg.storage_rebate_rate = Some(9999);
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.allow_dkg_completion_after_timeout = true;

@@ -9,6 +9,8 @@ shared object that is created at 0x6 during genesis.
 -  [Struct `Clock`](#sui_clock_Clock)
 -  [Constants](#@Constants_0)
 -  [Function `timestamp_ms`](#sui_clock_timestamp_ms)
+-  [Function `now_ms`](#sui_clock_now_ms)
+-  [Function `native_now_ms`](#sui_clock_native_now_ms)
 -  [Function `create`](#sui_clock_create)
 -  [Function `consensus_commit_prologue`](#sui_clock_consensus_commit_prologue)
 
@@ -94,6 +96,10 @@ Sender is not @0x0 the system address.
 The <code><a href="../sui/clock.md#sui_clock">clock</a></code>'s current timestamp as a running total of
 milliseconds since an arbitrary point in the past.
 
+Prefer <code><a href="../sui/clock.md#sui_clock_now_ms">now_ms</a></code>, which returns the same value without requiring
+the <code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code> as a transaction input, so callers do not have to
+thread a <code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code> through to reach it.
+
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>(<a href="../sui/clock.md#sui_clock">clock</a>: &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>): u64
 </code></pre>
@@ -107,6 +113,57 @@ milliseconds since an arbitrary point in the past.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>(<a href="../sui/clock.md#sui_clock">clock</a>: &<a href="../sui/clock.md#sui_clock_Clock">Clock</a>): u64 {
     <a href="../sui/clock.md#sui_clock">clock</a>.<a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>
 }
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_clock_now_ms"></a>
+
+## Function `now_ms`
+
+The current timestamp in milliseconds, read without the <code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code>
+being a transaction input. Equal to <code><a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a></code> of a <code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code>
+passed into the same transaction, and preferred over it: it needs
+no input object, so any function can read the time without its
+callers having to pass a <code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code> down.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/clock.md#sui_clock_now_ms">now_ms</a>(): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/clock.md#sui_clock_now_ms">now_ms</a>(): u64 {
+    <a href="../sui/clock.md#sui_clock_native_now_ms">native_now_ms</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_clock_native_now_ms"></a>
+
+## Function `native_now_ms`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/clock.md#sui_clock_native_now_ms">native_now_ms</a>(): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/clock.md#sui_clock_native_now_ms">native_now_ms</a>(): u64;
 </code></pre>
 
 
