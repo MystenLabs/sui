@@ -158,11 +158,12 @@ fn verify_move_call<Mode: ExecutionMode>(
         let dep_version_id = ObjectID::from(dep_version_id);
         let selected = unified_linkage.0.linkage.get(&dep_original_id);
         if deps_are_pinned {
+            let selected_by_minversion = env.resolve_minversioned_package(dep_version_id)?;
             assert_invariant!(
-                selected == Some(&dep_version_id),
+                selected == Some(&dep_version_id) || selected == Some(&selected_by_minversion),
                 "MoveCall to {original_id} is not public, so its dependency {dep_original_id} \
-                 must be pinned to {dep_version_id}, but the transaction linkage selects \
-                 {selected:?}"
+                 must be pinned to {dep_version_id}, or its minversion selection \
+                 {selected_by_minversion}, but the transaction linkage selects {selected:?}"
             );
         } else {
             let Some(selected) = selected else {
