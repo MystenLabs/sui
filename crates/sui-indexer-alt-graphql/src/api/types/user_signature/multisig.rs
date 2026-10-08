@@ -9,7 +9,7 @@ use crate::api::scalars::base64::Base64;
 use crate::api::types::user_signature::passkey::PasskeySignature;
 use crate::api::types::user_signature::zklogin::ZkLoginSignature;
 use crate::api::types::user_signature::{
-    Ed25519Signature, Secp256k1Signature, Secp256r1Signature, SignatureScheme,
+    Ed25519Signature, MlDsa65Signature, Secp256k1Signature, Secp256r1Signature, SignatureScheme,
 };
 
 /// An aggregated multisig signature.
@@ -51,11 +51,19 @@ pub(crate) enum MultisigMemberPublicKey {
     Secp256r1(Secp256r1PublicKey),
     Passkey(PasskeyPublicKey),
     ZkLogin(ZkLoginPublicIdentifier),
+    MlDsa65(MlDsa65PublicKey),
 }
 
 /// An Ed25519 public key.
 #[derive(SimpleObject, Clone)]
 pub(crate) struct Ed25519PublicKey {
+    /// The raw public key bytes.
+    bytes: Option<Base64>,
+}
+
+/// An ML-DSA-65 (FIPS 204) public key.
+#[derive(SimpleObject, Clone)]
+pub(crate) struct MlDsa65PublicKey {
     /// The raw public key bytes.
     bytes: Option<Base64>,
 }
@@ -132,7 +140,10 @@ fn compressed_signature_to_scheme(sig: &CompressedSignature) -> Option<Signature
                 .ok()
                 .map(|native| SignatureScheme::Passkey(PasskeySignature { native }))
         }
-        CompressedSignature::MLDSA65(_) => None,
+        CompressedSignature::MLDSA65(b) => Some(SignatureScheme::MlDsa65(MlDsa65Signature {
+            signature: Some(Base64(b.0.to_vec())),
+            public_key: None,
+        })),
     }
 }
 
@@ -143,7 +154,7 @@ impl From<&sui_types::multisig::MultiSigPublicKey> for MultisigCommittee {
                 pk.pubkeys()
                     .iter()
                     .map(|(public_key, weight)| MultisigMember {
-                        public_key: MultisigMemberPublicKey::try_from(public_key).ok(),
+                        public_key: Some(MultisigMemberPublicKey::from(public_key)),
                         weight: Some(*weight),
                     })
                     .collect(),
@@ -153,12 +164,9 @@ impl From<&sui_types::multisig::MultiSigPublicKey> for MultisigCommittee {
     }
 }
 
-impl TryFrom<&PublicKey> for MultisigMemberPublicKey {
-    type Error = anyhow::Error;
-
-    /// Fails for member schemes with no GraphQL representation yet.
-    fn try_from(pk: &PublicKey) -> Result<Self, Self::Error> {
-        Ok(match pk {
+impl From<&PublicKey> for MultisigMemberPublicKey {
+    fn from(pk: &PublicKey) -> Self {
+        match pk {
             PublicKey::Ed25519(_) => MultisigMemberPublicKey::Ed25519(Ed25519PublicKey {
                 bytes: Some(Base64(pk.as_ref().to_vec())),
             }),
@@ -182,9 +190,9 @@ impl TryFrom<&PublicKey> for MultisigMemberPublicKey {
                         .unwrap_or_default(),
                 )
             }
-            PublicKey::MLDSA65(_) => {
-                anyhow::bail!("ML-DSA-65 multisig members have no GraphQL type yet")
-            }
-        })
+            PublicKey::MLDSA65(_) => MultisigMemberPublicKey::MlDsa65(MlDsa65PublicKey {
+                bytes: Some(Base64(pk.as_ref().to_vec())),
+            }),
+        }
     }
 }

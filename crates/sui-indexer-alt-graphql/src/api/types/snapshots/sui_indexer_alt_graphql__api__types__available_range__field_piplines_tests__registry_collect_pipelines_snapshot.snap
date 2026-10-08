@@ -849,6 +849,15 @@ MergeCoinsCommand.coin
 MergeCoinsCommand.coins
   => {}
 
+MlDsa65PublicKey.bytes
+  => {}
+
+MlDsa65Signature.signature
+  => {}
+
+MlDsa65Signature.publicKey
+  => {}
+
 MoveCallCommand.function
   => {}
 

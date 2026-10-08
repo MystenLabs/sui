@@ -788,11 +788,13 @@ mod tests {
                     .await
                     .unwrap()
                     .unwrap();
+                // Without a caller header, sui-rpc's client fills in its own version.
+                let sdk_default = sui_rpc::headers::MAX_PROTOCOL_VERSION.to_string();
                 assert_eq!(
                     headers
                         .get(X_SUI_CLIENT_PROTOCOL_VERSION)
                         .map(|v| v.to_str().unwrap()),
-                    version
+                    version.or(Some(sdk_default.as_str()))
                 );
                 assert!(!headers.contains_key("authorization"));
             }
