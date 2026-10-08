@@ -95,7 +95,7 @@ impl CheckpointFetcher for MockFetcher {
 /// Build a fully deserializable test `ProtoCheckpoint` at the given sequence number.
 /// Empty contents, default aggregate signature. `process_checkpoint` parses (but does not
 /// verify) the signature, so the default BLS bytes are accepted.
-pub(super) fn make_test_proto_checkpoint(seq: u64) -> ProtoCheckpoint {
+pub(crate) fn make_test_proto_checkpoint(seq: u64) -> ProtoCheckpoint {
     let contents = NativeCheckpointContents::new_with_digests_only_for_tests(vec![]);
     let summary = NativeCheckpointSummary {
         epoch: 0,
