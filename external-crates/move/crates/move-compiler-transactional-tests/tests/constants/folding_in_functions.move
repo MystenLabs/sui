@@ -5,6 +5,7 @@ module 0x42::m {
     const ONE: u64 = 1;
     const TWO: u64 = 2;
     const MAX_U16: u16 = 0xFFFF;
+    const FLAG: bool = true;
 
     // operations over constants are folded, so the constants are never loaded
     public fun binop(): u64 { ONE + TWO }
@@ -19,4 +20,9 @@ module 0x42::m {
     // the cast cannot be folded, so it remains and errors at runtime
     #[allow(always_errors)]
     public fun unfoldable(): u8 { MAX_U16 as u8 }
+
+    // branches on constant conditions are removed
+    public fun branch(): u64 { if (FLAG) ONE else TWO }
+
+    public fun short_circuit(x: bool): bool { FLAG && x }
 }

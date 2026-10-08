@@ -3,7 +3,7 @@ source: crates/move-transactional-test-runner/src/framework.rs
 ---
 processed 2 tasks
 
-task 1, lines 3-22:
+task 1, lines 3-28:
 //# print-bytecode
 // Move bytecode v7
 module 42.m {
@@ -39,9 +39,22 @@ B0:
 	2: Ret
 }
 
+public branch(): u64 {
+B0:
+	0: LdConst[0](u64: 1)
+	1: Ret
+}
+
+public short_circuit(x#0#0: bool): bool {
+B0:
+	0: MoveLoc[0](x#0#0: bool)
+	1: Ret
+}
+
 Constants [
 	0 => u64: 1
 	1 => u64: 2
 	2 => u16: 65535
+	3 => bool: true
 ]
 }
