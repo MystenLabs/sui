@@ -259,7 +259,7 @@ pub async fn execution_process(
 
             // Await unconditionally: once dispatched, execution always runs to completion
             // within the alive-epoch guard and is never detached at epoch end.
-            tokio::task::spawn_blocking(move || {
+            let result = tokio::task::spawn_blocking(move || {
                 let _enter = blocking_span.enter();
                 let _scope = monitored_scope("ExecutionDriver::blocking_task");
                 match authority.try_execute_immediately(
@@ -293,8 +293,13 @@ pub async fn execution_process(
                     }
                 }
             })
-            .await
-            .expect("transaction execution task panicked");
+            .await;
+            match result {
+                Ok(()) => {}
+                Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+                // Only runtime shutdown cancels the task, so there is nothing left to do.
+                Err(e) => info!("Transaction execution cancelled by runtime shutdown: {e}"),
+            }
         }.instrument(execution_span));
     }
 }
