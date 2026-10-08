@@ -612,7 +612,7 @@ impl AuthorityMetrics {
             .unwrap(),
             staggered_submission_excess_copies: register_histogram_with_registry!(
                 "staggered_submission_excess_copies",
-                "Per-commit duplicate copies beyond allowance of transactions without allowed proposers, feeding the staggered-submission activation signal",
+                "New excess copies of transactions without allowed proposers in each commit, accounting for copies in earlier commits while cached, feeding the staggered-submission activation signal",
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry,
             )
