@@ -526,6 +526,12 @@ impl WritebackCache {
             id: FullObjectID::Consensus((*object_id, initial_shared_version)),
             version,
         };
+        tracing::warn!(
+            ?object_id,
+            ?initial_shared_version,
+            ?version,
+            "causal admission diagnostic: execution blocking on implicit system object"
+        );
         // Block wait until the object is available at the requested version.
         // Note that before blocking, we check if the latest version already passed the requested version,
         // if so it must imply that we have already produced the requested version.
@@ -540,6 +546,12 @@ impl WritebackCache {
                     .is_some_and(|latest| latest.version() >= version)
                     .then_some(())
             },
+        );
+        tracing::warn!(
+            ?object_id,
+            ?initial_shared_version,
+            ?version,
+            "causal admission diagnostic: implicit system object wait completed"
         );
         self.metrics
             .implicit_system_object_read_wait_latency

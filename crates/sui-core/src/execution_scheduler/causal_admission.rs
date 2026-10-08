@@ -61,6 +61,15 @@ pub struct CausalAdmissionMetrics {
     next_admitted: IntGauge,
 }
 
+#[derive(Debug)]
+pub(crate) struct CausalAdmissionDiagnostics {
+    pub watermark: u64,
+    pub next_index: u64,
+    pub in_flight: usize,
+    pub done_above: Vec<u64>,
+    pub next_admitted: bool,
+}
+
 impl CausalAdmissionMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
@@ -293,6 +302,17 @@ impl CausalAdmission {
     /// Whether every assigned index is retired and nothing is in flight.
     pub fn is_quiescent(&self) -> bool {
         Self::is_quiescent_locked(&self.inner.lock())
+    }
+
+    pub(crate) fn diagnostics(&self) -> CausalAdmissionDiagnostics {
+        let inner = self.inner.lock();
+        CausalAdmissionDiagnostics {
+            watermark: inner.watermark,
+            next_index: inner.next_index,
+            in_flight: inner.in_flight,
+            done_above: inner.done_above.iter().copied().collect(),
+            next_admitted: inner.next_admitted,
+        }
     }
 
     fn is_quiescent_locked(inner: &AdmissionInner) -> bool {

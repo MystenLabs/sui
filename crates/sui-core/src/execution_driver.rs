@@ -53,6 +53,7 @@ use sui_macros::fail_point_async;
 use sui_types::execution::ExecutionOutput;
 use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
+use tokio::time::{Duration, sleep};
 use tracing::{Instrument, debug, error_span, info, trace, warn};
 
 use crate::authority::AuthorityState;
@@ -144,6 +145,28 @@ pub async fn execution_process(
     causal_admission: Arc<CausalAdmission>,
 ) {
     info!("Starting pending certificates execution process.");
+
+    let diagnostic_admission = causal_admission.clone();
+    let diagnostic_authority = authority_state.clone();
+    spawn_monitored_task!(async move {
+        loop {
+            sleep(Duration::from_secs(10)).await;
+            if diagnostic_authority.upgrade().is_none() {
+                return;
+            }
+            let state = diagnostic_admission.diagnostics();
+            if state.in_flight > 0 || state.watermark + 1 != state.next_index {
+                warn!(
+                    watermark = state.watermark,
+                    next_index = state.next_index,
+                    in_flight = state.in_flight,
+                    done_above = ?state.done_above,
+                    next_admitted = state.next_admitted,
+                    "causal admission diagnostic snapshot"
+                );
+            }
+        }
+    });
 
     // Transactions that have arrived but are not yet admitted, ordered by causal index.
     let mut waiting: BinaryHeap<Reverse<QueuedCertificate>> = BinaryHeap::new();
@@ -241,7 +264,13 @@ pub async fn execution_process(
         // Certificate execution is CPU-bound and can take significant time, so run it on a
         // blocking thread to avoid stalling the async runtime's worker threads.
         let epoch_store_clone = epoch_store.clone();
-        let execution_span = error_span!("execution_driver", tx_digest = ?digest);
+        let execution_span = error_span!(
+            "execution_driver",
+            tx_digest = ?digest,
+            causal_index = ?execution_env.causal_index,
+            accumulator_version = ?execution_env.assigned_versions.accumulator_version(),
+            system_object_versions = ?execution_env.assigned_versions.system_object_versions,
+        );
         // spawn_blocking runs on a thread that does not inherit the current tracing span,
         // so re-enter the span inside the blocking closure to keep execution logs attributed.
         let blocking_span = execution_span.clone();

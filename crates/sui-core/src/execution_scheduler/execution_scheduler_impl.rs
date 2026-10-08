@@ -41,7 +41,7 @@ use sui_types::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 use super::{PendingCertificate, overload_tracker::OverloadTracker};
 
@@ -290,6 +290,14 @@ impl ExecutionScheduler {
             return;
         }
 
+        warn!(
+            ?tx_digest,
+            causal_index = ?execution_env.causal_index,
+            ?missing_input_keys,
+            barrier_dependencies = ?execution_env.barrier_dependencies,
+            "causal admission diagnostic: transaction parked before execution driver"
+        );
+
         let _pending_guard = PendingGuard::new(&self, &cert);
         self.metrics
             .transaction_manager_num_enqueued_certificates
@@ -423,6 +431,20 @@ impl ExecutionScheduler {
         if certs.is_empty() {
             return;
         }
+        let pending: Vec<_> = certs
+            .iter()
+            .map(|(cert, env)| {
+                (
+                    *cert.digest(),
+                    env.causal_index,
+                    env.assigned_versions.accumulator_version(),
+                )
+            })
+            .collect();
+        warn!(
+            ?pending,
+            "causal admission diagnostic: transactions parked in funds withdraw scheduler"
+        );
         let scheduler = self.clone();
         let epoch_store = epoch_store.clone();
         spawn_monitored_task!(async move {
@@ -477,6 +499,15 @@ impl ExecutionScheduler {
         if tx_with_keys.is_empty() {
             return;
         }
+
+        let pending: Vec<_> = tx_with_keys
+            .iter()
+            .map(|(key, env)| (key, env.causal_index))
+            .collect();
+        warn!(
+            ?pending,
+            "causal admission diagnostic: keyed transactions parked awaiting digest resolution"
+        );
 
         let scheduler = self.clone();
         let epoch_store = epoch_store.clone();
