@@ -7,10 +7,12 @@ use crate::{
 };
 use std::{
     borrow::Borrow,
-    collections::{BTreeMap, btree_map::Entry},
+    collections::{BTreeMap, BTreeSet, VecDeque, btree_map::Entry},
 };
 use sui_types::base_types::ObjectID;
-use sui_types::{error::ExecutionErrorTrait, execution_status::ExecutionErrorKind};
+use sui_types::{
+    error::ExecutionErrorTrait, execution_status::ExecutionErrorKind, package_config::MinVersion,
+};
 
 /// Unifiers. These are used to determine how to unify two packages.
 #[derive(Debug, Clone)]
@@ -35,6 +37,8 @@ pub struct PackageResolution {
     /// `ResolvedLinkage::update_for_publication` adds.
     pub version: Option<u64>,
 }
+
+pub(crate) type MinVersionResolver<'a, E> = dyn Fn(ObjectID) -> Result<Option<MinVersion>, E> + 'a;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResolutionTable {
@@ -199,18 +203,278 @@ pub(crate) fn add_and_unify<E: ExecutionErrorTrait, S: PackageStore + ?Sized>(
         *existing_unifier = existing_unifier.unify(&resolution)?;
     }
 
-    if !resolution_table
-        .all_versions_resolution_table
-        .contains_key(object_id)
-    {
-        resolution_table.all_versions_resolution_table.insert(
-            *object_id,
-            PackageResolution {
-                original_id: original_pkg_id,
-                version: Some(package.version()),
-            },
-        );
-    }
+    record_package_resolution(resolution_table, &package);
 
     Ok(())
+}
+
+fn record_package_resolution<P: PackageMetadata>(
+    resolution_table: &mut ResolutionTable,
+    package: &P,
+) {
+    resolution_table
+        .all_versions_resolution_table
+        .entry(package.version_id())
+        .or_insert(PackageResolution {
+            original_id: package.original_id(),
+            version: Some(package.version()),
+        });
+}
+
+/// The use-site constraint retained while selected packages are expanded.
+///
+/// Besides selecting the `VersionConstraint` constructor, this is part of the expansion key: an
+/// `Exact` expansion must not suppress a separate `AtLeast` expansion of the same package, or
+/// vice versa, because they impose different constraints on its dependencies.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) enum ConstraintKind {
+    Exact,
+    AtLeast,
+}
+
+impl ConstraintKind {
+    fn resolution_fn<P: PackageMetadata>(self) -> fn(&P) -> Option<VersionConstraint> {
+        match self {
+            Self::Exact => VersionConstraint::exact,
+            Self::AtLeast => VersionConstraint::at_least,
+        }
+    }
+}
+
+/// Resolves package references and expands their direct linkage tables for one transaction.
+pub(crate) struct LinkageStoreResolver<'a, S: PackageStore + ?Sized, E> {
+    store: &'a S,
+    minversion_resolver: Option<&'a MinVersionResolver<'a, E>>,
+    minversion_cache: BTreeMap<ObjectID, Option<MinVersion>>,
+    // A package must be expanded once per package/dependency constraint pair. Constraints are
+    // unified before consulting this set, so a stricter dependency context is never discarded.
+    expanded: BTreeSet<(ObjectID, ConstraintKind, ConstraintKind)>,
+}
+
+impl<'a, S: PackageStore + ?Sized, E: ExecutionErrorTrait> LinkageStoreResolver<'a, S, E> {
+    pub(crate) fn new(
+        store: &'a S,
+        minversion_resolver: Option<&'a MinVersionResolver<'a, E>>,
+    ) -> Self {
+        Self {
+            store,
+            minversion_resolver,
+            minversion_cache: BTreeMap::new(),
+            expanded: BTreeSet::new(),
+        }
+    }
+
+    pub(crate) fn store(&self) -> &S {
+        self.store
+    }
+
+    /// Resolve a package reference through its stable minversion selection.
+    pub(crate) fn resolve_package_id(&mut self, package_id: ObjectID) -> Result<ObjectID, E> {
+        Ok(self.load_package(&package_id)?.version_id())
+    }
+
+    /// Resolve a root package and add its selected linkage to the table.
+    pub(crate) fn resolve_package(
+        &mut self,
+        resolution_table: &mut ResolutionTable,
+        package_id: ObjectID,
+        package_constraint: ConstraintKind,
+        dependency_constraint: ConstraintKind,
+    ) -> Result<(), E> {
+        self.resolve_package_(
+            resolution_table,
+            package_id,
+            package_constraint,
+            dependency_constraint,
+            true,
+        )
+    }
+
+    /// Resolve one entry from an already-flattened linkage table.
+    ///
+    /// The entry's linkage only needs expansion when minversion selects a different package.
+    pub(crate) fn resolve_linkage_entry(
+        &mut self,
+        resolution_table: &mut ResolutionTable,
+        package_id: ObjectID,
+        package_constraint: ConstraintKind,
+        dependency_constraint: ConstraintKind,
+    ) -> Result<(), E> {
+        self.resolve_package_(
+            resolution_table,
+            package_id,
+            package_constraint,
+            dependency_constraint,
+            false,
+        )
+    }
+
+    fn resolve_package_(
+        &mut self,
+        resolution_table: &mut ResolutionTable,
+        package_id: ObjectID,
+        package_constraint: ConstraintKind,
+        dependency_constraint: ConstraintKind,
+        expand_root_linkage: bool,
+    ) -> Result<(), E> {
+        let mut pending = VecDeque::from([(
+            package_id,
+            package_constraint,
+            dependency_constraint,
+            expand_root_linkage,
+        )]);
+        while let Some((package_id, package_constraint, dependency_constraint, expand_linkage)) =
+            pending.pop_front()
+        {
+            let referenced_package = get_package(&package_id, self.store)?;
+            // Retain the historical reference for provenance. `add_and_unify` below records the
+            // selected executable package too, so linkage lookups work for both package IDs.
+            record_package_resolution(resolution_table, &referenced_package);
+            let package = self.load_package(&package_id)?;
+            let selected_id = package.version_id();
+            add_and_unify(
+                &selected_id,
+                self.store,
+                resolution_table,
+                package_constraint.resolution_fn(),
+            )?;
+
+            // Package linkage tables are already flattened. Preserve that behavior for unchanged
+            // entries, but expand a selected replacement so its linkage is used instead.
+            if !expand_linkage && selected_id == package_id {
+                continue;
+            }
+            if !self
+                .expanded
+                .insert((selected_id, package_constraint, dependency_constraint))
+            {
+                continue;
+            }
+            // The set deduplicates identical work, but retains distinct dependency constraints:
+            // each is unified above and must expand dependencies under its own context.
+            pending.extend(
+                resolution_table
+                    .config
+                    .linkage_table(&package)
+                    .into_values()
+                    .map(ObjectID::from)
+                    .map(|dependency_id| {
+                        (
+                            dependency_id,
+                            dependency_constraint,
+                            dependency_constraint,
+                            false,
+                        )
+                    }),
+            );
+        }
+        Ok(())
+    }
+
+    /// Collect original IDs from the selected graph without applying linkage constraints.
+    pub(crate) fn collect_original_ids(
+        &mut self,
+        resolution_table: &ResolutionTable,
+        package_id: ObjectID,
+        original_ids: &mut BTreeSet<ObjectID>,
+    ) -> Result<(), E> {
+        let mut pending = vec![package_id];
+        let mut visited = BTreeSet::new();
+        while let Some(package_id) = pending.pop() {
+            // Package-version rules apply only to user-package families. Skip system packages so
+            // they are neither recorded as runtime targets nor traversed. `load_package` has a
+            // separate guard because other callers still need to load system packages without
+            // resolving minversion through PackageConfig.
+            if sui_types::is_system_package(package_id) {
+                continue;
+            }
+            let package = self.load_package(&package_id)?;
+            if !visited.insert(package.version_id()) {
+                continue;
+            }
+            original_ids.insert(package.original_id());
+            pending.extend(
+                resolution_table
+                    .config
+                    .linkage_table(&package)
+                    .into_values()
+                    .map(ObjectID::from),
+            );
+        }
+        Ok(())
+    }
+
+    /// Collect exact package versions declared by a publish or upgrade, including transitive
+    /// dependencies. This bypasses minversion selection so forbid-list and minversion checks use
+    /// the versions recorded by the command, not versions selected for executable linkage.
+    pub(crate) fn collect_declared_package_versions(
+        &self,
+        resolution_table: &ResolutionTable,
+        package_ids: impl IntoIterator<Item = ObjectID>,
+        versions: &mut BTreeSet<(ObjectID, u64)>,
+    ) -> Result<(), E> {
+        let mut pending = package_ids.into_iter().collect::<Vec<_>>();
+        let mut visited = BTreeSet::new();
+        while let Some(package_id) = pending.pop() {
+            if sui_types::is_system_package(package_id) {
+                continue;
+            }
+            let package = get_package(&package_id, self.store)?;
+            if !visited.insert(package.version_id()) {
+                continue;
+            }
+            versions.insert((package.original_id(), package.version()));
+            pending.extend(
+                resolution_table
+                    .config
+                    .linkage_table(&package)
+                    .into_values()
+                    .map(ObjectID::from),
+            );
+        }
+        Ok(())
+    }
+
+    /// Load a reference through its stable minversion setting, caching one setting per package family.
+    pub(crate) fn load_package(&mut self, object_id: &ObjectID) -> Result<S::Package, E> {
+        let package = get_package(object_id, self.store)?;
+        // System packages have no PackageConfig entries. Return before invoking the resolver so
+        // system-package execution does not read PackageConfig.
+        if sui_types::is_system_package(package.version_id()) {
+            return Ok(package);
+        }
+        let Some(minversion_resolver) = self.minversion_resolver else {
+            return Ok(package);
+        };
+        let original_id = package.original_id();
+        let minversion = match self.minversion_cache.entry(original_id) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(minversion_resolver(original_id)?),
+        };
+        let Some(minversion) = minversion else {
+            return Ok(package);
+        };
+        // Minversion only raises older references. A reference that is already at or above the
+        // selected version remains unchanged.
+        if package.version() >= minversion.version {
+            return Ok(package);
+        }
+        let selected_id = minversion.package_id.bytes;
+        let selected = get_package::<E, _>(&selected_id, self.store).map_err(|error| {
+            E::new_with_source(
+                ExecutionErrorKind::InvalidLinkage,
+                format!("invalid minversion selection for package {original_id}: {error}"),
+            )
+        })?;
+        if selected.original_id() != original_id
+            || selected.version_id() != selected_id
+            || selected.version() != minversion.version
+        {
+            return Err(E::new_with_source(
+                ExecutionErrorKind::InvalidLinkage,
+                format!("invalid minversion selection for package {original_id}"),
+            ));
+        }
+        Ok(selected)
+    }
 }
