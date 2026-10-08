@@ -23,6 +23,7 @@ use crate::{
     dag_state::DagState,
     error::ConsensusError,
     network::{SerializedBlockForm, ValidatorNetworkClient, ValidatorNetworkService},
+    slim_block::{DecodeError, SlimBlockCodec},
     task::{join_and_propagate_panic, reap_finished_task},
 };
 
@@ -46,6 +47,7 @@ pub(crate) struct Subscriber<C: ValidatorNetworkClient, S: ValidatorNetworkServi
     network_client: Arc<C>,
     authority_service: Arc<S>,
     dag_state: Arc<RwLock<DagState>>,
+    slim_block_codec: Arc<SlimBlockCodec>,
     subscriptions: Arc<Mutex<Box<[Option<JoinHandle<()>>]>>>,
     // Retain replaced subscription tasks so stop() can await them and propagate panics.
     retired_subscriptions: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -58,6 +60,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         authority_service: Arc<S>,
         dag_state: Arc<RwLock<DagState>>,
     ) -> Self {
+        let slim_block_codec = Arc::new(SlimBlockCodec::new(context.clone()));
         let subscriptions = (0..context.committee.size())
             .map(|_| None)
             .collect::<Vec<_>>();
@@ -66,6 +69,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             network_client,
             authority_service,
             dag_state,
+            slim_block_codec,
             subscriptions: Arc::new(Mutex::new(subscriptions.into_boxed_slice())),
             retired_subscriptions: Arc::new(Mutex::new(Vec::new())),
         }
@@ -82,6 +86,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         // references so they do not become additional owners during shutdown.
         let authority_service = Arc::downgrade(&self.authority_service);
         let dag_state = Arc::downgrade(&self.dag_state);
+        let slim_block_codec = self.slim_block_codec.clone();
 
         let mut subscriptions = self.subscriptions.lock();
         self.unsubscribe_locked(peer, &mut subscriptions[peer.value()]);
@@ -90,6 +95,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
             network_client,
             authority_service,
             dag_state,
+            slim_block_codec,
             peer,
         )));
     }
@@ -134,6 +140,7 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
         network_client: Arc<C>,
         authority_service: Weak<S>,
         dag_state: Weak<RwLock<DagState>>,
+        slim_block_codec: Arc<SlimBlockCodec>,
         peer: AuthorityIndex,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
@@ -256,37 +263,68 @@ impl<C: ValidatorNetworkClient, S: ValidatorNetworkService> Subscriber<C, S> {
                         let Some(authority_service) = authority_service.upgrade() else {
                             return;
                         };
-                        // Nothing emits the slim form yet; the decoder that turns it
-                        // back into a full block lands with the codec. Until then a
-                        // slim payload can only come from a misbehaving peer: drop it
-                        // here rather than hand downstream a form it cannot parse.
-                        if matches!(block.block, SerializedBlockForm::Slim(_)) {
-                            let reason: &'static str =
-                                (&ConsensusError::UnexpectedBlockForm).into();
-                            context
-                                .metrics
-                                .node_metrics
-                                .subscribe_stream_form_failures
-                                .with_label_values(&[peer_hostname, reason])
-                                .inc();
-                            retries = 0;
-                            backoff.reset();
-                            continue 'stream;
-                        }
-                        let result = authority_service.handle_send_block(peer, block).await;
-                        if let Err(e) = result {
-                            match e {
-                                ConsensusError::BlockRejected { block_ref, reason } => {
-                                    debug!(
-                                        "Failed to process block from peer {} {} for block {:?}: {}",
-                                        peer, peer_hostname, block_ref, reason
-                                    );
+                        let mut block = block;
+                        // A slim payload is rebuilt into the full form here, against
+                        // local state. One that cannot be rebuilt is dropped rather
+                        // than passed on as an empty payload downstream would reject
+                        // as a peer fault -- the usual cause is an ancestor this node
+                        // has not accepted yet -- and is attributed by kind.
+                        let deliver = match &block.block {
+                            SerializedBlockForm::Full(_) => true,
+                            SerializedBlockForm::Slim(slim) => {
+                                let slim = slim.clone();
+                                let Some(dag_state) = dag_state.upgrade() else {
+                                    return;
+                                };
+                                let node_metrics = &context.metrics.node_metrics;
+                                node_metrics
+                                    .slim_blocks_received
+                                    .with_label_values(&[peer_hostname])
+                                    .inc();
+                                match slim_block_codec.decode(&slim, peer, &dag_state) {
+                                    Ok((_signed, serialized)) => {
+                                        block.block = SerializedBlockForm::Full(serialized);
+                                        true
+                                    }
+                                    Err(error) => {
+                                        node_metrics
+                                            .slim_block_decode_failures
+                                            .with_label_values(&[
+                                                peer_hostname,
+                                                error.metric_label(),
+                                            ])
+                                            .inc();
+                                        match error {
+                                            DecodeError::Malformed(_) => info!(
+                                                "Malformed slim block from peer {} {}: {}",
+                                                peer, peer_hostname, error
+                                            ),
+                                            DecodeError::NeedFullBlock { .. } => debug!(
+                                                "Cannot rebuild block from peer {} {}: {}",
+                                                peer, peer_hostname, error
+                                            ),
+                                        }
+                                        false
+                                    }
                                 }
-                                _ => {
-                                    info!(
-                                        "Invalid block received from peer {} {}: {}",
-                                        peer, peer_hostname, e
-                                    );
+                            }
+                        };
+                        if deliver {
+                            let result = authority_service.handle_send_block(peer, block).await;
+                            if let Err(e) = result {
+                                match e {
+                                    ConsensusError::BlockRejected { block_ref, reason } => {
+                                        debug!(
+                                            "Failed to process block from peer {} {} for block {:?}: {}",
+                                            peer, peer_hostname, block_ref, reason
+                                        );
+                                    }
+                                    _ => {
+                                        info!(
+                                            "Invalid block received from peer {} {}: {}",
+                                            peer, peer_hostname, e
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -509,9 +547,9 @@ mod test {
         }
     }
 
-    /// Slim payloads are dropped at the subscriber: nothing can decode them until the
-    /// codec lands, so they must never reach the authority service, while full payloads
-    /// on the same stream keep flowing.
+    /// A slim payload that cannot be rebuilt (here: garbage bytes) is dropped at the
+    /// subscriber and counted as malformed, while full payloads on the same stream
+    /// keep flowing.
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn subscriber_drops_slim_payloads_without_delivering() {
         let (context, _keys) = Context::new_for_test(4);
@@ -554,14 +592,14 @@ mod test {
             context
                 .metrics
                 .node_metrics
-                .subscribe_stream_form_failures
+                .slim_block_decode_failures
                 .with_label_values(&[
                     context.committee.authority(peer).hostname.as_str(),
-                    "UnexpectedBlockForm",
+                    "malformed",
                 ])
                 .get()
                 > 0,
-            "dropped slim payloads must be counted"
+            "undecodable slim payloads must be counted as malformed"
         );
     }
 
