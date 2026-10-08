@@ -667,6 +667,31 @@ vector.json
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       },
       {
+        "module_name": "forwarding_address",
+        "datatype_name": "MasterCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "forwarding_address",
+        "datatype_name": "MasterRecord",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "forwarding_address",
+        "datatype_name": "MasterIdCounter",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "forwarding_address",
+        "datatype_name": "ForwardingDeposit",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "forwarding_address",
+        "datatype_name": "MasterRegistered",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
         "module_name": "groth16",
         "datatype_name": "Curve",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
