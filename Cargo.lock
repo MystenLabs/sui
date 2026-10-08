@@ -871,7 +871,7 @@ dependencies = [
 [[package]]
 name = "anemo"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=68adc31d4ea1f4573f08c2c75317fcb205b823de#68adc31d4ea1f4573f08c2c75317fcb205b823de"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=845a9b5aab1f8b78fb67c0e8e1998cb2e6a4d72e#845a9b5aab1f8b78fb67c0e8e1998cb2e6a4d72e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -919,7 +919,7 @@ dependencies = [
 [[package]]
 name = "anemo-build"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=68adc31d4ea1f4573f08c2c75317fcb205b823de#68adc31d4ea1f4573f08c2c75317fcb205b823de"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=845a9b5aab1f8b78fb67c0e8e1998cb2e6a4d72e#845a9b5aab1f8b78fb67c0e8e1998cb2e6a4d72e"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -930,7 +930,7 @@ dependencies = [
 [[package]]
 name = "anemo-cli"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=68adc31d4ea1f4573f08c2c75317fcb205b823de#68adc31d4ea1f4573f08c2c75317fcb205b823de"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=845a9b5aab1f8b78fb67c0e8e1998cb2e6a4d72e#845a9b5aab1f8b78fb67c0e8e1998cb2e6a4d72e"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -946,7 +946,7 @@ dependencies = [
 [[package]]
 name = "anemo-tower"
 version = "0.0.0"
-source = "git+https://github.com/mystenlabs/anemo.git?rev=68adc31d4ea1f4573f08c2c75317fcb205b823de#68adc31d4ea1f4573f08c2c75317fcb205b823de"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=845a9b5aab1f8b78fb67c0e8e1998cb2e6a4d72e#845a9b5aab1f8b78fb67c0e8e1998cb2e6a4d72e"
 dependencies = [
  "anemo",
  "bytes",
@@ -9093,7 +9093,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=6b8e1e8cdce408e73d46538773fc85a56c082db7#6b8e1e8cdce408e73d46538773fc85a56c082db7"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=77f590c3333b0c4e3c2525e2695484c26995d064#77f590c3333b0c4e3c2525e2695484c26995d064"
 dependencies = [
  "ahash 0.7.8",
  "async-task",
@@ -9122,7 +9122,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=6b8e1e8cdce408e73d46538773fc85a56c082db7#6b8e1e8cdce408e73d46538773fc85a56c082db7"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=77f590c3333b0c4e3c2525e2695484c26995d064#77f590c3333b0c4e3c2525e2695484c26995d064"
 dependencies = [
  "darling 0.14.2",
  "proc-macro2",
