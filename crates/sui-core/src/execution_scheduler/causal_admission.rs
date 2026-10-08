@@ -29,7 +29,13 @@
 //! waiters enqueue - are index-less: never blocked by admission, though they occupy
 //! a concurrency slot when one is free.
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+    collections::BTreeSet,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use mysten_common::{assert_reachable, assert_sometimes, debug_fatal};
 use parking_lot::Mutex;
@@ -79,7 +85,7 @@ impl CausalAdmissionMetrics {
             .unwrap(),
             in_flight: register_int_gauge_with_registry!(
                 "causal_admission_in_flight",
-                "Transactions admitted for execution and not yet finished, including parked ones",
+                "Transactions currently consuming execution capacity; parked executions release it",
                 registry,
             )
             .unwrap(),
@@ -109,8 +115,8 @@ struct AdmissionInner {
     watermark: u64,
     /// Done indices > C, awaiting the gap below them to fill.
     done_above: BTreeSet<u64>,
-    /// Admitted (submitted for execution) transactions not yet finished. Includes
-    /// transactions blocked inside execution.
+    /// Admitted transactions currently consuming execution capacity. Transactions
+    /// blocked inside execution release capacity without retiring their causal index.
     in_flight: usize,
     /// Whether a causal-next admission (over the concurrency limit) is outstanding.
     /// At most one at a time, bounding in-flight at concurrency_limit + 1.
@@ -234,8 +240,11 @@ impl CausalAdmission {
         inner.in_flight += 1;
         self.publish(&inner);
         Some(InFlightSlot {
-            admission: self.clone(),
-            is_next,
+            capacity: Arc::new(CapacitySlot {
+                admission: self.clone(),
+                is_next,
+                released: AtomicBool::new(false),
+            }),
             retire_on_drop: Some(index),
         })
     }
@@ -253,8 +262,11 @@ impl CausalAdmission {
         inner.in_flight += 1;
         self.publish(&inner);
         Some(InFlightSlot {
-            admission: self.clone(),
-            is_next: false,
+            capacity: Arc::new(CapacitySlot {
+                admission: self.clone(),
+                is_next: false,
+                released: AtomicBool::new(false),
+            }),
             retire_on_drop: None,
         })
     }
@@ -333,15 +345,52 @@ impl CausalAdmission {
     }
 }
 
-/// A held execution-concurrency slot. Dropping it releases the slot and retires the
-/// admitted index - one lock and one driver wakeup for the whole completion.
-pub struct InFlightSlot {
+struct CapacitySlot {
     admission: Arc<CausalAdmission>,
     is_next: bool,
+    released: AtomicBool,
+}
+
+impl CapacitySlot {
+    fn release(&self) {
+        if self.released.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let mut inner = self.admission.inner.lock();
+        inner.in_flight -= 1;
+        if self.is_next {
+            inner.next_admitted = false;
+        }
+        self.admission.publish(&inner);
+        drop(inner);
+        self.admission.notify.notify_one();
+    }
+}
+
+/// Type-erased permit installed on the execution thread. Blocking sync primitives
+/// drop it before parking, which releases capacity but does not retire the index.
+pub struct ExecutionCapacityPermit(Arc<CapacitySlot>);
+
+impl Drop for ExecutionCapacityPermit {
+    fn drop(&mut self) {
+        self.0.release();
+    }
+}
+
+/// A causal-admission slot. Its capacity may be released early when execution parks,
+/// but its causal index is retired only when this owner is dropped after execution.
+pub struct InFlightSlot {
+    capacity: Arc<CapacitySlot>,
     retire_on_drop: Option<u64>,
 }
 
 impl InFlightSlot {
+    /// Returns a permit whose drop releases only the execution capacity. The slot
+    /// continues to own the causal index until execution completes.
+    pub fn capacity_permit(&self) -> ExecutionCapacityPermit {
+        ExecutionCapacityPermit(self.capacity.clone())
+    }
+
     /// Keeps the admitted causal index alive past this execution attempt, for a
     /// transaction that will be re-submitted under the same index (RetryLater).
     pub fn skip_retire(&mut self) {
@@ -351,17 +400,15 @@ impl InFlightSlot {
 
 impl Drop for InFlightSlot {
     fn drop(&mut self) {
-        let mut inner = self.admission.inner.lock();
-        inner.in_flight -= 1;
-        if self.is_next {
-            inner.next_admitted = false;
-        }
+        self.capacity.release();
+        let admission = &self.capacity.admission;
+        let mut inner = admission.inner.lock();
         if let Some(index) = self.retire_on_drop {
             CausalAdmission::mark_done_locked(&mut inner, index);
         }
-        self.admission.publish(&inner);
+        admission.publish(&inner);
         drop(inner);
-        self.admission.notify.notify_one();
+        admission.notify.notify_one();
     }
 }
 
@@ -465,6 +512,27 @@ mod tests {
         // index runs ahead of the watermark.
         drop(_s2);
         assert!(admission.try_admit(5).is_some());
+    }
+
+    #[test]
+    fn parked_execution_releases_capacity_without_retiring_index() {
+        let admission = CausalAdmission::new(1);
+        assign(&admission, 2);
+
+        let slot1 = admission.try_admit(1).unwrap();
+        let capacity = slot1.capacity_permit();
+        drop(capacity);
+
+        // Capacity is available to the producer, but index 1 remains live until its
+        // execution owner completes.
+        assert_eq!(admission.watermark_for_testing(), 0);
+        let slot2 = admission.try_admit(2).unwrap();
+        assert_eq!(admission.watermark_for_testing(), 0);
+
+        drop(slot1);
+        assert_eq!(admission.watermark_for_testing(), 1);
+        drop(slot2);
+        assert_eq!(admission.watermark_for_testing(), 2);
     }
 
     #[test]

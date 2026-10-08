@@ -34,18 +34,18 @@
 //! their waiters), though they occupy a concurrency slot when one is free. Any
 //! transaction bypassing admission must be unable to block.
 //!
-//! Execution occupies at most K+1 threads of the shared tokio blocking pool (whose
+//! Execution initially occupies at most K+1 threads of the shared tokio blocking pool (whose
 //! exhaustion by other subsystems would halt much of the node regardless), plus any
 //! settlement transactions that found no free slot. The settlement queue runs one
-//! settlement at a time, so those add at most one settlement's transactions. Parked
-//! transactions hold their concurrency slot; if that ever limits throughput, the
-//! escalation path is releasing the slot on park - see the deleted
-//! `mysten_common::sync::execution_permit` for the prior mechanism.
+//! settlement at a time, so those add at most one settlement's transactions. A
+//! transaction that actually parks releases execution capacity while retaining its
+//! causal index, preventing blocked executions from starving their producers.
 
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::sync::{Arc, Weak};
 
+use mysten_common::sync::execution_permit::set_execution_permit;
 use mysten_common::{debug_fatal, fatal, random::get_rng};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use rand::Rng;
@@ -260,6 +260,12 @@ pub async fn execution_process(
             // Await unconditionally: once dispatched, execution always runs to completion
             // within the alive-epoch guard and is never detached at epoch end.
             tokio::task::spawn_blocking(move || {
+                // Blocking sync primitives drop this permit before parking. That
+                // releases only execution capacity; `slot` keeps owning the causal
+                // index until this execution attempt finishes.
+                let _capacity_guard = slot
+                    .as_ref()
+                    .map(|slot| set_execution_permit(Box::new(slot.capacity_permit())));
                 let _enter = blocking_span.enter();
                 let _scope = monitored_scope("ExecutionDriver::blocking_task");
                 match authority.try_execute_immediately(
