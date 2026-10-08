@@ -38,7 +38,7 @@ use move_vm_runtime::{
 use smallvec::smallvec;
 use std::{
     borrow::Borrow,
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet, VecDeque},
 };
 use sui_types::{
@@ -82,10 +82,17 @@ pub struct InMemoryTestStore {
     /// for a transaction's funds withdrawal inputs. Object withdrawals are reserved by the object
     /// runtime instead, under different rules.
     address_reservations: RefCell<BTreeMap<(SuiAddress, TypeTag), U256>>,
+    /// Timestamp `clock::now_ms` returns. Unit tests have no consensus commits,
+    /// so the test-only Clock helpers set it; it starts at the genesis Clock's 0.
+    clock_timestamp_ms: Cell<u64>,
 }
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
 impl InMemoryTestStore {
+    pub(crate) fn set_clock_timestamp_ms(&self, timestamp_ms: u64) {
+        self.clock_timestamp_ms.set(timestamp_ms);
+    }
+
     fn settled_funds(&self, owner: SuiAddress, type_: &TypeTag) -> u128 {
         self.funds
             .borrow()
@@ -166,6 +173,10 @@ impl ImplicitSystemObjectResolver for InMemoryTestStore {
         type_: &TypeTag,
     ) -> sui_types::error::SuiResult<u128> {
         Ok(self.settled_funds(owner, type_))
+    }
+
+    fn clock_timestamp_ms(&self) -> sui_types::error::SuiResult<u64> {
+        Ok(self.clock_timestamp_ms.get())
     }
 }
 
