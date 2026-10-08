@@ -256,6 +256,9 @@ pub trait ImplicitSystemObjectResolver {
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
 
     fn clock(&self) -> SuiResult<Object>;
+
+    /// The master address registered for `master_id`, or `None` if it is unregistered.
+    fn forwarding_master(&self, master_id: u64) -> SuiResult<Option<SuiAddress>>;
 }
 
 pub struct DenyListResult {
