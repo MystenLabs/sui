@@ -189,11 +189,11 @@ impl Default for StaggerParams {
 
 /// Decides whether this validator should delay submitting a given user transaction to
 /// consensus, and by how much. Inactive by default; activated and deactivated by the
-/// commit-derived duplication signal (`record_commit`), which every honest validator
-/// computes from identical commit output, so the mode flips in lockstep without
-/// coordination. A validator that restarts mid-epoch rebuilds its windows only from the
-/// commits it processes after recovery, so its flip can lag peers by up to one window —
-/// acceptable for local policy.
+/// commit-derived duplication signal (`record_commit`). Validators processing the same
+/// commit history derive the same mode without coordination. A validator that restarts
+/// mid-epoch rebuilds both its signal window and cached copy counts from commits after
+/// recovery, so its mode can lag peers while that history is rebuilt — acceptable for
+/// local policy.
 pub struct StaggeredSubmission {
     active: AtomicBool,
     params: RwLock<StaggerParams>,
@@ -255,9 +255,9 @@ impl StaggeredSubmission {
     /// does a transition also flip staggering itself (and retune its hold cap to the
     /// band's). Returns the band entered on a transition (`None` otherwise), together
     /// with the window's duplication ratio — excess copies as a percentage of unique
-    /// user transactions, the value the band thresholds were compared against (zero
-    /// while the window holds no user transactions; can exceed 100 when duplication
-    /// dominates).
+    /// user transactions, the value the band thresholds were compared against. A
+    /// window without new unique transactions uses a denominator of one, so late
+    /// excess copies still activate the signal (and an empty window reads as zero).
     ///
     /// Activation suppresses the very duplication it measures, so under a sustained
     /// attack the signal still cycles, with a mostly-elevated duty cycle: once the
@@ -283,12 +283,9 @@ impl StaggeredSubmission {
             .fold((0u64, 0u64), |(excess, total), (e, t)| {
                 (excess + e, total + t)
             });
-        // An empty window reads as a zero ratio.
-        let duplication_ratio = if total == 0 {
-            0.0
-        } else {
-            excess as f64 / total as f64
-        };
+        // First occurrences can age out while late copies keep arriving. Do not hide
+        // that duplication just because the window contains no new transactions.
+        let duplication_ratio = excess as f64 / total.max(1) as f64;
 
         // The highest band whose enter ratio the window meets (0 if none).
         let target_band = SIGNAL_BANDS
@@ -835,6 +832,28 @@ mod tests {
                 ratio = staggered.record_commit(0, 100, true).1;
             }
             assert_eq!(ratio, 0.0);
+        }
+
+        #[tokio::test]
+        async fn late_copies_activate_without_new_unique_transactions() {
+            let staggered = StaggeredSubmission::new();
+            staggered.record_commit(0, 1, true);
+            for _ in 0..SIGNAL_WINDOW_COMMITS {
+                assert_eq!(staggered.record_commit(0, 0, true), (None, 0.0));
+            }
+
+            // The materiality floor still applies even though the ratio is large.
+            assert_eq!(
+                staggered.record_commit(SIGNAL_MIN_EXCESS_COPIES - 1, 0, true),
+                (None, (SIGNAL_MIN_EXCESS_COPIES - 1) as f64),
+            );
+            assert!(!staggered.is_active());
+            assert_eq!(
+                staggered.record_commit(1, 0, true),
+                (Some(2), SIGNAL_MIN_EXCESS_COPIES as f64),
+            );
+            assert!(staggered.is_active());
+            assert_eq!(staggered.params.read().max_delay, SIGNAL_BANDS[1].max_delay);
         }
 
         #[test]
