@@ -3177,17 +3177,25 @@ impl AuthorityPerEpochStore {
         // between calls. Claiming a root version would make every later call a
         // duplicate of the first version group and get it dropped by enqueue
         // deduplication (see `execution_scheduler::causal_admission`); versionless units
-        // bypass it. Tests that need a root version attach one explicitly.
+        // bypass it. Tests that need a root version attach one explicitly. The other
+        // implicitly read system objects keep their pins.
         Ok(AssignedTxAndVersions::new(
             assigned_versions
                 .0
                 .into_iter()
                 .map(|(key, versions)| {
+                    let system_object_versions = sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS
+                        .iter()
+                        .filter(|id| **id != sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                        .filter_map(|id| Some((*id, versions.system_object_versions.get(id)?)))
+                        .collect();
                     (
                         key,
                         AssignedVersions::new(
                             versions.shared_object_versions,
-                            sui_types::base_types::SystemObjectVersions::empty(),
+                            sui_types::base_types::SystemObjectVersions::from_map(
+                                system_object_versions,
+                            ),
                         ),
                     )
                 })
