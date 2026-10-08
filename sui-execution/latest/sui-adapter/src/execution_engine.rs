@@ -88,9 +88,7 @@ pub(crate) mod checked {
     };
 
     /// Whether `InsufficientFundsForWithdraw` appears anywhere in the early-error list.
-    fn any_error_is_insufficient_funds_for_withdraw(
-        execution_params: &ExecutionOrEarlyError,
-    ) -> bool {
+    fn should_short_circuit_insufficient_funds(execution_params: &ExecutionOrEarlyError) -> bool {
         execution_params.early_errors().is_some_and(|errors| {
             errors
                 .iter()
@@ -98,55 +96,40 @@ pub(crate) mod checked {
         })
     }
 
-    /// Whether to short-circuit an IFFW transaction. Matches the legacy short-circuit once
-    /// `early_exit_on_iffw` is on (constant at gas model v15+): any IFFW among the early errors
-    /// short-circuits, even when it is not the head error.
-    fn should_short_circuit_insufficient_funds(execution_params: &ExecutionOrEarlyError) -> bool {
-        any_error_is_insufficient_funds_for_withdraw(execution_params)
-    }
-
     fn payment_kind(
         gas_data: &GasData,
         transaction_kind: &TransactionKind,
     ) -> Result<PaymentKind, ExecutionError> {
-        Ok(
-            if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
-                PaymentKind::unmetered()
-            } else if is_gasless_transaction(gas_data, transaction_kind) {
-                PaymentKind::gasless()
-            } else if gas_data.payment.is_empty() {
-                PaymentKind::smash(vec![PaymentMethod::AddressBalance(
-                    gas_data.owner,
-                    gas_data.budget,
-                )])
-                .ok_or_else(|| {
-                    ExecutionError::invariant_violation(
-                        "unable to create a payment kind with a single address balance",
-                    )
-                })?
-            } else {
-                let payment_methods = gas_data
-                    .payment
-                    .iter()
-                    .map(|entry| {
-                        if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
-                            PaymentMethod::AddressBalance(
-                                gas_data.owner,
-                                parsed.reservation_amount(),
-                            )
-                        } else {
-                            PaymentMethod::Coin(*entry)
-                        }
-                    })
-                    .collect();
-                PaymentKind::smash(payment_methods).ok_or_else(|| {
-                    ExecutionError::invariant_violation(
-                        "unable to create a payment kind from the gas payment: \
-                     duplicate gas coin or reservation overflow",
-                    )
-                })?
-            },
-        )
+        if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
+            return Ok(PaymentKind::unmetered());
+        }
+        if is_gasless_transaction(gas_data, transaction_kind) {
+            return Ok(PaymentKind::gasless());
+        }
+        let payment_methods = if gas_data.payment.is_empty() {
+            vec![PaymentMethod::AddressBalance(
+                gas_data.owner,
+                gas_data.budget,
+            )]
+        } else {
+            gas_data
+                .payment
+                .iter()
+                .map(|entry| {
+                    if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
+                        PaymentMethod::AddressBalance(gas_data.owner, parsed.reservation_amount())
+                    } else {
+                        PaymentMethod::Coin(*entry)
+                    }
+                })
+                .collect()
+        };
+        PaymentKind::smash(payment_methods).ok_or_else(|| {
+            ExecutionError::invariant_violation(
+                "unable to create a payment kind from the gas payment: \
+                 duplicate gas coin or reservation overflow",
+            )
+        })
     }
 
     /// Everything `execute_transaction_to_effects` hands back to the executor layer.
@@ -207,7 +190,9 @@ pub(crate) mod checked {
         );
 
         let Finalized {
-            gas,
+            cost_summary,
+            gas_coin,
+            gas_status,
             status,
             timings,
             execution_result,
@@ -240,13 +225,10 @@ pub(crate) mod checked {
                 } else {
                     ExecutionStatus::Success
                 };
-                let coin = gas_charger.gas_coin();
                 Finalized {
-                    gas: GasOutcome {
-                        cost_summary: gas_cost_summary,
-                        coin,
-                        status: gas_charger.into_gas_status(),
-                    },
+                    cost_summary: gas_cost_summary,
+                    gas_coin: gas_charger.gas_coin(),
+                    gas_status: gas_charger.into_gas_status(),
                     status,
                     timings,
                     execution_result,
@@ -261,11 +243,9 @@ pub(crate) mod checked {
                 // Rebuild the store from its inputs, keeping only the input version bumps.
                 temporary_store = temporary_store.into_bump_only();
                 Finalized {
-                    gas: GasOutcome {
-                        cost_summary: GasCostSummary::default(),
-                        coin: None,
-                        status: gas_status,
-                    },
+                    cost_summary: GasCostSummary::default(),
+                    gas_coin: None,
+                    gas_status,
                     status: ExecutionStatus::new_failure(error.to_execution_failure()),
                     timings: vec![],
                     execution_result: Err(error),
@@ -274,11 +254,6 @@ pub(crate) mod checked {
         };
 
         // Shared infallible tail: trim the genesis dependency, build effects, telemetry.
-        let GasOutcome {
-            cost_summary,
-            coin,
-            status: gas_status,
-        } = gas;
         #[skip_checked_arithmetic]
         trace!(
             tx_digest = ?transaction_digest,
@@ -295,7 +270,7 @@ pub(crate) mod checked {
             transaction_dependencies,
             cost_summary,
             status,
-            coin,
+            gas_coin,
             *epoch_id,
         );
         // Skip VM telemetry on simulation paths (dev-inspect / dry-run) since a new runtime is
@@ -512,14 +487,10 @@ pub(crate) mod checked {
         }
     }
 
-    struct GasOutcome {
-        cost_summary: GasCostSummary,
-        coin: Option<ObjectID>,
-        status: SuiGasStatus,
-    }
-
     struct Finalized<Mode: ExecutionMode> {
-        gas: GasOutcome,
+        cost_summary: GasCostSummary,
+        gas_coin: Option<ObjectID>,
+        gas_status: SuiGasStatus,
         status: ExecutionStatus,
         timings: Vec<ExecutionTiming>,
         execution_result: Result<Mode::ExecutionResults, Mode::Error>,
@@ -585,14 +556,7 @@ pub(crate) mod checked {
             };
         }
 
-        let sponsor = {
-            let gas_owner = gas_data.owner;
-            if gas_owner == transaction_signer {
-                None
-            } else {
-                Some(gas_owner)
-            }
-        };
+        let sponsor = (gas_data.owner != transaction_signer).then_some(gas_data.owner);
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
@@ -731,7 +695,7 @@ pub(crate) mod checked {
                     .map(|_| v)
             });
 
-        let checks = check_effects::<Mode>(temporary_store, gas_charger, protocol_config, metrics);
+        let checks = check_effects::<Mode>(temporary_store, gas_charger, protocol_config, &metrics);
         // Execution error wins; otherwise a failed effects check fails the tx.
         let result = result.and_then(|v| checks.map(|()| v));
 
@@ -788,17 +752,13 @@ pub(crate) mod checked {
     }
 
     fn check_effects<Mode: ExecutionMode>(
-        temporary_store: &mut TemporaryStore<'_>,
-        gas_charger: &mut GasCharger,
+        temporary_store: &TemporaryStore<'_>,
+        gas_charger: &GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<ExecutionMetrics>,
+        metrics: &ExecutionMetrics,
     ) -> Result<(), Mode::Error> {
-        let meter = check_meter_limit::<Mode>(
-            temporary_store,
-            gas_charger,
-            protocol_config,
-            metrics.clone(),
-        );
+        let meter =
+            check_meter_limit::<Mode>(temporary_store, gas_charger, protocol_config, metrics);
         let written = check_written_objects_limit::<Mode>(
             temporary_store,
             gas_charger,
@@ -841,10 +801,10 @@ pub(crate) mod checked {
 
     #[instrument(name = "check_meter_limit", level = "debug", skip_all)]
     fn check_meter_limit<Mode: ExecutionMode>(
-        temporary_store: &mut TemporaryStore<'_>,
-        gas_charger: &mut GasCharger,
+        temporary_store: &TemporaryStore<'_>,
+        gas_charger: &GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<ExecutionMetrics>,
+        metrics: &ExecutionMetrics,
     ) -> Result<(), Mode::Error> {
         let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
 
@@ -879,10 +839,10 @@ pub(crate) mod checked {
 
     #[instrument(name = "check_written_objects_limit", level = "debug", skip_all)]
     fn check_written_objects_limit<Mode: ExecutionMode>(
-        temporary_store: &mut TemporaryStore<'_>,
-        gas_charger: &mut GasCharger,
+        temporary_store: &TemporaryStore<'_>,
+        gas_charger: &GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<ExecutionMetrics>,
+        metrics: &ExecutionMetrics,
     ) -> Result<(), Mode::Error> {
         if let (Some(normal_lim), Some(system_lim)) = (
             protocol_config.max_size_written_objects_as_option(),

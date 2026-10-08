@@ -228,10 +228,6 @@ pub mod checked {
             self.gas_status.is_unmetered()
         }
 
-        pub fn set_computation_to_budget(&mut self) {
-            self.gas_status.adjust_computation_on_out_of_gas();
-        }
-
         pub fn move_gas_status(&self) -> &GasStatus {
             self.gas_status.move_gas_status()
         }
@@ -391,7 +387,7 @@ pub mod checked {
             self.meter_storage(temporary_store).or_else(|_| {
                 // Even input-only storage doesn't fit: full budget for computation, rebates only.
                 self.reset(temporary_store);
-                self.set_computation_to_budget();
+                self.gas_status.adjust_computation_on_out_of_gas();
                 temporary_store.collect_rebate(self)
             })
         }
