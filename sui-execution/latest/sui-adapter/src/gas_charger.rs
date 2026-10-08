@@ -368,6 +368,15 @@ pub mod checked {
             self.charge_internal_gas(cost)
         }
 
+        /// Charges adding an adapter-emitted event to an authenticated event stream the way
+        /// `event::emit_authenticated` would.
+        pub fn charge_synthesized_event_stream(
+            &mut self,
+            protocol_config: &ProtocolConfig,
+        ) -> Result<(), ExecutionError> {
+            self.charge_internal_gas(protocol_config.event_emit_auth_stream_cost())
+        }
+
         fn charge_internal_gas(&mut self, amount: u64) -> Result<(), ExecutionError> {
             self.gas_status
                 .move_gas_status_mut()

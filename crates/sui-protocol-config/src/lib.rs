@@ -432,6 +432,7 @@ const MAINNET_USDB: &str =
 //              Add the `object::is_shared_input_impl` native and its cost.
 //              Add the forwarding address resolution and registration costs and the variant
 //              bound on devnet.
+//              Add forwarding deposits to authenticated event streams keyed by master on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1189,6 +1190,12 @@ struct FeatureFlags {
     // "ordinary address" and would strand funds sent to one.
     #[serde(skip_serializing_if = "is_false")]
     freeze_forwarding_addresses: bool,
+
+    // If true, each ForwardingDeposit event is also added to an authenticated event stream keyed
+    // by the master address.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    forwarding_deposit_event_streams: bool,
 
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // Deprecated: must always be set to `true`.
@@ -2506,6 +2513,12 @@ impl ProtocolConfig {
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
         self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
+    }
+
+    pub fn forwarding_deposit_event_streams(&self) -> bool {
+        self.feature_flags.forwarding_deposit_event_streams
+            && self.feature_flags.enable_forwarding_addresses
+            && self.enable_authenticated_event_streams()
     }
 
     pub fn per_object_congestion_control_mode(&self) -> PerObjectCongestionControlMode {
@@ -4997,6 +5010,7 @@ impl ProtocolConfig {
                         // 1M gas units: about 1 SUI at a 1,000 MIST gas price.
                         cfg.forwarding_address_register_cost_base = Some(1_000_000_000);
                         cfg.forwarding_address_max_variant = Some(0);
+                        cfg.feature_flags.forwarding_deposit_event_streams = true;
                     }
                 }
                 // Use this template when making changes:
