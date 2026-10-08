@@ -11,7 +11,10 @@ use crate::{
     execution_value::ExecutionState,
     static_programmable_transactions::{
         execution::context::subst_signature,
-        linkage::{analysis::LinkageAnalyzer, resolved_linkage::ExecutableLinkage},
+        linkage::{
+            analysis::LinkageAnalyzer, resolution::LinkageStoreResolver,
+            resolved_linkage::ExecutableLinkage,
+        },
         loading::ast::{
             self as L, Datatype, DeserializedPackage, LoadedFunction, LoadedFunctionInstantiation,
             Type,
@@ -226,6 +229,9 @@ where
         function: String,
         type_arguments: Vec<Type>,
     ) -> Result<LoadedFunction, Mode::Error> {
+        // Resolve before linkage analysis so the selected package's direct linkage is used rather
+        // than the historical package's linkage.
+        let package = self.resolve_minversioned_package(package)?;
         let module = to_identifier(module)?;
         let name = to_identifier(function)?;
 
@@ -304,6 +310,25 @@ where
             is_entry: runtime_signature.is_entry,
             is_native: runtime_signature.is_native,
         })
+    }
+
+    pub(crate) fn resolve_minversioned_package(
+        &self,
+        package_id: ObjectID,
+    ) -> Result<ObjectID, Mode::Error> {
+        if !self.protocol_config.enable_package_minversion() {
+            return Ok(package_id);
+        }
+
+        let minversion_resolver = |original_id| {
+            self.state_view
+                .read_minversion(original_id)
+                .map_err(|error| {
+                    Mode::Error::new_with_source(ExecutionErrorKind::InvalidLinkage, error)
+                })
+        };
+        LinkageStoreResolver::new(self.linkable_store, Some(&minversion_resolver))
+            .resolve_package_id(package_id)
     }
 
     pub fn load_type_input(&self, idx: usize, ty: TypeInput) -> Result<Type, Mode::Error> {
