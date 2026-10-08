@@ -804,6 +804,14 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     soft_bundle: bool,
 
+    // If true, enable package-version forbid lists.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_package_version_forbid_list: bool,
+
+    // If true, enable package minversion.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_package_minversion: bool,
+
     // If true, enable the coin deny list V2.
     #[serde(skip_serializing_if = "is_false")]
     enable_coin_deny_list_v2: bool,
@@ -2541,6 +2549,10 @@ impl ProtocolConfig {
 
     pub fn include_special_package_amendments_as_option(&self) -> &Option<Arc<Amendments>> {
         &self.include_special_package_amendments
+    }
+
+    pub fn package_version_rules_enabled(&self) -> bool {
+        self.enable_package_minversion() || self.enable_package_version_forbid_list()
     }
 }
 
