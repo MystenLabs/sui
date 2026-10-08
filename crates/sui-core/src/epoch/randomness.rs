@@ -24,7 +24,7 @@ use sui_protocol_config::assert_reachable_gated;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, EpochId, StakeUnit};
 use sui_types::crypto::{AuthorityKeyPair, RandomnessRound};
-use sui_types::error::{SuiErrorKind, SuiResult};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{
     ConsensusTransaction, Round, TimestampMs, VersionedDkgConfirmation, VersionedDkgMessage,
 };
@@ -280,6 +280,22 @@ impl DkgRole {
                 observer.complete(&raw_messages, &confirmations)
             }
         }
+    }
+}
+
+/// Error from advancing DKG. Runtime shutdown is a separate variant so that a cancelled blocking
+/// task is never handled like a failed DKG step.
+#[derive(Debug)]
+pub(crate) enum AdvanceDkgError {
+    Sui(SuiError),
+    /// The runtime is shutting down and cancelled DKG message processing. The commit being
+    /// processed must be abandoned without persisting its output.
+    RuntimeShutdown,
+}
+
+impl From<SuiError> for AdvanceDkgError {
+    fn from(e: SuiError) -> Self {
+        Self::Sui(e)
     }
 }
 
@@ -667,7 +683,7 @@ impl RandomnessManager {
         &mut self,
         consensus_output: &mut ConsensusCommitOutput,
         round: Round,
-    ) -> SuiResult {
+    ) -> Result<(), AdvanceDkgError> {
         let epoch_store = self.epoch_store()?;
 
         self.try_merge_messages(consensus_output, &epoch_store)
@@ -700,7 +716,7 @@ impl RandomnessManager {
         &mut self,
         consensus_output: &mut ConsensusCommitOutput,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
+    ) -> Result<(), AdvanceDkgError> {
         if self.dkg_output.initialized() || self.used_messages.initialized() {
             return Ok(());
         }
@@ -710,7 +726,14 @@ impl RandomnessManager {
             .into_values()
             .collect();
         while let Some(res) = handles.next().await {
-            if let Ok(Some(processed)) = res {
+            let processed = match res {
+                Ok(processed) => processed,
+                Err(e) if e.is_panic() => std::panic::resume_unwind(e.into_panic()),
+                // Only runtime shutdown cancels the task. Treating it like an invalid message
+                // would persist DKG state that is missing this message.
+                Err(_) => return Err(AdvanceDkgError::RuntimeShutdown),
+            };
+            if let Some(processed) = processed {
                 self.processed_messages
                     .insert(processed.sender(), processed.clone());
                 consensus_output.insert_dkg_processed_message(processed);

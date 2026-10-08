@@ -82,7 +82,7 @@ use crate::{
     consensus_throughput_calculator::ConsensusThroughputCalculator,
     consensus_types::consensus_output_api::{ConsensusCommitAPI, ParsedTransaction},
     epoch::{
-        randomness::{DkgStatus, RandomnessManager},
+        randomness::{AdvanceDkgError, DkgStatus, RandomnessManager},
         reconfiguration::ReconfigState,
     },
     execution_cache::ObjectCacheRead,
@@ -715,6 +715,10 @@ impl CheckpointQueue {
     }
 }
 
+/// Runtime shutdown cancelled blocking work while a consensus commit was being processed.
+#[derive(Debug)]
+pub(crate) struct RuntimeShutdown;
+
 pub struct ConsensusHandler<C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
     /// corresponding store. This store is also used to get the current epoch ID.
@@ -1050,15 +1054,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     ) {
         let transactions = consensus_commit.transactions();
         self.handle_consensus_commit(consensus_commit, transactions)
-            .await;
+            .await
+            .expect("runtime shutdown during test commit");
     }
 
+    /// Returns `Err(RuntimeShutdown)` if runtime shutdown cancelled work that the commit depends
+    /// on. The commit's output is then not persisted, and it is replayed after restart.
     #[instrument(level = "debug", skip_all, fields(epoch = self.epoch_store.epoch(), round = consensus_commit.leader_round()))]
     pub(crate) async fn handle_consensus_commit(
         &mut self,
         consensus_commit: impl ConsensusCommitAPI,
         transactions: ParsedConsensusTransactions,
-    ) {
+    ) -> Result<(), RuntimeShutdown> {
         // This may block until one of two conditions happens:
         // - Number of uncommitted transactions in the writeback cache goes below the
         //   backpressure threshold.
@@ -1162,7 +1169,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             randomness_dkg_messages,
             randomness_dkg_confirmations,
         )
-        .await;
+        .await?;
 
         let mut execution_time_estimator = self
             .epoch_store
@@ -1191,7 +1198,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let make_checkpoint = should_accept_tx || final_round;
         if !make_checkpoint {
             // No need for any further processing
-            return;
+            return Ok(());
         }
 
         // If this is the final round, record execution time observations for storage in the
@@ -1304,6 +1311,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         });
 
         fail_point!("crash");
+        Ok(())
     }
 
     fn handle_close_epoch(
@@ -2285,7 +2293,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         randomness_manager: Option<&mut RandomnessManager>,
         randomness_dkg_messages: Vec<(AuthorityName, Vec<u8>)>,
         randomness_dkg_confirmations: Vec<(AuthorityName, Vec<u8>)>,
-    ) {
+    ) -> Result<(), RuntimeShutdown> {
         if !self.epoch_store.randomness_state_enabled() {
             let num_dkg_messages = randomness_dkg_messages.len();
             let num_dkg_confirmations = randomness_dkg_confirmations.len();
@@ -2296,7 +2304,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     num_dkg_confirmations
                 );
             }
-            return;
+            return Ok(());
         }
 
         let randomness_manager =
@@ -2325,11 +2333,16 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             || randomness_dkg_confirmation_updates
             || always_advance_dkg_to_resolution
         {
-            randomness_manager
+            match randomness_manager
                 .advance_dkg(&mut state.output, commit_info.round)
                 .await
-                .expect("epoch ended");
+            {
+                Ok(()) => {}
+                Err(AdvanceDkgError::RuntimeShutdown) => return Err(RuntimeShutdown),
+                Err(AdvanceDkgError::Sui(e)) => panic!("failed to advance randomness DKG: {e:?}"),
+            }
         }
+        Ok(())
     }
 
     fn process_randomness_dkg_messages(
@@ -3337,10 +3350,14 @@ impl MysticetiConsensusHandler {
                 let commit_index = consensus_commit.commit_ref.index;
                 if commit_index <= last_processed_commit_at_startup {
                     consensus_handler.handle_prior_consensus_commit(consensus_commit);
-                } else {
-                    consensus_handler
-                        .handle_consensus_commit(consensus_commit, transactions)
-                        .await;
+                } else if let Err(e) = consensus_handler
+                    .handle_consensus_commit(consensus_commit, transactions)
+                    .await
+                {
+                    info!(
+                        "Consensus commit {commit_index} was not handled ({e:?}); it will be replayed after restart"
+                    );
+                    break;
                 }
                 commit_consumer_monitor.set_highest_handled_commit(commit_index);
             }
