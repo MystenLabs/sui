@@ -2563,6 +2563,39 @@ emit_authenticated_impl
 ForwardingAddressRegistry
 	public struct
 	0x2::forwarding_address
+MasterCap
+	public struct
+	0x2::forwarding_address
+MasterRecord
+	public struct
+	0x2::forwarding_address
+MasterIdCounter
+	public struct
+	0x2::forwarding_address
+ForwardingDeposit
+	public struct
+	0x2::forwarding_address
+MasterRegistered
+	public struct
+	0x2::forwarding_address
+register
+	public fun
+	0x2::forwarding_address
+master_id
+	public fun
+	0x2::forwarding_address
+charge_registration_fee
+	fun
+	0x2::forwarding_address
+allocate_master_id
+	fun
+	0x2::forwarding_address
+mix_master_id
+	fun
+	0x2::forwarding_address
+mul_mod_2_48
+	fun
+	0x2::forwarding_address
 create
 	fun
 	0x2::forwarding_address
