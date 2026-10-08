@@ -599,6 +599,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::DenyListStateCreate => {
                                 SuiEndOfEpochTransactionKind::CoinDenyListStateCreate
                             }
+                            EndOfEpochTransactionKind::PackageConfigCreate => {
+                                SuiEndOfEpochTransactionKind::PackageConfigCreate
+                            }
                             EndOfEpochTransactionKind::BridgeStateCreate(chain_id) => {
                                 SuiEndOfEpochTransactionKind::BridgeStateCreate(
                                     (*chain_id.as_bytes()).into(),
@@ -1810,6 +1813,7 @@ pub enum SuiEndOfEpochTransactionKind {
     AddressAliasStateCreate,
     WriteAccumulatorStorageCost,
     ForwardingAddressRegistryCreate,
+    PackageConfigCreate,
 }
 
 #[serde_as]
