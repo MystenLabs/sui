@@ -27,9 +27,23 @@ public struct Clock has key {
 
 /// The `clock`'s current timestamp as a running total of
 /// milliseconds since an arbitrary point in the past.
+///
+/// Prefer `now_ms`, which returns the same value without requiring
+/// the `Clock` as a transaction input, so callers do not have to
+/// thread a `Clock` through to reach it.
 public fun timestamp_ms(clock: &Clock): u64 {
     clock.timestamp_ms
 }
+
+/// The current timestamp in milliseconds, read without the `Clock`
+/// being a transaction input. Equal to `timestamp_ms` of a `Clock`
+/// passed into the same transaction, and preferred over it: it needs
+/// no input object, so any function can read the time without its
+/// callers having to pass a `Clock` down.
+public fun now_ms(): u64 {
+    native_now_ms()
+}
+native fun native_now_ms(): u64;
 
 #[allow(unused_function)]
 /// Create and share the singleton Clock -- this function is
@@ -58,6 +72,7 @@ fun consensus_commit_prologue(clock: &mut Clock, timestamp_ms: u64, ctx: &TxCont
 /// Expose the functionality of `create()` (usually only done during
 /// genesis) for tests that want to create a Clock.
 public fun create_for_testing(ctx: &mut TxContext): Clock {
+    native_set_now_ms_for_testing(0);
     Clock {
         id: object::new(ctx),
         timestamp_ms: 0,
@@ -73,12 +88,14 @@ public fun share_for_testing(clock: Clock) {
 #[test_only]
 public fun increment_for_testing(clock: &mut Clock, tick: u64) {
     clock.timestamp_ms = clock.timestamp_ms + tick;
+    native_set_now_ms_for_testing(clock.timestamp_ms);
 }
 
 #[test_only]
 public fun set_for_testing(clock: &mut Clock, timestamp_ms: u64) {
     assert!(timestamp_ms >= clock.timestamp_ms);
     clock.timestamp_ms = timestamp_ms;
+    native_set_now_ms_for_testing(clock.timestamp_ms);
 }
 
 #[test_only]
@@ -86,3 +103,9 @@ public fun destroy_for_testing(clock: Clock) {
     let Clock { id, timestamp_ms: _ } = clock;
     id.delete();
 }
+
+#[test_only]
+/// Keeps `now_ms` in step with the `Clock` a test creates or
+/// mutates, since tests have no consensus commits to set it. With several
+/// test Clocks, the most recently created or mutated one wins.
+native fun native_set_now_ms_for_testing(timestamp_ms: u64);

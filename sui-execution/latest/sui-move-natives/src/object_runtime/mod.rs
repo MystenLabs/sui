@@ -248,6 +248,15 @@ impl<'a> ObjectRuntime<'a> {
         }
     }
 
+    pub fn clock_timestamp_ms(&self) -> PartialVMResult<u64> {
+        self.system_object_resolver
+            .clock_timestamp_ms()
+            .map_err(|e| {
+                PartialVMError::new(StatusCode::STORAGE_ERROR)
+                    .with_message(format!("Failed to read the Clock: {e}"))
+            })
+    }
+
     pub fn check_object_funds_sufficiency(
         &mut self,
         owner: SuiAddress,

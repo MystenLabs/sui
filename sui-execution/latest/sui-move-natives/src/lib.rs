@@ -3,6 +3,7 @@
 
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
+    clock::ClockNowMsCostParams,
     config::ConfigReadSettingImplCostParams,
     crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
     crypto::{
@@ -84,6 +85,7 @@ use transfer::TransferReceiveObjectInternalCostParams;
 
 mod accumulator;
 mod address;
+mod clock;
 mod config;
 mod crypto;
 mod dynamic_field;
@@ -111,6 +113,9 @@ pub struct NativesCostTable {
     pub address_from_bytes_cost_params: AddressFromBytesCostParams,
     pub address_to_u256_cost_params: AddressToU256CostParams,
     pub address_from_u256_cost_params: AddressFromU256CostParams,
+
+    // Clock: cost params for the Move native function `native_now_ms(): u64`
+    pub clock_now_ms_cost_params: ClockNowMsCostParams,
 
     // Config
     pub config_read_setting_impl_cost_params: ConfigReadSettingImplCostParams,
@@ -243,6 +248,11 @@ impl NativesCostTable {
                 address_from_u256_cost_base: protocol_config.address_from_u256_cost_base().into(),
             },
 
+            clock_now_ms_cost_params: ClockNowMsCostParams {
+                clock_now_ms_cost_base: protocol_config
+                    .clock_now_ms_cost_base_as_option()
+                    .map(Into::into),
+            },
             config_read_setting_impl_cost_params: ConfigReadSettingImplCostParams {
                 config_read_setting_impl_cost_base: protocol_config
                     .config_read_setting_impl_cost_base_as_option()
@@ -1022,6 +1032,12 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "dynamic_field",
             "hash_type_and_key",
             make_native!(dynamic_field::hash_type_and_key),
+        ),
+        ("clock", "native_now_ms", make_native!(clock::now_ms)),
+        (
+            "clock",
+            "native_set_now_ms_for_testing",
+            make_native!(clock::set_now_ms_for_testing),
         ),
         (
             "config",
