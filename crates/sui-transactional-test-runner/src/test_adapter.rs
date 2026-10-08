@@ -63,6 +63,7 @@ use sui_protocol_config::{
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::KeyPairWrapper;
+use sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID;
 use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
@@ -143,6 +144,7 @@ const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     SUI_COIN_REGISTRY_OBJECT_ID,
     SUI_DISPLAY_REGISTRY_OBJECT_ID,
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
 ];
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [

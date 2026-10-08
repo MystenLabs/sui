@@ -1815,6 +1815,15 @@ pub struct ProtocolConfig {
     package_original_package_id_impl_cost_base: Option<u64>,
     package_original_package_id_impl_cost_per_byte: Option<u64>,
 
+    // `forwarding_address` module
+    forwarding_address_resolve_cost_base: Option<u64>,
+    // Charged once the address parses as a supported forwarding address, before the master record
+    // is read, so it covers the registry and record reads whether or not the record exists.
+    forwarding_address_resolve_lookup_cost_base: Option<u64>,
+    forwarding_address_register_cost_base: Option<u64>,
+    // Highest forwarding address variant the resolver accepts; higher variants abort.
+    forwarding_address_max_variant: Option<u64>,
+
     // `dynamic_field` module
     // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
     dynamic_field_hash_type_and_key_cost_base: Option<u64>,
@@ -2768,6 +2777,12 @@ impl ProtocolConfig {
 
             package_original_package_id_impl_cost_base: None,
             package_original_package_id_impl_cost_per_byte: None,
+
+            // `forwarding_address` module
+            forwarding_address_resolve_cost_base: None,
+            forwarding_address_resolve_lookup_cost_base: None,
+            forwarding_address_register_cost_base: None,
+            forwarding_address_max_variant: None,
 
             // `dynamic_field` module
             // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -4840,6 +4855,13 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_forwarding_addresses = true;
                         cfg.feature_flags.mldsa65_auth = true;
+                        cfg.forwarding_address_resolve_cost_base = Some(52);
+                        // The registry and a master record together meter at about 490 bytes.
+                        cfg.forwarding_address_resolve_lookup_cost_base =
+                            Some(512 * cfg.obj_access_cost_read_per_byte());
+                        // 1M gas units: about 1 SUI at a 1,000 MIST gas price.
+                        cfg.forwarding_address_register_cost_base = Some(1_000_000_000);
+                        cfg.forwarding_address_max_variant = Some(0);
                     }
                     cfg.storage_rebate_rate = Some(9999);
                     if chain != Chain::Mainnet {
