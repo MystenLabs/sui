@@ -116,6 +116,16 @@ transaction, charged like `event::emit` and counted against `max_num_event_emit`
 what the transaction paid to the address however many commands made up the payment, and splitting
 a payment into many credits cannot exhaust the event limit.
 
+With `forwarding_deposit_event_streams` (devnet from 139), each `ForwardingDeposit` is also added
+to the authenticated event stream keyed by its master: the adapter records the same accumulator
+entry that `event::emit_authenticated` records, pointing at the event's index after the
+transaction's Move events, and charges `event_emit_auth_stream_cost` for it. A light client can
+then read every deposit forwarded to a master with `stream_events(master)` and verify it against
+the stream head without trusting a fullnode. Move cannot write to a master's stream, since
+`emit_authenticated` always uses the event type's package as the stream id. Forwarded deposits are
+the only way funds reach a master through a forwarding address (the gas coin is rejected), so the
+stream is a complete record of them.
+
 `coin::send_funds(Gas, forwarding_address)` fails the transaction. The gas budget refund and the
 gas charge location follow the gas coin's recipient and are set outside `reroute`, so resolving it
 would need a second resolution path, and the master would net the coin's value plus the refunded

@@ -48,6 +48,12 @@ impl ForwardingGas for TransactionGas<'_> {
             .charge_synthesized_event(self.protocol_config, tag_size, value_size)
             .map_err(|_| RerouteError::OutOfGas)
     }
+
+    fn charge_event_stream(&mut self) -> Result<(), RerouteError> {
+        self.gas_charger
+            .charge_synthesized_event_stream(self.protocol_config)
+            .map_err(|_| RerouteError::OutOfGas)
+    }
 }
 
 fn execution_error(error: RerouteError) -> ExecutionError {
@@ -92,7 +98,8 @@ pub fn reroute(
     gas_charger: &mut GasCharger,
     sender: SuiAddress,
     written_objects: &BTreeMap<ObjectID, Object>,
-    accumulator_events: &mut [MoveAccumulatorEvent],
+    accumulator_events: &mut Vec<MoveAccumulatorEvent>,
+    num_prior_events: usize,
 ) -> Result<Vec<Event>, ExecutionError> {
     let mut gas = TransactionGas {
         protocol_config,
@@ -104,6 +111,7 @@ pub fn reroute(
                 .iter()
                 .map(|(id, object)| (*id, &object.owner)),
             accumulator_events,
+            num_prior_events as u64,
         )
         .map_err(execution_error)?;
     Ok(events

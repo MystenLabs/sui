@@ -2421,6 +2421,7 @@ pub fn finish(
             tx_context.sender(),
             &written_objects,
             &mut accumulator_events,
+            user_events.len(),
         )?;
         forwarding::check_event_count(
             protocol_config,

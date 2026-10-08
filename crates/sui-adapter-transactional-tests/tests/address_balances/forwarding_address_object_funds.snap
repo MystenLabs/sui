@@ -54,7 +54,7 @@ task 6, lines 50-52:
 events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 100, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,1), object(2,0)
 unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa, 0x0000000000000000000000000000000000000000000000000000000000000acc
-accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(6,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(6,0), A, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0]), (object(6,1), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2287371, non_refundable_storage_fee: 229
 
 task 7, lines 54-60:
@@ -69,7 +69,7 @@ events: Event { package_id: sui, transaction_module: Identifier("forwarding_addr
 created: object(7,0), object(7,1)
 mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,1), object(2,0), object(4,1)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
-accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(6,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(6,0), A, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[1]), (object(6,1), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
 gas summary: computation_cost: 1001000000, storage_cost: 9416400,  storage_rebate: 5737426, non_refundable_storage_fee: 574
 
 task 8, lines 62-68:
@@ -90,7 +90,7 @@ task 9, lines 70-72:
 events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 100, 0, 0, 0, 0, 0, 0, 0] }
 mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,1), object(2,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
-accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(6,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(6,0), A, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0]), (object(6,1), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
 gas summary: computation_cost: 1000000, storage_cost: 3807600,  storage_rebate: 3807219, non_refundable_storage_fee: 381
 
 task 10, lines 74-76:
@@ -100,7 +100,7 @@ task 10, lines 74-76:
 events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 100, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,1), object(2,0)
 unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa, 0x0000000000000000000000000000000000000000000000000000000000000acc
-accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(6,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 100), (object(6,0), A, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0]), (object(6,1), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2287371, non_refundable_storage_fee: 229
 
 task 11, lines 78-82:
@@ -129,7 +129,7 @@ task 13, lines 88-93:
 events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 32, 3, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,1), object(2,0)
 unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa, 0x0000000000000000000000000000000000000000000000000000000000000acc
-accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 500), (object(6,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 800)
+accumulators_written: (object(3,0), fake(2,0), sui::balance::Balance<sui::sui::SUI>, Split, 500), (object(6,0), A, sui::accumulator_settlement::EventStreamHead, Merge, event_indices:[0]), (object(6,1), A, sui::balance::Balance<sui::sui::SUI>, Merge, 800)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 2287371, non_refundable_storage_fee: 229
 
 task 14, line 95:
