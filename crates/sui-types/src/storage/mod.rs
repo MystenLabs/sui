@@ -254,6 +254,8 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
 /// consensus assigned to this transaction. Never sees writes made earlier in the same transaction.
 pub trait ImplicitSystemObjectResolver {
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
+
+    fn clock_timestamp_ms(&self) -> SuiResult<u64>;
 }
 
 pub struct DenyListResult {

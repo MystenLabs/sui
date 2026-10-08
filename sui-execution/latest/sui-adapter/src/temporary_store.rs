@@ -37,8 +37,9 @@ use sui_types::storage::{
 use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_transaction};
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
+    clock::Clock,
     digests::ObjectDigest,
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiResult},
@@ -1223,6 +1224,19 @@ impl ImplicitSystemObjectResolver for TemporaryStore<'_> {
         settled
             .checked_sub(unsettled)
             .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
+    }
+
+    /// This function is expected never to fail; an error indicates an invariant violation.
+    fn clock_timestamp_ms(&self) -> SuiResult<u64> {
+        let clock = self
+            .load_implicitly_read_system_object(&SUI_CLOCK_OBJECT_ID)
+            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?;
+        let clock: Clock = clock
+            .data
+            .try_as_move()
+            .and_then(|move_object| move_object.to_rust())
+            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?;
+        Ok(clock.timestamp_ms())
     }
 }
 
