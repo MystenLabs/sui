@@ -26,7 +26,9 @@ use move_vm_runtime::{
 use smallvec::smallvec;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    accumulator_root::AccumulatorValue,
+    accumulator_root::{
+        AccumulatorValue, derive_event_stream_head_object_id, event_stream_head_type_tag,
+    },
     balance::Balance,
     base_types::{ObjectID, SuiAddress},
     forwarding_address::{ForwardingAddress, ForwardingDeposit, ForwardingMaster},
@@ -36,7 +38,7 @@ use sui_types::{
 
 use crate::{
     NativesCostTable, get_extension,
-    object_runtime::{MoveAccumulatorEvent, MoveAccumulatorValue},
+    object_runtime::{MoveAccumulatorAction, MoveAccumulatorEvent, MoveAccumulatorValue},
 };
 
 #[derive(Clone)]
@@ -70,6 +72,8 @@ pub trait ForwardingGas {
     fn charge_lookup(&mut self) -> Result<(), RerouteError>;
     /// For every event emitted on Move's behalf, sized like `event::emit` sizes it.
     fn charge_event(&mut self, tag_size: u64, value_size: u64) -> Result<(), RerouteError>;
+    /// For every event added to an authenticated event stream, like `event::emit_authenticated`.
+    fn charge_event_stream(&mut self) -> Result<(), RerouteError>;
 }
 
 pub struct NoForwardingGas;
@@ -82,6 +86,9 @@ impl ForwardingGas for NoForwardingGas {
         Ok(())
     }
     fn charge_event(&mut self, _: u64, _: u64) -> Result<(), RerouteError> {
+        Ok(())
+    }
+    fn charge_event_stream(&mut self) -> Result<(), RerouteError> {
         Ok(())
     }
 }
@@ -181,10 +188,17 @@ impl<'a> Resolver<'a> {
     /// the event states what the transaction paid to that address regardless of how many
     /// commands made up the payment, and a payment split across many credits cannot run into
     /// `max_num_event_emit`.
+    ///
+    /// With `forwarding_deposit_event_streams`, each event is also added to the authenticated
+    /// event stream keyed by its master, so the master can verify every forwarded deposit with a
+    /// light client. The returned events must be appended right after the transaction's
+    /// `num_prior_events` Move events, since the stream entries pushed onto `credits` refer to
+    /// them by index.
     pub fn reroute<'b>(
         &mut self,
         owners: impl Iterator<Item = (ObjectID, &'b Owner)>,
-        credits: &mut [MoveAccumulatorEvent],
+        credits: &mut Vec<MoveAccumulatorEvent>,
+        num_prior_events: u64,
     ) -> Result<Vec<(StructTag, Vec<u8>)>, RerouteError> {
         // FIXME(forwarding-addresses): before this reaches production, reroute objects (coins,
         // NFTs) owned by a forwarding address to the master instead of failing, with an event
@@ -235,6 +249,7 @@ impl<'a> Resolver<'a> {
             credit.accumulator_id = *accumulator_id.inner();
         }
 
+        let event_streams = self.protocol_config.forwarding_deposit_event_streams();
         let mut events = vec![];
         for ((forwarding_address, coin_type), (master, amount)) in deposits {
             let tag = ForwardingDeposit::struct_tag(coin_type);
@@ -248,6 +263,22 @@ impl<'a> Resolver<'a> {
                 u64::from(tag.abstract_size_for_gas_metering()),
                 contents.len() as u64,
             )?;
+            if event_streams {
+                self.gas.charge_event_stream()?;
+                let Ok(stream_head_id) = derive_event_stream_head_object_id(master) else {
+                    return Err(RerouteError::InvariantViolation(
+                        "Failed to compute the event stream head id for a forwarding master"
+                            .to_owned(),
+                    ));
+                };
+                credits.push(MoveAccumulatorEvent {
+                    accumulator_id: stream_head_id,
+                    action: MoveAccumulatorAction::Merge,
+                    target_addr: master.into(),
+                    target_ty: event_stream_head_type_tag(),
+                    value: MoveAccumulatorValue::EventRef(num_prior_events + events.len() as u64),
+                });
+            }
             events.push((tag, contents));
         }
         Ok(events)
