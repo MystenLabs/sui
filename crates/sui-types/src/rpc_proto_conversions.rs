@@ -1680,22 +1680,19 @@ impl From<&crate::crypto::ZkLoginPublicIdentifier> for ZkLoginPublicIdentifier {
 // SignatureScheme
 //
 
-impl TryFrom<crate::crypto::SignatureScheme> for SignatureScheme {
-    type Error = crate::crypto::SignatureScheme;
-
-    /// Fails for schemes the proto enum has no variant for yet.
-    fn try_from(value: crate::crypto::SignatureScheme) -> Result<Self, Self::Error> {
+impl From<crate::crypto::SignatureScheme> for SignatureScheme {
+    fn from(value: crate::crypto::SignatureScheme) -> Self {
         use crate::crypto::SignatureScheme as S;
 
         match value {
-            S::ED25519 => Ok(Self::Ed25519),
-            S::Secp256k1 => Ok(Self::Secp256k1),
-            S::Secp256r1 => Ok(Self::Secp256r1),
-            S::BLS12381 => Ok(Self::Bls12381),
-            S::MultiSig => Ok(Self::Multisig),
-            S::ZkLoginAuthenticator => Ok(Self::Zklogin),
-            S::PasskeyAuthenticator => Ok(Self::Passkey),
-            S::MLDSA65 => Err(value),
+            S::ED25519 => Self::Ed25519,
+            S::Secp256k1 => Self::Secp256k1,
+            S::Secp256r1 => Self::Secp256r1,
+            S::BLS12381 => Self::Bls12381,
+            S::MultiSig => Self::Multisig,
+            S::ZkLoginAuthenticator => Self::Zklogin,
+            S::PasskeyAuthenticator => Self::Passkey,
+            S::MLDSA65 => Self::Mldsa65,
         }
     }
 }
@@ -1716,9 +1713,7 @@ impl From<&crate::crypto::Signature> for SimpleSignature {
         let public_key = value.public_key_bytes();
 
         let mut message = Self::default();
-        if let Ok(scheme) = SignatureScheme::try_from(value.scheme()) {
-            message.set_scheme(scheme);
-        }
+        message.set_scheme(value.scheme().into());
         message.signature = Some(signature.to_vec().into());
         message.public_key = Some(public_key.to_vec().into());
         message
@@ -1760,9 +1755,7 @@ impl From<&crate::crypto::PublicKey> for MultisigMemberPublicKey {
             }
         }
 
-        if let Ok(scheme) = SignatureScheme::try_from(value.scheme()) {
-            message.set_scheme(scheme);
-        }
+        message.set_scheme(value.scheme().into());
         message
     }
 }
@@ -1838,7 +1831,7 @@ impl From<&crate::crypto::CompressedSignature> for MultisigMemberSignature {
             }
             crate::crypto::CompressedSignature::MLDSA65(b) => {
                 message.signature = Some(b.0.to_vec().into());
-                None
+                Some(SignatureScheme::Mldsa65)
             }
         };
 
@@ -1912,7 +1905,7 @@ impl Merge<&crate::signature::GenericSignature> for UserSignature {
                 Some(SignatureScheme::Multisig)
             }
             crate::signature::GenericSignature::Signature(signature) => {
-                let scheme = SignatureScheme::try_from(signature.scheme()).ok();
+                let scheme = Some(SignatureScheme::from(signature.scheme()));
                 if mask.contains(Self::SIMPLE_FIELD) {
                     self.signature = Some(Signature::Simple(signature.into()));
                 }

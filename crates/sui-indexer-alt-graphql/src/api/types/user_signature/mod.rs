@@ -24,6 +24,7 @@ pub(crate) enum SignatureScheme {
     Multisig(MultisigSignature),
     ZkLogin(ZkLoginSignature),
     Passkey(PasskeySignature),
+    MlDsa65(MlDsa65Signature),
 }
 
 /// A user signature for a transaction.
@@ -96,7 +97,16 @@ pub(crate) struct Secp256r1Signature {
     public_key: Option<Base64>,
 }
 
-/// Converts a native `Signature` (ed25519/secp256k1/secp256r1) into the corresponding
+/// An ML-DSA-65 (FIPS 204) signature.
+#[derive(SimpleObject, Clone)]
+pub(crate) struct MlDsa65Signature {
+    /// The raw signature bytes.
+    signature: Option<Base64>,
+    /// The public key bytes.
+    public_key: Option<Base64>,
+}
+
+/// Converts a native `Signature` (ed25519/secp256k1/secp256r1/mldsa65) into the corresponding
 /// `SignatureScheme` union variant.
 pub(crate) fn simple_signature_to_scheme(
     sig: &sui_types::crypto::Signature,
@@ -114,6 +124,10 @@ pub(crate) fn simple_signature_to_scheme(
             public_key,
         })),
         NativeSignatureScheme::Secp256r1 => Some(SignatureScheme::Secp256r1(Secp256r1Signature {
+            signature,
+            public_key,
+        })),
+        NativeSignatureScheme::MLDSA65 => Some(SignatureScheme::MlDsa65(MlDsa65Signature {
             signature,
             public_key,
         })),

@@ -17,17 +17,17 @@ use sui_sdk_types::{
     CommandArgumentError, ConsensusDeterminedVersionAssignments, Digest, Ed25519PublicKey,
     Ed25519Signature, EndOfEpochTransactionKind, Event, ExecutionError, ExecutionStatus,
     ExecutionTimeObservationKey, ExecutionTimeObservations, FundsWithdrawal, IdOperation,
-    Identifier, Input, Jwk, JwkId, MakeMoveVector, MergeCoins, MoveCall, MoveLocation, MovePackage,
-    MultisigMemberPublicKey, MultisigMemberSignature, Mutability, Object, ObjectIn, ObjectOut,
-    ObjectReference, Owner, PackageUpgradeError, PasskeyAuthenticator, PasskeyPublicKey, Publish,
-    Secp256k1PublicKey, Secp256k1Signature, Secp256r1PublicKey, Secp256r1Signature, SharedInput,
-    SignatureScheme, SignedCheckpointSummary, SignedTransaction, SimpleSignature, SplitCoins,
-    StructTag, SystemPackage, Transaction, TransactionEffects, TransactionEffectsV1,
-    TransactionEffectsV2, TransactionEvents, TransactionExpiration, TransactionKind,
-    TransferObjects, TypeArgumentError, TypeParseError, TypeTag, UnchangedConsensusKind, Upgrade,
-    UserSignature, ValidatorAggregatedSignature, ValidatorCommittee, ValidatorCommitteeMember,
-    ValidatorExecutionTimeObservation, VersionAssignment, VersionAssignmentV2,
-    ZkLoginAuthenticator, ZkLoginPublicIdentifier,
+    Identifier, Input, Jwk, JwkId, MakeMoveVector, MergeCoins, MlDsa65PublicKey, MlDsa65Signature,
+    MoveCall, MoveLocation, MovePackage, MultisigMemberPublicKey, MultisigMemberSignature,
+    Mutability, Object, ObjectIn, ObjectOut, ObjectReference, Owner, PackageUpgradeError,
+    PasskeyAuthenticator, PasskeyPublicKey, Publish, Secp256k1PublicKey, Secp256k1Signature,
+    Secp256r1PublicKey, Secp256r1Signature, SharedInput, SignatureScheme, SignedCheckpointSummary,
+    SignedTransaction, SimpleSignature, SplitCoins, StructTag, SystemPackage, Transaction,
+    TransactionEffects, TransactionEffectsV1, TransactionEffectsV2, TransactionEvents,
+    TransactionExpiration, TransactionKind, TransferObjects, TypeArgumentError, TypeParseError,
+    TypeTag, UnchangedConsensusKind, Upgrade, UserSignature, ValidatorAggregatedSignature,
+    ValidatorCommittee, ValidatorCommitteeMember, ValidatorExecutionTimeObservation,
+    VersionAssignment, VersionAssignmentV2, ZkLoginAuthenticator, ZkLoginPublicIdentifier,
 };
 use tap::Pipe;
 
@@ -1212,10 +1212,8 @@ impl TryFrom<crate::crypto::PublicKey> for MultisigMemberPublicKey {
             crate::crypto::PublicKey::Passkey(p) => {
                 Self::Passkey(PasskeyPublicKey::new(Secp256r1PublicKey::new(p.0)))
             }
-            crate::crypto::PublicKey::MLDSA65(_) => {
-                return Err(SdkTypeConversionError(
-                    "ML-DSA-65 has no sui-sdk-types representation yet".to_string(),
-                ));
+            crate::crypto::PublicKey::MLDSA65(pk) => {
+                Self::MlDsa65(Box::new(MlDsa65PublicKey::from_bytes(&pk.0)?))
             }
         }
         .pipe(Ok)
@@ -1240,10 +1238,8 @@ impl TryFrom<crate::crypto::CompressedSignature> for MultisigMemberSignature {
                 Self::ZkLogin(Box::new(z.try_into()?))
             }
             crate::crypto::CompressedSignature::Passkey(p) => Self::Passkey(p.try_into()?),
-            crate::crypto::CompressedSignature::MLDSA65(_) => {
-                return Err(SdkTypeConversionError(
-                    "ML-DSA-65 has no sui-sdk-types representation yet".to_string(),
-                ));
+            crate::crypto::CompressedSignature::MLDSA65(s) => {
+                Self::MlDsa65(Box::new(MlDsa65Signature::from_bytes(&s.0)?))
             }
         }
         .pipe(Ok)
@@ -1280,11 +1276,10 @@ impl TryFrom<crate::crypto::Signature> for SimpleSignature {
                     )?,
                 }
             }
-            crate::crypto::Signature::MLDSA65SuiSignature(_) => {
-                return Err(SdkTypeConversionError(
-                    "ML-DSA-65 has no sui-sdk-types representation yet".to_string(),
-                ));
-            }
+            crate::crypto::Signature::MLDSA65SuiSignature(s) => Self::MlDsa65 {
+                signature: Box::new(MlDsa65Signature::from_bytes(s.signature_bytes())?),
+                public_key: Box::new(MlDsa65PublicKey::from_bytes(s.public_key_bytes())?),
+            },
         }
         .pipe(Ok)
     }
@@ -1302,10 +1297,7 @@ impl TryFrom<crate::crypto::SignatureScheme> for SignatureScheme {
             crate::crypto::SignatureScheme::MultiSig => Ok(Self::Multisig),
             crate::crypto::SignatureScheme::ZkLoginAuthenticator => Ok(Self::ZkLogin),
             crate::crypto::SignatureScheme::PasskeyAuthenticator => Ok(Self::Passkey),
-            // TODO: map once sui-sdk-types defines MLDSA65.
-            crate::crypto::SignatureScheme::MLDSA65 => Err(SdkTypeConversionError(
-                "ML-DSA-65 has no sui-sdk-types representation yet".to_string(),
-            )),
+            crate::crypto::SignatureScheme::MLDSA65 => Ok(Self::MlDsa65),
         }
     }
 }

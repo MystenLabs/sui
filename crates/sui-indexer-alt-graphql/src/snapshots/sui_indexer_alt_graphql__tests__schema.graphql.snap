@@ -1,6 +1,5 @@
 ---
 source: crates/sui-indexer-alt-graphql/src/lib.rs
-assertion_line: 680
 expression: sdl
 ---
 """
@@ -2045,6 +2044,30 @@ type MergeCoinsCommand {
 }
 
 """
+An ML-DSA-65 (FIPS 204) public key.
+"""
+type MlDsa65PublicKey {
+	"""
+	The raw public key bytes.
+	"""
+	bytes: Base64
+}
+
+"""
+An ML-DSA-65 (FIPS 204) signature.
+"""
+type MlDsa65Signature {
+	"""
+	The public key bytes.
+	"""
+	publicKey: Base64
+	"""
+	The raw signature bytes.
+	"""
+	signature: Base64
+}
+
+"""
 Abilities are keywords in Sui Move that define how types behave at the compiler level.
 """
 enum MoveAbility {
@@ -3064,7 +3087,7 @@ type MultisigMember {
 """
 A multisig member's public key, varying by scheme.
 """
-union MultisigMemberPublicKey = Ed25519PublicKey | Secp256K1PublicKey | Secp256R1PublicKey | PasskeyPublicKey | ZkLoginPublicIdentifier
+union MultisigMemberPublicKey = Ed25519PublicKey | Secp256K1PublicKey | Secp256R1PublicKey | PasskeyPublicKey | ZkLoginPublicIdentifier | MlDsa65PublicKey
 
 """
 An aggregated multisig signature.
@@ -4306,7 +4329,7 @@ type SharedInput {
 """
 The structured details of a signature, varying by scheme.
 """
-union SignatureScheme = Ed25519Signature | Secp256K1Signature | Secp256R1Signature | MultisigSignature | ZkLoginSignature | PasskeySignature
+union SignatureScheme = Ed25519Signature | Secp256K1Signature | Secp256R1Signature | MultisigSignature | ZkLoginSignature | PasskeySignature | MlDsa65Signature
 
 """
 The result of signature verification.
