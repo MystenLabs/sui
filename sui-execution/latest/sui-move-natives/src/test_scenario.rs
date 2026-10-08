@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    get_extension, get_extension_mut, get_nth_struct_field, get_tag_and_layouts, legacy_test_cost,
+    forwarding_address, get_extension, get_extension_mut, get_nth_struct_field,
+    get_tag_and_layouts, legacy_test_cost,
     object_runtime::{
         MoveAccumulatorAction, MoveAccumulatorEvent, MoveAccumulatorValue, ObjectRuntime,
         RuntimeResults, object_store::ChildObjectEffects,
@@ -31,7 +32,7 @@ use move_vm_runtime::{
 use move_vm_runtime::{
     execution::{
         Type,
-        values::{self, StructRef, Value},
+        values::{self, Struct, StructRef, Value},
     },
     pop_arg,
 };
@@ -42,13 +43,14 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
 };
 use sui_types::{
-    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, TypeTag,
+    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_ADDRESS, TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     clock::Clock,
     config,
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
     execution::DynamicallyLoadedObjectMetadata,
+    forwarding_address::{FORWARDING_ADDRESS_MODULE_NAME, MASTER_REGISTERED_STRUCT_NAME},
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
@@ -60,6 +62,7 @@ use sui_types::{
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
 const E_INVALID_SHARED_OR_IMMUTABLE_USAGE: u64 = 1;
 const E_OBJECT_NOT_FOUND_CODE: u64 = 4;
+const E_FORWARDING_ADDRESS_UNRESOLVABLE: u64 = 12;
 const E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET: u64 = 5;
 const E_RECEIVING_TICKET_ALREADY_ALLOCATED: u64 = 6;
 const E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET: u64 = 7;
@@ -86,6 +89,10 @@ pub struct InMemoryTestStore {
     /// Timestamp of the Clock `clock::borrow` returns. Unit tests have no consensus commits,
     /// so the test-only Clock helpers set it; it starts at the genesis Clock's 0.
     clock_timestamp_ms: Cell<u64>,
+    /// Forwarding master per master ID, as of the end of the previous transaction. Registry
+    /// records live in the scenario's object inventories rather than in `storage`, so each
+    /// transaction's `MasterRegistered` events are applied here when it ends.
+    forwarding_masters: RefCell<BTreeMap<u64, SuiAddress>>,
 }
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
@@ -122,6 +129,27 @@ impl InMemoryTestStore {
             .borrow_mut()
             .insert((owner, type_), reserved);
         true
+    }
+
+    fn record_forwarding_registrations(
+        &self,
+        events: &[(StructTag, Value)],
+    ) -> PartialVMResult<()> {
+        for (tag, value) in events {
+            if tag.address != SUI_FRAMEWORK_ADDRESS
+                || tag.module.as_ident_str() != FORWARDING_ADDRESS_MODULE_NAME
+                || tag.name.as_ident_str() != MASTER_REGISTERED_STRUCT_NAME
+            {
+                continue;
+            }
+            let fields: Vec<Value> = value.copy_value().value_as::<Struct>()?.unpack().collect();
+            let [master_id, master, _cap_id]: [Value; 3] = safe_unwrap!(fields.try_into().ok());
+            self.forwarding_masters.borrow_mut().insert(
+                master_id.value_as::<u64>()?,
+                master.value_as::<AccountAddress>()?.into(),
+            );
+        }
+        Ok(())
     }
 
     /// Applies the ending transaction's accumulator events to the settled balances, and drops
@@ -198,6 +226,10 @@ impl ImplicitSystemObjectResolver for InMemoryTestStore {
             },
             TransactionDigest::default(),
         ))
+    }
+
+    fn forwarding_master(&self, master_id: u64) -> sui_types::error::SuiResult<Option<SuiAddress>> {
+        Ok(self.forwarding_masters.borrow().get(&master_id).copied())
     }
 }
 
@@ -288,11 +320,11 @@ pub fn end_transaction(
     let results = object_runtime_state.finish(received, ChildObjectEffects::new());
     let RuntimeResults {
         writes,
-        user_events,
+        mut user_events,
         loaded_child_objects: _,
         created_object_ids,
         deleted_object_ids,
-        accumulator_events,
+        mut accumulator_events,
         settlement_input_sui: _,
         settlement_output_sui: _,
     } = match results {
@@ -304,6 +336,40 @@ pub fn end_transaction(
             ));
         }
     };
+    // The same resolution the adapter runs at the end of a transaction, against the masters this
+    // scenario has registered so far, without gas.
+    {
+        let protocol_config = get_extension!(context, ObjectRuntime)?.protocol_config;
+        let store: &&InMemoryTestStore = get_extension!(context)?;
+        let mut no_gas = forwarding_address::NoForwardingGas;
+        let events = forwarding_address::Resolver::new(protocol_config, *store, &mut no_gas)
+            .reroute(
+                writes.iter().map(|(id, (owner, _, _))| (*id, owner)),
+                &mut accumulator_events,
+            );
+        match events {
+            Ok(events) => {
+                for (tag, contents) in events {
+                    let type_tag = TypeTag::Struct(Box::new(tag.clone()));
+                    let layout = safe_unwrap!(context.type_tag_to_type_layout(&type_tag));
+                    let value = safe_unwrap!(Value::simple_deserialize(&contents, &layout));
+                    user_events.push((tag, value));
+                }
+            }
+            Err(forwarding_address::RerouteError::Unresolvable(_)) => {
+                return Ok(NativeResult::err(
+                    legacy_test_cost(),
+                    E_FORWARDING_ADDRESS_UNRESOLVABLE,
+                ));
+            }
+            Err(error) => {
+                return Err(
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(format!("forwarding address resolution failed: {error:?}")),
+                );
+            }
+        }
+    }
     let object_runtime_ref: &mut ObjectRuntime = get_extension_mut!(context)?;
     let all_active_child_objects_with_values = object_runtime_ref
         .all_active_child_objects()
@@ -408,6 +474,7 @@ pub fn end_transaction(
     if !store.settle_funds(accumulator_events) {
         return Ok(NativeResult::err(legacy_test_cost(), E_UNBACKED_WITHDRAWAL));
     }
+    store.record_forwarding_registrations(&user_events)?;
 
     // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
