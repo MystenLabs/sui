@@ -254,6 +254,8 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
 /// consensus assigned to this transaction. Never sees writes made earlier in the same transaction.
 pub trait ImplicitSystemObjectResolver {
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
+    /// The master address registered for `master_id`, or `None` if it is unregistered.
+    fn forwarding_master(&self, master_id: u64) -> SuiResult<Option<SuiAddress>>;
 }
 
 pub struct DenyListResult {

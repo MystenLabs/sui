@@ -3006,6 +3006,22 @@ impl AuthorityState {
         })
     }
 
+    pub fn forwarding_address_registry_version_for_testing(
+        &self,
+    ) -> Option<sui_types::base_types::ConsensusObjectVersion> {
+        let initial_shared_version = self
+            .epoch_store_for_testing()
+            .epoch_start_config()
+            .forwarding_address_registry_obj_initial_shared_version()?;
+        let version = self
+            .get_object(&sui_types::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)?
+            .version();
+        Some(sui_types::base_types::ConsensusObjectVersion {
+            initial_shared_version,
+            version,
+        })
+    }
+
     /// Executes accumulator settlement for testing purposes.
     /// Returns a list of (transaction, execution_env) pairs that can be replayed on another
     /// AuthorityState (e.g., a fullnode) using `replay_settlement_for_testing`.
