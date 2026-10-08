@@ -5,7 +5,7 @@
 use crate::{
     PreCompiledProgramInfo,
     cfgir::{
-        self, OptConstants,
+        self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
         cfg::{ImmForwardCFG, MutForwardCFG},
         constants::{self, Constants},
@@ -379,20 +379,20 @@ fn function_body(
                     cfgir::refine_inference_and_verify(&function_context, cfg);
                     // do not optimize if there are errors, warnings are okay
                     if !context.env.has_errors() {
-                        let constants = OptConstants {
-                            values: &constants.values,
-                            force_inline: false,
-                        };
                         cfgir::optimize(
                             context.env,
                             &context.reporter,
-                            constants,
                             context.current_package,
                             signature,
                             &locals,
+                            &constants.values,
                             cfg,
                         );
-                        cfgir::report_always_erroring_operations(&context.reporter, constants, cfg);
+                        cfgir::report_always_erroring_operations(
+                            &context.reporter,
+                            &constants.values,
+                            cfg,
+                        );
                     }
                 },
             );

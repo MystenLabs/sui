@@ -8,11 +8,11 @@ use crate::{
     cfgir::{
         ast::{BasicBlocks, remap_labels},
         cfg::{CFG, MutForwardCFG},
-        optimize::OptConstants,
     },
     diagnostics::DiagnosticReporter,
-    expansion::ast::Mutability,
-    hlir::ast::{Command_, FunctionSignature, Label, SingleType, Var},
+    expansion::ast::{ModuleIdent, Mutability},
+    hlir::ast::{Command_, FunctionSignature, Label, SingleType, Value, Var},
+    parser::ast::ConstantName,
     shared::unique_map::UniqueMap,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -20,9 +20,9 @@ use std::collections::{BTreeMap, BTreeSet};
 /// returns true if anything changed
 pub fn optimize(
     _reporter: &DiagnosticReporter,
-    _constants: OptConstants,
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
+    _constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let changed = optimize_(cfg.start_block(), cfg.blocks_mut());
