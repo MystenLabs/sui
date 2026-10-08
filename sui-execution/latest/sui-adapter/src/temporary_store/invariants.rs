@@ -29,6 +29,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::effects::{AccumulatorOperation, AccumulatorValue};
 use sui_types::error::{ExecutionError, SuiResult};
 use sui_types::execution::DynamicallyLoadedObjectMetadata;
+use sui_types::forwarding_address::ForwardingAddress;
 use sui_types::gas::GasCostSummary;
 use sui_types::is_system_package;
 use sui_types::layout_resolver::LayoutResolver;
@@ -544,6 +545,36 @@ impl InvariantChecker {
                 "packages written by this transaction do not correspond to its publish and upgrade \
                  commands: commands declared {declared:?}, packages recorded {written:?}"
             )));
+        }
+        Ok(())
+    }
+
+    /// Nothing can sign for a forwarding address, so nothing may end up there: every funds credit
+    /// to one is rerouted to its master, and everything else sent to one fails the transaction.
+    /// Checked after gas charging so the charge itself is covered.
+    pub(crate) fn check_no_forwarding_recipients(
+        &self,
+        store: &TemporaryStore<'_>,
+    ) -> Result<(), ExecutionError> {
+        if !store.protocol_config().enable_forwarding_addresses() {
+            return Ok(());
+        }
+        for (id, object) in &store.execution_results.written_objects {
+            if let Ok(owner) = object.owner.get_owner_address()
+                && ForwardingAddress::has_magic(owner)
+            {
+                return Err(ExecutionError::invariant_violation(format!(
+                    "object {id} is owned by forwarding address {owner}"
+                )));
+            }
+        }
+        for event in &store.execution_results.accumulator_events {
+            let address = event.write.address.address;
+            if ForwardingAddress::has_magic(address) {
+                return Err(ExecutionError::invariant_violation(format!(
+                    "accumulator write targets forwarding address {address}"
+                )));
+            }
         }
         Ok(())
     }

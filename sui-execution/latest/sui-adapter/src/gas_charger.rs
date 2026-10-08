@@ -337,6 +337,48 @@ pub mod checked {
             self.gas_status.charge_storage_read(owner_cost)
         }
 
+        /// Charged once per recipient that is a forwarding address, when its resolution starts.
+        pub fn charge_forwarding_resolution(
+            &mut self,
+            protocol_config: &ProtocolConfig,
+        ) -> Result<(), ExecutionError> {
+            self.charge_internal_gas(protocol_config.forwarding_address_resolve_cost_base())
+        }
+
+        /// Charged before each registry read while resolving a forwarding address.
+        pub fn charge_forwarding_lookup(
+            &mut self,
+            protocol_config: &ProtocolConfig,
+        ) -> Result<(), ExecutionError> {
+            self.charge_internal_gas(protocol_config.forwarding_address_resolve_lookup_cost_base())
+        }
+
+        /// Charges an event the adapter emits on Move's behalf the way `event::emit` would,
+        /// with the serialized size standing in for the Move value's abstract size.
+        pub fn charge_synthesized_event(
+            &mut self,
+            protocol_config: &ProtocolConfig,
+            tag_size: u64,
+            value_size: u64,
+        ) -> Result<(), ExecutionError> {
+            let cost = protocol_config.event_emit_cost_base()
+                + protocol_config.event_emit_value_size_derivation_cost_per_byte() * value_size
+                + protocol_config.event_emit_tag_size_derivation_cost_per_byte() * tag_size
+                + protocol_config.event_emit_output_cost_per_byte() * (tag_size + value_size);
+            self.charge_internal_gas(cost)
+        }
+
+        fn charge_internal_gas(&mut self, amount: u64) -> Result<(), ExecutionError> {
+            self.gas_status
+                .move_gas_status_mut()
+                .deduct_gas(move_core_types::gas_algebra::InternalGas::new(amount))
+                .map_err(|_| {
+                    ExecutionError::from_kind(
+                        sui_types::execution_status::ExecutionErrorKind::InsufficientGas,
+                    )
+                })
+        }
+
         /// Restore the store + gas state to the post-input shape: drop execution writes, clear
         /// storage cost/rebate, re-smash gas, and re-touch mutable inputs so their versions still
         /// bump on the err path.
