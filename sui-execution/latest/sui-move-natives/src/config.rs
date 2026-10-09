@@ -5,11 +5,12 @@ use crate::{
     NativesCostTable, abstract_size, get_extension, get_extension_mut,
     object_runtime::ObjectRuntime,
 };
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
 use move_binary_format::{safe_assert_eq, safe_unwrap};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::StructTag,
-    runtime_value as R, vm_status::StatusCode,
+    runtime_value as R,
 };
 use move_vm_runtime::execution::values::{Struct, Vector};
 use move_vm_runtime::native_charge_gas_early_exit;
@@ -50,13 +51,11 @@ pub fn read_setting_impl(
 
     let config_read_setting_impl_cost_base =
         config_read_setting_impl_cost_base.ok_or_else(|| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("gas cost is not set".to_string())
+            partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "gas cost is not set")
         })?;
     let config_read_setting_impl_cost_per_byte = config_read_setting_impl_cost_per_byte
         .ok_or_else(|| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("gas cost is not set".to_string())
+            partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR, "gas cost is not set")
         })?;
     // Charge base fee
     native_charge_gas_early_exit!(context, config_read_setting_impl_cost_base);
@@ -73,10 +72,10 @@ pub fn read_setting_impl(
     let field_setting_tag: StructTag = match context.type_to_type_tag(&field_setting_ty)? {
         TypeTag::Struct(s) => *s,
         _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Sui verifier guarantees this is a struct"
+            ));
         }
     };
     let Some(field_setting_layout) = context.type_to_type_layout(&field_setting_ty)? else {
@@ -164,8 +163,10 @@ fn consistent_value_before_current_epoch(
 fn unpack_struct<const N: usize>(s: Value) -> PartialVMResult<[Value; N]> {
     let s: Struct = s.value_as()?;
     s.unpack().collect::<Vec<_>>().try_into().map_err(|e| {
-        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-            .with_message(format!("struct expected to have {N} fields: {e:?}"))
+        partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "struct expected to have {N} fields: {e:?}"
+        )
     })
 }
 
@@ -176,8 +177,10 @@ fn unpack_option(option: Value, type_param: &Type) -> PartialVMResult<Option<Val
         None
     } else {
         let [elem]: [Value; 1] = vec.unpack(type_param, 1)?.try_into().map_err(|e| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message(format!("vector expected to have one element: {e:?}"))
+            partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "vector expected to have one element: {e:?}"
+            )
         })?;
         Some(elem)
     })

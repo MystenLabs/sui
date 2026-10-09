@@ -5,11 +5,11 @@ use crate::{
     NativesCostTable, abstract_size, get_extension, get_extension_mut, legacy_test_cost,
     object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
 };
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
 use move_binary_format::{safe_assert, safe_assert_eq, safe_unwrap};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
-    vm_status::StatusCode,
 };
 use move_vm_runtime::{
     execution::{
@@ -48,8 +48,8 @@ pub fn emit(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 1);
+    safe_assert_eq!(ty_args.len(), 1);
+    safe_assert_eq!(args.len(), 1);
 
     let ty = safe_unwrap!(ty_args.pop());
     let event_value = safe_unwrap!(args.pop_back());
@@ -61,8 +61,8 @@ pub fn emit_authenticated_impl(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.len() == 2);
-    debug_assert!(args.len() == 3);
+    safe_assert_eq!(ty_args.len(), 2);
+    safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
     if !get_extension!(context, ObjectRuntime)?
@@ -129,10 +129,10 @@ fn emit_impl(
     let tag = match context.type_to_type_tag(&ty)? {
         TypeTag::Struct(s) => s,
         _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            );
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Sui verifier guarantees this is a struct"
+            ));
         }
     };
     let tag_size = tag.abstract_size_for_gas_metering();
@@ -163,13 +163,11 @@ fn emit_impl(
     let ev_size = u64::from(tag_size + event_value_size);
     // Check if the event size is within the limit
     if ev_size > max_event_emit_size {
-        return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-            .with_message(format!(
-                "Emitting event of size {ev_size} bytes. Limit is {max_event_emit_size} bytes."
-            ))
-            .with_sub_status(
-                VMMemoryLimitExceededSubStatusCode::EVENT_SIZE_LIMIT_EXCEEDED as u64,
-            ));
+        return Err(partial_vm_error!(
+            MEMORY_LIMIT_EXCEEDED,
+            "Emitting event of size {ev_size} bytes. Limit is {max_event_emit_size} bytes."
+        )
+        .with_sub_status(VMMemoryLimitExceededSubStatusCode::EVENT_SIZE_LIMIT_EXCEEDED as u64));
     }
 
     // Check that the size contribution of the event is within the total size limit
@@ -180,10 +178,9 @@ fn emit_impl(
     {
         let total_events_size = obj_runtime.state.total_events_size() + ev_size;
         if total_events_size > max_event_emit_size_total {
-            return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
-                .with_message(format!(
+            return Err(partial_vm_error!(MEMORY_LIMIT_EXCEEDED,
                     "Reached total event size of size {total_events_size} bytes. Limit is {max_event_emit_size_total} bytes."
-                ))
+                )
                 .with_sub_status(
                     VMMemoryLimitExceededSubStatusCode::TOTAL_EVENT_SIZE_LIMIT_EXCEEDED as u64,
                 ));
@@ -214,8 +211,10 @@ fn emit_impl(
             .total_events_emitted()
             .checked_sub(1)
             .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("No events found after emitting authenticated event".to_string())
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "No events found after emitting authenticated event"
+                )
             })?;
         obj_runtime.emit_accumulator_event(
             accumulator_id,

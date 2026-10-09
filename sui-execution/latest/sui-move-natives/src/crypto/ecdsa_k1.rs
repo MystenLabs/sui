@@ -14,6 +14,8 @@ use fastcrypto::{
     traits::{RecoverableSignature, ToFromBytes},
 };
 use move_binary_format::errors::PartialVMResult;
+use move_binary_format::safe_assert;
+use move_binary_format::safe_assert_eq;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
     execution::{
@@ -76,8 +78,8 @@ pub fn ecrecover(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 3);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 3);
 
     let hash = pop_arg!(args, u8);
 
@@ -158,8 +160,8 @@ pub fn decompress_pubkey(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 1);
 
     // Load the cost parameters from the protocol config
     let ecdsa_k1_decompress_pubkey_cost_params = get_extension!(context, NativesCostTable)?
@@ -220,8 +222,8 @@ pub fn secp256k1_verify(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 4);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 4);
 
     let hash = pop_arg!(args, u8);
 
@@ -310,8 +312,8 @@ pub fn secp256k1_sign(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 4);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 4);
 
     // The corresponding Move function, sui::ecdsa_k1::secp256k1_sign, is only used for testing, so
     // we don't need to charge any gas.
@@ -363,8 +365,8 @@ pub fn secp256k1_keypair_from_seed(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 1);
 
     // The corresponding Move function, sui::ecdsa_k1::secp256k1_keypair_from_seed, is only used for
     // testing, so we don't need to charge any gas.

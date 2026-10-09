@@ -11,15 +11,15 @@
 //! block for any basic block.
 use crate::absint::{FunctionContext, VMControlFlowGraph};
 use move_abstract_interpreter::control_flow_graph::ControlFlowGraph;
+use move_binary_format::partial_vm_error;
 use move_binary_format::{
     CompiledModule,
-    errors::{PartialVMError, PartialVMResult},
+    errors::PartialVMResult,
     file_format::{
         Bytecode, CodeOffset, CodeUnit, FunctionDefinitionIndex, Signature, StructFieldInformation,
     },
 };
 use move_bytecode_verifier_meter::Meter;
-use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
 
 type BlockId = CodeOffset;
@@ -71,37 +71,31 @@ impl<'a> StackUsageVerifier<'a> {
             if let Some(max_push_size) = config.max_push_size
                 && overall_push > max_push_size as u64
             {
-                return Err(PartialVMError::new(StatusCode::VALUE_STACK_PUSH_OVERFLOW)
+                return Err(partial_vm_error!(VALUE_STACK_PUSH_OVERFLOW)
                     .at_code_offset(self.current_function(), block_start));
             }
 
             // Check that the stack height is sufficient to accommodate the number
             // of pops this instruction does
             if stack_size_increment < num_pops {
-                return Err(
-                    PartialVMError::new(StatusCode::NEGATIVE_STACK_SIZE_WITHIN_BLOCK)
-                        .at_code_offset(self.current_function(), block_start),
-                );
+                return Err(partial_vm_error!(NEGATIVE_STACK_SIZE_WITHIN_BLOCK)
+                    .at_code_offset(self.current_function(), block_start));
             }
             if let Some(new_incr) = u64::checked_sub(stack_size_increment, num_pops) {
                 stack_size_increment = new_incr
             } else {
-                return Err(
-                    PartialVMError::new(StatusCode::NEGATIVE_STACK_SIZE_WITHIN_BLOCK)
-                        .at_code_offset(self.current_function(), block_start),
-                );
+                return Err(partial_vm_error!(NEGATIVE_STACK_SIZE_WITHIN_BLOCK)
+                    .at_code_offset(self.current_function(), block_start));
             };
             if let Some(new_incr) = u64::checked_add(stack_size_increment, num_pushes) {
                 stack_size_increment = new_incr
             } else {
-                return Err(
-                    PartialVMError::new(StatusCode::POSITIVE_STACK_SIZE_AT_BLOCK_END)
-                        .at_code_offset(self.current_function(), block_start),
-                );
+                return Err(partial_vm_error!(POSITIVE_STACK_SIZE_AT_BLOCK_END)
+                    .at_code_offset(self.current_function(), block_start));
             };
 
             if stack_size_increment > config.max_value_stack_size as u64 {
-                return Err(PartialVMError::new(StatusCode::VALUE_STACK_OVERFLOW)
+                return Err(partial_vm_error!(VALUE_STACK_OVERFLOW)
                     .at_code_offset(self.current_function(), block_start));
             }
         }
@@ -109,10 +103,8 @@ impl<'a> StackUsageVerifier<'a> {
         if stack_size_increment == 0 {
             Ok(())
         } else {
-            Err(
-                PartialVMError::new(StatusCode::POSITIVE_STACK_SIZE_AT_BLOCK_END)
-                    .at_code_offset(self.current_function(), block_start),
-            )
+            Err(partial_vm_error!(POSITIVE_STACK_SIZE_AT_BLOCK_END)
+                .at_code_offset(self.current_function(), block_start))
         }
     }
 

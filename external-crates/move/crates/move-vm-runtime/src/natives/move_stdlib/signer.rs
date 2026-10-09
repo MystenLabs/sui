@@ -12,7 +12,7 @@ use crate::{
     },
     pop_arg,
 };
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, safe_assert, safe_assert_eq};
 use move_core_types::gas_algebra::InternalGas;
 use smallvec::smallvec;
 use std::{collections::VecDeque, sync::Arc};
@@ -32,11 +32,11 @@ pub struct BorrowAddressGasParameters {
 fn native_borrow_address(
     gas_params: &BorrowAddressGasParameters,
     context: &mut NativeContext,
-    _ty_args: Vec<Type>,
+    ty_args: Vec<Type>,
     mut arguments: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(_ty_args.is_empty());
-    debug_assert!(arguments.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(arguments.len(), 1);
 
     native_charge_gas_early_exit!(context, gas_params.base);
     let signer_reference = pop_arg!(arguments, SignerRef);

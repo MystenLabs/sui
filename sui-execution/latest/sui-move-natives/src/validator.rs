@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{NativesCostTable, get_extension};
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
+use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
+use move_binary_format::{safe_assert, safe_assert_eq};
+use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::pop_arg;
 use move_vm_runtime::{
     execution::Type, execution::values::Value, natives::functions::NativeResult,
@@ -29,8 +31,8 @@ pub fn validate_metadata_bcs(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert_eq!(args.len(), 1);
 
     let validator_validate_metadata_bcs_cost_params = get_extension!(context, NativesCostTable)?
         .validator_validate_metadata_bcs_cost_params
@@ -51,9 +53,9 @@ pub fn validate_metadata_bcs(
 
     let validator_metadata =
         bcs::from_bytes::<ValidatorMetadataV1>(&metadata_bytes).map_err(|_| {
-            PartialVMError::new(StatusCode::MALFORMED).with_message(
+            partial_vm_error!(
+                MALFORMED,
                 "ValidateMetadata Move struct does not match internal ValidateMetadata struct"
-                    .to_string(),
             )
         })?;
 

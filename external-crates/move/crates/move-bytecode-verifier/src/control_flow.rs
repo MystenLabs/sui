@@ -17,6 +17,7 @@ use crate::{
     control_flow_v5,
     loop_summary::{LoopPartition, LoopSummary},
 };
+use move_binary_format::partial_vm_error;
 use move_binary_format::{
     CompiledModule,
     errors::{PartialVMError, PartialVMResult},
@@ -57,9 +58,9 @@ fn verify_fallthrough(
 ) -> PartialVMResult<()> {
     let current_function = current_function_opt.unwrap_or(FunctionDefinitionIndex(0));
     match code.code.last() {
-        None => Err(PartialVMError::new(StatusCode::EMPTY_CODE_UNIT)),
+        None => Err(partial_vm_error!(EMPTY_CODE_UNIT)),
         Some(last) if !last.is_unconditional_branch() => {
-            Err(PartialVMError::new(StatusCode::INVALID_FALL_THROUGH)
+            Err(partial_vm_error!(INVALID_FALL_THROUGH)
                 .at_code_offset(current_function, (code.code.len() - 1) as CodeOffset))
         }
         Some(_) => Ok(()),
