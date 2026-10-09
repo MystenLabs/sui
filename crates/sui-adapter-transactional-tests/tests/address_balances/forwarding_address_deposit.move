@@ -9,9 +9,9 @@
 
 //# init --addresses test=0x0 --accounts A B
 
-//# programmable --sender A --inputs mutshared(250) @A --gas-budget 2000000000
+//# programmable --sender A --inputs mutshared(250) @A 1 --gas-budget 2000000000
 // Registration pays the registration fee.
-//> 0: sui::forwarding_address::register(Input(0));
+//> 0: sui::forwarding_address::register(Input(0), Input(2));
 //> 1: TransferObjects([Result(0)], Input(1));
 
 //# programmable --sender B --inputs 1000 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101

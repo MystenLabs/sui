@@ -23,14 +23,14 @@ fun register_allocates_distinct_ids_owned_by_the_registrant() {
 
     scenario.next_tx(ALICE);
     let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
-    let alice_cap = forwarding_address::register(&mut registry, scenario.ctx());
+    let alice_cap = forwarding_address::register(&mut registry, 1, scenario.ctx());
     let alice_id = alice_cap.master_id();
     transfer::public_transfer(alice_cap, ALICE);
     test_scenario::return_shared(registry);
 
     scenario.next_tx(BOB);
     let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
-    let bob_cap = forwarding_address::register(&mut registry, scenario.ctx());
+    let bob_cap = forwarding_address::register(&mut registry, 1, scenario.ctx());
     let bob_id = bob_cap.master_id();
     transfer::public_transfer(bob_cap, BOB);
 
@@ -68,7 +68,7 @@ fun the_last_counter_value_is_allocatable() {
     scenario.next_tx(ALICE);
     let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
     forwarding_address::set_next_counter_for_testing(&mut registry, LAST_COUNTER);
-    let cap = forwarding_address::register(&mut registry, scenario.ctx());
+    let cap = forwarding_address::register(&mut registry, 1, scenario.ctx());
     assert!(cap.master_id() == forwarding_address::mix_master_id_for_testing(0xFFFF_FFFF_FFFF));
     transfer::public_transfer(cap, ALICE);
     test_scenario::return_shared(registry);
@@ -83,7 +83,7 @@ fun register_aborts_once_ids_are_exhausted() {
     scenario.next_tx(ALICE);
     let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
     forwarding_address::set_next_counter_for_testing(&mut registry, LAST_COUNTER + 1);
-    let cap = forwarding_address::register(&mut registry, scenario.ctx());
+    let cap = forwarding_address::register(&mut registry, 1, scenario.ctx());
     transfer::public_transfer(cap, ALICE);
     test_scenario::return_shared(registry);
     scenario.end();
@@ -134,7 +134,7 @@ fun register_then_switch_to(master: address, depositor: address): (Scenario, u64
     forwarding_address::create_for_testing(scenario.ctx());
     scenario.next_tx(master);
     let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
-    let cap = forwarding_address::register(&mut registry, scenario.ctx());
+    let cap = forwarding_address::register(&mut registry, 1, scenario.ctx());
     let master_id = cap.master_id();
     transfer::public_transfer(cap, master);
     test_scenario::return_shared(registry);
@@ -198,11 +198,204 @@ fun deposit_to_an_id_registered_in_the_same_transaction_aborts() {
     forwarding_address::create_for_testing(scenario.ctx());
     scenario.next_tx(ALICE);
     let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
-    let cap = forwarding_address::register(&mut registry, scenario.ctx());
+    let cap = forwarding_address::register(&mut registry, 1, scenario.ctx());
     balance::create_for_testing<SUI>(1000).send_funds(
         forwarding_address(cap.master_id(), OPAQUE_VARIANT, 1),
     );
     transfer::public_transfer(cap, ALICE);
     test_scenario::return_shared(registry);
+    scenario.end();
+}
+
+// === Pause and rotation ===
+
+const CAROL: address = @0xCA201;
+
+/// Registers for ALICE and leaves the scenario in a transaction by BOB.
+fun register_alice_then_switch_to_bob(): (Scenario, MasterCap) {
+    let mut scenario = test_scenario::begin(@0x0);
+    forwarding_address::create_for_testing(scenario.ctx());
+    scenario.next_tx(ALICE);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    let cap = forwarding_address::register(&mut registry, 2, scenario.ctx());
+    test_scenario::return_shared(registry);
+    scenario.next_tx(BOB);
+    (scenario, cap)
+}
+
+#[test]
+fun paused_ids_reject_deposits_until_the_cap_unpauses() {
+    let (mut scenario, cap) = register_alice_then_switch_to_bob();
+    let target = forwarding_address(cap.master_id(), OPAQUE_VARIANT, 1);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::pause(&mut registry, &cap);
+    assert!(forwarding_address::is_paused_for_testing(&registry, cap.master_id()));
+    // Pausing twice is a no-op, not an error.
+    forwarding_address::pause(&mut registry, &cap);
+    forwarding_address::unpause(&mut registry, &cap);
+    assert!(!forwarding_address::is_paused_for_testing(&registry, cap.master_id()));
+    test_scenario::return_shared(registry);
+
+    scenario.next_tx(BOB);
+    balance::create_for_testing<SUI>(1000).send_funds(target);
+    scenario.next_tx(BOB);
+    assert!(test_scenario::settled_balance<SUI>(ALICE) == 1000);
+    transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::test_scenario::EForwardingAddressUnresolvable)]
+fun deposits_to_a_paused_id_abort() {
+    let (mut scenario, cap) = register_alice_then_switch_to_bob();
+    let target = forwarding_address(cap.master_id(), OPAQUE_VARIANT, 1);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::pause(&mut registry, &cap);
+    test_scenario::return_shared(registry);
+    transfer::public_transfer(cap, ALICE);
+    scenario.next_tx(BOB);
+    balance::create_for_testing<SUI>(1000).send_funds(target);
+    scenario.next_tx(BOB);
+    scenario.end();
+}
+
+#[test]
+fun the_master_can_pause_without_the_cap() {
+    let (mut scenario, cap) = register_alice_then_switch_to_bob();
+    scenario.next_tx(ALICE);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::pause_by_master(&mut registry, cap.master_id(), scenario.ctx());
+    assert!(forwarding_address::is_paused_for_testing(&registry, cap.master_id()));
+    test_scenario::return_shared(registry);
+    transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::forwarding_address::ENotMaster)]
+fun only_the_master_can_pause_without_the_cap() {
+    let (mut scenario, cap) = register_alice_then_switch_to_bob();
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::pause_by_master(&mut registry, cap.master_id(), scenario.ctx());
+    test_scenario::return_shared(registry);
+    transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+#[test]
+fun rotation_takes_effect_after_the_delay() {
+    let (mut scenario, cap) = register_alice_then_switch_to_bob();
+    let target = forwarding_address(cap.master_id(), OPAQUE_VARIANT, 1);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::propose_rotation(&mut registry, &cap, CAROL, scenario.ctx());
+    assert!(
+        forwarding_address::pending_rotation_for_testing(&registry, cap.master_id()) == option::some(CAROL),
+    );
+    test_scenario::return_shared(registry);
+
+    // Pending: deposits still reach the old master.
+    scenario.next_tx(BOB);
+    balance::create_for_testing<SUI>(300).send_funds(target);
+    scenario.next_tx(BOB);
+    assert!(test_scenario::settled_balance<SUI>(ALICE) == 300);
+
+    // One epoch later the delay of two has not elapsed; two epochs later it has, and anyone may
+    // finalize.
+    scenario.next_epoch(BOB);
+    scenario.next_epoch(BOB);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::finalize_rotation(&mut registry, cap.master_id(), scenario.ctx());
+    assert!(
+        forwarding_address::registered_master_for_testing(&registry, cap.master_id()) == option::some(CAROL),
+    );
+    assert!(forwarding_address::pending_rotation_for_testing(&registry, cap.master_id()).is_none());
+    test_scenario::return_shared(registry);
+
+    scenario.next_tx(BOB);
+    balance::create_for_testing<SUI>(400).send_funds(target);
+    scenario.next_tx(BOB);
+    assert!(test_scenario::settled_balance<SUI>(ALICE) == 300);
+    assert!(test_scenario::settled_balance<SUI>(CAROL) == 400);
+    transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::forwarding_address::ERotationNotDue)]
+fun rotation_cannot_be_finalized_before_the_delay() {
+    let (mut scenario, cap) = register_alice_then_switch_to_bob();
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::propose_rotation(&mut registry, &cap, CAROL, scenario.ctx());
+    test_scenario::return_shared(registry);
+    scenario.next_epoch(BOB);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::finalize_rotation(&mut registry, cap.master_id(), scenario.ctx());
+    test_scenario::return_shared(registry);
+    transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+#[test]
+fun the_master_can_cancel_a_rotation_without_the_cap() {
+    let (mut scenario, cap) = register_alice_then_switch_to_bob();
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::propose_rotation(&mut registry, &cap, CAROL, scenario.ctx());
+    test_scenario::return_shared(registry);
+    scenario.next_tx(ALICE);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::cancel_rotation_by_master(&mut registry, cap.master_id(), scenario.ctx());
+    assert!(forwarding_address::pending_rotation_for_testing(&registry, cap.master_id()).is_none());
+    test_scenario::return_shared(registry);
+    transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::forwarding_address::ENoPendingRotation)]
+fun cancelling_without_a_pending_rotation_aborts() {
+    let (scenario, cap) = register_alice_then_switch_to_bob();
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::cancel_rotation(&mut registry, &cap);
+    test_scenario::return_shared(registry);
+    transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::forwarding_address::EForwardingAddressMaster)]
+fun a_forwarding_address_cannot_become_a_master() {
+    let (mut scenario, cap) = register_alice_then_switch_to_bob();
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    let target = forwarding_address(cap.master_id(), OPAQUE_VARIANT, 1);
+    forwarding_address::propose_rotation(&mut registry, &cap, target, scenario.ctx());
+    test_scenario::return_shared(registry);
+    transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::forwarding_address::EInvalidRotationDelay)]
+fun registering_with_no_delay_aborts() {
+    let mut scenario = test_scenario::begin(@0x0);
+    forwarding_address::create_for_testing(scenario.ctx());
+    scenario.next_tx(ALICE);
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    let cap = forwarding_address::register(&mut registry, 0, scenario.ctx());
+    transfer::public_transfer(cap, ALICE);
+    test_scenario::return_shared(registry);
+    scenario.end();
+}
+
+#[test]
+fun the_rotation_delay_can_only_grow() {
+    let (scenario, cap) = register_alice_then_switch_to_bob();
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::increase_rotation_delay(&mut registry, &cap, 5);
+    test_scenario::return_shared(registry);
+    transfer::public_transfer(cap, ALICE);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::forwarding_address::EInvalidRotationDelay)]
+fun shortening_the_rotation_delay_aborts() {
+    let (scenario, cap) = register_alice_then_switch_to_bob();
+    let mut registry = scenario.take_shared<ForwardingAddressRegistry>();
+    forwarding_address::increase_rotation_delay(&mut registry, &cap, 1);
+    test_scenario::return_shared(registry);
+    transfer::public_transfer(cap, ALICE);
     scenario.end();
 }

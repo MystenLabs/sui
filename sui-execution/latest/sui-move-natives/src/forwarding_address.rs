@@ -29,7 +29,7 @@ use sui_types::{
     accumulator_root::AccumulatorValue,
     balance::Balance,
     base_types::{ObjectID, SuiAddress},
-    forwarding_address::{ForwardingAddress, ForwardingDeposit},
+    forwarding_address::{ForwardingAddress, ForwardingDeposit, ForwardingMaster},
     object::Owner,
     storage::ImplicitSystemObjectResolver,
 };
@@ -149,12 +149,18 @@ impl<'a> Resolver<'a> {
                     parsed.master_id
                 ))
             })?;
-        let Some(master) = master else {
+        let Some(ForwardingMaster { master, paused }) = master else {
             return Err(RerouteError::Unresolvable(format!(
                 "Forwarding address {forwarding_address} has no registered master (id {})",
                 parsed.master_id
             )));
         };
+        if paused {
+            return Err(RerouteError::Unresolvable(format!(
+                "Forwarding address {forwarding_address} is paused (id {})",
+                parsed.master_id
+            )));
+        }
         // FIXME(forwarding-addresses): before this reaches production, follow the chain when the
         // master is itself a forwarding address, bounded by a protocol config hop limit, charging
         // each hop's lookup and emitting an event per hop.

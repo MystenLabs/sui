@@ -49,7 +49,10 @@ use sui_types::{
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
     execution::DynamicallyLoadedObjectMetadata,
-    forwarding_address::{FORWARDING_ADDRESS_MODULE_NAME, MASTER_REGISTERED_STRUCT_NAME},
+    forwarding_address::{
+        FORWARDING_ADDRESS_MODULE_NAME, ForwardingMaster, MASTER_REGISTERED_STRUCT_NAME,
+        PAUSED_STRUCT_NAME, ROTATION_FINALIZED_STRUCT_NAME, UNPAUSED_STRUCT_NAME,
+    },
     id::UID,
     in_memory_storage::InMemoryStorage,
     object::{MoveObject, Object, Owner},
@@ -88,7 +91,7 @@ pub struct InMemoryTestStore {
     /// Forwarding master per master ID, as of the end of the previous transaction. Registry
     /// records live in the scenario's object inventories rather than in `storage`, so each
     /// transaction's `MasterRegistered` events are applied here when it ends.
-    forwarding_masters: RefCell<BTreeMap<u64, SuiAddress>>,
+    forwarding_masters: RefCell<BTreeMap<u64, ForwardingMaster>>,
 }
 impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
@@ -127,23 +130,51 @@ impl InMemoryTestStore {
     /// the reservations it took, which only cover that transaction. Returns false if the
     /// transaction withdrew more from an owner than it had, which only a withdrawal that was not
     /// reserved against these balances (e.g. one kept from an earlier transaction) can do.
+    /// Applies the ending transaction's registry events (registration, pause, unpause, finalized
+    /// rotation) to the masters that later transactions resolve against.
     fn record_forwarding_registrations(
         &self,
         events: &[(StructTag, Value)],
     ) -> PartialVMResult<()> {
         for (tag, value) in events {
+            let name = tag.name.as_ident_str();
             if tag.address != SUI_FRAMEWORK_ADDRESS
                 || tag.module.as_ident_str() != FORWARDING_ADDRESS_MODULE_NAME
-                || tag.name.as_ident_str() != MASTER_REGISTERED_STRUCT_NAME
+                || ![
+                    MASTER_REGISTERED_STRUCT_NAME,
+                    PAUSED_STRUCT_NAME,
+                    UNPAUSED_STRUCT_NAME,
+                    ROTATION_FINALIZED_STRUCT_NAME,
+                ]
+                .contains(&name)
             {
                 continue;
             }
-            let fields: Vec<Value> = value.copy_value().value_as::<Struct>()?.unpack().collect();
-            let [master_id, master, _cap_id]: [Value; 3] = safe_unwrap!(fields.try_into().ok());
-            self.forwarding_masters.borrow_mut().insert(
-                master_id.value_as::<u64>()?,
-                master.value_as::<AccountAddress>()?.into(),
-            );
+            let mut fields: VecDeque<Value> =
+                value.copy_value().value_as::<Struct>()?.unpack().collect();
+            let master_id = safe_unwrap!(fields.pop_front()).value_as::<u64>()?;
+            let mut masters = self.forwarding_masters.borrow_mut();
+            match name {
+                name if name == MASTER_REGISTERED_STRUCT_NAME => {
+                    let master = safe_unwrap!(fields.pop_front()).value_as::<AccountAddress>()?;
+                    masters.insert(
+                        master_id,
+                        ForwardingMaster {
+                            master: master.into(),
+                            paused: false,
+                        },
+                    );
+                }
+                name if name == PAUSED_STRUCT_NAME || name == UNPAUSED_STRUCT_NAME => {
+                    let entry = safe_unwrap!(masters.get_mut(&master_id));
+                    entry.paused = name == PAUSED_STRUCT_NAME;
+                }
+                name if name == ROTATION_FINALIZED_STRUCT_NAME => {
+                    let master = safe_unwrap!(fields.pop_front()).value_as::<AccountAddress>()?;
+                    safe_unwrap!(masters.get_mut(&master_id)).master = master.into();
+                }
+                _ => {}
+            }
         }
         Ok(())
     }
@@ -196,7 +227,10 @@ impl ImplicitSystemObjectResolver for InMemoryTestStore {
         Ok(self.settled_funds(owner, type_))
     }
 
-    fn forwarding_master(&self, master_id: u64) -> sui_types::error::SuiResult<Option<SuiAddress>> {
+    fn forwarding_master(
+        &self,
+        master_id: u64,
+    ) -> sui_types::error::SuiResult<Option<ForwardingMaster>> {
         Ok(self.forwarding_masters.borrow().get(&master_id).copied())
     }
 }

@@ -2569,6 +2569,9 @@ MasterCap
 MasterRecord
 	public struct
 	0x2::forwarding_address
+PendingRotation
+	public struct
+	0x2::forwarding_address
 MasterIdCounter
 	public struct
 	0x2::forwarding_address
@@ -2578,10 +2581,67 @@ ForwardingDeposit
 MasterRegistered
 	public struct
 	0x2::forwarding_address
+Paused
+	public struct
+	0x2::forwarding_address
+Unpaused
+	public struct
+	0x2::forwarding_address
+RotationProposed
+	public struct
+	0x2::forwarding_address
+RotationCancelled
+	public struct
+	0x2::forwarding_address
+RotationFinalized
+	public struct
+	0x2::forwarding_address
+RotationDelayIncreased
+	public struct
+	0x2::forwarding_address
 register
 	public fun
 	0x2::forwarding_address
 master_id
+	public fun
+	0x2::forwarding_address
+pause
+	public fun
+	0x2::forwarding_address
+pause_by_master
+	public fun
+	0x2::forwarding_address
+unpause
+	public fun
+	0x2::forwarding_address
+pause_impl
+	fun
+	0x2::forwarding_address
+propose_rotation
+	public fun
+	0x2::forwarding_address
+cancel_rotation
+	public fun
+	0x2::forwarding_address
+cancel_rotation_by_master
+	public fun
+	0x2::forwarding_address
+cancel_rotation_impl
+	fun
+	0x2::forwarding_address
+finalize_rotation
+	public fun
+	0x2::forwarding_address
+increase_rotation_delay
+	public fun
+	0x2::forwarding_address
+assert_master
+	fun
+	0x2::forwarding_address
+record_mut
+	fun
+	0x2::forwarding_address
+is_forwarding_address
 	public fun
 	0x2::forwarding_address
 charge_registration_fee

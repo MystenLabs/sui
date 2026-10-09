@@ -14,12 +14,13 @@ use sui_types::{
         FORWARDING_ADDRESS_MODULE_NAME, FORWARDING_ADDRESS_PAYLOAD_LENGTH,
         FORWARDING_DEPOSIT_STRUCT_NAME, ForwardingAddress, ForwardingDeposit,
         MASTER_REGISTERED_STRUCT_NAME, MasterRecord, MasterRecordKey, MasterRegistered,
+        RotationFinalized,
     },
     gas_coin::GAS,
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     supported_protocol_versions::SupportedProtocolVersions,
-    transaction::{Argument, ObjectArg, SharedObjectMutability, TransactionData},
+    transaction::{Argument, CallArg, ObjectArg, SharedObjectMutability, TransactionData},
 };
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
 
@@ -31,6 +32,8 @@ const REGISTER_COST_GAS_UNITS: u64 = REGISTER_COST / 1000;
 const PAYLOAD: [u8; FORWARDING_ADDRESS_PAYLOAD_LENGTH] = [
     0x80, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0xff,
 ];
+/// Rotation delay every registration in these tests uses.
+const ROTATION_DELAY_EPOCHS: u64 = 1;
 /// The mixed id the registry assigns to its first registration (the Move unit test
 /// `master_id_mixing_is_invertible_and_keeps_zero_reserved` pins the same constant).
 const FIRST_MASTER_ID: u64 = 0x52ca8647179c;
@@ -195,12 +198,13 @@ async fn register_master(env: &mut TestEnv, master: SuiAddress) -> Registration 
             mutability: SharedObjectMutability::Mutable,
         })
         .unwrap();
+    let rotation_delay = builder.pure(ROTATION_DELAY_EPOCHS).unwrap();
     let cap = builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("forwarding_address").unwrap(),
         Identifier::new("register").unwrap(),
         vec![],
-        vec![registry],
+        vec![registry, rotation_delay],
     );
     builder.transfer_arg(master, cap);
     let transaction = TransactionData::new_programmable(
@@ -253,7 +257,15 @@ async fn register_master(env: &mut TestEnv, master: SuiAddress) -> Registration 
             .is_some_and(|t| t.name().as_str() == "MasterCap"),
         "{cap:?}"
     );
-    assert_eq!(record, Some(MasterRecord { master }));
+    assert_eq!(
+        record,
+        Some(MasterRecord {
+            master,
+            paused: false,
+            pending: None,
+            rotation_delay_epochs: ROTATION_DELAY_EPOCHS,
+        })
+    );
 
     Registration {
         digest,
@@ -569,12 +581,13 @@ async fn test_register_and_deposit_in_the_same_transaction_fails() {
             mutability: SharedObjectMutability::Mutable,
         })
         .unwrap();
+    let rotation_delay = builder.pure(ROTATION_DELAY_EPOCHS).unwrap();
     let cap = builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
         Identifier::new("forwarding_address").unwrap(),
         Identifier::new("register").unwrap(),
         vec![],
-        vec![registry],
+        vec![registry, rotation_delay],
     );
     builder.transfer_arg(master, cap);
     add_gas_coin_balance_deposit(&mut builder, forwarding_address, amount);
@@ -753,12 +766,13 @@ fn vault_withdraw_to_transaction(
                 mutability: SharedObjectMutability::Mutable,
             })
             .unwrap();
+        let rotation_delay = builder.pure(ROTATION_DELAY_EPOCHS).unwrap();
         let cap = builder.programmable_move_call(
             SUI_FRAMEWORK_PACKAGE_ID,
             Identifier::new("forwarding_address").unwrap(),
             Identifier::new("register").unwrap(),
             vec![],
-            vec![registry],
+            vec![registry, rotation_delay],
         );
         builder.transfer_arg(sender, cap);
     }
@@ -937,4 +951,137 @@ async fn test_object_funds_forwarded_alongside_registrations_in_one_commit() {
         env.get_sui_balance_ab(master),
         initial_master_balance + 1000
     );
+}
+
+/// A master id's lifecycle on a real cluster: pausing with the cap makes deposits fail until the
+/// cap unpauses; a rotation proposed by the cap keeps paying the old master until the delay has
+/// passed and anyone finalizes it, after which deposits reach the new master.
+#[sim_test]
+async fn test_pause_and_rotation_policy() {
+    let mut env = forwarding_address_test_env(true).build().await;
+    let master = env.get_sender(0);
+    let depositor = env.get_sender(1);
+    let new_master = env.get_sender(2);
+    let amount = 1_000_000;
+    let registration = register_master(&mut env, master).await;
+    let forwarding_address = ForwardingAddress::derive_opaque(registration.master_id, PAYLOAD);
+
+    let registry_call = |env: &TestEnv, sender: SuiAddress, function: &str, args: Vec<CallArg>| {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let registry = builder
+            .obj(ObjectArg::SharedObject {
+                id: SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+                initial_shared_version: forwarding_address_registry_initial_shared_version(env),
+                mutability: SharedObjectMutability::Mutable,
+            })
+            .unwrap();
+        let mut arguments = vec![registry];
+        for arg in args {
+            arguments.push(builder.input(arg).unwrap());
+        }
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("forwarding_address").unwrap(),
+            Identifier::new(function).unwrap(),
+            vec![],
+            arguments,
+        );
+        TransactionData::new_programmable(
+            sender,
+            vec![env.get_gas_for_sender(sender)[0]],
+            builder.finish(),
+            10_000_000,
+            env.rgp,
+        )
+    };
+    let cap = |env: &TestEnv| {
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(
+            env.cluster.fullnode_handle.sui_node.with(|node| {
+                node.state()
+                    .get_object_cache_reader()
+                    .get_object(&registration.cap_id)
+                    .expect("MasterCap must exist")
+                    .compute_object_reference()
+            }),
+        ))
+    };
+    let master_id = CallArg::Pure(bcs::to_bytes(&registration.master_id).unwrap());
+
+    // Pause with the cap: deposits fail and nothing is credited.
+    let tx = registry_call(&env, master, "pause", vec![cap(&env)]);
+    let (_, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    let tx = forwarding_address_deposit_transaction(&env, depositor, forwarding_address, amount);
+    let (digest, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert_forwarding_unresolvable(effects.status(), "deposit to a paused id");
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+    assert_eq!(env.get_sui_balance_ab(master), 0);
+
+    // Unpause with the cap: deposits flow again.
+    let tx = registry_call(&env, master, "unpause", vec![cap(&env)]);
+    let (_, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    let tx = forwarding_address_deposit_transaction(&env, depositor, forwarding_address, amount);
+    let (digest, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+    assert_eq!(env.get_sui_balance_ab(master), amount);
+
+    // Propose a rotation: still the old master while pending, and not finalizable this epoch.
+    let tx = registry_call(
+        &env,
+        master,
+        "propose_rotation",
+        vec![
+            cap(&env),
+            CallArg::Pure(bcs::to_bytes(&new_master).unwrap()),
+        ],
+    );
+    let (_, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    let tx = forwarding_address_deposit_transaction(&env, depositor, forwarding_address, amount);
+    let (digest, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+    assert_eq!(env.get_sui_balance_ab(master), 2 * amount);
+    let tx = registry_call(
+        &env,
+        depositor,
+        "finalize_rotation",
+        vec![master_id.clone()],
+    );
+    let (_, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert!(
+        matches!(
+            effects.status(),
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionFailureStatus::MoveAbort(location, _),
+                ..
+            }) if location.function_name.as_deref() == Some("finalize_rotation")
+        ),
+        "finalizing before the delay must abort in finalize_rotation: {effects:?}"
+    );
+
+    // After the delay anyone can finalize; deposits then reach the new master.
+    env.cluster.trigger_reconfiguration().await;
+    env.update_all_gas().await;
+    let tx = registry_call(&env, depositor, "finalize_rotation", vec![master_id]);
+    let (digest, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    let events = get_events(&env, &digest);
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(
+        bcs::from_bytes::<RotationFinalized>(&events[0].contents).unwrap(),
+        RotationFinalized {
+            master_id: registration.master_id,
+            master: new_master,
+        }
+    );
+    let tx = forwarding_address_deposit_transaction(&env, depositor, forwarding_address, amount);
+    let (digest, effects) = env.exec_tx_directly(tx).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+    assert_eq!(env.get_sui_balance_ab(master), 2 * amount);
+    assert_eq!(env.get_sui_balance_ab(new_master), amount);
+    assert_forwarding_deposit_event(&env, &digest, forwarding_address, new_master, amount);
 }

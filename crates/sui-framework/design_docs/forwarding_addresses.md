@@ -85,9 +85,10 @@ wrapping. Ids look mixed but are not secret; the counter is public
 and the mix is invertible, which is fine because nothing depends on an id being unguessable.
 Assigned ids mean there is nothing to front-run.
 
-`MasterRecord` is published with a single field and its layout is also frozen: framework upgrades
-check struct layouts in bytecode, whether or not any record exists. Later state (paused, pending
-rotation) goes into separate registry dynamic fields keyed by master id.
+`MasterRecord { master, paused, pending, rotation_delay_epochs }` holds everything resolution and
+the lifecycle need, so a deposit costs one record read. Its layout freezes once it is published on a
+chain that keeps its state: framework upgrades check struct layouts in bytecode, whether or not any
+record exists, so any later state goes into separate registry dynamic fields keyed by master id.
 
 Registration charges a flat fee through a native, `forwarding_address_register_cost_base`, 1M gas
 units at 139 (about 1 SUI at a 1,000 MIST gas price), on top of normal gas and the dynamic field
@@ -104,8 +105,9 @@ whose target carries the magic:
 1. Charge `forwarding_address_resolve_cost_base` for the recipient. If its variant exceeds
    `forwarding_address_max_variant`, fail.
 2. Charge `forwarding_address_resolve_lookup_cost_base`, then read the master record from the
-   store through `ImplicitSystemObjectResolver::forwarding_master(master_id)`. No record: fail.
-   A master that is itself a forwarding address: fail (chaining is the next step).
+   store through `ImplicitSystemObjectResolver::forwarding_master(master_id)`. No record, or a
+   paused record: fail. A master that is itself a forwarding address: fail (chaining is the next
+   step).
 3. Rewrite the credit's target and accumulator object id to the master.
 
 Then emit one `ForwardingDeposit<T> { forwarding_address, master, amount }` per forwarding address
@@ -198,20 +200,47 @@ has existed since 132.
 ```move
 public struct ForwardingAddressRegistry has key { id: UID }
 public struct MasterCap has key, store { id: UID, master_id: u64 }
-public struct MasterRecord has store { master: address }          // dynamic field, key u64
+// Dynamic field on the registry, key u64 (the master id).
+public struct MasterRecord has store {
+    master: address,
+    paused: bool,
+    pending: Option<PendingRotation>,
+    rotation_delay_epochs: u64,
+}
+public struct PendingRotation has copy, drop, store { new_master: address, effective_epoch: u64 }
 public struct MasterIdCounter has copy, drop, store {}             // dynamic field, value u64
 
 public struct ForwardingDeposit<phantom T> has copy, drop { forwarding_address: address, master: address, amount: u64 }
-public struct MasterRegistered has copy, drop { master_id: u64, master: address, cap_id: ID }
+public struct MasterRegistered has copy, drop { master_id: u64, master: address, cap_id: ID, rotation_delay_epochs: u64 }
+public struct Paused has copy, drop { master_id: u64 }
+public struct Unpaused has copy, drop { master_id: u64 }
+public struct RotationProposed has copy, drop { master_id: u64, new_master: address, effective_epoch: u64 }
+public struct RotationCancelled has copy, drop { master_id: u64 }
+public struct RotationFinalized has copy, drop { master_id: u64, master: address }
+public struct RotationDelayIncreased has copy, drop { master_id: u64, rotation_delay_epochs: u64 }
 
-public fun register(registry: &mut ForwardingAddressRegistry, ctx: &mut TxContext): MasterCap;
+public fun register(registry: &mut ForwardingAddressRegistry, rotation_delay_epochs: u64, ctx: &mut TxContext): MasterCap;
 public fun master_id(cap: &MasterCap): u64;
+
+public fun pause(registry: &mut ForwardingAddressRegistry, cap: &MasterCap);
+public fun pause_by_master(registry: &mut ForwardingAddressRegistry, master_id: u64, ctx: &TxContext);
+public fun unpause(registry: &mut ForwardingAddressRegistry, cap: &MasterCap);
+
+public fun propose_rotation(registry: &mut ForwardingAddressRegistry, cap: &MasterCap, new_master: address, ctx: &TxContext);
+public fun cancel_rotation(registry: &mut ForwardingAddressRegistry, cap: &MasterCap);
+public fun cancel_rotation_by_master(registry: &mut ForwardingAddressRegistry, master_id: u64, ctx: &TxContext);
+public fun finalize_rotation(registry: &mut ForwardingAddressRegistry, master_id: u64, ctx: &TxContext);   // anyone, once due
+public fun increase_rotation_delay(registry: &mut ForwardingAddressRegistry, cap: &MasterCap, rotation_delay_epochs: u64);
+
+public fun is_forwarding_address(addr: address): bool;
 ```
 
-`ForwardingDeposit` is declared in Move so the type exists, but only the adapter emits it. The one
-Move abort is `EMasterIdsExhausted` (3) from `register`. Resolution failures (unregistered id,
-unsupported variant, a master that is a forwarding address, an object sent to a forwarding address)
-are execution errors with no command index, reported as `FeatureNotYetSupported` for now.
+`ForwardingDeposit` is declared in Move so the type exists, but only the adapter emits it. Move
+aborts: 3 `EMasterIdsExhausted`, 4 `EInvalidRotationDelay` (outside 1..=30, or not an increase),
+5 `ENotMaster`, 6 `EForwardingAddressMaster`, 7 `ENoPendingRotation`, 8 `ERotationNotDue`.
+Resolution failures (unregistered id, paused id, unsupported variant, a master that is a
+forwarding address, an object sent to a forwarding address) are execution errors with no command
+index, reported as `FeatureNotYetSupported` for now.
 
 ### Rust: `sui_types::forwarding_address`
 
@@ -219,13 +248,15 @@ are execution errors with no command index, reported as `FeatureNotYetSupported`
   (returns `None` for an ordinary address) and `has_magic`.
 - Constants: `FORWARDING_ADDRESS_MAGIC`, `FORWARDING_ADDRESS_VARIANT_OPAQUE`,
   `FORWARDING_ADDRESS_PAYLOAD_LENGTH`, `FORWARDING_ADDRESS_RESERVED_MASTER_ID`.
-- `MasterRecordKey(master_id).load(resolver, registry_version)` reads the record as of a registry
-  version; `ForwardingDeposit` and `MasterRegistered` mirror the events for BCS decoding.
+- `MasterRecordKey(master_id).load(resolver, registry_version)` reads the `MasterRecord` as of a
+  registry version; `ForwardingMaster { master, paused }` is the slice of it resolution needs;
+  `ForwardingDeposit`, `MasterRegistered` and `RotationFinalized` mirror the events for BCS decoding.
 - The resolution itself is `sui_move_natives::forwarding_address::Resolver`, one implementation
   that both the adapter and `test_scenario` run over a transaction's written owners and funds
   credits. It reads masters through `ImplicitSystemObjectResolver::forwarding_master(master_id)`
   (`TemporaryStore` implements it against the assigned registry version, the `test_scenario` store
-  from the registrations it has seen) and charges through a small `ForwardingGas` trait (the
+  from the `MasterRegistered`, `Paused`, `Unpaused` and `RotationFinalized` events it has seen)
+  and charges through a small `ForwardingGas` trait (the
   transaction's gas charger in the adapter, nothing in `test_scenario`). It hands back events as
   type tag plus BCS; the adapter wraps them as `Event`s, `test_scenario` deserializes them into Move
   values.
@@ -237,7 +268,8 @@ are execution errors with no command index, reported as `FeatureNotYetSupported`
 
 - Derive: `master_id` (from `MasterRegistered` or `MasterCap`), variant 0, a 16-byte payload.
 - Before sending, check for the magic. An address with the magic can only receive address-balance
-  deposits, and only if its id is registered; sending it an object fails the transaction.
+  deposits, and only if its id is registered and not paused; sending it an object fails the
+  transaction.
 - To find who a forwarding address pays: read the registry's dynamic field `master_id ->
   MasterRecord` (GraphQL `dynamicField` works today).
 - To find what was paid: index `ForwardingDeposit<T>` by `(master, payload)`.
@@ -257,65 +289,58 @@ are execution errors with no command index, reported as `FeatureNotYetSupported`
   implicit-read mechanism; gas is charged before the read, including for misses, and the events the
   adapter emits are charged and counted like Move events, so neither lookups nor events can be
   spammed for free.
-- **What is not yet protected:** a leaked master key. The mapping is write-once today, so every
-  published address keeps paying whoever holds the master key, and nothing can pause an id. That is
-  the lifecycle work below.
+- **Key compromise.** Two keys control an id and the lifecycle below is built so that losing
+  either one is survivable: a leaked master key is contained by pausing (immediate, either key) and
+  rotating (cap, delayed); a leaked cap is caught because its rotation waits out the delay, during
+  which the master cancels it. Losing both is not survivable, and nothing is designed for it.
 
-## Lifecycle: rotation, pause, brake (planned)
+## Lifecycle: pause, rotation, brake
 
-The registry assigns the id and hands back a capability (done); the record needs enough state to
-survive a compromise, and the protocol needs a brake.
+Two keys control an id. The master receives the funds and is expected to be hot; the `MasterCap`
+is expected to be cold and is the only key that can redirect funds or resume deposits.
 
-```move
-// Lifecycle state lives in separate registry dynamic fields keyed by master id.
-public struct PausedKey has copy, drop, store { master_id: u64 }    // -> bool
-public struct PendingKey has copy, drop, store { master_id: u64 }   // -> Pending { new_master: address, effective_epoch: u64 }
-
-public fun pause(registry: &mut ForwardingAddressRegistry, cap: &MasterCap);
-public fun pause_by_master(registry: &mut ForwardingAddressRegistry, master_id: u64, ctx: &TxContext);
-public fun unpause(registry: &mut ForwardingAddressRegistry, cap: &MasterCap);
-
-public fun propose_rotation(registry: &mut ForwardingAddressRegistry, cap: &MasterCap, new_master: address, ctx: &TxContext);
-public fun cancel_rotation(registry: &mut ForwardingAddressRegistry, cap: &MasterCap);
-public fun cancel_rotation_by_master(registry: &mut ForwardingAddressRegistry, master_id: u64, ctx: &TxContext);
-public fun finalize_rotation(registry: &mut ForwardingAddressRegistry, cap: &MasterCap, ctx: &TxContext);
-
-```
-
-The adapter's resolver reads the master record and the paused field and ignores pending; a deposit
-fails when the id is paused, unregistered, or of an unsupported variant.
-
-- Rotation is two-step with a delay (one epoch to start, a registry constant so it can be tuned
-  without a protocol bump). A thief needs both the cap and the master key to redirect funds, and
-  holding either one is enough to cancel or pause. Pause is immediate; deposits abort while paused.
-- `propose_rotation` must reject a `new_master` that carries the magic until chaining is decided,
-  since a forwarding-shaped master would strand every deposit. `register` cannot hit this today:
-  the master is the sender.
-- Brake: a protocol flag `freeze_forwarding_addresses`. When set, resolution fails for every
-  forwarding address, whatever state its record is in. One epoch of latency, which is acceptable
-  for a brake; anything faster needs governance that does not exist. It has to be a separate flag
-  because `enable_forwarding_addresses` off means "ordinary address", which must stay true for
-  every version before 139 on replay.
+- **Pause** is immediate and either key can do it: pausing only stops deposits (they fail at the
+  end of execution like an unregistered id) and never moves money, so a delay would only help an
+  attacker, and letting the hot key pause means the brake can be hit without fetching the cap.
+  Pausing twice is a no-op.
+- **Unpause** is cap-only. If the master key could unpause, a stolen master key would undo the
+  owner's pause and keep draining during the rotation delay. A stolen cap can keep an id paused,
+  but a stolen cap already controls rotation; the remedy is a new id.
+- **Rotation** is two-step. The cap proposes `new_master`, which must not carry the magic until
+  chaining lands; the proposal records `effective_epoch = current + rotation_delay_epochs`, and
+  anyone may finalize once the current epoch reaches it, so the cap can go back in the safe.
+  Deposits keep going to the old master while pending: the "my key leaked" sequence is pause,
+  propose, wait, finalize, unpause. Cancel is cap or current master, which is what stops a rotation
+  proposed with a stolen cap. A new proposal replaces a pending one.
+- **The delay** is the one parameter a registrant chooses, `rotation_delay_epochs` in 1..=30, set
+  at `register`. It can later only be increased: a decrease would need its own timelock to stay
+  safe against a stolen cap, and a registrant who wants a shorter delay registers a new id.
+- **Brake** (not yet implemented): a protocol flag `freeze_forwarding_addresses` under which
+  resolution fails for every forwarding address, whatever state its record is in. One epoch of
+  latency, which is acceptable for a brake; anything faster needs governance that does not exist.
+  It has to be a separate flag because `enable_forwarding_addresses` off means "ordinary address",
+  which must stay true for every version before 139 on replay.
 
 ```mermaid
 stateDiagram-v2
     direction LR
-    Unregistered: Unregistered (deposit aborts)
+    Unregistered: Unregistered (deposit fails)
     Active: Active (deposit credits master)
     Pending: Pending rotation (still credits old master)
-    Paused: Paused (deposit aborts)
+    Paused: Paused (deposit fails)
 
     Unregistered --> Active: register, pays gas
     Active --> Pending: propose_rotation (cap)
-    Pending --> Active: finalize after delay (cap)
-    Pending --> Active: cancel any time (cap or master)
+    Pending --> Active: finalize_rotation once due (anyone)
+    Pending --> Active: cancel_rotation (cap or master)
     Active --> Paused: pause (cap or master)
     Paused --> Active: unpause (cap)
 ```
 
-A deposit only credits while the record is Active or Pending. Redirecting funds takes the cap plus
-the delay; pausing or cancelling takes either the cap or the current master key, so a thief needs
-both keys to win and the owner needs one to stop them.
+Paused and pending are independent flags on the record: an id can be paused with a rotation
+pending, which is exactly the recovery sequence. A deposit credits only while the id is not paused.
+Redirecting funds takes the cap plus the delay; pausing or cancelling takes either the cap or the
+current master key, so a thief needs both keys to win and the owner needs one to stop them.
 
 ## Indexing
 
@@ -329,13 +354,14 @@ events for it.
 | Payment app     | Which deposits landed for master M, and from which forwarding address / payload? | `ForwardingDeposit<T> { forwarding_address, master, amount }` event; payload = bytes 16..32 of the address                 | Yes (#28236)                                               |
 | Payment app     | Given a payload, did invoice X get paid, how much, in which tx?                  | Same event, indexed by `(master, payload)`                                                                                 | Yes, needs an index                                        |
 | Wallet / sender | Is this forwarding address registered, and to whom, right now?                   | Registry dynamic field `master_id -> MasterRecord` (`MasterRecordKey::load` in `sui-types` reads it at a registry version) | Yes, plain object read; GraphQL `dynamicField` works today |
-| Master          | My record: master, paused, pending rotation, and its history                     | `MasterRecord`, `PausedKey` and `PendingKey` fields plus lifecycle events                                                  | Object yes; `MasterRegistered` yes, the rest no            |
+| Master          | My record: master, paused, pending rotation, and its history                     | `MasterRecord` plus the lifecycle events                                                                                   | Yes (#28236); needs an index                               |
 | Master          | Where is my `MasterCap`?                                                         | Owned object of type `MasterCap`                                                                                           | Yes, standard object index                                 |
 | Anyone          | Balances                                                                         | Master's address balance; a forwarding address always stays at 0                                                           | Yes, existing balance indexing                             |
 
-Events to add so an indexer never has to diff objects: `RotationProposed { master_id, new_master,
-effective_epoch }`, `RotationFinalized { master_id, master }`, `RotationCancelled { master_id }`,
-`Paused { master_id }`, `Unpaused { master_id }`.
+Lifecycle events, so an indexer never has to diff objects: `MasterRegistered { master_id, master,
+cap_id, rotation_delay_epochs }`, `Paused { master_id }`, `Unpaused { master_id }`,
+`RotationProposed { master_id, new_master, effective_epoch }`, `RotationCancelled { master_id }`,
+`RotationFinalized { master_id, master }`, `RotationDelayIncreased { master_id, rotation_delay_epochs }`.
 
 Implementation is one sui-indexer-alt pipeline over these events writing two tables,
 `forwarding_deposits(master, forwarding_address, payload, amount, coin_type, tx_digest, checkpoint)`
@@ -357,6 +383,8 @@ step adds dynamic fields next to the record instead of changing `MasterRecord`.
 - Address format with variant gating; opaque payload; assigned ids through a mixed counter;
   `MasterCap` (#28236).
 - Registration fee through a native cost param (#28236).
+- Pause (either key, immediate) and two-step rotation (cap proposes, anyone finalizes after the
+  registrant's delay, either key cancels), with lifecycle events (#28236).
 - End-of-execution rejection of objects sent to forwarding addresses (#28236).
 - Transactional, Move unit (`test_scenario`) and e2e coverage, including the staged upgrade and
   mixes with object funds withdrawals (#28236).
@@ -372,7 +400,6 @@ step adds dynamic fields next to the record instead of changing `MasterRecord`.
   hops and object-to-forwarding-address, replacing `FeatureNotYetSupported`. On-wire change: the
   Rust SDK types (`sui-sdk-types`) and the gRPC proto must add the variants first, since this repo's
   conversions are exhaustive; produced only under the devnet guard until the SDKs ship.
-- Pause and two-step rotation with lifecycle events (lifecycle section).
 - Brake flag `freeze_forwarding_addresses`.
 - Decide the open questions that change the format or the resolver: chaining, non-sender masters,
   object addresses as masters, magic length. These are cheap on devnet (wiped weekly) and expensive
@@ -390,17 +417,18 @@ step adds dynamic fields next to the record instead of changing `MasterRecord`.
 ### Required before mainnet
 
 - Testnet soak with real integrators, including at least one payment app using the event index.
-- Security review of the adapter resolver, the registration native and the lifecycle functions.
+- Security review of the adapter resolver, the registration native and the lifecycle functions
+  (in particular that unpause is cap-only and that the delay can only grow).
 - Registration fee tuned on testnet feedback.
 - Measure registry write contention (the system-object-writer pool) under a registration flood.
 - Same registry-creation ordering for mainnet: create in one release, enable in a later one.
 
 ## Open questions
 
-- Rotation delay: one epoch, or longer? And should `finalize_rotation` need the cap only, or cap + a
-  tx from the new master (proves the new key works before we cut over)?
-- Should the current master be able to pause and cancel without the cap (as proposed), or is
-  cap-only simpler to reason about?
+- Rotation delay bounds: 1..=30 epochs today. Should `finalize_rotation` additionally require a
+  transaction from the new master, proving the new key works before the cutover?
+- Should a registrant be able to shorten the delay behind its own timelock, or is "increase only"
+  enough?
 - Registration price: 1M gas units (about 1 SUI at a 1,000 MIST gas price) is the starting
   point. We want it to hurt for spam but not for a legit business.
 - Brake semantics: abort every deposit to a forwarding address, or only resolution (i.e. strand)? I

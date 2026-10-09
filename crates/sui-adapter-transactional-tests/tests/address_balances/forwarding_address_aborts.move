@@ -19,18 +19,18 @@ public fun send(recipient: address, ctx: &mut TxContext) {
     transfer::public_transfer(Thing { id: object::new(ctx) }, recipient);
 }
 
-//# programmable --sender B --inputs mutshared(250) 1000 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101 --gas-budget 2000000000
+//# programmable --sender B --inputs mutshared(250) 1000 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101 1 --gas-budget 2000000000
 // Registering and depositing in one transaction: resolution reads the registry at the version
 // assigned to the transaction, so it does not see the new record and the transaction fails.
 // The registration is rolled back with the rest of the transaction.
-//> 0: sui::forwarding_address::register(Input(0));
+//> 0: sui::forwarding_address::register(Input(0), Input(3));
 //> 1: TransferObjects([Result(0)], Input(2));
 //> 2: SplitCoins(Gas, [Input(1)]);
 //> 3: sui::coin::send_funds<sui::sui::SUI>(Result(2), Input(2));
 
-//# programmable --sender A --inputs mutshared(250) @A --gas-budget 2000000000
+//# programmable --sender A --inputs mutshared(250) @A 1 --gas-budget 2000000000
 // Still the first master ID, since the failed registration allocated nothing.
-//> 0: sui::forwarding_address::register(Input(0));
+//> 0: sui::forwarding_address::register(Input(0), Input(2));
 //> 1: TransferObjects([Result(0)], Input(1));
 
 //# programmable --sender B --inputs 1000 @0x010000000000fafafafafafafafafa0001010101010101010101010101010101
