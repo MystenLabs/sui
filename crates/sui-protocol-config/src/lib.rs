@@ -422,6 +422,7 @@ const MAINNET_USDB: &str =
 //              Add native vector bulk operations (keep_range, copy_range, replace_range
 //              and reverse) and their gas costs.
 // Version 140: Enable account policies on devnet.
+//              Add the `tx_context::co_signers` native and its cost.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1913,6 +1914,7 @@ pub struct ProtocolConfig {
     tx_context_epoch_cost_base: Option<u64>,
     tx_context_epoch_timestamp_ms_cost_base: Option<u64>,
     tx_context_sponsor_cost_base: Option<u64>,
+    tx_context_co_signers_cost_base: Option<u64>,
     tx_context_rgp_cost_base: Option<u64>,
     tx_context_gas_price_cost_base: Option<u64>,
     tx_context_gas_budget_cost_base: Option<u64>,
@@ -2865,6 +2867,7 @@ impl ProtocolConfig {
             tx_context_epoch_cost_base: None,
             tx_context_epoch_timestamp_ms_cost_base: None,
             tx_context_sponsor_cost_base: None,
+            tx_context_co_signers_cost_base: None,
             tx_context_rgp_cost_base: None,
             tx_context_gas_price_cost_base: None,
             tx_context_gas_budget_cost_base: None,
@@ -4884,6 +4887,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_account_policy = true;
                     }
+                    cfg.tx_context_co_signers_cost_base = Some(30);
                 }
                 // Use this template when making changes:
                 //

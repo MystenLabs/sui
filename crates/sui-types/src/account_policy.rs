@@ -5,12 +5,12 @@
 //! account key alone may do. Policies live as dynamic fields of the `AccountPolicyRegistry`
 //! system object, which every transaction implicitly reads at the version consensus assigned, so
 //! execution can look up the sender's policy deterministically and reject the transaction if the
-//! policy is active and any rule is violated.
+//! policy is active and any rule is violated. A transaction co-signed by the policy's guardian is
+//! exempt.
 
 use crate::{
     SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
     base_types::{ObjectID, SuiAddress},
-    digests::TransactionDigest,
     dynamic_field::{Field, derive_dynamic_field_id},
     object::Object,
 };
@@ -59,8 +59,6 @@ pub struct AccountPolicy {
     pub gas_budget_cap: u64,
     /// First epoch in which the policy is enforced. `u64::MAX` means disabled.
     pub activation_epoch: u64,
-    /// Transaction digests the guardian has exempted from the policy.
-    pub approved_digests: Vec<Vec<u8>>,
 }
 
 impl AccountPolicy {
@@ -75,9 +73,8 @@ impl AccountPolicy {
         self.activation_epoch <= epoch
     }
 
-    pub fn is_approved(&self, digest: &TransactionDigest) -> bool {
-        self.approved_digests
-            .iter()
-            .any(|approved| approved.as_slice() == digest.inner().as_slice())
+    /// A transaction co-signed by the guardian is exempt from the policy.
+    pub fn is_guardian_approved(&self, co_signers: &[SuiAddress]) -> bool {
+        co_signers.contains(&self.guardian)
     }
 }

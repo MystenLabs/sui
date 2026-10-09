@@ -4159,6 +4159,17 @@ impl SenderSignedData {
         &self.inner().tx_signatures
     }
 
+    /// Addresses that signed the transaction beyond its required signers (sender and sponsor).
+    /// Signature validity is established at admission; here only the addresses are derived.
+    pub fn co_signers(&self) -> Vec<SuiAddress> {
+        let required_signers = self.transaction_data().required_signers();
+        self.tx_signatures()
+            .iter()
+            .filter_map(|signature| SuiAddress::try_from(signature).ok())
+            .filter(|address| !required_signers.contains(address))
+            .collect()
+    }
+
     pub fn has_zklogin_sig(&self) -> bool {
         self.tx_signatures().iter().any(|sig| sig.is_zklogin())
     }

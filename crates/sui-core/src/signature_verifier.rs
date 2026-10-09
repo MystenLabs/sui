@@ -81,6 +81,9 @@ struct ZkLoginParams {
     pub additional_multisig_checks: bool,
     /// Flag to determine whether additional zkLogin public identifier structure is validated.
     pub validate_zklogin_public_identifier: bool,
+    /// Whether an account policy guardian may co-sign a transaction; fed by the
+    /// `enable_account_policy` protocol flag.
+    pub accept_co_signer: bool,
 }
 
 impl SignatureVerifier {
@@ -99,6 +102,7 @@ impl SignatureVerifier {
         additional_multisig_checks: bool,
         validate_zklogin_public_identifier: bool,
         enable_address_aliases: bool,
+        accept_co_signer: bool,
     ) -> Self {
         Self {
             committee,
@@ -127,6 +131,7 @@ impl SignatureVerifier {
                 zklogin_max_epoch_upper_bound_delta,
                 additional_multisig_checks,
                 validate_zklogin_public_identifier,
+                accept_co_signer,
             },
         }
     }
@@ -242,7 +247,8 @@ impl SignatureVerifier {
             self.zk_login_params.additional_multisig_checks,
             self.zk_login_params.validate_zklogin_public_identifier,
         )
-        .with_mldsa65_in_multisig(self.zk_login_params.accept_mldsa65_in_multisig);
+        .with_mldsa65_in_multisig(self.zk_login_params.accept_mldsa65_in_multisig)
+        .with_co_signer(self.zk_login_params.accept_co_signer);
         let indices = verify_sender_signed_data_message_signatures(
             signed_tx,
             self.committee.epoch(),

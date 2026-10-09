@@ -13,6 +13,7 @@ title: Module `sui::tx_context`
 -  [Function `epoch_timestamp_ms`](#sui_tx_context_epoch_timestamp_ms)
 -  [Function `native_epoch_timestamp_ms`](#sui_tx_context_native_epoch_timestamp_ms)
 -  [Function `sponsor`](#sui_tx_context_sponsor)
+-  [Function `co_signers`](#sui_tx_context_co_signers)
 -  [Function `fresh_object_address`](#sui_tx_context_fresh_object_address)
 -  [Function `fresh_id`](#sui_tx_context_fresh_id)
 -  [Function `reference_gas_price`](#sui_tx_context_reference_gas_price)
@@ -23,6 +24,7 @@ title: Module `sui::tx_context`
 -  [Function `native_gas_budget`](#sui_tx_context_native_gas_budget)
 -  [Function `option_sponsor`](#sui_tx_context_option_sponsor)
 -  [Function `native_sponsor`](#sui_tx_context_native_sponsor)
+-  [Function `native_co_signers`](#sui_tx_context_native_co_signers)
 -  [Function `derive_id`](#sui_tx_context_derive_id)
 
 
@@ -280,6 +282,32 @@ Return the adress of the transaction sponsor or <code>None</code> if there was n
 
 </details>
 
+<a name="sui_tx_context_co_signers"></a>
+
+## Function `co_signers`
+
+Return the addresses that signed the transaction in addition to its required signers
+(sender and sponsor), e.g. an account policy guardian.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_co_signers">co_signers</a>(_self: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): vector&lt;<b>address</b>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_co_signers">co_signers</a>(_self: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">TxContext</a>): vector&lt;<b>address</b>&gt; {
+    <a href="../sui/tx_context.md#sui_tx_context_native_co_signers">native_co_signers</a>()
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_tx_context_fresh_object_address"></a>
 
 ## Function `fresh_object_address`
@@ -510,6 +538,28 @@ That is the value the user submitted with the transaction data.
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_native_sponsor">native_sponsor</a>(): vector&lt;<b>address</b>&gt;;
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_tx_context_native_co_signers"></a>
+
+## Function `native_co_signers`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_native_co_signers">native_co_signers</a>(): vector&lt;<b>address</b>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_native_co_signers">native_co_signers</a>(): vector&lt;<b>address</b>&gt;;
 </code></pre>
 
 

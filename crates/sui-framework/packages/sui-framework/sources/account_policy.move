@@ -7,8 +7,8 @@
 /// Every transaction implicitly reads the registry at the version consensus assigned to it, so
 /// execution can look up the sender's policy without the transaction declaring it. While a policy
 /// is active, execution enforces a per-transaction SUI outflow limit, a gas budget cap, a fixed
-/// package allowlist, and that no non-coin object leaves the owner's ownership. The guardian
-/// exempts individual transactions by approving their digests.
+/// package allowlist, and that no non-coin object leaves the owner's ownership. A transaction
+/// co-signed by the guardian is exempt.
 ///
 /// A policy only takes effect `ACTIVATION_DELAY_EPOCHS` after it is enabled, and the owner can
 /// cancel it before then with the key alone, so an attacker holding the key cannot lock the
@@ -24,11 +24,10 @@ const DISABLED: u64 = 18446744073709551615;
 #[error(code = 0)]
 const ENotSystemAddress: vector<u8> = b"Only the system can create the account policy registry.";
 #[error(code = 1)]
-const ENotGuardian: vector<u8> = b"Only the policy guardian can do this.";
+const EAlreadyActive: vector<u8> =
+    b"An active policy can only be changed with the guardian's co-signature.";
 #[error(code = 2)]
-const EAlreadyActive: vector<u8> = b"An active policy can only be changed with guardian approval.";
-#[error(code = 3)]
-const ENotApproved: vector<u8> = b"This transaction has not been approved by the guardian.";
+const ENotCoSignedByGuardian: vector<u8> = b"The guardian must co-sign this transaction.";
 
 /// Singleton shared object holding every account policy as a dynamic field.
 public struct AccountPolicyRegistry has key {
@@ -47,8 +46,6 @@ public struct AccountPolicy has store {
     gas_budget_cap: u64,
     /// First epoch in which the policy is enforced; `DISABLED` if cancelled or disabled.
     activation_epoch: u64,
-    /// Transaction digests the guardian has exempted from the policy.
-    approved_digests: vector<vector<u8>>,
 }
 
 #[allow(unused_function)]
@@ -76,7 +73,6 @@ public fun enable(
             sui_limit_per_tx,
             gas_budget_cap,
             activation_epoch: ctx.epoch() + ACTIVATION_DELAY_EPOCHS,
-            approved_digests: vector[],
         },
     );
 }
@@ -89,19 +85,7 @@ public fun cancel(registry: &mut AccountPolicyRegistry, ctx: &TxContext) {
     policy.activation_epoch = DISABLED;
 }
 
-/// Exempt the transaction with digest `digest` from `owner`'s policy. Guardian only.
-public fun approve(
-    registry: &mut AccountPolicyRegistry,
-    owner: address,
-    digest: vector<u8>,
-    ctx: &TxContext,
-) {
-    let policy = registry.policy_mut(owner);
-    assert!(ctx.sender() == policy.guardian, ENotGuardian);
-    policy.approved_digests.push_back(digest);
-}
-
-/// Change the sender's policy. The calling transaction must itself be guardian-approved.
+/// Change the sender's policy. The guardian must co-sign the transaction.
 public fun update(
     registry: &mut AccountPolicyRegistry,
     guardian: address,
@@ -110,16 +94,16 @@ public fun update(
     ctx: &TxContext,
 ) {
     let policy = registry.policy_mut(ctx.sender());
-    policy.assert_approved(ctx);
+    policy.assert_guardian_co_signed(ctx);
     policy.guardian = guardian;
     policy.sui_limit_per_tx = sui_limit_per_tx;
     policy.gas_budget_cap = gas_budget_cap;
 }
 
-/// Stop enforcing the sender's policy. The calling transaction must itself be guardian-approved.
+/// Stop enforcing the sender's policy. The guardian must co-sign the transaction.
 public fun disable(registry: &mut AccountPolicyRegistry, ctx: &TxContext) {
     let policy = registry.policy_mut(ctx.sender());
-    policy.assert_approved(ctx);
+    policy.assert_guardian_co_signed(ctx);
     policy.activation_epoch = DISABLED;
 }
 
@@ -135,6 +119,6 @@ fun policy_mut(registry: &mut AccountPolicyRegistry, owner: address): &mut Accou
     df::borrow_mut(&mut registry.id, PolicyKey(owner))
 }
 
-fun assert_approved(policy: &AccountPolicy, ctx: &TxContext) {
-    assert!(policy.approved_digests.contains(ctx.digest()), ENotApproved);
+fun assert_guardian_co_signed(policy: &AccountPolicy, ctx: &TxContext) {
+    assert!(ctx.co_signers().contains(&policy.guardian), ENotCoSignedByGuardian);
 }

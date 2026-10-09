@@ -80,6 +80,7 @@ impl executor::Executor for Executor {
         transaction_kind: TransactionKind,
         _rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
+        _co_signers: Vec<SuiAddress>,
         transaction_digest: TransactionDigest,
         _trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
@@ -203,6 +204,7 @@ impl executor::Executor for Executor {
         transaction_kind: TransactionKind,
         _rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
+        _co_signers: Vec<SuiAddress>,
         transaction_digest: TransactionDigest,
         _trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (

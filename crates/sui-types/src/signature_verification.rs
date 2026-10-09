@@ -137,16 +137,34 @@ pub fn verify_sender_signed_data_message_signatures(
     let intent_message = txn.intent_message();
     assert_eq!(intent_message.intent, Intent::sui_transaction());
 
-    // 1. One signature per signer is required.
+    // 1. One signature per signer is required, plus at most one co-signer when accepted.
     let required_signers = txn.intent_message().value.required_signers();
+    let num_signatures = txn.inner().tx_signatures.len();
+    let max_signatures = required_signers.len() + usize::from(verify_params.accept_co_signer);
     fp_ensure!(
-        txn.inner().tx_signatures.len() == required_signers.len(),
+        num_signatures >= required_signers.len() && num_signatures <= max_signatures,
         SuiErrorKind::SignerSignatureNumberMismatch {
-            actual: txn.inner().tx_signatures.len(),
+            actual: num_signatures,
             expected: required_signers.len()
         }
         .into()
     );
+    if num_signatures > required_signers.len() {
+        let distinct_signers = txn
+            .inner()
+            .tx_signatures
+            .iter()
+            .map(SuiAddress::try_from)
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?;
+        fp_ensure!(
+            distinct_signers.len() == num_signatures,
+            SuiErrorKind::SignerSignatureNumberMismatch {
+                actual: num_signatures,
+                expected: required_signers.len()
+            }
+            .into()
+        );
+    }
 
     // 2. System transactions do not require valid signatures. User-submitted transactions are
     // verified not to be system transactions before this point.

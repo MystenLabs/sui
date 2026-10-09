@@ -58,6 +58,10 @@ impl TransactionContext {
         self.tx_context.borrow().sponsor()
     }
 
+    pub fn co_signers(&self) -> Vec<SuiAddress> {
+        self.tx_context.borrow().co_signers()
+    }
+
     pub fn rgp(&self) -> u64 {
         self.tx_context.borrow().rgp()
     }

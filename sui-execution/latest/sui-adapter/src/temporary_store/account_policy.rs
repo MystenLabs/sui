@@ -31,6 +31,7 @@ use crate::temporary_store::TemporaryStore;
 /// carry. Only user PTBs have them; system transactions have no sender policy.
 pub(super) struct AccountPolicyTxInputs {
     sender: SuiAddress,
+    co_signers: Vec<SuiAddress>,
     gas_budget: u64,
     called_packages: BTreeSet<ObjectID>,
     publishes: bool,
@@ -41,6 +42,7 @@ impl AccountPolicyTxInputs {
         transaction_kind: &TransactionKind,
         gas_data: &GasData,
         sender: SuiAddress,
+        co_signers: &[SuiAddress],
     ) -> Option<Self> {
         let TransactionKind::ProgrammableTransaction(pt) = transaction_kind else {
             return None;
@@ -58,6 +60,7 @@ impl AccountPolicyTxInputs {
         }
         Some(Self {
             sender,
+            co_signers: co_signers.to_vec(),
             gas_budget: gas_data.budget,
             called_packages,
             publishes,
@@ -76,7 +79,7 @@ impl TemporaryStore<'_> {
         let Some(policy) = self.load_sender_policy(inputs.sender) else {
             return Ok(());
         };
-        if !policy.is_active(self.cur_epoch) || policy.is_approved(&self.tx_digest) {
+        if !policy.is_active(self.cur_epoch) || policy.is_guardian_approved(&inputs.co_signers) {
             return Ok(());
         }
         let violation = |kind| {

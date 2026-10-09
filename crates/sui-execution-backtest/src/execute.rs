@@ -489,6 +489,9 @@ fn run_execution(
             txn_kind,
             rewritten_inputs,
             signer,
+            // TODO(account-policy): thread the on-chain signatures through so guardian
+            // co-signed transactions replay faithfully.
+            vec![],
             digest,
             &mut None,
         );

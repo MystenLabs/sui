@@ -136,6 +136,12 @@ public fun sponsor(_self: &TxContext): Option<address> {
     option_sponsor()
 }
 
+/// Return the addresses that signed the transaction in addition to its required signers
+/// (sender and sponsor), e.g. an account policy guardian.
+public fun co_signers(_self: &TxContext): vector<address> {
+    native_co_signers()
+}
+
 /// Create an `address` that has not been used. As it is an object address, it will never
 /// occur as the address for a user.
 /// In other words, the generated address is a globally unique object ID.
@@ -311,6 +317,8 @@ fun option_sponsor(): Option<address> {
     if (sponsor.length() == 0) option::none() else option::some(sponsor[0])
 }
 native fun native_sponsor(): vector<address>;
+
+native fun native_co_signers(): vector<address>;
 
 #[test_only]
 native fun replace(

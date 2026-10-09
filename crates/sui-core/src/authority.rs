@@ -1881,6 +1881,7 @@ impl AuthorityState {
         kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
         signer: SuiAddress,
+        co_signers: Vec<SuiAddress>,
         tx_digest: TransactionDigest,
     ) -> (
         InnerTemporaryStore,
@@ -1907,6 +1908,7 @@ impl AuthorityState {
                 kind,
                 rewritten_inputs,
                 signer,
+                co_signers,
                 tx_digest,
                 &mut None,
             );
@@ -2032,6 +2034,7 @@ impl AuthorityState {
                 kind,
                 rewritten_inputs,
                 signer,
+                certificate.data().co_signers(),
                 tx_digest,
             );
 

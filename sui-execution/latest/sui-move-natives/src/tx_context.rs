@@ -225,6 +225,39 @@ pub fn sponsor(
 }
 
 #[derive(Clone)]
+pub struct TxContextCoSignersCostParams {
+    pub tx_context_co_signers_cost_base: InternalGas,
+}
+/***************************************************************************************************
+ * native fun native_co_signers
+ * Implementation of the Move native function `fun native_co_signers(): vector<address>`
+ **************************************************************************************************/
+pub fn co_signers(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.is_empty());
+
+    let tx_context_co_signers_cost_params = get_extension!(context, NativesCostTable)?
+        .tx_context_co_signers_cost_params
+        .clone();
+    native_charge_gas_early_exit!(
+        context,
+        tx_context_co_signers_cost_params.tx_context_co_signers_cost_base
+    );
+
+    let transaction_context: &mut TransactionContext = get_extension_mut!(context)?;
+    let co_signers = transaction_context
+        .co_signers()
+        .into_iter()
+        .map(|addr| addr.into());
+    let co_signers = Value::vector_address(co_signers);
+    Ok(NativeResult::ok(context.gas_used(), smallvec![co_signers]))
+}
+
+#[derive(Clone)]
 pub struct TxContextRGPCostParams {
     pub tx_context_rgp_cost_base: InternalGas,
 }

@@ -46,6 +46,9 @@ pub struct VerifyParams {
     pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
     pub additional_multisig_checks: bool,
     pub validate_zklogin_public_identifier: bool,
+    /// Whether one signature beyond the required signers is accepted (an account policy
+    /// guardian's). What that signer means is decided at execution.
+    pub accept_co_signer: bool,
 }
 
 impl VerifyParams {
@@ -73,7 +76,13 @@ impl VerifyParams {
             zklogin_max_epoch_upper_bound_delta,
             additional_multisig_checks,
             validate_zklogin_public_identifier,
+            accept_co_signer: false,
         }
+    }
+
+    pub fn with_co_signer(mut self, accept: bool) -> Self {
+        self.accept_co_signer = accept;
+        self
     }
 
     /// Whether an ML-DSA-65 member's signature inside a multisig is accepted.

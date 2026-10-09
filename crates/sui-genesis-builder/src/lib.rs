@@ -938,6 +938,7 @@ fn create_genesis_transaction(
                 kind,
                 None, // compat_args
                 signer,
+                vec![],
                 genesis_digest,
                 &mut None,
             );

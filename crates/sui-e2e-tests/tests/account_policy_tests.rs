@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use shared_crypto::intent::Intent;
+use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -14,7 +16,7 @@ use sui_types::{
     object::Owner,
     transaction::{
         CallArg, ObjectArg, SharedObjectMutability,
-        TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE, TransactionData,
+        TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE, Transaction, TransactionData,
     },
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -132,23 +134,27 @@ impl Env {
             .build()
     }
 
-    /// The guardian exempts `tx_data` from the owner's policy.
-    async fn approve(&self, tx_data: &TransactionData) {
-        let tx = self
-            .builder(self.guardian)
+    /// Executes `tx_data` signed by the owner and co-signed by `co_signer`.
+    async fn execute_co_signed(
+        &self,
+        tx_data: TransactionData,
+        co_signer: SuiAddress,
+    ) -> TransactionEffects {
+        let keystore = &self.cluster.wallet.config.keystore;
+        let owner_sig = keystore
+            .sign_secure(&self.owner, &tx_data, Intent::sui_transaction())
             .await
-            .move_call(
-                SUI_FRAMEWORK_PACKAGE_ID,
-                "account_policy",
-                "approve",
-                vec![
-                    self.registry.clone(),
-                    CallArg::Pure(bcs::to_bytes(&self.owner).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&tx_data.digest().inner().to_vec()).unwrap()),
-                ],
-            )
-            .build();
-        self.execute_ok(tx).await;
+            .unwrap();
+        let co_sig = keystore
+            .sign_secure(&co_signer, &tx_data, Intent::sui_transaction())
+            .await
+            .unwrap();
+        let tx = Transaction::from_data(tx_data, vec![owner_sig, co_sig]);
+        self.cluster
+            .execute_transaction_return_raw_effects(tx)
+            .await
+            .unwrap()
+            .0
     }
 }
 
@@ -234,10 +240,17 @@ async fn test_account_policy_enforced_after_activation() {
         AccountPolicyViolationKind::ObjectTransferNotAllowed,
     );
 
-    // A guardian-approved transaction is exempt from every rule.
+    // A co-signature from anyone but the guardian changes nothing.
     let tx = env.transfer_sui_tx(2 * SUI_LIMIT).await;
-    env.approve(&tx).await;
-    env.execute_ok(tx).await;
+    assert_violation(
+        &env.execute_co_signed(tx, env.recipient).await,
+        AccountPolicyViolationKind::SuiOutflowExceeded,
+    );
+
+    // A transaction co-signed by the guardian is exempt from every rule.
+    let tx = env.transfer_sui_tx(2 * SUI_LIMIT).await;
+    let effects = env.execute_co_signed(tx, env.guardian).await;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
 }
 
 #[sim_test]
@@ -253,7 +266,7 @@ async fn test_account_policy_cancel_before_activation() {
 }
 
 #[sim_test]
-async fn test_account_policy_disable_requires_approval() {
+async fn test_account_policy_disable_requires_guardian_co_signature() {
     let env = Env::new().await;
     env.enable_policy().await;
     env.cluster.trigger_reconfiguration().await;
@@ -267,8 +280,8 @@ async fn test_account_policy_disable_requires_approval() {
     );
 
     let tx = env.policy_call_tx("disable").await;
-    env.approve(&tx).await;
-    env.execute_ok(tx).await;
+    let effects = env.execute_co_signed(tx, env.guardian).await;
+    assert!(effects.status().is_ok(), "{:?}", effects.status());
     env.execute_ok(env.transfer_sui_tx(2 * SUI_LIMIT).await)
         .await;
 }

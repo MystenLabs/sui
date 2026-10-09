@@ -791,6 +791,7 @@ mod test {
                 kind,
                 None, // compat_args
                 signer,
+                vec![],
                 genesis_digest,
                 &mut None,
             );

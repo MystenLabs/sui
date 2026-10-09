@@ -8,8 +8,8 @@ Policies are dynamic fields of the singleton <code><a href="../sui/account_polic
 Every transaction implicitly reads the registry at the version consensus assigned to it, so
 execution can look up the sender's policy without the transaction declaring it. While a policy
 is active, execution enforces a per-transaction SUI outflow limit, a gas budget cap, a fixed
-package allowlist, and that no non-coin object leaves the owner's ownership. The guardian
-exempts individual transactions by approving their digests.
+package allowlist, and that no non-coin object leaves the owner's ownership. A transaction
+co-signed by the guardian is exempt.
 
 A policy only takes effect <code><a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a></code> after it is enabled, and the owner can
 cancel it before then with the key alone, so an attacker holding the key cannot lock the
@@ -23,13 +23,12 @@ owner out by enabling a policy with their own guardian.
 -  [Function `create`](#sui_account_policy_create)
 -  [Function `enable`](#sui_account_policy_enable)
 -  [Function `cancel`](#sui_account_policy_cancel)
--  [Function `approve`](#sui_account_policy_approve)
 -  [Function `update`](#sui_account_policy_update)
 -  [Function `disable`](#sui_account_policy_disable)
 -  [Function `exists`](#sui_account_policy_exists)
 -  [Function `activation_epoch`](#sui_account_policy_activation_epoch)
 -  [Function `policy_mut`](#sui_account_policy_policy_mut)
--  [Function `assert_approved`](#sui_account_policy_assert_approved)
+-  [Function `assert_guardian_co_signed`](#sui_account_policy_assert_guardian_co_signed)
 
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
@@ -147,12 +146,6 @@ The policy itself. Field layout is mirrored by <code>sui_types::account_policy::
 <dd>
  First epoch in which the policy is enforced; <code><a href="../sui/account_policy.md#sui_account_policy_DISABLED">DISABLED</a></code> if cancelled or disabled.
 </dd>
-<dt>
-<code>approved_digests: vector&lt;vector&lt;u8&gt;&gt;</code>
-</dt>
-<dd>
- Transaction digests the guardian has exempted from the policy.
-</dd>
 </dl>
 
 
@@ -192,32 +185,22 @@ The policy itself. Field layout is mirrored by <code>sui_types::account_policy::
 
 
 
-<a name="sui_account_policy_ENotGuardian"></a>
-
-
-
-<pre><code>#[error]
-<b>const</b> <a href="../sui/account_policy.md#sui_account_policy_ENotGuardian">ENotGuardian</a>: vector&lt;u8&gt; = b"Only the policy guardian can do this.";
-</code></pre>
-
-
-
 <a name="sui_account_policy_EAlreadyActive"></a>
 
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/account_policy.md#sui_account_policy_EAlreadyActive">EAlreadyActive</a>: vector&lt;u8&gt; = b"An active policy can only be changed with guardian approval.";
+<b>const</b> <a href="../sui/account_policy.md#sui_account_policy_EAlreadyActive">EAlreadyActive</a>: vector&lt;u8&gt; = b"An active policy can only be changed with the guardian's co-signature.";
 </code></pre>
 
 
 
-<a name="sui_account_policy_ENotApproved"></a>
+<a name="sui_account_policy_ENotCoSignedByGuardian"></a>
 
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/account_policy.md#sui_account_policy_ENotApproved">ENotApproved</a>: vector&lt;u8&gt; = b"This transaction <b>has</b> not been approved by the guardian.";
+<b>const</b> <a href="../sui/account_policy.md#sui_account_policy_ENotCoSignedByGuardian">ENotCoSignedByGuardian</a>: vector&lt;u8&gt; = b"The guardian must co-sign this transaction.";
 </code></pre>
 
 
@@ -281,7 +264,6 @@ Opt the sender in. The policy is enforced from <code><a href="../sui/account_pol
             sui_limit_per_tx,
             gas_budget_cap,
             <a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>: ctx.epoch() + <a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a>,
-            approved_digests: vector[],
         },
     );
 }
@@ -319,43 +301,11 @@ attacker who enabled a policy on a stolen key cannot lock the owner out.
 
 </details>
 
-<a name="sui_account_policy_approve"></a>
-
-## Function `approve`
-
-Exempt the transaction with digest <code>digest</code> from <code>owner</code>'s policy. Guardian only.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_approve">approve</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, owner: <b>address</b>, digest: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_approve">approve</a>(
-    registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>,
-    owner: <b>address</b>,
-    digest: vector&lt;u8&gt;,
-    ctx: &TxContext,
-) {
-    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(owner);
-    <b>assert</b>!(ctx.sender() == policy.guardian, <a href="../sui/account_policy.md#sui_account_policy_ENotGuardian">ENotGuardian</a>);
-    policy.approved_digests.push_back(digest);
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="sui_account_policy_update"></a>
 
 ## Function `update`
 
-Change the sender's policy. The calling transaction must itself be guardian-approved.
+Change the sender's policy. The guardian must co-sign the transaction.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_update">update</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, guardian: <b>address</b>, sui_limit_per_tx: u64, gas_budget_cap: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -375,7 +325,7 @@ Change the sender's policy. The calling transaction must itself be guardian-appr
     ctx: &TxContext,
 ) {
     <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
-    policy.<a href="../sui/account_policy.md#sui_account_policy_assert_approved">assert_approved</a>(ctx);
+    policy.<a href="../sui/account_policy.md#sui_account_policy_assert_guardian_co_signed">assert_guardian_co_signed</a>(ctx);
     policy.guardian = guardian;
     policy.sui_limit_per_tx = sui_limit_per_tx;
     policy.gas_budget_cap = gas_budget_cap;
@@ -390,7 +340,7 @@ Change the sender's policy. The calling transaction must itself be guardian-appr
 
 ## Function `disable`
 
-Stop enforcing the sender's policy. The calling transaction must itself be guardian-approved.
+Stop enforcing the sender's policy. The guardian must co-sign the transaction.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_disable">disable</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -404,7 +354,7 @@ Stop enforcing the sender's policy. The calling transaction must itself be guard
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_disable">disable</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, ctx: &TxContext) {
     <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
-    policy.<a href="../sui/account_policy.md#sui_account_policy_assert_approved">assert_approved</a>(ctx);
+    policy.<a href="../sui/account_policy.md#sui_account_policy_assert_guardian_co_signed">assert_guardian_co_signed</a>(ctx);
     policy.<a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a> = <a href="../sui/account_policy.md#sui_account_policy_DISABLED">DISABLED</a>;
 }
 </code></pre>
@@ -485,13 +435,13 @@ Stop enforcing the sender's policy. The calling transaction must itself be guard
 
 </details>
 
-<a name="sui_account_policy_assert_approved"></a>
+<a name="sui_account_policy_assert_guardian_co_signed"></a>
 
-## Function `assert_approved`
+## Function `assert_guardian_co_signed`
 
 
 
-<pre><code><b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_assert_approved">assert_approved</a>(policy: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_assert_guardian_co_signed">assert_guardian_co_signed</a>(policy: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -500,8 +450,8 @@ Stop enforcing the sender's policy. The calling transaction must itself be guard
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_assert_approved">assert_approved</a>(policy: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>, ctx: &TxContext) {
-    <b>assert</b>!(policy.approved_digests.contains(ctx.digest()), <a href="../sui/account_policy.md#sui_account_policy_ENotApproved">ENotApproved</a>);
+<pre><code><b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_assert_guardian_co_signed">assert_guardian_co_signed</a>(policy: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>, ctx: &TxContext) {
+    <b>assert</b>!(ctx.co_signers().contains(&policy.guardian), <a href="../sui/account_policy.md#sui_account_policy_ENotCoSignedByGuardian">ENotCoSignedByGuardian</a>);
 }
 </code></pre>
 

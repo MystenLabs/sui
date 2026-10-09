@@ -1299,6 +1299,8 @@ pub struct TxContext {
     gas_budget: u64,
     // address of the sponsor if any
     sponsor: Option<AccountAddress>,
+    // addresses that signed the transaction beyond its required signers
+    co_signers: Vec<AccountAddress>,
     // whether the `TxContext` is native or not
     // (TODO: once we version execution we could drop this field)
     is_native: bool,
@@ -1359,6 +1361,7 @@ impl TxContext {
             gas_price,
             gas_budget,
             sponsor: sponsor.map(|s| s.into()),
+            co_signers: vec![],
             is_native: protocol_config.move_native_context(),
         }
     }
@@ -1413,6 +1416,19 @@ impl TxContext {
         self.sponsor.map(SuiAddress::from)
     }
 
+    pub fn co_signers(&self) -> Vec<SuiAddress> {
+        self.co_signers
+            .iter()
+            .copied()
+            .map(SuiAddress::from)
+            .collect()
+    }
+
+    pub fn with_co_signers(mut self, co_signers: Vec<SuiAddress>) -> Self {
+        self.co_signers = co_signers.into_iter().map(Into::into).collect();
+        self
+    }
+
     pub fn rgp(&self) -> u64 {
         self.rgp
     }
@@ -1449,6 +1465,7 @@ impl TxContext {
                 gas_price: 0,
                 gas_budget: 0,
                 sponsor: None,
+                co_signers: vec![],
                 is_native: true,
             };
             tx_context.into()

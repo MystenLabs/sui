@@ -223,6 +223,7 @@ impl SingleValidator {
                 kind,
                 None, // compat_args
                 signer,
+                executable.data().co_signers(),
                 *executable.digest(),
                 &mut None,
             );

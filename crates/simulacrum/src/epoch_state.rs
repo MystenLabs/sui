@@ -204,6 +204,7 @@ impl EpochState {
                 kind,
                 None, // compat_args
                 signer,
+                transaction.data().co_signers(),
                 tx_digest,
                 &mut None,
             );

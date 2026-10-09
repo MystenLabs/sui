@@ -229,6 +229,7 @@ pub(crate) mod checked {
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
+        co_signers: Vec<SuiAddress>,
         transaction_digest: TransactionDigest,
         move_vm: &Arc<MoveRuntime>,
         epoch_id: &EpochId,
@@ -266,7 +267,12 @@ pub(crate) mod checked {
             protocol_config,
             *epoch_id,
             system_object_versions,
-            (&transaction_kind, &gas_data, transaction_signer),
+            (
+                &transaction_kind,
+                &gas_data,
+                transaction_signer,
+                &co_signers,
+            ),
             unsettled_object_funds,
         );
 
@@ -284,6 +290,7 @@ pub(crate) mod checked {
                 transaction_kind,
                 rewritten_inputs,
                 transaction_signer,
+                co_signers,
                 transaction_digest,
                 move_vm,
                 epoch_id,
@@ -385,6 +392,7 @@ pub(crate) mod checked {
                 transaction_kind,
                 rewritten_inputs,
                 transaction_signer,
+                co_signers,
                 transaction_digest,
                 move_vm,
                 epoch_id,
@@ -651,6 +659,7 @@ pub(crate) mod checked {
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
+        co_signers: Vec<SuiAddress>,
         transaction_digest: TransactionDigest,
         move_vm: &Arc<MoveRuntime>,
         epoch_id: &EpochId,
@@ -695,7 +704,8 @@ pub(crate) mod checked {
             gas_data.budget,
             sponsor,
             protocol_config,
-        );
+        )
+        .with_co_signers(co_signers);
         let tx_ctx = Rc::new(RefCell::new(tx_ctx));
 
         let payment_kind = match payment_kind(&gas_data, &transaction_kind) {
@@ -1046,6 +1056,7 @@ pub(crate) mod checked {
             transaction_kind: TransactionKind,
             rewritten_inputs: Option<Vec<bool>>,
             transaction_signer: SuiAddress,
+            co_signers: Vec<SuiAddress>,
             transaction_digest: TransactionDigest,
             move_vm: &Arc<MoveRuntime>,
             epoch_id: &EpochId,
@@ -1130,7 +1141,8 @@ pub(crate) mod checked {
                 gas_data.budget,
                 sponsor,
                 protocol_config,
-            );
+            )
+            .with_co_signers(co_signers);
             let tx_ctx = Rc::new(RefCell::new(tx_ctx));
 
             let is_gasless = protocol_config.enable_gasless()

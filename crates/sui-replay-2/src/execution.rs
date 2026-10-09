@@ -153,6 +153,9 @@ pub fn execute_transaction_to_effects(
             txn_data.kind().clone(),
             None, // compat_args
             txn_data.sender(),
+            // TODO(account-policy): thread the on-chain signatures through so guardian
+            // co-signed transactions replay faithfully.
+            vec![],
             digest,
             trace_builder_opt,
         );

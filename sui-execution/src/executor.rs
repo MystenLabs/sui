@@ -49,6 +49,7 @@ pub trait Executor {
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
+        co_signers: Vec<SuiAddress>,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
@@ -78,6 +79,7 @@ pub trait Executor {
         transaction_kind: TransactionKind,
         _rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
+        co_signers: Vec<SuiAddress>,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (

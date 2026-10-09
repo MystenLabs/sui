@@ -80,8 +80,11 @@ struct PostExecutionCheckInputs {
 }
 
 impl PostExecutionCheckInputs {
-    fn new(transaction: (&TransactionKind, &GasData, SuiAddress), enable_gasless: bool) -> Self {
-        let (transaction_kind, gas_data, transaction_signer) = transaction;
+    fn new(
+        transaction: (&TransactionKind, &GasData, SuiAddress, &[SuiAddress]),
+        enable_gasless: bool,
+    ) -> Self {
+        let (transaction_kind, gas_data, transaction_signer, co_signers) = transaction;
         let (input_reservations, allowance_ids) = compute_input_reservations(
             transaction_kind,
             gas_data,
@@ -98,6 +101,7 @@ impl PostExecutionCheckInputs {
                 transaction_kind,
                 gas_data,
                 transaction_signer,
+                co_signers,
             ),
         }
     }
@@ -173,7 +177,7 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
         system_object_versions: SystemObjectVersions,
-        transaction: (&TransactionKind, &GasData, SuiAddress),
+        transaction: (&TransactionKind, &GasData, SuiAddress, &[SuiAddress]),
         unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
         let post_execution_check_inputs =
