@@ -5,8 +5,9 @@ use crate::{
     adapter,
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
-    gas_charger::{GasCharger, GasPayment, PaymentLocation},
+    gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
+    gas_payment::{GasPayment, PaymentLocation},
     sp,
     static_programmable_transactions::{
         env::Env,
@@ -335,7 +336,7 @@ where
         metrics: Arc<ExecutionMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &'gas mut GasCharger,
-        payment_location: Option<GasPayment>,
+        gas_payment: Option<GasPayment>,
         pure_input_bytes: IndexSet<Vec<u8>>,
         object_inputs: Vec<T::ObjectInput>,
         input_withdrawal_metadata: Vec<T::WithdrawalInput>,
@@ -363,7 +364,7 @@ where
         let pure_inputs = Locals::new_invalid(pure_input_metadata.len())?;
         let receiving_inputs = Locals::new_invalid(receiving_input_metadata.len())?;
         let mut new_gas_coin_id = None;
-        let gas = match payment_location {
+        let gas = match gas_payment {
             Some(gas_payment)
                 if matches!(gas_payment.location, PaymentLocation::AddressBalance(_))
                     && !env.protocol_config.gasless_transaction_drop_safety() =>
