@@ -4791,6 +4791,7 @@ impl ProtocolConfig {
                 138 => {
                     cfg.gas_model_version = Some(15);
                     cfg.feature_flags.enable_allowances = true;
+                    cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                         cfg.feature_flags.disable_effects_tx_dependencies = true;
