@@ -8,7 +8,7 @@ use crate::{
     cache::{identifier_interner::IdentifierInterner, move_cache::Package as CachedPackage},
     jit::{execution::ast::Package, optimization::to_optimized_form},
     natives::functions::NativeFunctions,
-    shared::types::OriginalId,
+    shared::{TypeLimits, types::OriginalId},
     validation::verification,
 };
 use move_binary_format::errors::PartialVMResult;
@@ -23,11 +23,19 @@ use std::{collections::BTreeMap, sync::Arc};
 /// direct-resolve into a system pkg the user explicitly links at the pinned version.
 pub fn translate_package(
     vm_config: &VMConfig,
+    type_limits: &TypeLimits,
     interner: &IdentifierInterner,
     natives: &NativeFunctions,
     system_packages: &BTreeMap<OriginalId, Arc<CachedPackage>>,
     loaded_package: verification::ast::Package,
 ) -> PartialVMResult<Package> {
     let opt_package = to_optimized_form(loaded_package)?;
-    execution::translate::package(vm_config, interner, natives, system_packages, opt_package)
+    execution::translate::package(
+        vm_config,
+        type_limits,
+        interner,
+        natives,
+        system_packages,
+        opt_package,
+    )
 }
