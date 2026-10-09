@@ -29,7 +29,7 @@ use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
-use sui_types::forwarding_address::MasterRecordKey;
+use sui_types::forwarding_address::{ForwardingMaster, MasterRecordKey};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::Data;
 use sui_types::storage::{
@@ -1223,13 +1223,13 @@ impl ImplicitSystemObjectResolver for TemporaryStore<'_> {
             .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
     }
 
-    fn forwarding_master(&self, master_id: u64) -> SuiResult<Option<SuiAddress>> {
+    fn forwarding_master(&self, master_id: u64) -> SuiResult<Option<ForwardingMaster>> {
         let registry_version = self
             .load_implicitly_read_system_object(&SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)?
             .version();
         Ok(MasterRecordKey(master_id)
             .load(self, registry_version)?
-            .map(|record| record.master))
+            .map(ForwardingMaster::from))
     }
 }
 
