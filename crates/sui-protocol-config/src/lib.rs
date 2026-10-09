@@ -421,6 +421,7 @@ const MAINNET_USDB: &str =
 //              Charge package inputs 1% of the per-byte object read cost.
 // Version 140: Add native vector bulk operations (keep_range, copy_range, replace_range
 //              and reverse) and their gas costs.
+//              Disable the ID leak verifier.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1330,6 +1331,11 @@ struct FeatureFlags {
     // silently dropped the displaced (finalized) transactions.
     #[serde(skip_serializing_if = "is_false")]
     merge_colliding_deferrals: bool,
+
+    // If true, skip the Sui ID leak verifier, allowing an existing `UID` to be packed into an
+    // object.
+    #[serde(skip_serializing_if = "is_false")]
+    disable_id_leak_verifier: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4875,6 +4881,8 @@ impl ProtocolConfig {
                     cfg.vector_copy_range_base_cost = Some(52);
                     cfg.vector_replace_range_base_cost = Some(52);
                     cfg.vector_replace_range_per_elem_cost = Some(8);
+
+                    cfg.feature_flags.disable_id_leak_verifier = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4987,6 +4995,7 @@ impl ProtocolConfig {
                 .map(|limit| limit as u128),
             deprecate_global_storage_ops,
             disable_entry_point_signature_check: self.disable_entry_point_signature_check(),
+            disable_id_leak_verifier: self.disable_id_leak_verifier(),
             switch_to_regex_reference_safety: false,
             framework_tx_context_mut_restrictions: self.framework_tx_context_mut_restrictions(),
             disallow_jump_orphans: self.disallow_jump_orphans(),

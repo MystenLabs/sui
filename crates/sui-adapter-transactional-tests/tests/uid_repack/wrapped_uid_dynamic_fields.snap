@@ -1,0 +1,58 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+// Tests that dynamic fields of an object follow its UID while the UID is stored bare in a dynamic
+// field, and after it is revived as an object of a different type.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-46:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9013600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 48:
+//# run ex::m::setup --sender A
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4909600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 50:
+//# run ex::m::stash --args object(2,1) object(2,0) --sender A
+created: object(3,0)
+mutated: object(0,0), object(2,1)
+wrapped: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 4218000,  storage_rebate: 3442456, non_refundable_storage_fee: 344
+
+task 4, line 52:
+//# run ex::m::bump_stashed --args object(2,1) --sender A
+mutated: object(0,0), object(2,1), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 3701200,  storage_rebate: 3700830, non_refundable_storage_fee: 370
+
+task 5, line 54:
+//# run ex::m::unstash_as_b --args object(2,1) --sender A
+mutated: object(0,0), object(2,1)
+unwrapped: object(2,0)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 4217578, non_refundable_storage_fee: 422
+
+task 6, line 56:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 5
+Contents: ex::m::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 7, line 58:
+//# run ex::m::check_b --args object(2,0) 2 --sender A
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220

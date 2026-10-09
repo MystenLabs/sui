@@ -1,0 +1,84 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+// Tests a UID leaving its defining module and being packed by another module or package,
+// including passing the UID between PTB commands.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-46:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7904000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 48-59:
+//# publish --dependencies ex
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5456800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, line 61:
+//# run ex::a::mint --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, line 63:
+//# run ex::c::from_a --args object(3,0) --sender A
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
+
+task 5, line 65:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 3
+Contents: ex::c::C {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 6, lines 67-70:
+//# programmable --inputs object(3,0) @A --sender A
+//> 0: ex::c::into_uid(Input(0));
+//> 1: ex::c::from_uid(Result(0));
+//> TransferObjects([Result(1)], Input(1))
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
+
+task 7, line 72:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 4
+Contents: ex::c::C {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 8, lines 74-76:
+//# programmable --inputs object(3,0) --sender A
+//> 0: ex::c::into_uid(Input(0));
+//> other::d::from_uid(Result(0))
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
+
+task 9, line 78:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 5
+Contents: other::d::D {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
