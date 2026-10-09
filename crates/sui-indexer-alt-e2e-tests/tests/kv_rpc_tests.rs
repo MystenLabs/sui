@@ -181,8 +181,8 @@ async fn plaintext_kv_rpc_cluster() -> FullCluster {
 }
 
 /// The second, unencrypted listener independently serves the same `LedgerService` as the primary
-/// one -- confirmed here without going through JSON-RPC, in case that path masks a failure to
-/// bind or serve the second listener at all.
+/// one -- confirmed here by dialing it directly, in case reaching it through a reader masks a
+/// failure to bind or serve the second listener at all.
 #[tokio::test]
 async fn test_plaintext_kv_rpc_listener_serves_get_service_info() {
     let cluster = plaintext_kv_rpc_cluster().await;

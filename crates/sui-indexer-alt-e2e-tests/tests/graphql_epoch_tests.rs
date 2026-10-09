@@ -5,9 +5,9 @@ use std::time::Duration;
 
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
-use jsonrpsee::core::Serialize;
 use reqwest::Client;
 use serde::Deserialize;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use serde_json::json;
