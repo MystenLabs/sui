@@ -50,7 +50,9 @@ use sui_types::{
 };
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
 
+mod account_policy;
 pub(crate) mod invariants;
+use account_policy::AccountPolicyTxInputs;
 use invariants::InvariantChecker;
 
 /// Declared allowance ids per `(funder, funds type)` key.
@@ -72,6 +74,9 @@ struct PostExecutionCheckInputs {
     /// What each `Publish`/`Upgrade` command in the PTB says the package it writes should look like.
     /// `None` when the transaction is not a PTB.
     declared_packages: Option<Vec<(usize, BTreeSet<ObjectID>)>>,
+    /// What the sender's account policy check needs from the transaction. `None` when the
+    /// transaction is not a PTB.
+    account_policy: Option<AccountPolicyTxInputs>,
 }
 
 impl PostExecutionCheckInputs {
@@ -89,6 +94,11 @@ impl PostExecutionCheckInputs {
             advance_epoch_gas_summary: transaction_kind.get_advance_epoch_tx_gas_summary(),
             is_genesis: matches!(transaction_kind, TransactionKind::Genesis(_)),
             declared_packages: declared_packages(transaction_kind),
+            account_policy: AccountPolicyTxInputs::new(
+                transaction_kind,
+                gas_data,
+                transaction_signer,
+            ),
         }
     }
 }
@@ -282,12 +292,16 @@ impl<'backing> TemporaryStore<'backing> {
             // If this transaction needs to read an implicit system object,
             // the version must be assigned before execution.
             .load_implicitly_read_system_object(object_id, version)?;
-        // Record the read version so it can be emitted into effects as a read-only consensus object and
-        // reproduced on replay.
+        self.record_implicitly_read_system_object(&object);
+        Some(object)
+    }
+
+    /// Records the read version of an implicitly read system object so it can be emitted into
+    /// effects as a read-only consensus object and reproduced on replay.
+    fn record_implicitly_read_system_object(&self, object: &Object) {
         self.loaded_system_objects
             .borrow_mut()
-            .insert(*object_id, (object.version(), object.digest()));
-        Some(object)
+            .insert(object.id(), (object.version(), object.digest()));
     }
 
     pub fn unsettled_object_funds(&self) -> &dyn UnsettledObjectFundsRead {

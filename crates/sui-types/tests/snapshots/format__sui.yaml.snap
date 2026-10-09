@@ -7,6 +7,18 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+AccountPolicyViolationKind:
+  ENUM:
+    0:
+      GasBudgetExceeded: UNIT
+    1:
+      PackageNotAllowed: UNIT
+    2:
+      PublishNotAllowed: UNIT
+    3:
+      SuiOutflowExceeded: UNIT
+    4:
+      ObjectTransferNotAllowed: UNIT
 AccumulatorAddress:
   STRUCT:
     - address:
@@ -681,6 +693,11 @@ ExecutionErrorKind:
         STRUCT:
           - id:
               TYPENAME: ObjectID
+    42:
+      AccountPolicyViolation:
+        STRUCT:
+          - kind:
+              TYPENAME: AccountPolicyViolationKind
 ExecutionFailure:
   STRUCT:
     - error:

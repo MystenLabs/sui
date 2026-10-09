@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 139;
+const MAX_PROTOCOL_VERSION: u64 = 140;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -421,6 +421,7 @@ const MAINNET_USDB: &str =
 //              Charge package inputs 1% of the per-byte object read cost.
 //              Add native vector bulk operations (keep_range, copy_range, replace_range
 //              and reverse) and their gas costs.
+// Version 140: Enable account policies on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1175,6 +1176,11 @@ struct FeatureFlags {
     // If true, resolve forwarding addresses through the forwarding address registry.
     #[serde(skip_serializing_if = "is_false")]
     enable_forwarding_addresses: bool,
+
+    // If true, create the account policy registry at genesis and enforce senders' account
+    // policies during sequencing and execution.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_account_policy: bool,
 
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // Deprecated: must always be set to `true`.
@@ -4873,6 +4879,11 @@ impl ProtocolConfig {
                     cfg.vector_copy_range_base_cost = Some(52);
                     cfg.vector_replace_range_base_cost = Some(52);
                     cfg.vector_replace_range_per_elem_cost = Some(8);
+                }
+                140 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_account_policy = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

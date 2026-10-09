@@ -11,6 +11,7 @@ use either::Either;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use sui_types::SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use sui_types::SUI_CLOCK_OBJECT_SHARED_VERSION;
@@ -666,6 +667,15 @@ fn implicitly_read_system_objects(
             initial_shared_version,
         ));
     }
+    if epoch_store.protocol_config().enable_account_policy()
+        && let Some(initial_shared_version) =
+            epoch_start_config.account_policy_registry_obj_initial_shared_version()
+    {
+        objects.push((
+            SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
+            initial_shared_version,
+        ));
+    }
     objects
 }
 
@@ -723,13 +733,19 @@ mod tests {
             initial_shared_version: sui_types::object::OBJECT_START_VERSION,
             version: v,
         };
-        AssignedVersions::new(
-            shared_object_versions,
-            SystemObjectVersions::new(
-                accumulator_version.map(at_start_version),
-                forwarding_address_registry_version.map(at_start_version),
-            ),
-        )
+        let mut system_object_versions = SystemObjectVersions::new(
+            accumulator_version.map(at_start_version),
+            forwarding_address_registry_version.map(at_start_version),
+        );
+        // The account policy registry is never written in these tests, so it stays at the same
+        // version as the forwarding address registry.
+        if let Some(version) = forwarding_address_registry_version {
+            system_object_versions.insert(
+                SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
+                at_start_version(version),
+            );
+        }
+        AssignedVersions::new(shared_object_versions, system_object_versions)
     }
 
     #[tokio::test]
@@ -1021,7 +1037,7 @@ mod tests {
             vec![
                 (
                     certs[0].key(),
-                    AssignedVersions::new(vec![], system_object_versions)
+                    AssignedVersions::new(vec![], system_object_versions.clone())
                 ),
                 (
                     certs[1].key(),
@@ -1262,6 +1278,10 @@ mod tests {
             SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
             SequenceNumber::from_u64(1),
         ));
+        shared_input_next_versions.remove(&(
+            SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
+            SequenceNumber::from_u64(1),
+        ));
         assert_eq!(
             shared_input_next_versions,
             HashMap::from([
@@ -1478,6 +1498,7 @@ mod tests {
             let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
             config.set_enable_accumulators_for_testing(true);
             config.set_enable_forwarding_addresses_for_testing(false);
+            config.set_enable_account_policy_for_testing(false);
             let authority = TestAuthorityBuilder::new()
                 .with_starting_objects(&shared_objects)
                 .with_protocol_config(config)

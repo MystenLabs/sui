@@ -1420,6 +1420,8 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
             }
+            // TODO(account-policy): the proto has no kind for this yet.
+            E::AccountPolicyViolation { .. } => ExecutionErrorKind::Unknown,
         };
 
         message.set_kind(kind);

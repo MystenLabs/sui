@@ -298,8 +298,26 @@ pub enum ExecutionErrorKind {
 
     #[error("Non-exclusive write input object {id} has been modified")]
     NonExclusiveWriteInputObjectModified { id: ObjectID },
+
+    #[error("Transaction violates the sender's account policy: {kind}")]
+    AccountPolicyViolation { kind: AccountPolicyViolationKind },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
+}
+
+/// Which rule of the sender's account policy a transaction broke.
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash, Error)]
+pub enum AccountPolicyViolationKind {
+    #[error("gas budget exceeds the policy cap")]
+    GasBudgetExceeded,
+    #[error("a called package is not allowed by the policy")]
+    PackageNotAllowed,
+    #[error("publishing or upgrading packages is not allowed by the policy")]
+    PublishNotAllowed,
+    #[error("SUI outflow exceeds the policy limit")]
+    SuiOutflowExceeded,
+    #[error("an object left the sender's ownership")]
+    ObjectTransferNotAllowed,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]

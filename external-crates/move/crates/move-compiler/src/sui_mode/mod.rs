@@ -87,6 +87,9 @@ pub const ADDRESS_ALIAS_CREATE: Symbol = symbol!("create");
 pub const FORWARDING_ADDRESS_MODULE_NAME: Symbol = symbol!("forwarding_address");
 pub const FORWARDING_ADDRESS_CREATE: Symbol = symbol!("create");
 
+pub const ACCOUNT_POLICY_MODULE_NAME: Symbol = symbol!("account_policy");
+pub const ACCOUNT_POLICY_CREATE: Symbol = symbol!("create");
+
 pub const TRANSFER_MODULE_NAME: Symbol = symbol!("transfer");
 pub const TRANSFER_FUNCTION_NAME: Symbol = symbol!("transfer");
 pub const FREEZE_FUNCTION_NAME: Symbol = symbol!("freeze_object");

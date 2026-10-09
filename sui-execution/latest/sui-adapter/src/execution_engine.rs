@@ -897,7 +897,12 @@ pub(crate) mod checked {
         let representable = temporary_store
             .check_accumulator_amounts_representable()
             .map_err(Into::into);
-        meter.and(written).and(representable)
+        let account_policy = if protocol_config.enable_account_policy() {
+            temporary_store.check_account_policy().map_err(Into::into)
+        } else {
+            Ok(())
+        };
+        meter.and(written).and(representable).and(account_policy)
     }
 
     #[instrument(name = "run_conservation_checks", level = "debug", skip_all)]

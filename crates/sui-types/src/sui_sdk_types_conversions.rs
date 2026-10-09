@@ -999,6 +999,10 @@ impl From<crate::execution_status::ExecutionErrorKind> for ExecutionError {
             crate::execution_status::ExecutionErrorKind::NonExclusiveWriteInputObjectModified { id } => {
                 Self::NonExclusiveWriteInputObjectModified { object: id.into() }
             }
+            // TODO(account-policy): sui-sdk-types has no variant for this yet.
+            crate::execution_status::ExecutionErrorKind::AccountPolicyViolation { .. } => {
+                Self::InvariantViolation
+            }
         }
     }
 }
