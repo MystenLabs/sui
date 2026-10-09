@@ -51,13 +51,13 @@ gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 
 
 task 7, line 51:
 //# run tto::M1::call_mut_ref_ret --args object(2,0) receiving(2,1)
-Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2203780, non_refundable_storage_fee: 220
 
 task 8, line 53:
 //# run tto::M1::call_mut_ref_immut_ret --args object(2,0) receiving(2,1)
-Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2203780, non_refundable_storage_fee: 220
 
 task 9, lines 55-56:
 //# programmable --inputs receiving(2,1)
