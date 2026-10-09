@@ -9,8 +9,9 @@
 //! network — each validator derives a deterministic slot for itself from a stake-weighted
 //! permutation of the committee seeded by the transaction, and delays its own submission
 //! according to that slot. The first `free_slots` validators in the derived order submit
-//! immediately (mirroring the proposer set an explicit list would grant), and
-//! every later validator waits long enough that an earlier copy can commit first.
+//! immediately (mirroring the proposer set an explicit list would grant), the validators
+//! up to the stake cut (`STAGGER_PROPOSER_STAKE_BPS`) wait long enough that an earlier
+//! copy can commit first, and every validator past the cut rejects the submission.
 //! Duplication is thereby bounded by construction instead of detected after its bandwidth is already spent.
 //!
 //! The slot is derived from the gas object ids rather than the transaction digest: digest
@@ -29,7 +30,7 @@ use std::time::{Duration, Instant};
 use fastcrypto::hash::HashFunction;
 use mysten_common::debug_fatal;
 use parking_lot::{Mutex, RwLock};
-use prometheus::IntGauge;
+use prometheus::{IntCounter, IntGauge};
 use rand::Rng as _;
 use rand::SeedableRng as _;
 use rand::rngs::StdRng;
@@ -54,6 +55,18 @@ const DEFAULT_STAGGER_STEP: Duration = Duration::from_millis(400);
 /// Held (staggered) submissions may occupy at most `capacity / this` of the owner's
 /// pending-transaction capacity; see [`StaggerQuota`].
 const STAGGERED_HELD_QUOTA_DIVISOR: usize = 4;
+/// Share of total voting power, in basis points, that a transaction's proposer set
+/// covers: the leading slots of its stagger order whose cumulative stake first reaches
+/// this share may propose it (the free slots immediately, the rest after their hold);
+/// every later slot rejects the submission outright. This bounds the copies of one
+/// transaction that can ever reach consensus — a hold only delays a copy, and when the
+/// validator learns of the commit late (processing lag, a slow chain) every held copy
+/// fires, so without a cap the amplification bound under load is the whole committee.
+/// Stake, not count: a count-based set could land on validators worth less than f,
+/// which a single fault budget could take out entirely. 40 % clears the validity
+/// threshold (f + 1, which guarantees an honest live member) with margin for slow
+/// validators, while still excluding most of the committee.
+const STAGGER_PROPOSER_STAKE_BPS: u64 = 4_000;
 
 /// Metric label splitting submissions by allowed-proposers restriction:
 /// "unrestricted" when any user transaction in the group could have named its
@@ -372,12 +385,12 @@ impl StaggeredSubmission {
         &self,
         txs: &[&Transaction],
         epoch_store: &AuthorityPerEpochStore,
-    ) -> Option<Duration> {
+    ) -> StaggerDecision {
         if !self.is_active() {
-            return None;
+            return StaggerDecision::Free;
         }
         if !epoch_store.protocol_config().allowed_proposers() {
-            return None;
+            return StaggerDecision::Free;
         }
         let epoch = epoch_store.epoch();
         let unrestricted: Vec<_> = txs
@@ -386,10 +399,12 @@ impl StaggeredSubmission {
             .filter(|(tx_data, _)| !tx_data.expiration().restricts_proposers(epoch))
             .collect();
         if unrestricted.is_empty() {
-            return None;
+            return StaggerDecision::Free;
         }
         // A non-member has no slot in the order; it also has no consensus to submit to.
-        let own_index = epoch_store.own_committee_index()?;
+        let Some(own_index) = epoch_store.own_committee_index() else {
+            return StaggerDecision::Free;
+        };
 
         let gas_payment: Vec<ObjectID> = unrestricted
             .iter()
@@ -398,7 +413,10 @@ impl StaggeredSubmission {
         let digests: Vec<&TransactionDigest> =
             unrestricted.iter().map(|(_, digest)| *digest).collect();
         let seed = stagger_seed(&gas_payment, &digests, epoch);
-        let slot = stagger_slot(&seed, epoch_store.committee(), own_index);
+        let committee = epoch_store.committee();
+        let order = stagger_order(&seed, committee);
+        let slot = slot_in_order(&order, committee, own_index);
+        let proposer_slots = stagger_proposer_slots(&order, committee);
 
         // SIP-45: a raised gas price pays for amplification, which maps here to that many
         // immediate slots. Matches the sizing an explicit proposer set is allowed. Soft
@@ -413,8 +431,21 @@ impl StaggeredSubmission {
 
         let params = self.params.read();
         let jitter = sample_jitter(params.step);
-        compute_delay(&params, slot, paid_amplification, jitter)
+        compute_delay(&params, slot, proposer_slots, paid_amplification, jitter)
     }
+}
+
+/// What staggering decides for one submission at this validator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StaggerDecision {
+    /// Submit immediately: staggering is off, the submission is not subject to it, or
+    /// this validator holds one of the transaction's free slots.
+    Free,
+    /// Hold for the given delay, then submit unless a copy was processed meanwhile.
+    Hold(Duration),
+    /// This validator is outside the transaction's proposer set: reject the submission
+    /// so the copy never occupies the queue, and the client moves on to a proposer.
+    Reject,
 }
 
 /// A component's admission gate for staggered (held) submissions, created by its owner
@@ -433,14 +464,21 @@ pub struct StaggerQuota {
     held: Arc<AtomicUsize>,
     /// Kept in lockstep with `held` for observability.
     metric: IntGauge,
+    /// Submissions rejected because this validator is outside the proposer set.
+    rejected_metric: IntCounter,
 }
 
 impl StaggerQuota {
-    pub fn new(max_pending_transactions: usize, held_metric: IntGauge) -> Self {
+    pub fn new(
+        max_pending_transactions: usize,
+        held_metric: IntGauge,
+        rejected_metric: IntCounter,
+    ) -> Self {
         Self {
             quota: (max_pending_transactions / STAGGERED_HELD_QUOTA_DIVISOR).max(1),
             held: Arc::new(AtomicUsize::new(0)),
             metric: held_metric,
+            rejected_metric,
         }
     }
 
@@ -452,17 +490,23 @@ impl StaggerQuota {
 
     /// Like [`StaggeredSubmission::submission_delay`], but also registers the hold
     /// against the quota and returns it as a [`StaggeredSlot`] carrying the
-    /// eligibility time.
+    /// eligibility time. A submission outside the proposer set is rejected before it
+    /// touches the quota.
     pub fn submission_slot(
         &self,
         txs: &[&Transaction],
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<StaggeredSlot>> {
-        let Some(delay) = epoch_store
+        let delay = match epoch_store
             .staggered_submission()
             .submission_delay(txs, epoch_store)
-        else {
-            return Ok(None);
+        {
+            StaggerDecision::Free => return Ok(None),
+            StaggerDecision::Hold(delay) => delay,
+            StaggerDecision::Reject => {
+                self.rejected_metric.inc();
+                return Err(SuiErrorKind::StaggeredSubmissionNotProposer.into());
+            }
         };
         if self
             .held
@@ -569,12 +613,18 @@ fn sample_jitter(step: Duration) -> Duration {
 fn compute_delay(
     params: &StaggerParams,
     slot: u64,
+    proposer_slots: u64,
     paid_amplification: u64,
     jitter: Duration,
-) -> Option<Duration> {
+) -> StaggerDecision {
     let free_slots = params.free_slots.max(paid_amplification);
     if slot < free_slots {
-        return None;
+        return StaggerDecision::Free;
+    }
+    // Paid amplification can widen the free slots past the stake cut: those slots still
+    // propose, so the proposer set never shrinks below the free slots.
+    if slot >= proposer_slots.max(free_slots) {
+        return StaggerDecision::Reject;
     }
     // Degenerate params (step > max_delay) clamp to a single firing step; the final
     // min() then keeps the ≤ max_delay invariant.
@@ -585,7 +635,7 @@ fn compute_delay(
         debug_fatal!("stagger step count {steps} overflows u32");
     }
     let steps = steps.min(u32::MAX as u128) as u32;
-    Some(
+    StaggerDecision::Hold(
         params
             .step
             .saturating_mul(steps)
@@ -646,14 +696,36 @@ pub(crate) fn stagger_order(seed: &[u8; 32], committee: &Committee) -> Vec<Autho
 }
 
 /// This validator's slot in the [`stagger_order`] permutation.
+#[cfg(test)]
 fn stagger_slot(seed: &[u8; 32], committee: &Committee, own_index: u32) -> u64 {
+    slot_in_order(&stagger_order(seed, committee), committee, own_index)
+}
+
+fn slot_in_order(order: &[AuthorityName], committee: &Committee, own_index: u32) -> u64 {
     let own_name = committee
         .authority_by_index(own_index)
         .expect("own_index is a committee member");
-    stagger_order(seed, committee)
+    order
         .iter()
         .position(|name| name == own_name)
         .expect("every committee member appears in the shuffle") as u64
+}
+
+/// Size of a transaction's proposer set: the shortest prefix of its [`stagger_order`]
+/// whose cumulative voting power reaches [`STAGGER_PROPOSER_STAKE_BPS`] of the total.
+/// Slots at or past this index reject the submission. Validators and the transaction
+/// driver derive it from the same order and committee, so both sides agree on who may
+/// be asked to propose.
+pub(crate) fn stagger_proposer_slots(order: &[AuthorityName], committee: &Committee) -> u64 {
+    let target = committee.total_votes() * STAGGER_PROPOSER_STAKE_BPS / 10_000;
+    let mut stake = 0;
+    for (index, name) in order.iter().enumerate() {
+        stake += committee.weight(name);
+        if stake >= target {
+            return index as u64 + 1;
+        }
+    }
+    order.len() as u64
 }
 
 #[cfg(test)]
@@ -746,6 +818,105 @@ mod tests {
         );
     }
 
+    /// `compute_delay` with an unbounded proposer set, as `Option` for the schedule tests.
+    fn schedule_delay(
+        params: &StaggerParams,
+        slot: u64,
+        paid_amplification: u64,
+        jitter: Duration,
+    ) -> Option<Duration> {
+        match compute_delay(params, slot, u64::MAX, paid_amplification, jitter) {
+            StaggerDecision::Free => None,
+            StaggerDecision::Hold(delay) => Some(delay),
+            StaggerDecision::Reject => panic!("slot {slot} rejected by an unbounded proposer set"),
+        }
+    }
+
+    #[test]
+    fn proposer_set_rejects_slots_past_the_stake_cut() {
+        let params = StaggerParams {
+            step: Duration::from_millis(250),
+            max_delay: Duration::from_secs(2),
+            free_slots: 3,
+        };
+        let no_jitter = Duration::ZERO;
+        // Five proposer slots: three free, two held, everything past them rejected.
+        assert_eq!(
+            compute_delay(&params, 2, 5, 1, no_jitter),
+            StaggerDecision::Free
+        );
+        assert_eq!(
+            compute_delay(&params, 4, 5, 1, no_jitter),
+            StaggerDecision::Hold(Duration::from_millis(500))
+        );
+        assert_eq!(
+            compute_delay(&params, 5, 5, 1, no_jitter),
+            StaggerDecision::Reject
+        );
+        assert_eq!(
+            compute_delay(&params, 200, 5, 1, no_jitter),
+            StaggerDecision::Reject
+        );
+        // Paid amplification widening the free slots past the cut still proposes.
+        assert_eq!(
+            compute_delay(&params, 6, 5, 7, no_jitter),
+            StaggerDecision::Free
+        );
+        assert_eq!(
+            compute_delay(&params, 7, 5, 7, no_jitter),
+            StaggerDecision::Reject
+        );
+        // A cut inside the free slots never shrinks them.
+        assert_eq!(
+            compute_delay(&params, 2, 1, 1, no_jitter),
+            StaggerDecision::Free
+        );
+        assert_eq!(
+            compute_delay(&params, 3, 1, 1, no_jitter),
+            StaggerDecision::Reject
+        );
+    }
+
+    #[test]
+    fn proposer_slots_cover_the_target_stake() {
+        // Equal stake: 40 % of four members needs two of them.
+        let (committee, _) = Committee::new_simple_test_committee_of_size(4);
+        let order = stagger_order(&test_seed(1), &committee);
+        assert_eq!(stagger_proposer_slots(&order, &committee), 2);
+        // Ten equal members: 40 % needs four.
+        let (committee, _) = Committee::new_simple_test_committee_of_size(10);
+        let order = stagger_order(&test_seed(1), &committee);
+        assert_eq!(stagger_proposer_slots(&order, &committee), 4);
+        // Uneven stake: the cut follows the stake landing in the order, so the set is
+        // one member when a 50 % holder leads it and four when the small ones do.
+        let (committee, _) =
+            Committee::new_simple_test_committee_with_normalized_voting_power(vec![
+                5000, 1250, 1250, 1250, 1250,
+            ]);
+        let whale = committee
+            .members()
+            .max_by_key(|(_, stake)| *stake)
+            .map(|(name, _)| *name)
+            .unwrap();
+        let mut seen = std::collections::HashSet::new();
+        for seed in 0..64u8 {
+            let order = stagger_order(&test_seed(seed), &committee);
+            let slots = stagger_proposer_slots(&order, &committee);
+            let whale_slot = order.iter().position(|name| *name == whale).unwrap() as u64;
+            assert_eq!(
+                slots,
+                if whale_slot == 0 {
+                    1
+                } else {
+                    (whale_slot + 1).min(4)
+                }
+            );
+            assert!(slots as usize <= order.len());
+            seen.insert(slots);
+        }
+        assert!(seen.len() > 1, "stake cut never varied across seeds");
+    }
+
     #[test]
     fn delay_schedule() {
         let params = StaggerParams {
@@ -755,49 +926,49 @@ mod tests {
         };
         let no_jitter = Duration::ZERO;
         // Free slots submit immediately; the first held slot waits one step.
-        assert_eq!(compute_delay(&params, 0, 1, no_jitter), None);
-        assert_eq!(compute_delay(&params, 2, 1, no_jitter), None);
+        assert_eq!(schedule_delay(&params, 0, 1, no_jitter), None);
+        assert_eq!(schedule_delay(&params, 2, 1, no_jitter), None);
         assert_eq!(
-            compute_delay(&params, 3, 1, no_jitter),
+            schedule_delay(&params, 3, 1, no_jitter),
             Some(Duration::from_millis(250))
         );
         assert_eq!(
-            compute_delay(&params, 4, 1, no_jitter),
+            schedule_delay(&params, 4, 1, no_jitter),
             Some(Duration::from_millis(500))
         );
         // 2s / 250ms = 8 firing steps: the last one fires exactly at max_delay, then the
         // schedule wraps instead of piling further slots onto the cap.
         assert_eq!(
-            compute_delay(&params, 10, 1, no_jitter),
+            schedule_delay(&params, 10, 1, no_jitter),
             Some(Duration::from_secs(2))
         );
         assert_eq!(
-            compute_delay(&params, 11, 1, no_jitter),
+            schedule_delay(&params, 11, 1, no_jitter),
             Some(Duration::from_millis(250))
         );
         assert_eq!(
-            compute_delay(&params, 120, 1, no_jitter),
+            schedule_delay(&params, 120, 1, no_jitter),
             Some(Duration::from_millis(1500))
         );
         // Paid amplification widens the free slots, and never narrows them.
-        assert_eq!(compute_delay(&params, 4, 5, no_jitter), None);
+        assert_eq!(schedule_delay(&params, 4, 5, no_jitter), None);
         assert_eq!(
-            compute_delay(&params, 5, 5, no_jitter),
+            schedule_delay(&params, 5, 5, no_jitter),
             Some(Duration::from_millis(250))
         );
-        assert_eq!(compute_delay(&params, 2, 1, no_jitter), None);
+        assert_eq!(schedule_delay(&params, 2, 1, no_jitter), None);
 
         // Jitter is added on top of the wrapped nominal delay (blurring the exact
         // submission instant an observer could otherwise derive) and never applies to
         // free slots.
         let jitter = Duration::from_millis(100);
-        assert_eq!(compute_delay(&params, 2, 1, jitter), None);
+        assert_eq!(schedule_delay(&params, 2, 1, jitter), None);
         assert_eq!(
-            compute_delay(&params, 3, 1, jitter),
+            schedule_delay(&params, 3, 1, jitter),
             Some(Duration::from_millis(350))
         );
         assert_eq!(
-            compute_delay(&params, 120, 1, jitter),
+            schedule_delay(&params, 120, 1, jitter),
             Some(Duration::from_millis(1600))
         );
     }
@@ -1099,12 +1270,12 @@ mod tests {
         let no_jitter = Duration::ZERO;
         let mut tail_delays = std::collections::HashSet::new();
         for slot in 3..200u64 {
-            let delay = compute_delay(&params, slot, 1, no_jitter).unwrap();
+            let delay = schedule_delay(&params, slot, 1, no_jitter).unwrap();
             assert!(delay >= params.step, "slot {slot} waited {delay:?}");
             assert!(delay <= params.max_delay, "slot {slot} waited {delay:?}");
             assert_eq!(
                 delay,
-                compute_delay(&params, slot + firing_steps, 1, no_jitter).unwrap(),
+                schedule_delay(&params, slot + firing_steps, 1, no_jitter).unwrap(),
                 "schedule does not cycle at slot {slot}"
             );
             if slot >= 3 + firing_steps {
@@ -1114,7 +1285,7 @@ mod tests {
         assert_eq!(tail_delays.len() as u64, firing_steps);
         // Paid amplification shifts the wrap origin with the free slots.
         assert_eq!(
-            compute_delay(&params, 5 + firing_steps, 5, no_jitter),
+            schedule_delay(&params, 5 + firing_steps, 5, no_jitter),
             Some(Duration::from_millis(250))
         );
         // Degenerate params (one firing step) still respect the max_delay bound.
@@ -1125,7 +1296,7 @@ mod tests {
         };
         for slot in 1..10u64 {
             assert_eq!(
-                compute_delay(&degenerate, slot, 1, no_jitter),
+                schedule_delay(&degenerate, slot, 1, no_jitter),
                 Some(Duration::from_secs(2))
             );
         }
@@ -1239,12 +1410,13 @@ mod adapter_tests {
             let seed = stagger_seed(&[object.id()], &[], epoch);
             stagger_slot(&seed, epoch_store.committee(), own_index)
         };
-        // 32 candidates make both picks overwhelmingly likely (miss odds ~(1/4)^32 and
-        // ~(3/4)^32 respectively).
+        // With four equal members the proposer set is two slots (40 % of stake), so a
+        // held slot is exactly slot 1. 32 candidates make both picks overwhelmingly
+        // likely (miss odds ~(3/4)^32 each).
         let staggered_gas = candidates
             .iter()
-            .find(|o| slot_of(o) >= 1)
-            .expect("no candidate gas object lands past slot 0")
+            .find(|o| slot_of(o) == 1)
+            .expect("no candidate gas object lands on the held slot")
             .clone();
         let immediate_gas = candidates
             .iter()
@@ -1456,7 +1628,7 @@ mod pool_tests {
             .filter(|object| object.id() != immediate_gas.id())
             .filter(|object| {
                 let seed = stagger_seed(&[object.id()], &[], epoch);
-                stagger_slot(&seed, epoch_store.committee(), own_index) >= 1
+                stagger_slot(&seed, epoch_store.committee(), own_index) == 1
             })
             .cloned();
 
@@ -1630,7 +1802,7 @@ mod pool_tests {
             .filter(|object| object.id() != immediate_gas.id())
             .find(|object| {
                 let seed = stagger_seed(&[immediate_gas.id(), object.id()], &[], epoch);
-                stagger_slot(&seed, epoch_store.committee(), own_index) >= 1
+                stagger_slot(&seed, epoch_store.committee(), own_index) == 1
             })
             .expect("no companion makes the bundle land past slot 0")
             .clone();
