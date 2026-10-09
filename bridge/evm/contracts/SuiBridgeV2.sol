@@ -237,7 +237,7 @@ contract SuiBridgeV2 is SuiBridge {
     /// @param tokenID The code of the token.
     /// @param suiAdjustedAmount The amount of tokens to transfer, adjusted for Sui decimals.
     /// @param senderAddress The address of the sender.
-    /// @param recipientAddress The address of the sender.
+    /// @param recipientAddress The address of the recipient.
     event TokensDepositedV2(
         uint8 indexed sourceChainID,
         uint64 indexed nonce,
