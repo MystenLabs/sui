@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 139;
+const MAX_PROTOCOL_VERSION: u64 = 140;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -419,7 +419,7 @@ const MAINNET_USDB: &str =
 //              Reduce the non-refundable storage fee from 1% to 0.01%.
 //              Allow random beacon DKG to complete after its timeout on devnet and testnet.
 //              Charge package inputs 1% of the per-byte object read cost.
-//              Add native vector bulk operations (keep_range, copy_range, replace_range
+// Version 140: Add native vector bulk operations (keep_range, copy_range, replace_range
 //              and reverse) and their gas costs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -4865,6 +4865,8 @@ impl ProtocolConfig {
                     }
                     // Validators cache packages, so reading one costs far less than reading an object.
                     cfg.obj_access_cost_read_per_package_kb = Some(154);
+                }
+                140 => {
                     cfg.vector_reverse_base_cost = Some(52);
                     cfg.vector_reverse_per_elem_cost = Some(8);
                     cfg.vector_keep_range_base_cost = Some(52);
@@ -5336,9 +5338,9 @@ mod test {
     }
 
     #[test]
-    fn vector_bulk_native_gas_costs_start_at_version_139() {
+    fn vector_bulk_native_gas_costs_start_at_version_140() {
         for chain in [Chain::Unknown, Chain::Mainnet, Chain::Testnet] {
-            let before = ProtocolConfig::get_for_version(ProtocolVersion::new(138), chain);
+            let before = ProtocolConfig::get_for_version(ProtocolVersion::new(139), chain);
             assert_eq!(before.vector_reverse_base_cost_as_option(), None);
             assert_eq!(before.vector_reverse_per_elem_cost_as_option(), None);
             assert_eq!(before.vector_keep_range_base_cost_as_option(), None);
@@ -5354,7 +5356,7 @@ mod test {
             assert_eq!(before.vector_replace_range_base_cost_as_option(), None);
             assert_eq!(before.vector_replace_range_per_elem_cost_as_option(), None);
 
-            let active = ProtocolConfig::get_for_version(ProtocolVersion::new(139), chain);
+            let active = ProtocolConfig::get_for_version(ProtocolVersion::new(140), chain);
             assert_eq!(active.vector_reverse_base_cost_as_option(), Some(52));
             assert_eq!(active.vector_reverse_per_elem_cost_as_option(), Some(8));
             assert_eq!(active.vector_keep_range_base_cost_as_option(), Some(52));
