@@ -145,12 +145,11 @@ impl AuthenticatorTrait for MultiSig {
             .into());
         }
 
-        // Same shape as the passkey/zkLogin checks: gates the member *signing*,
-        // not membership, so hybrid committees keep working on their classical
-        // members until the flag turns on.
-        if self.has_mldsa65_sigs() && !verify_params.accept_mldsa65_in_multisig {
+        // Gates membership, not just signing: an ML-DSA key in the committee
+        // is a BCS variant that older binaries cannot decode.
+        if self.multisig_pk.has_mldsa65_member() && !verify_params.accept_mldsa65_in_multisig {
             return Err(SuiErrorKind::InvalidSignature {
-                error: "ML-DSA-65 sig not supported inside multisig".to_string(),
+                error: "ML-DSA-65 member not supported inside multisig".to_string(),
             }
             .into());
         }
@@ -488,10 +487,13 @@ impl MultiSig {
             .any(|s| matches!(s, CompressedSignature::ZkLogin(_)))
     }
 
-    pub fn has_mldsa65_sigs(&self) -> bool {
-        self.sigs
-            .iter()
-            .any(|s| matches!(s, CompressedSignature::MLDSA65(_)))
+    /// Whether any committee key or signature is ML-DSA-65.
+    pub fn uses_mldsa65(&self) -> bool {
+        self.multisig_pk.has_mldsa65_member()
+            || self
+                .sigs
+                .iter()
+                .any(|s| matches!(s, CompressedSignature::MLDSA65(_)))
     }
 }
 
@@ -597,6 +599,12 @@ impl MultiSigPublicKey {
 
     pub fn pubkeys(&self) -> &Vec<(PublicKey, WeightUnit)> {
         &self.pk_map
+    }
+
+    pub fn has_mldsa65_member(&self) -> bool {
+        self.pk_map
+            .iter()
+            .any(|(pk, _)| matches!(pk, PublicKey::MLDSA65(_)))
     }
 
     pub fn validate(&self) -> Result<MultiSigPublicKey, FastCryptoError> {
