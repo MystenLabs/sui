@@ -18,9 +18,9 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID,
-    SUI_DENY_LIST_OBJECT_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID,
+    SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID, SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
+    SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID,
     SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
 };
 
@@ -38,6 +38,7 @@ const SYSTEM_SHARED_OBJECT_IDS: &[ObjectID] = &[
     SUI_DISPLAY_REGISTRY_OBJECT_ID,
     SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
     SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+    SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
 ];
 
 /// Reads the initial shared version of a system shared object from the store.
@@ -293,6 +294,10 @@ impl EpochStartConfiguration {
 
     pub fn forwarding_address_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         self.system_object_initial_shared_version(SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID)
+    }
+
+    pub fn account_policy_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.system_object_initial_shared_version(SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID)
     }
 }
 

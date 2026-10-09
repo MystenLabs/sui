@@ -121,6 +121,11 @@ const SUI_FORWARDING_ADDRESS_CREATE: FunctionIdent = (
     ident_str!("forwarding_address"),
     ident_str!("create"),
 );
+const SUI_ACCOUNT_POLICY_CREATE: FunctionIdent = (
+    SUI_FRAMEWORK_ADDRESS,
+    ident_str!("account_policy"),
+    ident_str!("create"),
+);
 const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[
     OBJECT_NEW,
     OBJECT_NEW_UID_FROM_HASH,
@@ -139,6 +144,7 @@ const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_DISPLAY_REGISTRY_CREATE,
     SUI_ALIAS_CREATE,
     SUI_FORWARDING_ADDRESS_CREATE,
+    SUI_ACCOUNT_POLICY_CREATE,
 ];
 
 impl AbstractValue {

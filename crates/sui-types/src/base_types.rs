@@ -233,49 +233,40 @@ pub struct ConsensusObjectVersion {
     pub version: SequenceNumber,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SystemObjectVersions {
-    accumulator_version: Option<ConsensusObjectVersion>,
-    forwarding_address_registry_version: Option<ConsensusObjectVersion>,
-}
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SystemObjectVersions(std::collections::BTreeMap<ObjectID, ConsensusObjectVersion>);
 
 impl SystemObjectVersions {
     pub fn new(
         accumulator_version: Option<ConsensusObjectVersion>,
         forwarding_address_registry_version: Option<ConsensusObjectVersion>,
     ) -> Self {
-        Self {
-            accumulator_version,
-            forwarding_address_registry_version,
+        let mut versions = std::collections::BTreeMap::new();
+        if let Some(version) = accumulator_version {
+            versions.insert(crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID, version);
         }
+        if let Some(version) = forwarding_address_registry_version {
+            versions.insert(crate::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, version);
+        }
+        Self(versions)
     }
 
     pub fn empty() -> Self {
-        Self::new(None, None)
+        Self::default()
     }
 
     pub fn from_map(
-        mut versions: std::collections::BTreeMap<ObjectID, ConsensusObjectVersion>,
+        versions: std::collections::BTreeMap<ObjectID, ConsensusObjectVersion>,
     ) -> Self {
-        let accumulator_version = versions.remove(&crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID);
-        let forwarding_address_registry_version =
-            versions.remove(&crate::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID);
-        assert!(
-            versions.is_empty(),
-            "{:?} are not implicitly read system objects",
-            versions.keys().collect::<Vec<_>>()
-        );
-        Self::new(accumulator_version, forwarding_address_registry_version)
+        Self(versions)
+    }
+
+    pub fn insert(&mut self, object_id: ObjectID, version: ConsensusObjectVersion) {
+        self.0.insert(object_id, version);
     }
 
     pub fn get(&self, object_id: &ObjectID) -> Option<ConsensusObjectVersion> {
-        match *object_id {
-            crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID => self.accumulator_version,
-            crate::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID => {
-                self.forwarding_address_registry_version
-            }
-            _ => panic!("{object_id} is not an implicitly read system object"),
-        }
+        self.0.get(object_id).copied()
     }
 }
 

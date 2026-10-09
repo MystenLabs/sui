@@ -21,8 +21,8 @@ use sui_types::effects::{AccumulatorOperation, AccumulatorValue, TransactionEven
 use sui_types::event::Event;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution_status::{
-    CommandArgumentError, ExecutionErrorKind, ExecutionStatus, PackageUpgradeError,
-    TypeArgumentError,
+    AccountPolicyViolationKind, CommandArgumentError, ExecutionErrorKind, ExecutionStatus,
+    PackageUpgradeError, TypeArgumentError,
 };
 use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointCommitment};
@@ -245,6 +245,9 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<CommandArgumentError>(&samples).unwrap();
     tracer.trace_type::<TypeArgumentError>(&samples).unwrap();
     tracer.trace_type::<PackageUpgradeError>(&samples).unwrap();
+    tracer
+        .trace_type::<AccountPolicyViolationKind>(&samples)
+        .unwrap();
     tracer
         .trace_type::<TransactionExpiration>(&samples)
         .unwrap();

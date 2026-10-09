@@ -109,6 +109,7 @@ static_symbols!(
     "permit",
     "address_alias",
     "forwarding_address",
+    "account_policy",
     "00000000000000000000000000000000",
 );
 

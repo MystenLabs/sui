@@ -1087,6 +1087,45 @@ total_voting_power
 quorum_threshold
 	public fun
 	0x3::voting_power
+AccountPolicyRegistry
+	public struct
+	0x2::account_policy
+PolicyKey
+	public struct
+	0x2::account_policy
+AccountPolicy
+	public struct
+	0x2::account_policy
+create
+	fun
+	0x2::account_policy
+enable
+	public fun
+	0x2::account_policy
+cancel
+	public fun
+	0x2::account_policy
+approve
+	public fun
+	0x2::account_policy
+update
+	public fun
+	0x2::account_policy
+disable
+	public fun
+	0x2::account_policy
+exists
+	public fun
+	0x2::account_policy
+activation_epoch
+	public fun
+	0x2::account_policy
+policy_mut
+	fun
+	0x2::account_policy
+assert_approved
+	fun
+	0x2::account_policy
 AccumulatorRoot
 	public struct
 	0x2::accumulator
@@ -3119,6 +3158,9 @@ address_alias_state
 	public(package) fun
 	0x2::object
 forwarding_address_registry
+	public(package) fun
+	0x2::object
+account_policy_registry
 	public(package) fun
 	0x2::object
 uid_as_inner

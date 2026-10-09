@@ -25,6 +25,7 @@ use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
 
 #[macro_use]
 pub mod error;
+pub mod account_policy;
 pub mod accumulator_event;
 pub mod accumulator_metadata;
 pub mod accumulator_root;
@@ -146,6 +147,7 @@ built_in_ids! {
     SUI_ACCUMULATOR_ROOT_ADDRESS / SUI_ACCUMULATOR_ROOT_OBJECT_ID = 0xacc;
     SUI_ADDRESS_ALIAS_STATE_ADDRESS / SUI_ADDRESS_ALIAS_STATE_OBJECT_ID = 0xa;
     SUI_FORWARDING_ADDRESS_REGISTRY_ADDRESS / SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID = 0xfa;
+    SUI_ACCOUNT_POLICY_REGISTRY_ADDRESS / SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID = 0xab;
 }
 
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
@@ -166,6 +168,7 @@ pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION
 pub const IMPLICITLY_READ_SYSTEM_OBJECTS: &[ObjectID] = &[
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
+    SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
 ];
 
 pub fn sui_framework_address_concat_string(suffix: &str) -> String {
