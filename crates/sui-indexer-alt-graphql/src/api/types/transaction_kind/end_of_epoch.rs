@@ -34,6 +34,7 @@ pub enum EndOfEpochTransactionKind {
     AuthenticatorStateExpire(AuthenticatorStateExpireTransaction),
     RandomnessStateCreate(RandomnessStateCreateTransaction),
     CoinDenyListStateCreate(CoinDenyListStateCreateTransaction),
+    PackageConfigCreate(PackageConfigCreateTransaction),
     StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction),
     BridgeStateCreate(BridgeStateCreateTransaction),
     BridgeCommitteeInit(BridgeCommitteeInitTransaction),
@@ -90,6 +91,14 @@ pub struct RandomnessStateCreateTransaction {
 /// System transaction for creating the coin deny list state.
 #[derive(SimpleObject, Clone)]
 pub struct CoinDenyListStateCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+/// System transaction for creating the package configuration state.
+#[derive(SimpleObject, Clone)]
+pub struct PackageConfigCreateTransaction {
     /// A workaround to define an empty variant of a GraphQL union.
     #[graphql(name = "_")]
     dummy: Option<bool>,
@@ -224,6 +233,9 @@ impl EndOfEpochTransactionKind {
             }
             N::DenyListStateCreate => {
                 K::CoinDenyListStateCreate(CoinDenyListStateCreateTransaction { dummy: None })
+            }
+            N::PackageConfigCreate => {
+                K::PackageConfigCreate(PackageConfigCreateTransaction { dummy: None })
             }
             N::StoreExecutionTimeObservations(_) => {
                 K::StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction {
