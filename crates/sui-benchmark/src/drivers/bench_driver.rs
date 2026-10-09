@@ -45,7 +45,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use sui_types::committee::Committee;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::messages_grpc::WaitForEffectsResponse;
+use sui_types::messages_grpc::{WaitForEffectsResponse, WaitForEffectsStatus};
 use sui_types::transaction::{Transaction, TransactionDataAPI};
 use sui_types::transaction_driver_types::TransactionSubmissionError;
 use sysinfo::System;
@@ -1341,8 +1341,10 @@ fn process_bundle_results(
                             BatchedTransactionStatus::Success { effects }
                         }
                         BundleItemResponse::DirectFailure(status) => status,
-                        BundleItemResponse::WaitForEffects(wait_response) => match wait_response {
-                            WaitForEffectsResponse::Executed { details, .. } => {
+                        BundleItemResponse::WaitForEffects(wait_response) => match wait_response
+                            .status
+                        {
+                            WaitForEffectsStatus::Executed { details, .. } => {
                                 let effects = details.map(|d| {
                                     let epoch = d.effects.executed_epoch();
                                     ExecutionEffects::FinalizedTransactionEffects(
@@ -1371,7 +1373,7 @@ fn process_bundle_results(
                                     },
                                 }
                             }
-                            WaitForEffectsResponse::Rejected { error } => {
+                            WaitForEffectsStatus::Rejected { error } => {
                                 if let Some(error) = error {
                                     let is_retriable =
                                         error.individual_error_indicates_epoch_change();
@@ -1389,7 +1391,7 @@ fn process_bundle_results(
                                     BatchedTransactionStatus::UnknownRejection
                                 }
                             }
-                            WaitForEffectsResponse::Expired { epoch, round } => {
+                            WaitForEffectsStatus::Expired { epoch, round } => {
                                 BatchedTransactionStatus::RetriableFailure {
                                     error: format!("Expired at epoch {}, round {:?}", epoch, round),
                                 }

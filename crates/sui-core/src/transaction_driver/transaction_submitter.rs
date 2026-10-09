@@ -8,10 +8,10 @@ use std::{
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use sui_types::{
-    base_types::AuthorityName,
+    base_types::{AuthorityName, ObjectID},
     error::ErrorCategory,
     messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
-    transaction::TransactionDataAPI as _,
+    transaction::{MAX_UNPAID_ALLOWED_PROPOSERS, TransactionDataAPI as _},
 };
 use tokio::time::timeout;
 use tracing::instrument;
@@ -20,15 +20,18 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     safe_client::SafeClient,
+    staggered_submission::{stagger_order, stagger_seed},
     transaction_driver::{
         SubmitTransactionOptions, TransactionDriverMetrics,
         error::{
             AggregatedEffectsDigests, TransactionDriverError, TransactionRequestError,
             aggregate_request_errors,
         },
-        request_retrier::RequestRetrier,
+        request_retrier::{RequestRetrier, StaggerTargets},
     },
-    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
+    validator_client_monitor::{
+        OperationFeedback, OperationType, TransactionClass, ValidatorClientMonitor,
+    },
 };
 
 #[cfg(test)]
@@ -76,6 +79,13 @@ impl TransactionSubmitter {
         });
 
         // Pings carry no transaction, so they are neither restricted nor unrestricted.
+        let tx_class = request.transaction.as_ref().map(|_| {
+            if allowed_proposers.is_some() {
+                TransactionClass::Restricted
+            } else {
+                TransactionClass::Unrestricted
+            }
+        });
         if request.transaction.is_some() {
             self.metrics
                 .submitted_txns_with_allowed_proposers
@@ -96,12 +106,41 @@ impl TransactionSubmitter {
             .submit_amplification_factor
             .observe(amplification_factor as f64);
 
+        // While validators stagger unrestricted transactions, target the transaction's
+        // own free-slot validators: they propose it immediately, everyone else would
+        // hold it. Harmless if the view is stale — a mistargeted submission is still
+        // sequenced, only slower.
+        let stagger_targets = request
+            .transaction
+            .as_ref()
+            .filter(|_| allowed_proposers.is_none() && client_monitor.staggering_active())
+            .map(|tx| {
+                // The same inputs the validators seed the schedule with.
+                let gas_payment: Vec<ObjectID> = tx
+                    .transaction_data()
+                    .gas_data()
+                    .payment
+                    .iter()
+                    .map(|(id, _, _)| *id)
+                    .collect();
+                let seed = stagger_seed(
+                    &gas_payment,
+                    &[tx.digest()],
+                    authority_aggregator.committee.epoch(),
+                );
+                StaggerTargets {
+                    order: stagger_order(&seed, &authority_aggregator.committee),
+                    free_slots: MAX_UNPAID_ALLOWED_PROPOSERS.max(amplification_factor) as usize,
+                }
+            });
+
         let mut retrier = RequestRetrier::new(
             authority_aggregator,
             client_monitor,
             options.allowed_validators.clone(),
             options.blocked_validators.clone(),
             allowed_proposers,
+            stagger_targets,
         );
 
         let ping_label = if request.ping_type.is_some() {
@@ -144,6 +183,7 @@ impl TransactionSubmitter {
                             &request,
                             options,
                             client_monitor,
+                            tx_class,
                             name,
                             display_name.clone(),
                         );
@@ -252,6 +292,7 @@ impl TransactionSubmitter {
         request: &SubmitTxRequest,
         options: &SubmitTransactionOptions,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
+        tx_class: Option<TransactionClass>,
         validator: AuthorityName,
         display_name: String,
     ) -> Result<SubmitTxResult, TransactionRequestError>
@@ -270,6 +311,7 @@ impl TransactionSubmitter {
                 authority_name: validator,
                 display_name: display_name.clone(),
                 operation: OperationType::Submit,
+                tx_class,
                 ping_type: request.ping_type,
                 result: Err(()),
             });
@@ -285,6 +327,7 @@ impl TransactionSubmitter {
                     authority_name: validator,
                     display_name: display_name.clone(),
                     operation: OperationType::Submit,
+                    tx_class,
                     ping_type: request.ping_type,
                     result: Err(()),
                 });
@@ -307,6 +350,7 @@ impl TransactionSubmitter {
                     authority_name: validator,
                     display_name,
                     operation: OperationType::Submit,
+                    tx_class,
                     ping_type: request.ping_type,
                     result: Err(()),
                 });
@@ -319,6 +363,7 @@ impl TransactionSubmitter {
             authority_name: validator,
             display_name,
             operation: OperationType::Submit,
+            tx_class,
             ping_type: request.ping_type,
             result: Ok(latency),
         });
