@@ -27,9 +27,11 @@ pub const HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES: u64 = 256;
 /// field types of datatypes.
 pub const MAX_TYPE_INSTANTIATION_NODES: u64 = 128;
 
-/// Size of the type depth LRU
+/// Capacity of the per-transaction type size formula cache. The cache never evicts, and
+/// filling it raises an invariant violation, so this must exceed the number of distinct
+/// datatypes any one transaction can touch.
 /// TODO(vm-rewrite): find a good bound for this
-pub const TYPE_DEPTH_LRU_SIZE: usize = 16_384;
+pub const SIZE_FORMULA_CACHE_CAPACITY: usize = 16_384;
 
 /// Size of the linkage-cahge virtual dispatch LRU
 /// TODO(vm-rewrite): find a good bound for this
