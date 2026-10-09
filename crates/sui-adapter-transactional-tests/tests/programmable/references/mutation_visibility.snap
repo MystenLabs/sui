@@ -27,14 +27,14 @@ task 5, lines 60-62:
 //> 1: TransferObjects([Result(0)], Input(0));
 created: object(5,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 6, lines 64-65:
 //# programmable --sender A
 //> 0: test::m::share();
 created: object(6,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 7, lines 67-69:
 //# programmable --sender A --inputs 1000 @A
@@ -42,7 +42,7 @@ task 7, lines 67-69:
 //> 1: TransferObjects([Result(0)], Input(1));
 created: object(7,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 // --- reads in the same transaction see the write ---
 
@@ -56,7 +56,7 @@ task 8, lines 73-80:
 //> 4: test::m::check_inner(Result(1), Input(0));
 //> 5: test::m::delete(Result(0));
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 9, lines 82-90:
 //# programmable --inputs 5
@@ -69,7 +69,7 @@ task 9, lines 82-90:
 //> 5: test::m::check(Result(4), Input(0));
 //> 6: test::m::delete(Result(0));
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 10, lines 92-101:
 //# programmable --inputs 5 6
@@ -83,7 +83,7 @@ task 10, lines 92-101:
 //> 6: test::m::check_inner(Result(1), Input(1));
 //> 7: test::m::delete(Result(0));
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 11, lines 103-108:
 //# programmable --inputs 0 7
@@ -93,7 +93,7 @@ task 11, lines 103-108:
 //> 2: test::m::check(Input(0), Input(1));
 //> 3: test::m::check_val(Input(0), Input(1));
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 12, lines 110-117:
 //# programmable --inputs 0 7 8
@@ -105,7 +105,7 @@ task 12, lines 110-117:
 //> 4: test::m::write(Result(2), Input(2));
 //> 5: test::m::check(Input(0), Input(2));
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 13, lines 119-123:
 //# programmable --inputs 0 7
@@ -114,7 +114,7 @@ task 13, lines 119-123:
 //> 1: test::m::write(Result(0), Input(1));
 //> 2: test::m::check_two_vals(Input(0), Input(0), Input(1));
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 14, lines 125-130:
 //# programmable --inputs 0u8 7u8 false
@@ -124,7 +124,7 @@ task 14, lines 125-130:
 //> 2: test::m::check_u8(Input(0), Input(1));
 //> 3: test::m::check_bool(Input(0), Input(2));
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 15, lines 132-140:
 //# programmable --inputs 1 2 0 1 9
@@ -137,7 +137,7 @@ task 15, lines 132-140:
 //> 5: test::m::check_elem(Result(0), Input(2), Input(4));
 //> 6: test::m::check_elem(Result(0), Input(3), Input(4));
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 16, lines 142-152:
 //# programmable --sender A --inputs object(5,0) 1 2 9
@@ -152,7 +152,7 @@ task 16, lines 142-152:
 //> 7: sui::dynamic_field::remove<u64, u64>(Result(0), Input(1));
 //> 8: test::m::check_val(Result(7), Input(3));
 mutated: object(0,0), object(5,0)
-gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2309868, non_refundable_storage_fee: 23332
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
 // --- writes persist in objects ---
 
@@ -162,7 +162,7 @@ task 17, lines 156-159:
 //> 0: test::m::inner_mut(Input(0));
 //> 1: test::m::set_inner(Result(0), Input(1), Input(2));
 mutated: object(0,0), object(5,0)
-gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2309868, non_refundable_storage_fee: 23332
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
 task 18, line 161:
 //# view-object 5,0
@@ -188,7 +188,7 @@ task 19, lines 163-168:
 //> 2: test::m::write(NestedResult(1,0), Input(1));
 //> 3: test::m::write(NestedResult(1,1), Input(2));
 mutated: object(0,0), object(5,0)
-gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2309868, non_refundable_storage_fee: 23332
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
 task 20, line 170:
 //# view-object 5,0
@@ -213,7 +213,7 @@ task 21, lines 172-176:
 //> 1: test::m::f_mut(Result(0));
 //> 2: test::m::write(Result(1), Input(1));
 mutated: object(0,0), object(6,0)
-gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2309868, non_refundable_storage_fee: 23332
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
 task 22, line 178:
 //# view-object 6,0
@@ -239,7 +239,7 @@ task 23, lines 180-184:
 //> 2: test::m::check(Result(1), Input(1));
 mutated: object(0,0)
 unchanged_shared: object(6,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 24, lines 186-192:
 //# programmable --sender A --inputs 42 @A
@@ -251,7 +251,7 @@ task 24, lines 186-192:
 //> 4: TransferObjects([Result(0)], Input(1));
 created: object(24,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
 task 25, line 194:
 //# view-object 24,0
@@ -278,7 +278,7 @@ task 26, lines 196-201:
 //> 3: TransferObjects([Result(2)], Input(2));
 created: object(26,0)
 mutated: object(0,0), object(7,0)
-gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1975802, non_refundable_storage_fee: 198
 
 task 27, line 203:
 //# view-object 7,0
@@ -322,7 +322,7 @@ task 29, lines 209-215:
 //> 4: TransferObjects([Result(2)], Input(2));
 created: object(29,0), object(29,1), object(29,2)
 mutated: object(0,0), object(5,0)
-gas summary: computation_cost: 1000000, storage_cost: 9287200,  storage_rebate: 2309868, non_refundable_storage_fee: 23332
+gas summary: computation_cost: 1000000, storage_cost: 9287200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
 
 task 30, line 217:
 //# view-object 5,0
@@ -351,7 +351,7 @@ task 31, lines 219-226:
 //> 5: sui::package::commit_upgrade(Input(0), Result(3));
 created: object(31,0)
 mutated: object(0,0), object(2,1), object(5,0)
-gas summary: computation_cost: 1000000, storage_cost: 6429600,  storage_rebate: 3927528, non_refundable_storage_fee: 39672
+gas summary: computation_cost: 1000000, storage_cost: 6429600,  storage_rebate: 3966803, non_refundable_storage_fee: 397
 
 task 32, line 228:
 //# view-object 5,0
