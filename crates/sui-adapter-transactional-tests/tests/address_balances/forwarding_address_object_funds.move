@@ -41,8 +41,8 @@ public fun withdraw_to(vault: &mut Vault, amount: u64, recipient: address) {
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: test::obj_vault::fund(Input(1), Result(0));
 
-//# programmable --sender A --inputs mutshared(250) @A --gas-budget 2000000000
-//> 0: sui::forwarding_address::register(Input(0));
+//# programmable --sender A --inputs mutshared(250) @A 1 --gas-budget 2000000000
+//> 0: sui::forwarding_address::register(Input(0), Input(2));
 //> 1: TransferObjects([Result(0)], Input(1));
 
 //# create-checkpoint
@@ -51,19 +51,19 @@ public fun withdraw_to(vault: &mut Vault, amount: u64, recipient: address) {
 // Object funds withdrawn from the vault and deposited to FA reach A.
 //> 0: test::obj_vault::withdraw_to(Input(0), Input(1), Input(2));
 
-//# programmable --sender B --inputs mutshared(250) @B object(2,0) 100 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101 --gas-budget 2000000000
+//# programmable --sender B --inputs mutshared(250) @B object(2,0) 100 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101 1 --gas-budget 2000000000
 // B registers, then withdraws from the vault and deposits to FA. The registry is a mutated input
 // and also read for resolution at the same version; A's record was committed earlier, so it
 // resolves.
-//> 0: sui::forwarding_address::register(Input(0));
+//> 0: sui::forwarding_address::register(Input(0), Input(5));
 //> 1: TransferObjects([Result(0)], Input(1));
 //> 2: test::obj_vault::withdraw_to(Input(2), Input(3), Input(4));
 
-//# programmable --sender B --inputs mutshared(250) @B object(2,0) 100 @0x2d2d975175e0fafafafafafafafafa0001010101010101010101010101010101 --gas-budget 2000000000
+//# programmable --sender B --inputs mutshared(250) @B object(2,0) 100 @0x2d2d975175e0fafafafafafafafafa0001010101010101010101010101010101 1 --gas-budget 2000000000
 // B registers again and deposits vault funds to the id this registration gets (FC). Resolution
 // does not see the new record, so the transaction fails and the withdrawal
 // is rolled back with it.
-//> 0: sui::forwarding_address::register(Input(0));
+//> 0: sui::forwarding_address::register(Input(0), Input(5));
 //> 1: TransferObjects([Result(0)], Input(1));
 //> 2: test::obj_vault::withdraw_to(Input(2), Input(3), Input(4));
 

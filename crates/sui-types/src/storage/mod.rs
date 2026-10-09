@@ -25,6 +25,7 @@ use crate::transaction::{InputObjects, SenderSignedData, TransactionDataAPI};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
+    forwarding_address::ForwardingMaster,
     object::Object,
 };
 use itertools::Itertools;
@@ -257,8 +258,8 @@ pub trait ImplicitSystemObjectResolver {
 
     fn clock(&self) -> SuiResult<Object>;
 
-    /// The master address registered for `master_id`, or `None` if it is unregistered.
-    fn forwarding_master(&self, master_id: u64) -> SuiResult<Option<SuiAddress>>;
+    /// The master registered for `master_id`, or `None` if it is unregistered.
+    fn forwarding_master(&self, master_id: u64) -> SuiResult<Option<ForwardingMaster>>;
 }
 
 pub struct DenyListResult {
