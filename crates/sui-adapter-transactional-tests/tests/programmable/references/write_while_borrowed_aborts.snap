@@ -1,0 +1,34 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+// A `&mut Coin` with no sources has no borrowers, so the coin commands accept it as a write
+// target. The only Move body for such a signature aborts.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-15:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4043200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 17-21:
+//# programmable --sender A --inputs 100 @A
+// ABORTS: SplitCoins through a sourceless `&mut Coin`, new_mut aborts with code 0
+//> 0: test::m::new_mut();
+//> 1: SplitCoins(Result(0), [Input(0)]);
+//> 2: TransferObjects([Result(1)], Input(1));
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m::new_mut (function index 0) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("new_mut") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m::new_mut at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
+
+task 3, lines 23-27:
+//# programmable --sender A --inputs 100 @A
+// ABORTS: MergeCoins into a sourceless `&mut Coin`, new_mut aborts with code 0
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::m::new_mut();
+//> 2: MergeCoins(Result(1), [Result(0)]);
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::m::new_mut (function index 0) at offset 1, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("new_mut") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: Some("test::m::new_mut at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(1) } }

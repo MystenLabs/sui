@@ -1,0 +1,370 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 33 tasks
+
+// Writes through references reach the underlying value: later reads in the same transaction see
+// them, and they persist in objects. Runtime behavior only; every task here is accepted statically.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-40:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 11886400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 42-45:
+//# publish --upgradeable --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5084400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 5, lines 60-62:
+//# programmable --sender A --inputs @A
+//> 0: test::m::new();
+//> 1: TransferObjects([Result(0)], Input(0));
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 6, lines 64-65:
+//# programmable --sender A
+//> 0: test::m::share();
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 7, lines 67-69:
+//# programmable --sender A --inputs 1000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1));
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+// --- reads in the same transaction see the write ---
+
+task 8, lines 73-80:
+//# programmable --inputs 5
+// VALID: a frozen read of the parent after a write through the child
+//> 0: test::m::new();
+//> 1: test::m::inner_mut(Result(0));
+//> 2: test::m::f_mut(Result(1));
+//> 3: test::m::write(Result(2), Input(0));
+//> 4: test::m::check_inner(Result(1), Input(0));
+//> 5: test::m::delete(Result(0));
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 9, lines 82-90:
+//# programmable --inputs 5
+// VALID: an immutable child taken after the write sees it
+//> 0: test::m::new();
+//> 1: test::m::inner_mut(Result(0));
+//> 2: test::m::f_mut(Result(1));
+//> 3: test::m::write(Result(2), Input(0));
+//> 4: test::m::f(Result(1));
+//> 5: test::m::check(Result(4), Input(0));
+//> 6: test::m::delete(Result(0));
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 10, lines 92-101:
+//# programmable --inputs 5 6
+// VALID: two writes through two successive references, the last wins
+//> 0: test::m::new();
+//> 1: test::m::inner_mut(Result(0));
+//> 2: test::m::f_mut(Result(1));
+//> 3: test::m::write(Result(2), Input(0));
+//> 4: test::m::f_mut(Result(1));
+//> 5: test::m::write(Result(4), Input(1));
+//> 6: test::m::check_inner(Result(1), Input(1));
+//> 7: test::m::delete(Result(0));
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 11, lines 103-108:
+//# programmable --inputs 0 7
+// VALID: a pure input written through `&mut`, then seen by reference and by value
+//> 0: test::m::id_mut<u64>(Input(0));
+//> 1: test::m::write(Result(0), Input(1));
+//> 2: test::m::check(Input(0), Input(1));
+//> 3: test::m::check_val(Input(0), Input(1));
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 12, lines 110-117:
+//# programmable --inputs 0 7 8
+// VALID: a second reference sees the first write and its own write is seen after
+//> 0: test::m::id_mut<u64>(Input(0));
+//> 1: test::m::write(Result(0), Input(1));
+//> 2: test::m::id_mut<u64>(Input(0));
+//> 3: test::m::check(Result(2), Input(1));
+//> 4: test::m::write(Result(2), Input(2));
+//> 5: test::m::check(Input(0), Input(2));
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 13, lines 119-123:
+//# programmable --inputs 0 7
+// VALID: two by-value uses of the input both see the write
+//> 0: test::m::id_mut<u64>(Input(0));
+//> 1: test::m::write(Result(0), Input(1));
+//> 2: test::m::check_two_vals(Input(0), Input(0), Input(1));
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 14, lines 125-130:
+//# programmable --inputs 0u8 7u8 false
+// VALID: the bool view of a pure input is a different value from the u8 view
+//> 0: test::m::id_mut<u8>(Input(0));
+//> 1: test::m::write_u8(Result(0), Input(1));
+//> 2: test::m::check_u8(Input(0), Input(1));
+//> 3: test::m::check_bool(Input(0), Input(2));
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 15, lines 132-140:
+//# programmable --inputs 1 2 0 1 9
+// VALID: writes to two vector elements through separate references
+//> 0: MakeMoveVec<u64>([Input(0), Input(1)]);
+//> 1: std::vector::borrow_mut<u64>(Result(0), Input(2));
+//> 2: test::m::write(Result(1), Input(4));
+//> 3: std::vector::borrow_mut<u64>(Result(0), Input(3));
+//> 4: test::m::write(Result(3), Input(4));
+//> 5: test::m::check_elem(Result(0), Input(2), Input(4));
+//> 6: test::m::check_elem(Result(0), Input(3), Input(4));
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 16, lines 142-152:
+//# programmable --sender A --inputs object(5,0) 1 2 9
+// VALID: a dynamic field added, written, read, and removed through references into the UID
+//> 0: test::m::uid_mut(Input(0));
+//> 1: sui::dynamic_field::add<u64, u64>(Result(0), Input(1), Input(2));
+//> 2: sui::dynamic_field::borrow_mut<u64, u64>(Result(0), Input(1));
+//> 3: test::m::write(Result(2), Input(3));
+//> 4: test::m::uid(Input(0));
+//> 5: sui::dynamic_field::borrow<u64, u64>(Result(4), Input(1));
+//> 6: test::m::check(Result(5), Input(3));
+//> 7: sui::dynamic_field::remove<u64, u64>(Result(0), Input(1));
+//> 8: test::m::check_val(Result(7), Input(3));
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
+
+// --- writes persist in objects ---
+
+task 17, lines 156-159:
+//# programmable --sender A --inputs object(5,0) 1 2
+// VALID: both field writes through the returned struct reference persist in an owned object
+//> 0: test::m::inner_mut(Input(0));
+//> 1: test::m::set_inner(Result(0), Input(1), Input(2));
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
+
+task 18, line 161:
+//# view-object 5,0
+Owner: Account Address ( A )
+Version: 7
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    inner: test::m::Inner {
+        f: 1u64,
+        g: 2u64,
+    },
+}
+
+task 19, lines 163-168:
+//# programmable --sender A --inputs object(5,0) 3 4
+// VALID: writes through sibling field references persist
+//> 0: test::m::inner_mut(Input(0));
+//> 1: test::m::f_g_mut(Result(0));
+//> 2: test::m::write(NestedResult(1,0), Input(1));
+//> 3: test::m::write(NestedResult(1,1), Input(2));
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
+
+task 20, line 170:
+//# view-object 5,0
+Owner: Account Address ( A )
+Version: 8
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    inner: test::m::Inner {
+        f: 3u64,
+        g: 4u64,
+    },
+}
+
+task 21, lines 172-176:
+//# programmable --sender A --inputs object(6,0) 7
+// VALID: a write through a reference into a shared object persists
+//> 0: test::m::inner_mut(Input(0));
+//> 1: test::m::f_mut(Result(0));
+//> 2: test::m::write(Result(1), Input(1));
+mutated: object(0,0), object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
+
+task 22, line 178:
+//# view-object 6,0
+Owner: Shared( 4 )
+Version: 9
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+    inner: test::m::Inner {
+        f: 7u64,
+        g: 0u64,
+    },
+}
+
+task 23, lines 180-184:
+//# programmable --sender A --inputs immshared(6,0) 7
+// VALID: an immutable reference into a read-only shared object sees the persisted write
+//> 0: test::m::inner(Input(0));
+//> 1: test::m::f(Result(0));
+//> 2: test::m::check(Result(1), Input(1));
+mutated: object(0,0)
+unchanged_shared: object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 24, lines 186-192:
+//# programmable --sender A --inputs 42 @A
+// VALID: a fresh object mutated through a reference is transferred with the mutation
+//> 0: test::m::new();
+//> 1: test::m::inner_mut(Result(0));
+//> 2: test::m::f_mut(Result(1));
+//> 3: test::m::write(Result(2), Input(0));
+//> 4: TransferObjects([Result(0)], Input(1));
+created: object(24,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 25, line 194:
+//# view-object 24,0
+Owner: Account Address ( A )
+Version: 11
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(24,0),
+        },
+    },
+    inner: test::m::Inner {
+        f: 42u64,
+        g: 0u64,
+    },
+}
+
+task 26, lines 196-201:
+//# programmable --sender A --inputs object(7,0) 300 @B
+// VALID: a split through a `&mut Balance` into a coin input is a new coin and a smaller input
+//> 0: sui::coin::balance_mut<sui::sui::SUI>(Input(0));
+//> 1: sui::balance::split<sui::sui::SUI>(Result(0), Input(1));
+//> 2: sui::coin::from_balance<sui::sui::SUI>(Result(1));
+//> 3: TransferObjects([Result(2)], Input(2));
+created: object(26,0)
+mutated: object(0,0), object(7,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1975802, non_refundable_storage_fee: 198
+
+task 27, line 203:
+//# view-object 7,0
+Owner: Account Address ( A )
+Version: 12
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 700u64,
+    },
+}
+
+task 28, line 205:
+//# view-object 26,0
+Owner: Account Address ( B )
+Version: 12
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(26,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 300u64,
+    },
+}
+
+// --- references live across Publish and Upgrade ---
+
+task 29, lines 209-215:
+//# programmable --sender A --inputs object(5,0) 7 @A
+// VALID: Publish with an `init` between a reference's creation and its use
+//> 0: test::m::inner_mut(Input(0));
+//> 1: test::m::f_mut(Result(0));
+//> 2: Publish(p, [sui, std]);
+//> 3: test::m::write(Result(1), Input(1));
+//> 4: TransferObjects([Result(2)], Input(2));
+created: object(29,0), object(29,1), object(29,2)
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 9287200,  storage_rebate: 2332967, non_refundable_storage_fee: 233
+
+task 30, line 217:
+//# view-object 5,0
+Owner: Account Address ( A )
+Version: 13
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    inner: test::m::Inner {
+        f: 7u64,
+        g: 4u64,
+    },
+}
+
+task 31, lines 219-226:
+//# programmable --sender A --inputs object(2,1) 0u8 digest(q_2) object(5,0) 9
+// VALID: Upgrade between a reference's creation and its use
+//> 0: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 1: test::m::inner_mut(Input(3));
+//> 2: test::m::f_mut(Result(1));
+//> 3: Upgrade(q_2, [sui, std], q, Result(0));
+//> 4: test::m::write(Result(2), Input(4));
+//> 5: sui::package::commit_upgrade(Input(0), Result(3));
+created: object(31,0)
+mutated: object(0,0), object(2,1), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 6429600,  storage_rebate: 3966803, non_refundable_storage_fee: 397
+
+task 32, line 228:
+//# view-object 5,0
+Owner: Account Address ( A )
+Version: 14
+Contents: test::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    inner: test::m::Inner {
+        f: 9u64,
+        g: 4u64,
+    },
+}
