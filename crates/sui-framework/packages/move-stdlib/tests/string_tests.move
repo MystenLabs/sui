@@ -74,10 +74,48 @@ fun append() {
 }
 
 #[test]
+fun append_utf8() {
+    let mut s = b"a".to_string();
+    s.append_utf8(vector[240, 159, 146, 150]);
+    assert_eq!(s.into_bytes(), vector[97, 240, 159, 146, 150])
+}
+
+#[test, expected_failure(abort_code = string::EInvalidUTF8)]
+fun append_invalid_utf8() {
+    let mut s = b"a".to_string();
+    s.append_utf8(vector[0xff]);
+}
+
+#[test]
 fun insert() {
     let mut s = b"abcd".to_string();
     s.insert(1, b"xy".to_string());
     assert_eq!(s, b"axybcd".to_string())
+}
+
+#[test]
+fun insert_at_boundaries_and_with_utf8() {
+    let mut s = b"ab".to_string();
+    s.insert(0, b"start".to_string());
+    let end = s.length();
+    s.insert(end, b"end".to_string());
+    assert_eq!(s, b"startabend".to_string());
+
+    let mut s = b"ab".to_string();
+    s.insert(1, vector[240, 159, 146, 150].to_string());
+    assert_eq!(s.into_bytes(), vector[97, 240, 159, 146, 150, 98]);
+}
+
+#[test, expected_failure(abort_code = string::EInvalidIndex)]
+fun insert_invalid_utf8_boundary() {
+    let mut s = vector[240, 159, 146, 150].to_string();
+    s.insert(1, b"x".to_string());
+}
+
+#[test, expected_failure(abort_code = string::EInvalidIndex)]
+fun insert_out_of_bounds() {
+    let mut s = b"abcd".to_string();
+    s.insert(5, b"x".to_string());
 }
 
 #[test]
