@@ -6,9 +6,8 @@ use std::{
     sync::Arc,
 };
 
-use consensus_config::{AuthorityIndex, DIGEST_LENGTH, DefaultHashFunction, Stake};
+use consensus_config::{AuthorityIndex, Stake};
 use consensus_types::block::{BlockRef, BlockTimestampMs, Round};
-use fastcrypto::hash::HashFunction as _;
 use itertools::Itertools as _;
 use parking_lot::RwLock;
 use rand::{SeedableRng as _, rngs::StdRng, seq::SliceRandom as _};
@@ -16,7 +15,10 @@ use rand::{SeedableRng as _, rngs::StdRng, seq::SliceRandom as _};
 use crate::{
     BlockAPI, VerifiedBlock,
     block::Slot,
-    commit::{Commit, CommitAPI, CommittedSubDag, Decision, LeaderStatus, TrustedCommit},
+    commit::{
+        Commit, CommitAPI, CommittedSubDag, Decision, LeaderStatus, TrustedCommit,
+        compute_sort_seed, sort_committed_blocks,
+    },
     context::Context,
     dag_state::DagState,
     leader_schedule_v3::NextCommitLeaderSchedule,
@@ -592,32 +594,6 @@ struct LeaderSlot {
     leader_status: LeaderStatus,
     // Which commit rule decided the slot (direct or indirect), or None while undecided.
     decision: Option<Decision>,
-}
-
-/// From a deterministic array of leaders, compute a deterministic digest used as seed for sort.
-fn compute_sort_seed(committed_leaders: &[VerifiedBlock]) -> [u8; DIGEST_LENGTH] {
-    let mut hasher = DefaultHashFunction::new();
-    for leader in committed_leaders {
-        hasher.update(leader.digest().as_ref());
-    }
-    hasher.finalize().into()
-}
-
-/// Per-block sort key:
-/// - Primary part: block round.
-/// - Secondary part: hash of seed and block digest.
-fn block_sort_key(
-    seed: &[u8; DIGEST_LENGTH],
-    block_ref: &BlockRef,
-) -> (Round, [u8; DIGEST_LENGTH]) {
-    let mut hasher = DefaultHashFunction::new();
-    hasher.update(seed);
-    hasher.update(block_ref.digest);
-    (block_ref.round, hasher.finalize().into())
-}
-
-fn sort_committed_blocks(blocks: &mut [VerifiedBlock], seed: &[u8; DIGEST_LENGTH]) {
-    blocks.sort_by_cached_key(|b| block_sort_key(seed, &b.reference()));
 }
 
 /// Takes the union of each committed leader's parent-round ancestors,

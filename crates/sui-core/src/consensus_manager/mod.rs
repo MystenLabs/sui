@@ -178,6 +178,7 @@ fn to_consensus_protocol_config(config: &ProtocolConfig) -> ConsensusProtocolCon
         /* enable_v3 */ false,
         /* leader_schedule_window_size */ 300,
         /* leader_schedule_update_interval */ 12,
+        config.shuffle_consensus_commit_blocks(),
     )
 }
 
