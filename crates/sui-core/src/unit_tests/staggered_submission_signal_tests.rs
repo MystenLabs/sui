@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use itertools::Itertools as _;
 use nonempty::NonEmpty;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
@@ -93,7 +94,7 @@ async fn cross_commit_copies_share_one_free_or_paid_allowance() {
     ] {
         let (_state, mut setup, transaction) = setup(gas_price, None, false).await;
         let mut total_excess = 0;
-        for (index, (copies, excess)) in copies.into_iter().zip(excess).enumerate() {
+        for (index, (copies, excess)) in copies.into_iter().zip_eq(excess).enumerate() {
             commit_copies(&mut setup, &transaction, index as u64 + 1, copies).await;
             total_excess += excess;
             assert_eq!(
