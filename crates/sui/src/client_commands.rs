@@ -83,7 +83,7 @@ use sui_types::{
     gas_coin::{GAS, GasCoin},
     message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
-    move_package::{MovePackage, UpgradeCap},
+    move_package::{MovePackage, UpgradeCap, UpgradeCapPolicy},
     object::{Object, Owner},
     parse_sui_type_tag,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -2049,7 +2049,7 @@ pub(crate) async fn upgrade_package(
     upgrade_capability: ObjectID,
     with_unpublished_dependencies: bool,
     _skip_dependency_verification: bool,
-) -> Result<(u8, CompiledPackage), anyhow::Error> {
+) -> Result<(UpgradeCapPolicy, CompiledPackage), anyhow::Error> {
     let compiled_package = compile_package(
         client.clone(),
         root_pkg,
@@ -2068,10 +2068,11 @@ pub(crate) async fn upgrade_package(
             .ok_or_else(|| anyhow!("Upgrade capability is not a Move Object"))?
             .contents(),
     )?;
-    // We keep the existing policy -- no fancy policies or changing the upgrade
-    // policy at the moment. To change the policy you can call a Move function in the
-    // `package` module to change this policy.
-    let upgrade_policy = upgrade_cap.policy;
+    // We keep the existing compatibility policy -- no fancy policies or changing the policy at
+    // the moment. The cap's raw policy also encodes minversion state, which is not an
+    // authorization policy and must not be submitted to `authorize_upgrade`.
+    let upgrade_policy = UpgradeCapPolicy::try_from(upgrade_cap.policy)
+        .map_err(|_| anyhow!("Invalid upgrade cap policy"))?;
 
     Ok((upgrade_policy, compiled_package))
 }
@@ -4344,7 +4345,8 @@ async fn upgrade_command(
     )
     .await;
 
-    let (upgrade_policy, compiled_package) = upgrade_result.map_err(|e| anyhow!("{e}"))?;
+    let (upgrade_cap_policy, compiled_package) = upgrade_result.map_err(|e| anyhow!("{e}"))?;
+    let upgrade_policy = upgrade_cap_policy.base_policy() as u8;
 
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     let package_id = compiled_package
@@ -4376,7 +4378,7 @@ async fn upgrade_command(
             compiled_modules,
             dep_ids,
             *upgrade_cap,
-            upgrade_policy,
+            upgrade_cap_policy,
             package_digest.to_vec(),
         )
         .await?;
