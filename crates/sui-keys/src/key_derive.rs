@@ -12,6 +12,7 @@ use fastcrypto::{
     secp256k1::{Secp256k1KeyPair, Secp256k1PrivateKey},
     traits::{KeyPair, ToFromBytes},
 };
+use fastcrypto_pq::slip10::derive_mldsa65_keypair;
 use slip10_ed25519::derive_ed25519_private_key;
 use sui_types::{
     base_types::SuiAddress,
@@ -23,10 +24,13 @@ pub const DERIVATION_PATH_COIN_TYPE: u32 = 784;
 pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
 pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
 pub const DERVIATION_PATH_PURPOSE_SECP256R1: u32 = 74;
+pub const DERVIATION_PATH_PURPOSE_MLDSA65: u32 = 94;
 
 /// Ed25519 follows SLIP-0010 using hardened path: m/44'/784'/0'/0'/{index}'
 /// Secp256k1 follows BIP-32/44 using path where the first 3 levels are hardened: m/54'/784'/0'/0/{index}
 /// Secp256r1 follows BIP-32/44 using path where the first 3 levels are hardened: m/74'/784'/0'/0/{index}
+/// ML-DSA-65 follows SLIP-0010 using hardened path: m/94'/784'/0'/0'/{index}', with the
+/// "ML-DSA-65 seed" master key; the derived node secret is the FIPS 204 keygen seed.
 /// Note that the purpose node is used to distinguish signature schemes.
 pub fn derive_key_pair_from_path(
     seed: &[u8],
@@ -61,11 +65,16 @@ pub fn derive_key_pair_from_path(
             );
             Ok((kp.public().into(), SuiKeyPair::Secp256r1(kp)))
         }
+        SignatureScheme::MLDSA65 => {
+            let indexes = path.into_iter().map(|i| i.into()).collect::<Vec<_>>();
+            let kp = derive_mldsa65_keypair(seed, &indexes)
+                .map_err(|e| SuiErrorKind::SignatureKeyGenError(e.to_string()))?;
+            Ok((kp.public().into(), SuiKeyPair::MLDSA65(kp)))
+        }
         SignatureScheme::BLS12381
         | SignatureScheme::MultiSig
         | SignatureScheme::ZkLoginAuthenticator
-        | SignatureScheme::PasskeyAuthenticator
-        | SignatureScheme::MLDSA65 => Err(SuiErrorKind::UnsupportedFeatureError {
+        | SignatureScheme::PasskeyAuthenticator => Err(SuiErrorKind::UnsupportedFeatureError {
             error: format!("key derivation not supported {:?}", key_scheme),
         }
         .into()),
@@ -176,11 +185,43 @@ pub fn validate_path(
                 })?),
             }
         }
+        SignatureScheme::MLDSA65 => {
+            match path {
+                Some(p) => {
+                    // The derivation path must be hardened at all levels with purpose = 94, coin_type = 784
+                    if let &[purpose, coin_type, account, change, address] = p.as_ref() {
+                        if Some(purpose)
+                            == ChildNumber::new(DERVIATION_PATH_PURPOSE_MLDSA65, true).ok()
+                            && Some(coin_type)
+                                == ChildNumber::new(DERIVATION_PATH_COIN_TYPE, true).ok()
+                            && account.is_hardened()
+                            && change.is_hardened()
+                            && address.is_hardened()
+                        {
+                            Ok(p)
+                        } else {
+                            Err(
+                                SuiErrorKind::SignatureKeyGenError("Invalid path".to_string())
+                                    .into(),
+                            )
+                        }
+                    } else {
+                        Err(SuiErrorKind::SignatureKeyGenError("Invalid path".to_string()).into())
+                    }
+                }
+                None => Ok(format!(
+                    "m/{DERVIATION_PATH_PURPOSE_MLDSA65}'/{DERIVATION_PATH_COIN_TYPE}'/0'/0'/0'"
+                )
+                .parse()
+                .map_err(|_| {
+                    SuiErrorKind::SignatureKeyGenError("Cannot parse path".to_string())
+                })?),
+            }
+        }
         SignatureScheme::BLS12381
         | SignatureScheme::MultiSig
         | SignatureScheme::ZkLoginAuthenticator
-        | SignatureScheme::PasskeyAuthenticator
-        | SignatureScheme::MLDSA65 => Err(SuiErrorKind::UnsupportedFeatureError {
+        | SignatureScheme::PasskeyAuthenticator => Err(SuiErrorKind::UnsupportedFeatureError {
             error: format!("key derivation not supported {:?}", key_scheme),
         }
         .into()),

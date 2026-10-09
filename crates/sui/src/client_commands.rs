@@ -286,9 +286,10 @@ pub enum SuiClientCommands {
         processing: TxProcessingArgs,
     },
 
-    /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1 | secp256r1 | mldsa65}
     /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
-    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word length can be
+    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1 or
+    /// m/94'/784'/0'/0'/0' for mldsa65. Word length can be
     /// { word12 | word15 | word18 | word21 | word24} default to word12 if not specified.
     #[clap(name = "new-address")]
     NewAddress {
