@@ -18,6 +18,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::transaction::TransactionDataAPI;
 use test_cluster::TestClusterBuilder;
 
+mod mldsa65;
 mod resolve;
 
 #[sim_test]

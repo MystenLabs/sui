@@ -110,12 +110,12 @@ pub(crate) async fn fetch_jwks(
     Ok(jwks)
 }
 
-/// The zkLogin circuit mode the chain's validators enforce at `epoch`'s protocol version, so
-/// that verification results here match on-chain acceptance.
-pub(crate) async fn chain_zklogin_circuit_mode(
+/// The protocol config the chain's validators enforce at `epoch`'s protocol version, so that
+/// verification results here match on-chain acceptance.
+pub(crate) async fn chain_protocol_config(
     ctx: &Context<'_>,
     epoch: &Epoch,
-) -> Result<u64, RpcError> {
+) -> Result<ProtocolConfig, RpcError> {
     let chain_identifier: &ChainIdentifier = ctx.data()?;
     let chain = chain_identifier.wait().await.chain();
 
@@ -124,15 +124,24 @@ pub(crate) async fn chain_zklogin_circuit_mode(
         .await?
         .context("Failed to fetch the epoch's protocol version")?;
 
-    Ok(
-        ProtocolConfig::get_for_version_if_supported(protocol_version.into(), chain)
-            .with_context(|| format!("Protocol version {protocol_version} is not supported"))?
-            .zklogin_circuit_mode(),
-    )
+    ProtocolConfig::get_for_version_if_supported(protocol_version.into(), chain)
+        .with_context(|| format!("Protocol version {protocol_version} is not supported"))
+        .map_err(Into::into)
+}
+
+/// The zkLogin circuit mode the chain's validators enforce at `epoch`'s protocol version.
+pub(crate) async fn chain_zklogin_circuit_mode(
+    ctx: &Context<'_>,
+    epoch: &Epoch,
+) -> Result<u64, RpcError> {
+    Ok(chain_protocol_config(ctx, epoch)
+        .await?
+        .zklogin_circuit_mode())
 }
 
 /// Verify any signature type locally. Supports Ed25519, Secp256k1, Secp256r1, MultiSig, ZkLogin,
-/// and Passkey.
+/// Passkey, and ML-DSA-65. ML-DSA-65 multisig members are accepted when the chain's protocol
+/// config enables them.
 pub(crate) async fn verify_signature(
     ctx: &Context<'_>,
     scope: Scope,
@@ -153,22 +162,21 @@ pub(crate) async fn verify_signature(
 
     let jwks = fetch_jwks(ctx, scope).await.map_err(upcast)?;
 
-    let zklogin_circuit_mode = chain_zklogin_circuit_mode(ctx, &epoch)
-        .await
-        .map_err(upcast)?;
+    let protocol_config = chain_protocol_config(ctx, &epoch).await.map_err(upcast)?;
 
     let params = VerifyParams::new(
         jwks,
         vec![],
         config.env,
-        zklogin_circuit_mode,
+        protocol_config.zklogin_circuit_mode(),
         true,
         true,
         true,
         config.max_epoch_upper_bound_delta,
         true,
         true,
-    );
+    )
+    .with_mldsa65_in_multisig(protocol_config.mldsa65_auth());
 
     match intent_scope {
         IntentScope::TransactionData => sig.verify_authenticator(

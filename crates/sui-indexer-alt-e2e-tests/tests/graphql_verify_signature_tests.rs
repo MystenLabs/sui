@@ -193,6 +193,12 @@ fn secp256r1_keypair(seed: u8) -> SuiKeyPair {
     ))
 }
 
+fn mldsa65_keypair(seed: u8) -> SuiKeyPair {
+    SuiKeyPair::MLDSA65(fastcrypto_pq::mldsa65::MLDSA65KeyPair::generate(
+        &mut rand::rngs::StdRng::from_seed([seed; 32]),
+    ))
+}
+
 #[tokio::test]
 async fn test_ed25519_personal_message() {
     let cluster = FullCluster::new().await.unwrap();
@@ -264,6 +270,70 @@ async fn test_multisig_personal_message() {
     let addr = SuiAddress::from(&multisig_pk);
 
     let personal = b"Hello from MultiSig!".to_vec();
+    let intent_msg = IntentMessage::new(
+        Intent::personal_message(),
+        PersonalMessage {
+            message: personal.clone(),
+        },
+    );
+    let sig1 = GenericSignature::Signature(Signature::new_secure(&intent_msg, &kp1));
+    let sig2 = GenericSignature::Signature(Signature::new_secure(&intent_msg, &kp2));
+    let signature =
+        GenericSignature::MultiSig(MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap());
+
+    let result = cluster
+        .verify(
+            personal,
+            signature.as_ref().to_owned(),
+            SCOPE_PERSONAL_MESSAGE,
+            addr,
+        )
+        .await
+        .unwrap();
+
+    insta::assert_json_snapshot!(result, @r###"
+    {
+      "success": true
+    }
+    "###);
+}
+
+#[tokio::test]
+async fn test_mldsa65_personal_message() {
+    let cluster = FullCluster::new().await.unwrap();
+    let (message, signature, addr) =
+        sign_personal_message(&mldsa65_keypair(/* seed = */ 4), b"Hello from ML-DSA-65!");
+
+    let result = cluster
+        .verify(message, signature, SCOPE_PERSONAL_MESSAGE, addr)
+        .await
+        .unwrap();
+
+    insta::assert_json_snapshot!(result, @r###"
+    {
+      "success": true
+    }
+    "###);
+}
+
+/// A hybrid committee is only accepted when the chain enables ML-DSA-65
+/// multisig members, which the test cluster's protocol version does.
+#[tokio::test]
+async fn test_multisig_with_mldsa65_member_personal_message() {
+    let cluster = FullCluster::new().await.unwrap();
+
+    // 2-of-2 multisig: ML-DSA-65 + Ed25519
+    let kp1 = mldsa65_keypair(/* seed = */ 13);
+    let kp2 = ed25519_keypair(/* seed = */ 14);
+    let multisig_pk = MultiSigPublicKey::new(
+        vec![kp1.public(), kp2.public()],
+        vec![1, 1],
+        /* threshold = */ 2,
+    )
+    .unwrap();
+    let addr = SuiAddress::from(&multisig_pk);
+
+    let personal = b"Hello from a hybrid MultiSig!".to_vec();
     let intent_msg = IntentMessage::new(
         Intent::personal_message(),
         PersonalMessage {
