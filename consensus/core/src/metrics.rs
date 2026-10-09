@@ -203,6 +203,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) num_of_bad_nodes: IntGauge,
     pub(crate) quorum_receive_latency: Histogram,
     pub(crate) block_receive_delay: IntCounterVec,
+    pub(crate) adaptive_block_cap_bytes: IntGauge,
     pub(crate) reputation_scores: IntGaugeVec,
     pub(crate) leader_schedule_total_scores: IntGaugeVec,
     pub(crate) leader_schedule_normalized_scores: GaugeVec,
@@ -709,6 +710,11 @@ impl NodeMetrics {
                 "quorum_receive_latency",
                 "The time it took to receive a new round quorum of blocks",
                 registry
+            ).unwrap(),
+            adaptive_block_cap_bytes: register_int_gauge_with_registry!(
+                "adaptive_block_cap_bytes",
+                "Current author-local adaptive cap on proposed block bytes",
+                registry,
             ).unwrap(),
             block_receive_delay: register_int_counter_vec_with_registry!(
                 "block_receive_delay",

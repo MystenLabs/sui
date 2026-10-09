@@ -105,6 +105,10 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_commit_sync_probe_timeout")]
     pub commit_sync_probe_timeout: Duration,
 
+    /// Whether the damper on proposed block bytes is active. On by default.
+    #[serde(default = "Parameters::default_adaptive_block_cap_enabled")]
+    pub adaptive_block_cap_enabled: bool,
+
     /// Tonic network settings.
     #[serde(default = "TonicParameters::default")]
     pub tonic: TonicParameters,
@@ -126,6 +130,10 @@ pub struct Parameters {
 impl Parameters {
     pub(crate) fn default_leader_timeout() -> Duration {
         Duration::from_millis(200)
+    }
+
+    pub(crate) fn default_adaptive_block_cap_enabled() -> bool {
+        true
     }
 
     pub(crate) fn default_min_round_delay() -> Duration {
@@ -235,6 +243,7 @@ impl Default for Parameters {
             max_blocks_per_fetch: Parameters::default_max_blocks_per_fetch(),
             sync_last_known_own_block_timeout:
                 Parameters::default_sync_last_known_own_block_timeout(),
+            adaptive_block_cap_enabled: Parameters::default_adaptive_block_cap_enabled(),
             round_prober_interval_ms: Parameters::default_round_prober_interval_ms(),
             round_prober_request_timeout_ms: Parameters::default_round_prober_request_timeout_ms(),
             propagation_delay_stop_proposal_threshold:
