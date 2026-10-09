@@ -421,6 +421,15 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             )>,
         >,
         _path: &Path,
+        tasks: &[TaskInput<
+            TaskCommand<
+                Self::ExtraInitArgs,
+                Self::ExtraPublishArgs,
+                Self::ExtraValueArgs,
+                Self::ExtraRunArgs,
+                Self::Subcommand,
+            >,
+        >],
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
         let pre_compiled_deps =
@@ -472,12 +481,14 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             )
             .await
         } else {
+            let with_fullnode = tasks.iter().any(|task| needs_fullnode(&task.command));
             init_val_fullnode_executor(
                 rng,
                 account_names,
                 additional_mapping,
                 &protocol_config,
                 reference_gas_price,
+                with_fullnode,
             )
             .await
         };
@@ -2821,11 +2832,45 @@ pub static PRE_COMPILED: LazyLock<Arc<PreCompiledProgramInfo>> = LazyLock::new(|
     }
 });
 
+/// Commands run for dry-run/dev-inspect send the transaction to a fullnode, rather than the
+/// validator itself. As such, we need to set up a fullnode only in the case that the test has
+/// those commands.
+fn needs_fullnode(
+    command: &TaskCommand<
+        SuiInitArgs,
+        SuiPublishArgs,
+        SuiExtraValueArgs,
+        SuiRunArgs,
+        SuiSubcommand<SuiExtraValueArgs, SuiRunArgs>,
+    >,
+) -> bool {
+    match command {
+        TaskCommand::Publish(_, SuiPublishArgs { dry_run, .. })
+        | TaskCommand::PublishAndCall(_, SuiPublishArgs { dry_run, .. }) => *dry_run,
+        TaskCommand::Subcommand(SuiSubcommand::ProgrammableTransaction(
+            ProgrammableTransactionCommand {
+                dev_inspect,
+                dry_run,
+                ..
+            },
+        )) => *dev_inspect || *dry_run,
+        TaskCommand::Subcommand(SuiSubcommand::UpgradePackage(UpgradePackageCommand {
+            dry_run,
+            ..
+        })) => *dry_run,
+        TaskCommand::Init(_, _)
+        | TaskCommand::PrintBytecode(_)
+        | TaskCommand::Run(_, _)
+        | TaskCommand::Subcommand(_) => false,
+    }
+}
+
 async fn create_validator_fullnode(
     protocol_config: &ProtocolConfig,
     objects: &[Object],
     reference_gas_price: Option<u64>,
-) -> (Arc<AuthorityState>, Arc<AuthorityState>) {
+    with_fullnode: bool,
+) -> (Arc<AuthorityState>, Option<Arc<AuthorityState>>) {
     // Build network config once and share it between validator and fullnode
     let network_config = {
         let mut builder =
@@ -2856,17 +2901,26 @@ async fn create_validator_fullnode(
         })
     };
     let validator = build_node(None);
-    let fullnode = build_node(Some(get_authority_key_pair().1));
-    tokio::try_join!(validator, fullnode).expect("authority setup task panicked")
+    if with_fullnode {
+        let fullnode = build_node(Some(get_authority_key_pair().1));
+        let (validator, fullnode) =
+            tokio::try_join!(validator, fullnode).expect("authority setup task panicked");
+        (validator, Some(fullnode))
+    } else {
+        let validator = validator.await.expect("authority setup task panicked");
+        (validator, None)
+    }
 }
 
 async fn create_val_fullnode_executor(
     protocol_config: &ProtocolConfig,
     objects: &[Object],
     reference_gas_price: Option<u64>,
+    with_fullnode: bool,
 ) -> ValidatorWithFullnode {
     let (validator, fullnode) =
-        create_validator_fullnode(protocol_config, objects, reference_gas_price).await;
+        create_validator_fullnode(protocol_config, objects, reference_gas_price, with_fullnode)
+            .await;
 
     ValidatorWithFullnode {
         validator,
@@ -2893,6 +2947,7 @@ async fn init_val_fullnode_executor(
     additional_mapping: BTreeMap<String, NumericalAddress>,
     protocol_config: &ProtocolConfig,
     reference_gas_price: Option<u64>,
+    with_fullnode: bool,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -2933,7 +2988,13 @@ async fn init_val_fullnode_executor(
     let default_account = mk_account();
 
     let executor = Box::new(
-        create_val_fullnode_executor(protocol_config, &objects, reference_gas_price).await,
+        create_val_fullnode_executor(
+            protocol_config,
+            &objects,
+            reference_gas_price,
+            with_fullnode,
+        )
+        .await,
     );
 
     update_named_address_mapping(
