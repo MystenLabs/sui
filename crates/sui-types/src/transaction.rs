@@ -72,7 +72,7 @@ use std::{
     iter,
 };
 use strum::IntoStaticStr;
-use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
+use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig};
 use tap::Pipe;
 use tracing::trace;
 
@@ -1159,24 +1159,25 @@ impl ProgrammableTransaction {
     }
 }
 
-/// Caches gasless allowed token types for the most recently seen protocol version.
+/// Caches gasless allowed token types for the most recently seen protocol version and chain.
+/// The allow-list differs per chain at the same version, so the chain must be part of the key.
 pub fn get_gasless_allowed_token_types(config: &ProtocolConfig) -> Arc<BTreeMap<TypeTag, u64>> {
     #[allow(clippy::type_complexity)]
-    static CACHE: RwLock<Option<(u64, Arc<BTreeMap<TypeTag, u64>>)>> = RwLock::new(None);
+    static CACHE: RwLock<Option<((u64, Chain), Arc<BTreeMap<TypeTag, u64>>)>> = RwLock::new(None);
 
-    let version = config.version.as_u64();
+    let key = (config.version.as_u64(), config.chain());
 
     // Fast path: read lock only.
-    if let Some((v, map)) = CACHE.read().unwrap().as_ref()
-        && *v == version
+    if let Some((k, map)) = CACHE.read().unwrap().as_ref()
+        && *k == key
     {
         return apply_test_token_overrides(Arc::clone(map));
     }
 
     // Parse from ProtocolConfig if it changed.
     let mut cache = CACHE.write().unwrap();
-    if let Some((v, map)) = cache.as_ref()
-        && *v == version
+    if let Some((k, map)) = cache.as_ref()
+        && *k == key
     {
         return apply_test_token_overrides(Arc::clone(map));
     }
@@ -1191,7 +1192,7 @@ pub fn get_gasless_allowed_token_types(config: &ProtocolConfig) -> Arc<BTreeMap<
         })
         .collect();
     let arc = Arc::new(map);
-    *cache = Some((version, Arc::clone(&arc)));
+    *cache = Some((key, Arc::clone(&arc)));
     apply_test_token_overrides(arc)
 }
 
