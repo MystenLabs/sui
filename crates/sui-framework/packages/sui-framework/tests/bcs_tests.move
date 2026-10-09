@@ -172,6 +172,49 @@ fun test_vec_u8_length_exceeds_remainder() {
 }
 
 #[test]
+fun test_peel_bytes() {
+    // A 4-byte fixed-size array (no length prefix) followed by a u64.
+    let mut serialized = vector[3, 1, 4, 1];
+    serialized.append(to_bytes(&42u64));
+    let mut bytes = new(serialized);
+    assert_eq!(bytes.peel_bytes(0), vector[]);
+    assert_eq!(bytes.peel_bytes(4), vector[3, 1, 4, 1]);
+    assert_eq!(bytes.peel_u64(), 42);
+    assert!(bytes.into_remainder_bytes().is_empty());
+}
+
+#[test]
+fun test_peel_bytes_all() {
+    let mut bytes = new(vector[0, 2, U8_MAX]);
+    assert_eq!(bytes.peel_bytes(3), vector[0, 2, U8_MAX]);
+    assert!(bytes.into_remainder_bytes().is_empty());
+}
+
+#[test]
+#[expected_failure(abort_code = bcs::EOutOfRange)]
+fun test_peel_bytes_exceeds_remainder() {
+    let mut bytes = new(vector[1, 2]);
+    let _fail = bytes.peel_bytes(3);
+}
+
+#[test]
+fun test_address_preserves_remainder() {
+    let mut serialized = to_bytes(&@0x1234);
+    serialized.push_back(7);
+    let mut bytes = new(serialized);
+    assert_eq!(bytes.peel_address(), @0x1234);
+    assert_eq!(bytes.peel_u8(), 7);
+    assert!(bytes.into_remainder_bytes().is_empty());
+}
+
+#[test]
+#[expected_failure(abort_code = bcs::EOutOfRange)]
+fun test_address_too_short() {
+    let mut bytes = new(vector[1, 2, 3]);
+    let _fail = bytes.peel_address();
+}
+
+#[test]
 fun test_option() {
     let bool_cases = vector[option::none(), option::some(true), option::some(false)];
     cases!(bool_cases, |bytes| bytes.peel_option_bool());

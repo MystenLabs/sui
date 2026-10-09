@@ -72,10 +72,20 @@ public fun into_remainder_bytes(bcs: BCS): vector<u8> {
     bytes
 }
 
+/// Read `n` raw bytes from the bcs-serialized bytes. Unlike `peel_vec_u8`, no length prefix is
+/// read, so this is for values whose length is fixed by their type, such as fixed-size arrays.
+public fun peel_bytes(bcs: &mut BCS, n: u64): vector<u8> {
+    let len = bcs.bytes.length();
+    assert!(len >= n, EOutOfRange);
+    // bytes are stored reversed: one bulk tail extraction, then restore stream order
+    let mut out = bcs.bytes.remove_range(len - n, len);
+    out.reverse();
+    out
+}
+
 /// Read address from the bcs-serialized bytes.
 public fun peel_address(bcs: &mut BCS): address {
-    assert!(bcs.bytes.length() >= address::length(), EOutOfRange);
-    address::from_bytes(vector::tabulate!(address::length(), |_| bcs.bytes.pop_back()))
+    address::from_bytes(bcs.peel_bytes(address::length()))
 }
 
 /// Read a `bool` value from bcs-serialized bytes.
@@ -173,12 +183,7 @@ public fun peel_vec_bool(bcs: &mut BCS): vector<bool> {
 /// Peel a vector of `u8` (eg string) from serialized bytes.
 public fun peel_vec_u8(bcs: &mut BCS): vector<u8> {
     let n = bcs.peel_vec_length();
-    let len = bcs.bytes.length();
-    assert!(len >= n, EOutOfRange);
-    // bytes are stored reversed: one bulk tail extraction, then restore stream order
-    let mut out = bcs.bytes.remove_range(len - n, len);
-    out.reverse();
-    out
+    bcs.peel_bytes(n)
 }
 
 /// Peel a `vector<vector<u8>>` (eg vec of string) from serialized bytes.
