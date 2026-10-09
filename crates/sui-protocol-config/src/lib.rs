@@ -419,6 +419,8 @@ const MAINNET_USDB: &str =
 //              Reduce the non-refundable storage fee from 1% to 0.01%.
 //              Allow random beacon DKG to complete after its timeout on devnet and testnet.
 //              Charge package inputs 1% of the per-byte object read cost.
+//              Add native vector bulk operations (keep_range, copy_range, replace_range
+//              and reverse) and their gas costs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2109,6 +2111,14 @@ pub struct ProtocolConfig {
     vector_pop_back_base_cost: Option<u64>,
     vector_destroy_empty_base_cost: Option<u64>,
     vector_swap_base_cost: Option<u64>,
+    vector_reverse_base_cost: Option<u64>,
+    vector_reverse_per_elem_cost: Option<u64>,
+    vector_keep_range_base_cost: Option<u64>,
+    vector_keep_range_per_dropped_elem_cost: Option<u64>,
+    vector_keep_range_per_moved_elem_cost: Option<u64>,
+    vector_copy_range_base_cost: Option<u64>,
+    vector_replace_range_base_cost: Option<u64>,
+    vector_replace_range_per_elem_cost: Option<u64>,
     debug_print_base_cost: Option<u64>,
     debug_print_stack_trace_base_cost: Option<u64>,
 
@@ -3046,6 +3056,14 @@ impl ProtocolConfig {
             vector_pop_back_base_cost: None,
             vector_destroy_empty_base_cost: None,
             vector_swap_base_cost: None,
+            vector_reverse_base_cost: None,
+            vector_reverse_per_elem_cost: None,
+            vector_keep_range_base_cost: None,
+            vector_keep_range_per_dropped_elem_cost: None,
+            vector_keep_range_per_moved_elem_cost: None,
+            vector_copy_range_base_cost: None,
+            vector_replace_range_base_cost: None,
+            vector_replace_range_per_elem_cost: None,
             debug_print_base_cost: None,
             debug_print_stack_trace_base_cost: None,
 
@@ -4847,6 +4865,14 @@ impl ProtocolConfig {
                     }
                     // Validators cache packages, so reading one costs far less than reading an object.
                     cfg.obj_access_cost_read_per_package_kb = Some(154);
+                    cfg.vector_reverse_base_cost = Some(52);
+                    cfg.vector_reverse_per_elem_cost = Some(8);
+                    cfg.vector_keep_range_base_cost = Some(52);
+                    cfg.vector_keep_range_per_dropped_elem_cost = Some(1);
+                    cfg.vector_keep_range_per_moved_elem_cost = Some(8);
+                    cfg.vector_copy_range_base_cost = Some(52);
+                    cfg.vector_replace_range_base_cost = Some(52);
+                    cfg.vector_replace_range_per_elem_cost = Some(8);
                 }
                 // Use this template when making changes:
                 //
@@ -5307,6 +5333,46 @@ mod test {
             prot.max_arguments(),
             prot.max_arguments_as_option().unwrap()
         );
+    }
+
+    #[test]
+    fn vector_bulk_native_gas_costs_start_at_version_139() {
+        for chain in [Chain::Unknown, Chain::Mainnet, Chain::Testnet] {
+            let before = ProtocolConfig::get_for_version(ProtocolVersion::new(138), chain);
+            assert_eq!(before.vector_reverse_base_cost_as_option(), None);
+            assert_eq!(before.vector_reverse_per_elem_cost_as_option(), None);
+            assert_eq!(before.vector_keep_range_base_cost_as_option(), None);
+            assert_eq!(
+                before.vector_keep_range_per_dropped_elem_cost_as_option(),
+                None
+            );
+            assert_eq!(
+                before.vector_keep_range_per_moved_elem_cost_as_option(),
+                None
+            );
+            assert_eq!(before.vector_copy_range_base_cost_as_option(), None);
+            assert_eq!(before.vector_replace_range_base_cost_as_option(), None);
+            assert_eq!(before.vector_replace_range_per_elem_cost_as_option(), None);
+
+            let active = ProtocolConfig::get_for_version(ProtocolVersion::new(139), chain);
+            assert_eq!(active.vector_reverse_base_cost_as_option(), Some(52));
+            assert_eq!(active.vector_reverse_per_elem_cost_as_option(), Some(8));
+            assert_eq!(active.vector_keep_range_base_cost_as_option(), Some(52));
+            assert_eq!(
+                active.vector_keep_range_per_dropped_elem_cost_as_option(),
+                Some(1)
+            );
+            assert_eq!(
+                active.vector_keep_range_per_moved_elem_cost_as_option(),
+                Some(8)
+            );
+            assert_eq!(active.vector_copy_range_base_cost_as_option(), Some(52));
+            assert_eq!(active.vector_replace_range_base_cost_as_option(), Some(52));
+            assert_eq!(
+                active.vector_replace_range_per_elem_cost_as_option(),
+                Some(8)
+            );
+        }
     }
 
     #[test]

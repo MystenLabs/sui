@@ -203,6 +203,17 @@ fun insert_empty() {
     assert_eq!(str, b"hello".to_ascii_string());
 }
 
+#[test]
+fun insert_at_start_and_into_empty_string() {
+    let mut str = b"world".to_ascii_string();
+    str.insert(0, b"hello ".to_ascii_string());
+    assert_eq!(str, b"hello world".to_ascii_string());
+
+    let mut empty = b"".to_ascii_string();
+    empty.insert(0, b"hello".to_ascii_string());
+    assert_eq!(empty, b"hello".to_ascii_string());
+}
+
 #[test, expected_failure(abort_code = ascii::EInvalidIndex)]
 fun insert_out_of_bounds_fail() {
     let mut str = b"hello".to_ascii_string();
