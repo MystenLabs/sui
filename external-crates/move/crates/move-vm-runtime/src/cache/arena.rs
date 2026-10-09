@@ -33,8 +33,8 @@ pub struct ArenaVec<T>(std::mem::ManuallyDrop<Vec<T>>);
 pub struct ArenaBox<T>(std::mem::ManuallyDrop<Box<T>>);
 
 /// Default size of a package arena.
-/// This is 10 megabytes, which should be more than enough room for any package on chain.
-const DEFAULT_ARENA_SIZE: usize = 10_000_000;
+/// This is 20 megabytes, which should be more than enough room for any package on chain.
+const DEFAULT_ARENA_SIZE: usize = 20_000_000;
 
 // -------------------------------------------------------------------------------------------------
 // Impls

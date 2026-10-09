@@ -10,7 +10,7 @@ use crate::natives::move_stdlib::vector::{
 use crate::{
     cache::identifier_interner::IdentifierInterner,
     execution::{
-        dispatch_tables::VMDispatchTables,
+        dispatch_tables::{DispatchTables, VMDispatchTables},
         values::{INDEX_OUT_OF_BOUNDS, MemBox, VMValueCast, Value, VectorRef},
     },
     jit::execution::ast::Type,
@@ -18,7 +18,7 @@ use crate::{
         extensions::NativeContextExtensions,
         functions::{NativeContext, NativeResult},
     },
-    shared::linkage_context::LinkageContext,
+    shared::{TypeLimits, linkage_context::LinkageContext},
 };
 use move_core_types::{gas_algebra::InternalGas, vm_status::sub_status::NFE_OUT_OF_GAS};
 use move_vm_config::runtime::VMConfig;
@@ -34,12 +34,15 @@ fn with_native_context<R>(
     let vm_config = Arc::new(VMConfig::new_for_test(false, None));
     let runtime_limits = vm_config.runtime_limits_config.clone();
     let vtables = VMDispatchTables::new(
-        vm_config,
-        Arc::new(IdentifierInterner::new()),
-        LinkageContext::new(BTreeMap::new()).unwrap(),
-        BTreeMap::new(),
-    )
-    .unwrap();
+        DispatchTables::new(
+            vm_config,
+            Arc::new(IdentifierInterner::new()),
+            LinkageContext::new(BTreeMap::new()).unwrap(),
+            BTreeMap::new(),
+        )
+        .unwrap(),
+        Arc::new(TypeLimits::VM_DEFAULT),
+    );
     let mut extensions = NativeContextExtensions::default();
     let mut context = NativeContext::new(
         None,
