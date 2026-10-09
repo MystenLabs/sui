@@ -65,6 +65,7 @@ object.yaml
 object_bag.yaml
 object_table.yaml
 package.yaml
+package_config.yaml
 party.yaml
 pay.yaml
 poseidon.yaml
@@ -419,6 +420,15 @@ type_origins:
     - module_name: package
       datatype_name: UpgradeReceipt
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: package
+      datatype_name: MinVersionEnrollment
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: package
+      datatype_name: MinVersionUpgradeAuthorization
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: package
+      datatype_name: MinVersionUpgrade
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
     - module_name: display
       datatype_name: Display
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
@@ -532,6 +542,18 @@ type_origins:
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
     - module_name: object_table
       datatype_name: ObjectTable
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: package_config
+      datatype_name: PackageConfig
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: package_config
+      datatype_name: VersionForbiddenKey
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: package_config
+      datatype_name: MinVersionKey
+      package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+    - module_name: package_config
+      datatype_name: MinVersion
       package: "0x0000000000000000000000000000000000000000000000000000000000000002"
     - module_name: priority_queue
       datatype_name: PriorityQueue

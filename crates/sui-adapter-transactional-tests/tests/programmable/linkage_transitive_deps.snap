@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 11 tasks
+processed 16 tasks
 
 // Visibility-based pinning applies to the transitive dependency closure, not just direct deps.
 // `Root -> Mid -> Leaf`. `Leaf::val` returns a per-version constant (10 in v1, 20 in v2) which
@@ -90,3 +90,52 @@ task 10, lines 63-66:
 //> 1: Leaf_V2::l::ping();
 Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
 Debug of error: InvalidLinkage at command Some(1)
+
+task 11, lines 68-71:
+// Enroll the upgraded leaf as the selected minimum version.
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
+//> 0: sui::package::enable_minversion(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(11,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 12, lines 73-75:
+//# programmable --sender A --inputs object(4,0)
+// Public linkage remains at-least: the historical Leaf_V1 dependency is raised to selected v2.
+//> Root::m::pub_go(Input(0));
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
+
+task 13, line 77:
+//# view-object 4,0
+Owner: Shared( 5 )
+Version: 11
+Contents: Root::m::R {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    v: 1u64,
+}
+
+task 14, lines 79-81:
+//# programmable --sender A --inputs object(4,0)
+// Entry linkage remains exact after selection: it executes the selected v2 dependency.
+//> Root::m::ent_go(Input(0));
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
+
+task 15, line 83:
+//# view-object 4,0
+Owner: Shared( 5 )
+Version: 12
+Contents: Root::m::R {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    v: 1u64,
+}
