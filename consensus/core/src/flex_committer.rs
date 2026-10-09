@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use consensus_config::{AuthorityIndex, DIGEST_LENGTH, DefaultHashFunction, Stake};
+use consensus_config::{AuthorityIndex, DIGEST_LENGTH, DefaultHashFunction};
 use consensus_types::block::{BlockRef, BlockTimestampMs, Round};
 use fastcrypto::hash::HashFunction as _;
 use itertools::Itertools as _;
@@ -380,7 +380,7 @@ impl FlexCommitter {
             .expect("At least one committed leader must be in to_commit");
         assert_eq!(leader_ref.round, commit_leader_round);
 
-        // Compute deterministic commit timestamp from leader parents.
+        // Compute a deterministic commit timestamp.
         let timestamp_ms =
             calculate_commit_timestamp(&self.context, &self.dag_state.read(), &committed_leaders);
 
@@ -620,8 +620,8 @@ fn sort_committed_blocks(blocks: &mut [VerifiedBlock], seed: &[u8; DIGEST_LENGTH
     blocks.sort_by_cached_key(|b| block_sort_key(seed, &b.reference()));
 }
 
-/// Takes the union of each committed leader's parent-round ancestors,
-/// and returns the median timestamp of parent blocks weighted by stake.
+/// Computes the stake-weighted median timestamp of committed leaders when their stake reaches
+/// certification. Otherwise, uses the union of their parent-round ancestors with quorum stake.
 /// Monotonicity is enforced against `last_commit_timestamp_ms`.
 fn calculate_commit_timestamp(
     context: &Context,
@@ -631,14 +631,12 @@ fn calculate_commit_timestamp(
     let leader_round = committed_leaders[0].round();
     debug_assert!(committed_leaders.iter().all(|b| b.round() == leader_round));
 
-    // When there are enough leader stake, use leaders to compute the commit timestamp.
-    let total_leader_stake = committed_leaders
-        .iter()
-        .map(|b| context.committee.stake(b.author()))
-        .sum::<Stake>();
-    if total_leader_stake >= context.committee.certification_threshold() {
-        let ts = crate::linearizer::median_timestamp_by_stake(context, committed_leaders)
-            .unwrap_or_else(|e| panic!("Cannot compute commit timestamp: {e}"));
+    // Certification stake ensures honest authorities hold a majority of the timestamp weight.
+    if let Some(ts) = crate::linearizer::median_timestamp_by_stake(
+        context,
+        committed_leaders,
+        context.committee.certification_threshold(),
+    ) {
         return ts.max(dag_state.last_commit_timestamp_ms());
     }
 
@@ -655,7 +653,11 @@ fn calculate_commit_timestamp(
     let blocks = block_opts
         .iter()
         .map(|b| b.as_ref().expect("Parent block must be in dag state"));
-    let ts = crate::linearizer::median_timestamp_by_stake(context, blocks)
-        .unwrap_or_else(|e| panic!("Cannot compute commit timestamp: {e}"));
+    let ts = crate::linearizer::median_timestamp_by_stake(
+        context,
+        blocks,
+        context.committee.quorum_threshold(),
+    )
+    .expect("Leader parents must provide quorum stake for the commit timestamp");
     ts.max(dag_state.last_commit_timestamp_ms())
 }

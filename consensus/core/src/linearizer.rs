@@ -143,12 +143,8 @@ impl Linearizer {
                     .as_ref()
                     .expect("We should have all blocks in dag state.")
             });
-            median_timestamp_by_stake(context, blocks).unwrap_or_else(|e| {
-                panic!(
-                    "Cannot compute median timestamp for leader block {:?} ancestors: {}",
-                    leader_block, e
-                )
-            })
+            median_timestamp_by_stake(context, blocks, context.committee.quorum_threshold())
+                .expect("Leader parents must provide quorum stake for the commit timestamp")
         };
 
         // Always make sure that commit timestamps are monotonic, so override if necessary.
@@ -289,11 +285,12 @@ impl Linearizer {
 
 /// Computes the median timestamp of the blocks weighted by the stake of their authorities.
 /// This function assumes each block comes from a different authority of the same round.
-/// Error is returned if no blocks are provided or total stake is less than quorum threshold.
+/// Returns None if no blocks are provided or total stake is less than `min_stake`.
 pub(crate) fn median_timestamp_by_stake<'a>(
     context: &Context,
     blocks: impl IntoIterator<Item = &'a VerifiedBlock>,
-) -> Result<BlockTimestampMs, String> {
+    min_stake: Stake,
+) -> Option<BlockTimestampMs> {
     let mut total_stake = 0;
     let mut timestamps = vec![];
     for block in blocks {
@@ -302,18 +299,11 @@ pub(crate) fn median_timestamp_by_stake<'a>(
         total_stake += stake;
     }
 
-    if timestamps.is_empty() {
-        return Err("No blocks provided".to_string());
-    }
-    if total_stake < context.committee.quorum_threshold() {
-        return Err(format!(
-            "Total stake {} < quorum threshold {}",
-            total_stake,
-            context.committee.quorum_threshold()
-        ));
+    if timestamps.is_empty() || total_stake < min_stake {
+        return None;
     }
 
-    Ok(median_timestamps_by_stake_inner(timestamps, total_stake))
+    Some(median_timestamps_by_stake_inner(timestamps, total_stake))
 }
 
 fn median_timestamps_by_stake_inner(
@@ -396,7 +386,8 @@ mod tests {
                         .expect("We should have all blocks in dag state.")
                 });
 
-                median_timestamp_by_stake(&context, blocks).unwrap()
+                median_timestamp_by_stake(&context, blocks, context.committee.quorum_threshold())
+                    .unwrap()
             };
             assert_eq!(subdag.timestamp_ms, expected_ts);
 
@@ -516,6 +507,7 @@ mod tests {
                 .blocks
                 .iter()
                 .filter(|block| block.round() == subdag.leader.round - 1),
+            context.committee.quorum_threshold(),
         )
         .unwrap();
         assert_eq!(subdag.timestamp_ms, expected_ts);
@@ -612,7 +604,8 @@ mod tests {
                         .expect("We should have all blocks in dag state.")
                 });
 
-                median_timestamp_by_stake(&context, blocks).unwrap()
+                median_timestamp_by_stake(&context, blocks, context.committee.quorum_threshold())
+                    .unwrap()
             };
             assert_eq!(subdag.timestamp_ms, expected_ts);
 
@@ -716,7 +709,8 @@ mod tests {
                         .expect("We should have all blocks in dag state.")
                 });
 
-                median_timestamp_by_stake(&context, blocks).unwrap()
+                median_timestamp_by_stake(&context, blocks, context.committee.quorum_threshold())
+                    .unwrap()
             };
             assert_eq!(subdag.timestamp_ms, expected_ts);
 
@@ -909,18 +903,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_median_timestamps_by_stake_errors() {
+    async fn test_median_timestamps_by_stake_requires_minimum_stake() {
         let num_authorities = 4;
         let (context, _keys) = Context::new_for_test(num_authorities);
         let context = Arc::new(context);
 
         // No blocks provided
-        let err = median_timestamp_by_stake(&context, &[] as &[VerifiedBlock]).unwrap_err();
-        assert_eq!(err, "No blocks provided");
+        assert!(
+            median_timestamp_by_stake(
+                &context,
+                &[] as &[VerifiedBlock],
+                context.committee.quorum_threshold(),
+            )
+            .is_none()
+        );
 
         // Blocks provided but total stake is less than quorum threshold
         let block = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build());
-        let err = median_timestamp_by_stake(&context, &[block]).unwrap_err();
-        assert_eq!(err, "Total stake 1 < quorum threshold 3");
+        assert!(
+            median_timestamp_by_stake(&context, &[block], context.committee.quorum_threshold())
+                .is_none()
+        );
     }
 }
