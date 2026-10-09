@@ -4837,6 +4837,7 @@ impl ProtocolConfig {
                     }
                 }
                 139 => {
+                    cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_forwarding_addresses = true;
                         cfg.feature_flags.mldsa65_auth = true;
