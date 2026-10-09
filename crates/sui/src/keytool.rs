@@ -104,12 +104,11 @@ pub enum KeyToolCommand {
         #[clap(long, default_value = "0")]
         cur_epoch: u64,
     },
-    // TODO: document mldsa65 for generate/import once its key derivation lands.
-    /// Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1 | mldsa65}
     /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
-    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word
-    /// length can be { word12 | word15 | word18 | word21 | word24} default to word12
-    /// if not specified.
+    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1 or
+    /// m/94'/784'/0'/0'/0' for mldsa65. Word length can be { word12 | word15 | word18 |
+    /// word21 | word24} default to word12 if not specified.
     ///
     /// The keypair file is output to the current directory. The content of the file is
     /// a Base64 encoded string of 33-byte `flag || privkey`.
@@ -122,11 +121,11 @@ pub enum KeyToolCommand {
     },
 
     /// Add a new key to Sui CLI Keystore using either the input mnemonic phrase or a Bech32 encoded 33-byte
-    /// `flag || privkey` starting with "suiprivkey", the key scheme flag {ed25519 | secp256k1 | secp256r1}
+    /// `flag || privkey` starting with "suiprivkey", the key scheme flag {ed25519 | secp256k1 | secp256r1 | mldsa65}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0
-    /// for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15,
-    /// 18, 21, 24. Set an alias for the key with the --alias flag. If no alias is provided, the tool will
-    /// automatically generate one.
+    /// for secp256k1 or m/74'/784'/0'/0/0 for secp256r1 or m/94'/784'/0'/0'/0' for mldsa65. Supports
+    /// mnemonic phrase of word length 12, 15, 18, 21, 24. Set an alias for the key with the --alias flag.
+    /// If no alias is provided, the tool will automatically generate one.
     Import {
         /// Sets an alias for this address. The alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).
         #[clap(long)]
