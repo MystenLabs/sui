@@ -515,8 +515,18 @@ impl WritebackCache {
             version,
         } = version;
         if let Some(object) = ObjectCacheRead::get_object_by_key(self, object_id, version) {
+            info!(
+                "CLAUDE: implicit system object exact read hit object_id={:?} requested_version={:?} returned_version={:?}",
+                object_id,
+                version,
+                object.version()
+            );
             return Some(object);
         }
+        info!(
+            "CLAUDE: implicit system object exact read missed and will wait object_id={:?} requested_version={:?}",
+            object_id, version
+        );
         self.metrics
             .implicit_system_object_read_waits
             .with_label_values(&[object_id.to_string().as_str()])
@@ -542,9 +552,23 @@ impl WritebackCache {
             "load_implicitly_read_system_object",
             &key,
             |_key| {
-                ObjectCacheRead::get_object(self, object_id)
-                    .is_some_and(|latest| latest.version() >= version)
-                    .then_some(())
+                let latest_version =
+                    ObjectCacheRead::get_object(self, object_id).map(|latest| latest.version());
+                let exact_dirty_version_present = self
+                    .dirty
+                    .objects
+                    .get(object_id)
+                    .is_some_and(|entry| entry.get(&version).is_some());
+                let ready = latest_version.is_some_and(|latest| latest >= version);
+                info!(
+                    "CLAUDE: implicit system object wait predicate object_id={:?} requested_version={:?} latest_version={:?} exact_dirty_version_present={} ready={}",
+                    object_id,
+                    version,
+                    latest_version,
+                    exact_dirty_version_present,
+                    ready
+                );
+                ready.then_some(())
             },
         );
         tracing::warn!(
@@ -644,15 +668,23 @@ impl WritebackCache {
         //   the tx finalizer, plus checkpoint executor, consensus, and RPCs from fullnodes.
         let mut entry = self.dirty.objects.entry(*object_id).or_default();
 
-        self.object_by_id_cache
-            .insert(
-                object_id,
-                LatestObjectCacheEntry::Object(version, object.clone()),
-                Ticket::Write,
-            )
-            // While Ticket::Write cannot expire, this insert may still fail.
-            // See the comment in `MonotonicCache::insert`.
-            .ok();
+        let latest_cache_insert = self.object_by_id_cache.insert(
+            object_id,
+            LatestObjectCacheEntry::Object(version, object.clone()),
+            Ticket::Write,
+        );
+
+        if latest_cache_insert.is_err() {
+            info!(
+                "CLAUDE: latest object cache write failed object_id={:?} version={:?}",
+                object_id, version
+            );
+        } else if sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(object_id) {
+            info!(
+                "CLAUDE: latest implicit system object cache write succeeded object_id={:?} version={:?}",
+                object_id, version
+            );
+        }
 
         entry.insert(version, object.clone());
 
@@ -968,6 +1000,18 @@ impl WritebackCache {
             ..
         } = &*tx_outputs;
 
+        let implicit_system_object_writes = written
+            .values()
+            .filter(|object| sui_types::IMPLICITLY_READ_SYSTEM_OBJECTS.contains(&object.id()))
+            .map(|object| (object.id(), object.version()))
+            .collect::<Vec<_>>();
+        if !implicit_system_object_writes.is_empty() {
+            info!(
+                "CLAUDE: transaction begins implicit system object output publication tx_digest={:?} writes={:?}",
+                tx_digest, implicit_system_object_writes
+            );
+        }
+
         // Deletions and wraps must be written first. The reason is that one of the deletes
         // may be a child object, and if we write the parent object first, a reader may or may
         // not see the previous version of the child object, instead of the deleted/wrapped
@@ -1047,6 +1091,13 @@ impl WritebackCache {
 
         self.executed_effects_digests_notify_read
             .notify(&tx_digest, &effects_digest);
+
+        if !implicit_system_object_writes.is_empty() {
+            info!(
+                "CLAUDE: transaction published executed marker after implicit system object outputs tx_digest={:?} effects_digest={:?} writes={:?}",
+                tx_digest, effects_digest, implicit_system_object_writes
+            );
+        }
 
         self.metrics
             .pending_notify_read

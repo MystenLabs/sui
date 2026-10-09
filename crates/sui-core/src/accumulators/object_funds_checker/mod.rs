@@ -20,7 +20,7 @@ use tokio::{
     sync::{oneshot, watch},
     time::Instant,
 };
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 
 use crate::{
     accumulators::{
@@ -203,6 +203,12 @@ impl ObjectFundsCheckerDEPRECATED {
             // At that time we will have to re-enqueue the transaction for execution again.
             // Re-enqueue is handled here so the caller does not need to worry about it.
             ObjectFundsWithdrawStatus::Pending(receiver) => {
+                info!(
+                    "CLAUDE: object funds check pending tx_digest={:?} causal_index={:?} accumulator_version={:?}",
+                    certificate.digest(),
+                    execution_env.causal_index,
+                    accumulator_version
+                );
                 self.metrics.pending_checks.inc();
                 let timer = self.metrics.pending_check_latency.start_timer();
                 let pending_metrics = self.metrics.clone();
@@ -218,17 +224,23 @@ impl ObjectFundsCheckerDEPRECATED {
                     "funds-withdraw retry requires an indexed env: execute via the scheduler"
                 );
                 let mut execution_env = execution_env.clone();
+                let causal_index = execution_env.causal_index;
                 let epoch_store = epoch_store.clone();
                 tokio::task::spawn(async move {
                     // It is possible that checkpoint executor finished executing
                     // the current epoch and went ahead with epoch change asynchronously,
                     // while this is still waiting.
                     let inner_metrics = pending_metrics.clone();
-                    let _ = epoch_store
+                    let retry_tx_digest = *cert.digest();
+                    let retry_result = epoch_store
                         .within_alive_epoch(async move {
                             let tx_digest = cert.digest();
                             match receiver.await {
                                 Ok(FundsWithdrawStatus::MaybeSufficient) => {
+                                    info!(
+                                        "CLAUDE: object funds watcher resolved maybe-sufficient tx_digest={:?} causal_index={:?} accumulator_version={:?}",
+                                        tx_digest, causal_index, accumulator_version
+                                    );
                                     assert_reachable_gated!(
                                         "object funds maybe sufficient",
                                         |pc| !pc.check_object_funds_withdraw_in_execution()
@@ -240,6 +252,10 @@ impl ObjectFundsCheckerDEPRECATED {
                                     debug!(?tx_digest, "Object funds possibly sufficient");
                                 }
                                 Ok(FundsWithdrawStatus::Insufficient) => {
+                                    info!(
+                                        "CLAUDE: object funds watcher resolved insufficient tx_digest={:?} causal_index={:?} accumulator_version={:?}",
+                                        tx_digest, causal_index, accumulator_version
+                                    );
                                     assert_reachable_gated!("object funds insufficient", |pc| !pc
                                         .check_object_funds_withdraw_in_execution());
                                     // Re-enqueue with insufficient funds status, so it will be executed
@@ -255,12 +271,20 @@ impl ObjectFundsCheckerDEPRECATED {
                                     debug!(?tx_digest, "Object funds insufficient");
                                 }
                                 Err(e) => {
+                                    info!(
+                                        "CLAUDE: object funds watcher channel closed tx_digest={:?} causal_index={:?} accumulator_version={:?} error={:?}",
+                                        tx_digest, causal_index, accumulator_version, e
+                                    );
                                     tracing::error!(
                                         "Error receiving funds withdraw status: {:?}",
                                         e
                                     );
                                 }
                             }
+                            info!(
+                                "CLAUDE: object funds watcher resubmits transaction tx_digest={:?} causal_index={:?} accumulator_version={:?}",
+                                tx_digest, causal_index, accumulator_version
+                            );
                             scheduler.send_transaction_for_execution(
                                 &cert,
                                 execution_env,
@@ -270,6 +294,13 @@ impl ObjectFundsCheckerDEPRECATED {
                             );
                         })
                         .await;
+                    info!(
+                        "CLAUDE: object funds watcher finished tx_digest={:?} causal_index={:?} accumulator_version={:?} resubmitted={}",
+                        retry_tx_digest,
+                        causal_index,
+                        accumulator_version,
+                        retry_result.is_ok()
+                    );
                     timer.observe_duration();
                     pending_metrics.pending_checks.dec();
                 });

@@ -36,6 +36,7 @@ use parking_lot::Mutex;
 use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
 use sui_types::base_types::SequenceNumber;
 use tokio::sync::Notify;
+use tracing::info;
 
 use crate::authority::ExecutionEnv;
 
@@ -365,6 +366,10 @@ impl InFlightSlot {
     /// Keeps the admitted causal index alive past this execution attempt, for a
     /// transaction that will be re-submitted under the same index (RetryLater).
     pub fn skip_retire(&mut self) {
+        info!(
+            "CLAUDE: causal slot skip_retire index={:?} is_next={}",
+            self.retire_on_drop, self.is_next
+        );
         self.retire_on_drop = None;
     }
 }
@@ -372,6 +377,9 @@ impl InFlightSlot {
 impl Drop for InFlightSlot {
     fn drop(&mut self) {
         let mut inner = self.admission.inner.lock();
+        let retire_index = self.retire_on_drop;
+        let watermark_before = inner.watermark;
+        let in_flight_before = inner.in_flight;
         inner.in_flight -= 1;
         if self.is_next {
             inner.next_admitted = false;
@@ -379,6 +387,16 @@ impl Drop for InFlightSlot {
         if let Some(index) = self.retire_on_drop {
             CausalAdmission::mark_done_locked(&mut inner, index);
         }
+        info!(
+            "CLAUDE: causal slot drop retire_index={:?} is_next={} watermark_before={} watermark_after={} in_flight_before={} in_flight_after={} done_above_len={}",
+            retire_index,
+            self.is_next,
+            watermark_before,
+            inner.watermark,
+            in_flight_before,
+            inner.in_flight,
+            inner.done_above.len()
+        );
         self.admission.publish(&inner);
         drop(inner);
         self.admission.notify.notify_one();

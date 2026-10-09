@@ -214,7 +214,15 @@ pub async fn execution_process(
         let epoch_store = authority.load_epoch_store_one_call_per_task();
 
         let digest = *certificate.digest();
+        let causal_index = execution_env.causal_index;
         trace!(?digest, "Pending certificate execution activated.");
+        info!(
+            "CLAUDE: driver admitted transaction tx_digest={:?} causal_index={:?} accumulator_version={:?} system_object_versions={:?}",
+            digest,
+            causal_index,
+            execution_env.assigned_versions.accumulator_version(),
+            execution_env.assigned_versions.system_object_versions
+        );
 
         if epoch_store.epoch() != certificate.epoch() {
             // With enqueue deduplication, and every transaction committed in an epoch
@@ -233,6 +241,10 @@ pub async fn execution_process(
         // here retires the index without paying for a dispatch that would no-op inside
         // `try_execute_immediately`, and without holding a concurrency slot while doing so.
         if authority.is_tx_already_executed(&digest) {
+            info!(
+                "CLAUDE: driver retires already-executed transaction tx_digest={:?} causal_index={:?}",
+                digest, causal_index
+            );
             continue;
         }
 
@@ -297,12 +309,20 @@ pub async fn execution_process(
                     &epoch_store_clone,
                 ) {
                     ExecutionOutput::Success(_) => {
+                        info!(
+                            "CLAUDE: execution succeeded and causal slot will retire tx_digest={:?} causal_index={:?}",
+                            digest, causal_index
+                        );
                         authority
                             .metrics
                             .execution_driver_executed_transactions
                             .inc();
                     }
                     ExecutionOutput::EpochEnded => {
+                        info!(
+                            "CLAUDE: execution ended at epoch boundary and causal slot will retire tx_digest={:?} causal_index={:?}",
+                            digest, causal_index
+                        );
                         warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
                     }
                     ExecutionOutput::Fatal(e) => {
@@ -313,6 +333,10 @@ pub async fn execution_process(
                         // original causal index (carried in the retry's env clone), so keep
                         // the index alive when the slot is released.
                         if let Some(slot) = &mut slot {
+                            info!(
+                                "CLAUDE: execution returned RetryLater and causal slot retirement will be skipped tx_digest={:?} causal_index={:?}",
+                                digest, causal_index
+                            );
                             slot.skip_retire();
                         }
                         authority
