@@ -11,6 +11,9 @@ Functions for operating on Move packages from within Move:
 -  [Struct `UpgradeCap`](#sui_package_UpgradeCap)
 -  [Struct `UpgradeTicket`](#sui_package_UpgradeTicket)
 -  [Struct `UpgradeReceipt`](#sui_package_UpgradeReceipt)
+-  [Struct `MinVersionEnrollment`](#sui_package_MinVersionEnrollment)
+-  [Struct `MinVersionUpgradeAuthorization`](#sui_package_MinVersionUpgradeAuthorization)
+-  [Struct `MinVersionUpgrade`](#sui_package_MinVersionUpgrade)
 -  [Constants](#@Constants_0)
 -  [Function `claim`](#sui_package_claim)
 -  [Function `claim_and_keep`](#sui_package_claim_and_keep)
@@ -22,6 +25,14 @@ Functions for operating on Move packages from within Move:
 -  [Function `upgrade_package`](#sui_package_upgrade_package)
 -  [Function `version`](#sui_package_version)
 -  [Function `upgrade_policy`](#sui_package_upgrade_policy)
+-  [Function `minversion_available`](#sui_package_minversion_available)
+-  [Function `minversion_enabled`](#sui_package_minversion_enabled)
+-  [Function `minversion_permanently_disabled`](#sui_package_minversion_permanently_disabled)
+-  [Function `enable_minversion`](#sui_package_enable_minversion)
+-  [Function `enable_minversion_impl`](#sui_package_enable_minversion_impl)
+-  [Function `disable_minversion_permanently`](#sui_package_disable_minversion_permanently)
+-  [Function `minversion_enrollment_info`](#sui_package_minversion_enrollment_info)
+-  [Function `minversion_upgrade_info`](#sui_package_minversion_upgrade_info)
 -  [Function `ticket_package`](#sui_package_ticket_package)
 -  [Function `ticket_policy`](#sui_package_ticket_policy)
 -  [Function `receipt_cap`](#sui_package_receipt_cap)
@@ -35,8 +46,13 @@ Functions for operating on Move packages from within Move:
 -  [Function `make_immutable`](#sui_package_make_immutable)
 -  [Function `authorize_upgrade`](#sui_package_authorize_upgrade)
 -  [Function `commit_upgrade`](#sui_package_commit_upgrade)
+-  [Function `prepare_minversion_upgrade`](#sui_package_prepare_minversion_upgrade)
+-  [Function `commit_minversion_upgrade`](#sui_package_commit_minversion_upgrade)
+-  [Function `commit_minversion_upgrade_impl`](#sui_package_commit_minversion_upgrade_impl)
+-  [Function `commit_upgrade_impl`](#sui_package_commit_upgrade_impl)
 -  [Function `original_package_id`](#sui_package_original_package_id)
 -  [Function `original_package_id_impl`](#sui_package_original_package_id_impl)
+-  [Function `test_publish`](#sui_package_test_publish)
 -  [Function `restrict`](#sui_package_restrict)
 
 
@@ -237,6 +253,117 @@ the end of the transaction that performed the upgrade.
 
 </details>
 
+<a name="sui_package_MinVersionEnrollment"></a>
+
+## Struct `MinVersionEnrollment`
+
+Must be consumed to record minversion enrollment in package configuration.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/package.md#sui_package_MinVersionEnrollment">MinVersionEnrollment</a>
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code><a href="../sui/package.md#sui_package_version">version</a>: u64</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>package_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_package_MinVersionUpgradeAuthorization"></a>
+
+## Struct `MinVersionUpgradeAuthorization`
+
+Must be consumed to commit an upgrade to a minversion package.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/package.md#sui_package_MinVersionUpgradeAuthorization">MinVersionUpgradeAuthorization</a>
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>cap: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
+<a name="sui_package_MinVersionUpgrade"></a>
+
+## Struct `MinVersionUpgrade`
+
+Must be consumed to record the result of an upgrade to a minversion package.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/package.md#sui_package_MinVersionUpgrade">MinVersionUpgrade</a>
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>previous_version: u64</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code><a href="../sui/package.md#sui_package_version">version</a>: u64</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>package_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+</details>
+
 <a name="@Constants_0"></a>
 
 ## Constants
@@ -315,6 +442,26 @@ between the package ID and version supplied (in the native).
 
 
 
+<a name="sui_package_EMinVersionUnavailable"></a>
+
+The requested minversion operation is not available for this cap.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_EMinVersionUnavailable">EMinVersionUnavailable</a>: u64 = 7;
+</code></pre>
+
+
+
+<a name="sui_package_EMinVersionEnabled"></a>
+
+Tried to commit an enrolled cap using the ordinary upgrade path.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_EMinVersionEnabled">EMinVersionEnabled</a>: u64 = 8;
+</code></pre>
+
+
+
 <a name="sui_package_COMPATIBLE"></a>
 
 Update any part of the package (function implementations, add new
@@ -343,6 +490,56 @@ Only be able to change dependencies.
 
 
 <pre><code><b>const</b> <a href="../sui/package.md#sui_package_DEP_ONLY">DEP_ONLY</a>: u8 = 192;
+</code></pre>
+
+
+
+<a name="sui_package_BASE_POLICY_MASK"></a>
+
+Mask for the base compatibility policy in an <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code> policy.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_BASE_POLICY_MASK">BASE_POLICY_MASK</a>: u8 = 192;
+</code></pre>
+
+
+
+<a name="sui_package_MINVERSION_STATE_MASK"></a>
+
+Mask for the minversion state in an <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code> policy.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_MINVERSION_STATE_MASK">MINVERSION_STATE_MASK</a>: u8 = 48;
+</code></pre>
+
+
+
+<a name="sui_package_MINVERSION_AVAILABLE"></a>
+
+Minversion is not enabled and can still be enabled.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_MINVERSION_AVAILABLE">MINVERSION_AVAILABLE</a>: u8 = 0;
+</code></pre>
+
+
+
+<a name="sui_package_MINVERSION_PERMANENTLY_DISABLED"></a>
+
+Minversion is not enabled and can never be enabled.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_MINVERSION_PERMANENTLY_DISABLED">MINVERSION_PERMANENTLY_DISABLED</a>: u8 = 16;
+</code></pre>
+
+
+
+<a name="sui_package_MINVERSION_ENABLED"></a>
+
+Minversion is enabled.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_MINVERSION_ENABLED">MINVERSION_ENABLED</a>: u8 = 32;
 </code></pre>
 
 
@@ -595,8 +792,7 @@ successfully applied upgrade.
 
 ## Function `upgrade_policy`
 
-The most permissive kind of upgrade currently supported by this
-<code>cap</code>.
+The base compatibility policy currently supported by this <code>cap</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_upgrade_policy">upgrade_policy</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>): u8
@@ -609,7 +805,235 @@ The most permissive kind of upgrade currently supported by this
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_upgrade_policy">upgrade_policy</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>): u8 {
-    cap.policy
+    cap.policy & <a href="../sui/package.md#sui_package_BASE_POLICY_MASK">BASE_POLICY_MASK</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_minversion_available"></a>
+
+## Function `minversion_available`
+
+Whether this <code>cap</code> can enroll in minversion.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_minversion_available">minversion_available</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_minversion_available">minversion_available</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>): bool {
+    (cap.policy & <a href="../sui/package.md#sui_package_MINVERSION_STATE_MASK">MINVERSION_STATE_MASK</a>) == <a href="../sui/package.md#sui_package_MINVERSION_AVAILABLE">MINVERSION_AVAILABLE</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_minversion_enabled"></a>
+
+## Function `minversion_enabled`
+
+Whether this <code>cap</code> is enrolled in minversion.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_minversion_enabled">minversion_enabled</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_minversion_enabled">minversion_enabled</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>): bool {
+    (cap.policy & <a href="../sui/package.md#sui_package_MINVERSION_STATE_MASK">MINVERSION_STATE_MASK</a>) == <a href="../sui/package.md#sui_package_MINVERSION_ENABLED">MINVERSION_ENABLED</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_minversion_permanently_disabled"></a>
+
+## Function `minversion_permanently_disabled`
+
+Whether this <code>cap</code> cannot be enrolled in minversion.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_minversion_permanently_disabled">minversion_permanently_disabled</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_minversion_permanently_disabled">minversion_permanently_disabled</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>): bool {
+    (cap.policy & <a href="../sui/package.md#sui_package_MINVERSION_STATE_MASK">MINVERSION_STATE_MASK</a>) == <a href="../sui/package.md#sui_package_MINVERSION_PERMANENTLY_DISABLED">MINVERSION_PERMANENTLY_DISABLED</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_enable_minversion"></a>
+
+## Function `enable_minversion`
+
+Enroll this <code>cap</code> in minversion and produce the token required to record the current package
+version as the selected minversion.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_enable_minversion">enable_minversion</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>): <a href="../sui/package.md#sui_package_MinVersionEnrollment">sui::package::MinVersionEnrollment</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_enable_minversion">enable_minversion</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>): <a href="../sui/package.md#sui_package_MinVersionEnrollment">MinVersionEnrollment</a> {
+    <b>let</b> original_id = cap.<a href="../sui/package.md#sui_package_original_package_id">original_package_id</a>();
+    cap.<a href="../sui/package.md#sui_package_enable_minversion_impl">enable_minversion_impl</a>(original_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_enable_minversion_impl"></a>
+
+## Function `enable_minversion_impl`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/package.md#sui_package_enable_minversion_impl">enable_minversion_impl</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): <a href="../sui/package.md#sui_package_MinVersionEnrollment">sui::package::MinVersionEnrollment</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/package.md#sui_package_enable_minversion_impl">enable_minversion_impl</a>(
+    cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>,
+    original_id: ID,
+): <a href="../sui/package.md#sui_package_MinVersionEnrollment">MinVersionEnrollment</a> {
+    <b>assert</b>!(cap.<a href="../sui/package.md#sui_package_minversion_available">minversion_available</a>(), <a href="../sui/package.md#sui_package_EMinVersionUnavailable">EMinVersionUnavailable</a>);
+    <b>let</b> <a href="../sui/package.md#sui_package_version">version</a> = cap.<a href="../sui/package.md#sui_package_version">version</a>;
+    <b>let</b> package_id = cap.<a href="../sui/package.md#sui_package">package</a>;
+    cap.policy = cap.policy | <a href="../sui/package.md#sui_package_MINVERSION_ENABLED">MINVERSION_ENABLED</a>;
+    <a href="../sui/package.md#sui_package_MinVersionEnrollment">MinVersionEnrollment</a> {
+        original_id,
+        <a href="../sui/package.md#sui_package_version">version</a>,
+        package_id,
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_disable_minversion_permanently"></a>
+
+## Function `disable_minversion_permanently`
+
+Permanently prevent this <code>cap</code> from enrolling in minversion.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_disable_minversion_permanently">disable_minversion_permanently</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_disable_minversion_permanently">disable_minversion_permanently</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>) {
+    <b>assert</b>!(cap.<a href="../sui/package.md#sui_package_minversion_available">minversion_available</a>(), <a href="../sui/package.md#sui_package_EMinVersionUnavailable">EMinVersionUnavailable</a>);
+    cap.policy = cap.policy | <a href="../sui/package.md#sui_package_MINVERSION_PERMANENTLY_DISABLED">MINVERSION_PERMANENTLY_DISABLED</a>;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_minversion_enrollment_info"></a>
+
+## Function `minversion_enrollment_info`
+
+Consume a minversion enrollment token and return its package selection.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/package.md#sui_package_minversion_enrollment_info">minversion_enrollment_info</a>(enrollment: <a href="../sui/package.md#sui_package_MinVersionEnrollment">sui::package::MinVersionEnrollment</a>): (<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, u64, <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/package.md#sui_package_minversion_enrollment_info">minversion_enrollment_info</a>(
+    enrollment: <a href="../sui/package.md#sui_package_MinVersionEnrollment">MinVersionEnrollment</a>,
+): (ID, u64, ID) {
+    <b>let</b> <a href="../sui/package.md#sui_package_MinVersionEnrollment">MinVersionEnrollment</a> {
+        original_id,
+        <a href="../sui/package.md#sui_package_version">version</a>,
+        package_id,
+    } = enrollment;
+    (original_id, <a href="../sui/package.md#sui_package_version">version</a>, package_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_minversion_upgrade_info"></a>
+
+## Function `minversion_upgrade_info`
+
+Consume a minversion upgrade token and return its package selection and prior version.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/package.md#sui_package_minversion_upgrade_info">minversion_upgrade_info</a>(upgrade: <a href="../sui/package.md#sui_package_MinVersionUpgrade">sui::package::MinVersionUpgrade</a>): (<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, u64, u64, <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/package.md#sui_package_minversion_upgrade_info">minversion_upgrade_info</a>(
+    upgrade: <a href="../sui/package.md#sui_package_MinVersionUpgrade">MinVersionUpgrade</a>,
+): (ID, u64, u64, ID) {
+    <b>let</b> <a href="../sui/package.md#sui_package_MinVersionUpgrade">MinVersionUpgrade</a> {
+        original_id,
+        previous_version,
+        <a href="../sui/package.md#sui_package_version">version</a>,
+        package_id,
+    } = upgrade;
+    (original_id, previous_version, <a href="../sui/package.md#sui_package_version">version</a>, package_id)
 }
 </code></pre>
 
@@ -928,7 +1352,7 @@ for the upgrade to succeed.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>, policy: u8, digest: vector&lt;u8&gt;): <a href="../sui/package.md#sui_package_UpgradeTicket">UpgradeTicket</a> {
     <b>let</b> id_zero = @0x0.to_id();
     <b>assert</b>!(cap.<a href="../sui/package.md#sui_package">package</a> != id_zero, <a href="../sui/package.md#sui_package_EAlreadyAuthorized">EAlreadyAuthorized</a>);
-    <b>assert</b>!(policy &gt;= cap.policy, <a href="../sui/package.md#sui_package_ETooPermissive">ETooPermissive</a>);
+    <b>assert</b>!(policy &gt;= cap.<a href="../sui/package.md#sui_package_upgrade_policy">upgrade_policy</a>(), <a href="../sui/package.md#sui_package_ETooPermissive">ETooPermissive</a>);
     <b>let</b> <a href="../sui/package.md#sui_package">package</a> = cap.<a href="../sui/package.md#sui_package">package</a>;
     cap.<a href="../sui/package.md#sui_package">package</a> = id_zero;
     <a href="../sui/package.md#sui_package_UpgradeTicket">UpgradeTicket</a> {
@@ -948,8 +1372,8 @@ for the upgrade to succeed.
 
 ## Function `commit_upgrade`
 
-Consume an <code><a href="../sui/package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a></code> to update its <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code>, finalizing
-the upgrade.
+Consume an <code><a href="../sui/package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a></code> to update its non-minversion <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code>, finalizing the
+upgrade.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_commit_upgrade">commit_upgrade</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, receipt: <a href="../sui/package.md#sui_package_UpgradeReceipt">sui::package::UpgradeReceipt</a>)
@@ -962,6 +1386,132 @@ the upgrade.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_commit_upgrade">commit_upgrade</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>, receipt: <a href="../sui/package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a>) {
+    <b>assert</b>!(!cap.<a href="../sui/package.md#sui_package_minversion_enabled">minversion_enabled</a>(), <a href="../sui/package.md#sui_package_EMinVersionEnabled">EMinVersionEnabled</a>);
+    cap.<a href="../sui/package.md#sui_package_commit_upgrade_impl">commit_upgrade_impl</a>(receipt);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_prepare_minversion_upgrade"></a>
+
+## Function `prepare_minversion_upgrade`
+
+Prepare an enrolled cap for upgrade while its current package can still identify its original
+package. The returned hot potato must be consumed by <code><a href="../sui/package.md#sui_package_commit_minversion_upgrade">commit_minversion_upgrade</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_prepare_minversion_upgrade">prepare_minversion_upgrade</a>(cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>): <a href="../sui/package.md#sui_package_MinVersionUpgradeAuthorization">sui::package::MinVersionUpgradeAuthorization</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_prepare_minversion_upgrade">prepare_minversion_upgrade</a>(
+    cap: &<a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>,
+): <a href="../sui/package.md#sui_package_MinVersionUpgradeAuthorization">MinVersionUpgradeAuthorization</a> {
+    <b>assert</b>!(cap.<a href="../sui/package.md#sui_package_minversion_enabled">minversion_enabled</a>(), <a href="../sui/package.md#sui_package_EMinVersionUnavailable">EMinVersionUnavailable</a>);
+    <a href="../sui/package.md#sui_package_MinVersionUpgradeAuthorization">MinVersionUpgradeAuthorization</a> {
+        cap: <a href="../sui/object.md#sui_object_id">object::id</a>(cap),
+        original_id: cap.<a href="../sui/package.md#sui_package_original_package_id">original_package_id</a>(),
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_commit_minversion_upgrade"></a>
+
+## Function `commit_minversion_upgrade`
+
+Consume an <code><a href="../sui/package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a></code> and its pre-authorization token to update an enrolled <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code>,
+producing the token required to record its minversion selection.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_commit_minversion_upgrade">commit_minversion_upgrade</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, receipt: <a href="../sui/package.md#sui_package_UpgradeReceipt">sui::package::UpgradeReceipt</a>, authorization: <a href="../sui/package.md#sui_package_MinVersionUpgradeAuthorization">sui::package::MinVersionUpgradeAuthorization</a>): <a href="../sui/package.md#sui_package_MinVersionUpgrade">sui::package::MinVersionUpgrade</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_commit_minversion_upgrade">commit_minversion_upgrade</a>(
+    cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>,
+    receipt: <a href="../sui/package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a>,
+    authorization: <a href="../sui/package.md#sui_package_MinVersionUpgradeAuthorization">MinVersionUpgradeAuthorization</a>,
+): <a href="../sui/package.md#sui_package_MinVersionUpgrade">MinVersionUpgrade</a> {
+    <b>let</b> <a href="../sui/package.md#sui_package_MinVersionUpgradeAuthorization">MinVersionUpgradeAuthorization</a> { cap: authorization_cap, original_id } = authorization;
+    <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(cap) == authorization_cap, <a href="../sui/package.md#sui_package_EWrongUpgradeCap">EWrongUpgradeCap</a>);
+    <b>assert</b>!(cap.<a href="../sui/package.md#sui_package_minversion_enabled">minversion_enabled</a>(), <a href="../sui/package.md#sui_package_EMinVersionUnavailable">EMinVersionUnavailable</a>);
+    cap.<a href="../sui/package.md#sui_package_commit_minversion_upgrade_impl">commit_minversion_upgrade_impl</a>(receipt, original_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_commit_minversion_upgrade_impl"></a>
+
+## Function `commit_minversion_upgrade_impl`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/package.md#sui_package_commit_minversion_upgrade_impl">commit_minversion_upgrade_impl</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, receipt: <a href="../sui/package.md#sui_package_UpgradeReceipt">sui::package::UpgradeReceipt</a>, original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): <a href="../sui/package.md#sui_package_MinVersionUpgrade">sui::package::MinVersionUpgrade</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/package.md#sui_package_commit_minversion_upgrade_impl">commit_minversion_upgrade_impl</a>(
+    cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>,
+    receipt: <a href="../sui/package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a>,
+    original_id: ID,
+): <a href="../sui/package.md#sui_package_MinVersionUpgrade">MinVersionUpgrade</a> {
+    <b>assert</b>!(cap.<a href="../sui/package.md#sui_package_minversion_enabled">minversion_enabled</a>(), <a href="../sui/package.md#sui_package_EMinVersionUnavailable">EMinVersionUnavailable</a>);
+    <b>let</b> previous_version = cap.<a href="../sui/package.md#sui_package_version">version</a>;
+    cap.<a href="../sui/package.md#sui_package_commit_upgrade_impl">commit_upgrade_impl</a>(receipt);
+    <a href="../sui/package.md#sui_package_MinVersionUpgrade">MinVersionUpgrade</a> {
+        original_id,
+        previous_version,
+        <a href="../sui/package.md#sui_package_version">version</a>: cap.<a href="../sui/package.md#sui_package_version">version</a>,
+        package_id: cap.<a href="../sui/package.md#sui_package">package</a>,
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_commit_upgrade_impl"></a>
+
+## Function `commit_upgrade_impl`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/package.md#sui_package_commit_upgrade_impl">commit_upgrade_impl</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, receipt: <a href="../sui/package.md#sui_package_UpgradeReceipt">sui::package::UpgradeReceipt</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/package.md#sui_package_commit_upgrade_impl">commit_upgrade_impl</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>, receipt: <a href="../sui/package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a>) {
     <b>let</b> <a href="../sui/package.md#sui_package_UpgradeReceipt">UpgradeReceipt</a> { cap: cap_id, <a href="../sui/package.md#sui_package">package</a> } = receipt;
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(cap) == cap_id, <a href="../sui/package.md#sui_package_EWrongUpgradeCap">EWrongUpgradeCap</a>);
     <b>assert</b>!(cap.<a href="../sui/package.md#sui_package">package</a>.to_address() == @0x0, <a href="../sui/package.md#sui_package_ENotAuthorized">ENotAuthorized</a>);
@@ -1026,6 +1576,37 @@ If <code>package_id</code>'s version is not <code><a href="../sui/package.md#sui
 
 </details>
 
+<a name="sui_package_test_publish"></a>
+
+## Function `test_publish`
+
+Test-only function to simulate publishing a package at address
+<code>ID</code>, to create an <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_test_publish">test_publish</a>(<a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_test_publish">test_publish</a>(<a href="../sui/package.md#sui_package">package</a>: ID, ctx: &<b>mut</b> TxContext): <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a> {
+    <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a> {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        <a href="../sui/package.md#sui_package">package</a>,
+        <a href="../sui/package.md#sui_package_version">version</a>: 1,
+        policy: <a href="../sui/package.md#sui_package_COMPATIBLE">COMPATIBLE</a>,
+    }
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_package_restrict"></a>
 
 ## Function `restrict`
@@ -1042,8 +1623,8 @@ If <code>package_id</code>'s version is not <code><a href="../sui/package.md#sui
 
 
 <pre><code><b>fun</b> <a href="../sui/package.md#sui_package_restrict">restrict</a>(cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>, policy: u8) {
-    <b>assert</b>!(cap.policy &lt;= policy, <a href="../sui/package.md#sui_package_ETooPermissive">ETooPermissive</a>);
-    cap.policy = policy;
+    <b>assert</b>!(cap.<a href="../sui/package.md#sui_package_upgrade_policy">upgrade_policy</a>() &lt;= policy, <a href="../sui/package.md#sui_package_ETooPermissive">ETooPermissive</a>);
+    cap.policy = policy | (cap.policy & <a href="../sui/package.md#sui_package_MINVERSION_STATE_MASK">MINVERSION_STATE_MASK</a>);
 }
 </code></pre>
 

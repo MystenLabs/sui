@@ -11,6 +11,7 @@ use crate::{
     id::{ID, UID},
     object::OBJECT_START_VERSION,
 };
+use anyhow::anyhow;
 use fastcrypto::hash::HashFunction;
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format::CompiledModule;
@@ -129,7 +130,7 @@ pub struct MovePackage {
 // associated constants before storing in any serialization setting.
 /// Rust representation of upgrade policy constants in `sui::package`.
 #[repr(u8)]
-#[derive(derive_more::Display, Debug, Clone, Copy)]
+#[derive(derive_more::Display, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpgradePolicy {
     #[display("COMPATIBLE")]
     Compatible = 0,
@@ -159,6 +160,69 @@ impl TryFrom<u8> for UpgradePolicy {
             x if x == Self::DepOnly as u8 => Ok(Self::DepOnly),
             _ => Err(()),
         }
+    }
+}
+
+const BASE_POLICY_MASK: u8 = 0xc0;
+const MINVERSION_STATE_MASK: u8 = 0x30;
+const RESERVED_POLICY_MASK: u8 = 0x0f;
+
+/// The minversion state encoded in an `UpgradeCap` policy.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MinVersionState {
+    Available = 0x00,
+    PermanentlyDisabled = 0x10,
+    Enabled = 0x20,
+}
+
+/// Decoded `UpgradeCap` policy. Its packed `u8` representation is retained in the on-chain
+/// `UpgradeCap` object for layout compatibility.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UpgradeCapPolicy {
+    base_policy: UpgradePolicy,
+    minversion_state: MinVersionState,
+}
+
+impl UpgradeCapPolicy {
+    pub fn base_policy(self) -> UpgradePolicy {
+        self.base_policy
+    }
+
+    pub fn minversion_state(self) -> MinVersionState {
+        self.minversion_state
+    }
+}
+
+impl TryFrom<u8> for UpgradeCapPolicy {
+    type Error = anyhow::Error;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if value & RESERVED_POLICY_MASK != 0 {
+            return Err(anyhow!(
+                "upgrade cap policy has reserved bits set: {value:#04x}"
+            ));
+        }
+
+        let base_policy = UpgradePolicy::try_from(value & BASE_POLICY_MASK)
+            .map_err(|_| anyhow!("invalid upgrade cap base policy: {value:#04x}"))?;
+        let minversion_state = match value & MINVERSION_STATE_MASK {
+            state if state == MinVersionState::Available as u8 => MinVersionState::Available,
+            state if state == MinVersionState::PermanentlyDisabled as u8 => {
+                MinVersionState::PermanentlyDisabled
+            }
+            state if state == MinVersionState::Enabled as u8 => MinVersionState::Enabled,
+            _ => {
+                return Err(anyhow!(
+                    "invalid upgrade cap minversion state: {value:#04x}"
+                ));
+            }
+        };
+
+        Ok(Self {
+            base_policy,
+            minversion_state,
+        })
     }
 }
 
@@ -888,5 +952,48 @@ fn build_upgraded_type_origin_table(
         }
     } else {
         Ok(new_table)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MinVersionState, UpgradeCapPolicy, UpgradePolicy};
+
+    #[test]
+    fn upgrade_cap_policy_decodes_all_valid_states() {
+        for (value, base_policy, minversion_state) in [
+            (0x00, UpgradePolicy::Compatible, MinVersionState::Available),
+            (
+                0x10,
+                UpgradePolicy::Compatible,
+                MinVersionState::PermanentlyDisabled,
+            ),
+            (0x20, UpgradePolicy::Compatible, MinVersionState::Enabled),
+            (0x80, UpgradePolicy::Additive, MinVersionState::Available),
+            (
+                0x90,
+                UpgradePolicy::Additive,
+                MinVersionState::PermanentlyDisabled,
+            ),
+            (0xa0, UpgradePolicy::Additive, MinVersionState::Enabled),
+            (0xc0, UpgradePolicy::DepOnly, MinVersionState::Available),
+            (
+                0xd0,
+                UpgradePolicy::DepOnly,
+                MinVersionState::PermanentlyDisabled,
+            ),
+            (0xe0, UpgradePolicy::DepOnly, MinVersionState::Enabled),
+        ] {
+            let decoded = UpgradeCapPolicy::try_from(value).unwrap();
+            assert_eq!(decoded.base_policy(), base_policy);
+            assert_eq!(decoded.minversion_state(), minversion_state);
+        }
+    }
+
+    #[test]
+    fn upgrade_cap_policy_rejects_reserved_bits() {
+        for value in [0x01, 0x0f, 0x30, 0x31, 0xf0] {
+            assert!(UpgradeCapPolicy::try_from(value).is_err());
+        }
     }
 }
