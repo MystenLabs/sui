@@ -1370,17 +1370,6 @@ impl GlobalStateHashStore for AuthorityStore {
             .map_err(Into::into)
     }
 
-    fn get_root_state_hash_for_highest_epoch(
-        &self,
-    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, GlobalStateHash))>> {
-        Ok(self
-            .perpetual_tables
-            .root_state_hash_by_epoch
-            .reversed_safe_iter_with_bounds(None, None)?
-            .next()
-            .transpose()?)
-    }
-
     fn insert_state_hash_for_epoch(
         &self,
         epoch: EpochId,
