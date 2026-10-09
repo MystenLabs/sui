@@ -4,7 +4,7 @@
 
 use crate::{
     cache::arena::{ArenaBuilder, ArenaVec},
-    jit::execution::ast::Type,
+    jit::execution::ast::{ArenaType, Type},
     shared::{
         safe_ops::{SafeArithmetic as _, SafeIndex as _},
         views::{ValueView, ValueVisitor},
@@ -1056,9 +1056,17 @@ impl VectorRef {
     /// Borrows an element from the container, returning it as a reference wrapped in `ValueImpl::Reference`.
     /// The result is a `PartialVmResult<ValueImpl>` containing the element as a `Reference`.
     pub fn borrow_elem(&self, index: usize, type_param: &Type) -> PartialVMResult<Value> {
+        self.borrow_elem_specialized(index, VectorSpecialization::try_from(type_param)?)
+    }
+
+    pub(crate) fn borrow_elem_specialized(
+        &self,
+        index: usize,
+        specialization: VectorSpecialization,
+    ) -> PartialVMResult<Value> {
         // Borrow the container inside the MemBox.
         let value = &*self.0.try_borrow()?;
-        check_elem_layout(type_param, value)?;
+        check_elem_layout(specialization, value)?;
         match value {
             // For a Vec container, extract the element.
             Value::Vec(vec) => {
@@ -1917,15 +1925,11 @@ fn checked_range<T>(v: &[T], i: usize, j: usize) -> PartialVMResult<&[T]> {
     v.get(i..j).ok_or_else(|| range_out_of_bounds(i, j, len))
 }
 
-/// Vec-to-Vec splice on pre-validated bounds: removes `v[i..j)`, inserts `other` at `i`,
-/// returns the removed elements.
 fn replace_range_impl<T>(v: &mut Vec<T>, i: usize, j: usize, mut other: Vec<T>) -> Vec<T> {
     if i == 0 && j == v.len() {
-        // whole vector replaced, just swap the 2 vectors
         return std::mem::replace(v, other);
     }
     if other.len() == j.saturating_sub(i) {
-        // elemets removed same as `other` size, swap with slice
         if let Some(range) = v.get_mut(i..j) {
             range.swap_with_slice(&mut other);
         }
@@ -1934,41 +1938,37 @@ fn replace_range_impl<T>(v: &mut Vec<T>, i: usize, j: usize, mut other: Vec<T>) 
     v.splice(i..j, other).collect()
 }
 
-fn check_elem_layout(ty: &Type, v: &Value) -> PartialVMResult<()> {
-    macro_rules! allowed_types {
-        ($ty:expr; $v:expr; $allowed:pat) => {
-            match $ty {
-                Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
-                    Err(partial_vm_error!(
-                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                        "invalid type param for vector: {:?}",
-                        ty
-                    ))
-                }
-                $allowed => Ok(()),
-                _ => Err(partial_vm_error!(
+fn check_elem_layout(specialization: VectorSpecialization, v: &Value) -> PartialVMResult<()> {
+    use PrimVec as PV;
+    use VectorSpecialization as S;
+    // Mirrors the original type-based check: a container value expects a `Container` element, and
+    // each primitive-vector value expects its own primitive specialization. The specialization is
+    // a faithful summary of the element type's vector representation, so the accept/reject verdict
+    // is unchanged; the mismatch error names the expected specialization.
+    macro_rules! expect {
+        ($expected:expr) => {
+            if specialization == $expected {
+                Ok(())
+            } else {
+                Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
                     "vector elem layout mismatch, expected {:?}, got {:?}",
-                    $ty,
-                    $v
-                )),
+                    specialization,
+                    v
+                ))
             }
         };
     }
     match v {
-        Value::Vec(_) => {
-            allowed_types!(ty; v; Type::Vector(_) | Type::Datatype(_) | Type::Signer | Type::DatatypeInstantiation(_))
-        }
-        Value::PrimVec(prim_vec) => match prim_vec {
-            PrimVec::VecU8(_) => allowed_types!(ty; v; Type::U8),
-            PrimVec::VecU16(_) => allowed_types!(ty; v; Type::U16),
-            PrimVec::VecU32(_) => allowed_types!(ty; v; Type::U32),
-            PrimVec::VecU64(_) => allowed_types!(ty; v; Type::U64),
-            PrimVec::VecU128(_) => allowed_types!(ty; v; Type::U128),
-            PrimVec::VecU256(_) => allowed_types!(ty; v; Type::U256),
-            PrimVec::VecBool(_) => allowed_types!(ty; v; Type::Bool),
-            PrimVec::VecAddress(_) => allowed_types!(ty; v; Type::Address),
-        },
+        Value::Vec(_) => expect!(S::Container),
+        Value::PrimVec(PV::VecU8(_)) => expect!(S::U8),
+        Value::PrimVec(PV::VecU16(_)) => expect!(S::U16),
+        Value::PrimVec(PV::VecU32(_)) => expect!(S::U32),
+        Value::PrimVec(PV::VecU64(_)) => expect!(S::U64),
+        Value::PrimVec(PV::VecU128(_)) => expect!(S::U128),
+        Value::PrimVec(PV::VecU256(_)) => expect!(S::U256),
+        Value::PrimVec(PV::VecBool(_)) => expect!(S::Bool),
+        Value::PrimVec(PV::VecAddress(_)) => expect!(S::Address),
         Value::U8(_)
         | Value::U16(_)
         | Value::U32(_)
@@ -2057,18 +2057,41 @@ impl std::ops::Deref for VecU8Ref<'_> {
 
 impl VectorRef {
     pub fn elem_len(&self, type_param: &Type) -> PartialVMResult<usize> {
-        let value = &*self.0.try_borrow()?;
-        check_elem_layout(type_param, value)?;
-        Ok(value.vector_ref()?.len())
+        self.elem_len_specialized(VectorSpecialization::try_from(type_param)?)
     }
 
     pub fn len(&self, type_param: &Type) -> PartialVMResult<Value> {
         Ok(Value::U64(checked_as!(self.elem_len(type_param)?, u64)?))
     }
 
+    pub(crate) fn len_specialized(
+        &self,
+        specialization: VectorSpecialization,
+    ) -> PartialVMResult<Value> {
+        Ok(Value::U64(checked_as!(
+            self.elem_len_specialized(specialization)?,
+            u64
+        )?))
+    }
+
+    fn elem_len_specialized(&self, specialization: VectorSpecialization) -> PartialVMResult<usize> {
+        let value = &*self.0.try_borrow()?;
+        check_elem_layout(specialization, value)?;
+        Ok(value.vector_ref()?.len())
+    }
+
     pub fn push_back(&self, e: Value, type_param: &Type, capacity: u64) -> PartialVMResult<()> {
+        self.push_back_specialized(e, VectorSpecialization::try_from(type_param)?, capacity)
+    }
+
+    pub(crate) fn push_back_specialized(
+        &self,
+        e: Value,
+        specialization: VectorSpecialization,
+        capacity: u64,
+    ) -> PartialVMResult<()> {
         let value = &mut *self.0.try_borrow_mut()?;
-        check_elem_layout(type_param, value)?;
+        check_elem_layout(specialization, value)?;
         let vec = value.vector_mut_ref()?;
         let size = vec.len();
 
@@ -2091,28 +2114,30 @@ impl VectorRef {
     /// Retains `v[start..end)`, moving the retained elements to the front and dropping all
     /// elements outside the range.
     pub fn keep_range(&self, start: usize, end: usize, type_param: &Type) -> PartialVMResult<()> {
+        let specialization = VectorSpecialization::try_from(type_param)?;
         let value = &mut *self.0.try_borrow_mut()?;
-        check_elem_layout(type_param, value)?;
+        check_elem_layout(specialization, value)?;
         let vec = value.vector_mut_ref()?;
         check_vector_range(start, end, vec.len())?;
-
-        fn keep_range<T>(v: &mut Vec<T>, start: usize, end: usize) {
-            v.truncate(end);
-            drop(v.drain(..start));
-        }
-
         match_vec_ref_container!(
             (mut vec)
-            prim r => keep_range(r, start, end);
-            vec r => keep_range(r, start, end);
+            prim r => {
+                r.truncate(end);
+                drop(r.drain(..start));
+            };
+            vec r => {
+                r.truncate(end);
+                drop(r.drain(..start));
+            };
         );
         Ok(())
     }
 
     /// Reverses `v` in place.
     pub fn reverse(&self, type_param: &Type) -> PartialVMResult<()> {
+        let specialization = VectorSpecialization::try_from(type_param)?;
         let value = &mut *self.0.try_borrow_mut()?;
-        check_elem_layout(type_param, value)?;
+        check_elem_layout(specialization, value)?;
         let vec = value.vector_mut_ref()?;
         match_vec_ref_container!(
             (mut vec)
@@ -2125,8 +2150,9 @@ impl VectorRef {
     /// Copies `v[i..j)` into a new vector; `v` is untouched. Elements of boxed vectors are
     /// deep-copied.
     pub fn copy_range(&self, i: usize, j: usize, type_param: &Type) -> PartialVMResult<Value> {
+        let specialization = VectorSpecialization::try_from(type_param)?;
         let value = &*self.0.try_borrow()?;
-        check_elem_layout(type_param, value)?;
+        check_elem_layout(specialization, value)?;
         Ok(match value.vector_ref()?.0 {
             VectorMatch::PrimVec(prim_vec) => Value::PrimVec(map_prim_vec!(
                 prim_vec,
@@ -2152,10 +2178,11 @@ impl VectorRef {
         type_param: &Type,
         capacity: u64,
     ) -> PartialVMResult<Value> {
+        let specialization = VectorSpecialization::try_from(type_param)?;
         let value = &mut *self.0.try_borrow_mut()?;
-        check_elem_layout(type_param, value)?;
+        check_elem_layout(specialization, value)?;
         let Vector(other) = other;
-        check_elem_layout(type_param, &other)?;
+        check_elem_layout(specialization, &other)?;
 
         let other_len = other.vector_ref()?.len();
         let len = value.vector_mut_ref()?.len();
@@ -2183,20 +2210,22 @@ impl VectorRef {
                 "vector::splice called on mismatched or non-vector containers"
             )
         };
-        Ok(match (value, other) {
-            (Value::PrimVec(vec), Value::PrimVec(other_vec)) => Value::PrimVec(map_prim_vec_pair!(
-                vec,
-                other_vec,
-                items,
-                other_items,
-                replace_range_impl(items, i, j, other_items),
-                mismatch()
-            )?),
-            (Value::Vec(vec), Value::Vec(other_vec)) => {
-                Value::Vec(replace_range_impl(vec, i, j, other_vec))
+        match (value, other) {
+            (Value::PrimVec(vec), Value::PrimVec(other_vec)) => {
+                Ok(Value::PrimVec(map_prim_vec_pair!(
+                    vec,
+                    other_vec,
+                    items,
+                    other_items,
+                    replace_range_impl(items, i, j, other_items),
+                    mismatch()
+                )?))
             }
-            _ => return Err(mismatch()),
-        })
+            (Value::Vec(vec), Value::Vec(other_vec)) => {
+                Ok(Value::Vec(replace_range_impl(vec, i, j, other_vec)))
+            }
+            _ => Err(mismatch()),
+        }
     }
 
     pub fn as_bytes_ref(&self) -> PartialVMResult<std::cell::Ref<'_, Vec<u8>>> {
@@ -2238,8 +2267,15 @@ impl VectorRef {
     }
 
     pub fn pop(&self, type_param: &Type) -> PartialVMResult<Value> {
+        self.pop_specialized(VectorSpecialization::try_from(type_param)?)
+    }
+
+    pub(crate) fn pop_specialized(
+        &self,
+        specialization: VectorSpecialization,
+    ) -> PartialVMResult<Value> {
         let value = &mut *self.0.try_borrow_mut()?;
-        check_elem_layout(type_param, value)?;
+        check_elem_layout(specialization, value)?;
 
         macro_rules! pop_vec_item {
             ($items:expr, $value:ident, $rhs:expr) => {
@@ -2270,8 +2306,17 @@ impl VectorRef {
     }
 
     pub fn swap(&self, idx1: usize, idx2: usize, type_param: &Type) -> PartialVMResult<()> {
+        self.swap_specialized(idx1, idx2, VectorSpecialization::try_from(type_param)?)
+    }
+
+    pub(crate) fn swap_specialized(
+        &self,
+        idx1: usize,
+        idx2: usize,
+        specialization: VectorSpecialization,
+    ) -> PartialVMResult<()> {
         let value = &mut *self.0.try_borrow_mut()?;
-        check_elem_layout(type_param, value)?;
+        check_elem_layout(specialization, value)?;
 
         macro_rules! swap {
             ($v: expr) => {{
@@ -2319,6 +2364,7 @@ macro_rules! take_and_map {
     };
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VectorSpecialization {
     U8,
     U16,
@@ -2347,11 +2393,50 @@ impl TryFrom<&Type> for VectorSpecialization {
             Type::Vector(_) | Type::Signer | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
                 VectorSpecialization::Container
             }
-            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
+            Type::Reference(_) | Type::MutableReference(_) => {
                 return Err(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
                     "invalid type param for vector: {:?}",
                     ty
+                ));
+            }
+        })
+    }
+}
+
+impl VectorSpecialization {
+    /// Determine a vector's specialization directly from its element type term, resolving a
+    /// type-parameter element through the frame's arguments — without realizing (or sizing) the
+    /// element type. Only the element's outermost constructor matters.
+    pub(crate) fn from_element(elem: &ArenaType, ty_args: &[Type]) -> PartialVMResult<Self> {
+        Ok(match elem {
+            ArenaType::U8 => VectorSpecialization::U8,
+            ArenaType::U16 => VectorSpecialization::U16,
+            ArenaType::U32 => VectorSpecialization::U32,
+            ArenaType::U64 => VectorSpecialization::U64,
+            ArenaType::U128 => VectorSpecialization::U128,
+            ArenaType::U256 => VectorSpecialization::U256,
+            ArenaType::Bool => VectorSpecialization::Bool,
+            ArenaType::Address => VectorSpecialization::Address,
+            ArenaType::Vector(_)
+            | ArenaType::Signer
+            | ArenaType::Datatype(_)
+            | ArenaType::DatatypeInstantiation(_) => VectorSpecialization::Container,
+            ArenaType::TyParam(idx) => {
+                let ty = ty_args.get(*idx as usize).ok_or_else(|| {
+                    partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "type parameter {idx} out of bounds -- len {}",
+                        ty_args.len()
+                    )
+                })?;
+                VectorSpecialization::try_from(ty)?
+            }
+            ArenaType::Reference(_) | ArenaType::MutableReference(_) => {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "invalid type param for vector: {:?}",
+                    elem
                 ));
             }
         })
@@ -2390,7 +2475,15 @@ impl Vector {
     }
 
     pub fn unpack(self, type_param: &Type, expected_num: u64) -> PartialVMResult<Vec<Value>> {
-        check_elem_layout(type_param, &self.0)?;
+        self.unpack_specialized(VectorSpecialization::try_from(type_param)?, expected_num)
+    }
+
+    pub(crate) fn unpack_specialized(
+        self,
+        specialization: VectorSpecialization,
+        expected_num: u64,
+    ) -> PartialVMResult<Vec<Value>> {
+        check_elem_layout(specialization, &self.0)?;
 
         use PrimVec as PV;
         use Value as V;
@@ -2428,7 +2521,7 @@ impl Vector {
 
     #[allow(dead_code)]
     pub fn to_vec_u8(self) -> PartialVMResult<Vec<u8>> {
-        check_elem_layout(&Type::U8, &self.0)?;
+        check_elem_layout(VectorSpecialization::U8, &self.0)?;
         if let Value::PrimVec(PrimVec::VecU8(xs)) = self.0 {
             Ok(xs.into_iter().collect())
         } else {
