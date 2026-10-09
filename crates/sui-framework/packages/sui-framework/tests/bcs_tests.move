@@ -172,22 +172,22 @@ fun test_vec_u8_length_exceeds_remainder() {
 }
 
 #[test]
-fun test_peel_bytes() {
+fun test_peel_array_u8() {
     // A 4-byte fixed-size array (no length prefix) followed by a u64.
     let mut serialized = vector[3, 1, 4, 1];
     serialized.append(to_bytes(&42u64));
     let mut bytes = new(serialized);
-    assert_eq!(bytes.peel_bytes(0), vector[]);
-    assert_eq!(bytes.peel_bytes(4), vector[3, 1, 4, 1]);
+    assert_eq!(bytes.peel_array_u8(0), vector[]);
+    assert_eq!(bytes.peel_array_u8(4), vector[3, 1, 4, 1]);
     assert_eq!(bytes.peel_u64(), 42);
     assert!(bytes.into_remainder_bytes().is_empty());
 }
 
 #[test]
 #[expected_failure(abort_code = bcs::EOutOfRange)]
-fun test_peel_bytes_exceeds_remainder() {
+fun test_peel_array_u8_exceeds_remainder() {
     let mut bytes = new(vector[1, 2]);
-    let _fail = bytes.peel_bytes(3);
+    let _fail = bytes.peel_array_u8(3);
 }
 
 #[test]
