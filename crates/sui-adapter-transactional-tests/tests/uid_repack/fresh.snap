@@ -1,0 +1,80 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+// Tests repacking a UID created in the same transaction. The object is reported as created with
+// its final type, and creating then deleting it leaves no trace in effects.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-42:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6855200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 44:
+//# run ex::m::transfer_b --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 46:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 2
+Contents: ex::m::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, line 48:
+//# run ex::m::share_b --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, line 50:
+//# view-object 4,0
+Owner: Shared( 3 )
+Version: 3
+Contents: ex::m::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+}
+
+task 6, line 52:
+//# run ex::m::freeze_b --sender A
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 7, line 54:
+//# view-object 6,0
+Owner: Immutable
+Version: 4
+Contents: ex::m::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+}
+
+task 8, line 56:
+//# run ex::m::use_b --args object(4,0) --sender A
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
+
+task 9, line 58:
+//# run ex::m::delete_b --sender A
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

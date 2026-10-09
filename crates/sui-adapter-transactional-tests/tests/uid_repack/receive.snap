@@ -1,0 +1,73 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+// Tests repacking an object received from a parent object into a different type.
+
+init:
+A: object(0,0)
+
+task 1, lines 8-40:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7881200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 42:
+//# run ex::m::start --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 44:
+//# view-object 2,1
+Owner: Account Address ( fake(2,0) )
+Version: 2
+Contents: ex::m::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 4, line 46:
+//# run ex::m::receive_a_as_b --args object(2,0) receiving(2,1) --sender A
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 3442456, non_refundable_storage_fee: 344
+
+task 5, line 48:
+//# view-object 2,1
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: ex::m::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 6, lines 50-51:
+// The object is no longer an A
+//# run ex::m::receive_a --args object(2,0) receiving(2,1) --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 15) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 15, instruction: 0, function_name: Some("receive_impl") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(15), 0)] }), command: Some(0) } }
+
+task 7, line 53:
+//# run ex::m::receive_b_as_a --args object(2,0) receiving(2,1) --sender A
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 3442456, non_refundable_storage_fee: 344
+
+task 8, line 55:
+//# view-object 2,1
+Owner: Account Address ( A )
+Version: 5
+Contents: ex::m::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}

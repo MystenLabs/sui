@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 139;
+const MAX_PROTOCOL_VERSION: u64 = 140;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -419,6 +419,7 @@ const MAINNET_USDB: &str =
 //              Reduce the non-refundable storage fee from 1% to 0.01%.
 //              Allow random beacon DKG to complete after its timeout on devnet and testnet.
 //              Charge package inputs 1% of the per-byte object read cost.
+// Version 140: Disable the ID leak verifier.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1328,6 +1329,11 @@ struct FeatureFlags {
     // silently dropped the displaced (finalized) transactions.
     #[serde(skip_serializing_if = "is_false")]
     merge_colliding_deferrals: bool,
+
+    // If true, skip the Sui ID leak verifier, allowing an existing `UID` to be packed into an
+    // object.
+    #[serde(skip_serializing_if = "is_false")]
+    disable_id_leak_verifier: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4848,6 +4854,9 @@ impl ProtocolConfig {
                     // Validators cache packages, so reading one costs far less than reading an object.
                     cfg.obj_access_cost_read_per_package_kb = Some(154);
                 }
+                140 => {
+                    cfg.feature_flags.disable_id_leak_verifier = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4959,6 +4968,7 @@ impl ProtocolConfig {
                 .map(|limit| limit as u128),
             deprecate_global_storage_ops,
             disable_entry_point_signature_check: self.disable_entry_point_signature_check(),
+            disable_id_leak_verifier: self.disable_id_leak_verifier(),
             switch_to_regex_reference_safety: false,
             framework_tx_context_mut_restrictions: self.framework_tx_context_mut_restrictions(),
             disallow_jump_orphans: self.disallow_jump_orphans(),
