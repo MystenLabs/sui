@@ -4,7 +4,10 @@
 use crate::{
     cache::move_cache::{MoveCache, ResolvedPackageResult},
     dbg_println,
-    execution::{dispatch_tables::VMDispatchTables, vm::MoveVM},
+    execution::{
+        dispatch_tables::{DispatchTables, VMDispatchTables},
+        vm::MoveVM,
+    },
     jit,
     natives::{extensions::NativeExtensions, functions::NativeFunctions},
     runtime::telemetry::{MoveRuntimeTelemetry, TelemetryContext},
@@ -160,6 +163,7 @@ impl MoveRuntime {
             cache,
             telemetry,
             natives,
+            type_limits,
             ..
         } = self;
         let Some(cache) = Arc::get_mut(cache) else {
@@ -191,6 +195,7 @@ impl MoveRuntime {
                     tx_telemetry,
                     cache,
                     natives,
+                    type_limits,
                     std::iter::once(version_id).collect(),
                 )
             });
@@ -264,6 +269,7 @@ impl MoveRuntime {
                 txn_telemetry,
                 &self.cache,
                 &self.natives,
+                &self.type_limits,
                 package_key,
             )
         })
@@ -304,28 +310,28 @@ impl MoveRuntime {
             let instance = try_block! {
                 let linkage_hash = link_context.to_linkage_hash();
 
-                let mut virtual_tables = if let Some(vtables) =
+                let mut tables = if let Some(tables) =
                     self.cache.cached_linkage_tables_at(&linkage_hash)  {
-                    vtables
+                    tables
                 } else {
                     self.load_and_cache_vtables(
                         &package_store, txn_telemetry, &link_context, &linkage_hash
                     )?
                 };
 
-                // This is more a sanity check than anything else. The VMDispatchTables should
-                // never have precomputed type depths, as those are computed on-demand.
-                // If for some reason the cached VTables have precomputed type depths, or the
-                // linkage context does not match the expected linkage context, then we drop the
-                // cached VTables and reload them. This should never happen, but if it does, we
-                // want to recover gracefully rather than erroring out with an invariant violation.
-                if !virtual_tables.type_depths.is_empty() || link_context != *virtual_tables.link_context {
-                    error!("Cached VTables for linkage context {:?} have precomputed type depths or do not match the expected linkage context. Dropping cached VTables and reloading.", link_context);
+                // Sanity check: if the cached tables do not match the expected linkage context,
+                // drop them and reload. This should never happen, but if it does we want to
+                // recover gracefully rather than erroring out with an invariant violation.
+                if link_context != *tables.link_context {
+                    error!("Cached VTables for linkage context {:?} do not match the expected linkage context. Dropping cached VTables and reloading.", link_context);
                     self.cache.drop_all_cached_linkage_tables();
-                    virtual_tables = self.load_and_cache_vtables(
+                    tables = self.load_and_cache_vtables(
                         &package_store, txn_telemetry, &link_context, &linkage_hash
                     )?;
                 }
+
+                // Wrap the shared tables in a per-execution resolver (with a fresh size cache).
+                let virtual_tables = VMDispatchTables::new(tables, self.type_limits.clone());
 
                 // Called and checked linkage, etc.
                 let instance = MoveVM {
@@ -361,7 +367,7 @@ impl MoveRuntime {
         txn_telemetry: &mut crate::runtime::telemetry::TransactionTelemetryContext,
         link_context: &LinkageContext,
         linkage_hash: &crate::shared::linkage_context::LinkageHash,
-    ) -> Result<VMDispatchTables, move_binary_format::errors::VMError> {
+    ) -> Result<DispatchTables, move_binary_format::errors::VMError> {
         tracing::trace!(linkage_table = ?link_context, "loading and caching VTables for linkage context");
         let all_packages = link_context.all_packages()?;
         let packages = package_resolution::resolve_packages(
@@ -369,6 +375,7 @@ impl MoveRuntime {
             txn_telemetry,
             &self.cache,
             &self.natives,
+            &self.type_limits,
             all_packages,
         )?;
         let validation_packages = packages
@@ -380,15 +387,15 @@ impl MoveRuntime {
             .into_values()
             .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
             .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
-        let vtables = VMDispatchTables::new(
+        let tables = DispatchTables::new(
             self.vm_config.clone(),
             self.cache.interner.clone(),
             link_context.clone(),
             runtime_packages,
         )?;
         self.cache
-            .add_linkage_tables_to_cache(linkage_hash.clone(), vtables.clone());
-        Ok(vtables)
+            .add_linkage_tables_to_cache(linkage_hash.clone(), tables.clone());
+        Ok(tables)
     }
 
     /// Publish a package.
@@ -441,6 +448,7 @@ impl MoveRuntime {
                     txn_telemetry,
                     &self.cache,
                     &self.natives,
+                    &self.type_limits,
                     link_context.all_package_dependencies_except(pkg.version_id)?,
                 )?;
                 let valdation_timer = txn_telemetry.make_timer_with_count(
@@ -462,6 +470,7 @@ impl MoveRuntime {
                     txn_telemetry,
                     &self.cache,
                     &self.natives,
+                    &self.type_limits,
                     self.cache.system_packages(),
                     verified_pkg.clone(),
                 )?;
@@ -474,11 +483,14 @@ impl MoveRuntime {
                     .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
 
                 let virtual_tables = VMDispatchTables::new(
+                    DispatchTables::new(
                     self.vm_config.clone(),
                     self.cache.interner.clone(),
                     link_context.clone(),
-                    runtime_packages,
-                )?;
+                        runtime_packages,
+                    )?,
+                    self.type_limits.clone(),
+                );
 
                 // Called and checked linkage, etc.
                 let instance = MoveVM {
