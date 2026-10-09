@@ -219,6 +219,15 @@ impl MultiSigLegacy {
         &self.multisig_pk
     }
 
+    /// Whether any committee key or signature is ML-DSA-65.
+    pub fn uses_mldsa65(&self) -> bool {
+        self.multisig_pk.has_mldsa65_member()
+            || self
+                .sigs
+                .iter()
+                .any(|s| matches!(s, CompressedSignature::MLDSA65(_)))
+    }
+
     pub fn get_sigs(&self) -> &[CompressedSignature] {
         &self.sigs
     }
@@ -330,6 +339,12 @@ impl MultiSigPublicKeyLegacy {
 
     pub fn pubkeys(&self) -> &[(PublicKey, WeightUnit)] {
         &self.pk_map
+    }
+
+    pub fn has_mldsa65_member(&self) -> bool {
+        self.pk_map
+            .iter()
+            .any(|(pk, _)| matches!(pk, PublicKey::MLDSA65(_)))
     }
 
     pub fn validate(&self) -> Result<Self, FastCryptoError> {

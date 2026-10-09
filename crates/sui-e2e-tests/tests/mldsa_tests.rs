@@ -201,21 +201,27 @@ impl HybridCommittee {
 
 #[sim_test]
 async fn test_mldsa65_multisig_member_denied() {
-    // With the flag pinned off, an ML-DSA member's signature is rejected by
-    // the multisig verifier itself; membership in the committee is fine.
+    // Flag off: a committee with an ML-DSA member is refused before
+    // verification, whichever member signs.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_mldsa65_auth_for_testing(false);
         config
     });
     let test_cluster = TestClusterBuilder::new().build().await;
     let committee = HybridCommittee::funded(&test_cluster, 1).await;
-    for tx in committee.signed_by(&[&committee.mldsa_kp]) {
-        let err = execute_tx(tx, &test_cluster).await.unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("ML-DSA-65 sig not supported inside multisig"),
-            "{err:?}"
-        );
+    for signer in [&committee.mldsa_kp, &committee.ed_kp] {
+        for tx in committee.signed_by(&[signer]) {
+            let err = execute_tx(tx, &test_cluster).await.unwrap_err();
+            assert!(
+                matches!(
+                    err.as_inner(),
+                    SuiErrorKind::UserInputError {
+                        error: UserInputError::Unsupported(msg)
+                    } if msg.contains("ML-DSA-65 multisig members")
+                ),
+                "{err:?}"
+            );
+        }
     }
 }
 
