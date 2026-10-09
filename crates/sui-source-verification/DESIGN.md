@@ -19,7 +19,7 @@ verify_source(source_path, publication, toolchain_override, env, client, ...)
 
 The `publication` — the on-chain address, the original id, and the recorded toolchain — is **not** a
 command-line argument. The CLI reads it from the package's own publication metadata via
-`move_package_alt::read_publication`, the same code path the package system uses to resolve this
+`move_package::read_publication`, the same code path the package system uses to resolve this
 package's address when *linking against it*. See [Security](#security).
 
 ## Scope

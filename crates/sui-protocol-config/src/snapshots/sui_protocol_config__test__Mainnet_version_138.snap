@@ -180,8 +180,10 @@ feature_flags:
   granular_post_execution_checks: true
   early_exit_on_iffw: true
   enable_unified_linkage: true
+  enable_allowances: true
   fix_ptb_generated_reads: true
   memory_safety_invariant_check_v2: true
+  merge_colliding_deferrals: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -274,7 +276,7 @@ max_ptb_value_size: 1048576
 gas_model_version: 15
 obj_data_cost_refundable: 100
 obj_metadata_cost_non_refundable: 50
-storage_rebate_rate: 9900
+storage_rebate_rate: 9999
 storage_fund_reinvest_rate: 500
 reward_slashing_rate: 10000
 storage_gas_price: 76

@@ -220,7 +220,7 @@ async fn test_successful_certified_effects() {
         details: None,
     };
 
-    for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+    for safe_client in authority_aggregator.authority_clients.values() {
         let client = safe_client.authority_client();
         client.set_ack_response(tx_digest, executed_response_ack.clone());
         client.set_full_response(tx_digest, executed_response_full.clone());
@@ -268,7 +268,7 @@ async fn test_successful_certified_effects() {
         details: None,
     };
 
-    for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+    for safe_client in authority_aggregator.authority_clients.values() {
         let client = safe_client.authority_client();
         // Getting the full effects will be skipped as we already have the full effects.
         client.set_ack_response(tx_digest, executed_response_ack.clone());
@@ -330,7 +330,7 @@ async fn test_transaction_rejected_non_retriable() {
         ),
     };
 
-    for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+    for safe_client in authority_aggregator.authority_clients.values() {
         let client = safe_client.authority_client();
         client.set_full_response(tx_digest, non_retriable_rejected_response.clone());
         client.set_ack_response(tx_digest, non_retriable_rejected_response.clone());
@@ -406,7 +406,7 @@ async fn test_transaction_rejected_retriable() {
         ),
     };
 
-    for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+    for safe_client in authority_aggregator.authority_clients.values() {
         let client = safe_client.authority_client();
         client.set_full_response(tx_digest, retriable_rejected_response.clone());
         client.set_ack_response(tx_digest, retriable_rejected_response.clone());
@@ -541,7 +541,7 @@ async fn test_transaction_expired() {
         round: Some(100),
     };
 
-    for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+    for safe_client in authority_aggregator.authority_clients.values() {
         let client = safe_client.authority_client();
         client.set_ack_response(tx_digest, expired_response.clone());
         client.set_full_response(tx_digest, expired_response.clone());
@@ -1194,7 +1194,7 @@ async fn test_full_effects_retry_loop() {
         details: None,
     };
 
-    for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+    for safe_client in authority_aggregator.authority_clients.values() {
         let client = safe_client.authority_client();
         client.set_ack_response(tx_digest, executed_response_ack.clone());
     }
@@ -1285,7 +1285,7 @@ async fn test_full_effects_digest_mismatch() {
         details: None,
     };
 
-    for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+    for safe_client in authority_aggregator.authority_clients.values() {
         let client = safe_client.authority_client();
         client.set_ack_response(tx_digest, executed_response_ack.clone());
     }
@@ -1367,13 +1367,13 @@ async fn test_request_retrier_exhaustion() {
         details: None,
     };
 
-    for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+    for safe_client in authority_aggregator.authority_clients.values() {
         let client = safe_client.authority_client();
         client.set_ack_response(tx_digest, executed_response_ack.clone());
     }
 
     // Set up all authorities to fail getting full effects
-    for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+    for safe_client in authority_aggregator.authority_clients.values() {
         let client = safe_client.authority_client();
         let failed_response = WaitForEffectsResponse::Rejected {
             error: Some(

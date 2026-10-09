@@ -210,8 +210,8 @@ impl fmt::Display for MoveTypeLayout {
             MoveLayoutView::Signer => write!(f, "signer"),
             MoveLayoutView::Vector(vv) if f.alternate() => write!(f, "vector<{:#}>", vv),
             MoveLayoutView::Vector(vv) => write!(f, "vector<{}>", vv),
-            MoveLayoutView::Struct(fv) if f.alternate() => write!(f, "{:#}", &*fv),
-            MoveLayoutView::Struct(fv) => write!(f, "{}", &*fv),
+            MoveLayoutView::Struct(fv) if f.alternate() => write!(f, "{:#}", *fv),
+            MoveLayoutView::Struct(fv) => write!(f, "{}", *fv),
             MoveLayoutView::Enum(ev) if f.alternate() => write!(f, "{ev:#}"),
             MoveLayoutView::Enum(ev) => write!(f, "{ev}"),
         }

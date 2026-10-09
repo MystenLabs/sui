@@ -2332,11 +2332,11 @@ fn check_member_visibility(
                     .package
                     .map(|pkg_name| format!("{}", pkg_name))
                     .unwrap_or("<unknown package>".to_string()),
-                &context
+                context
                     .current_module()
                     .map(|cur_module| cur_module.value.address.to_string())
                     .unwrap_or("<unknown addr>".to_string()),
-                &context
+                context
                     .current_module()
                     .and_then(|cur_module| context.module_info(cur_module).package)
                     .map(|pkg_name| format!("{}", pkg_name))

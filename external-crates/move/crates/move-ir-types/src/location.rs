@@ -163,13 +163,13 @@ impl<T: Ord> Ord for Spanned<T> {
 
 impl<T: fmt::Display> fmt::Display for Spanned<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", &self.value)
+        write!(f, "{}", self.value)
     }
 }
 
 impl<T: fmt::Debug> fmt::Debug for Spanned<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", &self.value)
+        write!(f, "{:?}", self.value)
     }
 }
 

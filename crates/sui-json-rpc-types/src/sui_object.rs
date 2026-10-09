@@ -843,7 +843,7 @@ impl Display for SuiParsedData {
         match self {
             SuiParsedData::MoveObject(o) => {
                 writeln!(writer, "{}: {}", "type".bold().bright_black(), o.type_)?;
-                write!(writer, "{}", &o.fields)?;
+                write!(writer, "{}", o.fields)?;
             }
             SuiParsedData::Package(p) => {
                 write!(

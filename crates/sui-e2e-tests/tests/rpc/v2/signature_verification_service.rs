@@ -3,10 +3,11 @@
 
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::traits::KeyPair;
+use fastcrypto_pq::mldsa65::MLDSA65KeyPair;
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
-use shared_crypto::intent::{Intent, IntentMessage};
+use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use sui_macros::sim_test;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
@@ -15,7 +16,8 @@ use sui_rpc::proto::sui::rpc::v2::signature_verification_service_client::Signatu
 use sui_rpc::proto::sui::rpc::v2::{ActiveJwk, Jwk, JwkId};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectDigest, ObjectID, SuiAddress};
-use sui_types::crypto::{PublicKey, Signature, SuiKeyPair};
+use sui_types::crypto::{PublicKey, Signature, SuiKeyPair, get_key_pair};
+use sui_types::multisig::{MultiSig, MultiSigPublicKey};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use sui_types::utils::{
@@ -237,4 +239,74 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
     }
 
     Ok(())
+}
+
+#[sim_test]
+async fn test_verify_signature_mldsa65() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let mut client = SignatureVerificationServiceClient::connect(test_cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let kp = SuiKeyPair::MLDSA65(MLDSA65KeyPair::generate(&mut rand::thread_rng()));
+    let address = SuiAddress::from(&kp.public());
+    let personal_message = PersonalMessage {
+        message: b"hello".to_vec(),
+    };
+    let intent_msg = IntentMessage::new(Intent::personal_message(), personal_message.clone());
+    let signature = GenericSignature::Signature(Signature::new_secure(&intent_msg, &kp));
+
+    let verify = |message: Vec<u8>, signature: &GenericSignature, address: Option<SuiAddress>| {
+        let mut request = VerifySignatureRequest::default();
+        request.message = Some(Bcs::from(message));
+        request.signature = Some({
+            let mut proto = UserSignature::default();
+            proto.bcs = Some(Bcs::from(signature.as_ref().to_owned()));
+            proto
+        });
+        request.address = address.map(|a| a.to_string());
+        request
+    };
+    let message = bcs::to_bytes(&personal_message).unwrap();
+
+    let response = client
+        .verify_signature(verify(message.clone(), &signature, Some(address)))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(true), "{:?}", response.reason);
+
+    let response = client
+        .verify_signature(verify(
+            bcs::to_bytes(&PersonalMessage {
+                message: b"other".to_vec(),
+            })
+            .unwrap(),
+            &signature,
+            None,
+        ))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(false));
+    assert!(response.reason.is_some());
+
+    // A hybrid committee: both members sign, the ML-DSA member verifies too.
+    let ed_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let multisig_pk =
+        MultiSigPublicKey::new(vec![kp.public(), ed_kp.public()], vec![1, 1], 2).unwrap();
+    let multisig_address = SuiAddress::from(&multisig_pk);
+    let ed_signature: GenericSignature = Signature::new_secure(&intent_msg, &ed_kp).into();
+    let multisig = GenericSignature::MultiSig(
+        MultiSig::combine(vec![signature.clone(), ed_signature], multisig_pk).unwrap(),
+    );
+    let response = client
+        .verify_signature(verify(message, &multisig, Some(multisig_address)))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(true), "{:?}", response.reason);
 }

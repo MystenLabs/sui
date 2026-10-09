@@ -99,6 +99,9 @@ fn verify_signature(
                 sui_sdk_types::SimpleSignature::Secp256r1 { public_key, .. } => {
                     [Some(public_key.derive_address()), None]
                 }
+                sui_sdk_types::SimpleSignature::MlDsa65 { public_key, .. } => {
+                    [Some(public_key.derive_address()), None]
+                }
                 _ => {
                     return Err(RpcError::new(
                         tonic::Code::Internal,

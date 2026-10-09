@@ -67,6 +67,8 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
             #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args),*)]
             #ignore
             #sig {
+                ::sui_simulator::telemetry_subscribers::init_for_testing();
+
                 async fn body_fn() #return_type { #body }
 
                 let timeout_secs: u64 = std::env::var("SUI_SIM_TEST_TIMEOUT_SECS")

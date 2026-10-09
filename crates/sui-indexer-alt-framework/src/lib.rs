@@ -610,7 +610,6 @@ mod tests {
     use crate::pipeline::concurrent::ConcurrentConfig;
     use crate::store::CommitterWatermark;
     use crate::store::ConcurrentConnection as _;
-    use crate::store::Connection as _;
 
     use super::*;
 

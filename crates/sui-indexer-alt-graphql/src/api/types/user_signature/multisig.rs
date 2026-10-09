@@ -9,7 +9,7 @@ use crate::api::scalars::base64::Base64;
 use crate::api::types::user_signature::passkey::PasskeySignature;
 use crate::api::types::user_signature::zklogin::ZkLoginSignature;
 use crate::api::types::user_signature::{
-    Ed25519Signature, Secp256k1Signature, Secp256r1Signature, SignatureScheme,
+    Ed25519Signature, MlDsa65Signature, Secp256k1Signature, Secp256r1Signature, SignatureScheme,
 };
 
 /// An aggregated multisig signature.
@@ -51,11 +51,19 @@ pub(crate) enum MultisigMemberPublicKey {
     Secp256r1(Secp256r1PublicKey),
     Passkey(PasskeyPublicKey),
     ZkLogin(ZkLoginPublicIdentifier),
+    MlDsa65(MlDsa65PublicKey),
 }
 
 /// An Ed25519 public key.
 #[derive(SimpleObject, Clone)]
 pub(crate) struct Ed25519PublicKey {
+    /// The raw public key bytes.
+    bytes: Option<Base64>,
+}
+
+/// An ML-DSA-65 (FIPS 204) public key.
+#[derive(SimpleObject, Clone)]
+pub(crate) struct MlDsa65PublicKey {
     /// The raw public key bytes.
     bytes: Option<Base64>,
 }
@@ -132,6 +140,10 @@ fn compressed_signature_to_scheme(sig: &CompressedSignature) -> Option<Signature
                 .ok()
                 .map(|native| SignatureScheme::Passkey(PasskeySignature { native }))
         }
+        CompressedSignature::MLDSA65(b) => Some(SignatureScheme::MlDsa65(MlDsa65Signature {
+            signature: Some(Base64(b.0.to_vec())),
+            public_key: None,
+        })),
     }
 }
 
@@ -178,6 +190,9 @@ impl From<&PublicKey> for MultisigMemberPublicKey {
                         .unwrap_or_default(),
                 )
             }
+            PublicKey::MLDSA65(_) => MultisigMemberPublicKey::MlDsa65(MlDsa65PublicKey {
+                bytes: Some(Base64(pk.as_ref().to_vec())),
+            }),
         }
     }
 }

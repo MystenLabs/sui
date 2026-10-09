@@ -13,8 +13,8 @@ use move_compiler::{
     unit_test::{TestPlan, plan_builder::construct_test_plan},
 };
 use move_coverage::coverage_map::{CoverageMap, TraceConsumer, output_map_to_file};
-use move_package_alt::{MoveFlavor, RootPackage};
-use move_package_alt_compilation::{
+use move_package::{MoveFlavor, RootPackage};
+use move_package_compilation::{
     build_config::BuildConfig, build_plan::BuildPlan, compiled_package::BuildNamedAddresses,
     find_env,
 };
@@ -154,7 +154,7 @@ pub enum UnitTestResult {
 
 pub async fn run_move_unit_tests<F: MoveFlavor, V: VMTestSetup + Sync, W: Write + Send>(
     pkg_path: &Path,
-    mut build_config: move_package_alt_compilation::build_config::BuildConfig,
+    mut build_config: move_package_compilation::build_config::BuildConfig,
     mut unit_test_config: UnitTestingConfig,
     flavor: F,
     vm_test_setup: V,

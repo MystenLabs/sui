@@ -124,11 +124,22 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
 
     fn compiled_state(&mut self) -> &mut CompiledState;
     fn default_syntax(&self) -> SyntaxChoice;
+    /// `tasks` is the list of tasks, excluding the `init` itself. This may be helpful for test
+    /// adapters that need to initialize differently depending on the tasks/commands being run.
     async fn init(
         default_syntax: SyntaxChoice,
         pre_compiled_deps: Option<PreCompiledDeps>,
         init_data: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         path: &Path,
+        tasks: &[TaskInput<
+            TaskCommand<
+                Self::ExtraInitArgs,
+                Self::ExtraPublishArgs,
+                Self::ExtraValueArgs,
+                Self::ExtraRunArgs,
+                Self::Subcommand,
+            >,
+        >],
     ) -> (Self, Option<String>);
 
     async fn publish_modules(
@@ -908,8 +919,14 @@ where
             None
         }
     };
-    let (adapter, result_opt) =
-        Adapter::init(default_syntax, pre_compiled_deps, init_opt, path).await;
+    let (adapter, result_opt) = Adapter::init(
+        default_syntax,
+        pre_compiled_deps,
+        init_opt,
+        path,
+        tasks.make_contiguous(),
+    )
+    .await;
 
     if let Some(result) = result_opt {
         if !init_comments.is_empty() {

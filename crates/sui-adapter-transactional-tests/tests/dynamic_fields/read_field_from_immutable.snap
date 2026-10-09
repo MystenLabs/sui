@@ -24,4 +24,4 @@ gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 
 task 3, line 32:
 //# run a::m::read_from_frozen --sender A --args object(2,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

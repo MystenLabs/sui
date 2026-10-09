@@ -6,8 +6,8 @@ use clap::*;
 use move_bytecode_source_map::utils::serialize_to_json_string;
 use move_compiler::compiled_unit::NamedCompiledModule;
 use move_disassembler::disassembler::Disassembler;
-use move_package_alt::MoveFlavor;
-use move_package_alt_compilation::{
+use move_package::MoveFlavor;
+use move_package_compilation::{
     build_config::BuildConfig, compiled_package::CompiledUnitWithSource, find_env,
 };
 use std::path::Path;
@@ -89,7 +89,7 @@ impl Disassemble {
                     }
                     println!("{}", disassemble_string);
                     if debug {
-                        println!("\n{:#?}", &unit.unit.module)
+                        println!("\n{:#?}", unit.unit.module)
                     }
                 }
             }

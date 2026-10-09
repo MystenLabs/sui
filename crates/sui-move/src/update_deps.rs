@@ -4,7 +4,7 @@
 use clap::Parser;
 
 use move_cli::base::{reroot_path, update_deps};
-use move_package_alt_compilation::build_config::BuildConfig;
+use move_package_compilation::build_config::BuildConfig;
 use sui_sdk::wallet_context::WalletContext;
 
 use std::path::Path;

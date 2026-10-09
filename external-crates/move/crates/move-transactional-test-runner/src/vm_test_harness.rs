@@ -6,7 +6,7 @@ use crate::{
     framework::{
         CompiledState, MaybeNamedCompiledModule, MoveTestAdapter, PreCompiledDeps, run_test_impl,
     },
-    tasks::{InitCommand, SyntaxChoice, TaskInput, parse_qualified_module_access},
+    tasks::{InitCommand, SyntaxChoice, TaskCommand, TaskInput, parse_qualified_module_access},
 };
 
 use anyhow::{Error, Result, anyhow, bail};
@@ -193,6 +193,15 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
         pre_compiled_deps: Option<PreCompiledDeps>,
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
+        _tasks: &[TaskInput<
+            TaskCommand<
+                Self::ExtraInitArgs,
+                Self::ExtraPublishArgs,
+                Self::ExtraValueArgs,
+                Self::ExtraRunArgs,
+                Self::Subcommand,
+            >,
+        >],
     ) -> (Self, Option<String>) {
         println!("---- INITIALIZING -------------------------------------------------------------");
         let pre_compiled_deps = pre_compiled_deps.map(|deps| Arc::clone(LazyLock::force(deps)));

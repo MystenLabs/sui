@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Error;
 use anyhow::Result;
+use backoff::ExponentialBackoff;
 use cynic::GraphQlResponse;
 use cynic::Operation;
 use reqwest::header::USER_AGENT;
@@ -36,6 +38,11 @@ use crate::gql::queries;
 /// blocking caller, so this only has to cover hyper's connection dispatch tasks running
 /// concurrently with the request being awaited.
 const GQL_RUNTIME_WORKER_THREADS: usize = 2;
+
+const GQL_MAX_ATTEMPTS: usize = 5;
+const GQL_RETRY_BUDGET: Duration = Duration::from_secs(120);
+// Allow the server's default 40-second query timeout to return its response first.
+const GQL_REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
 
 /// The runtime every GraphQL request runs on, for the life of the process.
 ///
@@ -113,7 +120,10 @@ impl GraphQLClient {
         let rpc = reqwest::Url::parse(node.gql_url())
             .with_context(|| format!("invalid GraphQL URL '{}'", node.gql_url()))?;
         Ok(Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(GQL_REQUEST_TIMEOUT)
+                .build()
+                .context("failed to build GraphQL HTTP client")?,
             node,
             rpc,
             version: version.to_string(),
@@ -139,29 +149,90 @@ impl GraphQLClient {
         T: serde::de::DeserializeOwned,
         V: serde::Serialize,
     {
-        Self::run_query_internal(&self.client, &self.rpc, &self.version, operation).await
+        Self::run_query_internal(
+            &self.client,
+            &self.rpc,
+            &self.version,
+            operation,
+            GQL_RETRY_BUDGET,
+        )
+        .await
     }
 
+    /// Retry transient transport and HTTP failures within an attempt limit and a total time budget.
     async fn run_query_internal<T, V>(
         client: &reqwest::Client,
         rpc: &reqwest::Url,
         version: &str,
         operation: &Operation<T, V>,
+        retry_budget: Duration,
     ) -> Result<GraphQlResponse<T>, Error>
     where
         T: serde::de::DeserializeOwned,
         V: serde::Serialize,
     {
-        client
+        let deadline = tokio::time::Instant::now() + retry_budget;
+        let backoff = ExponentialBackoff {
+            initial_interval: Duration::from_millis(500),
+            multiplier: 2.0,
+            max_interval: Duration::from_secs(4),
+            max_elapsed_time: Some(retry_budget),
+            ..Default::default()
+        };
+        let mut attempts = 0;
+        let retry = backoff::future::retry(backoff, || {
+            attempts += 1;
+            let attempt = attempts;
+            async move {
+                let result = Self::run_query_once(client, rpc, version, operation).await;
+                match result {
+                    Err(backoff::Error::Transient { err, .. }) if attempt >= GQL_MAX_ATTEMPTS => {
+                        Err(backoff::Error::permanent(err))
+                    }
+                    other => other,
+                }
+            }
+        });
+
+        // Include in-flight requests in the deadline because backoff checks elapsed time only
+        // between attempts.
+        tokio::time::timeout_at(deadline, retry)
+            .await
+            .context("GraphQL query exceeded its retry time budget")?
+            .with_context(|| format!("GraphQL query failed after {attempts} attempts"))
+    }
+
+    /// Submit one query, classifying HTTP failures before attempting to decode the response body.
+    async fn run_query_once<T, V>(
+        client: &reqwest::Client,
+        rpc: &reqwest::Url,
+        version: &str,
+        operation: &Operation<T, V>,
+    ) -> Result<GraphQlResponse<T>, backoff::Error<Error>>
+    where
+        T: serde::de::DeserializeOwned,
+        V: serde::Serialize,
+    {
+        let response = client
             .post(rpc.clone())
             .header(USER_AGENT, format!("sui-fork-v{}", version))
             .json(operation)
             .send()
             .await
-            .context("Failed to send GQL query")?
-            .json::<GraphQlResponse<T>>()
+            .map_err(classify_request_error)?;
+        if let Err(error) = response.error_for_status_ref() {
+            return Err(match response.status().as_u16() {
+                408 | 429 | 500 | 502 | 503 | 504 => backoff::Error::transient(error.into()),
+                _ => backoff::Error::permanent(error.into()),
+            });
+        }
+        // Reqwest labels both interrupted body reads and invalid JSON as decode errors, so classify
+        // failures by stage to retry interrupted transfers without retrying malformed responses.
+        let bytes = response
+            .bytes()
             .await
-            .context("Failed to read response in GQL query")
+            .map_err(|error| backoff::Error::transient(error.into()))?;
+        serde_json::from_slice(&bytes).map_err(|error| backoff::Error::permanent(error.into()))
     }
 
     pub(crate) fn chain(&self) -> Chain {
@@ -282,6 +353,15 @@ impl CheckpointRead for GraphQLClient {
     }
 }
 
+/// Classify request transport failures as transient and request construction failures as permanent.
+fn classify_request_error(error: reqwest::Error) -> backoff::Error<Error> {
+    if error.is_connect() || error.is_timeout() || error.is_request() || error.is_body() {
+        backoff::Error::transient(error.into())
+    } else {
+        backoff::Error::permanent(error.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use cynic::QueryBuilder;
@@ -289,6 +369,9 @@ mod tests {
     use itertools::Itertools as _;
     use serde_json::json;
     use sui_types::{base_types::ObjectID, test_checkpoint_data_builder::TestCheckpointBuilder};
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::TcpListener;
     use wiremock::matchers::{body_partial_json, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -419,6 +502,270 @@ mod tests {
         assert!(query.contains("checkpoint"));
         assert!(query.contains("summaryBcs"));
         assert!(query.contains("validatorSignatures"));
+    }
+
+    #[tokio::test]
+    async fn test_run_query_retries_transient_http_errors() {
+        for status in [408, 429, 500, 502, 503, 504] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .respond_with(ResponseTemplate::new(status).set_body_string("try again"))
+                .up_to_n_times(1)
+                .with_priority(1)
+                .expect(1)
+                .mount(&server)
+                .await;
+            Mock::given(method("POST"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "data": { "checkpoint": null }
+                })))
+                .with_priority(2)
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            let store = mock_store(&server);
+            let operation = CheckpointQuery::build(CheckpointArgs {
+                sequence_number: Some(7),
+            });
+            assert!(store.run_query(&operation).await.unwrap().data.is_some());
+            let requests = server.received_requests().await.unwrap();
+            assert_eq!(requests.len(), 2);
+            assert_eq!(requests[0].body, requests[1].body);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_run_query_ignores_retry_after() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "120"))
+            .up_to_n_times(1)
+            .with_priority(1)
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": { "checkpoint": null }
+            })))
+            .with_priority(2)
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let operation = CheckpointQuery::build(CheckpointArgs {
+            sequence_number: Some(7),
+        });
+        assert!(store.run_query(&operation).await.unwrap().data.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_run_query_bounds_repeated_rate_limits() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(429))
+            .expect(5)
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let operation = CheckpointQuery::build(CheckpointArgs {
+            sequence_number: Some(7),
+        });
+        let error = store.run_query(&operation).await.err().unwrap();
+        assert_eq!(
+            error.downcast_ref::<reqwest::Error>().unwrap().status(),
+            Some(reqwest::StatusCode::TOO_MANY_REQUESTS),
+        );
+        assert!(format!("{error:#}").contains("5 attempts"));
+    }
+
+    #[tokio::test]
+    async fn test_run_query_retries_timeouts() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_secs(10))
+                    .set_body_json(json!({ "data": { "checkpoint": null } })),
+            )
+            .up_to_n_times(1)
+            .with_priority(1)
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": { "checkpoint": null }
+            })))
+            .with_priority(2)
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let mut store = mock_store(&server);
+        store.client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(1))
+            .build()
+            .unwrap();
+        let operation = CheckpointQuery::build(CheckpointArgs {
+            sequence_number: Some(7),
+        });
+        assert!(store.run_query(&operation).await.unwrap().data.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_run_query_budget_includes_in_flight_requests() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(10)))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let operation = CheckpointQuery::build(CheckpointArgs {
+            sequence_number: Some(7),
+        });
+        let error = GraphQLClient::run_query_internal(
+            &store.client,
+            &store.rpc,
+            &store.version,
+            &operation,
+            Duration::from_secs(1),
+        )
+        .await
+        .err()
+        .unwrap();
+        assert!(
+            error
+                .downcast_ref::<tokio::time::error::Elapsed>()
+                .is_some()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_run_query_does_not_retry_permanent_http_errors() {
+        for status in [400, 401, 403, 404, 422, 501] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .respond_with(ResponseTemplate::new(status).set_body_json(json!({
+                    "data": { "checkpoint": null }
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            let store = mock_store(&server);
+            let operation = CheckpointQuery::build(CheckpointArgs {
+                sequence_number: Some(7),
+            });
+            let error = store.run_query(&operation).await.err().unwrap();
+            assert_eq!(
+                error.downcast_ref::<reqwest::Error>().unwrap().status(),
+                Some(reqwest::StatusCode::from_u16(status).unwrap()),
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_run_query_retries_truncated_response_body() {
+        // A raw TCP server lets Content-Length exceed the number of response bytes actually sent.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let body = br#"{"data":{"checkpoint":null}}"#;
+            let mut requests = Vec::new();
+            for truncated in [true, false] {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut headers = Vec::new();
+                while !headers.ends_with(b"\r\n\r\n") {
+                    headers.push(stream.read_u8().await.unwrap());
+                }
+                let headers = String::from_utf8(headers).unwrap();
+                let length = headers
+                    .lines()
+                    .find_map(|line| {
+                        let (name, value) = line.split_once(':')?;
+                        name.eq_ignore_ascii_case("content-length")
+                            .then(|| value.trim().parse::<usize>().unwrap())
+                    })
+                    .expect("query request should have a content length");
+                let mut request = vec![0; length];
+                stream.read_exact(&mut request).await.unwrap();
+                requests.push(request);
+
+                let headers = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len(),
+                );
+                stream.write_all(headers.as_bytes()).await.unwrap();
+                stream
+                    .write_all(if truncated { &body[..8] } else { body })
+                    .await
+                    .unwrap();
+                stream.shutdown().await.unwrap();
+            }
+            requests
+        });
+
+        let store = GraphQLClient::new(Node::Custom(url), "test-version").unwrap();
+        let operation = CheckpointQuery::build(CheckpointArgs {
+            sequence_number: Some(7),
+        });
+        let response = tokio::time::timeout(Duration::from_secs(10), store.run_query(&operation))
+            .await
+            .expect("query should finish within the test deadline")
+            .expect("query should recover from the interrupted response");
+        assert!(response.data.is_some());
+        let requests = server.await.unwrap();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0], requests[1]);
+    }
+
+    #[tokio::test]
+    async fn test_run_query_does_not_retry_invalid_json() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("invalid json"))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let operation = CheckpointQuery::build(CheckpointArgs {
+            sequence_number: Some(7),
+        });
+        let error = store.run_query(&operation).await.err().unwrap();
+        assert!(
+            error
+                .downcast_ref::<serde_json::Error>()
+                .unwrap()
+                .is_syntax()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_run_query_leaves_graphql_errors_unchanged() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": null,
+                "errors": [{ "message": "query failed" }]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let operation = CheckpointQuery::build(CheckpointArgs {
+            sequence_number: Some(7),
+        });
+        let response = store.run_query(&operation).await.unwrap();
+        assert!(response.data.is_none());
+        assert_eq!(response.errors.unwrap()[0].message, "query failed");
     }
 
     #[tokio::test]

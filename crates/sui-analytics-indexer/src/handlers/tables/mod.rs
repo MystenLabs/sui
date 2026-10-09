@@ -223,7 +223,7 @@ pub fn parse_struct(
     };
     for (k, v) in move_struct.fields {
         parse_struct_field(
-            &format!("{}.{}", path, &k),
+            &format!("{}.{}", path, k),
             v,
             &mut wrapped_struct,
             all_structs,
@@ -294,7 +294,7 @@ fn parse_struct_field(
         MoveValue::Vector(fields) => {
             for (index, field) in fields.iter().enumerate() {
                 parse_struct_field(
-                    &format!("{}[{}]", path, &index),
+                    &format!("{}[{}]", path, index),
                     field.clone(),
                     curr_struct,
                     all_structs,

@@ -5,7 +5,7 @@ mod common;
 
 use move_stackless_bytecode_2::from_model;
 
-use move_package_alt_compilation::model_builder;
+use move_package_compilation::model_builder;
 
 use std::path::Path;
 

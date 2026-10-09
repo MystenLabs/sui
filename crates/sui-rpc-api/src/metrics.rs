@@ -25,6 +25,7 @@ pub struct RpcMetrics {
     request_latency: HistogramVec,
     request_handler_latency: HistogramVec,
     first_chunk_latency: HistogramVec,
+    simulate_client_protocol_versions: IntCounterVec,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -79,7 +80,21 @@ impl RpcMetrics {
                 registry,
             )
             .unwrap(),
+            simulate_client_protocol_versions: register_int_counter_vec_with_registry!(
+                "rpc_simulate_transaction_client_protocol_version",
+                "SimulateTransaction requests by the client's reported x-sui-client-protocol-version; \
+                 0 when the header is missing, malformed, or more than 20 above this binary's max",
+                &["client_protocol_version"],
+                registry,
+            )
+            .unwrap(),
         }
+    }
+
+    pub(crate) fn observe_simulate_client_protocol_version(&self, version: u64) {
+        self.simulate_client_protocol_versions
+            .with_label_values(&[&version.to_string()])
+            .inc();
     }
 }
 

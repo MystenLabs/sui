@@ -592,14 +592,9 @@ impl RuntimeObjectResolver for RestReadStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        Ok(self.get_object(child).and_then(|o| {
-            if o.version() <= child_version_upper_bound
+        Ok(self.get_object(child).filter(|o| {
+            o.version() <= child_version_upper_bound
                 && o.owner == Owner::ObjectOwner((*parent).into())
-            {
-                Some(o)
-            } else {
-                None
-            }
         }))
     }
 
@@ -878,14 +873,9 @@ impl RuntimeObjectResolver for RpcStoreReadStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        Ok(self.get_object(child).and_then(|o| {
-            if o.version() <= child_version_upper_bound
+        Ok(self.get_object(child).filter(|o| {
+            o.version() <= child_version_upper_bound
                 && o.owner == Owner::ObjectOwner((*parent).into())
-            {
-                Some(o)
-            } else {
-                None
-            }
         }))
     }
 
@@ -1001,6 +991,24 @@ impl RpcIndexes for RpcStoreReadStore {
         cursor: Option<u64>,
     ) -> Result<Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>> {
         self.reader.package_versions_iter(original_id, cursor)
+    }
+
+    fn get_package_version_storage_id(
+        &self,
+        original_id: ObjectID,
+        version: u64,
+    ) -> Result<Option<ObjectID>> {
+        self.reader
+            .get_package_version_storage_id(original_id, version)
+    }
+
+    fn get_package_at_checkpoint(
+        &self,
+        original_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<(u64, ObjectID)>> {
+        self.reader
+            .get_package_at_checkpoint(original_id, checkpoint)
     }
 
     fn get_highest_indexed_checkpoint_seq_number(

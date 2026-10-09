@@ -13,7 +13,9 @@ use crate::{
     shared::views::*,
 };
 use move_binary_format::{errors::*, file_format::VariantTag};
-use move_core_types::{account_address::AccountAddress, runtime_value, u256::U256};
+use move_core_types::{
+    account_address::AccountAddress, runtime_value, u256::U256, vm_status::StatusCode,
+};
 
 #[cfg(test)]
 const SIZE_CONFIG: SizeConfig = SizeConfig {
@@ -453,6 +455,630 @@ fn vector_push_back_and_pop_container_vec() -> PartialVMResult<()> {
     let popped = vr.pop(&ty)?;
     assert!(popped.equals(&inner2)?);
 
+    Ok(())
+}
+
+#[test]
+fn vector_keep_range_exhaustive_u8_matches_reference() -> PartialVMResult<()> {
+    for len in 0..=6usize {
+        let base: Vec<u8> = (10..10 + len as u8).collect();
+        for start in 0..=len {
+            for end in start..=len {
+                let v = MemBox::new(Value::vector_u8(base.clone()));
+                let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+
+                vr.keep_range(start, end, &Type::U8)?;
+                assert_eq!(
+                    *vr.as_bytes_ref()?,
+                    base[start..end].to_vec(),
+                    "vec mismatch len={len} start={start} end={end}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn vector_keep_range_container_elements() -> PartialVMResult<()> {
+    let vec_val = Vector::pack(
+        VectorSpecialization::Container,
+        [
+            Value::vector_u8([1, 2, 3]),
+            Value::vector_u8([4, 5]),
+            Value::vector_u8([6, 7, 8, 9]),
+        ],
+    )?;
+    let v = MemBox::new(vec_val);
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+    let ty = Type::Vector(Box::new(Type::U8));
+
+    vr.keep_range(1, 3, &ty)?;
+    assert!(vr.len(&ty)?.equals(&Value::u64(2))?);
+    let first: Reference = VMValueCast::cast(vr.borrow_elem(0, &ty)?)?;
+    let second: Reference = VMValueCast::cast(vr.borrow_elem(1, &ty)?)?;
+    assert!(first.read_ref()?.equals(&Value::vector_u8([4, 5]))?);
+    assert!(second.read_ref()?.equals(&Value::vector_u8([6, 7, 8, 9]))?);
+    Ok(())
+}
+
+#[test]
+fn vector_keep_range_primitive_specializations() -> PartialVMResult<()> {
+    macro_rules! assert_keep {
+        ($value:expr, $ty:expr, $expected:expr) => {{
+            let value = MemBox::new($value);
+            let vector: VectorRef = VMValueCast::cast(value.as_ref_value())?;
+            let ty = $ty;
+
+            vector.keep_range(1, 2, &ty)?;
+            assert!(vector.len(&ty)?.equals(&Value::u64(1))?);
+
+            let first: Reference = VMValueCast::cast(vector.borrow_elem(0, &ty)?)?;
+            assert!(first.read_ref()?.equals(&$expected)?);
+        }};
+    }
+
+    assert_keep!(Value::vector_u8([1, 2]), Type::U8, Value::u8(2));
+    assert_keep!(Value::vector_u16([1, 2]), Type::U16, Value::u16(2));
+    assert_keep!(Value::vector_u32([1, 2]), Type::U32, Value::u32(2));
+    assert_keep!(Value::vector_u64([1, 2]), Type::U64, Value::u64(2));
+    assert_keep!(Value::vector_u128([1, 2]), Type::U128, Value::u128(2));
+    assert_keep!(
+        Value::vector_u256([U256::from(1u8), U256::from(2u8)]),
+        Type::U256,
+        Value::u256(U256::from(2u8))
+    );
+    assert_keep!(
+        Value::vector_bool([true, false]),
+        Type::Bool,
+        Value::bool(false)
+    );
+    assert_keep!(
+        Value::vector_address([AccountAddress::ONE, AccountAddress::TWO]),
+        Type::Address,
+        Value::address(AccountAddress::TWO)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn vector_keep_range_empty_range() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u64([10, 20, 30]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+
+    vr.keep_range(2, 2, &Type::U64)?;
+    assert!(vr.len(&Type::U64)?.equals(&Value::u64(0))?);
+    Ok(())
+}
+
+#[test]
+fn vector_keep_range_out_of_bounds_errors() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u8([1, 2, 3]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+
+    let error = vr.keep_range(2, 1, &Type::U8).unwrap_err();
+    let (status, sub_status, _, _, _, _) = error.all_data();
+    assert_eq!(status, StatusCode::VECTOR_OPERATION_ERROR);
+    assert_eq!(sub_status, Some(INDEX_OUT_OF_BOUNDS));
+    assert!(vr.keep_range(0, 4, &Type::U8).is_err());
+    assert_eq!(*vr.as_bytes_ref()?, vec![1, 2, 3]);
+    Ok(())
+}
+
+#[test]
+fn vector_keep_range_type_mismatch_errors() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u8([1, 2, 3]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+
+    assert!(vr.keep_range(0, 1, &Type::U64).is_err());
+    assert!(vr.len(&Type::U8)?.equals(&Value::u64(3))?);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// reverse
+// ---------------------------------------------------------------------------
+
+#[test]
+fn vector_reverse_empty_and_singleton() -> PartialVMResult<()> {
+    let empty = MemBox::new(Value::vector_u8([]));
+    let empty_ref: VectorRef = VMValueCast::cast(empty.as_ref_value())?;
+    empty_ref.reverse(&Type::U8)?;
+    assert_eq!(*empty_ref.as_bytes_ref()?, Vec::<u8>::new());
+
+    let singleton = MemBox::new(Value::vector_u8([7]));
+    let singleton_ref: VectorRef = VMValueCast::cast(singleton.as_ref_value())?;
+    singleton_ref.reverse(&Type::U8)?;
+    assert_eq!(*singleton_ref.as_bytes_ref()?, vec![7]);
+    Ok(())
+}
+
+#[test]
+fn vector_reverse_primitive_specializations() -> PartialVMResult<()> {
+    macro_rules! assert_reverse {
+        ($vec:expr, $ty:expr, $expected:expr) => {{
+            let value = MemBox::new($vec);
+            let vector: VectorRef = VMValueCast::cast(value.as_ref_value())?;
+            let ty = $ty;
+
+            vector.reverse(&ty)?;
+            for (index, expected) in $expected.iter().enumerate() {
+                let actual: Reference = VMValueCast::cast(vector.borrow_elem(index, &ty)?)?;
+                assert!(actual.read_ref()?.equals(expected)?);
+            }
+        }};
+    }
+
+    assert_reverse!(
+        Value::vector_u8([1, 2, 3]),
+        Type::U8,
+        [Value::u8(3), Value::u8(2), Value::u8(1)]
+    );
+    assert_reverse!(
+        Value::vector_u16([1, 2, 3]),
+        Type::U16,
+        [Value::u16(3), Value::u16(2), Value::u16(1)]
+    );
+    assert_reverse!(
+        Value::vector_u32([1, 2, 3]),
+        Type::U32,
+        [Value::u32(3), Value::u32(2), Value::u32(1)]
+    );
+    assert_reverse!(
+        Value::vector_u64([1, 2, 3]),
+        Type::U64,
+        [Value::u64(3), Value::u64(2), Value::u64(1)]
+    );
+    assert_reverse!(
+        Value::vector_u128([1, 2, 3]),
+        Type::U128,
+        [Value::u128(3), Value::u128(2), Value::u128(1)]
+    );
+    assert_reverse!(
+        Value::vector_u256([U256::from(1u8), U256::from(2u8), U256::from(3u8)]),
+        Type::U256,
+        [
+            Value::u256(U256::from(3u8)),
+            Value::u256(U256::from(2u8)),
+            Value::u256(U256::from(1u8)),
+        ]
+    );
+    assert_reverse!(
+        Value::vector_bool([true, false, true]),
+        Type::Bool,
+        [Value::bool(true), Value::bool(false), Value::bool(true)]
+    );
+    assert_reverse!(
+        Value::vector_address([
+            AccountAddress::ONE,
+            AccountAddress::TWO,
+            AccountAddress::ZERO
+        ]),
+        Type::Address,
+        [
+            Value::address(AccountAddress::ZERO),
+            Value::address(AccountAddress::TWO),
+            Value::address(AccountAddress::ONE),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn vector_reverse_container_and_error() -> PartialVMResult<()> {
+    let ty = Type::Vector(Box::new(Type::U8));
+    let value = MemBox::new(Vector::pack(
+        VectorSpecialization::Container,
+        [
+            Value::vector_u8([1]),
+            Value::vector_u8([2]),
+            Value::vector_u8([3]),
+        ],
+    )?);
+    let vector: VectorRef = VMValueCast::cast(value.as_ref_value())?;
+
+    vector.reverse(&ty)?;
+    let first: Reference = VMValueCast::cast(vector.borrow_elem(0, &ty)?)?;
+    let middle: Reference = VMValueCast::cast(vector.borrow_elem(1, &ty)?)?;
+    let last: Reference = VMValueCast::cast(vector.borrow_elem(2, &ty)?)?;
+    assert!(first.read_ref()?.equals(&Value::vector_u8([3]))?);
+    assert!(middle.read_ref()?.equals(&Value::vector_u8([2]))?);
+    assert!(last.read_ref()?.equals(&Value::vector_u8([1]))?);
+
+    assert!(vector.reverse(&Type::U8).is_err());
+    let after_error: Reference = VMValueCast::cast(vector.borrow_elem(0, &ty)?)?;
+    assert!(after_error.read_ref()?.equals(&Value::vector_u8([3]))?);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// slice
+// ---------------------------------------------------------------------------
+
+#[test]
+fn vector_copy_range_prim_and_original_untouched() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u8([1, 2, 3, 4, 5]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+
+    let out: Vector = VMValueCast::cast(vr.copy_range(1, 4, &Type::U8)?)?;
+    assert_eq!(out.to_vec_u8()?, vec![2, 3, 4]);
+    assert_eq!(*vr.as_bytes_ref()?, vec![1, 2, 3, 4, 5]);
+    Ok(())
+}
+
+#[test]
+fn vector_copy_range_empty_and_whole_ranges() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u8([1, 2, 3]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+
+    let empty: Vector = VMValueCast::cast(vr.copy_range(1, 1, &Type::U8)?)?;
+    let whole: Vector = VMValueCast::cast(vr.copy_range(0, 3, &Type::U8)?)?;
+    assert_eq!(empty.to_vec_u8()?, Vec::<u8>::new());
+    assert_eq!(whole.to_vec_u8()?, vec![1, 2, 3]);
+    assert_eq!(*vr.as_bytes_ref()?, vec![1, 2, 3]);
+    Ok(())
+}
+
+#[test]
+fn vector_copy_range_primitive_specializations() -> PartialVMResult<()> {
+    macro_rules! assert_slice {
+        ($vec:expr, $ty:expr, $copied:expr) => {{
+            let value = MemBox::new($vec);
+            let vector: VectorRef = VMValueCast::cast(value.as_ref_value())?;
+            let ty = $ty;
+
+            let out: Vector = VMValueCast::cast(vector.copy_range(1, 2, &ty)?)?;
+            assert!(vector.len(&ty)?.equals(&Value::u64(3))?);
+            let copied = out.unpack(&ty, 1)?;
+            assert!(copied[0].equals(&$copied)?);
+        }};
+    }
+
+    assert_slice!(Value::vector_u8([1, 2, 3]), Type::U8, Value::u8(2));
+    assert_slice!(Value::vector_u16([1, 2, 3]), Type::U16, Value::u16(2));
+    assert_slice!(Value::vector_u32([1, 2, 3]), Type::U32, Value::u32(2));
+    assert_slice!(Value::vector_u64([1, 2, 3]), Type::U64, Value::u64(2));
+    assert_slice!(Value::vector_u128([1, 2, 3]), Type::U128, Value::u128(2));
+    assert_slice!(
+        Value::vector_u256([U256::from(1u8), U256::from(2u8), U256::from(3u8)]),
+        Type::U256,
+        Value::u256(U256::from(2u8))
+    );
+    assert_slice!(
+        Value::vector_bool([true, false, true]),
+        Type::Bool,
+        Value::bool(false)
+    );
+    assert_slice!(
+        Value::vector_address([
+            AccountAddress::ONE,
+            AccountAddress::TWO,
+            AccountAddress::ZERO
+        ]),
+        Type::Address,
+        Value::address(AccountAddress::TWO)
+    );
+
+    Ok(())
+}
+
+/// Slicing a container vector deep-copies elements: mutating the original afterwards must
+/// not be visible through the slice.
+#[test]
+fn vector_copy_range_container_deep_copies() -> PartialVMResult<()> {
+    let vec_val = Vector::pack(
+        VectorSpecialization::Container,
+        [Value::vector_u8([1, 2]), Value::vector_u8([3])],
+    )?;
+    let v = MemBox::new(vec_val);
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+    let ty = Type::Vector(Box::new(Type::U8));
+
+    let out: Vector = VMValueCast::cast(vr.copy_range(0, 2, &ty)?)?;
+
+    // mutate the original's first inner vector through a borrowed reference
+    let inner: VectorRef = VMValueCast::cast(vr.borrow_elem(0, &ty)?)?;
+    inner.push_back(Value::u8(9), &Type::U8, 100)?;
+    let first: Reference = VMValueCast::cast(vr.borrow_elem(0, &ty)?)?;
+    assert!(first.read_ref()?.equals(&Value::vector_u8([1, 2, 9]))?);
+
+    // the slice still sees the original contents
+    let copied = out.unpack(&ty, 2)?;
+    assert!(copied[0].equals(&Value::vector_u8([1, 2]))?);
+    assert!(copied[1].equals(&Value::vector_u8([3]))?);
+    Ok(())
+}
+
+#[test]
+fn vector_copy_range_out_of_bounds_errors() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u8([1, 2, 3]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+
+    let error = vr.copy_range(2, 1, &Type::U8).unwrap_err();
+    let (status, sub_status, _, _, _, _) = error.all_data();
+    assert_eq!(status, StatusCode::VECTOR_OPERATION_ERROR);
+    assert_eq!(sub_status, Some(INDEX_OUT_OF_BOUNDS));
+
+    assert!(vr.copy_range(0, 4, &Type::U8).is_err());
+    Ok(())
+}
+
+#[test]
+fn vector_copy_range_type_mismatch_errors() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u8([1, 2, 3]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+
+    assert!(vr.copy_range(0, 1, &Type::U64).is_err());
+    assert_eq!(*vr.as_bytes_ref()?, vec![1, 2, 3]);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// splice
+// ---------------------------------------------------------------------------
+
+/// Exhaustive over small sizes: every valid (len, i, j, other_len) on vector<u8>, checked
+/// against std's Vec::splice as the reference semantics.
+#[test]
+fn vector_replace_range_exhaustive_u8_matches_reference() -> PartialVMResult<()> {
+    for len in 0..=6usize {
+        let base: Vec<u8> = (10..10 + len as u8).collect();
+        for i in 0..=len {
+            for j in i..=len {
+                for olen in 0..=3usize {
+                    let other_elems: Vec<u8> = (50..50 + olen as u8).collect();
+
+                    let mut expected_v = base.clone();
+                    let expected_out: Vec<u8> =
+                        expected_v.splice(i..j, other_elems.clone()).collect();
+
+                    let v = MemBox::new(Value::vector_u8(base.clone()));
+                    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+                    let other: Vector = VMValueCast::cast(Value::vector_u8(other_elems))?;
+
+                    let out: Vector =
+                        VMValueCast::cast(vr.replace_range(i, j, other, &Type::U8, 100)?)?;
+                    assert_eq!(
+                        *vr.as_bytes_ref()?,
+                        expected_v,
+                        "vec mismatch len={len} i={i} j={j} olen={olen}"
+                    );
+                    assert_eq!(
+                        out.to_vec_u8()?,
+                        expected_out,
+                        "ret mismatch len={len} i={i} j={j} olen={olen}"
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Same exhaustive matrix on the Container (boxed) specialization, elements tagged by a
+/// singleton inner vector so ordering and identity are observable.
+#[test]
+fn vector_replace_range_exhaustive_container_matches_reference() -> PartialVMResult<()> {
+    let ty = Type::Vector(Box::new(Type::U8));
+    for len in 0..=4usize {
+        let base_tags: Vec<u8> = (10..10 + len as u8).collect();
+        for i in 0..=len {
+            for j in i..=len {
+                for olen in 0..=2usize {
+                    let other_tags: Vec<u8> = (50..50 + olen as u8).collect();
+
+                    let mut expected_v = base_tags.clone();
+                    let expected_out: Vec<u8> =
+                        expected_v.splice(i..j, other_tags.clone()).collect();
+
+                    let vec_val = Vector::pack(
+                        VectorSpecialization::Container,
+                        base_tags.iter().map(|t| Value::vector_u8([*t])),
+                    )?;
+                    let v = MemBox::new(vec_val);
+                    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+                    let other: Vector = VMValueCast::cast(Vector::pack(
+                        VectorSpecialization::Container,
+                        other_tags.iter().map(|t| Value::vector_u8([*t])),
+                    )?)?;
+
+                    let out: Vector = VMValueCast::cast(vr.replace_range(i, j, other, &ty, 100)?)?;
+
+                    assert!(vr.len(&ty)?.equals(&Value::u64(expected_v.len() as u64))?);
+                    for (ndx, tag) in expected_v.iter().enumerate() {
+                        let elem: Reference = VMValueCast::cast(vr.borrow_elem(ndx, &ty)?)?;
+                        assert!(
+                            elem.read_ref()?.equals(&Value::vector_u8([*tag]))?,
+                            "vec mismatch at {ndx}: len={len} i={i} j={j} olen={olen}"
+                        );
+                    }
+                    let removed = out.unpack(&ty, expected_out.len() as u64)?;
+                    for (ndx, tag) in expected_out.iter().enumerate() {
+                        assert!(
+                            removed[ndx].equals(&Value::vector_u8([*tag]))?,
+                            "ret mismatch at {ndx}: len={len} i={i} j={j} olen={olen}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn vector_replace_range_primitive_specializations() -> PartialVMResult<()> {
+    macro_rules! assert_splice {
+        ($lhs:expr, $rhs:expr, $ty:expr, $first:expr, $mid:expr, $removed:expr) => {{
+            let value = MemBox::new($lhs);
+            let vector: VectorRef = VMValueCast::cast(value.as_ref_value())?;
+            let rhs: Vector = VMValueCast::cast($rhs)?;
+            let ty = $ty;
+
+            // replace the middle element
+            let out: Vector = VMValueCast::cast(vector.replace_range(1, 2, rhs, &ty, 100)?)?;
+            assert!(vector.len(&ty)?.equals(&Value::u64(3))?);
+            let first: Reference = VMValueCast::cast(vector.borrow_elem(0, &ty)?)?;
+            assert!(first.read_ref()?.equals(&$first)?);
+            let mid: Reference = VMValueCast::cast(vector.borrow_elem(1, &ty)?)?;
+            assert!(mid.read_ref()?.equals(&$mid)?);
+            let removed = out.unpack(&ty, 1)?;
+            assert!(removed[0].equals(&$removed)?);
+        }};
+    }
+
+    assert_splice!(
+        Value::vector_u8([1, 2, 3]),
+        Value::vector_u8([9]),
+        Type::U8,
+        Value::u8(1),
+        Value::u8(9),
+        Value::u8(2)
+    );
+    assert_splice!(
+        Value::vector_u16([1, 2, 3]),
+        Value::vector_u16([9]),
+        Type::U16,
+        Value::u16(1),
+        Value::u16(9),
+        Value::u16(2)
+    );
+    assert_splice!(
+        Value::vector_u32([1, 2, 3]),
+        Value::vector_u32([9]),
+        Type::U32,
+        Value::u32(1),
+        Value::u32(9),
+        Value::u32(2)
+    );
+    assert_splice!(
+        Value::vector_u64([1, 2, 3]),
+        Value::vector_u64([9]),
+        Type::U64,
+        Value::u64(1),
+        Value::u64(9),
+        Value::u64(2)
+    );
+    assert_splice!(
+        Value::vector_u128([1, 2, 3]),
+        Value::vector_u128([9]),
+        Type::U128,
+        Value::u128(1),
+        Value::u128(9),
+        Value::u128(2)
+    );
+    assert_splice!(
+        Value::vector_u256([U256::from(1u8), U256::from(2u8), U256::from(3u8)]),
+        Value::vector_u256([U256::from(9u8)]),
+        Type::U256,
+        Value::u256(U256::from(1u8)),
+        Value::u256(U256::from(9u8)),
+        Value::u256(U256::from(2u8))
+    );
+    assert_splice!(
+        Value::vector_bool([true, false, true]),
+        Value::vector_bool([true]),
+        Type::Bool,
+        Value::bool(true),
+        Value::bool(true),
+        Value::bool(false)
+    );
+    assert_splice!(
+        Value::vector_address([
+            AccountAddress::ONE,
+            AccountAddress::TWO,
+            AccountAddress::ZERO
+        ]),
+        Value::vector_address([AccountAddress::from_suffix(9)]),
+        Type::Address,
+        Value::address(AccountAddress::ONE),
+        Value::address(AccountAddress::from_suffix(9)),
+        Value::address(AccountAddress::TWO)
+    );
+
+    Ok(())
+}
+
+#[test]
+fn vector_replace_range_over_capacity_errors() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u8([1, 2, 3]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+    let other: Vector = VMValueCast::cast(Value::vector_u8([4, 5]))?;
+
+    // 3 - 1 + 2 = 4 > 3
+    let error = vr.replace_range(1, 2, other, &Type::U8, 3).unwrap_err();
+    let (status, sub_status, _, _, _, _) = error.all_data();
+    assert_eq!(status, StatusCode::VECTOR_OPERATION_ERROR);
+    assert_eq!(sub_status, Some(VEC_SIZE_LIMIT_REACHED));
+    assert_eq!(*vr.as_bytes_ref()?, vec![1, 2, 3]);
+    Ok(())
+}
+
+#[test]
+fn vector_replace_range_at_exactly_capacity_ok() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u8([1, 2, 3]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+    let other: Vector = VMValueCast::cast(Value::vector_u8([4, 5]))?;
+
+    // 3 - 1 + 2 = 4 == 4
+    let out: Vector = VMValueCast::cast(vr.replace_range(1, 2, other, &Type::U8, 4)?)?;
+    assert_eq!(*vr.as_bytes_ref()?, vec![1, 4, 5, 3]);
+    assert_eq!(out.to_vec_u8()?, vec![2]);
+    Ok(())
+}
+
+/// A shrinking splice is allowed even when the vector is already over capacity.
+#[test]
+fn vector_replace_range_shrinking_over_capacity_ok() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u8([1, 2, 3, 4, 5]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+    let other: Vector = VMValueCast::cast(Value::vector_u8([]))?;
+
+    let out: Vector = VMValueCast::cast(vr.replace_range(1, 4, other, &Type::U8, 3)?)?;
+    assert_eq!(*vr.as_bytes_ref()?, vec![1, 5]);
+    assert_eq!(out.to_vec_u8()?, vec![2, 3, 4]);
+    Ok(())
+}
+
+#[test]
+fn vector_replace_range_out_of_bounds_errors() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u8([1, 2, 3]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+
+    let other: Vector = VMValueCast::cast(Value::vector_u8([9]))?;
+    let error = vr.replace_range(2, 1, other, &Type::U8, 100).unwrap_err();
+    let (status, sub_status, _, _, _, _) = error.all_data();
+    assert_eq!(status, StatusCode::VECTOR_OPERATION_ERROR);
+    assert_eq!(sub_status, Some(INDEX_OUT_OF_BOUNDS));
+
+    let other: Vector = VMValueCast::cast(Value::vector_u8([9]))?;
+    assert!(vr.replace_range(1, 4, other, &Type::U8, 100).is_err());
+
+    assert_eq!(*vr.as_bytes_ref()?, vec![1, 2, 3]);
+    Ok(())
+}
+
+#[test]
+fn vector_replace_range_type_mismatch_errors() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u8([1, 2, 3]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+    let other: Vector = VMValueCast::cast(Value::vector_u64([9]))?;
+
+    assert!(vr.replace_range(1, 2, other, &Type::U8, 100).is_err());
+    Ok(())
+}
+
+#[test]
+fn vector_replace_range_mismatched_containers_errors() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::vector_u8([1, 2, 3]));
+    let vr: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+    let other: Vector = VMValueCast::cast(Vector::pack(
+        VectorSpecialization::Container,
+        [Value::vector_u8([1])],
+    )?)?;
+
+    assert!(vr.replace_range(1, 2, other, &Type::U8, 100).is_err());
     Ok(())
 }
 

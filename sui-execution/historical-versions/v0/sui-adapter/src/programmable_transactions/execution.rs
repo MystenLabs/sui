@@ -1037,7 +1037,7 @@ mod checked {
                 ExecutionErrorKind::FunctionNotFound,
                 format!(
                     "Could not resolve function '{}' in module {}",
-                    function, &module_id,
+                    function, module_id,
                 ),
             ));
         };
@@ -1154,7 +1154,7 @@ mod checked {
                     Type::Reference(_) | Type::MutableReference(_) => {
                         return Err(ExecutionError::from_kind(
                             ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
-                        ))
+                        ));
                     }
                     t => t,
                 };

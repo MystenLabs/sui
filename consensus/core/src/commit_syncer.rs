@@ -1000,6 +1000,7 @@ mod tests {
             &self,
             _peer: crate::network::PeerId,
             _highest_round_per_authority: Vec<Round>,
+            _filter: crate::network::BlockStreamFilter,
             _timeout: Duration,
         ) -> ConsensusResult<crate::network::ObserverBlockStream> {
             unimplemented!("Unimplemented")
@@ -1057,7 +1058,7 @@ mod tests {
         let transaction_vote_tracker =
             TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, 0));
+        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, Some(0)));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         // Create PeersPool - Observer typically connects to one validator
@@ -1138,7 +1139,7 @@ mod tests {
         let transaction_vote_tracker =
             TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, 0));
+        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, Some(0)));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         // Create PeersPool with multiple peers (validators and another observer)
@@ -1261,7 +1262,7 @@ mod tests {
         let transaction_vote_tracker =
             TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, 0));
+        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, Some(0)));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let mut commit_syncer = CommitSyncer::new(

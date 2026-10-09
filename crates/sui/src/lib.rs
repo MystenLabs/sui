@@ -8,6 +8,7 @@ pub mod client_ptb;
 mod clever_error_rendering;
 pub mod displays;
 pub mod external_signer;
+mod faucet;
 pub mod fire_drill;
 pub mod genesis_ceremony;
 pub mod genesis_inspector;

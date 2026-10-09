@@ -88,6 +88,11 @@ impl ObjectFundsCheckerDEPRECATED {
         &self.unsettled
     }
 
+    #[cfg(test)]
+    pub(crate) fn metrics(&self) -> &Arc<metrics::ObjectFundsCheckerMetrics> {
+        &self.metrics
+    }
+
     #[instrument(level = "debug", skip_all, fields(tx_digest = ?certificate.digest()))]
     pub fn should_commit_object_funds_withdraws(
         &self,
@@ -203,6 +208,15 @@ impl ObjectFundsCheckerDEPRECATED {
                 let pending_metrics = self.metrics.clone();
                 let scheduler = execution_scheduler.clone();
                 let cert = certificate.clone();
+                // This env clone carries the transaction's causal index, so the retry
+                // re-submits under the original index (the driver keeps it live on a
+                // RetryLater outcome) - a freshly assigned, higher index could be
+                // unreachable for admission while earlier-enqueued transactions block
+                // waiting on this one.
+                debug_assert!(
+                    execution_env.causal_index.is_some(),
+                    "funds-withdraw retry requires an indexed env: execute via the scheduler"
+                );
                 let mut execution_env = execution_env.clone();
                 let epoch_store = epoch_store.clone();
                 tokio::task::spawn(async move {
@@ -352,14 +366,25 @@ impl ObjectFundsCheckerDEPRECATED {
         true
     }
 
+    /// Barriers can call this out of order: barrier N+1 starts as soon as barrier N writes the
+    /// root object, and may finish first. A later barrier having executed implies every earlier
+    /// version is settled, so the settled version only ever moves forward.
     pub fn settle_accumulator_version(&self, next_accumulator_version: SequenceNumber) {
-        // unwrap is safe because a receiver is always alive as part of self.
-        self.last_settled_version_sender
-            .send(next_accumulator_version)
-            .unwrap();
-        self.metrics
-            .highest_settled_version
-            .set(next_accumulator_version.value() as i64);
+        let advanced = self
+            .last_settled_version_sender
+            .send_if_modified(|settled| {
+                if next_accumulator_version > *settled {
+                    *settled = next_accumulator_version;
+                    true
+                } else {
+                    false
+                }
+            });
+        if advanced {
+            self.metrics
+                .highest_settled_version
+                .set(next_accumulator_version.value() as i64);
+        }
     }
 
     #[cfg(test)]

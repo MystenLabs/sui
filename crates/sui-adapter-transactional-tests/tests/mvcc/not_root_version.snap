@@ -28,13 +28,13 @@ task 3, lines 59-60:
 //# programmable --sender P1 --inputs object(2,0)
 //> test::m::nop();
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 4, lines 62-63:
 //# programmable --sender P1 --inputs object(2,0)
 //> test::m::nop();
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
 
 task 5, line 65:
 //# view-object 2,0
@@ -76,7 +76,7 @@ task 8, lines 76-77:
 //# programmable --sender P2 --inputs object(6,0)
 //> 0: test::m::bump(Input(0));
 mutated: object(0,1), object(6,0), object(6,1)
-gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 3626568, non_refundable_storage_fee: 36632
+gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 3662834, non_refundable_storage_fee: 366
 
 task 9, line 79:
 //# view-object 6,1
@@ -102,7 +102,7 @@ task 10, lines 85-87:
 created: object(10,0)
 mutated: object(_), object(2,0)
 wrapped: object(6,0)
-gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2392632, non_refundable_storage_fee: 24168
+gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2416558, non_refundable_storage_fee: 242
 
 // checking that with version 3 we get the other value, then flip them to ensure
 // they abort
@@ -114,7 +114,7 @@ task 11, lines 92-94:
 created: object(10,0)
 mutated: object(_), object(2,0)
 wrapped: object(6,0)
-gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2392632, non_refundable_storage_fee: 24168
+gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2416558, non_refundable_storage_fee: 242
 
 // @2 with value 1 aborts
 

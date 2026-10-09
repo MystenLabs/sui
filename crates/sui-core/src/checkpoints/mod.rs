@@ -1373,9 +1373,7 @@ impl CheckpointStateHasher {
                 info!("Object state hasher was dropped, stopping checkpoint accumulation");
                 break;
             };
-            hasher
-                .accumulate_checkpoint(&effects, seq, &epoch_store)
-                .expect("epoch ended while accumulating checkpoint");
+            hasher.accumulate_checkpoint(&effects, seq, &epoch_store);
         }
     }
 }
@@ -1512,11 +1510,7 @@ impl CheckpointBuilder {
             .expect("epoch should not have ended")
             .and_then(|s| s.checkpoint_height);
 
-        for (height, pending) in self
-            .epoch_store
-            .get_pending_checkpoints(last_height)
-            .expect("unexpected epoch store error")
-        {
+        for (height, pending) in self.epoch_store.get_pending_checkpoints(last_height) {
             debug!(checkpoint_commit_height = height, "Making checkpoint");
 
             let seq = self.make_checkpoint(pending).await?;
@@ -1990,7 +1984,7 @@ impl CheckpointBuilder {
 
             self.epoch_store
                 .consensus_messages_processed_notify(transaction_keys)
-                .await?;
+                .await;
         }
 
         let signatures = self
@@ -2081,11 +2075,8 @@ impl CheckpointBuilder {
                     .global_state_hasher
                     .upgrade()
                     .expect("No checkpoints should be getting built after local configuration");
-                let acc = state_acc.accumulate_checkpoint(
-                    &effects,
-                    sequence_number,
-                    &self.epoch_store,
-                )?;
+                let acc =
+                    state_acc.accumulate_checkpoint(&effects, sequence_number, &self.epoch_store);
 
                 state_acc
                     .wait_for_previous_running_root(&self.epoch_store, sequence_number)
@@ -3124,7 +3115,7 @@ impl CheckpointService {
         use crate::authority::authority_per_epoch_store::consensus_quarantine::ConsensusCommitOutput;
 
         let mut output = ConsensusCommitOutput::new(0);
-        epoch_store.write_pending_checkpoint(&mut output, &checkpoint)?;
+        epoch_store.write_pending_checkpoint(&mut output, &checkpoint);
         output.set_default_commit_stats_for_testing();
         epoch_store.push_consensus_output_for_tests(output);
         self.notify_checkpoint()?;

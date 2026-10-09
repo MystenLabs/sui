@@ -129,6 +129,7 @@ impl RosettaClient {
         self.online_port
     }
 
+    #[allow(clippy::result_large_err)]
     pub async fn call<R: Serialize, T: DeserializeOwned>(
         &self,
         endpoint: RosettaEndpoint,

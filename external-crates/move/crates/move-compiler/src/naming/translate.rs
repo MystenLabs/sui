@@ -2753,7 +2753,7 @@ fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -
                     }
                 }
                 RT::BuiltinType(bn_) => {
-                    let name_f = || format!("{}", &bn_);
+                    let name_f = || format!("{}", bn_);
                     let arity = bn_.tparam_constraints(loc).len();
                     let tys = types(context, case, tys);
                     let tys = check_type_instantiation_arity(context, loc, name_f, tys, arity);
@@ -2936,7 +2936,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                         context,
                         TypeAnnotation::Expression,
                         eloc,
-                        || format!("{}::{}", &vtype.mident, &vtype.enum_name),
+                        || format!("{}::{}", vtype.mident, vtype.enum_name),
                         tyargs_opt,
                         vtype.tyarg_arity,
                     );
@@ -4019,15 +4019,13 @@ fn lvalue(
                         C::Bind => {
                             let msg = format!(
                                 "Duplicate declaration for local '{}' in a given 'let'",
-                                &var
+                                var
                             );
                             ((var.loc, msg), (prev_loc, "Previously declared here"))
                         }
                         C::Assign => {
-                            let msg = format!(
-                                "Duplicate usage of local '{}' in a given assignment",
-                                &var
-                            );
+                            let msg =
+                                format!("Duplicate usage of local '{}' in a given assignment", var);
                             ((var.loc, msg), (prev_loc, "Previously assigned here"))
                         }
                     };
@@ -4119,7 +4117,7 @@ fn lvalue(
                 context,
                 TypeAnnotation::Expression,
                 loc,
-                || format!("{}::{}", &stype.mident, &stype.name),
+                || format!("{}::{}", stype.mident, stype.name),
                 etys_opt,
                 stype.tyarg_arity,
             );

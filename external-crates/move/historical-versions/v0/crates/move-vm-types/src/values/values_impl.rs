@@ -1186,7 +1186,7 @@ impl Locals {
 
             ValueImpl::ContainerRef(_) | ValueImpl::Invalid | ValueImpl::IndexedRef(_) => Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("cannot borrow local {:?}", &v[idx])),
+                    .with_message(format!("cannot borrow local {:?}", v[idx])),
             ),
         }
     }
@@ -3024,7 +3024,7 @@ impl Display for ContainerRef {
                 f,
                 "(&container {:x} -- {:?})",
                 container.raw_address(),
-                &*status.borrow(),
+                *status.borrow(),
             ),
         }
     }

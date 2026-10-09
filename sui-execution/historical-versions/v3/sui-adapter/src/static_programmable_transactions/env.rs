@@ -226,7 +226,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                         ExecutionErrorKind::FunctionNotFound,
                         format!(
                             "Could not resolve function '{}' in module {}",
-                            name, &storage_id,
+                            name, storage_id,
                         ),
                     )
                 } else {

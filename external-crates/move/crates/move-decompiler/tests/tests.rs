@@ -4,8 +4,8 @@
 use move_decompiler::{generate_from_model, testing::structuring_unit_test};
 
 use move_command_line_common::insta_assert;
-use move_package_alt::{RootPackage, Vanilla};
-use move_package_alt_compilation::{build_config::BuildConfig, model_builder};
+use move_package::{RootPackage, Vanilla};
+use move_package_compilation::{build_config::BuildConfig, model_builder};
 use move_symbol_pool::Symbol;
 
 use tempfile::TempDir;
@@ -140,7 +140,7 @@ fn run_bytecode_test(file_path: &Path) -> datatest_stable::Result<()> {
     insta_assert! {
         input_path: file_path,
         contents: decompiled,
-        name: format!("{}", name),
+        name: name.to_string(),
     };
     Ok(())
 }

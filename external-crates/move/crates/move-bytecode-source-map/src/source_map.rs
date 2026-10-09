@@ -753,7 +753,7 @@ impl SourceMap {
             self.definition_location.start(),
             self.definition_location.end(),
         );
-        for (_, struct_map) in self.struct_map.iter_mut() {
+        for struct_map in self.struct_map.values_mut() {
             struct_map.definition_location = Loc::new(
                 file_hash,
                 struct_map.definition_location.start(),
@@ -766,7 +766,7 @@ impl SourceMap {
                 *loc = Loc::new(file_hash, loc.start(), loc.end());
             }
         }
-        for (_, enum_map) in self.enum_map.iter_mut() {
+        for enum_map in self.enum_map.values_mut() {
             enum_map.definition_location = Loc::new(
                 file_hash,
                 enum_map.definition_location.start(),
@@ -782,7 +782,7 @@ impl SourceMap {
                 }
             }
         }
-        for (_, function_map) in self.function_map.iter_mut() {
+        for function_map in self.function_map.values_mut() {
             function_map.location = Loc::new(
                 file_hash,
                 function_map.location.start(),
@@ -805,7 +805,7 @@ impl SourceMap {
             for (_, loc) in function_map.locals.iter_mut() {
                 *loc = Loc::new(file_hash, loc.start(), loc.end());
             }
-            for (_, loc) in function_map.code_map.iter_mut() {
+            for loc in function_map.code_map.values_mut() {
                 *loc = Loc::new(file_hash, loc.start(), loc.end());
             }
         }

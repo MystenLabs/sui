@@ -307,12 +307,12 @@ impl StateSnapshotWriterV1 {
         });
         write_handler.await?.context(format!(
             "Failed to write state snapshot for epoch: {}",
-            &epoch
+            epoch
         ))?;
 
         upload_handle.await?.context(format!(
             "Failed to upload state snapshot for epoch: {}",
-            &epoch
+            epoch
         ))?;
 
         Self::sync_file_to_remote(

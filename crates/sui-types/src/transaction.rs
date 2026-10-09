@@ -1699,6 +1699,13 @@ impl ProgrammableTransaction {
                 value: config.max_input_objects().to_string()
             }
         );
+        fp_ensure!(
+            inputs.len() <= u16::MAX as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum inputs in a programmable transaction".to_string(),
+                value: u16::MAX.to_string()
+            }
+        );
         for input in inputs {
             input.validity_check(config)?
         }
@@ -1968,17 +1975,23 @@ impl TransactionKind {
         )
     }
 
-    pub fn mutates_implicitly_read_system_object(&self) -> bool {
-        self.shared_input_objects()
-            .any(|obj| obj.may_mutate() && obj.id.is_implicitly_read_system_object())
-    }
-
     pub fn is_accumulator_barrier_settle_tx(&self) -> bool {
         matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
             && self.shared_input_objects().any(|obj| {
                 obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
                     && obj.mutability == SharedObjectMutability::Mutable
             })
+    }
+
+    /// Whether this is any accumulator settlement transaction (a settlement chunk or
+    /// the barrier); every one declares the accumulator root object as a shared input.
+    pub fn is_accumulator_settle_tx(&self) -> bool {
+        if let TransactionKind::ProgrammableSystemTransaction(pt) = self {
+            pt.shared_input_objects()
+                .any(|obj| obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+        } else {
+            false
+        }
     }
 
     /// If this is an accumulator barrier settlement transaction, returns its
@@ -2564,6 +2577,21 @@ impl TransactionData {
         match self {
             TransactionData::V1(v1) => v1,
         }
+    }
+
+    /// Whether the transaction is protected against replay, given its loaded `input_objects`:
+    /// it has a `ValidDuring` expiration of at most two epochs, a gas payment object, or an
+    /// address-owned input or coin reservation among `input_objects`. `input_objects` is only
+    /// consumed when the expiration and gas payment do not already protect the transaction.
+    pub fn has_replay_protection(
+        &self,
+        input_objects: impl IntoIterator<Item = impl std::borrow::Borrow<ObjectReadResult>>,
+    ) -> bool {
+        self.expiration().is_replay_protected()
+            || !self.gas_data().payment.is_empty()
+            || input_objects
+                .into_iter()
+                .any(|object| object.borrow().is_replay_protected_input())
     }
     fn new_system_transaction(kind: TransactionKind) -> Self {
         // assert transaction kind if a system transaction
@@ -3662,8 +3690,8 @@ impl TransactionDataAPI for TransactionDataV1 {
 
             // Legacy behavior: when paying gas from address balance, we require ValidDuring expiration
             // even if the transaction has other replay-protected inputs.
-            // New behavior: the check is done in `check_address_balance_replay_protection`, which only
-            // requires two-epoch ValidDuring if there are no replay-protected inputs.
+            // New behavior: the check is done in `check_replay_protection` in sui-transaction-checks,
+            // which only requires two-epoch ValidDuring if there are no replay-protected inputs.
             if !config.relax_valid_during_for_owned_inputs() {
                 if matches!(self.expiration(), TransactionExpiration::None) {
                     // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
@@ -4205,7 +4233,18 @@ impl SenderSignedData {
                         .into());
                     }
                 }
-                GenericSignature::Signature(_) | GenericSignature::MultiSigLegacy(_) => (),
+                GenericSignature::Signature(_) => {
+                    // Only ML-DSA-65 is gated; the classical schemes predate feature flags.
+                    if sig.is_mldsa65() && !config.mldsa65_auth() {
+                        return Err(SuiErrorKind::UserInputError {
+                            error: UserInputError::Unsupported(
+                                "ML-DSA-65 signatures are not enabled on this network".to_string(),
+                            ),
+                        }
+                        .into());
+                    }
+                }
+                GenericSignature::MultiSigLegacy(_) => (),
             }
         }
 
@@ -5609,7 +5648,7 @@ impl Display for CertifiedTransaction {
             "Signed Authorities Bitmap : {:?}",
             self.auth_sig().signers_map
         )?;
-        write!(writer, "{}", &self.data().intent_message().value.kind())?;
+        write!(writer, "{}", self.data().intent_message().value.kind())?;
         write!(f, "{}", writer)
     }
 }

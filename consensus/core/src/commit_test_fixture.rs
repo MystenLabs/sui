@@ -203,7 +203,7 @@ impl CommitTestFixture {
         let mut finalized_commits = vec![];
         for mut subdag in committed_sub_dags {
             subdag.decided_with_local_blocks = true;
-            let finalized = self.commit_finalizer.process_commit(subdag).await;
+            let finalized = self.commit_finalizer.process_commit(subdag).await.unwrap();
             finalized_commits.extend(finalized);
         }
 

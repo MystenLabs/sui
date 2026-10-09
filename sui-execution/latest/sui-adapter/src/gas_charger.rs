@@ -306,8 +306,17 @@ pub mod checked {
                 .iter()
                 // don't charge for loading Sui Framework or Move stdlib
                 .filter(|(id, _)| !is_system_package(**id))
-                .map(|(_, obj)| obj.object_size_for_gas_metering())
-                .try_for_each(|size| self.gas_status.charge_storage_read(size))
+                .try_for_each(|(_, obj)| {
+                    let size = obj.object_size_for_gas_metering();
+                    if obj.is_package() {
+                        // This covers every package input: packages named by Move calls, publish
+                        // dependencies, and the package and dependencies of an upgrade. The bytes
+                        // of newly published code are charged separately by `charge_publish_package`.
+                        self.gas_status.charge_package_object_read(size)
+                    } else {
+                        self.gas_status.charge_storage_read(size)
+                    }
+                })
         }
 
         pub fn charge_coin_transfers(

@@ -35,6 +35,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 mod auth;
 mod builder;
+#[allow(clippy::result_large_err)]
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.Randomness.rs"));
 }

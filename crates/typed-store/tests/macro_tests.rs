@@ -150,13 +150,13 @@ async fn macro_test() {
     // Test pagination
     let m = tbls_secondary.dump("table1", 2, 0).unwrap();
     assert_eq!(2, m.len());
-    assert_eq!(format!("\"1\""), *m.get("\"1\"").unwrap());
-    assert_eq!(format!("\"2\""), *m.get("\"2\"").unwrap());
+    assert_eq!("\"1\"".to_string(), *m.get("\"1\"").unwrap());
+    assert_eq!("\"2\"".to_string(), *m.get("\"2\"").unwrap());
 
     let m = tbls_secondary.dump("table1", 3, 2).unwrap();
     assert_eq!(3, m.len());
-    assert_eq!(format!("\"7\""), *m.get("\"7\"").unwrap());
-    assert_eq!(format!("\"8\""), *m.get("\"8\"").unwrap());
+    assert_eq!("\"7\"".to_string(), *m.get("\"7\"").unwrap());
+    assert_eq!("\"8\"".to_string(), *m.get("\"8\"").unwrap());
 }
 
 #[tokio::test]
