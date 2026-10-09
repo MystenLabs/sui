@@ -248,6 +248,20 @@ async fn test_settle_accumulator_version() {
 }
 
 #[tokio::test]
+async fn test_settle_accumulator_version_out_of_order() {
+    let checker = ObjectFundsCheckerDEPRECATED::new_for_testing(
+        SequenceNumber::from_u64(0),
+        Arc::new(ObjectFundsCheckerMetrics::new(&prometheus::Registry::new())),
+    );
+    checker.settle_accumulator_version(SequenceNumber::from_u64(2));
+    checker.settle_accumulator_version(SequenceNumber::from_u64(1));
+    assert_eq!(
+        checker.get_current_accumulator_version(),
+        SequenceNumber::from_u64(2)
+    );
+}
+
+#[tokio::test]
 async fn test_account_version_ahead_of_schedule() {
     let account = ObjectID::random();
     let funds_read = Arc::new(MockFundsRead::new(
