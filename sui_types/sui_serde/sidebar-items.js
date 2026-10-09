@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["to_sui_struct_tag_string"],"struct":["AsProtocolVersion","BigInt","Readable","SequenceNumber","SuiStructTag","SuiTypeTag"]};

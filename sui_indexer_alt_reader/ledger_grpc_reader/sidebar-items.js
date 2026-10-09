@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_BATCH_GET_OBJECTS","MAX_BATCH_GET_TRANSACTIONS"],"struct":["CheckpointedTransaction","LedgerGrpcArgs","LedgerGrpcReader"],"trait":["ChunkedLoader"]};

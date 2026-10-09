@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["send_telemetry_event"]};

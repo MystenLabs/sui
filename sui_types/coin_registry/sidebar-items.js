@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["COIN_REGISTRY_MODULE_NAME","CURRENCY_KEY_STRUCT_NAME"],"enum":["MetadataCapState","RegulatedState","SupplyState"],"fn":["get_coin_registry_obj_initial_shared_version"],"struct":["Currency","CurrencyKey","ExtraField"]};
