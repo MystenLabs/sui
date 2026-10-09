@@ -149,6 +149,7 @@ feature_flags:
   use_new_commit_handler: true
   better_loader_errors: true
   generate_df_type_layouts: true
+  allow_references_in_ptbs: true
   framework_tx_context_mut_restrictions: true
   include_function_signatures_in_instantiation_limits: true
   ptb_tx_context_restrictions: true

@@ -4886,6 +4886,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.shuffle_consensus_commit_blocks = true;
                     }
+
+                    cfg.feature_flags.allow_references_in_ptbs = true;
                 }
                 // Use this template when making changes:
                 //
