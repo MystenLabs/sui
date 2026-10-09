@@ -1,0 +1,144 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 960
+---
+processed 19 tasks
+
+// Pause and rotation of a master id. A registers with a rotation delay of one epoch; its cap is
+// object(1,0) and its first forwarding address is
+// 0x9c174786ca52 fafafafafafafafafa 00 0101...01. C is the rotation target.
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 10-12:
+//# programmable --sender A --inputs mutshared(250) @A 1 --gas-budget 2000000000
+//> 0: sui::forwarding_address::register(Input(0), Input(2));
+//> 1: TransferObjects([Result(0)], Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: A, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("MasterRegistered"), type_params: [] }, contents: [156, 23, 71, 134, 202, 82, 0, 0, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 130, 159, 205, 5, 151, 169, 98, 37, 118, 99, 29, 127, 189, 56, 176, 250, 78, 201, 62, 44, 34, 208, 137, 92, 253, 174, 39, 142, 34, 86, 71, 40, 1, 0, 0, 0, 0, 0, 0, 0] }
+created: object(1,0), object(1,1), object(1,2)
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,0)
+gas summary: computation_cost: 1001000000, storage_cost: 8116800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 14-16:
+//# programmable --sender A --inputs mutshared(250) object(1,0)
+// The cap pauses the id.
+//> 0: sui::forwarding_address::pause(Input(0), Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: A, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("Paused"), type_params: [] }, contents: [156, 23, 71, 134, 202, 82, 0, 0] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,0), object(1,0), object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 6186400,  storage_rebate: 6185781, non_refundable_storage_fee: 619
+
+task 3, lines 18-21:
+//# programmable --sender B --inputs 1000 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101
+// Deposits to a paused id fail.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+Error: Transaction Effects Status: Attempted to used feature that is not supported yet
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("Forwarding address _ is paused (id 91029789677468)"), command: None } }
+
+task 4, lines 23-25:
+//# programmable --sender B --inputs mutshared(250) 0x52ca8647179c
+// Only the master or the cap can pause; a stranger cannot pause by master id.
+//> 0: sui::forwarding_address::pause_by_master(Input(0), Input(1));
+Error: Transaction Effects Status: Move Abort in sui::forwarding_address::assert_master (function index 12) at offset 12 at line 276 with clever code 5
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 12, instruction: 12, function_name: Some("assert_master") }, 13836466615577083911) at command Some(0)
+
+task 5, lines 27-29:
+//# programmable --sender A --inputs mutshared(250) object(1,0)
+// The cap unpauses and deposits flow again.
+//> 0: sui::forwarding_address::unpause(Input(0), Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: A, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("Unpaused"), type_params: [] }, contents: [156, 23, 71, 134, 202, 82, 0, 0] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,0), object(1,0), object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 6186400,  storage_rebate: 6185781, non_refundable_storage_fee: 619
+
+task 6, lines 31-33:
+//# programmable --sender B --inputs 1000 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 232, 3, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa
+accumulators_written: (object(6,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 7, lines 35-37:
+//# programmable --sender A --inputs mutshared(250) object(1,0) @C
+// Propose rotating the master to C. Deposits keep reaching A while the rotation is pending.
+//> 0: sui::forwarding_address::propose_rotation(Input(0), Input(1), Input(2));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: A, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("RotationProposed"), type_params: [] }, contents: [156, 23, 71, 134, 202, 82, 0, 0, 240, 73, 205, 46, 99, 107, 174, 60, 172, 87, 77, 183, 141, 26, 218, 137, 142, 231, 86, 93, 139, 34, 84, 24, 27, 65, 52, 63, 162, 162, 211, 237, 1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,0), object(1,0), object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 6490400,  storage_rebate: 6185781, non_refundable_storage_fee: 619
+
+task 8, lines 39-41:
+//# programmable --sender B --inputs 2000 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 208, 7, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa
+accumulators_written: (object(6,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 2000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 9, lines 43-45:
+//# programmable --sender B --inputs mutshared(250) 0x52ca8647179c
+// Not due yet: the delay is one epoch.
+//> 0: sui::forwarding_address::finalize_rotation(Input(0), Input(1));
+Error: Transaction Effects Status: Move Abort in sui::forwarding_address::finalize_rotation (function index 10) at offset 30 at line 252 with clever code 8
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 10, instruction: 30, function_name: Some("finalize_rotation") }, 13837310937428393997) at command Some(0)
+
+task 10, line 47:
+//# advance-epoch
+Epoch advanced: 1
+
+task 11, lines 49-51:
+//# programmable --sender B --inputs mutshared(250) 0x52ca8647179c
+// Anyone can finalize once the delay has elapsed.
+//> 0: sui::forwarding_address::finalize_rotation(Input(0), Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("RotationFinalized"), type_params: [] }, contents: [156, 23, 71, 134, 202, 82, 0, 0, 240, 73, 205, 46, 99, 107, 174, 60, 172, 87, 77, 183, 141, 26, 218, 137, 142, 231, 86, 93, 139, 34, 84, 24, 27, 65, 52, 63, 162, 162, 211, 237] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,1), object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 4727200,  storage_rebate: 5030697, non_refundable_storage_fee: 503
+
+task 12, lines 53-56:
+//# programmable --sender B --inputs 4000 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101
+// Deposits now reach C.
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingDeposit"), type_params: [Struct(StructTag { address: sui, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })] }, contents: [156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 240, 73, 205, 46, 99, 107, 174, 60, 172, 87, 77, 183, 141, 26, 218, 137, 142, 231, 86, 93, 139, 34, 84, 24, 27, 65, 52, 63, 162, 162, 211, 237, 160, 15, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa
+accumulators_written: (object(12,0), C, sui::balance::Balance<sui::sui::SUI>, Merge, 4000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 13, lines 58-60:
+//# programmable --sender A --inputs mutshared(250) object(1,0) @A
+// A still holds the cap and can propose rotating back; C, now the master, cancels without it.
+//> 0: sui::forwarding_address::propose_rotation(Input(0), Input(1), Input(2));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: A, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("RotationProposed"), type_params: [] }, contents: [156, 23, 71, 134, 202, 82, 0, 0, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,0), object(1,0), object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 6490400,  storage_rebate: 6185781, non_refundable_storage_fee: 619
+
+task 14, lines 62-63:
+//# programmable --sender C --inputs mutshared(250) 0x52ca8647179c
+//> 0: sui::forwarding_address::cancel_rotation_by_master(Input(0), Input(1));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: C, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("RotationCancelled"), type_params: [] }, contents: [156, 23, 71, 134, 202, 82, 0, 0] }
+mutated: 0x00000000000000000000000000000000000000000000000000000000000000fa, object(0,2), object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 4727200,  storage_rebate: 4042796, non_refundable_storage_fee: 404
+
+task 15, lines 65-67:
+//# programmable --sender A --inputs mutshared(250) object(1,0) @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101
+// A forwarding address cannot become a master.
+//> 0: sui::forwarding_address::propose_rotation(Input(0), Input(1), Input(2));
+Error: Transaction Effects Status: Move Abort in sui::forwarding_address::propose_rotation (function index 6) at offset 12 at line 214 with clever code 6
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("forwarding_address") }, function: 6, instruction: 12, function_name: Some("propose_rotation") }, 13836747824265953289) at command Some(0)
+
+task 16, line 69:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 17, line 71:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+3000
+
+task 18, line 73:
+//# view-funds sui::balance::Balance<sui::sui::SUI> C
+4000

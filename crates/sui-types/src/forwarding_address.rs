@@ -20,6 +20,9 @@ use crate::{
 pub const FORWARDING_ADDRESS_MODULE_NAME: &IdentStr = ident_str!("forwarding_address");
 pub const FORWARDING_DEPOSIT_STRUCT_NAME: &IdentStr = ident_str!("ForwardingDeposit");
 pub const MASTER_REGISTERED_STRUCT_NAME: &IdentStr = ident_str!("MasterRegistered");
+pub const PAUSED_STRUCT_NAME: &IdentStr = ident_str!("Paused");
+pub const UNPAUSED_STRUCT_NAME: &IdentStr = ident_str!("Unpaused");
+pub const ROTATION_FINALIZED_STRUCT_NAME: &IdentStr = ident_str!("RotationFinalized");
 pub const MASTER_RECORD_STRUCT_NAME: &IdentStr = ident_str!("MasterRecord");
 
 /// Layout of a forwarding address:
@@ -69,13 +72,45 @@ pub struct MasterRegistered {
     pub master_id: u64,
     pub master: SuiAddress,
     pub cap_id: ObjectID,
+    pub rotation_delay_epochs: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct RotationFinalized {
+    pub master_id: u64,
+    pub master: SuiAddress,
 }
 
 /// Mirrors `sui::forwarding_address::MasterRecord`, the value of the registry's dynamic field
-/// keyed by master id.
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+/// keyed by master id. A Move `Option` serializes like a Rust `Option` for zero or one element.
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
 pub struct MasterRecord {
     pub master: SuiAddress,
+    pub paused: bool,
+    pub pending: Option<PendingRotation>,
+    pub rotation_delay_epochs: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone, Copy)]
+pub struct PendingRotation {
+    pub new_master: SuiAddress,
+    pub effective_epoch: u64,
+}
+
+/// What resolution needs to know about a registered master id.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ForwardingMaster {
+    pub master: SuiAddress,
+    pub paused: bool,
+}
+
+impl From<MasterRecord> for ForwardingMaster {
+    fn from(record: MasterRecord) -> Self {
+        Self {
+            master: record.master,
+            paused: record.paused,
+        }
+    }
 }
 
 impl MoveTypeTagTrait for MasterRecord {
@@ -222,11 +257,16 @@ mod tests {
     #[test]
     fn master_record_loads_through_the_registry_schema() {
         let key = MasterRecordKey(0x52ca8647179c);
-        let master = SuiAddress::random_for_testing_only();
-        let field = key
-            .dynamic_field_key()
-            .into_field(MasterRecord { master })
-            .unwrap();
+        let record = MasterRecord {
+            master: SuiAddress::random_for_testing_only(),
+            paused: true,
+            pending: Some(PendingRotation {
+                new_master: SuiAddress::random_for_testing_only(),
+                effective_epoch: 7,
+            }),
+            rotation_delay_epochs: 2,
+        };
+        let field = key.dynamic_field_key().into_field(record.clone()).unwrap();
         let move_object = field
             .into_move_object_unsafe_for_testing(SequenceNumber::from_u64(3))
             .unwrap();
@@ -244,10 +284,7 @@ mod tests {
             crate::digests::TransactionDigest::genesis_marker(),
         );
         let store = InMemoryStorage::new(vec![registry, field_object]);
-        assert_eq!(
-            key.load(&store, registry_version).unwrap(),
-            Some(MasterRecord { master })
-        );
+        assert_eq!(key.load(&store, registry_version).unwrap(), Some(record));
         assert_eq!(
             MasterRecordKey(1).load(&store, registry_version).unwrap(),
             None
