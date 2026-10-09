@@ -19,6 +19,7 @@ use crate::{
 
 pub const FORWARDING_ADDRESS_MODULE_NAME: &IdentStr = ident_str!("forwarding_address");
 pub const FORWARDING_DEPOSIT_STRUCT_NAME: &IdentStr = ident_str!("ForwardingDeposit");
+pub const FORWARDING_TRANSFER_STRUCT_NAME: &IdentStr = ident_str!("ForwardingTransfer");
 pub const MASTER_REGISTERED_STRUCT_NAME: &IdentStr = ident_str!("MasterRegistered");
 pub const PAUSED_STRUCT_NAME: &IdentStr = ident_str!("Paused");
 pub const UNPAUSED_STRUCT_NAME: &IdentStr = ident_str!("Unpaused");
@@ -63,6 +64,25 @@ impl ForwardingDeposit {
             module: FORWARDING_ADDRESS_MODULE_NAME.to_owned(),
             name: FORWARDING_DEPOSIT_STRUCT_NAME.to_owned(),
             type_params: vec![coin_type],
+        }
+    }
+}
+
+/// An object sent to a forwarding address, rerouted to the master.
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct ForwardingTransfer {
+    pub forwarding_address: SuiAddress,
+    pub master: SuiAddress,
+    pub object_id: ObjectID,
+}
+
+impl ForwardingTransfer {
+    pub fn struct_tag() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: FORWARDING_ADDRESS_MODULE_NAME.to_owned(),
+            name: FORWARDING_TRANSFER_STRUCT_NAME.to_owned(),
+            type_params: vec![],
         }
     }
 }

@@ -60,9 +60,9 @@ const EZeroWithdrawal: u64 = 10;
 const EUnbackedWithdrawal: u64 = 11;
 
 #[allow(unused_const)]
-/// Funds were deposited to a forwarding address that cannot be resolved (unregistered id,
-/// unsupported variant, or a master that is itself a forwarding address), or an object was sent
-/// to a forwarding address. Mirrors the adapter's end-of-execution check.
+/// Funds or an object were sent to a forwarding address that cannot be resolved (unregistered id,
+/// unsupported variant, or a chain longer than the protocol allows). Mirrors the adapter's
+/// end-of-execution resolution.
 const EForwardingAddressUnresolvable: u64 = 12;
 
 /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.

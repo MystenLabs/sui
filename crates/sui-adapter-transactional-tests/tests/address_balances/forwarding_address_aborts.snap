@@ -2,11 +2,11 @@
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 assertion_line: 960
 ---
-processed 13 tasks
+processed 15 tasks
 
-// Deposits to forwarding-shaped addresses that cannot resolve fail the transaction instead of
-// stranding funds. Resolution happens at the end of execution, so every failure here is an
-// execution error without a command index, not a Move abort.
+// Deposits and objects sent to forwarding-shaped addresses that cannot resolve fail the
+// transaction instead of stranding anything. Resolution happens at the end of execution, so every
+// failure here is an execution error without a command index, not a Move abort.
 // The first registration is assigned master ID 0x52ca8647179c (LE bytes 9c174786ca52).
 
 init:
@@ -65,41 +65,75 @@ task 6, lines 46-50:
 Error: Transaction Effects Status: Attempted to used feature that is not supported yet
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("The gas coin cannot be sent to forwarding address _"), command: None } }
 
-task 7, lines 52-55:
+task 7, lines 52-56:
 //# programmable --sender B --inputs 1000 @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101
-// Transferring a coin object to a forwarding address fails: objects are not rerouted yet.
+// Transferring a coin object to a forwarding address reroutes it to the master, with a
+// ForwardingTransfer event.
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1));
-Error: Transaction Effects Status: Attempted to used feature that is not supported yet
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("Object _ cannot be sent to forwarding address _"), command: None } }
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingTransfer"), type_params: [] }, contents: [156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 147, 209, 188, 211, 81, 147, 41, 177, 115, 66, 171, 28, 227, 80, 162, 217, 208, 171, 22, 252, 152, 201, 76, 105, 27, 168, 255, 9, 210, 224, 194, 51] }
+created: object(7,0)
+mutated: object(0,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 8, lines 57-59:
+task 8, line 58:
+//# view-object 7,0
+Owner: Account Address ( A )
+Version: 6
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 1000u64,
+    },
+}
+
+task 9, lines 60-62:
 //# programmable --sender B --inputs @0x9c174786ca52fafafafafafafafafa0001010101010101010101010101010101
-// So does transferring the gas coin itself.
-//> TransferObjects([Gas], Input(0));
-Error: Transaction Effects Status: Attempted to used feature that is not supported yet
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("Object fake(0,1) cannot be sent to forwarding address _"), command: None } }
+// So does an object sent from Move.
+//> test::thing::send(Input(0));
+events: Event { package_id: sui, transaction_module: Identifier("forwarding_address"), sender: B, type_: StructTag { address: sui, module: Identifier("forwarding_address"), name: Identifier("ForwardingTransfer"), type_params: [] }, contents: [156, 23, 71, 134, 202, 82, 250, 250, 250, 250, 250, 250, 250, 250, 250, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 243, 134, 39, 253, 150, 142, 147, 168, 219, 66, 170, 249, 193, 201, 119, 57, 204, 148, 49, 27, 97, 245, 128, 213, 217, 204, 77, 47, 209, 139, 4, 237] }
+created: object(9,0)
+mutated: object(0,1)
+unchanged_shared: 0x00000000000000000000000000000000000000000000000000000000000000fa
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 9, lines 61-63:
+task 10, line 64:
+//# view-object 9,0
+Owner: Account Address ( A )
+Version: 7
+Contents: test::thing::Thing {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(9,0),
+        },
+    },
+}
+
+task 11, lines 66-68:
 //# programmable --sender B --inputs @0x010000000000fafafafafafafafafa0001010101010101010101010101010101
-// And any other object, from Move, whether or not the forwarding address is registered.
+// An object sent to an unregistered forwarding address fails like a deposit would.
 //> test::thing::send(Input(0));
 Error: Transaction Effects Status: Attempted to used feature that is not supported yet
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("Object _ cannot be sent to forwarding address _"), command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FeatureNotYetSupported, source: Some("Forwarding address _ has no registered master (id 1)"), command: None } }
 
-task 10, lines 65-68:
+task 12, lines 70-73:
 //# programmable --sender B --inputs 1000 @0x00000000000000fafafafafafafafafa00010101010101010101010101010101
 // Magic at the wrong offset is an ordinary address and is credited directly.
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
 mutated: object(0,1)
-accumulators_written: (object(10,0), _, sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
+accumulators_written: (object(12,0), _, sui::balance::Balance<sui::sui::SUI>, Merge, 1000)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 11, line 70:
+task 13, line 75:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 12, line 72:
+task 14, line 77:
 //# view-funds sui::balance::Balance<sui::sui::SUI> A
 No funds accumulator object found

@@ -2578,6 +2578,9 @@ MasterIdCounter
 ForwardingDeposit
 	public struct
 	0x2::forwarding_address
+ForwardingTransfer
+	public struct
+	0x2::forwarding_address
 MasterRegistered
 	public struct
 	0x2::forwarding_address

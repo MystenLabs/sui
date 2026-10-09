@@ -2316,7 +2316,7 @@ pub fn finish(
     by_value_shared_objects: &BTreeSet<ObjectID>,
     consensus_owner_objects: &BTreeMap<ObjectID, Owner>,
     loaded_runtime_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
-    written_objects: BTreeMap<ObjectID, Object>,
+    mut written_objects: BTreeMap<ObjectID, Object>,
     created_object_ids: IndexSet<ObjectID>,
     deleted_object_ids: IndexSet<ObjectID>,
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
@@ -2419,7 +2419,7 @@ pub fn finish(
             state_view,
             gas_charger,
             tx_context.sender(),
-            &written_objects,
+            &mut written_objects,
             &mut accumulator_events,
         )?;
         forwarding::check_event_count(

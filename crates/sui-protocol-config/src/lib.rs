@@ -1823,6 +1823,9 @@ pub struct ProtocolConfig {
     forwarding_address_register_cost_base: Option<u64>,
     // Highest forwarding address variant the resolver accepts; higher variants abort.
     forwarding_address_max_variant: Option<u64>,
+    // Most forwarding addresses a recipient may resolve through (a master that is itself a
+    // forwarding address resolves again); longer chains fail the transaction.
+    forwarding_address_max_hops: Option<u64>,
 
     // `dynamic_field` module
     // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -2783,6 +2786,7 @@ impl ProtocolConfig {
             forwarding_address_resolve_lookup_cost_base: None,
             forwarding_address_register_cost_base: None,
             forwarding_address_max_variant: None,
+            forwarding_address_max_hops: None,
 
             // `dynamic_field` module
             // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
@@ -4862,6 +4866,7 @@ impl ProtocolConfig {
                         // 1M gas units: about 1 SUI at a 1,000 MIST gas price.
                         cfg.forwarding_address_register_cost_base = Some(1_000_000_000);
                         cfg.forwarding_address_max_variant = Some(0);
+                        cfg.forwarding_address_max_hops = Some(3);
                     }
                     cfg.storage_rebate_rate = Some(9999);
                     if chain != Chain::Mainnet {
