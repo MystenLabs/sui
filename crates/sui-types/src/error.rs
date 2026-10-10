@@ -381,6 +381,11 @@ pub enum UserInputError {
 
     #[error("Validator {proposer} is not an allowed proposer of this transaction")]
     ProposerNotAllowed { proposer: u32 },
+
+    #[error("Transaction cannot pass the sender's account policy: {kind}")]
+    AccountPolicyViolation {
+        kind: crate::execution_status::AccountPolicyViolationKind,
+    },
 }
 
 #[derive(

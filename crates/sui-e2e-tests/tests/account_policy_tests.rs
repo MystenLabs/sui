@@ -117,6 +117,21 @@ impl Env {
             .0
     }
 
+    /// Asserts that validators refuse to sign `tx_data` because of the sender's policy.
+    async fn execute_rejected(&self, tx_data: TransactionData) {
+        let tx = self.cluster.wallet.sign_transaction(&tx_data).await;
+        let error = self
+            .cluster
+            .execute_transaction_return_raw_effects(tx)
+            .await
+            .expect_err("transaction should be rejected at admission")
+            .to_string();
+        assert!(
+            error.contains("account policy"),
+            "unexpected rejection: {error}"
+        );
+    }
+
     async fn execute_ok(&self, tx_data: TransactionData) -> TransactionEffects {
         let effects = self.execute(tx_data).await;
         assert!(effects.status().is_ok(), "{:?}", effects.status());
@@ -371,16 +386,14 @@ async fn test_account_policy_enforced_after_activation() {
     env.execute_ok(env.transfer_sui_tx(SUI_LIMIT / 2, env.stranger).await)
         .await;
 
+    // Rules visible from the transaction alone are enforced at admission, costing no gas.
     let tx = env
         .builder(env.owner)
         .await
         .transfer_sui(Some(1), env.stranger)
         .with_gas_budget(env.gas_cap + 1)
         .build();
-    assert_violation(
-        &env.execute(tx).await,
-        AccountPolicyViolationKind::GasBudgetExceeded,
-    );
+    env.execute_rejected(tx).await;
 
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/move_test_code_account_policy");
@@ -390,10 +403,7 @@ async fn test_account_policy_enforced_after_activation() {
         .publish_async(path)
         .await
         .build();
-    assert_violation(
-        &env.execute(tx).await,
-        AccountPolicyViolationKind::PublishNotAllowed,
-    );
+    env.execute_rejected(tx).await;
 
     // Unlisted packages may not be called, not even a read-only framework function.
     let tx = env
@@ -406,14 +416,8 @@ async fn test_account_policy_enforced_after_activation() {
             vec![env.registry.clone(), pure(&env.owner)],
         )
         .build();
-    assert_violation(
-        &env.execute(tx).await,
-        AccountPolicyViolationKind::PackageNotAllowed,
-    );
-    assert_violation(
-        &env.execute(env.mint_item_tx(&package).await).await,
-        AccountPolicyViolationKind::PackageNotAllowed,
-    );
+    env.execute_rejected(tx).await;
+    env.execute_rejected(env.mint_item_tx(&package).await).await;
 
     // Staking keeps the SUI with the owner, so a stake far above the limit is allowed.
     let effects = env.execute_ok(env.stake_tx().await).await;
@@ -453,10 +457,11 @@ async fn test_account_policy_listed_recipients() {
         .await;
 
     // Removing the recipient needs the guardian once the policy is active.
-    let tx = env
-        .policy_call_tx("remove_recipient", vec![pure(&env.recipient)])
-        .await;
-    assert!(env.execute(tx).await.status().is_err());
+    env.execute_rejected(
+        env.policy_call_tx("remove_recipient", vec![pure(&env.recipient)])
+            .await,
+    )
+    .await;
     let tx = env
         .policy_call_tx("remove_recipient", vec![pure(&env.recipient)])
         .await;
@@ -591,11 +596,9 @@ async fn test_account_policy_disable_requires_guardian_co_signature() {
     env.enable_policy().await;
     env.cluster.trigger_reconfiguration().await;
 
-    // With the key alone, disabling aborts in Move and the policy stays in force.
-    let effects = env
-        .execute(env.policy_call_tx("disable", vec![]).await)
+    // With the key alone, disabling is a framework call the policy does not allow.
+    env.execute_rejected(env.policy_call_tx("disable", vec![]).await)
         .await;
-    assert!(effects.status().is_err());
     assert_violation(
         &env.execute(env.transfer_sui_tx(2 * SUI_LIMIT, env.stranger).await)
             .await,
@@ -625,6 +628,17 @@ async fn test_account_policy_budget_spans_the_epoch() {
     );
     env.execute_ok(env.transfer_sui_tx(SUI_LIMIT / 10, env.stranger).await)
         .await;
+
+    // Once the gas budget alone no longer fits, validators refuse to sign at all.
+    env.execute_ok(env.transfer_sui_tx(SUI_LIMIT * 2 / 10, env.stranger).await)
+        .await;
+    let tx = env
+        .builder(env.owner)
+        .await
+        .transfer_sui(Some(1), env.stranger)
+        .with_gas_budget(env.gas_cap)
+        .build();
+    env.execute_rejected(tx).await;
 
     env.cluster.trigger_reconfiguration().await;
     env.execute_ok(env.transfer_sui_tx(SUI_LIMIT * 6 / 10, env.stranger).await)

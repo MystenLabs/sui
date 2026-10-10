@@ -229,6 +229,7 @@ pub mod auth_unit_test_utils;
 
 pub mod authority_test_utils;
 
+mod account_policy_admission;
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
 
@@ -1111,6 +1112,8 @@ impl AuthorityState {
             &receiving_objects,
             epoch_store,
         )?;
+
+        self.handle_account_policy_checks(transaction.data(), epoch_store)?;
 
         Ok(checked_input_objects)
     }
