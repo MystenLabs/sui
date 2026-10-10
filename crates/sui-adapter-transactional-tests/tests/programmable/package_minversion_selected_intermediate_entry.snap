@@ -1,0 +1,156 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 19 tasks
+
+// An entry call requires the exact dependency versions recorded when its package was published.
+// ConsumerS therefore requires MidSV1 and LeafSV3. Enrolling the Mid family redirects MidSV1 to
+// MidSV2, and the call must use that exact selected Mid version. MidSV2's own LeafSV2 dependency is
+// different: it is a minimum version requirement, so a newer Leaf version may satisfy it. This lets
+// ConsumerS keep its exact LeafSV3 while running the selected MidSV2.
+//
+// Success case:
+//
+//   ConsumerS entry closure       selection and expansion       unified linkage
+//   -----------------------       -----------------------       ---------------
+//   Exact(MidSV1)          -----> Exact(MidSV2)                 Exact(MidSV2)
+//   Exact(LeafSV3)                MidSV2 -> AtLeast(LeafSV2)    Exact(LeafSV3)
+//
+// `Exact(LeafSV3)` satisfies `AtLeast(LeafSV2)`, so the selected MidSV2 executes with LeafSV3.
+//
+// Failure case:
+//
+//   ConsumerF entry closure       selection and expansion
+//   -----------------------       -----------------------
+//   Exact(MidFV1)          -----> Exact(MidFV2)
+//   Exact(LeafFV2)                MidFV2 -> AtLeast(LeafFV3)
+//
+// `Exact(LeafFV2)` cannot satisfy `AtLeast(LeafFV3)`, so linkage resolution fails.
+
+init:
+A: object(0,0)
+
+task 1, lines 30-32:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 34-36:
+//# upgrade --package LeafSV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 38-40:
+//# upgrade --package LeafSV2 --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, lines 42-49:
+//# publish --upgradeable --dependencies LeafSV1 --sender A
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 7128800,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 5, lines 51-58:
+//# upgrade --package MidSV1 --upgrade-capability 4,1 --dependencies LeafSV2 --sender A
+created: object(5,0)
+mutated: object(0,0), object(4,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 7128800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 6, lines 60-64:
+//# publish --dependencies MidSV1 LeafSV3 --sender A
+created: object(6,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 6057200,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 7, lines 66-68:
+//# programmable --sender A --inputs object(4,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(7,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 8, lines 70-72:
+// Entry linkage pins the consumer's LeafSV3 exactly. Selecting MidSV2 expands its older LeafSV2
+// edge as at-least, so LeafSV3 satisfies it and both emitted versions prove the final graph.
+//# run ConsumerS::consumer::call --sender A
+events: Event { package_id: ConsumerS, transaction_module: Identifier("consumer"), sender: A, type_: StructTag { address: MidSV1, module: Identifier("mid"), name: Identifier("Selected"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: ConsumerS, transaction_module: Identifier("consumer"), sender: A, type_: StructTag { address: ConsumerS, module: Identifier("consumer"), name: Identifier("Leaf"), type_params: [] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 9, lines 74-77:
+// Enrolling the leaf too exercises nested selection through the selected intermediate table.
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(9,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 4019998, non_refundable_storage_fee: 402
+
+task 10, line 79:
+//# run ConsumerS::consumer::call --sender A
+events: Event { package_id: ConsumerS, transaction_module: Identifier("consumer"), sender: A, type_: StructTag { address: MidSV1, module: Identifier("mid"), name: Identifier("Selected"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: ConsumerS, transaction_module: Identifier("consumer"), sender: A, type_: StructTag { address: ConsumerS, module: Identifier("consumer"), name: Identifier("Leaf"), type_params: [] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 11, lines 81-83:
+//# publish --upgradeable --sender A
+created: object(11,0), object(11,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 12, lines 85-87:
+//# upgrade --package LeafFV1 --upgrade-capability 11,1 --sender A
+created: object(12,0)
+mutated: object(0,0), object(11,1)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 13, lines 89-91:
+//# upgrade --package LeafFV2 --upgrade-capability 11,1 --sender A
+created: object(13,0)
+mutated: object(0,0), object(11,1)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 14, lines 93-96:
+//# publish --upgradeable --dependencies LeafFV1 --sender A
+created: object(14,0), object(14,1)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 5973600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 15, lines 98-101:
+//# upgrade --package MidFV1 --upgrade-capability 14,1 --dependencies LeafFV3 --sender A
+created: object(15,0)
+mutated: object(0,0), object(14,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 5973600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 16, lines 103-106:
+//# publish --dependencies MidFV1 LeafFV2 --sender A
+created: object(16,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 5175600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 17, lines 108-110:
+//# programmable --sender A --inputs object(14,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(17,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(14,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 4019998, non_refundable_storage_fee: 402
+
+task 18, lines 112-113:
+// The entry closure pins LeafFV2 exactly, which cannot satisfy selected MidFV2's LeafFV3 edge.
+//# run ConsumerF::consumer::call --sender A
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("Exact/AtLeast conflicting resolutions for package: linkage requires exactly this package LeafFV2 (version 2) and also at least the following version of the package LeafFV3 at version 3. However LeafFV2 is at version 2 which is less than 3."), command: Some(0) } }

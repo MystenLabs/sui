@@ -77,7 +77,7 @@ Contents: Consumer::consumer::Result {
 
 task 9, lines 55-57:
 //# programmable --sender A --inputs object(1,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 created: object(9,0)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
