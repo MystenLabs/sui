@@ -23,13 +23,14 @@ PackageConfig
 -  [Function `is_version_forbidden`](#sui_package_config_is_version_forbidden)
 -  [Function `record_minversion_enrollment`](#sui_package_config_record_minversion_enrollment)
 -  [Function `record_minversion_upgrade`](#sui_package_config_record_minversion_upgrade)
--  [Function `record_minversion_upgrade_and_forbid_previous`](#sui_package_config_record_minversion_upgrade_and_forbid_previous)
+-  [Function `record_minversion_upgrade_and_forbid_previous_versions`](#sui_package_config_record_minversion_upgrade_and_forbid_previous_versions)
 -  [Function `create`](#sui_package_config_create)
 -  [Function `is_forbidden_value`](#sui_package_config_is_forbidden_value)
 -  [Function `record_minversion_impl`](#sui_package_config_record_minversion_impl)
 -  [Function `cap_package_info`](#sui_package_config_cap_package_info)
 -  [Function `assert_historical_version`](#sui_package_config_assert_historical_version)
 -  [Function `forbid_version_impl`](#sui_package_config_forbid_version_impl)
+-  [Function `forbid_version_range_impl`](#sui_package_config_forbid_version_range_impl)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -219,7 +220,7 @@ The package version selected by minversion.
 Forbid a historical version of the package controlled by <code>cap</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version">forbid_version</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, version: u64, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version">forbid_version</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, version: u64, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -230,7 +231,7 @@ Forbid a historical version of the package controlled by <code>cap</code>.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version">forbid_version</a>(
     <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
-    cap: &UpgradeCap,
+    cap: &<b>mut</b> UpgradeCap,
     version: u64,
     _ctx: &<b>mut</b> TxContext,
 ) {
@@ -251,7 +252,7 @@ Forbid a historical version of the package controlled by <code>cap</code>.
 Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version_range">forbid_version_range</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, start: u64, end: u64, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version_range">forbid_version_range</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, cap: &<b>mut</b> <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, start: u64, end: u64, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -262,7 +263,7 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version_range">forbid_version_range</a>(
     <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
-    cap: &UpgradeCap,
+    cap: &<b>mut</b> UpgradeCap,
     start: u64,
     end: u64,
     _ctx: &<b>mut</b> TxContext,
@@ -272,9 +273,7 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
     // `start &lt;= end` and a historical end establish only the upper bound.
     <b>assert</b>!(start &gt; 0, <a href="../sui/package_config.md#sui_package_config_EInvalidVersion">EInvalidVersion</a>);
     <a href="../sui/package_config.md#sui_package_config_assert_historical_version">assert_historical_version</a>(end, current_version);
-    start.range_do_eq!(end, |version| {
-        <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_forbid_version_impl">forbid_version_impl</a>(original_id, version);
-    });
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_forbid_version_range_impl">forbid_version_range_impl</a>(original_id, start, end);
 }
 </code></pre>
 
@@ -303,8 +302,7 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
     version: u64,
 ): bool {
     <b>let</b> forbid_key = <a href="../sui/package_config.md#sui_package_config_VersionForbiddenKey">VersionForbiddenKey</a> { original_id, version };
-    <b>if</b> (!field::exists_with_type&lt;_, u64&gt;(&<a href="../sui/package_config.md#sui_package_config">package_config</a>.id, forbid_key)) <b>return</b> <b>false</b>;
-    <a href="../sui/package_config.md#sui_package_config_is_forbidden_value">is_forbidden_value</a>(*field::borrow(&<a href="../sui/package_config.md#sui_package_config">package_config</a>.id, forbid_key))
+    field::get_fold!(&<a href="../sui/package_config.md#sui_package_config">package_config</a>.id, forbid_key, <b>false</b>, |value: &u64| <a href="../sui/package_config.md#sui_package_config_is_forbidden_value">is_forbidden_value</a>(*value))
 }
 </code></pre>
 
@@ -371,13 +369,13 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 
 </details>
 
-<a name="sui_package_config_record_minversion_upgrade_and_forbid_previous"></a>
+<a name="sui_package_config_record_minversion_upgrade_and_forbid_previous_versions"></a>
 
-## Function `record_minversion_upgrade_and_forbid_previous`
+## Function `record_minversion_upgrade_and_forbid_previous_versions`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade_and_forbid_previous">record_minversion_upgrade_and_forbid_previous</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, upgrade: <a href="../sui/package.md#sui_package_MinVersionUpgrade">sui::package::MinVersionUpgrade</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade_and_forbid_previous_versions">record_minversion_upgrade_and_forbid_previous_versions</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, upgrade: <a href="../sui/package.md#sui_package_MinVersionUpgrade">sui::package::MinVersionUpgrade</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -386,7 +384,7 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade_and_forbid_previous">record_minversion_upgrade_and_forbid_previous</a>(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade_and_forbid_previous_versions">record_minversion_upgrade_and_forbid_previous_versions</a>(
     <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
     upgrade: MinVersionUpgrade,
     _ctx: &<b>mut</b> TxContext,
@@ -394,7 +392,7 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
     <b>let</b> (original_id, previous_version, version, package_id) =
         <a href="../sui/package.md#sui_package_minversion_upgrade_info">package::minversion_upgrade_info</a>(upgrade);
     <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_record_minversion_impl">record_minversion_impl</a>(original_id, version, package_id);
-    <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_forbid_version_impl">forbid_version_impl</a>(original_id, previous_version);
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_forbid_version_range_impl">forbid_version_range_impl</a>(original_id, 1, previous_version);
 }
 </code></pre>
 
@@ -476,11 +474,7 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 ) {
     <b>let</b> key = <a href="../sui/package_config.md#sui_package_config_MinVersionKey">MinVersionKey</a> { original_id };
     <b>let</b> value = <a href="../sui/package_config.md#sui_package_config_MinVersion">MinVersion</a> { version, package_id };
-    <b>if</b> (field::exists_with_type&lt;_, <a href="../sui/package_config.md#sui_package_config_MinVersion">MinVersion</a>&gt;(&<a href="../sui/package_config.md#sui_package_config">package_config</a>.id, key)) {
-        *field::borrow_mut(&<b>mut</b> <a href="../sui/package_config.md#sui_package_config">package_config</a>.id, key) = value;
-    } <b>else</b> {
-        field::add(&<b>mut</b> <a href="../sui/package_config.md#sui_package_config">package_config</a>.id, key, value);
-    }
+    <b>let</b> _ = field::replace&lt;<a href="../sui/package_config.md#sui_package_config_MinVersionKey">MinVersionKey</a>, <a href="../sui/package_config.md#sui_package_config_MinVersion">MinVersion</a>, <a href="../sui/package_config.md#sui_package_config_MinVersion">MinVersion</a>&gt;(&<b>mut</b> <a href="../sui/package_config.md#sui_package_config">package_config</a>.id, key, value);
 }
 </code></pre>
 
@@ -553,11 +547,40 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 
 <pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version_impl">forbid_version_impl</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>, original_id: ID, version: u64) {
     <b>let</b> key = <a href="../sui/package_config.md#sui_package_config_VersionForbiddenKey">VersionForbiddenKey</a> { original_id, version };
-    <b>if</b> (field::exists_with_type&lt;_, u64&gt;(&<a href="../sui/package_config.md#sui_package_config">package_config</a>.id, key)) {
-        *field::borrow_mut(&<b>mut</b> <a href="../sui/package_config.md#sui_package_config">package_config</a>.id, key) = <a href="../sui/package_config.md#sui_package_config_VERSION_FORBIDDEN">VERSION_FORBIDDEN</a>;
-    } <b>else</b> {
-        field::add(&<b>mut</b> <a href="../sui/package_config.md#sui_package_config">package_config</a>.id, key, <a href="../sui/package_config.md#sui_package_config_VERSION_FORBIDDEN">VERSION_FORBIDDEN</a>);
-    }
+    <b>let</b> _ = field::replace&lt;<a href="../sui/package_config.md#sui_package_config_VersionForbiddenKey">VersionForbiddenKey</a>, u64, u64&gt;(
+        &<b>mut</b> <a href="../sui/package_config.md#sui_package_config">package_config</a>.id,
+        key,
+        <a href="../sui/package_config.md#sui_package_config_VERSION_FORBIDDEN">VERSION_FORBIDDEN</a>,
+    );
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_config_forbid_version_range_impl"></a>
+
+## Function `forbid_version_range_impl`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version_range_impl">forbid_version_range_impl</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, start: u64, end: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_forbid_version_range_impl">forbid_version_range_impl</a>(
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
+    original_id: ID,
+    start: u64,
+    end: u64,
+) {
+    start.range_do_eq!(end, |version| <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_forbid_version_impl">forbid_version_impl</a>(original_id, version));
 }
 </code></pre>
 

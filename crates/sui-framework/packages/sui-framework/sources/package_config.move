@@ -45,7 +45,7 @@ const VERSION_FORBIDDEN: u64 = 1;
 /// Forbid a historical version of the package controlled by `cap`.
 public fun forbid_version(
     package_config: &mut PackageConfig,
-    cap: &UpgradeCap,
+    cap: &mut UpgradeCap,
     version: u64,
     _ctx: &mut TxContext,
 ) {
@@ -57,7 +57,7 @@ public fun forbid_version(
 /// Forbid all historical versions in the inclusive range `[start, end]`.
 public fun forbid_version_range(
     package_config: &mut PackageConfig,
-    cap: &UpgradeCap,
+    cap: &mut UpgradeCap,
     start: u64,
     end: u64,
     _ctx: &mut TxContext,
@@ -67,9 +67,7 @@ public fun forbid_version_range(
     // `start <= end` and a historical end establish only the upper bound.
     assert!(start > 0, EInvalidVersion);
     assert_historical_version(end, current_version);
-    start.range_do_eq!(end, |version| {
-        package_config.forbid_version_impl(original_id, version);
-    });
+    package_config.forbid_version_range_impl(original_id, start, end);
 }
 
 public(package) fun is_version_forbidden(
@@ -78,8 +76,7 @@ public(package) fun is_version_forbidden(
     version: u64,
 ): bool {
     let forbid_key = VersionForbiddenKey { original_id, version };
-    if (!field::exists_with_type<_, u64>(&package_config.id, forbid_key)) return false;
-    is_forbidden_value(*field::borrow(&package_config.id, forbid_key))
+    field::get_fold!(&package_config.id, forbid_key, false, |value: &u64| is_forbidden_value(*value))
 }
 
 public fun record_minversion_enrollment(
@@ -101,7 +98,7 @@ public fun record_minversion_upgrade(
     package_config.record_minversion_impl(original_id, version, package_id);
 }
 
-public fun record_minversion_upgrade_and_forbid_previous(
+public fun record_minversion_upgrade_and_forbid_previous_versions(
     package_config: &mut PackageConfig,
     upgrade: MinVersionUpgrade,
     _ctx: &mut TxContext,
@@ -109,7 +106,7 @@ public fun record_minversion_upgrade_and_forbid_previous(
     let (original_id, previous_version, version, package_id) =
         package::minversion_upgrade_info(upgrade);
     package_config.record_minversion_impl(original_id, version, package_id);
-    package_config.forbid_version_impl(original_id, previous_version);
+    package_config.forbid_version_range_impl(original_id, 1, previous_version);
 }
 
 #[allow(unused_function)]
@@ -132,11 +129,7 @@ fun record_minversion_impl(
 ) {
     let key = MinVersionKey { original_id };
     let value = MinVersion { version, package_id };
-    if (field::exists_with_type<_, MinVersion>(&package_config.id, key)) {
-        *field::borrow_mut(&mut package_config.id, key) = value;
-    } else {
-        field::add(&mut package_config.id, key, value);
-    }
+    let _ = field::replace<MinVersionKey, MinVersion, MinVersion>(&mut package_config.id, key, value);
 }
 
 fun cap_package_info(cap: &UpgradeCap): (ID, u64) {
@@ -149,11 +142,20 @@ fun assert_historical_version(version: u64, current_version: u64) {
 
 fun forbid_version_impl(package_config: &mut PackageConfig, original_id: ID, version: u64) {
     let key = VersionForbiddenKey { original_id, version };
-    if (field::exists_with_type<_, u64>(&package_config.id, key)) {
-        *field::borrow_mut(&mut package_config.id, key) = VERSION_FORBIDDEN;
-    } else {
-        field::add(&mut package_config.id, key, VERSION_FORBIDDEN);
-    }
+    let _ = field::replace<VersionForbiddenKey, u64, u64>(
+        &mut package_config.id,
+        key,
+        VERSION_FORBIDDEN,
+    );
+}
+
+fun forbid_version_range_impl(
+    package_config: &mut PackageConfig,
+    original_id: ID,
+    start: u64,
+    end: u64,
+) {
+    start.range_do_eq!(end, |version| package_config.forbid_version_impl(original_id, version));
 }
 
 #[mode(test)]
