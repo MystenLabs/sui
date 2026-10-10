@@ -1093,6 +1093,12 @@ AccountPolicyRegistry
 PolicyKey
 	public struct
 	0x2::account_policy
+Spent
+	public struct
+	0x2::account_policy
+Custody
+	public struct
+	0x2::account_policy
 PackagePermission
 	public struct
 	0x2::account_policy

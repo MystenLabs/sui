@@ -250,6 +250,10 @@ impl InvariantChecker {
                     continue;
                 }
             };
+            if sui_types::account_policy::is_spent_type(&event.write.address.ty) {
+                // Account policy spend counters are bookkeeping, not funds.
+                continue;
+            }
             if !Balance::is_balance_type(&event.write.address.ty) {
                 debug_fatal!(
                     "Integer accumulator value at non-Balance type: {:?}",

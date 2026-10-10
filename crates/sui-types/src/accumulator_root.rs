@@ -135,6 +135,16 @@ pub trait UnsettledObjectFundsRead {
         account: &AccumulatorObjId,
         accumulator_version: SequenceNumber,
     ) -> u128;
+
+    /// Account policy spend merged at `account` by transactions that read the accumulator root
+    /// at `accumulator_version` and are not yet settled.
+    fn get_unsettled_counter_merge(
+        &self,
+        _account: &AccumulatorObjId,
+        _accumulator_version: SequenceNumber,
+    ) -> u128 {
+        0
+    }
 }
 
 pub struct EmptyUnsettledObjectFunds;
@@ -149,6 +159,18 @@ impl UnsettledObjectFundsRead for EmptyUnsettledObjectFunds {
     }
 }
 
+/// Accumulator types stored as a `U128` sum: balances, and account policy spend counters.
+fn ensure_u128_accumulator_type(type_: &TypeTag) -> SuiResult<()> {
+    if Balance::is_balance_type(type_) || crate::account_policy::is_spent_type(type_) {
+        Ok(())
+    } else {
+        Err(SuiErrorKind::TypeError {
+            error: "only Balance<T> and account policy counters are supported".to_string(),
+        }
+        .into())
+    }
+}
+
 impl AccumulatorValue {
     pub fn as_u128(&self) -> Option<u128> {
         match self {
@@ -157,12 +179,7 @@ impl AccumulatorValue {
     }
 
     pub fn get_field_id(owner: SuiAddress, type_: &TypeTag) -> SuiResult<AccumulatorObjId> {
-        if !Balance::is_balance_type(type_) {
-            return Err(SuiErrorKind::TypeError {
-                error: "only Balance<T> is supported".to_string(),
-            }
-            .into());
-        }
+        ensure_u128_accumulator_type(type_)?;
 
         let key = AccumulatorKey { owner };
         Ok(AccumulatorObjId(
@@ -182,12 +199,7 @@ impl AccumulatorValue {
         owner: SuiAddress,
         type_: &TypeTag,
     ) -> SuiResult<bool> {
-        if !Balance::is_balance_type(type_) {
-            return Err(SuiErrorKind::TypeError {
-                error: "only Balance<T> is supported".to_string(),
-            }
-            .into());
-        }
+        ensure_u128_accumulator_type(type_)?;
 
         let key = AccumulatorKey { owner };
         DynamicFieldKey(
@@ -223,12 +235,7 @@ impl AccumulatorValue {
         owner: SuiAddress,
         type_: &TypeTag,
     ) -> SuiResult<Option<Self>> {
-        if !Balance::is_balance_type(type_) {
-            return Err(SuiErrorKind::TypeError {
-                error: "only Balance<T> is supported".to_string(),
-            }
-            .into());
-        }
+        ensure_u128_accumulator_type(type_)?;
 
         let key = AccumulatorKey { owner };
         let key_type_tag = AccumulatorKey::get_type_tag(std::slice::from_ref(type_));

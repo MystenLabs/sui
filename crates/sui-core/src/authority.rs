@@ -2038,6 +2038,13 @@ impl AuthorityState {
                 tx_digest,
             );
 
+        if protocol_config.enable_account_policy()
+            && let Some(accumulator_version) = accumulator_version
+        {
+            self.unsettled_object_withdrawals
+                .record_account_policy_spends(&effects, accumulator_version);
+        }
+
         if !protocol_config.check_object_funds_withdraw_in_execution() {
             // TODO: Move the object funds checker to the executor so that it can eventually be
             // removed from the active code path.

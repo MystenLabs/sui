@@ -52,7 +52,7 @@ use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, TypeTag, is_system_package};
 
 mod account_policy;
 pub(crate) mod invariants;
-use account_policy::AccountPolicyTxInputs;
+use account_policy::{AccountPolicySpend, AccountPolicyTxInputs};
 use invariants::InvariantChecker;
 
 /// Declared allowance ids per `(funder, funds type)` key.
@@ -166,6 +166,9 @@ pub struct TemporaryStore<'backing> {
 
     /// The PTB command that took each object by value, deleted it, or gave it a new owner.
     object_consumers: BTreeMap<ObjectID, u16>,
+    /// Spend this transaction charges against the sender's account policy budgets, once the
+    /// policy check has established that an active policy applies.
+    account_policy_spend: Option<AccountPolicySpend>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -276,6 +279,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_system_objects: RefCell::new(BTreeMap::new()),
             unsettled_object_funds,
             object_consumers: BTreeMap::new(),
+            account_policy_spend: None,
         }
     }
 
@@ -765,6 +769,7 @@ impl<'backing> TemporaryStore<'backing> {
             execution_results: _,
             invariants: _,
             object_consumers: _,
+            account_policy_spend: _,
         } = self;
         let mut bump_only = Self {
             store,
@@ -787,6 +792,7 @@ impl<'backing> TemporaryStore<'backing> {
             execution_results: ExecutionResultsV2::default(),
             invariants: InvariantChecker::default(),
             object_consumers: BTreeMap::new(),
+            account_policy_spend: None,
         };
         // The only writes a BumpOnly exit records: bump the versions of the mutable inputs it locked.
         bump_only.ensure_active_inputs_mutated();

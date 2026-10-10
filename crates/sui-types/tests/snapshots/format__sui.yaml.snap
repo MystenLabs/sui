@@ -19,6 +19,8 @@ AccountPolicyViolationKind:
       CoinOutflowExceeded: UNIT
     4:
       ObjectTransferNotAllowed: UNIT
+    5:
+      CustodyLimitExceeded: UNIT
 AccumulatorAddress:
   STRUCT:
     - address:

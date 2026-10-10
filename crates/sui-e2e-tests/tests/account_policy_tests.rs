@@ -17,15 +17,15 @@ use sui_types::{
         AccountPolicyViolationKind, ExecutionFailure, ExecutionFailureStatus, ExecutionStatus,
     },
     object::Owner,
-    transaction::{
-        CallArg, ObjectArg, SharedObjectMutability,
-        TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE, Transaction, TransactionData,
-    },
+    transaction::{CallArg, ObjectArg, SharedObjectMutability, Transaction, TransactionData},
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 
 const MIST_PER_SUI: u64 = 1_000_000_000;
+/// Per-epoch SUI budget of the test policy.
 const SUI_LIMIT: u64 = MIST_PER_SUI;
+/// Gas budget of every test transaction; the policy counts it against `SUI_LIMIT`.
+const GAS_BUDGET: u64 = 50_000_000;
 const SUI_TYPE: &str = "0x2::sui::SUI";
 
 struct Env {
@@ -89,7 +89,7 @@ impl Env {
             recipient: addresses[2],
             stranger: addresses[3],
             rgp,
-            gas_cap: rgp * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+            gas_cap: 2 * GAS_BUDGET,
             registry,
             _guard: guard,
         }
@@ -105,7 +105,7 @@ impl Env {
 
     async fn builder(&self, sender: SuiAddress) -> TestTransactionBuilder {
         let gas = self.gas_objects(sender).await[0];
-        TestTransactionBuilder::new(sender, gas, self.rgp)
+        TestTransactionBuilder::new(sender, gas, self.rgp).with_gas_budget(GAS_BUDGET)
     }
 
     async fn execute(&self, tx_data: TransactionData) -> TransactionEffects {
@@ -191,10 +191,16 @@ impl Env {
         package: ObjectID,
         custody: bool,
         custody_types: Vec<String>,
+        custody_limit: Option<u64>,
     ) -> TransactionData {
         self.policy_call_tx(
             "set_package",
-            vec![pure(&package), pure(&custody), pure(&custody_types)],
+            vec![
+                pure(&package),
+                pure(&custody),
+                pure(&custody_types),
+                pure(&custody_limit),
+            ],
         )
         .await
     }
@@ -503,7 +509,7 @@ async fn test_account_policy_package_custody() {
     env.cluster.trigger_reconfiguration().await;
 
     // Allowed to be called, but not trusted with the owner's objects.
-    env.execute_with_guardian(env.set_package_tx(package.id, false, vec![]).await)
+    env.execute_with_guardian(env.set_package_tx(package.id, false, vec![], None).await)
         .await;
     let fresh_item = env.mint_item(&package).await;
     assert_violation(
@@ -527,7 +533,7 @@ async fn test_account_policy_package_custody() {
 
     // Custody limited to a type the items are not.
     env.execute_with_guardian(
-        env.set_package_tx(package.id, true, vec![package.wrapper_type()])
+        env.set_package_tx(package.id, true, vec![package.wrapper_type()], None)
             .await,
     )
     .await;
@@ -539,7 +545,7 @@ async fn test_account_policy_package_custody() {
 
     // Custody of items: wrapping, burning and sending all pass.
     env.execute_with_guardian(
-        env.set_package_tx(package.id, true, vec![package.item_type()])
+        env.set_package_tx(package.id, true, vec![package.item_type()], None)
             .await,
     )
     .await;
@@ -599,5 +605,52 @@ async fn test_account_policy_disable_requires_guardian_co_signature() {
     env.execute_with_guardian(env.policy_call_tx("disable", vec![]).await)
         .await;
     env.execute_ok(env.transfer_sui_tx(2 * SUI_LIMIT, env.stranger).await)
+        .await;
+}
+
+#[sim_test]
+async fn test_account_policy_budget_spans_the_epoch() {
+    let env = Env::new().await;
+    env.enable_policy().await;
+    env.cluster.trigger_reconfiguration().await;
+
+    // Two transfers each under the limit together exceed it; a failed attempt still costs gas,
+    // and the budget resets with the epoch.
+    env.execute_ok(env.transfer_sui_tx(SUI_LIMIT * 6 / 10, env.stranger).await)
+        .await;
+    assert_violation(
+        &env.execute(env.transfer_sui_tx(SUI_LIMIT * 6 / 10, env.stranger).await)
+            .await,
+        AccountPolicyViolationKind::CoinOutflowExceeded,
+    );
+    env.execute_ok(env.transfer_sui_tx(SUI_LIMIT / 10, env.stranger).await)
+        .await;
+
+    env.cluster.trigger_reconfiguration().await;
+    env.execute_ok(env.transfer_sui_tx(SUI_LIMIT * 6 / 10, env.stranger).await)
+        .await;
+}
+
+#[sim_test]
+async fn test_account_policy_custody_limit_spans_the_epoch() {
+    let env = Env::new().await;
+    let package = env.publish_test_package().await;
+    let first = env.mint_item(&package).await;
+    let second = env.mint_item(&package).await;
+    env.enable_policy().await;
+    env.cluster.trigger_reconfiguration().await;
+
+    env.execute_with_guardian(env.set_package_tx(package.id, true, vec![], Some(1)).await)
+        .await;
+    env.execute_ok(env.item_call_tx(&package, "burn", first, vec![]).await)
+        .await;
+    assert_violation(
+        &env.execute(env.item_call_tx(&package, "burn", second, vec![]).await)
+            .await,
+        AccountPolicyViolationKind::CustodyLimitExceeded,
+    );
+
+    env.cluster.trigger_reconfiguration().await;
+    env.execute_ok(env.item_call_tx(&package, "burn", second, vec![]).await)
         .await;
 }

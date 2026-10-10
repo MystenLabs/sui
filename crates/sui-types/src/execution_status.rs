@@ -318,6 +318,8 @@ pub enum AccountPolicyViolationKind {
     CoinOutflowExceeded,
     #[error("an object left the sender's ownership")]
     ObjectTransferNotAllowed,
+    #[error("a package took more of the sender's objects than its per-epoch custody limit")]
+    CustodyLimitExceeded,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]

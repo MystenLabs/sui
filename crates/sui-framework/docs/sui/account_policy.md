@@ -7,10 +7,12 @@ Opt-in account policies that bound what a transaction signed by the account key 
 Policies are dynamic fields of the singleton <code><a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a></code>, keyed by owner address.
 Every transaction implicitly reads the registry at the version consensus assigned to it, so
 execution can look up the sender's policy without the transaction declaring it. While a policy
-is active, execution enforces a gas budget cap, a per-transaction outflow limit for each coin
-type, a package allowlist, and that the owner's objects stay with the owner unless they go to a
-listed recipient or are taken by a package with custody permission. A transaction co-signed by
-the guardian is exempt.
+is active, execution enforces a gas budget cap, a per-epoch outflow limit for each coin type
+(gas included for SUI), a package allowlist, and that the owner's objects stay with the owner
+unless they go to a listed recipient or are taken by a package with custody permission, itself
+optionally capped per epoch. Spend is tracked in accumulator counters keyed by owner and epoch,
+so it needs no sequencing between the owner's transactions. A transaction co-signed by the
+guardian is exempt.
 
 A policy only takes effect <code><a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a></code> after it is enabled. Until then the owner
 can change or cancel it with the key alone, so an attacker holding the key cannot lock the
@@ -20,6 +22,8 @@ guardian's co-signature.
 
 -  [Struct `AccountPolicyRegistry`](#sui_account_policy_AccountPolicyRegistry)
 -  [Struct `PolicyKey`](#sui_account_policy_PolicyKey)
+-  [Struct `Spent`](#sui_account_policy_Spent)
+-  [Struct `Custody`](#sui_account_policy_Custody)
 -  [Struct `PackagePermission`](#sui_account_policy_PackagePermission)
 -  [Struct `AccountPolicy`](#sui_account_policy_AccountPolicy)
 -  [Constants](#@Constants_0)
@@ -112,6 +116,51 @@ Dynamic field key of an owner's policy.
 
 </details>
 
+<a name="sui_account_policy_Spent"></a>
+
+## Struct `Spent`
+
+Accumulator type of a policy's per-epoch spend counter for <code>T</code>: a coin type for coin outflow,
+or <code><a href="../sui/account_policy.md#sui_account_policy_Custody">Custody</a></code> for objects taken by a package. Written by execution, never by Move code.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/account_policy.md#sui_account_policy_Spent">Spent</a>&lt;<b>phantom</b> T&gt; <b>has</b> drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+</dl>
+
+
+</details>
+
+<a name="sui_account_policy_Custody"></a>
+
+## Struct `Custody`
+
+Marker for custody counters.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/account_policy.md#sui_account_policy_Custody">Custody</a> <b>has</b> drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+</dl>
+
+
+</details>
+
 <a name="sui_account_policy_PackagePermission"></a>
 
 ## Struct `PackagePermission`
@@ -141,6 +190,12 @@ What a listed package may do with the owner's objects. Field layout is mirrored 
 </dt>
 <dd>
  Object types custody is limited to, as type strings; empty means any type.
+</dd>
+<dt>
+<code>custody_limit: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;</code>
+</dt>
+<dd>
+ Maximum number of the owner's objects the package may take per epoch, if bounded.
 </dd>
 </dl>
 
@@ -189,8 +244,8 @@ The policy itself. Field layout is mirrored by <code>sui_types::account_policy::
 <code>coin_limits: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, u64&gt;</code>
 </dt>
 <dd>
- Per-transaction net outflow limit (in the coin's smallest unit) by coin type string.
- Types without an entry may not flow out at all.
+ Per-epoch net outflow limit (in the coin's smallest unit) by coin type string, gas
+ included for SUI. Types without an entry may not flow out at all.
 </dd>
 <dt>
 <code>recipients: <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<b>address</b>&gt;</code>
@@ -449,7 +504,7 @@ Stop enforcing the sender's active policy. The guardian must co-sign.
 
 ## Function `set_coin_limit`
 
-Set the per-transaction outflow limit of <code>coin_type</code> (e.g. <code><a href="../sui/sui.md#sui_sui_SUI">0x2::sui::SUI</a></code>).
+Set the per-epoch outflow limit of <code>coin_type</code> (e.g. <code><a href="../sui/sui.md#sui_sui_SUI">0x2::sui::SUI</a></code>).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_coin_limit">set_coin_limit</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, coin_type: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, limit: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -545,10 +600,11 @@ Set the per-transaction outflow limit of <code>coin_type</code> (e.g. <code><a h
 
 ## Function `set_package`
 
-Allow calling <code><a href="../sui/package.md#sui_package">package</a></code> (its original ID), optionally with custody of the owner's objects.
+Allow calling <code><a href="../sui/package.md#sui_package">package</a></code> (its original ID), optionally with custody of the owner's objects,
+limited to <code>custody_types</code> (empty for any) and to <code>custody_limit</code> objects per epoch.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_package">set_package</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, <a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, custody: bool, custody_types: vector&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_package">set_package</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, <a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, custody: bool, custody_types: vector&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;, custody_limit: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -562,11 +618,12 @@ Allow calling <code><a href="../sui/package.md#sui_package">package</a></code> (
     <a href="../sui/package.md#sui_package">package</a>: ID,
     custody: bool,
     custody_types: vector&lt;String&gt;,
+    custody_limit: Option&lt;u64&gt;,
     ctx: &TxContext,
 ) {
     <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
     policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
-    <b>let</b> permission = <a href="../sui/account_policy.md#sui_account_policy_PackagePermission">PackagePermission</a> { custody, custody_types };
+    <b>let</b> permission = <a href="../sui/account_policy.md#sui_account_policy_PackagePermission">PackagePermission</a> { custody, custody_types, custody_limit };
     <b>if</b> (policy.packages.contains(&<a href="../sui/package.md#sui_package">package</a>)) {
         *policy.packages.get_mut(&<a href="../sui/package.md#sui_package">package</a>) = permission;
     } <b>else</b> {

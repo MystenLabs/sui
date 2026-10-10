@@ -12,7 +12,7 @@ use sui_types::{
     accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
     base_types::SequenceNumber,
     digests::ChainIdentifier,
-    effects::{TransactionEffects, TransactionEffectsAPI},
+    effects::{AccumulatorOperation, AccumulatorValue, TransactionEffects, TransactionEffectsAPI},
     transaction::{TransactionData, TransactionDataAPI},
 };
 
@@ -39,6 +39,10 @@ struct Inner {
     /// unused entries in unsettled_withdraws that are now fully committed. Without doing so unsettled_withdraws
     /// may grow unbounded.
     unsettled_accounts: BTreeMap<SequenceNumber, BTreeSet<AccumulatorObjId>>,
+    /// Account policy spend merged into counters at each accumulator version and not yet settled.
+    /// Same shape and lifecycle as `unsettled_withdraws`; the policy check adds it to the settled
+    /// counter value to bound spend within a commit.
+    unsettled_counter_merges: BTreeMap<AccumulatorObjId, BTreeMap<SequenceNumber, u128>>,
 }
 
 impl UnsettledObjectFundsRead for UnsettledObjectWithdrawals {
@@ -52,6 +56,20 @@ impl UnsettledObjectFundsRead for UnsettledObjectWithdrawals {
             account,
             accumulator_version,
         )
+    }
+
+    fn get_unsettled_counter_merge(
+        &self,
+        account: &AccumulatorObjId,
+        accumulator_version: SequenceNumber,
+    ) -> u128 {
+        self.inner
+            .read()
+            .unsettled_counter_merges
+            .get(account)
+            .and_then(|merges| merges.get(&accumulator_version))
+            .copied()
+            .unwrap_or_default()
     }
 }
 
@@ -156,6 +174,44 @@ impl UnsettledObjectWithdrawals {
             .inc();
     }
 
+    /// Record the account policy spend counters an executed transaction merged into, so later
+    /// transactions in the same commit see it before settlement.
+    pub fn record_account_policy_spends(
+        &self,
+        effects: &TransactionEffects,
+        accumulator_version: SequenceNumber,
+    ) {
+        let merges: Vec<_> = effects
+            .accumulator_events()
+            .into_iter()
+            .filter(|event| sui_types::account_policy::is_spent_type(&event.write.address.ty))
+            .filter_map(|event| match (&event.write.operation, &event.write.value) {
+                (AccumulatorOperation::Merge, AccumulatorValue::Integer(amount)) => {
+                    Some((event.accumulator_obj, *amount as u128))
+                }
+                _ => None,
+            })
+            .collect();
+        if merges.is_empty() {
+            return;
+        }
+        let mut inner = self.inner.write();
+        for (account, amount) in merges {
+            let entry = inner
+                .unsettled_counter_merges
+                .entry(account)
+                .or_default()
+                .entry(accumulator_version)
+                .or_default();
+            *entry = entry.saturating_add(amount);
+            inner
+                .unsettled_accounts
+                .entry(accumulator_version)
+                .or_default()
+                .insert(account);
+        }
+    }
+
     fn update_unsettled_metrics(&self, inner: &Inner) {
         self.metrics
             .unsettled_accounts
@@ -179,6 +235,12 @@ impl UnsettledObjectWithdrawals {
                     withdraws.remove(&accumulator_version);
                     if withdraws.is_empty() {
                         inner.unsettled_withdraws.remove(&account);
+                    }
+                }
+                if let Some(merges) = inner.unsettled_counter_merges.get_mut(&account) {
+                    merges.remove(&accumulator_version);
+                    if merges.is_empty() {
+                        inner.unsettled_counter_merges.remove(&account);
                     }
                 }
             }

@@ -14,9 +14,11 @@ use crate::{
     SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_PACKAGE_ID,
     base_types::{ObjectID, SuiAddress},
     collection_types::{VecMap, VecSet},
+    crypto::DefaultHash,
     dynamic_field::{Field, derive_dynamic_field_id},
     object::Object,
 };
+use fastcrypto::hash::HashFunction;
 use move_core_types::{
     ident_str,
     identifier::IdentStr,
@@ -26,6 +28,46 @@ use serde::{Deserialize, Serialize};
 
 pub const ACCOUNT_POLICY_MODULE_NAME: &IdentStr = ident_str!("account_policy");
 pub const POLICY_KEY_STRUCT_NAME: &IdentStr = ident_str!("PolicyKey");
+pub const SPENT_STRUCT_NAME: &IdentStr = ident_str!("Spent");
+pub const CUSTODY_STRUCT_NAME: &IdentStr = ident_str!("Custody");
+
+fn account_policy_struct(name: &IdentStr, type_params: Vec<TypeTag>) -> TypeTag {
+    TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: ACCOUNT_POLICY_MODULE_NAME.to_owned(),
+        name: name.to_owned(),
+        type_params,
+    }))
+}
+
+/// Accumulator type of a policy's per-epoch spend counter for `inner`: a coin type for coin
+/// outflow, or `Custody` for objects taken by a package.
+pub fn spent_type_tag(inner: TypeTag) -> TypeTag {
+    account_policy_struct(SPENT_STRUCT_NAME, vec![inner])
+}
+
+pub fn custody_type_tag() -> TypeTag {
+    account_policy_struct(CUSTODY_STRUCT_NAME, vec![])
+}
+
+/// Whether `type_` is a policy spend counter, which the accumulator machinery settles like a
+/// balance.
+pub fn is_spent_type(type_: &TypeTag) -> bool {
+    matches!(type_, TypeTag::Struct(tag)
+        if tag.address == SUI_FRAMEWORK_ADDRESS
+            && tag.module.as_ident_str() == ACCOUNT_POLICY_MODULE_NAME
+            && tag.name.as_ident_str() == SPENT_STRUCT_NAME)
+}
+
+/// Accumulator address of a policy's spend counters: one per owner and epoch, and per package
+/// for custody counts. A fresh address each epoch is what resets the budget.
+pub fn counter_address(owner: SuiAddress, epoch: u64, package: Option<ObjectID>) -> SuiAddress {
+    let mut hasher = DefaultHash::default();
+    hasher.update(b"sui::account_policy::counter");
+    bcs::serialize_into(&mut hasher, &(owner, epoch, package))
+        .expect("counter key serialization cannot fail");
+    SuiAddress::from_bytes(hasher.finalize().digest).expect("digest is address sized")
+}
 
 /// Mirrors `sui::account_policy::PolicyKey`, the dynamic field key of an owner's policy.
 #[derive(Serialize, Deserialize)]
@@ -54,6 +96,8 @@ pub struct PackagePermission {
     pub custody: bool,
     /// Object types custody is limited to, as type strings; empty means any type.
     pub custody_types: Vec<String>,
+    /// Maximum number of the owner's objects the package may take per epoch, if bounded.
+    pub custody_limit: Option<u64>,
 }
 
 impl PackagePermission {
@@ -75,8 +119,8 @@ pub struct AccountPolicy {
     pub gas_budget_cap: u64,
     /// First epoch in which the policy is enforced. `u64::MAX` means disabled.
     pub activation_epoch: u64,
-    /// Per-transaction net outflow limit by coin type string. Types without an entry may not
-    /// flow out at all.
+    /// Per-epoch net outflow limit by coin type string, gas included for SUI. Types without an
+    /// entry may not flow out at all.
     pub coin_limits: VecMap<String, u64>,
     /// Addresses (or object IDs) that coins and objects may be sent to without limit.
     pub recipients: VecSet<SuiAddress>,
@@ -128,11 +172,22 @@ impl AccountPolicy {
     pub fn allows_custody(&self, original_package_id: ObjectID, object_type: &TypeTag) -> bool {
         original_package_id == SUI_SYSTEM_PACKAGE_ID
             || self
-                .packages
-                .contents
-                .iter()
-                .find(|entry| entry.key == original_package_id)
-                .is_some_and(|entry| entry.value.allows_custody_of(object_type))
+                .package_permission(original_package_id)
+                .is_some_and(|permission| permission.allows_custody_of(object_type))
+    }
+
+    /// The per-epoch cap on objects `original_package_id` may take, if the policy sets one.
+    pub fn custody_limit(&self, original_package_id: ObjectID) -> Option<u64> {
+        self.package_permission(original_package_id)
+            .and_then(|permission| permission.custody_limit)
+    }
+
+    fn package_permission(&self, original_package_id: ObjectID) -> Option<&PackagePermission> {
+        self.packages
+            .contents
+            .iter()
+            .find(|entry| entry.key == original_package_id)
+            .map(|entry| &entry.value)
     }
 }
 

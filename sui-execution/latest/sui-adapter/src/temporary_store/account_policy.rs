@@ -8,16 +8,25 @@
 //! policy. The registry read is only recorded in effects when the sender has a policy: a
 //! transaction whose sender has none behaves identically whether or not the version is pinned on
 //! replay.
+//!
+//! Per-epoch budgets are tracked in accumulator counters keyed by owner and epoch. The check reads
+//! the counter settled at the assigned accumulator root version plus the merges of earlier
+//! transactions in the same commit, and the transaction's own spend is merged after gas is
+//! charged, whether or not it succeeded, so failing transactions still consume gas budget.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use move_core_types::language_storage::TypeTag;
 use mysten_common::debug_fatal;
 use sui_types::{
-    SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
-    account_policy::{AccountPolicy, account_policy_field_id},
+    SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID, SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    account_policy::{
+        AccountPolicy, account_policy_field_id, counter_address, custody_type_tag, spent_type_tag,
+    },
+    accumulator_event::AccumulatorEvent,
+    accumulator_root::AccumulatorValue as AccumulatorRootValue,
     base_types::{ObjectID, SuiAddress},
-    effects::{AccumulatorOperation, AccumulatorValue},
+    effects::{AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1},
     error::ExecutionError,
     execution_status::{AccountPolicyViolationKind, ExecutionErrorKind},
     gas_coin::GAS,
@@ -73,11 +82,21 @@ impl AccountPolicyTxInputs {
     }
 }
 
+/// What a transaction charges against its sender's per-epoch budgets.
+pub(super) struct AccountPolicySpend {
+    owner: SuiAddress,
+    epoch: u64,
+    /// Net coin outflow by type; only charged if the transaction succeeds.
+    coin_outflows: BTreeMap<TypeTag, u64>,
+    /// Objects taken by each package (original ID); only charged if the transaction succeeds.
+    custody_counts: BTreeMap<ObjectID, u64>,
+}
+
 impl TemporaryStore<'_> {
     /// Rejects the transaction if the sender has an active account policy that it violates.
     /// Runs after execution so it sees final ownership and balances, and before gas is charged,
-    /// which is why the gas budget cap, not the gas actually used, bounds gas spend.
-    pub(crate) fn check_account_policy(&self) -> Result<(), ExecutionError> {
+    /// so gas is checked against the budget cap and the gas budget rather than what was used.
+    pub(crate) fn check_account_policy(&mut self) -> Result<(), ExecutionError> {
         let Some(inputs) = &self.post_execution_check_inputs.account_policy else {
             return Ok(());
         };
@@ -87,6 +106,29 @@ impl TemporaryStore<'_> {
         if !policy.is_active(self.cur_epoch) || policy.is_guardian_approved(&inputs.co_signers) {
             return Ok(());
         }
+        // From here on the policy applies, so the transaction's gas counts against the budget
+        // even if a rule below rejects it.
+        let mut spend = AccountPolicySpend {
+            owner: inputs.sender,
+            epoch: self.cur_epoch,
+            coin_outflows: BTreeMap::new(),
+            custody_counts: BTreeMap::new(),
+        };
+        let result = self.check_rules(&policy, &mut spend);
+        self.account_policy_spend = Some(spend);
+        result
+    }
+
+    fn check_rules(
+        &self,
+        policy: &AccountPolicy,
+        spend: &mut AccountPolicySpend,
+    ) -> Result<(), ExecutionError> {
+        let inputs = self
+            .post_execution_check_inputs
+            .account_policy
+            .as_ref()
+            .expect("checked by caller");
         let violation = |kind| {
             Err(ExecutionError::from_kind(
                 ExecutionErrorKind::AccountPolicyViolation { kind },
@@ -143,8 +185,22 @@ impl TemporaryStore<'_> {
                 .and_then(|command| called_packages.get(usize::from(*command)))
                 .copied()
                 .flatten();
-            if !custodian.is_some_and(|package| policy.allows_custody(package, &object_type)) {
+            let Some(package) =
+                custodian.filter(|package| policy.allows_custody(*package, &object_type))
+            else {
                 return violation(AccountPolicyViolationKind::ObjectTransferNotAllowed);
+            };
+            *spend.custody_counts.entry(package).or_default() += 1;
+        }
+        for (package, count) in &spend.custody_counts {
+            if let Some(limit) = policy.custody_limit(*package) {
+                let taken = self.counter_total(
+                    counter_address(sender, self.cur_epoch, Some(*package)),
+                    spent_type_tag(custody_type_tag()),
+                );
+                if taken + u128::from(*count) > u128::from(limit) {
+                    return violation(AccountPolicyViolationKind::CustodyLimitExceeded);
+                }
             }
         }
 
@@ -188,12 +244,95 @@ impl TemporaryStore<'_> {
             };
             *outflows.entry(coin_type).or_default() += delta;
         }
+        // Gas is SUI outflow too; the budget is the bound known before gas is charged.
+        outflows.entry(GAS::type_tag()).or_default();
         for (coin_type, outflow) in outflows {
-            if outflow > policy.coin_limit(&coin_type) as i128 {
+            let outflow = u64::try_from(outflow).unwrap_or(0);
+            let gas = if coin_type == GAS::type_tag() {
+                inputs.gas_budget
+            } else {
+                0
+            };
+            let spent = self.counter_total(
+                counter_address(sender, self.cur_epoch, None),
+                spent_type_tag(coin_type.clone()),
+            );
+            if spent + u128::from(outflow) + u128::from(gas)
+                > u128::from(policy.coin_limit(&coin_type))
+            {
                 return violation(AccountPolicyViolationKind::CoinOutflowExceeded);
+            }
+            if outflow > 0 {
+                spend.coin_outflows.insert(coin_type, outflow);
             }
         }
         Ok(())
+    }
+
+    /// Merges this transaction's spend into the sender's per-epoch counters. Coin outflow and
+    /// custody only count for a successful transaction, whose writes stand; gas counts always.
+    pub(crate) fn record_account_policy_spend(&mut self, gas_used: u64, succeeded: bool) {
+        let Some(spend) = self.account_policy_spend.take() else {
+            return;
+        };
+        let mut merges: Vec<(SuiAddress, TypeTag, u64)> = Vec::new();
+        let coin_address = counter_address(spend.owner, spend.epoch, None);
+        let mut sui_spent = gas_used;
+        if succeeded {
+            for (coin_type, amount) in spend.coin_outflows {
+                if coin_type == GAS::type_tag() {
+                    sui_spent = sui_spent.saturating_add(amount);
+                } else {
+                    merges.push((coin_address, spent_type_tag(coin_type), amount));
+                }
+            }
+            for (package, count) in spend.custody_counts {
+                merges.push((
+                    counter_address(spend.owner, spend.epoch, Some(package)),
+                    spent_type_tag(custody_type_tag()),
+                    count,
+                ));
+            }
+        }
+        if sui_spent > 0 {
+            merges.push((coin_address, spent_type_tag(GAS::type_tag()), sui_spent));
+        }
+        for (address, type_, amount) in merges {
+            let Ok(field_id) = AccumulatorRootValue::get_field_id(address, &type_) else {
+                debug_fatal!("account policy counter type {type_} is not an accumulator type");
+                continue;
+            };
+            self.add_accumulator_event(AccumulatorEvent::new(
+                field_id,
+                AccumulatorWriteV1 {
+                    address: AccumulatorAddress::new(address, type_),
+                    operation: AccumulatorOperation::Merge,
+                    value: AccumulatorValue::Integer(amount),
+                },
+            ));
+        }
+    }
+
+    /// Settled value of a spend counter at the assigned accumulator root version, plus merges from
+    /// earlier transactions in the same commit. Zero if accumulators are not enabled.
+    fn counter_total(&self, address: SuiAddress, type_: TypeTag) -> u128 {
+        let Some(root) = self.load_implicitly_read_system_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+        else {
+            return 0;
+        };
+        let version = root.version();
+        let settled = AccumulatorRootValue::load(self, Some(version), address, &type_)
+            .ok()
+            .flatten()
+            .and_then(|value| value.as_u128())
+            .unwrap_or(0);
+        let unsettled = AccumulatorRootValue::get_field_id(address, &type_)
+            .map(|field_id| {
+                self.unsettled_object_funds
+                    .get_unsettled_counter_merge(&field_id, version)
+            })
+            .unwrap_or(0);
+        settled.saturating_add(unsettled)
     }
 
     /// The sender's policy as of the registry version assigned to this transaction, if any.

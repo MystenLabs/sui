@@ -57,6 +57,8 @@ enum MergedValue {
 
 enum ClassifiedType {
     Balance,
+    /// `sui::account_policy::Spent<T>`, a per-epoch spend counter settled like a balance.
+    AccountPolicyCounter,
     Unknown,
 }
 
@@ -71,6 +73,9 @@ impl ClassifiedType {
             && struct_tag.name.as_ident_str() == BALANCE_STRUCT_NAME
         {
             return Self::Balance;
+        }
+        if sui_types::account_policy::is_spent_type(ty) {
+            return Self::AccountPolicyCounter;
         }
 
         Self::Unknown
@@ -91,7 +96,7 @@ impl MergedValue {
 
         match (ty, merge, split) {
             (
-                ClassifiedType::Balance,
+                ClassifiedType::Balance | ClassifiedType::AccountPolicyCounter,
                 MergedValue::SumU128(merge_amount),
                 MergedValue::SumU128(split_amount),
             ) => {

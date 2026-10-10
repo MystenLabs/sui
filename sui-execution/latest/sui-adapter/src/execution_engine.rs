@@ -840,6 +840,12 @@ pub(crate) mod checked {
                 .map_err(|error| (error.into(), BumpOnlyReason::WriteReset))?;
         }
         let cost_summary = gas_charger.charge(temporary_store, &result);
+        if protocol_config.enable_account_policy() {
+            temporary_store.record_account_policy_spend(
+                u64::try_from(cost_summary.net_gas_usage()).unwrap_or(0),
+                result.is_ok(),
+            );
+        }
         Ok(ExecutionOutcome {
             cost_summary,
             execution_result: result,

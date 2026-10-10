@@ -6,10 +6,12 @@
 /// Policies are dynamic fields of the singleton `AccountPolicyRegistry`, keyed by owner address.
 /// Every transaction implicitly reads the registry at the version consensus assigned to it, so
 /// execution can look up the sender's policy without the transaction declaring it. While a policy
-/// is active, execution enforces a gas budget cap, a per-transaction outflow limit for each coin
-/// type, a package allowlist, and that the owner's objects stay with the owner unless they go to a
-/// listed recipient or are taken by a package with custody permission. A transaction co-signed by
-/// the guardian is exempt.
+/// is active, execution enforces a gas budget cap, a per-epoch outflow limit for each coin type
+/// (gas included for SUI), a package allowlist, and that the owner's objects stay with the owner
+/// unless they go to a listed recipient or are taken by a package with custody permission, itself
+/// optionally capped per epoch. Spend is tracked in accumulator counters keyed by owner and epoch,
+/// so it needs no sequencing between the owner's transactions. A transaction co-signed by the
+/// guardian is exempt.
 ///
 /// A policy only takes effect `ACTIVATION_DELAY_EPOCHS` after it is enabled. Until then the owner
 /// can change or cancel it with the key alone, so an attacker holding the key cannot lock the
@@ -41,6 +43,13 @@ public struct AccountPolicyRegistry has key {
 /// Dynamic field key of an owner's policy.
 public struct PolicyKey(address) has copy, drop, store;
 
+/// Accumulator type of a policy's per-epoch spend counter for `T`: a coin type for coin outflow,
+/// or `Custody` for objects taken by a package. Written by execution, never by Move code.
+public struct Spent<phantom T> has drop {}
+
+/// Marker for custody counters.
+public struct Custody has drop {}
+
 /// What a listed package may do with the owner's objects. Field layout is mirrored by
 /// `sui_types::account_policy::PackagePermission`.
 public struct PackagePermission has copy, drop, store {
@@ -48,6 +57,8 @@ public struct PackagePermission has copy, drop, store {
     custody: bool,
     /// Object types custody is limited to, as type strings; empty means any type.
     custody_types: vector<String>,
+    /// Maximum number of the owner's objects the package may take per epoch, if bounded.
+    custody_limit: Option<u64>,
 }
 
 /// The policy itself. Field layout is mirrored by `sui_types::account_policy::AccountPolicy`.
@@ -57,8 +68,8 @@ public struct AccountPolicy has store {
     gas_budget_cap: u64,
     /// First epoch in which the policy is enforced; `DISABLED` if cancelled or disabled.
     activation_epoch: u64,
-    /// Per-transaction net outflow limit (in the coin's smallest unit) by coin type string.
-    /// Types without an entry may not flow out at all.
+    /// Per-epoch net outflow limit (in the coin's smallest unit) by coin type string, gas
+    /// included for SUI. Types without an entry may not flow out at all.
     coin_limits: VecMap<String, u64>,
     /// Addresses (or object IDs) that coins and objects may be sent to without limit.
     recipients: VecSet<address>,
@@ -129,7 +140,7 @@ public fun set_gas_budget_cap(
     policy.gas_budget_cap = gas_budget_cap;
 }
 
-/// Set the per-transaction outflow limit of `coin_type` (e.g. `0x2::sui::SUI`).
+/// Set the per-epoch outflow limit of `coin_type` (e.g. `0x2::sui::SUI`).
 public fun set_coin_limit(
     registry: &mut AccountPolicyRegistry,
     coin_type: String,
@@ -165,17 +176,19 @@ public fun remove_recipient(
     };
 }
 
-/// Allow calling `package` (its original ID), optionally with custody of the owner's objects.
+/// Allow calling `package` (its original ID), optionally with custody of the owner's objects,
+/// limited to `custody_types` (empty for any) and to `custody_limit` objects per epoch.
 public fun set_package(
     registry: &mut AccountPolicyRegistry,
     package: ID,
     custody: bool,
     custody_types: vector<String>,
+    custody_limit: Option<u64>,
     ctx: &TxContext,
 ) {
     let policy = registry.policy_mut(ctx.sender());
     policy.authorize(ctx);
-    let permission = PackagePermission { custody, custody_types };
+    let permission = PackagePermission { custody, custody_types, custody_limit };
     if (policy.packages.contains(&package)) {
         *policy.packages.get_mut(&package) = permission;
     } else {
