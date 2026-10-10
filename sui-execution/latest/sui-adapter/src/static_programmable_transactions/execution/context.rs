@@ -364,12 +364,6 @@ where
         let receiving_inputs = Locals::new_invalid(receiving_input_metadata.len())?;
         let mut new_gas_coin_id = None;
         let gas = match payment_location {
-            Some(gas_payment)
-                if matches!(gas_payment.location, PaymentLocation::AddressBalance(_))
-                    && !env.protocol_config.gasless_transaction_drop_safety() =>
-            {
-                None
-            }
             Some(gas_payment) => {
                 let ty = env.gas_coin_type()?;
                 let (gas_metadata, gas_value) = match gas_payment.location {
