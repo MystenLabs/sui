@@ -33,9 +33,14 @@ public fun timestamp_ms(clock: &Clock): u64 {
 
 /// A reference to the `Clock` without it being a transaction input.
 /// It is the same `Clock`, at the same timestamp, as one passed into
-/// the transaction, so any function can read the time without its
-/// callers having to pass a `Clock` down. Prefer this over taking a
-/// `Clock` parameter.
+/// the transaction.
+///
+/// Taking a `Clock` parameter instead forces every caller up to the
+/// entry function to accept and forward one, and the transaction to
+/// declare it as an input. Reading it here keeps the time an internal
+/// detail of the function that needs it: callers do not change when a
+/// function starts to need the time, and existing code written against
+/// `&Clock` can be called with `borrow()` from anywhere.
 public fun borrow(): &Clock {
     native_borrow()
 }
