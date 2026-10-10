@@ -10,7 +10,7 @@ use async_graphql::Interface;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
 use async_graphql::connection::Edge;
-use futures::future::try_join_all;
+use futures::future::join_all;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::dynamic_field::DynamicFieldType;
@@ -124,7 +124,7 @@ pub(crate) enum AddressTransactionRelationship {
     field(
         name = "multi_get_derived_objects",
         arg(name = "keys", ty = "Vec<DerivedObjectKey>"),
-        ty = "Result<Vec<Option<MoveObject>>, RpcError<dynamic_field::Error>>",
+        ty = "Result<Vec<Option<Result<MoveObject, RpcError<dynamic_field::Error>>>>, RpcError>",
         desc = "Access derived objects using their keys and optional version bounds.\n\nEach key can specify at most one of `version`, `rootVersion`, or `atCheckpoint`, with the same semantics as `Query.object`. Returns a list that is guaranteed to be the same length as `keys`. If a derived object has not been claimed, has been deleted, or is not available in the store, its corresponding entry is `null`.",
     ),
     field(
@@ -444,8 +444,8 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DerivedObjectKey>,
-    ) -> Result<Vec<Option<MoveObject>>, RpcError<dynamic_field::Error>> {
-        let objects = keys.into_iter().map(|key| {
+    ) -> Result<Vec<Option<Result<MoveObject, RpcError<dynamic_field::Error>>>>, RpcError> {
+        let objects = keys.into_iter().map(|key| async move {
             derived_object::by_key(
                 ctx,
                 self.scope.clone(),
@@ -457,9 +457,11 @@ impl Address {
                     at_checkpoint: key.at_checkpoint,
                 },
             )
+            .await
+            .transpose()
         });
 
-        try_join_all(objects).await
+        Ok(join_all(objects).await)
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
@@ -469,8 +471,8 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
-        let fields = keys.into_iter().map(|key| {
+    ) -> Result<Vec<Option<Result<DynamicField, RpcError<dynamic_field::Error>>>>, RpcError> {
+        let fields = keys.into_iter().map(|key| async move {
             DynamicField::by_name(
                 ctx,
                 self.scope.clone(),
@@ -478,9 +480,11 @@ impl Address {
                 DynamicFieldType::DynamicField,
                 key,
             )
+            .await
+            .transpose()
         });
 
-        try_join_all(fields).await
+        Ok(join_all(fields).await)
     }
 
     /// Access dynamic object fields on an object using their types and BCS-encoded names.
@@ -490,8 +494,8 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
-        try_join_all(keys.into_iter().map(|key| {
+    ) -> Result<Vec<Option<Result<DynamicField, RpcError<dynamic_field::Error>>>>, RpcError> {
+        let fields = keys.into_iter().map(|key| async move {
             DynamicField::by_name(
                 ctx,
                 self.scope.clone(),
@@ -499,8 +503,11 @@ impl Address {
                 DynamicFieldType::DynamicObject,
                 key,
             )
-        }))
-        .await
+            .await
+            .transpose()
+        });
+
+        Ok(join_all(fields).await)
     }
 
     /// Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.

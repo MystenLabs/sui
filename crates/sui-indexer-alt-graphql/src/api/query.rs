@@ -9,7 +9,7 @@ use async_graphql::Result;
 use async_graphql::connection::Connection;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
-use futures::future::try_join_all;
+use futures::future::join_all;
 use prost_types::FieldMask;
 use sui_indexer_alt_reader::fullnode_client::Error::GrpcExecutionError;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
@@ -339,13 +339,14 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<AddressKey>,
-    ) -> Result<Vec<Option<Address>>, RpcError<address::Error>> {
+    ) -> Result<Vec<Option<Result<Address, RpcError<address::Error>>>>, RpcError> {
         let scope = self.scope(ctx)?;
-        let addresses = keys
-            .into_iter()
-            .map(|k| Address::by_key(ctx, scope.clone(), k));
+        let addresses = keys.into_iter().map(|key| {
+            let scope = scope.clone();
+            async move { Address::by_key(ctx, scope, key).await.transpose() }
+        });
 
-        try_join_all(addresses).await
+        Ok(join_all(addresses).await)
     }
 
     /// Fetch balances by their addresses and coin types.
@@ -391,13 +392,14 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<UInt53>,
-    ) -> Result<Vec<Option<Epoch>>, RpcError> {
+    ) -> Result<Vec<Option<Result<Epoch, RpcError>>>, RpcError> {
         let scope = self.scope(ctx)?;
-        let epochs = keys
-            .into_iter()
-            .map(|k| Epoch::fetch(ctx, scope.clone(), Some(k)));
+        let epochs = keys.into_iter().map(|key| {
+            let scope = scope.clone();
+            async move { Epoch::fetch(ctx, scope, Some(key)).await.transpose() }
+        });
 
-        try_join_all(epochs).await
+        Ok(join_all(epochs).await)
     }
 
     /// Access derived objects under parent objects using their names and optional version bounds.
@@ -407,13 +409,15 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<NameKey>,
-    ) -> Result<Vec<Option<MoveObject>>, RpcError<dynamic_field::Error>> {
+    ) -> Result<Vec<Option<Result<MoveObject, RpcError<dynamic_field::Error>>>>, RpcError> {
         let scope = self.scope(ctx)?;
-        let objects = keys
-            .into_iter()
-            .map(|key| derived_object::by_key(ctx, scope.clone(), key));
+        // The outer Option lets GraphQL null an individual failed lookup instead of the list.
+        let objects = keys.into_iter().map(|key| {
+            let scope = scope.clone();
+            async move { derived_object::by_key(ctx, scope, key).await.transpose() }
+        });
 
-        try_join_all(objects).await
+        Ok(join_all(objects).await)
     }
 
     /// Access dynamic fields on parent objects using their names and optional version bounds.
@@ -423,13 +427,18 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<NameKey>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
+    ) -> Result<Vec<Option<Result<DynamicField, RpcError<dynamic_field::Error>>>>, RpcError> {
         let scope = self.scope(ctx)?;
         let fields = keys.into_iter().map(|key| {
-            DynamicField::by_key(ctx, scope.clone(), DynamicFieldType::DynamicField, key)
+            let scope = scope.clone();
+            async move {
+                DynamicField::by_key(ctx, scope, DynamicFieldType::DynamicField, key)
+                    .await
+                    .transpose()
+            }
         });
 
-        try_join_all(fields).await
+        Ok(join_all(fields).await)
     }
 
     /// Access dynamic object fields on parent objects using their names and optional version bounds.
@@ -439,13 +448,18 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<NameKey>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
+    ) -> Result<Vec<Option<Result<DynamicField, RpcError<dynamic_field::Error>>>>, RpcError> {
         let scope = self.scope(ctx)?;
         let fields = keys.into_iter().map(|key| {
-            DynamicField::by_key(ctx, scope.clone(), DynamicFieldType::DynamicObject, key)
+            let scope = scope.clone();
+            async move {
+                DynamicField::by_key(ctx, scope, DynamicFieldType::DynamicObject, key)
+                    .await
+                    .transpose()
+            }
         });
 
-        try_join_all(fields).await
+        Ok(join_all(fields).await)
     }
 
     /// Fetch objects by their keys.
@@ -455,13 +469,14 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<ObjectKey>,
-    ) -> Result<Vec<Option<Object>>, RpcError<object::Error>> {
+    ) -> Result<Vec<Option<Result<Object, RpcError<object::Error>>>>, RpcError> {
         let scope = self.scope(ctx)?;
-        let objects = keys
-            .into_iter()
-            .map(|k| Object::by_key(ctx, scope.clone(), k));
+        let objects = keys.into_iter().map(|key| {
+            let scope = scope.clone();
+            async move { Object::by_key(ctx, scope, key).await.transpose() }
+        });
 
-        try_join_all(objects).await
+        Ok(join_all(objects).await)
     }
 
     /// Fetch packages by their keys.
@@ -471,13 +486,14 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<PackageKey>,
-    ) -> Result<Vec<Option<MovePackage>>, RpcError<move_package::Error>> {
+    ) -> Result<Vec<Option<Result<MovePackage, RpcError<move_package::Error>>>>, RpcError> {
         let scope = self.scope(ctx)?;
-        let packages = keys
-            .into_iter()
-            .map(|k| MovePackage::by_key(ctx, scope.clone(), k));
+        let packages = keys.into_iter().map(|key| {
+            let scope = scope.clone();
+            async move { MovePackage::by_key(ctx, scope, key).await.transpose() }
+        });
 
-        try_join_all(packages).await
+        Ok(join_all(packages).await)
     }
 
     /// Fetch transactions by their digests.
@@ -487,13 +503,14 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<Digest>,
-    ) -> Result<Vec<Option<Transaction>>, RpcError> {
+    ) -> Result<Vec<Option<Result<Transaction, RpcError>>>, RpcError> {
         let scope = self.scope(ctx)?;
-        let transactions = keys
-            .into_iter()
-            .map(|d| Transaction::fetch(ctx, scope.clone(), d));
+        let transactions = keys.into_iter().map(|digest| {
+            let scope = scope.clone();
+            async move { Transaction::fetch(ctx, scope, digest).await.transpose() }
+        });
 
-        try_join_all(transactions).await
+        Ok(join_all(transactions).await)
     }
 
     /// Fetch transaction effects by their transactions' digests.
@@ -503,13 +520,18 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<Digest>,
-    ) -> Result<Vec<Option<TransactionEffects>>, RpcError> {
+    ) -> Result<Vec<Option<Result<TransactionEffects, RpcError>>>, RpcError> {
         let scope = self.scope(ctx)?;
-        let effects = keys
-            .into_iter()
-            .map(|d| TransactionEffects::fetch(ctx, scope.clone(), d));
+        let effects = keys.into_iter().map(|digest| {
+            let scope = scope.clone();
+            async move {
+                TransactionEffects::fetch(ctx, scope, digest)
+                    .await
+                    .transpose()
+            }
+        });
 
-        try_join_all(effects).await
+        Ok(join_all(effects).await)
     }
 
     /// Fetch types by their string representations.
@@ -521,12 +543,18 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Vec<Option<MoveType>>, RpcError<move_type::Error>> {
-        let types = keys
-            .into_iter()
-            .map(|t| async move { MoveType::canonicalize(t.into(), self.scope(ctx)?).await });
+    ) -> Result<Vec<Option<Result<MoveType, RpcError<move_type::Error>>>>, RpcError> {
+        let scope = self.scope(ctx)?;
+        let types = keys.into_iter().map(|type_| {
+            let scope = scope.clone();
+            async move {
+                MoveType::canonicalize(type_.into(), scope)
+                    .await
+                    .transpose()
+            }
+        });
 
-        try_join_all(types).await
+        Ok(join_all(types).await)
     }
 
     /// Look-up a Name Service NameRecord by its domain name.

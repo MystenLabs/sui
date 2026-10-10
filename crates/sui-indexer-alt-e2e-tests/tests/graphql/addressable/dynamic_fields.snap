@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 14 tasks
+processed 15 tasks
 
 init:
 A: object(0,0)
@@ -226,7 +226,270 @@ Response: {
   }
 }
 
-task 12, lines 127-137:
+task 12, lines 127-167:
+//# run-graphql
+Response: {
+  "data": {
+    "fields": [
+      {
+        "name": {
+          "json": "20"
+        }
+      },
+      null,
+      null,
+      {
+        "name": {
+          "json": "50"
+        }
+      }
+    ],
+    "objectFields": [
+      {
+        "name": {
+          "json": "20"
+        }
+      },
+      null,
+      null,
+      {
+        "name": {
+          "json": "20"
+        }
+      }
+    ],
+    "address": {
+      "fields": [
+        {
+          "name": {
+            "json": "20"
+          }
+        },
+        null,
+        null,
+        {
+          "name": {
+            "json": "50"
+          }
+        }
+      ],
+      "objectFields": [
+        {
+          "name": {
+            "json": "20"
+          }
+        },
+        null,
+        null,
+        {
+          "name": {
+            "json": "20"
+          }
+        }
+      ]
+    },
+    "object": {
+      "fields": [
+        {
+          "name": {
+            "json": "20"
+          }
+        },
+        null,
+        null,
+        {
+          "name": {
+            "json": "50"
+          }
+        }
+      ],
+      "objectFields": [
+        {
+          "name": {
+            "json": "20"
+          }
+        },
+        null,
+        null,
+        {
+          "name": {
+            "json": "20"
+          }
+        }
+      ],
+      "asMoveObject": {
+        "fields": [
+          {
+            "name": {
+              "json": "20"
+            }
+          },
+          null,
+          null,
+          {
+            "name": {
+              "json": "50"
+            }
+          }
+        ],
+        "objectFields": [
+          {
+            "name": {
+              "json": "20"
+            }
+          },
+          null,
+          null,
+          {
+            "name": {
+              "json": "20"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Literal error: Unexpected '{' at byte offset 0, expected one of 'b', 'false', 'true', 'x', '@', '$', an identifier, a decimal number, a hexadecimal number, or a string",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "fields",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Literal error: Unexpected '{' at byte offset 0, expected one of 'b', 'false', 'true', 'x', '@', '$', an identifier, a decimal number, a hexadecimal number, or a string",
+      "locations": [
+        {
+          "line": 8,
+          "column": 3
+        }
+      ],
+      "path": [
+        "objectFields",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Literal error: Unexpected '{' at byte offset 0, expected one of 'b', 'false', 'true', 'x', '@', '$', an identifier, a decimal number, a hexadecimal number, or a string",
+      "locations": [
+        {
+          "line": 15,
+          "column": 5
+        }
+      ],
+      "path": [
+        "address",
+        "fields",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Literal error: Unexpected '{' at byte offset 0, expected one of 'b', 'false', 'true', 'x', '@', '$', an identifier, a decimal number, a hexadecimal number, or a string",
+      "locations": [
+        {
+          "line": 18,
+          "column": 5
+        }
+      ],
+      "path": [
+        "address",
+        "objectFields",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Literal error: Unexpected '{' at byte offset 0, expected one of 'b', 'false', 'true', 'x', '@', '$', an identifier, a decimal number, a hexadecimal number, or a string",
+      "locations": [
+        {
+          "line": 23,
+          "column": 5
+        }
+      ],
+      "path": [
+        "object",
+        "fields",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Literal error: Unexpected '{' at byte offset 0, expected one of 'b', 'false', 'true', 'x', '@', '$', an identifier, a decimal number, a hexadecimal number, or a string",
+      "locations": [
+        {
+          "line": 26,
+          "column": 5
+        }
+      ],
+      "path": [
+        "object",
+        "objectFields",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Literal error: Unexpected '{' at byte offset 0, expected one of 'b', 'false', 'true', 'x', '@', '$', an identifier, a decimal number, a hexadecimal number, or a string",
+      "locations": [
+        {
+          "line": 33,
+          "column": 3
+        }
+      ],
+      "path": [
+        "object",
+        "asMoveObject",
+        "fields",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Literal error: Unexpected '{' at byte offset 0, expected one of 'b', 'false', 'true', 'x', '@', '$', an identifier, a decimal number, a hexadecimal number, or a string",
+      "locations": [
+        {
+          "line": 36,
+          "column": 3
+        }
+      ],
+      "path": [
+        "object",
+        "asMoveObject",
+        "objectFields",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 13, lines 169-179:
 //# run-graphql
 Response: {
   "data": {
@@ -254,7 +517,7 @@ Response: {
   ]
 }
 
-task 13, lines 139-151:
+task 14, lines 181-193:
 //# run-graphql
 Response: {
   "data": {

@@ -18,7 +18,6 @@ use diesel::QueryDsl;
 use diesel::sql_types::Bool;
 use fastcrypto::encoding::Base58;
 use fastcrypto::encoding::Encoding;
-use futures::future::try_join_all;
 use move_core_types::language_storage::StructTag;
 use sui_indexer_alt_reader::consistent_reader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
@@ -454,7 +453,7 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DerivedObjectKey>,
-    ) -> Result<Vec<Option<MoveObject>>, RpcError<dynamic_field::Error>> {
+    ) -> Result<Vec<Option<Result<MoveObject, RpcError<dynamic_field::Error>>>>, RpcError> {
         self.super_.multi_get_derived_objects(ctx, keys).await
     }
 
@@ -465,17 +464,8 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
-        try_join_all(keys.into_iter().map(|key| {
-            DynamicField::by_name(
-                ctx,
-                self.super_.scope.clone(),
-                self.super_.address.into(),
-                DynamicFieldType::DynamicField,
-                key,
-            )
-        }))
-        .await
+    ) -> Result<Vec<Option<Result<DynamicField, RpcError<dynamic_field::Error>>>>, RpcError> {
+        self.super_.multi_get_dynamic_fields(ctx, keys).await
     }
 
     /// Access dynamic object fields on an object using their types and BCS-encoded names.
@@ -485,17 +475,8 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
-        try_join_all(keys.into_iter().map(|key| {
-            DynamicField::by_name(
-                ctx,
-                self.super_.scope.clone(),
-                self.super_.address.into(),
-                DynamicFieldType::DynamicObject,
-                key,
-            )
-        }))
-        .await
+    ) -> Result<Vec<Option<Result<DynamicField, RpcError<dynamic_field::Error>>>>, RpcError> {
+        self.super_.multi_get_dynamic_object_fields(ctx, keys).await
     }
 
     /// Fetch balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.

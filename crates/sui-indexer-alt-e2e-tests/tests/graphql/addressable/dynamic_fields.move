@@ -125,6 +125,48 @@ module P::M {
 }
 
 //# run-graphql
+{ # Literal errors are isolated in root, address, object, and Move-object multi-gets.
+  fields: multiGetDynamicFields(keys: [
+    { parent: "@{obj_3_0}", name: { literal: "20u64" } },
+    { parent: "@{obj_3_0}", name: { literal: "{" } },
+    { parent: "@{obj_3_0}", name: { literal: "99u64" } },
+    { parent: "@{obj_3_0}", name: { literal: "50u64" } },
+  ]) { name { json } }
+  objectFields: multiGetDynamicObjectFields(keys: [
+    { parent: "@{obj_3_0}", name: { literal: "20u64" } },
+    { parent: "@{obj_3_0}", name: { literal: "{" } },
+    { parent: "@{obj_3_0}", name: { literal: "99u64" } },
+    { parent: "@{obj_3_0}", name: { literal: "20u64" } },
+  ]) { name { json } }
+  address(address: "@{obj_3_0}") {
+    fields: multiGetDynamicFields(keys: [
+      { literal: "20u64" }, { literal: "{" }, { literal: "99u64" }, { literal: "50u64" },
+    ]) { name { json } }
+    objectFields: multiGetDynamicObjectFields(keys: [
+      { literal: "20u64" }, { literal: "{" }, { literal: "99u64" }, { literal: "20u64" },
+    ]) { name { json } }
+  }
+  object(address: "@{obj_3_0}") {
+    fields: multiGetDynamicFields(keys: [
+      { literal: "20u64" }, { literal: "{" }, { literal: "99u64" }, { literal: "50u64" },
+    ]) { name { json } }
+    objectFields: multiGetDynamicObjectFields(keys: [
+      { literal: "20u64" }, { literal: "{" }, { literal: "99u64" }, { literal: "20u64" },
+    ]) { name { json } }
+    asMoveObject { ...Fields }
+  }
+}
+
+fragment Fields on IMoveObject {
+  fields: multiGetDynamicFields(keys: [
+    { literal: "20u64" }, { literal: "{" }, { literal: "99u64" }, { literal: "50u64" },
+  ]) { name { json } }
+  objectFields: multiGetDynamicObjectFields(keys: [
+    { literal: "20u64" }, { literal: "{" }, { literal: "99u64" }, { literal: "20u64" },
+  ]) { name { json } }
+}
+
+//# run-graphql
 { # It's an error to paginate dynamic fields with a version set
   address(address: "@{obj_4_0}", rootVersion: 8) {
     dynamicFields {

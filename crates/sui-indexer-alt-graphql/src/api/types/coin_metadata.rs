@@ -324,7 +324,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DerivedObjectKey>,
-    ) -> Result<Vec<Option<MoveObject>>, RpcError<dynamic_field::Error>> {
+    ) -> Result<Vec<Option<Result<MoveObject, RpcError<dynamic_field::Error>>>>, RpcError> {
         self.super_.multi_get_derived_objects(ctx, keys).await
     }
 
@@ -335,7 +335,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
+    ) -> Result<Vec<Option<Result<DynamicField, RpcError<dynamic_field::Error>>>>, RpcError> {
         self.super_.multi_get_dynamic_fields(ctx, keys).await
     }
 
@@ -346,7 +346,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
+    ) -> Result<Vec<Option<Result<DynamicField, RpcError<dynamic_field::Error>>>>, RpcError> {
         self.super_.multi_get_dynamic_object_fields(ctx, keys).await
     }
 
