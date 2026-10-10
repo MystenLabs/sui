@@ -116,6 +116,12 @@ pub(crate) fn refine_to_single_linkage<E: ExecutionErrorTrait>(
         }
     }
 
+    // Package versions are individually acyclic when published, but selecting versions from
+    // different historical graphs can create a cycle in the final effective linkage.
+    if protocol_config.enable_package_minversion() {
+        resolver.validate_acyclic_linkage(&base_linkage)?;
+    }
+
     // Validate init linkage constraints before `from_resolution_table` erases the underlying
     // constraints. Minversion mismatches are transaction errors; all others are invariants.
     if protocol_config.harden_linkage_consistency() {
@@ -283,7 +289,6 @@ fn collect_package_version_targets<E: ExecutionErrorTrait>(
         Command::Publish(_, _, resolved_linkage)
         | Command::Upgrade(_, _, _, _, resolved_linkage) => resolver
             .collect_declared_package_versions(
-                resolution_table,
                 resolved_linkage.linkage.values().copied(),
                 &mut version_targets.publication_versions,
             ),
@@ -410,7 +415,7 @@ fn add_exact_linkage_to_table<E: ExecutionErrorTrait>(
     resolver: &mut LinkageStoreResolver<'_, VerifiedPackageStore<'_>, E>,
 ) -> Result<(), E> {
     for resolved in linkage.values() {
-        resolver.resolve_linkage_entry(
+        resolver.resolve_flattened_linkage_entry(
             resolution_table,
             *resolved,
             ConstraintKind::Exact,
@@ -499,35 +504,35 @@ fn add_upgrade_init_linkage_to_table<E: ExecutionErrorTrait>(
     }
 
     for (original_id, version_id) in linkage {
-        let package = resolver.load_package(version_id)?;
-        let selected_id = package.version_id();
         match resolution_table.resolution_table.get(original_id) {
-            None => resolver.resolve_linkage_entry(
+            None => resolver.resolve_flattened_linkage_entry(
                 resolution_table,
                 *version_id,
                 ConstraintKind::Exact,
                 ConstraintKind::Exact,
             )?,
-            Some(existing) if existing.object_id() == selected_id => {
-                if protocol_config.harden_linkage_consistency() {
-                    resolver.resolve_linkage_entry(
-                        resolution_table,
-                        *version_id,
-                        ConstraintKind::Exact,
-                        ConstraintKind::Exact,
-                    )?;
-                }
-            }
             Some(existing) => {
-                return Err(E::new_with_source(
-                    ExecutionErrorKind::InvalidLinkage,
-                    format!(
-                        "upgrade init linkage conflicts with transaction linkage: package \
-                         {original_id} resolves to {} in transaction linkage, but upgrade \
-                         linkage requires {selected_id}",
-                        existing.object_id(),
-                    ),
-                ));
+                let existing_id = existing.object_id();
+                let selected_id = resolver.resolve_package_id(*version_id)?;
+                if existing_id == selected_id {
+                    if protocol_config.harden_linkage_consistency() {
+                        resolver.resolve_flattened_linkage_entry(
+                            resolution_table,
+                            *version_id,
+                            ConstraintKind::Exact,
+                            ConstraintKind::Exact,
+                        )?;
+                    }
+                } else {
+                    return Err(E::new_with_source(
+                        ExecutionErrorKind::InvalidLinkage,
+                        format!(
+                            "upgrade init linkage conflicts with transaction linkage: package \
+                             {original_id} resolves to {existing_id} in transaction linkage, but \
+                             upgrade linkage requires {selected_id}",
+                        ),
+                    ));
+                }
             }
         }
     }
