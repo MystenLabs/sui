@@ -133,12 +133,8 @@ impl InvariantChecker {
     pub(crate) fn check_sui_conserved(
         &self,
         store: &TemporaryStore<'_>,
-        simple_conservation_checks: bool,
         gas_summary: &GasCostSummary,
     ) -> Result<(), ExecutionError> {
-        if !simple_conservation_checks {
-            return Ok(());
-        }
         // total amount of SUI in storage rebate of input objects
         let mut total_input_rebate = 0;
         // total amount of SUI in storage rebate of output objects
@@ -487,8 +483,7 @@ impl InvariantChecker {
         if store.post_execution_check_inputs.is_genesis || Mode::skip_conservation_checks() {
             return Ok(());
         }
-        let simple_conservation_checks = store.protocol_config().simple_conservation_checks();
-        self.check_sui_conserved(store, simple_conservation_checks, cost_summary)
+        self.check_sui_conserved(store, cost_summary)
             .and_then(|()| {
                 if enable_expensive_checks {
                     let mut layout_resolver =
