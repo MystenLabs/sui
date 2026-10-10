@@ -16,6 +16,7 @@ use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID,
     base_types::ObjectID,
     error::{ExecutionError, SuiResult},
+    execution_status::ExecutionErrorKind,
     id::ID,
     package_config::MinVersion,
 };
@@ -302,7 +303,10 @@ fn invalid_minversion_selections_are_rejected() {
     for store in &cases {
         let mut resolver =
             LinkageStoreResolver::<_, ExecutionError>::new(store, Some(&minversion_resolver));
-        assert!(resolver.load_package(&historical_id).is_err());
+        let Err(error) = resolver.load_package(&historical_id) else {
+            panic!("invalid minversion selection unexpectedly resolved");
+        };
+        assert_eq!(error.kind(), &ExecutionErrorKind::InvariantViolation);
     }
 }
 

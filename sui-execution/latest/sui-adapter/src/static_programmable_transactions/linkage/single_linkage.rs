@@ -406,7 +406,7 @@ fn add_exact_linkage_to_table<E: ExecutionErrorTrait>(
     resolver: &mut LinkageStoreResolver<'_, VerifiedPackageStore<'_>, E>,
 ) -> Result<(), E> {
     for resolved in linkage.values() {
-        resolver.resolve_linkage_entry(
+        resolver.resolve_flattened_linkage_entry(
             resolution_table,
             *resolved,
             ConstraintKind::Exact,
@@ -498,7 +498,7 @@ fn add_upgrade_init_linkage_to_table<E: ExecutionErrorTrait>(
         let package = resolver.load_package(version_id)?;
         let selected_id = package.version_id();
         match resolution_table.resolution_table.get(original_id) {
-            None => resolver.resolve_linkage_entry(
+            None => resolver.resolve_flattened_linkage_entry(
                 resolution_table,
                 *version_id,
                 ConstraintKind::Exact,
@@ -506,7 +506,7 @@ fn add_upgrade_init_linkage_to_table<E: ExecutionErrorTrait>(
             )?,
             Some(existing) if existing.object_id() == selected_id => {
                 if protocol_config.harden_linkage_consistency() {
-                    resolver.resolve_linkage_entry(
+                    resolver.resolve_flattened_linkage_entry(
                         resolution_table,
                         *version_id,
                         ConstraintKind::Exact,

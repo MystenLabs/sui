@@ -293,7 +293,7 @@ impl<'a, S: PackageStore + ?Sized, E: ExecutionErrorTrait> LinkageStoreResolver<
     /// Resolve one entry from an already-flattened linkage table.
     ///
     /// The entry's linkage only needs expansion when minversion selects a different package.
-    pub(crate) fn resolve_linkage_entry(
+    pub(crate) fn resolve_flattened_linkage_entry(
         &mut self,
         resolution_table: &mut ResolutionTable,
         package_id: ObjectID,
@@ -459,10 +459,13 @@ impl<'a, S: PackageStore + ?Sized, E: ExecutionErrorTrait> LinkageStoreResolver<
         if package.version() >= minversion.version {
             return Ok(package);
         }
+        // PackageConfig records selections from unforgeable framework tokens. A missing or
+        // mismatched selected package therefore indicates invalid trusted state, not a user
+        // linkage error.
         let selected_id = minversion.package_id.bytes;
         let selected = get_package::<E, _>(&selected_id, self.store).map_err(|error| {
             E::new_with_source(
-                ExecutionErrorKind::InvalidLinkage,
+                ExecutionErrorKind::InvariantViolation,
                 format!("invalid minversion selection for package {original_id}: {error}"),
             )
         })?;
@@ -471,7 +474,7 @@ impl<'a, S: PackageStore + ?Sized, E: ExecutionErrorTrait> LinkageStoreResolver<
             || selected.version() != minversion.version
         {
             return Err(E::new_with_source(
-                ExecutionErrorKind::InvalidLinkage,
+                ExecutionErrorKind::InvariantViolation,
                 format!("invalid minversion selection for package {original_id}"),
             ));
         }
