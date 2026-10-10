@@ -38,11 +38,12 @@ const ROTATION_DELAY_EPOCHS: u64 = 1;
 /// `master_id_mixing_is_invertible_and_keeps_zero_reserved` pins the same constant).
 const FIRST_MASTER_ID: u64 = 0x52ca8647179c;
 
-/// Forwarding ships in two steps: one release creates the registry, a later one enables
-/// resolution. The registry must exist by the first epoch that enables forwarding, and a
-/// registration and a deposit in that epoch must work. Genesis at protocol version 130 uses the
-/// frozen v130 framework snapshot, which predates the `forwarding_address` module. Epochs are
-/// closed explicitly so no transaction lands in a reconfiguration window.
+/// Forwarding ships in steps: one release creates the registry, a later one turns the flag on,
+/// and the Move API with its cost params comes with 140 (139 froze before it landed). The
+/// registry must exist by the first epoch with the flag on, and a registration and a deposit must
+/// work in the first epoch at 140. Genesis at protocol version 130 uses the frozen v130 framework
+/// snapshot, which predates the `forwarding_address` module. Epochs are closed explicitly so no
+/// transaction lands in a reconfiguration window.
 #[sim_test]
 async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
     let mut env = TestEnvBuilder::new()
@@ -53,7 +54,7 @@ async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
             if version.as_u64() >= 132 {
                 config.set_create_forwarding_address_registry_for_testing(true);
             }
-            if version.as_u64() >= 139 {
+            if version.as_u64() >= 140 {
                 set_forwarding_address_config_for_testing(&mut config);
             }
             config
@@ -65,7 +66,7 @@ async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
                     130, 138,
                 ))
                 .with_fullnode_supported_protocol_versions_config(
-                    SupportedProtocolVersions::new_for_testing(130, 139),
+                    SupportedProtocolVersions::new_for_testing(130, 140),
                 )
         }))
         .build()
@@ -98,9 +99,9 @@ async fn test_forwarding_address_upgrade_creates_registry_before_enabling() {
     }
 
     env.cluster
-        .update_validator_supported_versions(SupportedProtocolVersions::new_for_testing(130, 139))
+        .update_validator_supported_versions(SupportedProtocolVersions::new_for_testing(130, 140))
         .await;
-    reconfigure_until_protocol_version(&env, 139).await;
+    reconfigure_until_protocol_version(&env, 140).await;
     env.update_all_gas().await;
 
     let master = env.get_sender(0);

@@ -1,6 +1,7 @@
 # Forwarding Addresses
 
-Status: implemented on devnet at protocol version 139 (core in #27989, Move side in #28236). Not
+Status: implemented on devnet, protocol version 140 (core and the flag in 139 via #27989, Move
+side and cost params in 140 via #28236; 139 froze with v1.82.0 before the Move side landed). Not
 enabled on testnet or mainnet. The sections "Path to production" and "Open questions" list what
 still has to happen and what is still undecided.
 
@@ -38,10 +39,10 @@ Defined in `crates/sui-types/src/forwarding_address.rs`; all integers little-end
   bytes have to line up for an address to be treated as a resolvable forwarding address.
 - **Master id.** 48 bits, assigned by the registry at registration; see below. Id 0 is reserved
   and never allocated. Move and Rust carry it as a `u64`.
-- **Variant.** Decides what the payload bytes mean. Variant 0 (the only one at 139) gives them no
+- **Variant.** Decides what the payload bytes mean. Variant 0 (the only one at 140) gives them no
   on-chain meaning: the resolver never reads them, so there is no canonical encoding to enforce,
   and an invoice tag only has to be distinct. A later variant can define structure, for example a
-  typed tag or an on-chain lookup. `forwarding_address_max_variant` in protocol config (0 at 139)
+  typed tag or an on-chain lookup. `forwarding_address_max_variant` in protocol config (0 at 140)
   is the highest variant the resolver accepts; higher variants abort instead of being treated as
   ordinary recipients, so nobody can fund an address whose meaning a later version will define.
 - **Payload.** 16 bytes whose meaning the variant defines. Under variant 0 the issuer chooses them
@@ -91,7 +92,7 @@ chain that keeps its state: framework upgrades check struct layouts in bytecode,
 record exists, so any later state goes into separate registry dynamic fields keyed by master id.
 
 Registration charges a flat fee through a native, `forwarding_address_register_cost_base`, 1M gas
-units at 139 (about 1 SUI at a 1,000 MIST gas price), on top of normal gas and the dynamic field
+units at 140 (about 1 SUI at a 1,000 MIST gas price), on top of normal gas and the dynamic field
 storage cost. Records are never deleted, so the storage fee is never rebated in practice. The fee
 goes to validators as gas, so there is no treasury or distribution question.
 
@@ -158,10 +159,10 @@ feature flag is on, so pre-139 behaviour is untouched.
 
 ### Protocol gating and rollout
 
-| Setting                                           | Kind     | Value at 139 (devnet)        |
+| Setting                                           | Kind     | Value at 140 (devnet)        |
 | ------------------------------------------------- | -------- | ---------------------------- |
 | `create_forwarding_address_registry`              | flag     | on since 132 (devnet only)   |
-| `enable_forwarding_addresses`                     | flag     | on (devnet only)             |
+| `enable_forwarding_addresses`                     | flag     | on since 139 (devnet only)   |
 | `forwarding_address_max_variant`                  | u64      | 0                            |
 | `forwarding_address_resolve_cost_base`            | gas      | 52                           |
 | `forwarding_address_resolve_lookup_cost_base`     | gas      | 512 * `obj_access_cost_read_per_byte` |
@@ -177,6 +178,11 @@ assignment is an execution invariant violation, never an abort. That holds as lo
 reaches a version that creates the registry before one that enables resolution, which is why the
 two flags live in different versions and must ship in different releases. On devnet the registry
 has existed since 132.
+
+139 froze (v1.82.0) with the flag on but before the Move API and the cost params landed, so those
+are in 140. A v1.83 binary at protocol 139 therefore has resolution enabled with no cost params; a
+deposit to a forwarding address there would hit a missing param. That is accepted for devnet, which
+is wiped on every release, and cannot happen on testnet or mainnet, where the flag is off at 139.
 
 ### Interaction with other features
 
@@ -375,7 +381,7 @@ up in effects as a read-only consensus object, so replay and RPC already return 
 Each step is Move plus adapter code; none touch consensus or the core change again. Every
 step adds dynamic fields next to the record instead of changing `MasterRecord`.
 
-### Done (devnet, protocol version 139)
+### Done (devnet, protocol version 140)
 
 - Registry as an implicitly read system object, version-pinned per transaction (#27989).
 - Resolution of funds credits in the adapter at the end of execution, with gas per lookup and
