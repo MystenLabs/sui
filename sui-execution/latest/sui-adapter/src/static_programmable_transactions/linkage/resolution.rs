@@ -5,6 +5,7 @@ use crate::{
     data_store::{PackageMetadata, PackageStore},
     static_programmable_transactions::linkage::config::ResolutionConfig,
 };
+use petgraph::{algo::toposort, graphmap::DiGraphMap};
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, BTreeSet, VecDeque, btree_map::Entry},
@@ -300,7 +301,7 @@ impl<'a, S: PackageStore + ?Sized, E: ExecutionErrorTrait> LinkageStoreResolver<
     /// Resolve one entry from an already-flattened linkage table.
     ///
     /// The entry's linkage only needs expansion when minversion selects a different package.
-    pub(crate) fn resolve_linkage_entry(
+    pub(crate) fn resolve_flattened_linkage_entry(
         &mut self,
         resolution_table: &mut ResolutionTable,
         package_id: ObjectID,
@@ -351,6 +352,17 @@ impl<'a, S: PackageStore + ?Sized, E: ExecutionErrorTrait> LinkageStoreResolver<
             if !expand_linkage && selected_id == package_id {
                 continue;
             }
+            // Suppose a caller requires Mid exactly and also requires LeafV3 exactly. If Mid is
+            // replaced by MidV2, which was built with LeafV2, we still require MidV2 exactly. But
+            // MidV2's LeafV2 dependency is only a minimum: the caller's newer LeafV3 can satisfy it.
+            // This relaxation applies only when replacing a dependency from the caller's flattened
+            // linkage. When the called root package is replaced, its dependencies keep the
+            // constraint chosen from the function's visibility (exact for entry, at-least for public).
+            let dependency_constraint = if !expand_linkage && selected_id != package_id {
+                ConstraintKind::AtLeast
+            } else {
+                dependency_constraint
+            };
             if !self
                 .expanded
                 .insert((selected_id, package_constraint, dependency_constraint))
@@ -411,33 +423,60 @@ impl<'a, S: PackageStore + ?Sized, E: ExecutionErrorTrait> LinkageStoreResolver<
         Ok(())
     }
 
-    /// Collect exact package versions declared by a publish or upgrade, including transitive
-    /// dependencies. This bypasses minversion selection so forbid-list and minversion checks use
-    /// the versions recorded by the command, not versions selected for executable linkage.
+    /// Record the package versions listed by a publish or upgrade command so package policy can
+    /// check them. The command already contains its complete dependency map, including transitive
+    /// dependencies. Do not follow the stored maps of those dependencies: they may name older
+    /// versions that the command has replaced. Do not apply minversion selection here either; policy
+    /// must check the versions the command actually requested.
     pub(crate) fn collect_declared_package_versions(
         &self,
-        resolution_table: &ResolutionTable,
         package_ids: impl IntoIterator<Item = ObjectID>,
         versions: &mut BTreeSet<(ObjectID, u64)>,
     ) -> Result<(), E> {
-        let mut pending = package_ids.into_iter().collect::<Vec<_>>();
-        let mut visited = BTreeSet::new();
-        while let Some(package_id) = pending.pop() {
+        for package_id in package_ids {
             if sui_types::is_system_package(package_id) {
                 continue;
             }
             let package = get_package(&package_id, self.store)?;
-            if !visited.insert(package.version_id()) {
-                continue;
-            }
             versions.insert((package.original_id(), package.version()));
-            pending.extend(
-                resolution_table
-                    .config
-                    .linkage_table(&package)
-                    .into_values()
-                    .map(ObjectID::from),
-            );
+        }
+        Ok(())
+    }
+
+    /// Reject cycles after package selection. Selection can combine edges from different package
+    /// versions into a cycle even though every version was valid when published.
+    ///
+    /// Build a graph with one edge for each dependency. Use the iterative topological sort rather
+    /// than recursive cycle detection.
+    pub(crate) fn validate_acyclic_linkage(
+        &self,
+        resolution_table: &ResolutionTable,
+    ) -> Result<(), E> {
+        let mut graph = DiGraphMap::<ObjectID, ()>::new();
+        for (original_id, constraint) in &resolution_table.resolution_table {
+            let package = get_package(&constraint.object_id(), self.store)?;
+            for dependency_id in resolution_table
+                .config
+                .linkage_table(&package)
+                .into_values()
+                .map(ObjectID::from)
+            {
+                let dependency = get_package(&dependency_id, self.store)?;
+                let dependency_original_id = dependency.original_id();
+                // An upgraded package's table includes the package itself to identify its version.
+                // That entry is metadata, not a dependency edge. `add_edge` adds nodes if they are
+                // not already present in the graph.
+                if dependency_original_id != *original_id {
+                    graph.add_edge(*original_id, dependency_original_id, ());
+                }
+            }
+        }
+
+        if toposort(&graph, None).is_err() {
+            return Err(E::new_with_source(
+                ExecutionErrorKind::InvalidLinkage,
+                "cyclic package dependency in resolved linkage".to_owned(),
+            ));
         }
         Ok(())
     }
@@ -466,10 +505,12 @@ impl<'a, S: PackageStore + ?Sized, E: ExecutionErrorTrait> LinkageStoreResolver<
         if package.version() >= minversion.version {
             return Ok(package);
         }
+        // A missing or mismatched selected package from the minversion resolver indicates invalid
+        // state and an invariant violation.
         let selected_id = minversion.package_id.bytes;
         let selected = get_package::<E, _>(&selected_id, self.store).map_err(|error| {
             E::new_with_source(
-                ExecutionErrorKind::InvalidLinkage,
+                ExecutionErrorKind::InvariantViolation,
                 format!("invalid minversion selection for package {original_id}: {error}"),
             )
         })?;
@@ -478,7 +519,7 @@ impl<'a, S: PackageStore + ?Sized, E: ExecutionErrorTrait> LinkageStoreResolver<
             || selected.version() != minversion.version
         {
             return Err(E::new_with_source(
-                ExecutionErrorKind::InvalidLinkage,
+                ExecutionErrorKind::InvariantViolation,
                 format!("invalid minversion selection for package {original_id}"),
             ));
         }

@@ -29,6 +29,7 @@ move-vm-config.workspace = true
 mysten-common.workspace = true
 mysten-metrics.workspace = true
 nonempty.workspace = true
+petgraph = "0.8.1"
 
 move-bytecode-verifier = { path = "../../../external-crates/move/crates/move-bytecode-verifier" }
 move-vm-runtime = { path = "../../../external-crates/move/crates/move-vm-runtime" }
