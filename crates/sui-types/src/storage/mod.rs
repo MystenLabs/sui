@@ -255,7 +255,7 @@ pub trait RuntimeObjectResolver: BackingPackageStore {
 pub trait ImplicitSystemObjectResolver {
     fn object_available_balance(&self, owner: SuiAddress, type_: &TypeTag) -> SuiResult<u128>;
 
-    fn clock(&self) -> SuiResult<crate::clock::Clock>;
+    fn clock(&self) -> SuiResult<Object>;
 }
 
 pub struct DenyListResult {
