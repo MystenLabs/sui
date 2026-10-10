@@ -421,6 +421,8 @@ const MAINNET_USDB: &str =
 //              Charge package inputs 1% of the per-byte object read cost.
 // Version 140: Add native vector bulk operations (keep_range, copy_range, replace_range
 //              and reverse) and their gas costs.
+//              Add the forwarding address resolution and registration costs and the variant
+//              bound on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4873,13 +4875,6 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_forwarding_addresses = true;
                         cfg.feature_flags.mldsa65_auth = true;
-                        cfg.forwarding_address_resolve_cost_base = Some(52);
-                        // The registry and a master record together meter at about 490 bytes.
-                        cfg.forwarding_address_resolve_lookup_cost_base =
-                            Some(512 * cfg.obj_access_cost_read_per_byte());
-                        // 1M gas units: about 1 SUI at a 1,000 MIST gas price.
-                        cfg.forwarding_address_register_cost_base = Some(1_000_000_000);
-                        cfg.forwarding_address_max_variant = Some(0);
                     }
                     cfg.storage_rebate_rate = Some(9999);
                     if chain != Chain::Mainnet {
@@ -4897,6 +4892,15 @@ impl ProtocolConfig {
                     cfg.vector_copy_range_base_cost = Some(52);
                     cfg.vector_replace_range_base_cost = Some(52);
                     cfg.vector_replace_range_per_elem_cost = Some(8);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.forwarding_address_resolve_cost_base = Some(52);
+                        // The registry and a master record together meter at about 490 bytes.
+                        cfg.forwarding_address_resolve_lookup_cost_base =
+                            Some(512 * cfg.obj_access_cost_read_per_byte());
+                        // 1M gas units: about 1 SUI at a 1,000 MIST gas price.
+                        cfg.forwarding_address_register_cost_base = Some(1_000_000_000);
+                        cfg.forwarding_address_max_variant = Some(0);
+                    }
                 }
                 // Use this template when making changes:
                 //
