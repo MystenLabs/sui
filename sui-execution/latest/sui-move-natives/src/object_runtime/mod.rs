@@ -258,11 +258,15 @@ impl<'a> ObjectRuntime<'a> {
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message(format!("Failed to read the Clock: {e}"))
             })?;
-            let bytes = bcs::to_bytes(&clock).map_err(|e| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Failed to serialize the Clock: {e}"))
-            })?;
-            let value = Value::simple_deserialize(&bytes, layout).ok_or_else(|| {
+            let contents = clock
+                .data
+                .try_as_move()
+                .ok_or_else(|| {
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("The Clock is not a Move object".to_string())
+                })?
+                .contents();
+            let value = Value::simple_deserialize(contents, layout).ok_or_else(|| {
                 PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE)
                     .with_message("Failed to deserialize the Clock".to_string())
             })?;

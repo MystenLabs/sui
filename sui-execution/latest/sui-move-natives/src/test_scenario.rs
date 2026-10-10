@@ -42,7 +42,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
 };
 use sui_types::{
-    SUI_CLOCK_OBJECT_ID, TypeTag,
+    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     clock::Clock,
     config,
@@ -176,11 +176,28 @@ impl ImplicitSystemObjectResolver for InMemoryTestStore {
         Ok(self.settled_funds(owner, type_))
     }
 
-    fn clock(&self) -> sui_types::error::SuiResult<Clock> {
-        Ok(Clock {
+    fn clock(&self) -> sui_types::error::SuiResult<Object> {
+        let clock = Clock {
             id: UID::new(SUI_CLOCK_OBJECT_ID),
             timestamp_ms: self.clock_timestamp_ms.get(),
-        })
+        };
+        let move_object = unsafe {
+            MoveObject::new_from_execution_with_limit(
+                Clock::type_().into(),
+                false,
+                SUI_CLOCK_OBJECT_SHARED_VERSION,
+                bcs::to_bytes(&clock).expect("Clock serializes"),
+                250 * 1024,
+            )
+        }
+        .expect("Clock fits the object size limit");
+        Ok(Object::new_move(
+            move_object,
+            Owner::Shared {
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+            },
+            TransactionDigest::default(),
+        ))
     }
 }
 
