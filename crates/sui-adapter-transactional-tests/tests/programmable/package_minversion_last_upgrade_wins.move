@@ -11,7 +11,7 @@ module BaseV1::base;
 public fun ping() { abort 1 }
 
 //# programmable --sender A --inputs object(1,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
 //# upgrade --package BaseV1 --upgrade-capability 1,1 --sender A --minversion
@@ -20,7 +20,8 @@ public fun ping() { abort 2 }
 
 //# upgrade --package BaseV2 --upgrade-capability 1,1 --sender A --minversion
 module BaseV3::base;
-public fun ping() {}
+public struct Ping has copy, drop { version: u64 }
+public fun ping() { sui::event::emit(Ping { version: 3 }) }
 
 // v3 is newer than the current selection and must not be downgraded.
 //# run BaseV3::base::ping --sender A

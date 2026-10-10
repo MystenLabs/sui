@@ -11,12 +11,13 @@ module BaseV1::base;
 public fun ping() { abort 1 }
 
 //# programmable --sender A --inputs object(1,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
 //# upgrade --package BaseV1 --upgrade-capability 1,1 --sender A --minversion
 module BaseV2::base;
-public fun ping() {}
+public struct Ping has copy, drop { version: u64 }
+public fun ping() { sui::event::emit(Ping { version: 2 }) }
 
 // The v2 reference must execute v2, not be redirected back to stable v1.
 //# run BaseV2::base::ping --sender A

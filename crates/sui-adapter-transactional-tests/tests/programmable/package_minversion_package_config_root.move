@@ -23,7 +23,7 @@ public fun ping() { sui::event::emit(Ping { version: 2 }) }
 //# run BaseV2::base::ping --sender A
 
 //# programmable --sender A --inputs object(1,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
 // The setting is immediately selected. Historical BaseV1 emits version 2 from BaseV2 and records

@@ -17,7 +17,7 @@ gas summary: computation_cost: 1000000, storage_cost: 5137600,  storage_rebate: 
 
 task 2, lines 13-15:
 //# programmable --sender A --inputs object(1,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 created: object(2,0)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
@@ -29,22 +29,24 @@ created: object(3,0)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 9348000,  storage_rebate: 6831717, non_refundable_storage_fee: 683
 
-task 4, lines 21-23:
+task 4, lines 21-24:
 //# upgrade --package BaseV2 --upgrade-capability 1,1 --sender A --minversion
 created: object(4,0)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 9279600,  storage_rebate: 6831717, non_refundable_storage_fee: 683
+gas summary: computation_cost: 1000000, storage_cost: 10374000,  storage_rebate: 6831717, non_refundable_storage_fee: 683
 
-task 5, lines 25-26:
+task 5, lines 26-27:
 // v3 is newer than the current selection and must not be downgraded.
 //# run BaseV3::base::ping --sender A
+events: Event { package_id: BaseV3, transaction_module: Identifier("base"), sender: A, type_: StructTag { address: BaseV3, module: Identifier("base"), name: Identifier("Ping"), type_params: [] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 6, lines 28-29:
+task 6, lines 29-30:
 // The last upgrade, v3, is selected for historical v1.
 //# run BaseV1::base::ping --sender A
+events: Event { package_id: BaseV3, transaction_module: Identifier("base"), sender: A, type_: StructTag { address: BaseV3, module: Identifier("base"), name: Identifier("Ping"), type_params: [] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

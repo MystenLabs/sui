@@ -41,7 +41,7 @@ use MinDependencyV1::dependency;
 public fun publish_time_only() { dependency::ping() }
 
 //# programmable --sender A --inputs object(3,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
 // This package has no init. Its MinDependencyV1 dependency is below minversion, which selects

@@ -55,7 +55,7 @@ gas summary: computation_cost: 1000000, storage_cost: 6224400,  storage_rebate: 
 
 task 8, lines 43-45:
 //# programmable --sender A --inputs object(3,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 created: object(8,0)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(3,1)

@@ -12,7 +12,8 @@ public fun value() { abort 1 }
 
 //# upgrade --package LeafV1 --upgrade-capability 1,1 --sender A
 module LeafV2::leaf;
-public fun value() {}
+public struct Ping has copy, drop { version: u64 }
+public fun value() { sui::event::emit(Ping { version: 2 }) }
 
 //# publish --upgradeable --dependencies LeafV1 --sender A
 module BaseV1::base;
@@ -30,7 +31,7 @@ use BaseV1::base;
 public fun call() { base::call() }
 
 //# programmable --sender A --inputs object(3,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
 // The selected BaseV2 dependency table immediately replaces BaseV1's table and uses LeafV2.
@@ -44,7 +45,8 @@ public fun call() { base::call() }
 
 //# upgrade --package LeafV2 --upgrade-capability 1,1 --sender A
 module LeafV3::leaf;
-public fun value() {}
+public struct Ping has copy, drop { version: u64 }
+public fun value() { sui::event::emit(Ping { version: 3 }) }
 
 // LeafV2 is now historical. The selected BaseV2 package still executes LeafV2, so the forbid
 // list rejects that selected executable dependency.

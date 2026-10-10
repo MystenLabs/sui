@@ -11,19 +11,20 @@ module BaseV1::base;
 public fun ping() { abort 1 }
 
 //# programmable --sender A --inputs object(1,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
 //# stage-package
 module BaseV2::base;
-public fun ping() {}
+public struct Ping has copy, drop { version: u64 }
+public fun ping() { sui::event::emit(Ping { version: 2 }) }
 
 //# programmable --sender A --inputs object(1,1) object(0xcf6) 0u8 digest(BaseV2)
 //> 0: sui::package::prepare_minversion_upgrade(Input(0));
 //> 1: sui::package::authorize_upgrade(Input(0), Input(2), Input(3));
 //> 2: Upgrade(BaseV2, [sui,std], BaseV1, Result(1));
 //> 3: sui::package::commit_minversion_upgrade(Input(0), Result(2), Result(0));
-//> sui::package_config::record_minversion_upgrade_and_forbid_previous(Input(1), Result(3));
+//> sui::package_config::record_minversion_upgrade_and_forbid_previous_versions(Input(1), Result(3));
 
 // v1 immediately resolves to v2, so the v1 forbid no longer applies.
 //# run BaseV1::base::ping --sender A
