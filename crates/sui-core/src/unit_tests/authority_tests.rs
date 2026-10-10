@@ -2998,7 +2998,7 @@ async fn test_valid_immutable_clock_parameter() {
 
 #[tokio::test]
 async fn test_implicit_clock_read_uses_pinned_version() {
-    // `clock::now_ms` reads the Clock at the version pinned for the transaction,
+    // `clock::borrow` reads the Clock at the version pinned for the transaction,
     // not the latest version in the store.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -3052,7 +3052,7 @@ async fn test_implicit_clock_read_uses_pinned_version() {
         sender,
         package_object_ref.0,
         ident_str!("object_basics").to_owned(),
-        ident_str!("create_with_now_ms").to_owned(),
+        ident_str!("create_with_clock_timestamp").to_owned(),
         /* type_args */ vec![],
         gas_ref,
         vec![CallArg::Pure(bcs::to_bytes(&sender).unwrap())],
