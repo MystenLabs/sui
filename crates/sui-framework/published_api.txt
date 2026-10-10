@@ -1093,6 +1093,9 @@ AccountPolicyRegistry
 PolicyKey
 	public struct
 	0x2::account_policy
+PackagePermission
+	public struct
+	0x2::account_policy
 AccountPolicy
 	public struct
 	0x2::account_policy
@@ -1105,10 +1108,28 @@ enable
 cancel
 	public fun
 	0x2::account_policy
-update
+disable
 	public fun
 	0x2::account_policy
-disable
+set_guardian
+	public fun
+	0x2::account_policy
+set_gas_budget_cap
+	public fun
+	0x2::account_policy
+set_coin_limit
+	public fun
+	0x2::account_policy
+add_recipient
+	public fun
+	0x2::account_policy
+remove_recipient
+	public fun
+	0x2::account_policy
+set_package
+	public fun
+	0x2::account_policy
+remove_package
 	public fun
 	0x2::account_policy
 exists
@@ -1120,7 +1141,7 @@ activation_epoch
 policy_mut
 	fun
 	0x2::account_policy
-assert_guardian_co_signed
+authorize
 	fun
 	0x2::account_policy
 AccumulatorRoot

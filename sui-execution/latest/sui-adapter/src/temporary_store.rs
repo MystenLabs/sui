@@ -163,6 +163,9 @@ pub struct TemporaryStore<'backing> {
     loaded_system_objects: RefCell<BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>>,
 
     unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
+
+    /// The PTB command that took each object by value, deleted it, or gave it a new owner.
+    object_consumers: BTreeMap<ObjectID, u16>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -272,6 +275,7 @@ impl<'backing> TemporaryStore<'backing> {
             system_object_versions,
             loaded_system_objects: RefCell::new(BTreeMap::new()),
             unsettled_object_funds,
+            object_consumers: BTreeMap::new(),
         }
     }
 
@@ -760,6 +764,7 @@ impl<'backing> TemporaryStore<'backing> {
             // Execution outcomes can be discarded.
             execution_results: _,
             invariants: _,
+            object_consumers: _,
         } = self;
         let mut bump_only = Self {
             store,
@@ -781,6 +786,7 @@ impl<'backing> TemporaryStore<'backing> {
             unsettled_object_funds,
             execution_results: ExecutionResultsV2::default(),
             invariants: InvariantChecker::default(),
+            object_consumers: BTreeMap::new(),
         };
         // The only writes a BumpOnly exit records: bump the versions of the mutable inputs it locked.
         bump_only.ensure_active_inputs_mutated();
@@ -1470,6 +1476,10 @@ impl Storage for TemporaryStore<'_> {
 
     fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>) {
         TemporaryStore::save_generated_object_ids(self, generated_ids)
+    }
+
+    fn record_object_consumers(&mut self, consumers: BTreeMap<ObjectID, u16>) {
+        self.object_consumers = consumers;
     }
 }
 

@@ -111,6 +111,7 @@ where
     for sp!(annotated_index, c) in commands {
         let annotated_index = annotated_index as usize;
         let start = Instant::now();
+        context.set_current_command(annotated_index)?;
         if let Err(err) =
             execute_command::<Mode>(&mut context, &mut mode_results, c, trace_builder_opt)
         {
@@ -138,6 +139,8 @@ where
     let wrapped_object_containers = object_runtime!(context)?.wrapped_object_containers();
     // We record the generated object IDs for expensive invariant checks
     let generated_object_ids = object_runtime!(context)?.generated_object_ids();
+    // We record which command consumed each object for the account policy check
+    let object_consumers = object_runtime!(context)?.object_consumers();
 
     // apply changes
     let finished = context.finish();
@@ -149,6 +152,7 @@ where
     env.state_view.record_execution_results(finished?)?;
     env.state_view
         .record_generated_object_ids(generated_object_ids);
+    env.state_view.record_object_consumers(object_consumers);
     Ok(mode_results)
 }
 

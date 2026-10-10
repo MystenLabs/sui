@@ -314,8 +314,8 @@ pub enum AccountPolicyViolationKind {
     PackageNotAllowed,
     #[error("publishing or upgrading packages is not allowed by the policy")]
     PublishNotAllowed,
-    #[error("SUI outflow exceeds the policy limit")]
-    SuiOutflowExceeded,
+    #[error("coin outflow exceeds the policy limit for its type")]
+    CoinOutflowExceeded,
     #[error("an object left the sender's ownership")]
     ObjectTransferNotAllowed,
 }

@@ -9,23 +9,32 @@
 //! transaction whose sender has none behaves identically whether or not the version is pinned on
 //! replay.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
+use move_core_types::language_storage::TypeTag;
 use mysten_common::debug_fatal;
 use sui_types::{
     SUI_ACCOUNT_POLICY_REGISTRY_OBJECT_ID,
-    account_policy::{ACCOUNT_POLICY_ALLOWED_PACKAGES, AccountPolicy, account_policy_field_id},
+    account_policy::{AccountPolicy, account_policy_field_id},
     base_types::{ObjectID, SuiAddress},
     effects::{AccumulatorOperation, AccumulatorValue},
     error::ExecutionError,
     execution_status::{AccountPolicyViolationKind, ExecutionErrorKind},
-    gas_coin::GasCoin,
+    gas_coin::GAS,
     governance::StakedSui,
     object::{Object, Owner},
+    storage::BackingPackageStore,
     transaction::{Command, GasData, TransactionKind},
 };
 
 use crate::temporary_store::TemporaryStore;
+
+/// What the policy check needs to know about each PTB command.
+enum CommandSummary {
+    MoveCall(ObjectID),
+    Publish,
+    Other,
+}
 
 /// Facts about the transaction that the policy check needs and that execution results do not
 /// carry. Only user PTBs have them; system transactions have no sender policy.
@@ -33,8 +42,7 @@ pub(super) struct AccountPolicyTxInputs {
     sender: SuiAddress,
     co_signers: Vec<SuiAddress>,
     gas_budget: u64,
-    called_packages: BTreeSet<ObjectID>,
-    publishes: bool,
+    commands: Vec<CommandSummary>,
 }
 
 impl AccountPolicyTxInputs {
@@ -47,23 +55,20 @@ impl AccountPolicyTxInputs {
         let TransactionKind::ProgrammableTransaction(pt) = transaction_kind else {
             return None;
         };
-        let mut called_packages = BTreeSet::new();
-        let mut publishes = false;
-        for command in &pt.commands {
-            match command {
-                Command::MoveCall(call) => {
-                    called_packages.insert(call.package);
-                }
-                Command::Publish(..) | Command::Upgrade(..) => publishes = true,
-                _ => {}
-            }
-        }
+        let commands = pt
+            .commands
+            .iter()
+            .map(|command| match command {
+                Command::MoveCall(call) => CommandSummary::MoveCall(call.package),
+                Command::Publish(..) | Command::Upgrade(..) => CommandSummary::Publish,
+                _ => CommandSummary::Other,
+            })
+            .collect();
         Some(Self {
             sender,
             co_signers: co_signers.to_vec(),
             gas_budget: gas_data.budget,
-            called_packages,
-            publishes,
+            commands,
         })
     }
 }
@@ -90,32 +95,103 @@ impl TemporaryStore<'_> {
         if inputs.gas_budget > policy.gas_budget_cap {
             return violation(AccountPolicyViolationKind::GasBudgetExceeded);
         }
-        if inputs.publishes {
-            return violation(AccountPolicyViolationKind::PublishNotAllowed);
+
+        // Which package each command calls, by original ID so upgrades keep working.
+        let mut called_packages: Vec<Option<ObjectID>> = Vec::with_capacity(inputs.commands.len());
+        for command in &inputs.commands {
+            called_packages.push(match command {
+                CommandSummary::MoveCall(package) => {
+                    let Some(original) = self.original_package_id(*package) else {
+                        return violation(AccountPolicyViolationKind::PackageNotAllowed);
+                    };
+                    if !policy.allows_package(original) {
+                        return violation(AccountPolicyViolationKind::PackageNotAllowed);
+                    }
+                    Some(original)
+                }
+                CommandSummary::Publish => {
+                    return violation(AccountPolicyViolationKind::PublishNotAllowed);
+                }
+                CommandSummary::Other => None,
+            });
         }
-        if inputs
-            .called_packages
-            .iter()
-            .any(|package| !ACCOUNT_POLICY_ALLOWED_PACKAGES.contains(package))
-        {
-            return violation(AccountPolicyViolationKind::PackageNotAllowed);
+
+        let sender = inputs.sender;
+        let before = self.sender_objects_before(sender);
+
+        // Every non-coin object the sender held must still be theirs, be with a listed recipient,
+        // or have been taken by a package the policy trusts with custody of that type.
+        for (id, object) in &before {
+            if object.is_coin() {
+                continue;
+            }
+            let after = self.execution_results.written_objects.get(id);
+            if after.is_some_and(|after| owned_by(after, sender)) {
+                continue;
+            }
+            if after.is_some_and(|after| {
+                owner_address(after).is_some_and(|recipient| policy.is_recipient(recipient))
+            }) {
+                continue;
+            }
+            let Some(object_type) = object.type_().map(|ty| ty.clone().into()) else {
+                return violation(AccountPolicyViolationKind::ObjectTransferNotAllowed);
+            };
+            let custodian = self
+                .object_consumers
+                .get(id)
+                .and_then(|command| called_packages.get(usize::from(*command)))
+                .copied()
+                .flatten();
+            if !custodian.is_some_and(|package| policy.allows_custody(package, &object_type)) {
+                return violation(AccountPolicyViolationKind::ObjectTransferNotAllowed);
+            }
         }
-        // Deleted and wrapped objects are not checked: neither can happen from a bare PTB, so
-        // they can only come from an allowed package.
-        let object_left_sender = self.input_objects.iter().any(|(id, before)| {
-            owned_by(before, inputs.sender)
-                && !before.is_gas_coin()
-                && self
-                    .execution_results
-                    .written_objects
-                    .get(id)
-                    .is_some_and(|after| !owned_by(after, inputs.sender))
-        });
-        if object_left_sender {
-            return violation(AccountPolicyViolationKind::ObjectTransferNotAllowed);
+
+        // Net outflow per coin type: value held before, minus value still with the sender or
+        // sent to a listed recipient afterwards, plus net address-balance withdrawals.
+        let mut outflows: BTreeMap<TypeTag, i128> = BTreeMap::new();
+        for object in before.values() {
+            if let Some((coin_type, value)) = coin_value(object) {
+                *outflows.entry(coin_type).or_default() += value as i128;
+            }
         }
-        if self.sender_sui_outflow(inputs.sender) > policy.sui_limit_per_tx as i128 {
-            return violation(AccountPolicyViolationKind::SuiOutflowExceeded);
+        for object in self.execution_results.written_objects.values() {
+            let kept = owned_by(object, sender)
+                || owner_address(object).is_some_and(|recipient| policy.is_recipient(recipient));
+            if !kept {
+                continue;
+            }
+            if let Some((coin_type, value)) = coin_value(object) {
+                *outflows.entry(coin_type).or_default() -= value as i128;
+            }
+        }
+        for event in &self.execution_results.accumulator_events {
+            let AccumulatorValue::Integer(amount) = event.write.value else {
+                continue;
+            };
+            let Some(coin_type) = balance_coin_type(&event.write.address.ty) else {
+                continue;
+            };
+            let address = event.write.address.address;
+            let delta = if address == sender {
+                match event.write.operation {
+                    AccumulatorOperation::Split => amount as i128,
+                    AccumulatorOperation::Merge => -(amount as i128),
+                }
+            } else if policy.is_recipient(address)
+                && event.write.operation == AccumulatorOperation::Merge
+            {
+                -(amount as i128)
+            } else {
+                continue;
+            };
+            *outflows.entry(coin_type).or_default() += delta;
+        }
+        for (coin_type, outflow) in outflows {
+            if outflow > policy.coin_limit(&coin_type) as i128 {
+                return violation(AccountPolicyViolationKind::CoinOutflowExceeded);
+            }
         }
         Ok(())
     }
@@ -151,61 +227,88 @@ impl TemporaryStore<'_> {
         Some(policy)
     }
 
-    /// Net SUI that left the sender in this transaction: SUI held in the sender's coins and
-    /// stake before minus after, plus net withdrawals from the sender's SUI address balance.
-    /// Negative when the sender gained SUI.
-    fn sender_sui_outflow(&self, sender: SuiAddress) -> i128 {
-        let held = |objects: &std::collections::BTreeMap<ObjectID, Object>| -> i128 {
-            objects
-                .values()
-                .filter(|object| owned_by(object, sender))
-                .map(|object| sui_held(object) as i128)
-                .sum()
-        };
-        let held_before = held(&self.input_objects);
-        let held_after = held(&self.execution_results.written_objects);
-        let balance_outflow: i128 = self
-            .execution_results
-            .accumulator_events
+    fn original_package_id(&self, package: ObjectID) -> Option<ObjectID> {
+        self.get_package_object(&package)
+            .ok()
+            .flatten()
+            .map(|package| package.move_package().original_package_id())
+    }
+
+    /// Objects the sender possessed when the transaction started: owned inputs, plus objects
+    /// loaded at runtime that belonged to the sender or to one of the sender's objects (received
+    /// objects and dynamic fields), as they were before the transaction.
+    fn sender_objects_before(&self, sender: SuiAddress) -> BTreeMap<ObjectID, Object> {
+        let mut objects: BTreeMap<ObjectID, Object> = self
+            .input_objects
             .iter()
-            .filter(|event| {
-                event.write.address.address == sender
-                    && GasCoin::is_gas_balance_type(&event.write.address.ty)
-            })
-            .map(|event| {
-                let AccumulatorValue::Integer(amount) = event.write.value else {
-                    return 0;
-                };
-                match event.write.operation {
-                    AccumulatorOperation::Split => amount as i128,
-                    AccumulatorOperation::Merge => -(amount as i128),
+            .filter(|(_, object)| owned_by(object, sender))
+            .map(|(id, object)| (*id, object.clone()))
+            .collect();
+        // Two passes pick up children of children (an object received by a dynamic field).
+        for _ in 0..2 {
+            let possessed: BTreeSet<SuiAddress> = objects
+                .keys()
+                .map(|id| SuiAddress::from(*id))
+                .chain(std::iter::once(sender))
+                .collect();
+            for (id, metadata) in &self.loaded_runtime_objects {
+                if objects.contains_key(id) {
+                    continue;
                 }
-            })
-            .sum();
-        held_before - held_after + balance_outflow
+                let holder = match &metadata.owner {
+                    Owner::AddressOwner(holder) | Owner::ObjectOwner(holder) => *holder,
+                    Owner::ConsensusAddressOwner { owner, .. } => *owner,
+                    Owner::Shared { .. } | Owner::Immutable | Owner::Party { .. } => continue,
+                };
+                if !possessed.contains(&holder) {
+                    continue;
+                }
+                if let Some(object) = self.store.get_object_by_key(id, metadata.version) {
+                    objects.insert(*id, object);
+                }
+            }
+        }
+        objects
     }
 }
 
 fn owned_by(object: &Object, address: SuiAddress) -> bool {
-    matches!(
-        object.owner(),
-        Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } if *owner == address
-    )
+    owner_address(object) == Some(address)
 }
 
-/// SUI held by `object`: a SUI coin's balance, or a stake's principal.
-fn sui_held(object: &Object) -> u64 {
-    if object.is_gas_coin() {
-        object.get_coin_value_unsafe()
-    } else if object
+/// The address an object is owned by, including object IDs as addresses for objects held by
+/// other objects. Shared and immutable objects have none.
+fn owner_address(object: &Object) -> Option<SuiAddress> {
+    match object.owner() {
+        Owner::AddressOwner(address) | Owner::ObjectOwner(address) => Some(*address),
+        Owner::ConsensusAddressOwner { owner, .. } => Some(*owner),
+        Owner::Shared { .. } | Owner::Immutable | Owner::Party { .. } => None,
+    }
+}
+
+/// The coin type and amount an object holds: a coin's balance, or a stake's principal as SUI.
+fn coin_value(object: &Object) -> Option<(TypeTag, u64)> {
+    if let Some(coin_type) = object.coin_type_maybe() {
+        return Some((coin_type, object.get_coin_value_unsafe()));
+    }
+    if object
         .data
         .try_as_move()
         .is_some_and(|move_object| move_object.is_staked_sui())
     {
-        StakedSui::try_from(object)
-            .map(|stake| stake.principal())
-            .unwrap_or(0)
-    } else {
-        0
+        let principal = StakedSui::try_from(object).ok()?.principal();
+        return Some((GAS::type_tag(), principal));
     }
+    None
+}
+
+/// `T` for a `Balance<T>` accumulator type.
+fn balance_coin_type(balance_type: &TypeTag) -> Option<TypeTag> {
+    use sui_types::balance::Balance;
+    let TypeTag::Struct(tag) = balance_type else {
+        return None;
+    };
+    Balance::is_balance_type(balance_type)
+        .then(|| tag.type_params.first().cloned())
+        .flatten()
 }

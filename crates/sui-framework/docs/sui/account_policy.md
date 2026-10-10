@@ -7,28 +7,37 @@ Opt-in account policies that bound what a transaction signed by the account key 
 Policies are dynamic fields of the singleton <code><a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a></code>, keyed by owner address.
 Every transaction implicitly reads the registry at the version consensus assigned to it, so
 execution can look up the sender's policy without the transaction declaring it. While a policy
-is active, execution enforces a per-transaction SUI outflow limit, a gas budget cap, a fixed
-package allowlist, and that no non-coin object leaves the owner's ownership. A transaction
-co-signed by the guardian is exempt.
+is active, execution enforces a gas budget cap, a per-transaction outflow limit for each coin
+type, a package allowlist, and that the owner's objects stay with the owner unless they go to a
+listed recipient or are taken by a package with custody permission. A transaction co-signed by
+the guardian is exempt.
 
-A policy only takes effect <code><a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a></code> after it is enabled, and the owner can
-cancel it before then with the key alone, so an attacker holding the key cannot lock the
-owner out by enabling a policy with their own guardian.
+A policy only takes effect <code><a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a></code> after it is enabled. Until then the owner
+can change or cancel it with the key alone, so an attacker holding the key cannot lock the
+owner out by enabling a policy with their own guardian. Once active, every change needs the
+guardian's co-signature.
 
 
 -  [Struct `AccountPolicyRegistry`](#sui_account_policy_AccountPolicyRegistry)
 -  [Struct `PolicyKey`](#sui_account_policy_PolicyKey)
+-  [Struct `PackagePermission`](#sui_account_policy_PackagePermission)
 -  [Struct `AccountPolicy`](#sui_account_policy_AccountPolicy)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#sui_account_policy_create)
 -  [Function `enable`](#sui_account_policy_enable)
 -  [Function `cancel`](#sui_account_policy_cancel)
--  [Function `update`](#sui_account_policy_update)
 -  [Function `disable`](#sui_account_policy_disable)
+-  [Function `set_guardian`](#sui_account_policy_set_guardian)
+-  [Function `set_gas_budget_cap`](#sui_account_policy_set_gas_budget_cap)
+-  [Function `set_coin_limit`](#sui_account_policy_set_coin_limit)
+-  [Function `add_recipient`](#sui_account_policy_add_recipient)
+-  [Function `remove_recipient`](#sui_account_policy_remove_recipient)
+-  [Function `set_package`](#sui_account_policy_set_package)
+-  [Function `remove_package`](#sui_account_policy_remove_package)
 -  [Function `exists`](#sui_account_policy_exists)
 -  [Function `activation_epoch`](#sui_account_policy_activation_epoch)
 -  [Function `policy_mut`](#sui_account_policy_policy_mut)
--  [Function `assert_guardian_co_signed`](#sui_account_policy_assert_guardian_co_signed)
+-  [Function `authorize`](#sui_account_policy_authorize)
 
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
@@ -44,6 +53,7 @@ owner out by enabling a policy with their own guardian.
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
 <b>use</b> <a href="../sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
+<b>use</b> <a href="../sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
 </code></pre>
 
 
@@ -102,6 +112,41 @@ Dynamic field key of an owner's policy.
 
 </details>
 
+<a name="sui_account_policy_PackagePermission"></a>
+
+## Struct `PackagePermission`
+
+What a listed package may do with the owner's objects. Field layout is mirrored by
+<code>sui_types::account_policy::PackagePermission</code>.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/account_policy.md#sui_account_policy_PackagePermission">PackagePermission</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>custody: bool</code>
+</dt>
+<dd>
+ The package may delete, wrap, or give away the owner's objects.
+</dd>
+<dt>
+<code>custody_types: vector&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;</code>
+</dt>
+<dd>
+ Object types custody is limited to, as type strings; empty means any type.
+</dd>
+</dl>
+
+
+</details>
+
 <a name="sui_account_policy_AccountPolicy"></a>
 
 ## Struct `AccountPolicy`
@@ -130,12 +175,6 @@ The policy itself. Field layout is mirrored by <code>sui_types::account_policy::
 <dd>
 </dd>
 <dt>
-<code>sui_limit_per_tx: u64</code>
-</dt>
-<dd>
- Maximum net SUI (in MIST) that may leave the owner's coins and stake in one transaction.
-</dd>
-<dt>
 <code>gas_budget_cap: u64</code>
 </dt>
 <dd>
@@ -145,6 +184,26 @@ The policy itself. Field layout is mirrored by <code>sui_types::account_policy::
 </dt>
 <dd>
  First epoch in which the policy is enforced; <code><a href="../sui/account_policy.md#sui_account_policy_DISABLED">DISABLED</a></code> if cancelled or disabled.
+</dd>
+<dt>
+<code>coin_limits: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, u64&gt;</code>
+</dt>
+<dd>
+ Per-transaction net outflow limit (in the coin's smallest unit) by coin type string.
+ Types without an entry may not flow out at all.
+</dd>
+<dt>
+<code>recipients: <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<b>address</b>&gt;</code>
+</dt>
+<dd>
+ Addresses (or object IDs) that coins and objects may be sent to without limit.
+</dd>
+<dt>
+<code>packages: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, <a href="../sui/account_policy.md#sui_account_policy_PackagePermission">sui::account_policy::PackagePermission</a>&gt;</code>
+</dt>
+<dd>
+ Packages that may be called, by original package ID. The system package is always
+ callable.
 </dd>
 </dl>
 
@@ -190,7 +249,7 @@ The policy itself. Field layout is mirrored by <code>sui_types::account_policy::
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/account_policy.md#sui_account_policy_EAlreadyActive">EAlreadyActive</a>: vector&lt;u8&gt; = b"An active policy can only be changed with the guardian's co-signature.";
+<b>const</b> <a href="../sui/account_policy.md#sui_account_policy_EAlreadyActive">EAlreadyActive</a>: vector&lt;u8&gt; = b"Only a pending policy can be cancelled with the key alone.";
 </code></pre>
 
 
@@ -235,10 +294,11 @@ Create and share the <code><a href="../sui/account_policy.md#sui_account_policy_
 
 ## Function `enable`
 
-Opt the sender in. The policy is enforced from <code><a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a></code> epochs from now.
+Opt the sender in with an empty rule set. The policy is enforced from
+<code><a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a></code> epochs from now; configure it before then with the <code>set_*</code> calls.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_enable">enable</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, guardian: <b>address</b>, sui_limit_per_tx: u64, gas_budget_cap: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_enable">enable</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, guardian: <b>address</b>, gas_budget_cap: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -250,7 +310,6 @@ Opt the sender in. The policy is enforced from <code><a href="../sui/account_pol
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_enable">enable</a>(
     registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>,
     guardian: <b>address</b>,
-    sui_limit_per_tx: u64,
     gas_budget_cap: u64,
     ctx: &TxContext,
 ) {
@@ -261,9 +320,11 @@ Opt the sender in. The policy is enforced from <code><a href="../sui/account_pol
         <a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a> {
             owner,
             guardian,
-            sui_limit_per_tx,
             gas_budget_cap,
             <a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>: ctx.epoch() + <a href="../sui/account_policy.md#sui_account_policy_ACTIVATION_DELAY_EPOCHS">ACTIVATION_DELAY_EPOCHS</a>,
+            coin_limits: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
+            recipients: <a href="../sui/vec_set.md#sui_vec_set_empty">vec_set::empty</a>(),
+            packages: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
         },
     );
 }
@@ -301,46 +362,11 @@ attacker who enabled a policy on a stolen key cannot lock the owner out.
 
 </details>
 
-<a name="sui_account_policy_update"></a>
-
-## Function `update`
-
-Change the sender's policy. The guardian must co-sign the transaction.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_update">update</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, guardian: <b>address</b>, sui_limit_per_tx: u64, gas_budget_cap: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_update">update</a>(
-    registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>,
-    guardian: <b>address</b>,
-    sui_limit_per_tx: u64,
-    gas_budget_cap: u64,
-    ctx: &TxContext,
-) {
-    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
-    policy.<a href="../sui/account_policy.md#sui_account_policy_assert_guardian_co_signed">assert_guardian_co_signed</a>(ctx);
-    policy.guardian = guardian;
-    policy.sui_limit_per_tx = sui_limit_per_tx;
-    policy.gas_budget_cap = gas_budget_cap;
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="sui_account_policy_disable"></a>
 
 ## Function `disable`
 
-Stop enforcing the sender's policy. The guardian must co-sign the transaction.
+Stop enforcing the sender's active policy. The guardian must co-sign.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_disable">disable</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -354,8 +380,226 @@ Stop enforcing the sender's policy. The guardian must co-sign the transaction.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_disable">disable</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, ctx: &TxContext) {
     <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
-    policy.<a href="../sui/account_policy.md#sui_account_policy_assert_guardian_co_signed">assert_guardian_co_signed</a>(ctx);
+    policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
     policy.<a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a> = <a href="../sui/account_policy.md#sui_account_policy_DISABLED">DISABLED</a>;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_account_policy_set_guardian"></a>
+
+## Function `set_guardian`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_guardian">set_guardian</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, guardian: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_guardian">set_guardian</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, guardian: <b>address</b>, ctx: &TxContext) {
+    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
+    policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
+    policy.guardian = guardian;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_account_policy_set_gas_budget_cap"></a>
+
+## Function `set_gas_budget_cap`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_gas_budget_cap">set_gas_budget_cap</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, gas_budget_cap: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_gas_budget_cap">set_gas_budget_cap</a>(
+    registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>,
+    gas_budget_cap: u64,
+    ctx: &TxContext,
+) {
+    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
+    policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
+    policy.gas_budget_cap = gas_budget_cap;
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_account_policy_set_coin_limit"></a>
+
+## Function `set_coin_limit`
+
+Set the per-transaction outflow limit of <code>coin_type</code> (e.g. <code><a href="../sui/sui.md#sui_sui_SUI">0x2::sui::SUI</a></code>).
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_coin_limit">set_coin_limit</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, coin_type: <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, limit: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_coin_limit">set_coin_limit</a>(
+    registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>,
+    coin_type: String,
+    limit: u64,
+    ctx: &TxContext,
+) {
+    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
+    policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
+    <b>if</b> (policy.coin_limits.contains(&coin_type)) {
+        *policy.coin_limits.get_mut(&coin_type) = limit;
+    } <b>else</b> {
+        policy.coin_limits.insert(coin_type, limit);
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_account_policy_add_recipient"></a>
+
+## Function `add_recipient`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_add_recipient">add_recipient</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, recipient: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_add_recipient">add_recipient</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, recipient: <b>address</b>, ctx: &TxContext) {
+    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
+    policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
+    <b>if</b> (!policy.recipients.contains(&recipient)) {
+        policy.recipients.insert(recipient);
+    };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_account_policy_remove_recipient"></a>
+
+## Function `remove_recipient`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_remove_recipient">remove_recipient</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, recipient: <b>address</b>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_remove_recipient">remove_recipient</a>(
+    registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>,
+    recipient: <b>address</b>,
+    ctx: &TxContext,
+) {
+    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
+    policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
+    <b>if</b> (policy.recipients.contains(&recipient)) {
+        policy.recipients.remove(&recipient);
+    };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_account_policy_set_package"></a>
+
+## Function `set_package`
+
+Allow calling <code><a href="../sui/package.md#sui_package">package</a></code> (its original ID), optionally with custody of the owner's objects.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_package">set_package</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, <a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, custody: bool, custody_types: vector&lt;<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_set_package">set_package</a>(
+    registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>,
+    <a href="../sui/package.md#sui_package">package</a>: ID,
+    custody: bool,
+    custody_types: vector&lt;String&gt;,
+    ctx: &TxContext,
+) {
+    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
+    policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
+    <b>let</b> permission = <a href="../sui/account_policy.md#sui_account_policy_PackagePermission">PackagePermission</a> { custody, custody_types };
+    <b>if</b> (policy.packages.contains(&<a href="../sui/package.md#sui_package">package</a>)) {
+        *policy.packages.get_mut(&<a href="../sui/package.md#sui_package">package</a>) = permission;
+    } <b>else</b> {
+        policy.packages.insert(<a href="../sui/package.md#sui_package">package</a>, permission);
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_account_policy_remove_package"></a>
+
+## Function `remove_package`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_remove_package">remove_package</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">sui::account_policy::AccountPolicyRegistry</a>, <a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_remove_package">remove_package</a>(registry: &<b>mut</b> <a href="../sui/account_policy.md#sui_account_policy_AccountPolicyRegistry">AccountPolicyRegistry</a>, <a href="../sui/package.md#sui_package">package</a>: ID, ctx: &TxContext) {
+    <b>let</b> policy = registry.<a href="../sui/account_policy.md#sui_account_policy_policy_mut">policy_mut</a>(ctx.sender());
+    policy.<a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(ctx);
+    <b>if</b> (policy.packages.contains(&<a href="../sui/package.md#sui_package">package</a>)) {
+        policy.packages.remove(&<a href="../sui/package.md#sui_package">package</a>);
+    };
 }
 </code></pre>
 
@@ -435,13 +679,14 @@ Stop enforcing the sender's policy. The guardian must co-sign the transaction.
 
 </details>
 
-<a name="sui_account_policy_assert_guardian_co_signed"></a>
+<a name="sui_account_policy_authorize"></a>
 
-## Function `assert_guardian_co_signed`
+## Function `authorize`
+
+A pending policy is the owner's to shape; an active one changes only with the guardian.
 
 
-
-<pre><code><b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_assert_guardian_co_signed">assert_guardian_co_signed</a>(policy: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(policy: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">sui::account_policy::AccountPolicy</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -450,8 +695,10 @@ Stop enforcing the sender's policy. The guardian must co-sign the transaction.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_assert_guardian_co_signed">assert_guardian_co_signed</a>(policy: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>, ctx: &TxContext) {
-    <b>assert</b>!(ctx.co_signers().contains(&policy.guardian), <a href="../sui/account_policy.md#sui_account_policy_ENotCoSignedByGuardian">ENotCoSignedByGuardian</a>);
+<pre><code><b>fun</b> <a href="../sui/account_policy.md#sui_account_policy_authorize">authorize</a>(policy: &<a href="../sui/account_policy.md#sui_account_policy_AccountPolicy">AccountPolicy</a>, ctx: &TxContext) {
+    <b>if</b> (ctx.epoch() &gt;= policy.<a href="../sui/account_policy.md#sui_account_policy_activation_epoch">activation_epoch</a>) {
+        <b>assert</b>!(ctx.co_signers().contains(&policy.guardian), <a href="../sui/account_policy.md#sui_account_policy_ENotCoSignedByGuardian">ENotCoSignedByGuardian</a>);
+    }
 }
 </code></pre>
 

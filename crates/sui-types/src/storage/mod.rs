@@ -291,6 +291,11 @@ pub trait Storage {
     ) -> DenyListResult;
 
     fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>);
+
+    /// Records, for each object that a PTB command took by value, deleted, or gave a new owner,
+    /// the index of that command. Lets post-execution checks attribute an ownership change to
+    /// the command (and so the package) that caused it.
+    fn record_object_consumers(&mut self, _consumers: BTreeMap<ObjectID, u16>) {}
 }
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;

@@ -123,6 +123,10 @@ pub(crate) struct ObjectRuntimeState {
     total_events_size: u64,
     total_events_emitted: u64,
     received: IndexMap<ObjectID, DynamicallyLoadedObjectMetadata>,
+    // index of the PTB command currently executing, if the adapter reports it
+    current_command: Option<u16>,
+    // command that took each object by value, deleted it, or gave it a new owner
+    object_consumers: BTreeMap<ObjectID, u16>,
     // Used to track SUI conservation in settlement transactions. Settlement transactions
     // gather up withdraws and deposits from other transactions, and record them to accumulator
     // fields. The settlement transaction records the total amount of SUI being disbursed here,
@@ -236,6 +240,8 @@ impl<'a> ObjectRuntime<'a> {
                 total_events_size: 0,
                 total_events_emitted: 0,
                 received: IndexMap::new(),
+                current_command: None,
+                object_consumers: BTreeMap::new(),
                 settlement_input_sui: 0,
                 settlement_output_sui: 0,
                 accumulator_merge_totals: BTreeMap::new(),
@@ -363,7 +369,24 @@ impl<'a> ObjectRuntime<'a> {
         if !was_new {
             self.state.deleted_ids.insert(id);
         }
+        self.record_consumed(id);
         Ok(())
+    }
+
+    pub fn set_current_command(&mut self, index: u16) {
+        self.state.current_command = Some(index);
+    }
+
+    /// Attributes `id` to the current command. The last attribution wins, so an object handed
+    /// from one command to the next is attributed to the command that finally consumed it.
+    pub fn record_consumed(&mut self, id: ObjectID) {
+        if let Some(command) = self.state.current_command {
+            self.state.object_consumers.insert(id, command);
+        }
+    }
+
+    pub fn object_consumers(&self) -> BTreeMap<ObjectID, u16> {
+        self.state.object_consumers.clone()
     }
 
     /// In the new PTB adapter, this function is also used for persisting owners at the end
@@ -378,6 +401,10 @@ impl<'a> ObjectRuntime<'a> {
         let id: ObjectID = get_object_id(obj.copy_value())?
             .value_as::<AccountAddress>()?
             .into();
+        // Inputs handed back to their owner at the end of the transaction were not consumed.
+        if !end_of_transaction {
+            self.record_consumed(id);
+        }
         // - An object is new if it is contained in the new ids or if it is one of the objects
         //   created during genesis (the system state object or clock).
         // - Otherwise, check the input objects for the previous owner
@@ -860,6 +887,8 @@ impl ObjectRuntimeState {
             accumulator_split_totals: _,
             object_funds_available: _,
             total_events_emitted: _,
+            current_command: _,
+            object_consumers: _,
         } = self;
 
         // The set of new ids is a subset of the generated ids.

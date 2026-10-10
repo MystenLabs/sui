@@ -798,6 +798,22 @@ where
     //
 
     fn location(&mut self, usage: UsageKind, location: T::Location) -> Result<Value, Mode::Error> {
+        if matches!(usage, UsageKind::Move) {
+            // Objects consumed inside Move surface through the object runtime; input objects
+            // taken by value may instead be wrapped silently, so they are attributed here.
+            let consumed_input = match location {
+                T::Location::GasCoin => self.locations.gas.as_ref().map(|(_, m, _)| m.id),
+                T::Location::ObjectInput(i) => self
+                    .locations
+                    .input_object_metadata
+                    .get(i as usize)
+                    .map(|(_, m)| m.id),
+                _ => None,
+            };
+            if let Some(id) = consumed_input {
+                object_runtime_mut!(self)?.record_consumed(id);
+            }
+        }
         let resolved = self.locations.resolve(location)?;
         let mut local = match resolved {
             ResolvedLocation::Local(l) => l,
@@ -883,6 +899,12 @@ where
         VMValue: VMValueCast<V>,
     {
         args.into_iter().map(|arg| self.argument(arg)).collect()
+    }
+
+    pub fn set_current_command(&mut self, index: usize) -> Result<(), Mode::Error> {
+        let index = u16::try_from(index).unwrap_or(u16::MAX);
+        object_runtime_mut!(self)?.set_current_command(index);
+        Ok(())
     }
 
     pub fn result(&mut self, result: Vec<Option<CtxValue>>) -> Result<(), Mode::Error> {

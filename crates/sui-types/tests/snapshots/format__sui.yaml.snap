@@ -16,7 +16,7 @@ AccountPolicyViolationKind:
     2:
       PublishNotAllowed: UNIT
     3:
-      SuiOutflowExceeded: UNIT
+      CoinOutflowExceeded: UNIT
     4:
       ObjectTransferNotAllowed: UNIT
 AccumulatorAddress:
