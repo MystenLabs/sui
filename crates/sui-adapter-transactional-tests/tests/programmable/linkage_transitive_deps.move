@@ -81,3 +81,10 @@ public fun ping() {}
 //> Root::m::ent_go(Input(0));
 
 //# view-object 4,0
+
+// The same PTB conflicted before enrollment. Both references now select Leaf v2 and succeed.
+//# programmable --sender A --inputs object(4,0)
+//> 0: Root::m::ent_go(Input(0));
+//> 1: Leaf_V2::l::ping();
+
+//# view-object 4,0

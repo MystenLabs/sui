@@ -13,7 +13,7 @@ public fun ping() { abort 1 }
 
 // A permanently-disabled cap cannot produce an enrollment token.
 //# programmable --sender A --inputs object(1,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
 // Ordinary upgrades remain valid for permanently-disabled caps.

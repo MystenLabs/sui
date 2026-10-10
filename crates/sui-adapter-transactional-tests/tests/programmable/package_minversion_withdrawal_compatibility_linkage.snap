@@ -1,0 +1,104 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+// Address-balance withdrawals enter the adapter as Balance<T>. For compatibility with a function
+// that expects Coin<T>, the adapter may convert the withdrawal into a Coin<T> input. The package
+// that defines T must still participate in minversion linkage during that conversion.
+//
+// Here T comes from CoinV1. Selecting CoinV2 adds its LeafV2 dependency to the transaction:
+//
+//   withdrawn Coin<CoinV1::COIN_TYPE> -> selected CoinV2 -> LeafV2
+//   Root                                                 -> LeafV1
+//
+// Root's public dependency can move forward, so the call must use LeafV2. This verifies the special
+// withdrawal-compatibility input path rather than the ordinary object- and type-input paths.
+
+init:
+A: object(0,0)
+
+task 1, lines 18-20:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 22-24:
+//# upgrade --package LeafV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 26-38:
+//# publish --upgradeable --dependencies LeafV1 --sender A
+created: object(3,0), object(3,1), object(3,2), object(3,3)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 13832000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 4, lines 40-43:
+// Seed an address balance for the compatibility withdrawal.
+//# programmable --sender A --inputs object(3,1) 10 @A
+//> 0: sui::coin::mint<CoinV1::coin_type::COIN_TYPE>(Input(0), Input(1));
+//> sui::coin::send_funds<CoinV1::coin_type::COIN_TYPE>(Result(0), Input(2));
+mutated: object(0,0), object(3,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000cf6
+accumulators_written: (object(4,0), A, sui::balance::Balance<CoinV1::coin_type::COIN_TYPE>, Merge, 10)
+gas summary: computation_cost: 1000000, storage_cost: 2766400,  storage_rebate: 2766123, non_refundable_storage_fee: 277
+
+task 5, line 45:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, lines 47-59:
+//# upgrade --package CoinV1 --upgrade-capability 3,3 --dependencies LeafV2 --sender A
+created: object(6,0)
+mutated: object(0,0), object(3,3)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 10244800,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 7, lines 61-68:
+//# publish --dependencies LeafV1 --sender A
+created: object(7,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 6338400,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 8, line 70:
+//# run Root::root::make --sender A
+created: object(8,0)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 9, lines 72-74:
+//# programmable --sender A --inputs object(3,3) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(9,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(3,3)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 10, lines 76-79:
+// The withdrawal is converted to Coin<COIN_TYPE>. Selecting CoinV2 for COIN_TYPE lifts Root to LeafV2.
+//# programmable --sender A --inputs object(8,0) coin_reservation<sui::balance::Balance<CoinV1::coin_type::COIN_TYPE>>(1) @A
+//> 0: Root::root::call(Input(0));
+//> sui::coin::send_funds<CoinV1::coin_type::COIN_TYPE>(Input(1), Input(2));
+mutated: object(0,0), object(8,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000cf6
+accumulators_written: (object(4,0), A, sui::balance::Balance<CoinV1::coin_type::COIN_TYPE>, Merge, 0)
+gas summary: computation_cost: 1000000, storage_cost: 2318000,  storage_rebate: 2317768, non_refundable_storage_fee: 232
+
+task 11, line 81:
+//# view-object 8,0
+Owner: Shared( 8 )
+Version: 10
+Contents: Root::root::Result {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(8,0),
+        },
+    },
+    value: 2u64,
+}

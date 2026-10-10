@@ -12,22 +12,23 @@ public fun ping() { abort 1 }
 
 //# upgrade --package BaseV1 --upgrade-capability 1,1 --sender A
 module BaseV2::base;
-public fun ping() {}
+public struct Ping has copy, drop { version: u64 }
+public fun ping() { sui::event::emit(Ping { version: 2 }) }
 
 // The policy write is not visible to another command in the same PTB: linkage uses the explicit
 // root input's pre-state, so this historical v1 call still aborts and the PTB rolls back.
 //# programmable --sender A --inputs object(1,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 //> 2: BaseV1::base::ping();
 
 //# programmable --sender A --inputs object(1,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
 // A second enrollment is rejected and leaves the original selection intact.
 //# programmable --sender A --inputs object(1,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
 // The enrolled selection immediately redirects v1 to v2.
@@ -44,6 +45,7 @@ public fun ping() {}
 
 //# upgrade --package BaseV2 --upgrade-capability 1,1 --sender A --minversion
 module BaseV3::base;
-public fun ping() {}
+public struct Ping has copy, drop { version: u64 }
+public fun ping() { sui::event::emit(Ping { version: 3 }) }
 
 //# run BaseV1::base::ping --sender A
