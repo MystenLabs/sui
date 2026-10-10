@@ -64,7 +64,7 @@ fn move_call<Mode: ExecutionMode>(env: &Env<Mode>, call: &T::MoveCall) -> Result
         arguments: _,
     } = call;
     check_signature::<Mode>(env, function)?;
-    check_tx_context::<Mode>(env, function)?;
+    check_tx_context::<Mode>(function)?;
     check_private_generics_v2(&function.original_mid, function.name.as_ident_str())?;
     check_visibility::<Mode>(env, function)?;
     Ok(())
@@ -108,13 +108,7 @@ fn check_signature<Mode: ExecutionMode>(
 /// These rules apply to the instantiated signature, so they cover generic parameters and return
 /// types instantiated with `TxContext`. Unlike the reference rules in `check_signature`, they are
 /// enforced under all execution modes.
-fn check_tx_context<Mode: ExecutionMode>(
-    env: &Env<Mode>,
-    function: &T::LoadedFunction,
-) -> Result<(), Mode::Error> {
-    if !env.protocol_config.ptb_tx_context_restrictions() {
-        return Ok(());
-    }
+fn check_tx_context<Mode: ExecutionMode>(function: &T::LoadedFunction) -> Result<(), Mode::Error> {
     check_no_tx_context_by_value::<Mode::Error>(&function.signature.parameters)?;
     check_tx_context_refs::<Mode::Error>(&function.signature.parameters)?;
     check_no_tx_context_return::<Mode::Error>(&function.signature.return_)?;
