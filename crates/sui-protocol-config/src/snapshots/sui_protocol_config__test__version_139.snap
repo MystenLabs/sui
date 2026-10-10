@@ -162,6 +162,7 @@ feature_flags:
   address_aliases: true
   create_forwarding_address_registry: true
   enable_forwarding_addresses: true
+  forwarding_deposit_event_streams: true
   fix_checkpoint_signature_mapping: true
   enable_object_funds_withdraw: true
   record_net_unsettled_object_withdraws: true

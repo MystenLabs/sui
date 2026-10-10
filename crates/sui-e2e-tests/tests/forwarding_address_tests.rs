@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{sync::Arc, time::Duration};
+
+use futures::StreamExt;
 use move_core_types::identifier::Identifier;
+use sui_light_client::authenticated_events::AuthenticatedEventsClient;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
@@ -1084,4 +1088,121 @@ async fn test_pause_and_rotation_policy() {
     assert_eq!(env.get_sui_balance_ab(master), 2 * amount);
     assert_eq!(env.get_sui_balance_ab(new_master), amount);
     assert_forwarding_deposit_event(&env, &digest, forwarding_address, new_master, amount);
+}
+
+/// Forwarding deposits are added to an authenticated event stream keyed by the master, which a
+/// light client reads over RPC and verifies against the stream head. The second transaction emits
+/// a Move authenticated event before its deposits, so the master's stream entries must point past
+/// it at the events the adapter appends, and the package's stream must still get the Move event.
+#[sim_test]
+async fn test_forwarding_deposits_stream_to_master() {
+    let mut env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut config| {
+            config.enable_authenticated_event_streams_for_testing();
+            config.set_create_forwarding_address_registry_for_testing(true);
+            set_forwarding_address_config_for_testing(&mut config);
+            config.set_forwarding_deposit_event_streams_for_testing(true);
+            config
+        }))
+        .with_test_cluster_builder_cb(Box::new(|builder| {
+            builder
+                .disable_fullnode_pruning()
+                .with_rpc_config(sui_config::RpcConfig {
+                    enable_indexing: Some(true),
+                    ..Default::default()
+                })
+        }))
+        .build()
+        .await;
+    let master = env.get_sender(0);
+    let depositor = env.get_sender(1);
+    let registration = register_master(&mut env, master).await;
+    let first = ForwardingAddress::derive_opaque(registration.master_id, PAYLOAD);
+    let second = ForwardingAddress::derive_opaque(
+        registration.master_id,
+        [0x01; FORWARDING_ADDRESS_PAYLOAD_LENGTH],
+    );
+    let package_id = env
+        .setup_test_package(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data/auth_event"),
+        )
+        .await;
+
+    // Streams start at the latest checkpoint, so they are opened before anything is emitted. The
+    // master's stream head does not exist until its first deposit settles.
+    let genesis_committee = env.cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .epoch_store_for_testing()
+            .committee()
+            .as_ref()
+            .clone()
+    });
+    let client = Arc::new(
+        AuthenticatedEventsClient::new(env.cluster.rpc_url(), genesis_committee)
+            .await
+            .unwrap(),
+    );
+
+    let mut master_stream = Box::pin(client.clone().stream_events(master).await.unwrap());
+    let mut package_stream = Box::pin(
+        client
+            .clone()
+            .stream_events(SuiAddress::from(package_id))
+            .await
+            .unwrap(),
+    );
+
+    let (digest, effects) = send_to_address_balance(&mut env, depositor, first, 1_000).await;
+    assert!(effects.status().is_ok(), "{effects:?}");
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let value = builder.pure(7u64).unwrap();
+    builder.programmable_move_call(
+        package_id,
+        Identifier::new("events").unwrap(),
+        Identifier::new("emit").unwrap(),
+        vec![],
+        vec![value],
+    );
+    add_gas_coin_balance_deposit(&mut builder, first, 300);
+    add_gas_coin_balance_deposit(&mut builder, second, 400);
+    let transaction = TransactionData::new_programmable(
+        depositor,
+        vec![env.get_gas_for_sender(depositor)[0]],
+        builder.finish(),
+        10_000_000,
+        env.rgp,
+    );
+    let (digest, effects) = env.exec_tx_directly(transaction).await.unwrap();
+    assert!(effects.status().is_ok(), "{effects:?}");
+    env.cluster.wait_for_tx_settlement(&[digest]).await;
+    assert_eq!(get_events(&env, &digest).len(), 3);
+
+    let mut deposits = vec![];
+    while deposits.len() < 3 {
+        let event = tokio::time::timeout(Duration::from_secs(60), master_stream.next())
+            .await
+            .expect("timed out waiting for the master's stream")
+            .expect("stream ended")
+            .expect("event failed verification");
+        assert_eq!(
+            event.event.type_.name.as_ident_str(),
+            FORWARDING_DEPOSIT_STRUCT_NAME
+        );
+        let deposit = bcs::from_bytes::<ForwardingDeposit>(&event.event.contents).unwrap();
+        assert_eq!(deposit.master, master);
+        deposits.push((deposit.forwarding_address, deposit.amount));
+    }
+    deposits.sort();
+    let mut expected = vec![(first, 1_000), (first, 300), (second, 400)];
+    expected.sort();
+    assert_eq!(deposits, expected);
+
+    let event = tokio::time::timeout(Duration::from_secs(60), package_stream.next())
+        .await
+        .expect("timed out waiting for the package's stream")
+        .expect("stream ended")
+        .expect("event failed verification");
+    assert_eq!(event.event.package_id, package_id);
 }

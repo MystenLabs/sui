@@ -415,6 +415,7 @@ const MAINNET_USDB: &str =
 //              instead of overwriting (which stranded the displaced transactions).
 //              Reduce the non-refundable storage fee from 1% to 0.01% on mainnet.
 // Version 139: Enable forwarding addresses on devnet.
+//              Add forwarding deposits to authenticated event streams keyed by master on devnet.
 //              Enable ML-DSA-65 account signatures on devnet.
 //              Reduce the non-refundable storage fee from 1% to 0.01%.
 //              Allow random beacon DKG to complete after its timeout on devnet and testnet.
@@ -1173,6 +1174,12 @@ struct FeatureFlags {
     // If true, resolve forwarding addresses through the forwarding address registry.
     #[serde(skip_serializing_if = "is_false")]
     enable_forwarding_addresses: bool,
+
+    // If true, each ForwardingDeposit event is also added to an authenticated event stream keyed
+    // by the master address.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    forwarding_deposit_event_streams: bool,
 
     // Corrects signature-to-signer mapping in CheckpointContentsV2.
     // Deprecated: must always be set to `true`.
@@ -2434,6 +2441,12 @@ impl ProtocolConfig {
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
         self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
+    }
+
+    pub fn forwarding_deposit_event_streams(&self) -> bool {
+        self.feature_flags.forwarding_deposit_event_streams
+            && self.feature_flags.enable_forwarding_addresses
+            && self.enable_authenticated_event_streams()
     }
 
     pub fn per_object_congestion_control_mode(&self) -> PerObjectCongestionControlMode {
@@ -4862,6 +4875,7 @@ impl ProtocolConfig {
                         // 1M gas units: about 1 SUI at a 1,000 MIST gas price.
                         cfg.forwarding_address_register_cost_base = Some(1_000_000_000);
                         cfg.forwarding_address_max_variant = Some(0);
+                        cfg.feature_flags.forwarding_deposit_event_streams = true;
                     }
                     cfg.storage_rebate_rate = Some(9999);
                     if chain != Chain::Mainnet {
