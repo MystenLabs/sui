@@ -1413,44 +1413,22 @@ where
             })
             .collect::<Vec<&CompiledModule>>();
 
-        if self.env.protocol_config.enable_init_on_upgrade() {
-            // Only newly added modules have their `init` functions called on upgrade.
-            let expected_inits: BTreeSet<Identifier> = modules_with_init
-                .into_iter()
-                .filter(|name| !current_module_names.contains(name.as_str()))
-                .collect();
-            self.push_package_and_init_selected_modules(
-                version_id,
-                package,
-                verified_pkg,
-                vm,
-                new_modules.iter().copied(),
-                expected_inits,
-                &linkage,
-                trace_builder_opt,
-                UPGRADE_INIT_EXPECTED_STACK_HEIGHT,
-            )?;
-        } else {
-            let new_module_has_init = new_modules.iter().any(|module| {
-                module.function_defs.iter().any(|fdef| {
-                    let fhandle = module.function_handle_at(fdef.function);
-                    let fname = module.identifier_at(fhandle.name);
-                    fname == INIT_FN_NAME
-                })
-            });
-            if new_module_has_init {
-                return Err(Mode::Error::new_with_source(
-                    ExecutionErrorKind::FeatureNotYetSupported,
-                    "`init` in new modules on upgrade is not yet supported",
-                ));
-            }
-
-            self.env.linkable_store.package_store.push_package(
-                version_id,
-                Rc::new(package),
-                verified_pkg,
-            )?;
-        }
+        // Only newly added modules have their `init` functions called on upgrade.
+        let expected_inits: BTreeSet<Identifier> = modules_with_init
+            .into_iter()
+            .filter(|name| !current_module_names.contains(name.as_str()))
+            .collect();
+        self.push_package_and_init_selected_modules(
+            version_id,
+            package,
+            verified_pkg,
+            vm,
+            new_modules.iter().copied(),
+            expected_inits,
+            &linkage,
+            trace_builder_opt,
+            UPGRADE_INIT_EXPECTED_STACK_HEIGHT,
+        )?;
 
         Ok(version_id)
     }
