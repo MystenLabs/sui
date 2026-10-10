@@ -424,7 +424,7 @@ const MAINNET_USDB: &str =
 //              Shuffle the block order within each round of a consensus commit on devnet.
 //              Disable the ID leak verifier.
 //              Enable check_object_funds_withdraw_in_execution on mainnet.
-//              Add `sui::clock::now_ms`, which reads the Clock without a Clock input.
+//              Add `sui::clock::borrow`, which references the Clock without a Clock input.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1929,8 +1929,8 @@ pub struct ProtocolConfig {
     tx_context_replace_cost_base: Option<u64>,
 
     // `clock` module
-    // Cost params for the Move native function `native_now_ms(): u64`
-    clock_now_ms_cost_base: Option<u64>,
+    // Cost params for the Move native function `native_borrow(): &Clock`
+    clock_borrow_cost_base: Option<u64>,
 
     // Types
     // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -2885,7 +2885,7 @@ impl ProtocolConfig {
             tx_context_replace_cost_base: None,
 
             // `clock` module
-            clock_now_ms_cost_base: None,
+            clock_borrow_cost_base: None,
 
             // `types` module
             // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -4889,7 +4889,7 @@ impl ProtocolConfig {
                     cfg.obj_access_cost_read_per_package_kb = Some(154);
                 }
                 140 => {
-                    cfg.clock_now_ms_cost_base = Some(52);
+                    cfg.clock_borrow_cost_base = Some(52);
                     cfg.vector_reverse_base_cost = Some(52);
                     cfg.vector_reverse_per_elem_cost = Some(8);
                     cfg.vector_keep_range_base_cost = Some(52);

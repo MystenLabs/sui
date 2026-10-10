@@ -57,9 +57,9 @@ fn clock_timestamp_ms(clock: &Object) -> u64 {
 }
 
 /// A transaction that passes the Clock explicitly sees the same timestamp through
-/// `clock::now_ms` as through the Clock input.
+/// `clock::borrow()` as through the Clock input.
 #[sim_test]
-async fn test_now_ms_matches_clock_input() {
+async fn test_borrowed_clock_matches_clock_input() {
     let (mut test_env, package_id) = setup().await;
     let tx = clock_test_call(
         &test_env,
@@ -74,9 +74,9 @@ async fn test_now_ms_matches_clock_input() {
 /// A transaction without any Clock input reads the Clock written by its commit's prologue. The
 /// read is recorded in effects, and the fullnode reproduces it from effects.
 #[sim_test]
-async fn test_now_ms_without_clock_input() {
+async fn test_borrowed_clock_without_clock_input() {
     let (mut test_env, package_id) = setup().await;
-    let tx = clock_test_call(&test_env, package_id, "emit_now_ms", vec![]);
+    let tx = clock_test_call(&test_env, package_id, "emit_borrowed_timestamp", vec![]);
     let (digest, effects) = test_env.exec_tx_directly(tx).await.unwrap();
     assert!(effects.status().is_ok(), "{:?}", effects.status());
     let clock_version = clock_read_only_root_version(&effects)
@@ -104,7 +104,7 @@ async fn test_now_ms_without_clock_input() {
 /// An aborted transaction still records its implicit Clock read, so the fullnode can reproduce
 /// the failed execution from effects.
 #[sim_test]
-async fn test_now_ms_read_recorded_on_abort() {
+async fn test_borrowed_clock_read_recorded_on_abort() {
     let (mut test_env, package_id) = setup().await;
     let tx = clock_test_call(&test_env, package_id, "read_then_abort", vec![]);
     let (digest, effects) = test_env.exec_tx_directly(tx).await.unwrap();
@@ -120,9 +120,9 @@ async fn test_now_ms_read_recorded_on_abort() {
 /// Simulation has no consensus assignment, so it reads the fullnode's latest Clock and reports
 /// that version in its effects.
 #[sim_test]
-async fn test_now_ms_in_simulation() {
+async fn test_borrowed_clock_in_simulation() {
     let (test_env, package_id) = setup().await;
-    let tx = clock_test_call(&test_env, package_id, "emit_now_ms", vec![]);
+    let tx = clock_test_call(&test_env, package_id, "emit_borrowed_timestamp", vec![]);
     let (result, clock) = test_env.cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let result = state

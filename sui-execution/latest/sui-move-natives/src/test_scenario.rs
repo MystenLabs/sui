@@ -42,8 +42,9 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
 };
 use sui_types::{
-    TypeTag,
+    SUI_CLOCK_OBJECT_ID, TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
+    clock::Clock,
     config,
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
@@ -82,7 +83,7 @@ pub struct InMemoryTestStore {
     /// for a transaction's funds withdrawal inputs. Object withdrawals are reserved by the object
     /// runtime instead, under different rules.
     address_reservations: RefCell<BTreeMap<(SuiAddress, TypeTag), U256>>,
-    /// Timestamp `clock::now_ms` returns. Unit tests have no consensus commits,
+    /// Timestamp of the Clock `clock::borrow` returns. Unit tests have no consensus commits,
     /// so the test-only Clock helpers set it; it starts at the genesis Clock's 0.
     clock_timestamp_ms: Cell<u64>,
 }
@@ -175,8 +176,11 @@ impl ImplicitSystemObjectResolver for InMemoryTestStore {
         Ok(self.settled_funds(owner, type_))
     }
 
-    fn clock_timestamp_ms(&self) -> sui_types::error::SuiResult<u64> {
-        Ok(self.clock_timestamp_ms.get())
+    fn clock(&self) -> sui_types::error::SuiResult<Clock> {
+        Ok(Clock {
+            id: UID::new(SUI_CLOCK_OBJECT_ID),
+            timestamp_ms: self.clock_timestamp_ms.get(),
+        })
     }
 }
 

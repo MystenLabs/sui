@@ -1227,16 +1227,10 @@ impl ImplicitSystemObjectResolver for TemporaryStore<'_> {
     }
 
     /// This function is expected never to fail; an error indicates an invariant violation.
-    fn clock_timestamp_ms(&self) -> SuiResult<u64> {
-        let clock = self
-            .load_implicitly_read_system_object(&SUI_CLOCK_OBJECT_ID)
-            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?;
-        let clock: Clock = clock
-            .data
-            .try_as_move()
-            .and_then(|move_object| move_object.to_rust())
-            .ok_or(SuiErrorKind::ExecutionInvariantViolation)?;
-        Ok(clock.timestamp_ms())
+    fn clock(&self) -> SuiResult<Clock> {
+        self.load_implicitly_read_system_object(&SUI_CLOCK_OBJECT_ID)
+            .and_then(|clock| clock.data.try_as_move()?.to_rust())
+            .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
     }
 }
 
