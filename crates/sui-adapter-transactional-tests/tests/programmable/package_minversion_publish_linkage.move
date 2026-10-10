@@ -4,7 +4,7 @@
 // Package policy applies to exact declared dependencies of publishes and upgrades, including when
 // those commands execute an initializer.
 
-//# init --addresses Leaf=0x0 LeafV2=0x0 MinDependencyV1=0x0 MinDependencyV2=0x0 Publisher=0x0 ForbiddenPublisher=0x0 ForbiddenUpgradeV1=0x0 ForbiddenUpgradeV2=0x0 UpgradePublisherV1=0x0 UpgradePublisherV2=0x0 --accounts A
+//# init --addresses Leaf=0x0 LeafV2=0x0 MinDependencyV1=0x0 MinDependencyV2=0x0 Publisher=0x0 BelowMinPublisher=0x0 ForbiddenPublisher=0x0 ForbiddenUpgradeV1=0x0 ForbiddenUpgradeV2=0x0 UpgradePublisherV1=0x0 UpgradePublisherV2=0x0 --accounts A
 
 //# publish --upgradeable --sender A
 module Leaf::leaf;
@@ -41,13 +41,13 @@ use MinDependencyV1::dependency;
 public fun publish_time_only() { dependency::ping() }
 
 //# programmable --sender A --inputs object(3,1) object(0xcf6)
-//> 0: sui::package::enable_minversion(Input(0));
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
 // This package has no init. Its MinDependencyV1 dependency is below minversion, which selects
 // MinDependencyV2, so it is rejected.
 //# publish --upgradeable --dependencies MinDependencyV1 --sender A
-module UpgradePublisherV1::publisher;
+module BelowMinPublisher::publisher;
 use MinDependencyV1::dependency;
 
 public fun publish_time_only() { dependency::ping() }

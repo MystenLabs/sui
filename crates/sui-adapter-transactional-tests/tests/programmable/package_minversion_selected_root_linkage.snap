@@ -1,0 +1,67 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+// RootV1 was published with LeafV1, while RootV2 was published with LeafV2. After enrolling the
+// Root family at v2, a call that still names RootV1 must be resolved as:
+//
+//   requested: RootV1 -> LeafV1
+//   selected:  RootV2 -> LeafV2
+//
+// Linkage analysis must use RootV2's dependency table, not the stale table from RootV1. The public
+// and entry calls both emit the leaf version so the selected graph is observable.
+
+init:
+A: object(0,0)
+
+task 1, lines 15-17:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 19-21:
+//# upgrade --package LeafV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5160400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 3, lines 23-29:
+//# publish --upgradeable --dependencies LeafV1 --sender A
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 7341600,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 4, lines 31-37:
+//# upgrade --package RootV1 --upgrade-capability 3,1 --dependencies LeafV2 --sender A
+created: object(4,0)
+mutated: object(0,0), object(3,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 7341600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 5, lines 39-41:
+//# programmable --sender A --inputs object(3,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+created: object(5,0)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 6, lines 43-45:
+// RootV1 is redirected before visibility-based linkage analysis, so both calls use RootV2's
+// LeafV2 dependency table and emit version 2.
+//# run RootV1::root::public_call --sender A
+events: Event { package_id: RootV2, transaction_module: Identifier("root"), sender: A, type_: StructTag { address: RootV1, module: Identifier("root"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 7, lines 47-48:
+// The historical entry call is redirected in the same way.
+//# run RootV1::root::entry_call --sender A
+events: Event { package_id: RootV2, transaction_module: Identifier("root"), sender: A, type_: StructTag { address: RootV1, module: Identifier("root"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

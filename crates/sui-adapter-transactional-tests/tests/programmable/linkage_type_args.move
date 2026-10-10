@@ -9,12 +9,15 @@
 //# publish --upgradeable --sender A
 module DepV1::M1;
 public struct A has drop { }
+public fun report() { abort 1 }
 
 //# upgrade --package DepV1 --upgrade-capability 1,1 --sender A
 // `B` introduced in v2 => its defining id is v2 => a `B` type-arg pins Dep at_least 2.
 module DepV2::M1;
 public struct A has drop { }
 public struct B has drop { }
+public struct Ping has copy, drop { version: u64 }
+public fun report() { sui::event::emit(Ping { version: 2 }) }
 
 //# publish --sender A
 module Gen::m;
@@ -39,12 +42,13 @@ fun init(_ctx: &mut TxContext) { }
 //> TransferObjects([Result(0)], Input(0))
 
 // Type-only references remain at-least after minversion selection.
-//# programmable --sender A --inputs object(1,1) object(0x426)
-//> 0: sui::package::enable_minversion(Input(0));
+//# programmable --sender A --inputs object(1,1) object(0xcf6)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
 //> sui::package_config::record_minversion_enrollment(Input(1), Result(0));
 
 //# advance-epoch
 
 // `A` has a v1 defining ID, but its type-only linkage is raised to the stable v2 package.
 //# programmable --sender A
-//> Gen::m::id<DepV1::M1::A>();
+//> 0: Gen::m::id<DepV1::M1::A>();
+//> 1: DepV1::M1::report();

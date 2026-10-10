@@ -25,7 +25,8 @@ localnet = "$chain_id"
 EOF
   cat > "$name/sources/main.move" <<EOF
 module $name::main;
-public fun value(): u64 { 1 }
+public struct Version has copy, drop { value: u64 }
+public fun emit_version() { sui::event::emit(Version { value: 1 }) }
 EOF
 }
 
@@ -33,15 +34,18 @@ publish() {
   local name=$1
   sui client --client.config "$CONFIG" publish "$name" --json > "$name.json"
   jq -er '.objectChanges[] | select(.type == "created" and (.objectType | endswith("::package::UpgradeCap"))) | .objectId' "$name.json" > "$name.cap"
+  jq -er '.objectChanges[] | select(.type == "published") | .packageId' "$name.json" > "$name.package"
 }
 
 upgrade() {
   local name=$1
   cat > "$name/sources/main.move" <<EOF
 module $name::main;
-public fun value(): u64 { 2 }
+public struct Version has copy, drop { value: u64 }
+public fun emit_version() { sui::event::emit(Version { value: 2 }) }
 EOF
-  sui client --client.config "$CONFIG" upgrade "$name" > /dev/null
+  sui client --client.config "$CONFIG" upgrade "$name" --json > "$name.upgrade.json"
+  jq -er '.objectChanges[] | select(.type == "published") | .packageId' "$name.upgrade.json" > "$name.latest-package"
 }
 
 # An enrollment-available cap uses the ordinary upgrade completion flow.
@@ -69,6 +73,13 @@ sui client --client.config "$CONFIG" ptb \
   --summary > /dev/null
 echo "=== upgrade with minversion enabled ==="
 upgrade enabled
+sui client --client.config "$CONFIG" ptb \
+  --move-call "$(< enabled.package)"::main::emit_version \
+  --json > enabled.call.json
+jq -e --arg latest "$(< enabled.latest-package)" \
+  '.events | any(.packageId == $latest and .parsedJson.value == "2")' \
+  enabled.call.json > /dev/null
+echo "=== historical call selected latest package ==="
 
 # Packed state bits must be decoded before authorization. Additive permits adding an API.
 make_package additive
@@ -96,6 +107,7 @@ exit_code: 0
 === upgrade with enrollment available ===
 === upgrade with enrollment disabled ===
 === upgrade with minversion enabled ===
+=== historical call selected latest package ===
 === upgrade with additive minversion policy ===
 === upgrade with dependency-only minversion policy ===
 

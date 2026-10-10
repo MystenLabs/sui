@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 960
 ---
 processed 12 tasks
 
@@ -65,8 +66,8 @@ Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: 
 task 10, lines 41-42:
 // Version zero is not historical. The range must reject it rather than install a v0 entry.
 //# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 0 1 --sender A
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::forbid_version_range (function index 1) at offset 23, Abort Code: 1
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 1, instruction: 23, function_name: Some("forbid_version_range") }, 1) at command Some(0)
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::forbid_version_range (function index 1) at offset 24, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 1, instruction: 24, function_name: Some("forbid_version_range") }, 1) at command Some(0)
 
 task 11, lines 44-45:
 // The current version is not historical, so it cannot be forbidden.
