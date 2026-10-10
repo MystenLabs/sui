@@ -348,6 +348,7 @@ pub fn end_transaction(
             .reroute(
                 writes.iter().map(|(id, (owner, _, _))| (*id, owner)),
                 &mut accumulator_events,
+                user_events.len() as u64,
             );
         match events {
             Ok(events) => {
