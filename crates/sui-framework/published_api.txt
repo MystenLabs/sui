@@ -1807,10 +1807,10 @@ Clock
 timestamp_ms
 	public fun
 	0x2::clock
-now_ms
+borrow
 	public fun
 	0x2::clock
-native_now_ms
+native_borrow
 	fun
 	0x2::clock
 create

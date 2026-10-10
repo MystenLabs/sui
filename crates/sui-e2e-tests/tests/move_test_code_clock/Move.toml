@@ -1,4 +1,4 @@
-# Separate from `move_test_code` because `clock::now_ms` only exists in the
+# Separate from `move_test_code` because `clock::borrow` only exists in the
 # protocol 139 framework, and some tests publish `move_test_code` on older frameworks.
 [package]
 name = "move_test_code_clock"

@@ -21,20 +21,20 @@ fun creating_a_clock_and_incrementing_it() {
 }
 
 #[test]
-fun now_ms_follows_the_test_clock() {
-    assert!(clock::now_ms() == 0);
+fun borrowed_clock_follows_the_test_clock() {
+    assert!(clock::borrow().timestamp_ms() == 0);
 
     let mut ctx = tx_context::dummy();
     let mut clock = clock::create_for_testing(&mut ctx);
     clock.set_for_testing(50);
-    assert!(clock::now_ms() == 50);
+    assert!(clock::borrow().timestamp_ms() == 50);
 
     clock.increment_for_testing(5);
-    assert!(clock::now_ms() == 55);
+    assert!(clock::borrow().timestamp_ms() == 55);
 
     // A fresh test Clock starts at 0 and takes over.
     let fresh = clock::create_for_testing(&mut ctx);
-    assert!(clock::now_ms() == 0);
+    assert!(clock::borrow().timestamp_ms() == 0);
 
     fresh.destroy_for_testing();
     clock.destroy_for_testing();
