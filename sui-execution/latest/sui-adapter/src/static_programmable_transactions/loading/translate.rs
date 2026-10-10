@@ -39,14 +39,6 @@ pub fn transaction<Mode: ExecutionMode>(
     }
     metering::pre_translation::meter::<Mode::Error>(meter, &pt)?;
     let P::ProgrammableTransaction { inputs, commands } = pt;
-    // withdrawal_compatibility_inputs specified ==> the protocol config flag is set
-    assert_invariant!(
-        withdrawal_compatibility_inputs.is_none()
-            || env
-                .protocol_config
-                .convert_withdrawal_compatibility_ptb_arguments(),
-        "if withdrawal compatibility must be specified, then the flag is set in the protocol config"
-    );
     let withdrawal_compatibility_inputs =
         withdrawal_compatibility_inputs.unwrap_or_else(|| vec![false; inputs.len()]);
     assert_invariant!(
