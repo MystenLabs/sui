@@ -121,9 +121,14 @@ milliseconds since an arbitrary point in the past.
 
 A reference to the <code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code> without it being a transaction input.
 It is the same <code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code>, at the same timestamp, as one passed into
-the transaction, so any function can read the time without its
-callers having to pass a <code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code> down. Prefer this over taking a
-<code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code> parameter.
+the transaction.
+
+Taking a <code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code> parameter instead forces every caller up to the
+entry function to accept and forward one, and the transaction to
+declare it as an input. Reading it here keeps the time an internal
+detail of the function that needs it: callers do not change when a
+function starts to need the time, and existing code written against
+<code>&<a href="../sui/clock.md#sui_clock_Clock">Clock</a></code> can be called with <code><a href="../sui/borrow.md#sui_borrow">borrow</a>()</code> from anywhere.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>(): &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>
