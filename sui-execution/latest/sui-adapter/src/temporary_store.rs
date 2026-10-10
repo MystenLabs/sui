@@ -39,7 +39,6 @@ use sui_types::transaction::{Command, GasData, TransactionKind, is_gasless_trans
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
-    clock::Clock,
     digests::ObjectDigest,
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiResult},
@@ -278,11 +277,27 @@ impl<'backing> TemporaryStore<'backing> {
                 return None;
             }
         };
-        let object = self
-            .store
-            // If this transaction needs to read an implicit system object,
-            // the version must be assigned before execution.
-            .load_implicitly_read_system_object(object_id, version)?;
+        let object = match self.input_objects.get(object_id) {
+            // A declared input is the object this transaction was sequenced against, so it is
+            // the same object the implicit read must see.
+            Some(object) => {
+                if object.version() != version.version {
+                    debug_fatal!(
+                        "declared input {object_id} at version {:?} disagrees with its implicit \
+                         read version {:?}",
+                        object.version(),
+                        version.version
+                    );
+                    return None;
+                }
+                object.clone()
+            }
+            None => self
+                .store
+                // If this transaction needs to read an implicit system object,
+                // the version must be assigned before execution.
+                .load_implicitly_read_system_object(object_id, version)?,
+        };
         // Record the read version so it can be emitted into effects as a read-only consensus object and
         // reproduced on replay.
         self.loaded_system_objects
@@ -1227,9 +1242,8 @@ impl ImplicitSystemObjectResolver for TemporaryStore<'_> {
     }
 
     /// This function is expected never to fail; an error indicates an invariant violation.
-    fn clock(&self) -> SuiResult<Clock> {
+    fn clock(&self) -> SuiResult<Object> {
         self.load_implicitly_read_system_object(&SUI_CLOCK_OBJECT_ID)
-            .and_then(|clock| clock.data.try_as_move()?.to_rust())
             .ok_or_else(|| SuiErrorKind::ExecutionInvariantViolation.into())
     }
 }
