@@ -193,15 +193,17 @@ pub async fn execution_process(
         let digest = *certificate.digest();
         trace!(?digest, "Pending certificate execution activated.");
 
+        let is_already_executed = authority.is_tx_already_executed(&digest);
         if epoch_store.epoch() != certificate.epoch() {
-            // With enqueue deduplication, and every transaction committed in an epoch
-            // executing before the epoch closes, this should be impossible. Dropping
-            // the slot retires the causal index.
-            debug_fatal!(
-                "certificate from epoch {} in the execution driver at epoch {}",
-                certificate.epoch(),
-                epoch_store.epoch()
-            );
+            // During restart catch-up, a certificate can remain queued while checkpoint
+            // execution finishes its epoch. It must have executed before reconfiguration.
+            if !is_already_executed {
+                debug_fatal!(
+                    "unexecuted certificate from epoch {} in the execution driver at epoch {}",
+                    certificate.epoch(),
+                    epoch_store.epoch()
+                );
+            }
             continue;
         }
 
@@ -209,7 +211,7 @@ pub async fn execution_process(
         // scheduler still sends it so that its causal index is retired. Dropping the slot
         // here retires the index without paying for a dispatch that would no-op inside
         // `try_execute_immediately`, and without holding a concurrency slot while doing so.
-        if authority.is_tx_already_executed(&digest) {
+        if is_already_executed {
             continue;
         }
 
