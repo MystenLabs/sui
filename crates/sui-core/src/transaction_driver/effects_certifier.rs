@@ -18,7 +18,7 @@ use sui_types::{
     messages_consensus::ConsensusPosition,
     messages_grpc::{
         ExecutedData, PingType, RawWaitForEffectsRequest, SubmitTxResult, TxType,
-        WaitForEffectsRequest, WaitForEffectsResponse, WaitForEffectsStatus,
+        WaitForEffectsRequest, WaitForEffectsResponse,
     },
     transaction_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
@@ -159,7 +159,6 @@ impl EffectsCertifier {
                 full_effects_start_time = Some(Instant::now());
                 self.get_full_effects_with_fallback(
                     authority_aggregator,
-                    client_monitor,
                     client,
                     name,
                     tx_digest,
@@ -242,15 +241,7 @@ impl EffectsCertifier {
             current_target = name;
             full_effects_start_time = Some(Instant::now());
             full_effects_result = self
-                .get_full_effects(
-                    client,
-                    name,
-                    client_monitor,
-                    tx_digest,
-                    tx_type,
-                    consensus_position,
-                    options,
-                )
+                .get_full_effects(client, tx_digest, tx_type, consensus_position, options)
                 .await;
         }
     }
@@ -259,8 +250,6 @@ impl EffectsCertifier {
     async fn get_full_effects<A>(
         &self,
         client: Arc<SafeClient<A>>,
-        name: AuthorityName,
-        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: Option<TransactionDigest>,
         _tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
@@ -284,10 +273,8 @@ impl EffectsCertifier {
         .await
         {
             Ok(Ok(response)) => {
-                // The report rides every outcome; record it before acting on the status.
-                client_monitor.record_staggering_report(name, response.staggering);
-                match response.status {
-                    WaitForEffectsStatus::Executed {
+                match response {
+                    WaitForEffectsResponse::Executed {
                         effects_digest,
                         details,
                     } => {
@@ -302,13 +289,13 @@ impl EffectsCertifier {
                             ))
                         }
                     }
-                    WaitForEffectsStatus::Rejected { error } => match error {
+                    WaitForEffectsResponse::Rejected { error } => match error {
                         Some(e) => Err(TransactionRequestError::RejectedAtValidator(e)),
                         // Even though this response is not an error, returning an error which is required
                         // by the function signature. This will get ignored by the caller as a retriable error.
                         None => Err(TransactionRequestError::RejectedByConsensus),
                     },
-                    WaitForEffectsStatus::Expired { epoch, round } => Err(
+                    WaitForEffectsResponse::Expired { epoch, round } => Err(
                         TransactionRequestError::StatusExpired(epoch, round.unwrap_or(0)),
                     ),
                 }
@@ -330,7 +317,6 @@ impl EffectsCertifier {
     async fn get_full_effects_with_fallback<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
-        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         initial_client: Arc<SafeClient<A>>,
         initial_target: AuthorityName,
         tx_digest: Option<TransactionDigest>,
@@ -349,8 +335,6 @@ impl EffectsCertifier {
         // Add initial request to the pending set alongside fallbacks for uniform handling
         let initial_request = self.get_full_effects(
             initial_client,
-            initial_target,
-            client_monitor,
             tx_digest,
             tx_type,
             consensus_position,
@@ -390,8 +374,6 @@ impl EffectsCertifier {
 
                         let fut = self.get_full_effects(
                             client.clone(),
-                            acked_validator,
-                            client_monitor,
                             tx_digest,
                             tx_type,
                             consensus_position,
@@ -504,12 +486,8 @@ impl EffectsCertifier {
 
         // Every validator returns at most one WaitForEffectsResponse.
         while let Some((name, response)) = futures.next().await {
-            if let Ok(response) = &response {
-                // The report rides every outcome; record it before acting on the status.
-                client_monitor.record_staggering_report(name, response.staggering);
-            }
-            match response.map(|response| response.status) {
-                Ok(WaitForEffectsStatus::Executed {
+            match response {
+                Ok(WaitForEffectsResponse::Executed {
                     effects_digest,
                     details: _,
                 }) => {
@@ -551,7 +529,7 @@ impl EffectsCertifier {
                         return Ok(effects_digest);
                     }
                 }
-                Ok(WaitForEffectsStatus::Rejected { error }) => {
+                Ok(WaitForEffectsResponse::Rejected { error }) => {
                     if let Some(e) = error {
                         tracing::trace!(name = ?name.concise(), "Rejected at validator: {:?}", e);
                         let error = TransactionRequestError::RejectedAtValidator(e);
@@ -569,7 +547,7 @@ impl EffectsCertifier {
                         .with_label_values(&[tx_type.as_str(), ping_label])
                         .inc();
                 }
-                Ok(WaitForEffectsStatus::Expired { epoch, round }) => {
+                Ok(WaitForEffectsResponse::Expired { epoch, round }) => {
                     let error = TransactionRequestError::StatusExpired(epoch, round.unwrap_or(0));
                     // Expired status is submission retriable.
                     retriable_errors_aggregator.insert(name, error);

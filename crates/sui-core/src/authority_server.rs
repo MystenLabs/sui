@@ -50,8 +50,7 @@ use sui_types::{
     effects::TransactionEffects,
     messages_grpc::{
         ExecutedData, RawSubmitTxRequest, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
-        StaggeringReport, SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
-        WaitForEffectsStatus,
+        SubmitTxResult, WaitForEffectsRequest, WaitForEffectsResponse,
     },
 };
 use sui_types::{effects::TransactionEvents, messages_grpc::SubmitTxType};
@@ -1790,20 +1789,6 @@ impl Drop for InflightTransactionsGuard {
     }
 }
 
-/// The staggering state reported on wait-for-effects and health responses, with a
-/// validator-local unix-millis timestamp sampled alongside it so the driver can order
-/// reports from this validator that it processes out of order.
-fn staggering_report(epoch_store: &AuthorityPerEpochStore) -> Option<StaggeringReport> {
-    let report_ms = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .ok()
-        .map(|since_epoch| since_epoch.as_millis() as u64);
-    Some(StaggeringReport {
-        active: epoch_store.staggered_submission().is_active(),
-        report_ms,
-    })
-}
-
 impl ValidatorService {
     async fn handle_submit_transaction_impl(
         &self,
@@ -1818,7 +1803,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<RawWaitForEffectsResponse> {
         let request: WaitForEffectsRequest = request.into_inner().try_into()?;
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let status = timeout(
+        let response = timeout(
             // TODO(fastpath): Tune this once we have a good estimate of the typical delay.
             Duration::from_secs(20),
             epoch_store
@@ -1826,13 +1811,7 @@ impl ValidatorService {
                 .map_err(|_| SuiErrorKind::EpochEnded(epoch_store.epoch())),
         )
         .await
-        .map_err(|_| tonic::Status::internal("Timeout waiting for effects"))???;
-        // Attached once here, so every outcome — including Rejected and Expired —
-        // carries the validator's staggering state.
-        let response: RawWaitForEffectsResponse = WaitForEffectsResponse {
-            staggering: staggering_report(&epoch_store),
-            status,
-        }
+        .map_err(|_| tonic::Status::internal("Timeout waiting for effects"))???
         .try_into()?;
         Ok((tonic::Response::new(response), Weight::zero()))
     }
@@ -1842,7 +1821,7 @@ impl ValidatorService {
         &self,
         request: WaitForEffectsRequest,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<WaitForEffectsStatus> {
+    ) -> SuiResult<WaitForEffectsResponse> {
         if request.ping_type.is_some() {
             return timeout(
                 Duration::from_secs(10),
@@ -1876,7 +1855,7 @@ impl ValidatorService {
             {
                 NotifyReadConsensusTxStatusResult::Status(
                     ConsensusTxStatus::Rejected | ConsensusTxStatus::Dropped,
-                ) => Ok(WaitForEffectsStatus::Rejected {
+                ) => Ok(WaitForEffectsResponse::Rejected {
                     error: epoch_store.get_rejection_vote_reason(consensus_position),
                 }),
                 NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Finalized) => {
@@ -1884,7 +1863,7 @@ impl ValidatorService {
                     futures::future::pending().await
                 }
                 NotifyReadConsensusTxStatusResult::Expired(round) => {
-                    Ok(WaitForEffectsStatus::Expired {
+                    Ok(WaitForEffectsResponse::Expired {
                         epoch: epoch_store.epoch(),
                         round: Some(round),
                     })
@@ -1912,7 +1891,7 @@ impl ValidatorService {
                 } else {
                     None
                 };
-                Ok(WaitForEffectsStatus::Executed {
+                Ok(WaitForEffectsResponse::Executed {
                     effects_digest,
                     details,
                 })
@@ -1928,7 +1907,7 @@ impl ValidatorService {
         &self,
         request: WaitForEffectsRequest,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<WaitForEffectsStatus> {
+    ) -> SuiResult<WaitForEffectsResponse> {
         let consensus_tx_status_cache = &epoch_store.consensus_tx_status_cache;
 
         let Some(consensus_position) = request.consensus_position else {
@@ -1966,17 +1945,17 @@ impl ValidatorService {
         match status {
             NotifyReadConsensusTxStatusResult::Status(status) => match status {
                 ConsensusTxStatus::Rejected | ConsensusTxStatus::Dropped => {
-                    Ok(WaitForEffectsStatus::Rejected {
+                    Ok(WaitForEffectsResponse::Rejected {
                         error: epoch_store.get_rejection_vote_reason(consensus_position),
                     })
                 }
-                ConsensusTxStatus::Finalized => Ok(WaitForEffectsStatus::Executed {
+                ConsensusTxStatus::Finalized => Ok(WaitForEffectsResponse::Executed {
                     effects_digest: TransactionEffectsDigest::ZERO,
                     details,
                 }),
             },
             NotifyReadConsensusTxStatusResult::Expired(round) => {
-                Ok(WaitForEffectsStatus::Expired {
+                Ok(WaitForEffectsResponse::Expired {
                     epoch: epoch_store.epoch(),
                     round: Some(round),
                 })
@@ -2085,7 +2064,7 @@ impl ValidatorService {
             num_inflight_execution_transactions,
             last_locally_built_checkpoint,
             last_committed_leader_round,
-            staggering: staggering_report(&epoch_store),
+            staggering_active: Some(epoch_store.staggered_submission().is_active()),
         };
 
         let raw_response = typed_response
