@@ -678,7 +678,7 @@ fn test_multisig_mldsa65_hybrid() {
         .map_err(|e| e.into_inner());
     assert!(
         matches!(res, Err(crate::error::SuiErrorKind::InvalidSignature { error })
-            if error.contains("ML-DSA-65 sig not supported inside multisig"))
+            if error.contains("ML-DSA-65 member not supported inside multisig"))
     );
 
     // The classical member alone cannot meet the threshold.
@@ -714,4 +714,73 @@ fn test_multisig_mldsa65_hybrid() {
         )
         .is_err()
     );
+}
+
+/// Flag off rejects any ML-DSA-65 part of a multisig, in both formats, even
+/// when only the classical member signs.
+#[test]
+fn test_multisig_mldsa65_member_gated_by_protocol_config() {
+    use crate::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
+    use crate::transaction::{
+        GasData, SenderSignedData, TransactionData, TransactionKind, TxValidityCheckContext,
+    };
+    use sui_protocol_config::ProtocolConfig;
+
+    let ed_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let ed_kp2 = SuiKeyPair::Ed25519(get_key_pair().1);
+    let mldsa_kp = SuiKeyPair::MLDSA65(MLDSA65KeyPair::generate(&mut rand::thread_rng()));
+    let pks = vec![ed_kp.public(), mldsa_kp.public()];
+    let multisig_pk = MultiSigPublicKey::new(pks.clone(), vec![1, 1], 1).unwrap();
+    let legacy_pk = MultiSigPublicKeyLegacy::new(pks, vec![1, 1], 1).unwrap();
+    let sender = SuiAddress::from(&multisig_pk);
+
+    let tx_data = TransactionData::new_with_gas_data(
+        TransactionKind::ProgrammableTransaction(
+            crate::programmable_transaction_builder::ProgrammableTransactionBuilder::new().finish(),
+        ),
+        sender,
+        GasData {
+            payment: vec![crate::base_types::random_object_ref()],
+            owner: sender,
+            price: 1000,
+            budget: 1_000_000,
+        },
+    );
+    let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
+    let ed_sig: GenericSignature = Signature::new_secure(&intent_msg, &ed_kp).into();
+    // An ML-DSA signature on a classical committee; only buildable unchecked.
+    let classical_pk =
+        MultiSigPublicKey::new(vec![ed_kp.public(), ed_kp2.public()], vec![1, 1], 1).unwrap();
+    let mldsa_sig = GenericSignature::from(Signature::new_secure(&intent_msg, &mldsa_kp))
+        .to_compressed()
+        .unwrap();
+    let signed = [
+        GenericSignature::MultiSig(MultiSig::combine(vec![ed_sig.clone()], multisig_pk).unwrap()),
+        GenericSignature::MultiSigLegacy(MultiSigLegacy::combine(vec![ed_sig], legacy_pk).unwrap()),
+        GenericSignature::MultiSig(MultiSig::insecure_new(vec![mldsa_sig], 1, classical_pk)),
+    ]
+    .map(|sig| SenderSignedData::new(tx_data.clone(), vec![sig]));
+
+    let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+    config.set_mldsa65_auth_for_testing(false);
+    for tx in &signed {
+        let err = tx
+            .validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config))
+            .unwrap_err();
+        assert!(
+            matches!(
+                err.into_inner(),
+                crate::error::SuiErrorKind::UserInputError {
+                    error: crate::error::UserInputError::Unsupported(msg)
+                } if msg.contains("ML-DSA-65 multisig members")
+            ),
+            "expected Unsupported while mldsa65_auth is off"
+        );
+    }
+
+    config.set_mldsa65_auth_for_testing(true);
+    for tx in &signed {
+        tx.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config))
+            .unwrap();
+    }
 }
