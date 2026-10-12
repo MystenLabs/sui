@@ -4106,6 +4106,18 @@ impl SenderSignedTransaction {
     }
 }
 
+/// Any ML-DSA-65 part of a multisig is a BCS variant older binaries cannot
+/// decode, so it stays out of blocks until the flag is on, even when only
+/// classical members signed.
+fn mldsa65_multisig_unsupported() -> SuiError {
+    SuiErrorKind::UserInputError {
+        error: UserInputError::Unsupported(
+            "ML-DSA-65 multisig members are not enabled on this network".to_string(),
+        ),
+    }
+    .into()
+}
+
 impl SenderSignedData {
     pub fn new(tx_data: TransactionData, tx_signatures: Vec<GenericSignature>) -> Self {
         Self(SizeOneVec::new(SenderSignedTransaction {
@@ -4203,7 +4215,7 @@ impl SenderSignedData {
     fn check_user_signature_protocol_compatibility(&self, config: &ProtocolConfig) -> SuiResult {
         for sig in &self.inner().tx_signatures {
             match sig {
-                GenericSignature::MultiSig(_) => {
+                GenericSignature::MultiSig(multisig) => {
                     if !config.upgraded_multisig_supported() {
                         return Err(SuiErrorKind::UserInputError {
                             error: UserInputError::Unsupported(
@@ -4211,6 +4223,9 @@ impl SenderSignedData {
                             ),
                         }
                         .into());
+                    }
+                    if multisig.uses_mldsa65() && !config.mldsa65_auth() {
+                        return Err(mldsa65_multisig_unsupported());
                     }
                 }
                 GenericSignature::ZkLoginAuthenticator(_) => {
@@ -4244,7 +4259,11 @@ impl SenderSignedData {
                         .into());
                     }
                 }
-                GenericSignature::MultiSigLegacy(_) => (),
+                GenericSignature::MultiSigLegacy(multisig) => {
+                    if multisig.uses_mldsa65() && !config.mldsa65_auth() {
+                        return Err(mldsa65_multisig_unsupported());
+                    }
+                }
             }
         }
 
