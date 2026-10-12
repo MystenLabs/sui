@@ -460,6 +460,10 @@ pub(crate) mod checked {
                 .map_err(|error| (error.into(), BumpOnlyReason::PublishedPackages))?;
         }
 
+        temporary_store
+            .check_no_forwarding_recipients()
+            .map_err(|error| (error.into(), BumpOnlyReason::ForwardingRecipient))?;
+
         Ok(())
     }
 
@@ -580,6 +584,7 @@ pub(crate) mod checked {
         Conservation,
         Ownership,
         PublishedPackages,
+        ForwardingRecipient,
     }
 
     impl BumpOnlyReason {
@@ -592,6 +597,7 @@ pub(crate) mod checked {
                 Self::Conservation => "conservation",
                 Self::Ownership => "ownership",
                 Self::PublishedPackages => "published_packages",
+                Self::ForwardingRecipient => "forwarding_recipient",
             }
         }
 

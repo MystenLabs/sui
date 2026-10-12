@@ -207,11 +207,18 @@ pub async fn submit_and_execute_with_error(
         .get(&executable.key())
         .cloned()
         .unwrap_or_else(AssignedVersions::empty);
-    // This executes directly, so it attaches the accumulator root version itself: the
-    // helper assigns none, and execution reads the root implicitly for object funds
-    // withdraws, even when the transaction has no shared inputs.
+    // This executes directly, so it attaches the implicitly read system object versions
+    // itself: the helper assigns none, and execution reads the accumulator root for object
+    // funds withdraws and the forwarding registry for deposits, even when the transaction
+    // has no shared inputs.
     let assigned_versions = match authority.accumulator_version_for_testing() {
         Some(version) => assigned_versions.with_accumulator_version_for_testing(version),
+        None => assigned_versions,
+    };
+    let assigned_versions = match authority.forwarding_address_registry_version_for_testing() {
+        Some(version) => {
+            assigned_versions.with_forwarding_address_registry_version_for_testing(version)
+        }
         None => assigned_versions,
     };
 

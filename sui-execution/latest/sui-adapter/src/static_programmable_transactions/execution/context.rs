@@ -8,6 +8,7 @@ use crate::{
     gas_charger::{GasCharger, GasPayment, PaymentLocation},
     gas_meter::SuiGasMeter,
     sp,
+    static_programmable_transactions::execution::forwarding,
     static_programmable_transactions::{
         env::Env,
         execution::{
@@ -607,6 +608,9 @@ where
             remaining_events.is_empty(),
             "Events should be taken after every Move call"
         );
+        if let Some(GasCoinTransfer::SendFunds { recipient }) = &gas_coin_transfer {
+            forwarding::reject_gas_coin_recipient(env.protocol_config, (*recipient).into())?;
+        }
         // Refund unused gas to the coin, real or ephemeral
         if let Some(gas_id) = gas_id_opt {
             // deleted implies was moved and used in send_funds
@@ -2316,7 +2320,7 @@ pub fn finish(
     created_object_ids: IndexSet<ObjectID>,
     deleted_object_ids: IndexSet<ObjectID>,
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
-    accumulator_events: Vec<MoveAccumulatorEvent>,
+    mut accumulator_events: Vec<MoveAccumulatorEvent>,
     settlement_input_sui: u64,
     settlement_output_sui: u64,
 ) -> Result<ExecutionResults, ExecutionError> {
@@ -2394,7 +2398,7 @@ pub fn finish(
         // let deleted = deleted_object_ids.contains(&id);
     }
 
-    let user_events: Vec<Event> = user_events
+    let mut user_events: Vec<Event> = user_events
         .into_iter()
         .map(|(module_id, tag, contents)| {
             Event::new(
@@ -2406,6 +2410,24 @@ pub fn finish(
             )
         })
         .collect();
+
+    // Forwarding addresses are rerouted after every Move event is in place, so `EventRef`
+    // indices into `user_events` stay valid and the reroute events follow them.
+    if protocol_config.enable_forwarding_addresses() {
+        let reroute_events = forwarding::reroute(
+            protocol_config,
+            state_view,
+            gas_charger,
+            tx_context.sender(),
+            &written_objects,
+            &mut accumulator_events,
+        )?;
+        forwarding::check_event_count(
+            protocol_config,
+            user_events.len().saturating_add(reroute_events.len()),
+        )?;
+        user_events.extend(reroute_events);
+    }
 
     let mut receiving_funds_type_and_owners = BTreeMap::new();
     let accumulator_events = accumulator_events
