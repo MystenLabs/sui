@@ -184,6 +184,7 @@ pub struct AdmissionQueueMetrics {
     pub pool_depth: IntGaugeVec,
     pub pool_bytes: IntGaugeVec,
     pub pool_staggered_held: IntGauge,
+    pub pool_staggered_rejected: IntCounter,
     pub pool_taken_per_proposal: Histogram,
     pub pool_requeued_on_dropped_ack: IntCounter,
     pub pool_gc_notified: IntCounter,
@@ -245,6 +246,12 @@ impl AdmissionQueueMetrics {
             pool_staggered_held: register_int_gauge_with_registry!(
                 "consensus_transaction_pool_staggered_held",
                 "User-lane entries in the pool stamped with a staggered-submission hold, whether or not the hold has elapsed",
+                registry,
+            )
+            .unwrap(),
+            pool_staggered_rejected: register_int_counter_with_registry!(
+                "consensus_transaction_pool_staggered_rejected",
+                "User submissions rejected because this validator is outside the transaction's staggered-submission proposer set",
                 registry,
             )
             .unwrap(),

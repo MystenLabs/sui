@@ -50,7 +50,9 @@ use crate::authority::consensus_tx_status_cache::{
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_handler::{SequencedConsensusTransactionKey, classify, tx_type_label};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
-use crate::staggered_submission::{StaggerQuota, StaggeredSlot, proposers_metric_label};
+use crate::staggered_submission::{
+    StaggerDecision, StaggerQuota, StaggeredSlot, proposers_metric_label,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -73,6 +75,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_best_effort_timeout: IntCounterVec,
     pub sequencing_staggered_delay: Histogram,
     pub sequencing_staggered_held: IntGauge,
+    pub sequencing_staggered_rejected: IntCounter,
     pub consensus_latency: Histogram,
     pub num_rejected_cert_in_epoch_boundary: IntCounter,
 }
@@ -169,6 +172,11 @@ impl ConsensusAdapterMetrics {
             sequencing_staggered_held: register_int_gauge_with_registry!(
                 "sequencing_staggered_held",
                 "Number of staggered submissions currently occupying the stagger quota, from their staggered-submission hold through submission.",
+                registry,
+            ).unwrap(),
+            sequencing_staggered_rejected: register_int_counter_with_registry!(
+                "sequencing_staggered_rejected",
+                "Submissions rejected because this validator is outside the transaction's staggered-submission proposer set.",
                 registry,
             ).unwrap(),
             // These two metrics originally lived in ValidatorServiceMetrics (authority_server.rs)
@@ -291,6 +299,7 @@ impl ConsensusAdapter {
         let stagger_quota = StaggerQuota::new(
             max_pending_transactions,
             metrics.sequencing_staggered_held.clone(),
+            metrics.sequencing_staggered_rejected.clone(),
         );
         Self {
             consensus_client,
@@ -1073,10 +1082,12 @@ impl ConsensusOverloadChecker for ConsensusAdapter {
         // wholesale at submission. Weakly consistent, like check_limits: the
         // authoritative slot acquisition happens in submit_batch.
         if !self.stagger_quota.has_capacity()
-            && epoch_store
-                .staggered_submission()
-                .submission_delay(txs, epoch_store)
-                .is_some()
+            && matches!(
+                epoch_store
+                    .staggered_submission()
+                    .submission_delay(txs, epoch_store),
+                StaggerDecision::Hold(_)
+            )
         {
             return Err(SuiErrorKind::ValidatorOverloadedRetryAfter {
                 retry_after_secs: 1,
