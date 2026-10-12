@@ -366,14 +366,25 @@ impl ObjectFundsCheckerDEPRECATED {
         true
     }
 
+    /// Barriers can call this out of order: barrier N+1 starts as soon as barrier N writes the
+    /// root object, and may finish first. A later barrier having executed implies every earlier
+    /// version is settled, so the settled version only ever moves forward.
     pub fn settle_accumulator_version(&self, next_accumulator_version: SequenceNumber) {
-        // unwrap is safe because a receiver is always alive as part of self.
-        self.last_settled_version_sender
-            .send(next_accumulator_version)
-            .unwrap();
-        self.metrics
-            .highest_settled_version
-            .set(next_accumulator_version.value() as i64);
+        let advanced = self
+            .last_settled_version_sender
+            .send_if_modified(|settled| {
+                if next_accumulator_version > *settled {
+                    *settled = next_accumulator_version;
+                    true
+                } else {
+                    false
+                }
+            });
+        if advanced {
+            self.metrics
+                .highest_settled_version
+                .set(next_accumulator_version.value() as i64);
+        }
     }
 
     #[cfg(test)]
