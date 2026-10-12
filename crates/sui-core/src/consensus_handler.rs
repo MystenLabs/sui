@@ -52,9 +52,8 @@ use sui_types::{
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
-        InputObjectKind, MAX_UNPAID_ALLOWED_PROPOSERS, PlainTransactionWithClaims,
-        SenderSignedData, TransactionDataAPI, TransactionKey, VerifiedTransaction, WithAliases,
-        paid_proposer_count,
+        InputObjectKind, PlainTransactionWithClaims, SenderSignedData, TransactionDataAPI,
+        TransactionKey, VerifiedTransaction, WithAliases, paid_proposer_count,
     },
 };
 use tokio::task::JoinSet;
@@ -3164,8 +3163,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             if let Some(transaction) = user_transaction {
                 let tx_data = transaction.data().transaction_data();
                 if !tx_data.expiration().restricts_proposers(epoch) {
-                    let allowance = MAX_UNPAID_ALLOWED_PROPOSERS
-                        .max((tx_data.gas_price() / rgp).saturating_add(1));
+                    let allowance = paid_proposer_count(tx_data.gas_price(), rgp);
                     if total_occurrences > allowance {
                         state.staggering_excess_copies += 1;
                     }
