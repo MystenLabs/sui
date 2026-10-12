@@ -12,35 +12,20 @@ use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::{
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::{Committee, CommitteeTrait as _};
-use sui_types::{
-    base_types::AuthorityName,
-    messages_grpc::{StaggeringReport, ValidatorHealthRequest},
-};
+use sui_types::{base_types::AuthorityName, messages_grpc::ValidatorHealthRequest};
 use tokio::{
     task::JoinSet,
     time::{interval, timeout},
 };
 use tracing::{debug, info, warn};
-
-/// How long a computed staggering view is served before being recomputed. Zero in
-/// unit tests, which mutate reports and assert the view in the same instant.
-#[cfg(not(test))]
-const STAGGERING_VIEW_TTL: Duration = Duration::from_millis(250);
-#[cfg(test)]
-const STAGGERING_VIEW_TTL: Duration = Duration::ZERO;
-
-/// A validator's latest self-reported staggering state, as tracked by the driver.
-struct TrackedStaggeringReport {
-    /// The report as received on the wire.
-    report: StaggeringReport,
-    /// Local receipt time; drives freshness on the driver's clock only.
-    received_at: Instant,
-}
 
 /// Monitors validator interactions from the client's perspective.
 ///
@@ -59,14 +44,12 @@ pub struct ValidatorClientMonitor<A: Clone> {
     client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     cached_latencies: RwLock<HashMap<(AuthorityName, TransactionClass), Duration>>,
-    /// Latest staggering state each validator self-reported (via health-check and
-    /// wait-for-effects responses).
-    staggering_reports: RwLock<HashMap<AuthorityName, TrackedStaggeringReport>>,
-    /// Memoized [`Self::staggering_active`] result: the stake-weighted scan costs
-    /// ~microseconds per call and runs on every submitted transaction, while the
-    /// view changes on the mode's phase timescale (tens of seconds) — a TTL of
-    /// staleness is noise against the report freshness window.
-    staggering_view: RwLock<Option<(bool, Instant)>>,
+    /// Latest staggering state each validator self-reported on its health-check
+    /// response, with the local receipt time that drives freshness.
+    staggering_reports: RwLock<HashMap<AuthorityName, (bool, Instant)>>,
+    /// The stake-weighted view over `staggering_reports`, recomputed when a report
+    /// arrives and after every health-check round (so aged-out reports drop off).
+    staggering_active: AtomicBool,
 }
 
 impl<A> ValidatorClientMonitor<A>
@@ -90,7 +73,7 @@ where
             authority_aggregator,
             cached_latencies: RwLock::new(HashMap::new()),
             staggering_reports: RwLock::new(HashMap::new()),
-            staggering_view: RwLock::new(None),
+            staggering_active: AtomicBool::new(false),
         });
 
         let monitor_clone = monitor.clone();
@@ -151,7 +134,7 @@ where
                     .await
                     {
                         Ok(Ok(response)) => {
-                            monitor.record_staggering_report(name, response.staggering);
+                            monitor.record_staggering_report(name, response.staggering_active);
                             let latency = start.elapsed();
                             monitor.record_interaction_result(OperationFeedback {
                                 authority_name: name,
@@ -194,8 +177,8 @@ where
             }
 
             self.update_cached_latencies(&authority_agg);
-            // Refreshes the staggering gauges even when no submissions query the view.
-            self.staggering_active();
+            // Ages out reports from validators that stopped answering.
+            self.refresh_staggering_view();
         }
     }
 }
@@ -284,110 +267,67 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         !self.cached_latencies.read().is_empty()
     }
 
-    /// Reports older than this no longer count toward [`Self::staggering_active`]
-    /// and no longer shield the stored entry from out-of-order overwrites. Two
-    /// health-check intervals, so a single missed health check does not flap the
+    /// Reports older than this no longer count toward [`Self::staggering_active`].
+    /// Two health-check intervals, so a single missed health check does not flap the
     /// view.
     fn report_freshness(&self) -> Duration {
         self.config.health_check_interval * 2
     }
 
-    /// Record a validator's self-reported staggering state, carried on health-check
-    /// and wait-for-effects responses. `None` (a validator predating the field)
-    /// carries no information and is ignored.
-    ///
-    /// The report's `report_ms` is the validator-local timestamp sampled with the
-    /// state. Two in-flight responses from the same validator can be processed out
-    /// of order (wait-for-effects long-polls), so an incoming report stamped older
-    /// than a still-fresh stored one is discarded instead of clobbering newer state.
-    /// Once the stored entry goes stale that shield drops, so a validator whose
-    /// clock stepped backwards — or that stamped the far future — recovers within
-    /// one freshness window. Reports without a timestamp fall back to
-    /// last-write-wins.
-    pub fn record_staggering_report(
-        &self,
-        validator: AuthorityName,
-        report: Option<StaggeringReport>,
-    ) {
-        let Some(report) = report else {
+    /// Record a validator's self-reported staggering state from its health-check
+    /// response. `None` (a validator predating the field) carries no information and
+    /// is ignored. Health checks to one validator are sequential, so reports from it
+    /// arrive in order and the latest simply wins.
+    pub fn record_staggering_report(&self, validator: AuthorityName, active: Option<bool>) {
+        let Some(active) = active else {
             return;
         };
-        let now = Instant::now();
-        let mut reports = self.staggering_reports.write();
-        if let Some(stored) = reports.get(&validator)
-            && let Some(stored_ms) = stored.report.report_ms
-            && now.saturating_duration_since(stored.received_at) < self.report_freshness()
-            && report
-                .report_ms
-                .is_some_and(|incoming_ms| incoming_ms < stored_ms)
-        {
-            return;
-        }
-        reports.insert(
-            validator,
-            TrackedStaggeringReport {
-                report,
-                received_at: now,
-            },
-        );
+        self.staggering_reports
+            .write()
+            .insert(validator, (active, Instant::now()));
+        self.refresh_staggering_view();
     }
 
     /// Whether staggered submission is currently considered active on the validator
-    /// network: validators reporting active within the freshness window must total
-    /// at least f+1 by stake, so at least one of them is honest — and honest
-    /// validators flip in lockstep, so one honest report reflects the network state.
-    /// A fresh report counts immediately (flipping on is cheap to believe: the cost
-    /// of a wrong belief in either direction is only bounded latency) and decays by
-    /// aging out of the window. Freshness runs on the driver's receipt clock only;
-    /// the validator-local timestamps merely order each validator's own reports.
+    /// network, as last computed by `refresh_staggering_view`: validators
+    /// reporting active within the freshness window must total at least f+1 by
+    /// stake, so at least one of them is honest — and honest validators converge on
+    /// the same mode, so one honest report reflects the network state. A fresh
+    /// report counts immediately (flipping on is cheap to believe: the cost of a
+    /// wrong belief in either direction is only bounded latency) and decays by aging
+    /// out of the window.
     pub fn staggering_active(&self) -> bool {
-        if let Some((active, computed_at)) = *self.staggering_view.read()
-            && computed_at.elapsed() < STAGGERING_VIEW_TTL
-        {
-            return active;
-        }
-        // Concurrent recomputes race benignly: both derive the same view.
-        let active = self.compute_staggering_active();
-        *self.staggering_view.write() = Some((active, Instant::now()));
-        active
+        self.staggering_active.load(Ordering::Relaxed)
     }
 
-    fn compute_staggering_active(&self) -> bool {
+    fn refresh_staggering_view(&self) {
         let authority_agg = self.authority_aggregator.load();
         let committee = &authority_agg.committee;
         let freshness = self.report_freshness();
         let now = Instant::now();
-        let reports = self.staggering_reports.read();
-        let active_stake: u64 = reports
+        let active_stake: u64 = self
+            .staggering_reports
+            .read()
             .iter()
-            .filter(|(_, tracked)| {
-                tracked.report.active
-                    && now.saturating_duration_since(tracked.received_at) < freshness
+            .filter(|(_, (active, received_at))| {
+                *active && now.saturating_duration_since(*received_at) < freshness
             })
             .map(|(name, _)| committee.weight(name))
             .sum();
         let active = active_stake >= committee.validity_threshold();
+        self.staggering_active.store(active, Ordering::Relaxed);
         self.metrics
             .staggering_active_stake
             .set(active_stake as i64);
         self.metrics.staggering_active.set(active as i64);
-        active
     }
 
     #[cfg(test)]
-    pub fn record_staggering_report_at(
-        &self,
-        validator: AuthorityName,
-        report: StaggeringReport,
-        at: Instant,
-    ) {
-        self.staggering_reports.write().insert(
-            validator,
-            TrackedStaggeringReport {
-                report,
-                received_at: at,
-            },
-        );
+    pub fn record_staggering_report_at(&self, validator: AuthorityName, active: bool, at: Instant) {
+        self.staggering_reports
+            .write()
+            .insert(validator, (active, at));
+        self.refresh_staggering_view();
     }
 
     /// Select validators based on client-observed performance for the given transaction type.
