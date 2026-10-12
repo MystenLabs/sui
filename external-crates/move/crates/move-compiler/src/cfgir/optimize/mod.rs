@@ -2,35 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod constant_fold;
+mod context;
 mod eliminate_locals;
 mod forwarding_jumps;
 mod inline_blocks;
 mod simplify_jumps;
 
 pub use constant_fold::report_always_erroring_operations;
+pub use context::Context;
 
 use move_proc_macros::growing_stack;
-use move_symbol_pool::Symbol;
 
-use std::collections::BTreeMap;
+use crate::{cfgir::cfg::MutForwardCFG, editions::FeatureGate};
 
-use crate::{
-    cfgir::cfg::MutForwardCFG,
-    diagnostics::DiagnosticReporter,
-    editions::FeatureGate,
-    expansion::ast::{ModuleIdent, Mutability},
-    hlir::ast::*,
-    parser::ast::ConstantName,
-    shared::{CompilationEnv, unique_map::UniqueMap},
-};
-
-pub type Optimization = fn(
-    &DiagnosticReporter,
-    &FunctionSignature,
-    &UniqueMap<Var, (Mutability, SingleType)>,
-    &BTreeMap<(ModuleIdent, ConstantName), Value>,
-    &mut MutForwardCFG,
-) -> bool;
+pub type Optimization = fn(&mut Context, &mut MutForwardCFG) -> bool;
 
 const OPTIMIZATIONS: &[Optimization] = &[
     eliminate_locals::optimize,
@@ -48,17 +33,12 @@ const MOVE_2024_OPTIMIZATIONS: &[Optimization] = &[
 ];
 
 #[growing_stack]
-pub fn optimize(
-    env: &CompilationEnv,
-    reporter: &DiagnosticReporter,
-    package: Option<Symbol>,
-    signature: &FunctionSignature,
-    locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
-    cfg: &mut MutForwardCFG,
-) {
+pub fn optimize(context: &mut Context, cfg: &mut MutForwardCFG) {
     let mut count = 0;
-    let optimizations = if env.supports_feature(package, FeatureGate::Move2024Optimizations) {
+    let optimizations = if context
+        .env
+        .supports_feature(context.package(), FeatureGate::Move2024Optimizations)
+    {
         MOVE_2024_OPTIMIZATIONS
     } else {
         OPTIMIZATIONS
@@ -73,7 +53,7 @@ pub fn optimize(
         }
 
         // reset the count if something has changed
-        if optimization(reporter, signature, locals, constants, cfg) {
+        if optimization(context, cfg) {
             count = 0
         } else {
             count += 1

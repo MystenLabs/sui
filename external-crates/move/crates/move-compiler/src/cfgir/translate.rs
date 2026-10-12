@@ -379,20 +379,16 @@ fn function_body(
                     cfgir::refine_inference_and_verify(&function_context, cfg);
                     // do not optimize if there are errors, warnings are okay
                     if !context.env.has_errors() {
-                        cfgir::optimize(
+                        let mut optimize_context = cfgir::optimize::Context::new(
                             context.env,
                             &context.reporter,
                             context.current_package,
                             signature,
                             &locals,
                             &constants.values,
-                            cfg,
                         );
-                        cfgir::report_always_erroring_operations(
-                            &context.reporter,
-                            &constants.values,
-                            cfg,
-                        );
+                        cfgir::optimize(&mut optimize_context, cfg);
+                        cfgir::report_always_erroring_operations(&optimize_context, cfg);
                     }
                 },
             );

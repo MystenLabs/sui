@@ -442,15 +442,15 @@ fn verify_and_optimize(
     // constants used by other constants are always inlined (regardless of whether or the
     // expression it is in would be folded)
     inline_constant_values(constant_values, cfg);
-    cfgir::optimize(
+    let mut optimize_context = cfgir::optimize::Context::new(
         context.env,
         context.reporter(),
         context.current_package,
         &fake_signature,
         locals,
         constant_values,
-        cfg,
     );
+    cfgir::optimize(&mut optimize_context, cfg);
 }
 
 /// Replaces each use of a folded constant with its value. The optimizer only inlines values it

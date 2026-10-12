@@ -2,42 +2,29 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use super::Context;
 use crate::{
     cfgir::cfg::MutForwardCFG,
     diag,
-    diagnostics::DiagnosticReporter,
-    expansion::ast::{ModuleIdent, Mutability},
     hlir::ast::{
-        BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
-        TypeName_, UnannotatedExp_, Value, Value_, Var,
+        BaseType, BaseType_, Command, Command_, Exp, TypeName, TypeName_, UnannotatedExp_, Value_,
     },
     ice,
     naming::ast::{BuiltinTypeName, BuiltinTypeName_},
-    parser::ast::{BinOp, BinOp_, ConstantName, UnaryOp, UnaryOp_},
-    shared::unique_map::UniqueMap,
+    parser::ast::{BinOp, BinOp_, UnaryOp, UnaryOp_},
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
-use std::{borrow::Cow, collections::BTreeMap, convert::TryFrom};
+use std::{borrow::Cow, convert::TryFrom};
 
 /// returns true if anything changed
-pub fn optimize(
-    reporter: &DiagnosticReporter,
-    _signature: &FunctionSignature,
-    _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
-    cfg: &mut MutForwardCFG,
-) -> bool {
-    let context = Context {
-        reporter,
-        constants,
-    };
+pub fn optimize(context: &mut Context, cfg: &mut MutForwardCFG) -> bool {
     let mut changed = false;
     for block_ref in cfg.blocks_mut().values_mut() {
         let block = std::mem::take(block_ref);
         *block_ref = block
             .into_iter()
-            .filter_map(|mut cmd| match optimize_cmd(&context, &mut cmd) {
+            .filter_map(|mut cmd| match optimize_cmd(context, &mut cmd) {
                 None => {
                     changed = true;
                     None
@@ -50,11 +37,6 @@ pub fn optimize(
             .collect();
     }
     changed
-}
-
-struct Context<'a> {
-    reporter: &'a DiagnosticReporter<'a>,
-    constants: &'a BTreeMap<(ModuleIdent, ConstantName), Value>,
 }
 
 //**************************************************************************************************
@@ -129,7 +111,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 _ => unreachable!(),
             };
             let changed = optimize_exp(er);
-            let v = match foldable_exp(context, er) {
+            let v = match context.foldable_exp(er) {
                 Some(v) => v,
                 None => return changed,
             };
@@ -146,8 +128,8 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let changed1 = optimize_exp(e1);
             let changed2 = optimize_exp(e2);
             let changed = changed1 || changed2;
-            let v1_opt = foldable_exp(context, e1);
-            let v2_opt = foldable_exp(context, e2);
+            let v1_opt = context.foldable_exp(e1);
+            let v2_opt = context.foldable_exp(e2);
             if let (Some(v1), Some(v2)) = (v1_opt, v2_opt) {
                 if let Some(folded) = fold_binary_op(e.exp.loc, op, v1, v2) {
                     *e_ = folded;
@@ -166,7 +148,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 _ => unreachable!(),
             };
             let changed = optimize_exp(e);
-            let v = match foldable_exp(context, e) {
+            let v = match context.foldable_exp(e) {
                 Some(v) => v,
                 None => return changed,
             };
@@ -191,7 +173,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             let mut vs = vec![];
             for earg in eargs {
                 let eloc = earg.exp.loc;
-                if let Some(v) = foldable_exp(context, earg) {
+                if let Some(v) = context.foldable_exp(earg) {
                     vs.push(sp(eloc, v.clone()));
                 } else {
                     return changed;
@@ -441,22 +423,8 @@ const fn evalue_(loc: Loc, v: Value_) -> UnannotatedExp_ {
 }
 
 //**************************************************************************************************
-// Foldable Value
+// Ignorable
 //**************************************************************************************************
-
-/// The value of `e` if it is statically known. Constants are not inlined, but their values are
-/// used so that enclosing expressions can be folded.
-fn foldable_exp<'a>(context: &Context<'a>, e: &'a Exp) -> Option<&'a Value_> {
-    use UnannotatedExp_ as E;
-    match &e.exp.value {
-        E::Constant(module, name) => context
-            .constants
-            .get(&(*module, *name))
-            .map(|sp!(_, v_)| v_),
-        E::Value(sp!(_, v_)) => Some(v_),
-        _ => None,
-    }
-}
 
 fn ignorable_exp(e: &Exp) -> bool {
     use UnannotatedExp_ as E;
@@ -474,18 +442,10 @@ fn ignorable_exp(e: &Exp) -> bool {
 
 /// Reports any operation over values that will always error at runtime, e.g. `1 / 0` or
 /// `0xFFFFu16 as u8`.
-pub fn report_always_erroring_operations(
-    reporter: &DiagnosticReporter,
-    constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
-    cfg: &MutForwardCFG,
-) {
-    let context = Context {
-        reporter,
-        constants,
-    };
+pub fn report_always_erroring_operations(context: &Context, cfg: &MutForwardCFG) {
     for block in cfg.blocks().values() {
         for cmd in block {
-            check_cmd(&context, cmd);
+            check_cmd(context, cmd);
         }
     }
 }
@@ -518,7 +478,7 @@ fn check_cmd(context: &Context, sp!(_, cmd_): &Command) {
 fn check_exp<'a>(context: &Context<'a>, e: &'a Exp) -> Option<Cow<'a, Value_>> {
     use UnannotatedExp_ as E;
     match &e.exp.value {
-        E::Value(_) | E::Constant(_, _) => foldable_exp(context, e).map(Cow::Borrowed),
+        E::Value(_) | E::Constant(_, _) => context.foldable_exp(e).map(Cow::Borrowed),
 
         E::Unit { .. }
         | E::UnresolvedError

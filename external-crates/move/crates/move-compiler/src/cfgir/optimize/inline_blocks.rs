@@ -4,27 +4,18 @@
 
 use move_proc_macros::growing_stack;
 
+use super::Context;
 use crate::{
     cfgir::{
         ast::{BasicBlocks, remap_labels},
         cfg::{CFG, MutForwardCFG},
     },
-    diagnostics::DiagnosticReporter,
-    expansion::ast::{ModuleIdent, Mutability},
-    hlir::ast::{Command_, FunctionSignature, Label, SingleType, Value, Var},
-    parser::ast::ConstantName,
-    shared::unique_map::UniqueMap,
+    hlir::ast::{Command_, Label},
 };
 use std::collections::{BTreeMap, BTreeSet};
 
 /// returns true if anything changed
-pub fn optimize(
-    _reporter: &DiagnosticReporter,
-    _signature: &FunctionSignature,
-    _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    _constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
-    cfg: &mut MutForwardCFG,
-) -> bool {
+pub fn optimize(_context: &mut Context, cfg: &mut MutForwardCFG) -> bool {
     let changed = optimize_(cfg.start_block(), cfg.blocks_mut());
     if changed {
         let dead_blocks = cfg.recompute();

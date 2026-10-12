@@ -2,28 +2,18 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use super::Context;
 use crate::{
     cfgir::{cfg::MutForwardCFG, remove_no_ops},
-    diagnostics::DiagnosticReporter,
-    expansion::ast::{ModuleIdent, Mutability},
-    hlir::ast::{FunctionSignature, SingleType, Value, Var},
-    parser::ast::ConstantName,
-    shared::unique_map::UniqueMap,
+    hlir::ast::{FunctionSignature, Var},
 };
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 /// returns true if anything changed
-pub fn optimize(
-    _reporter: &DiagnosticReporter,
-    signature: &FunctionSignature,
-    _locals: &UniqueMap<Var, (Mutability, SingleType)>,
-    _constants: &BTreeMap<(ModuleIdent, ConstantName), Value>,
-    cfg: &mut MutForwardCFG,
-) -> bool {
+pub fn optimize(context: &mut Context, cfg: &mut MutForwardCFG) -> bool {
     let changed = remove_no_ops::optimize(cfg);
     let ssa_temps = {
-        let s = count(signature, cfg);
+        let s = count(context.signature, cfg);
         if s.is_empty() {
             return changed;
         }
