@@ -17,7 +17,7 @@ use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
-use sui_types::messages_grpc::{PingType, WaitForEffectsRequest, WaitForEffectsStatus};
+use sui_types::messages_grpc::{PingType, WaitForEffectsRequest, WaitForEffectsResponse};
 use sui_types::object::Object;
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::utils::to_sender_signed_transaction;
@@ -132,10 +132,8 @@ async fn test_wait_for_effects_position_mismatch() {
         .unwrap();
 
     let exec_effects = exec_handle.await.unwrap();
-    // The staggering report rides the envelope on every outcome.
-    assert!(response.staggering.is_some());
-    match response.status {
-        WaitForEffectsStatus::Executed {
+    match response {
+        WaitForEffectsResponse::Executed {
             effects_digest,
             details,
         } => {
@@ -177,10 +175,8 @@ async fn test_wait_for_effects_ping_rejected() {
         .await
         .unwrap();
 
-    // The staggering report rides the envelope on every outcome.
-    assert!(response.staggering.is_some());
-    match response.status {
-        WaitForEffectsStatus::Rejected { error } => {
+    match response {
+        WaitForEffectsResponse::Rejected { error } => {
             assert!(error.is_none(), "{:?}", error);
         }
         _ => panic!("Expected Rejected response"),
@@ -277,8 +273,8 @@ async fn test_wait_for_effects_ping_rejected_with_reason() {
         .await
         .unwrap();
 
-    match response.status {
-        WaitForEffectsStatus::Rejected { error } => {
+    match response {
+        WaitForEffectsResponse::Rejected { error } => {
             assert_eq!(
                 error.map(|e| e.into_inner()),
                 Some(SuiErrorKind::UserInputError {
@@ -336,8 +332,8 @@ async fn test_wait_for_effects_finalized() {
         .unwrap();
 
     let exec_effects = exec_handle.await.unwrap();
-    match response.status {
-        WaitForEffectsStatus::Executed {
+    match response {
+        WaitForEffectsResponse::Executed {
             details,
             effects_digest,
         } => {
@@ -362,8 +358,8 @@ async fn test_wait_for_effects_finalized() {
         .await
         .unwrap();
 
-    match response.status {
-        WaitForEffectsStatus::Executed {
+    match response {
+        WaitForEffectsResponse::Executed {
             details,
             effects_digest,
         } => {
@@ -419,12 +415,7 @@ async fn test_wait_for_effects_expired() {
         .await
         .unwrap();
 
-    // The staggering report rides the envelope on every outcome.
-    assert!(response.staggering.is_some());
-    assert!(matches!(
-        response.status,
-        WaitForEffectsStatus::Expired { .. }
-    ));
+    assert!(matches!(response, WaitForEffectsResponse::Expired { .. }));
 }
 
 #[tokio::test]
@@ -461,8 +452,8 @@ async fn test_wait_for_effects_ping() {
             .await
             .unwrap();
 
-        match response.status {
-            WaitForEffectsStatus::Executed {
+        match response {
+            WaitForEffectsResponse::Executed {
                 effects_digest,
                 details,
             } => {
@@ -506,8 +497,8 @@ async fn test_wait_for_effects_ping() {
             .await
             .unwrap();
 
-        match response.status {
-            WaitForEffectsStatus::Executed {
+        match response {
+            WaitForEffectsResponse::Executed {
                 effects_digest,
                 details,
             } => {
@@ -557,7 +548,7 @@ async fn test_wait_for_effects_ping() {
             .unwrap();
 
         assert!(
-            matches!(response.status, WaitForEffectsStatus::Expired { .. }),
+            matches!(response, WaitForEffectsResponse::Expired { .. }),
             "Expected Expired response, got {:?}",
             response
         );
@@ -642,8 +633,8 @@ async fn test_wait_for_effects_allows_matching_previously_signed() {
         .wait_for_effects(request, None)
         .await
         .unwrap();
-    match response.status {
-        WaitForEffectsStatus::Executed { effects_digest, .. } => {
+    match response {
+        WaitForEffectsResponse::Executed { effects_digest, .. } => {
             assert_eq!(effects_digest, effects.digest());
         }
         _ => panic!("Expected Executed response"),
