@@ -110,7 +110,12 @@ pub fn proposers_metric_label(
 /// duplication on a quiet network (where a tiny denominator makes the ratio noisy)
 /// from flipping the mode network-wide: a full-committee fan-out of a single
 /// transaction stays under it, while any sustained fan-out crosses it within one
-/// window. Identical on every validator (compiled in), so the mode moves in lockstep.
+/// window. The thresholds are compiled in and the per-commit inputs derive from the
+/// shared commit history, so validators converge on the same band; a restarted
+/// validator starts from band 0 with an empty window and re-converges within about a
+/// window plus a dwell (its copy counts re-align once the copies of transactions it
+/// first saw before the restart stop arriving), unless the ratio sits inside a band's
+/// enter/exit gap, where by design neither side moves.
 ///
 /// De-escalation additionally waits out `SIGNAL_EXIT_DWELL_COMMITS` of the ratio
 /// sitting below the active band's exit threshold. Staggering suppresses the very

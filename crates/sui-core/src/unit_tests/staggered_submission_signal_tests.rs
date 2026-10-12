@@ -89,8 +89,9 @@ async fn commit_copies(
 async fn cross_commit_copies_share_one_free_or_paid_allowance() {
     for (gas_price, copies, excess) in [
         (1, [1, 2, 1, 2], [0, 0, 1, 2]),
-        // At 5x RGP, the signal allows six copies, including the SIP-45 race margin.
-        (5, [1, 4, 1, 2], [0, 0, 0, 2]),
+        // At 5x RGP the gas price buys five copies, the same count an explicit proposer
+        // set of that size is allowed; the sixth copy is the first excess one.
+        (5, [1, 4, 1, 2], [0, 0, 1, 2]),
     ] {
         let (_state, mut setup, transaction) = setup(gas_price, None, false).await;
         let mut total_excess = 0;
