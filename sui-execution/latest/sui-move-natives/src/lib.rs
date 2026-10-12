@@ -992,31 +992,31 @@ pub fn make_stdlib_gas_params_for_protocol_config(
                 base: get_gas_cost_or_default!(vector_swap_base_cost_as_option),
             },
             reverse: MSN::vector::ReverseGasParameters {
-                base: get_gas_cost_or_default_since!(vector_reverse_base_cost_as_option, 139),
+                base: get_gas_cost_or_default_since!(vector_reverse_base_cost_as_option, 140),
                 per_elem: get_gas_cost_or_default_since!(
                     vector_reverse_per_elem_cost_as_option,
-                    139
+                    140
                 ),
             },
             keep_range: MSN::vector::KeepRangeGasParameters {
-                base: get_gas_cost_or_default_since!(vector_keep_range_base_cost_as_option, 139),
+                base: get_gas_cost_or_default_since!(vector_keep_range_base_cost_as_option, 140),
                 per_dropped_elem: get_gas_cost_or_default_since!(
                     vector_keep_range_per_dropped_elem_cost_as_option,
-                    139
+                    140
                 ),
                 per_moved_elem: get_gas_cost_or_default_since!(
                     vector_keep_range_per_moved_elem_cost_as_option,
-                    139
+                    140
                 ),
             },
             copy_range: MSN::vector::CopyRangeGasParameters {
-                base: get_gas_cost_or_default_since!(vector_copy_range_base_cost_as_option, 139),
+                base: get_gas_cost_or_default_since!(vector_copy_range_base_cost_as_option, 140),
             },
             replace_range: MSN::vector::ReplaceRangeGasParameters {
-                base: get_gas_cost_or_default_since!(vector_replace_range_base_cost_as_option, 139),
+                base: get_gas_cost_or_default_since!(vector_replace_range_base_cost_as_option, 140),
                 per_elem: get_gas_cost_or_default_since!(
                     vector_replace_range_per_elem_cost_as_option,
-                    139
+                    140
                 ),
             },
         },
@@ -1618,7 +1618,7 @@ mod tests {
 
     #[test]
     fn vector_bulk_native_gas_mapping_is_protocol_gated() {
-        let before = ProtocolConfig::get_for_version(ProtocolVersion::new(138), Chain::Unknown);
+        let before = ProtocolConfig::get_for_version(ProtocolVersion::new(139), Chain::Unknown);
         let before = make_stdlib_gas_params_for_protocol_config(&before);
         assert_eq!(before.vector.reverse.base, 0.into());
         assert_eq!(before.vector.reverse.per_elem, 0.into());
@@ -1629,7 +1629,7 @@ mod tests {
         assert_eq!(before.vector.replace_range.base, 0.into());
         assert_eq!(before.vector.replace_range.per_elem, 0.into());
 
-        let active = ProtocolConfig::get_for_version(ProtocolVersion::new(139), Chain::Unknown);
+        let active = ProtocolConfig::get_for_version(ProtocolVersion::new(140), Chain::Unknown);
         let active = make_stdlib_gas_params_for_protocol_config(&active);
         assert_eq!(active.vector.reverse.base, 52.into());
         assert_eq!(active.vector.reverse.per_elem, 8.into());
