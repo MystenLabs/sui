@@ -9,7 +9,7 @@ use std::{
 use futures::stream::{FuturesUnordered, StreamExt};
 use sui_types::{
     base_types::{AuthorityName, ObjectID},
-    error::ErrorCategory,
+    error::{ErrorCategory, SuiError, SuiErrorKind},
     messages_grpc::{SubmitTxRequest, SubmitTxResult, TxType},
     transaction::{MAX_UNPAID_ALLOWED_PROPOSERS, TransactionDataAPI as _},
 };
@@ -20,7 +20,7 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     safe_client::SafeClient,
-    staggered_submission::{stagger_order, stagger_seed},
+    staggered_submission::{stagger_order, stagger_proposer_slots, stagger_seed},
     transaction_driver::{
         SubmitTransactionOptions, TransactionDriverMetrics,
         error::{
@@ -128,9 +128,13 @@ impl TransactionSubmitter {
                     &[tx.digest()],
                     authority_aggregator.committee.epoch(),
                 );
+                let order = stagger_order(&seed, &authority_aggregator.committee);
+                let proposer_slots =
+                    stagger_proposer_slots(&order, &authority_aggregator.committee) as usize;
                 StaggerTargets {
-                    order: stagger_order(&seed, &authority_aggregator.committee),
+                    order,
                     free_slots: MAX_UNPAID_ALLOWED_PROPOSERS.max(amplification_factor) as usize,
+                    proposer_slots,
                 }
             });
 
@@ -322,7 +326,7 @@ impl TransactionSubmitter {
             TransactionRequestError::TimedOutSubmittingTransaction
         })?
         .map_err(|error| {
-            if is_validator_error(error.categorize()) {
+            if is_validator_error(&error) {
                 client_monitor.record_interaction_result(OperationFeedback {
                     authority_name: validator,
                     display_name: display_name.clone(),
@@ -345,7 +349,7 @@ impl TransactionSubmitter {
 
         // Since only one transaction is submitted, it is ok to return error when the submission is rejected.
         if let SubmitTxResult::Rejected { error } = &result {
-            if is_validator_error(error.categorize()) {
+            if is_validator_error(error) {
                 client_monitor.record_interaction_result(OperationFeedback {
                     authority_name: validator,
                     display_name,
@@ -372,9 +376,17 @@ impl TransactionSubmitter {
 }
 
 // Whether the failure is caused by the peer validator, as opposed to the user or this node.
-fn is_validator_error(category: ErrorCategory) -> bool {
+fn is_validator_error(error: &SuiError) -> bool {
+    // A non-proposer declining a staggered submission is the schedule working, not a
+    // fault of that validator: it must not count against its score.
+    if matches!(
+        error.as_inner(),
+        SuiErrorKind::StaggeredSubmissionNotProposer
+    ) {
+        return false;
+    }
     matches!(
-        category,
+        error.categorize(),
         ErrorCategory::Aborted
             | ErrorCategory::Internal
             | ErrorCategory::ValidatorOverloaded
