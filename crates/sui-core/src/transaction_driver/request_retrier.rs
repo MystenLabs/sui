@@ -32,6 +32,9 @@ pub(crate) struct StaggerTargets {
     /// How many leading slots propose immediately (free slots, widened by paid
     /// amplification) — the same count the validators grant.
     pub free_slots: usize,
+    /// How many leading slots may propose at all: the free slots plus the holders.
+    /// Validators past them reject the submission, so they are never targeted.
+    pub proposer_slots: usize,
 }
 
 /// Provides the next target validator to retry operations,
@@ -83,6 +86,9 @@ impl<A: Clone> RequestRetrier<A> {
                 .map(|(rank, name)| (name, rank))
                 .collect();
             let mut order = targets.order;
+            // Paid amplification can widen the free slots past the stake cut; the
+            // validators propose for those slots too.
+            order.truncate(targets.proposer_slots.max(targets.free_slots));
             let free_slots = targets.free_slots.min(order.len());
             order[..free_slots]
                 .sort_by_key(|name| latency_rank.get(name).copied().unwrap_or(usize::MAX));
@@ -457,6 +463,7 @@ mod tests {
         let targets = StaggerTargets {
             order: validators.clone(),
             free_slots: 2,
+            proposer_slots: 4,
         };
         let mut retrier = RequestRetrier::new(
             &auth_agg,
@@ -474,6 +481,52 @@ mod tests {
         // latency ranking would prefer validator 3.
         assert_eq!(retrier.next_target().unwrap().0, validators[2]);
         assert_eq!(retrier.next_target().unwrap().0, validators[3]);
+        assert!(retrier.next_target().is_err());
+    }
+
+    /// Validators past the proposer set reject the submission, so the walk stops at the
+    /// set's end instead of asking them.
+    #[tokio::test]
+    async fn test_stagger_targets_stop_at_proposer_set() {
+        let auth_agg = Arc::new(get_authority_aggregator(4));
+        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+        let validators: Vec<_> = auth_agg.committee.names().copied().collect();
+
+        let targets = StaggerTargets {
+            order: validators.clone(),
+            free_slots: 1,
+            proposer_slots: 3,
+        };
+        let mut retrier = RequestRetrier::new(
+            &auth_agg,
+            &client_monitor,
+            vec![],
+            vec![],
+            None,
+            Some(targets),
+        );
+        assert_eq!(retrier.next_target().unwrap().0, validators[0]);
+        assert_eq!(retrier.next_target().unwrap().0, validators[1]);
+        assert_eq!(retrier.next_target().unwrap().0, validators[2]);
+        assert!(retrier.next_target().is_err());
+
+        // Paid amplification widening the free slots past the cut keeps those targets.
+        let targets = StaggerTargets {
+            order: validators.clone(),
+            free_slots: 4,
+            proposer_slots: 2,
+        };
+        let mut retrier = RequestRetrier::new(
+            &auth_agg,
+            &client_monitor,
+            vec![],
+            vec![],
+            None,
+            Some(targets),
+        );
+        for _ in 0..4 {
+            assert!(retrier.next_target().is_ok());
+        }
         assert!(retrier.next_target().is_err());
     }
 
