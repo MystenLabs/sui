@@ -464,12 +464,12 @@ impl ConsensusTransactionPool {
         drop(inner);
 
         let newly_inserted = outcome.notify()?;
-        // Observed only for entries actually admitted, mirroring the adapter path where
-        // the histogram records delays that are really applied. The entry (and with it
-        // the slot) is in the pool, but the slot's delay was captured at creation.
+        // Observed only for entries actually admitted, so the histogram records holds
+        // that are really applied. The entry (and with it the slot) is in the pool, but
+        // the slot's delay was captured at creation.
         if let Some(delay) = stagger_delay {
-            self.adapter_metrics
-                .sequencing_staggered_delay
+            self.metrics
+                .pool_staggered_delay
                 .observe(delay.as_secs_f64());
         }
         self.metrics.pool_depth.with_label_values(&["user"]).inc();

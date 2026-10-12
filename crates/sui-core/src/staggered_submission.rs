@@ -5,14 +5,18 @@
 //!
 //! A transaction without a usable allowed-proposers list can be submitted to every validator
 //! at once, amplifying its consensus cost while paying gas once. Rejecting such transactions
-//! outright would break existing clients, so instead — when duplication is detected on the
+//! everywhere would break existing clients, so instead — when duplication is detected on the
 //! network — each validator derives a deterministic slot for itself from a stake-weighted
-//! permutation of the committee seeded by the transaction, and delays its own submission
-//! according to that slot. The first `free_slots` validators in the derived order submit
-//! immediately (mirroring the proposer set an explicit list would grant), the validators
+//! permutation of the committee seeded by the transaction, and acts on its own submission
+//! according to that slot. The first `paid_proposer_count` validators in the derived order
+//! submit immediately (the proposer set an explicit list would be allowed), the validators
 //! up to the stake cut (`STAGGER_PROPOSER_STAKE_BPS`) wait long enough that an earlier
 //! copy can commit first, and every validator past the cut rejects the submission.
 //! Duplication is thereby bounded by construction instead of detected after its bandwidth is already spent.
+//!
+//! Staggering applies on the consensus transaction pool path only: entries are held inside
+//! the pool and skipped by `take()` until eligible. A validator configured to use the
+//! push-based consensus adapter path instead submits immediately.
 //!
 //! The slot is derived from the gas object ids rather than the transaction digest: digest
 //! derivation could be ground by re-signing trivial variants (nonce, budget) until each
@@ -38,7 +42,7 @@ use sui_types::crypto::DefaultHash;
 use sui_types::digests::TransactionDigest;
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::ConsensusTransaction;
-use sui_types::transaction::{MAX_UNPAID_ALLOWED_PROPOSERS, Transaction, TransactionDataAPI as _};
+use sui_types::transaction::{Transaction, TransactionDataAPI as _, paid_proposer_count};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 
@@ -102,8 +106,6 @@ pub struct StaggerParams {
     /// firing steps (see `compute_delay`), so a submitter never waits longer than
     /// this regardless of committee size.
     pub max_delay: Duration,
-    /// Number of leading slots that submit without delay.
-    pub free_slots: u64,
 }
 
 impl Default for StaggerParams {
@@ -111,7 +113,6 @@ impl Default for StaggerParams {
         Self {
             step: DEFAULT_STAGGER_STEP,
             max_delay: DEFAULT_STAGGER_MAX_DELAY,
-            free_slots: MAX_UNPAID_ALLOWED_PROPOSERS,
         }
     }
 }
@@ -144,14 +145,12 @@ impl StaggeredSubmission {
         *self.params.write() = params;
     }
 
-    /// The delay this validator applies before submitting a group of user transactions —
-    /// a single transaction or a soft bundle — to consensus, or `None` to submit
-    /// immediately. Staggering exists to remove the amplification value of omitting the
-    /// allowed-proposers list, and a group is as amplifiable as its least restricted
-    /// member (soft bundles are external fan-out too, and would otherwise be a wrapper
-    /// that bypasses the hold): the group is held if any member could have named its
-    /// proposers and did not, and only those members' identity feeds the slot seed, so a
-    /// restricted companion cannot be used to re-roll the schedule.
+    /// What this validator does with a group of user transactions — a single transaction
+    /// or a soft bundle — bound for consensus: submit now, after a hold, or not at all.
+    /// Soft bundle members name the same allowed proposers (enforced at admission), so a
+    /// group is restricted or unrestricted as a whole; only an unrestricted group is
+    /// subject to staggering, and every member feeds the slot seed, so a bundle cannot be
+    /// used to re-roll a member's schedule.
     pub fn submission_delay(
         &self,
         txs: &[&Transaction],
@@ -164,12 +163,16 @@ impl StaggeredSubmission {
             return StaggerDecision::Free;
         }
         let epoch = epoch_store.epoch();
-        let unrestricted: Vec<_> = txs
+        let tx_data: Vec<_> = txs
             .iter()
             .map(|tx| (tx.data().transaction_data(), tx.digest()))
-            .filter(|(tx_data, _)| !tx_data.expiration().restricts_proposers(epoch))
             .collect();
-        if unrestricted.is_empty() {
+        // Vacuously free when empty; conservatively held when admission let a mixed
+        // bundle through, since a single unrestricted member is enough to amplify.
+        if tx_data
+            .iter()
+            .all(|(tx_data, _)| tx_data.expiration().restricts_proposers(epoch))
+        {
             return StaggerDecision::Free;
         }
         // A non-member has no slot in the order; it also has no consensus to submit to.
@@ -177,35 +180,28 @@ impl StaggeredSubmission {
             return StaggerDecision::Free;
         };
 
-        let gas_payment: Vec<ObjectID> = unrestricted
+        let gas_payment: Vec<ObjectID> = tx_data
             .iter()
             .flat_map(|(tx_data, _)| tx_data.gas_data().payment.iter().map(|(id, _, _)| *id))
             .collect();
-        let digests: Vec<&TransactionDigest> =
-            unrestricted.iter().map(|(_, digest)| *digest).collect();
+        let digests: Vec<&TransactionDigest> = tx_data.iter().map(|(_, digest)| *digest).collect();
         let seed = stagger_seed(&gas_payment, &digests, epoch);
         let committee = epoch_store.committee();
         let order = stagger_order(&seed, committee);
         let slot = slot_in_order(&order, committee, own_index);
         let proposer_slots = stagger_proposer_slots(&order, committee);
 
-        // SIP-45: a raised gas price pays for amplification, which maps here to that many
-        // immediate slots. Matches the sizing an explicit proposer set is allowed. Soft
-        // bundles enforce a uniform gas price at admission; min() is the conservative
-        // choice should that ever change.
-        let paid_amplification = unrestricted
+        // SIP-45: the gas price buys that many immediate slots, the same sizing an
+        // explicit proposer set is allowed. Soft bundles enforce a uniform gas price at
+        // admission; min() is the conservative choice should that ever change.
+        let gas_price = tx_data
             .iter()
             .map(|(tx_data, _)| tx_data.gas_data().price)
             .min()
-            .expect("unrestricted is non-empty")
-            / epoch_store.reference_gas_price().max(1);
+            .expect("txs is non-empty");
+        let free_slots = paid_proposer_count(gas_price, epoch_store.reference_gas_price());
 
-        compute_delay(
-            &self.params.read(),
-            slot,
-            proposer_slots,
-            paid_amplification,
-        )
+        compute_delay(&self.params.read(), slot, proposer_slots, free_slots)
     }
 }
 
@@ -222,14 +218,14 @@ pub enum StaggerDecision {
     Reject,
 }
 
-/// A component's admission gate for staggered (held) submissions, created by its owner
-/// — the transaction pool or the consensus adapter — with the owner's capacity and
-/// held gauge, so slot requests carry no limits or metrics. The stagger policy itself
-/// (mode, schedule) stays on the per-epoch [`StaggeredSubmission`] in the epoch store.
+/// The transaction pool's admission gate for staggered (held) submissions, created with
+/// the pool's capacity and metrics so slot requests carry no limits or metrics. The
+/// stagger policy itself (mode, schedule) stays on the per-epoch [`StaggeredSubmission`]
+/// in the epoch store.
 ///
 /// Held submissions are not drained until their delay elapses, so without the quota
 /// (`max_pending_transactions / STAGGERED_HELD_QUOTA_DIVISOR`), sustained
-/// no-proposer-list inflow at up to `max_delay` of dwell each could fill the owner's
+/// no-proposer-list inflow at up to `max_delay` of dwell each could fill the pool's
 /// capacity and crowd out restricted traffic. At the quota the caller gets a retriable
 /// overload error instead — which also steers the client to retry against another
 /// validator, plausibly one of the transaction's free-slot validators.
@@ -254,12 +250,6 @@ impl StaggerQuota {
             metric: held_metric,
             rejected_metric,
         }
-    }
-
-    /// Whether another held submission would currently be admitted. Advisory: the
-    /// authoritative check-and-register is `submission_slot`.
-    pub fn has_capacity(&self) -> bool {
-        self.held.load(Ordering::Relaxed) < self.quota
     }
 
     /// Like [`StaggeredSubmission::submission_delay`], but also registers the hold
@@ -360,26 +350,18 @@ impl Drop for StaggeredSlot {
     }
 }
 
-/// The delay for `slot`, given that `paid_amplification` immediate slots were paid for
-/// beyond the default free slots. The first slot past the free slots waits one step.
-///
-/// Held slots wrap around the `max_delay / step` firing steps rather than saturating at
-/// `max_delay`. Saturating would give every slot past `free_slots + max_delay/step` the
-/// same firing time: an attacker who computes the (public) permutation and fans out only
-/// to those tail validators gets every copy proposed simultaneously at the cap, with no
-/// earlier copy to trigger drop-on-commit — amplification ≈ the tail size, defeating the
-/// mechanism. Wrapping spreads the tail evenly across the window (~committee/steps
-/// validators per firing time), leaving a residual bound of roughly
-/// `committee_size × commit_latency / max_delay` copies against a fan-out aimed at one
-/// stretch of firing times — the best any schedule confined to `max_delay` can do, since
-/// copies firing within one commit latency of each other cannot dedup one another.
+/// The decision for `slot`, given the `free_slots` immediate slots the gas price pays for
+/// and the `proposer_slots` of the transaction's proposer set. The first held slot waits
+/// one step; later ones wrap around the `max_delay / step` firing steps rather than
+/// saturating at `max_delay`, so no stretch of the (public) order fires simultaneously at
+/// the cap, where a fan-out aimed at it would amplify by its whole size with no earlier
+/// copy to dedup it.
 fn compute_delay(
     params: &StaggerParams,
     slot: u64,
     proposer_slots: u64,
-    paid_amplification: u64,
+    free_slots: u64,
 ) -> StaggerDecision {
-    let free_slots = params.free_slots.max(paid_amplification);
     if slot < free_slots {
         return StaggerDecision::Free;
     }
@@ -555,12 +537,8 @@ mod tests {
     }
 
     /// `compute_delay` with an unbounded proposer set, as `Option` for the schedule tests.
-    fn schedule_delay(
-        params: &StaggerParams,
-        slot: u64,
-        paid_amplification: u64,
-    ) -> Option<Duration> {
-        match compute_delay(params, slot, u64::MAX, paid_amplification) {
+    fn schedule_delay(params: &StaggerParams, slot: u64, free_slots: u64) -> Option<Duration> {
+        match compute_delay(params, slot, u64::MAX, free_slots) {
             StaggerDecision::Free => None,
             StaggerDecision::Hold(delay) => Some(delay),
             StaggerDecision::Reject => panic!("slot {slot} rejected by an unbounded proposer set"),
@@ -572,22 +550,21 @@ mod tests {
         let params = StaggerParams {
             step: Duration::from_millis(250),
             max_delay: Duration::from_secs(2),
-            free_slots: 3,
         };
         // Five proposer slots: three free, two held, everything past them rejected.
-        assert_eq!(compute_delay(&params, 2, 5, 1), StaggerDecision::Free);
+        assert_eq!(compute_delay(&params, 2, 5, 3), StaggerDecision::Free);
         assert_eq!(
-            compute_delay(&params, 4, 5, 1),
+            compute_delay(&params, 4, 5, 3),
             StaggerDecision::Hold(Duration::from_millis(500))
         );
-        assert_eq!(compute_delay(&params, 5, 5, 1), StaggerDecision::Reject);
-        assert_eq!(compute_delay(&params, 200, 5, 1), StaggerDecision::Reject);
+        assert_eq!(compute_delay(&params, 5, 5, 3), StaggerDecision::Reject);
+        assert_eq!(compute_delay(&params, 200, 5, 3), StaggerDecision::Reject);
         // Paid amplification widening the free slots past the cut still proposes.
         assert_eq!(compute_delay(&params, 6, 5, 7), StaggerDecision::Free);
         assert_eq!(compute_delay(&params, 7, 5, 7), StaggerDecision::Reject);
         // A cut inside the free slots never shrinks them.
-        assert_eq!(compute_delay(&params, 2, 1, 1), StaggerDecision::Free);
-        assert_eq!(compute_delay(&params, 3, 1, 1), StaggerDecision::Reject);
+        assert_eq!(compute_delay(&params, 2, 1, 3), StaggerDecision::Free);
+        assert_eq!(compute_delay(&params, 3, 1, 3), StaggerDecision::Reject);
     }
 
     #[test]
@@ -635,37 +612,35 @@ mod tests {
         let params = StaggerParams {
             step: Duration::from_millis(250),
             max_delay: Duration::from_secs(2),
-            free_slots: 3,
         };
         // Free slots submit immediately; the first held slot waits one step.
-        assert_eq!(schedule_delay(&params, 0, 1), None);
-        assert_eq!(schedule_delay(&params, 2, 1), None);
+        assert_eq!(schedule_delay(&params, 0, 3), None);
+        assert_eq!(schedule_delay(&params, 2, 3), None);
         assert_eq!(
-            schedule_delay(&params, 3, 1),
+            schedule_delay(&params, 3, 3),
             Some(Duration::from_millis(250))
         );
         assert_eq!(
-            schedule_delay(&params, 4, 1),
+            schedule_delay(&params, 4, 3),
             Some(Duration::from_millis(500))
         );
         // 2s / 250ms = 8 firing steps: the last one fires exactly at max_delay, then the
         // schedule wraps instead of piling further slots onto the cap.
-        assert_eq!(schedule_delay(&params, 10, 1), Some(Duration::from_secs(2)));
+        assert_eq!(schedule_delay(&params, 10, 3), Some(Duration::from_secs(2)));
         assert_eq!(
-            schedule_delay(&params, 11, 1),
+            schedule_delay(&params, 11, 3),
             Some(Duration::from_millis(250))
         );
         assert_eq!(
-            schedule_delay(&params, 120, 1),
+            schedule_delay(&params, 120, 3),
             Some(Duration::from_millis(1500))
         );
-        // Paid amplification widens the free slots, and never narrows them.
+        // Paid amplification widens the free slots.
         assert_eq!(schedule_delay(&params, 4, 5), None);
         assert_eq!(
             schedule_delay(&params, 5, 5),
             Some(Duration::from_millis(250))
         );
-        assert_eq!(schedule_delay(&params, 2, 1), None);
     }
 
     #[test]
@@ -673,7 +648,6 @@ mod tests {
         let params = StaggerParams {
             step: Duration::from_millis(250),
             max_delay: Duration::from_secs(2),
-            free_slots: 3,
         };
         let firing_steps = 8u64; // 2s / 250ms
         // Every held slot waits at least one step and at most max_delay, and the
@@ -681,12 +655,12 @@ mod tests {
         // firing times instead of sharing the cap.
         let mut tail_delays = std::collections::HashSet::new();
         for slot in 3..200u64 {
-            let delay = schedule_delay(&params, slot, 1).unwrap();
+            let delay = schedule_delay(&params, slot, 3).unwrap();
             assert!(delay >= params.step, "slot {slot} waited {delay:?}");
             assert!(delay <= params.max_delay, "slot {slot} waited {delay:?}");
             assert_eq!(
                 delay,
-                schedule_delay(&params, slot + firing_steps, 1).unwrap(),
+                schedule_delay(&params, slot + firing_steps, 3).unwrap(),
                 "schedule does not cycle at slot {slot}"
             );
             if slot >= 3 + firing_steps {
@@ -703,7 +677,6 @@ mod tests {
         let degenerate = StaggerParams {
             step: Duration::from_secs(3),
             max_delay: Duration::from_secs(2),
-            free_slots: 1,
         };
         for slot in 1..10u64 {
             assert_eq!(
@@ -724,74 +697,53 @@ mod tests {
     }
 }
 
+/// Staggering through the pull-based transaction pool: entries are held inside the pool
+/// and skipped by `take()` until eligible.
 #[cfg(test)]
-mod adapter_tests {
+mod pool_tests {
     use std::num::NonZeroUsize;
     use std::sync::Arc;
-    use std::time::Instant;
 
-    use consensus_core::BlockStatus;
-    use consensus_types::block::BlockRef;
-    use parking_lot::Mutex;
+    use consensus_config::AuthorityIndex;
+    use consensus_core::TransactionPool as _;
+    use consensus_types::block::{BlockDigest, BlockRef};
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, SuiAddress};
     use sui_types::crypto::{AccountKeyPair, deterministic_random_account_key};
-    use sui_types::error::SuiResult;
-    use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
+    use sui_types::messages_consensus::ConsensusTransaction;
     use sui_types::object::Object;
-    use sui_types::transaction::VerifiedTransactionWithAliases;
+    use sui_types::transaction::MAX_UNPAID_ALLOWED_PROPOSERS;
 
     use super::*;
+    use crate::admission_queue::AdmissionQueueMetrics;
     use crate::authority::AuthorityState;
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use crate::consensus_adapter::consensus_tests::test_user_transaction;
-    use crate::consensus_adapter::{BlockStatusReceiver, ConsensusClient};
     use crate::consensus_handler::SequencedConsensusTransaction;
-    use crate::consensus_test_utils::make_consensus_adapter_with_client_for_test;
-    use crate::mock_consensus::with_block_status;
+    use crate::consensus_transaction_pool::ConsensusTransactionPool;
 
-    struct RecordingClient {
-        submit_times: Mutex<Vec<Instant>>,
+    /// Ten equal-stake members: the 40 % stake cut makes a proposer set of four slots,
+    /// three of them free at the reference gas price, so exactly slot 3 is held and
+    /// every later slot is rejected.
+    const COMMITTEE_SIZE: u32 = 10;
+    const HELD_SLOT: u64 = MAX_UNPAID_ALLOWED_PROPOSERS;
+
+    /// This validator's slot for a transaction or bundle paying with `gas`.
+    fn slot_for_gas(epoch_store: &AuthorityPerEpochStore, gas: &[ObjectID]) -> u64 {
+        let seed = stagger_seed(gas, &[], epoch_store.epoch());
+        stagger_slot(
+            &seed,
+            epoch_store.committee(),
+            epoch_store.own_committee_index().unwrap(),
+        )
     }
 
-    #[async_trait::async_trait]
-    impl ConsensusClient for RecordingClient {
-        async fn submit(
-            &self,
-            transactions: &[ConsensusTransaction],
-            epoch_store: &Arc<AuthorityPerEpochStore>,
-        ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
-            self.submit_times.lock().push(Instant::now());
-            // Mark the transactions processed so the adapter's processed-notify race
-            // resolves and the submission task completes.
-            let keys: Vec<_> = transactions
-                .iter()
-                .map(|t| SequencedConsensusTransaction::new_test(t.clone()).key())
-                .collect();
-            epoch_store.process_notifications(keys.iter());
-            let positions = (0..transactions.len())
-                .map(|index| ConsensusPosition {
-                    epoch: epoch_store.epoch(),
-                    index: index as u16,
-                    block: BlockRef::MIN,
-                })
-                .collect();
-            Ok((
-                positions,
-                with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
-            ))
-        }
-    }
-
-    pub(super) const COMMITTEE_SIZE: u32 = 4;
-
-    /// A 4-validator state, plus gas objects ground so that this validator's derived slot
-    /// for a transaction paying with `staggered_gas` is past slot 0 (i.e. the transaction
-    /// is held when staggering is active, since a reference-price transaction has exactly
-    /// one immediate slot), while a transaction paying with `immediate_gas` is not. The
-    /// remaining candidate objects (all owned by `sender`) are returned for tests that
-    /// need to grind their own picks.
-    pub(super) async fn setup() -> (
+    /// A state for one of `COMMITTEE_SIZE` validators, plus gas objects ground so that
+    /// its slot for a transaction paying with `staggered_gas` is the held slot, while a
+    /// transaction paying with `immediate_gas` lands in a free slot. The remaining
+    /// candidate objects (all owned by `sender`) are returned for tests that need to
+    /// grind their own picks.
+    async fn setup() -> (
         Arc<AuthorityState>,
         SuiAddress,
         AccountKeyPair,
@@ -800,7 +752,8 @@ mod adapter_tests {
         Vec<Object>,
     ) {
         let (sender, keypair) = deterministic_random_account_key();
-        let candidates: Vec<Object> = (0..32)
+        // Each pick has odds 1/COMMITTEE_SIZE per candidate; 128 make a miss negligible.
+        let candidates: Vec<Object> = (0..128)
             .map(|_| Object::with_id_owner_for_testing(ObjectID::random(), sender))
             .collect();
 
@@ -815,24 +768,16 @@ mod adapter_tests {
             .await;
 
         let epoch_store = state.epoch_store_for_testing();
-        let epoch = epoch_store.epoch();
-        let own_index = epoch_store.own_committee_index().unwrap();
-        let slot_of = |object: &Object| {
-            let seed = stagger_seed(&[object.id()], &[], epoch);
-            stagger_slot(&seed, epoch_store.committee(), own_index)
-        };
-        // With four equal members the proposer set is two slots (40 % of stake), so a
-        // held slot is exactly slot 1. 32 candidates make both picks overwhelmingly
-        // likely (miss odds ~(3/4)^32 each).
+        let slot_of = |object: &Object| slot_for_gas(&epoch_store, &[object.id()]);
         let staggered_gas = candidates
             .iter()
-            .find(|o| slot_of(o) == 1)
+            .find(|o| slot_of(o) == HELD_SLOT)
             .expect("no candidate gas object lands on the held slot")
             .clone();
         let immediate_gas = candidates
             .iter()
-            .find(|o| slot_of(o) == 0)
-            .expect("no candidate gas object lands first")
+            .find(|o| slot_of(o) < HELD_SLOT)
+            .expect("no candidate gas object lands in a free slot")
             .clone();
 
         (
@@ -844,146 +789,6 @@ mod adapter_tests {
             candidates,
         )
     }
-
-    async fn submit_and_wait(
-        adapter: &Arc<crate::consensus_adapter::ConsensusAdapter>,
-        state: &Arc<AuthorityState>,
-        transaction: VerifiedTransactionWithAliases,
-    ) -> Duration {
-        let epoch_store = state.epoch_store_for_testing();
-        let consensus_tx =
-            ConsensusTransaction::new_user_transaction_v2_message(&state.name, transaction.into());
-        let start = Instant::now();
-        let waiter = {
-            let guard = epoch_store.get_reconfig_state_read_lock_guard();
-            adapter
-                .submit(consensus_tx, Some(&guard), &epoch_store, None, None)
-                .unwrap()
-        };
-        waiter.await.unwrap();
-        start.elapsed()
-    }
-
-    #[tokio::test]
-    async fn staggered_submission_delays_held_slots_only() {
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
-            c.set_allowed_proposers_for_testing(true);
-            c
-        });
-        let (state, sender, keypair, staggered_gas, immediate_gas, _) = setup().await;
-
-        let client = Arc::new(RecordingClient {
-            submit_times: Mutex::new(vec![]),
-        });
-        let adapter = make_consensus_adapter_with_client_for_test(&state, client.clone(), 100);
-
-        const STEP: Duration = Duration::from_millis(1000);
-        let epoch_store = state.epoch_store_for_testing();
-        let staggered = epoch_store.staggered_submission();
-        staggered.set_params_for_testing(StaggerParams {
-            step: STEP,
-            max_delay: Duration::from_secs(10),
-            free_slots: 1,
-        });
-        staggered.set_active(true);
-
-        // Slot 0 for its gas object: submits immediately even while staggering is active.
-        let tx = test_user_transaction(&state, sender, &keypair, immediate_gas, vec![]).await;
-        let elapsed = submit_and_wait(&adapter, &state, tx).await;
-        assert_eq!(client.submit_times.lock().len(), 1);
-        assert!(elapsed < STEP, "immediate slot was delayed by {elapsed:?}");
-
-        // Past slot 0: held for at least one step.
-        let tx =
-            test_user_transaction(&state, sender, &keypair, staggered_gas.clone(), vec![]).await;
-        let elapsed = submit_and_wait(&adapter, &state, tx).await;
-        assert_eq!(client.submit_times.lock().len(), 2);
-        assert!(
-            elapsed >= STEP,
-            "held slot submitted after only {elapsed:?}"
-        );
-
-        // Inactive: the same held slot submits immediately. A new gas coin was created by
-        // the previous transfer, so reuse of the original gas object is fine: the previous
-        // transaction is already processed, but this one has a fresh digest.
-        staggered.set_active(false);
-        let gas = state.get_object(&staggered_gas.id()).unwrap();
-        let tx = test_user_transaction(&state, sender, &keypair, gas, vec![]).await;
-        let elapsed = submit_and_wait(&adapter, &state, tx).await;
-        assert_eq!(client.submit_times.lock().len(), 3);
-        assert!(elapsed < STEP, "inactive staggering delayed by {elapsed:?}");
-    }
-
-    #[tokio::test]
-    async fn held_submission_dropped_when_processed() {
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
-            c.set_allowed_proposers_for_testing(true);
-            c
-        });
-        let (state, sender, keypair, staggered_gas, _, _) = setup().await;
-        let epoch_store = state.epoch_store_for_testing();
-
-        let client = Arc::new(RecordingClient {
-            submit_times: Mutex::new(vec![]),
-        });
-        let adapter = make_consensus_adapter_with_client_for_test(&state, client.clone(), 100);
-
-        // A hold long enough that the test can only pass by cancellation.
-        let staggered = epoch_store.staggered_submission();
-        staggered.set_params_for_testing(StaggerParams {
-            step: Duration::from_secs(60),
-            max_delay: Duration::from_secs(60),
-            free_slots: 1,
-        });
-        staggered.set_active(true);
-
-        let tx = test_user_transaction(&state, sender, &keypair, staggered_gas, vec![]).await;
-        let consensus_tx =
-            ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx.into());
-        let key = SequencedConsensusTransaction::new_test(consensus_tx.clone()).key();
-
-        let waiter = adapter
-            .submit(
-                consensus_tx,
-                Some(&epoch_store.get_reconfig_state_read_lock_guard()),
-                &epoch_store,
-                None,
-                None,
-            )
-            .unwrap();
-
-        // While the transaction is held, another validator's copy commits.
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        epoch_store.process_notifications(std::iter::once(&key));
-
-        waiter.await.unwrap();
-        assert!(
-            client.submit_times.lock().is_empty(),
-            "held submission should have been dropped, not submitted"
-        );
-    }
-}
-
-/// Staggering through the pull-based transaction pool: entries are held inside the pool
-/// and skipped by `take()` until eligible, rather than delayed before submission.
-#[cfg(test)]
-mod pool_tests {
-    use std::sync::Arc;
-
-    use consensus_config::AuthorityIndex;
-    use consensus_core::TransactionPool as _;
-    use consensus_types::block::{BlockDigest, BlockRef};
-    use sui_protocol_config::ProtocolConfig;
-    use sui_types::messages_consensus::ConsensusTransaction;
-    use sui_types::object::Object;
-
-    use super::adapter_tests::setup;
-    use super::*;
-    use crate::admission_queue::AdmissionQueueMetrics;
-    use crate::authority::AuthorityState;
-    use crate::consensus_adapter::consensus_tests::test_user_transaction;
-    use crate::consensus_handler::SequencedConsensusTransaction;
-    use crate::consensus_transaction_pool::ConsensusTransactionPool;
 
     fn pool_for(state: &Arc<AuthorityState>) -> Arc<ConsensusTransactionPool> {
         Arc::new(ConsensusTransactionPool::new_for_tests(
@@ -1028,19 +833,12 @@ mod pool_tests {
         staggered.set_params_for_testing(StaggerParams {
             step: Duration::from_secs(60),
             max_delay: Duration::from_secs(60),
-            free_slots: 1,
         });
         staggered.set_active(true);
 
-        let epoch = epoch_store.epoch();
-        let own_index = epoch_store.own_committee_index().unwrap();
         let mut held_gas = candidates
             .iter()
-            .filter(|object| object.id() != immediate_gas.id())
-            .filter(|object| {
-                let seed = stagger_seed(&[object.id()], &[], epoch);
-                stagger_slot(&seed, epoch_store.committee(), own_index) == 1
-            })
+            .filter(|object| slot_for_gas(&epoch_store, &[object.id()]) == HELD_SLOT)
             .cloned();
 
         // Fill the quota with held entries.
@@ -1088,7 +886,6 @@ mod pool_tests {
         staggered.set_params_for_testing(StaggerParams {
             step: Duration::from_millis(250),
             max_delay: Duration::from_millis(500),
-            free_slots: 1,
         });
         staggered.set_active(true);
 
@@ -1123,7 +920,6 @@ mod pool_tests {
         staggered.set_params_for_testing(StaggerParams {
             step: Duration::from_secs(60),
             max_delay: Duration::from_secs(60),
-            free_slots: 1,
         });
         staggered.set_active(true);
 
@@ -1162,7 +958,6 @@ mod pool_tests {
         staggered.set_params_for_testing(StaggerParams {
             step: Duration::from_secs(60),
             max_delay: Duration::from_secs(60),
-            free_slots: 1,
         });
         staggered.set_active(true);
 
@@ -1199,23 +994,19 @@ mod pool_tests {
         staggered.set_params_for_testing(StaggerParams {
             step: Duration::from_millis(250),
             max_delay: Duration::from_millis(500),
-            free_slots: 1,
         });
         staggered.set_active(true);
 
         // A soft bundle's slot derives from the union of its members' gas objects:
         // grind a companion so the bundle is held even though one member would land
         // first on its own. Soft bundles are external fan-out and must not bypass the hold.
-        let epoch = epoch_store.epoch();
-        let own_index = epoch_store.own_committee_index().unwrap();
         let companion = candidates
             .iter()
             .filter(|object| object.id() != immediate_gas.id())
             .find(|object| {
-                let seed = stagger_seed(&[immediate_gas.id(), object.id()], &[], epoch);
-                stagger_slot(&seed, epoch_store.committee(), own_index) == 1
+                slot_for_gas(&epoch_store, &[immediate_gas.id(), object.id()]) == HELD_SLOT
             })
-            .expect("no companion makes the bundle land past slot 0")
+            .expect("no companion makes the bundle land on the held slot")
             .clone();
 
         let tx_a = test_user_transaction(&state, sender, &keypair, immediate_gas, vec![]).await;
@@ -1244,5 +1035,46 @@ mod pool_tests {
         // The dropped ack requeues the bundle; close() resolves it before the pool drops.
         drop(ack);
         pool.close();
+    }
+
+    #[tokio::test]
+    async fn slot_past_the_proposer_set_rejected() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+            c.set_allowed_proposers_for_testing(true);
+            c
+        });
+        let (state, sender, keypair, _, _, candidates) = setup().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let pool = Arc::new(ConsensusTransactionPool::new_for_tests(
+            epoch_store.clone(),
+            10,
+            metrics.clone(),
+        ));
+        epoch_store.staggered_submission().set_active(true);
+
+        // Past the proposer set: rejected at insert, before the quota or the pool are
+        // touched, with the error that sends the client on to a proposer.
+        let gas = candidates
+            .iter()
+            .find(|object| slot_for_gas(&epoch_store, &[object.id()]) > HELD_SLOT)
+            .expect("no candidate gas object lands past the proposer set")
+            .clone();
+        let tx = test_user_transaction(&state, sender, &keypair, gas, vec![]).await;
+        let consensus_tx =
+            ConsensusTransaction::new_user_transaction_v2_message(&state.name, tx.into());
+        let error = pool
+            .try_insert(pool.epoch(), 1, vec![consensus_tx])
+            .unwrap_err();
+        assert!(
+            matches!(
+                error.as_inner(),
+                SuiErrorKind::StaggeredSubmissionNotProposer
+            ),
+            "unexpected rejection error: {error}"
+        );
+        assert_eq!(metrics.pool_staggered_rejected.get(), 1);
+        assert_eq!(metrics.pool_staggered_held.get(), 0);
+        assert_eq!(pool.queue_depth("user"), 0);
     }
 }
