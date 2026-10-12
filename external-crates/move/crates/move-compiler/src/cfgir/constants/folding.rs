@@ -16,6 +16,7 @@ use crate::{
             ConstantEntry, ConstantId, ConstantValues, Constants, unfoldable_constant_use_error,
         },
         translate::{Context as CfgirContext, lower_body_to_cfg, move_value_from_value},
+        visitor::CFGIRMutVisitorContext,
     },
     diag,
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
@@ -456,55 +457,28 @@ fn verify_and_optimize(
 /// Replaces each use of a folded constant with its value. The optimizer only inlines values it
 /// can fold into an enclosing expression, but a constant body must reduce to a single value.
 fn inline_constant_values(values: &ConstantValues, cfg: &mut MutForwardCFG) {
-    fn command_exps_mut(cmd_: &mut H::Command_) -> Vec<&mut H::Exp> {
-        use H::Command_ as C;
+    struct Inliner<'a>(&'a ConstantValues);
 
-        match cmd_ {
-            C::IgnoreAndPop { exp, .. }
-            | C::Return { exp, .. }
-            | C::Abort(_, exp)
-            | C::Assign(_, _, exp)
-            | C::JumpIf { cond: exp, .. }
-            | C::VariantSwitch { subject: exp, .. } => vec![exp],
-            C::Mutate(lhs, rhs) => vec![lhs, rhs],
-            C::Break(_) | C::Continue(_) | C::Jump { .. } => vec![],
-        }
-    }
+    impl CFGIRMutVisitorContext for Inliner<'_> {
+        fn push_warning_filter_scope(&mut self, _filters: FilterScope) {}
 
-    for block in cfg.blocks_mut().values_mut() {
-        for sp!(_, cmd_) in block.iter_mut() {
-            for e in command_exps_mut(cmd_) {
-                inline_constant_values_exp(values, e);
-            }
-        }
-    }
-}
+        fn pop_warning_filter_scope(&mut self) {}
 
-#[growing_stack]
-fn inline_constant_values_exp(values: &ConstantValues, e: &mut H::Exp) {
-    use H::UnannotatedExp_ as E;
-
-    match &mut e.exp.value {
-        e_ @ E::Constant(_, _) => {
-            let E::Constant(m, c) = e_ else {
-                unreachable!()
+        fn visit_exp_custom(&mut self, e: &mut H::Exp) -> bool {
+            use H::UnannotatedExp_ as E;
+            let E::Constant(m, c) = e.exp.value else {
+                return false;
             };
-            if let Some(value) = values.get(&(*m, *c)) {
-                *e_ = E::Value(value.clone());
+            if let Some(value) = self.0.get(&(m, c)) {
+                e.exp.value = E::Value(value.clone());
             }
+            true
         }
-        E::UnaryExp(_, base) | E::Cast(base, _) => inline_constant_values_exp(values, base),
-        E::BinopExp(lhs, _, rhs) => {
-            inline_constant_values_exp(values, lhs);
-            inline_constant_values_exp(values, rhs)
-        }
-        E::Vector(_, _, _, args) | E::Multiple(args) => {
-            for arg in args {
-                inline_constant_values_exp(values, arg);
-            }
-        }
-        // other forms cannot appear in constant bodies
-        _ => (),
+    }
+
+    let mut inliner = Inliner(values);
+    for (lbl, block) in cfg.blocks_mut() {
+        inliner.visit_block(*lbl, block);
     }
 }
 

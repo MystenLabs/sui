@@ -111,7 +111,7 @@ pub trait CFGIRVisitorContext {
         }
     }
 
-    // TODO  type visiting
+    // TODO type visiting
 
     fn visit_struct_custom(
         &mut self,
@@ -397,6 +397,306 @@ macro_rules! simple_visitor {
     }
 }
 pub(crate) use simple_visitor;
+
+//**************************************************************************************************
+// CFGIR mut visitor
+//**************************************************************************************************
+
+pub trait CFGIRMutVisitor: Send + Sync {
+    fn visit(
+        &self,
+        env: &CompilationEnv,
+        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &mut G::Program,
+    );
+}
+
+pub trait CFGIRMutVisitorConstructor: Send + Sync {
+    type Context<'a>: Sized + CFGIRMutVisitorContext;
+
+    fn context<'a>(
+        env: &'a CompilationEnv,
+        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &G::Program,
+    ) -> Self::Context<'a>;
+
+    fn visit(
+        env: &CompilationEnv,
+        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &mut G::Program,
+    ) {
+        let mut context = Self::context(env, pre_compiled_program, program);
+        context.visit(program);
+    }
+}
+
+pub trait CFGIRMutVisitorContext {
+    fn push_warning_filter_scope(&mut self, filters: FilterScope);
+    fn pop_warning_filter_scope(&mut self);
+
+    fn visit_module_custom(
+        &mut self,
+        _ident: ModuleIdent,
+        _mdef: &mut G::ModuleDefinition,
+    ) -> bool {
+        false
+    }
+
+    /// By default, the visitor will visit all all expressions in all functions in all modules. A
+    /// custom version should of this function should be created if different type of analysis is
+    /// required.
+    fn visit(&mut self, program: &mut G::Program) {
+        for (mident, mdef) in program.modules.key_cloned_iter_mut() {
+            self.push_warning_filter_scope(mdef.warning_filter.clone());
+            if self.visit_module_custom(mident, mdef) {
+                self.pop_warning_filter_scope();
+                continue;
+            }
+
+            for (struct_name, sdef) in mdef.structs.key_cloned_iter_mut() {
+                self.visit_struct(mident, struct_name, sdef)
+            }
+            for (enum_name, edef) in mdef.enums.key_cloned_iter_mut() {
+                self.visit_enum(mident, enum_name, edef)
+            }
+            for (constant_name, cdef) in mdef.constants.key_cloned_iter_mut() {
+                self.visit_constant(mident, constant_name, cdef)
+            }
+            for (function_name, fdef) in mdef.functions.key_cloned_iter_mut() {
+                self.visit_function(mident, function_name, fdef)
+            }
+
+            self.pop_warning_filter_scope();
+        }
+    }
+
+    // TODO type visiting
+
+    fn visit_struct_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _struct_name: DatatypeName,
+        _sdef: &mut H::StructDefinition,
+    ) -> bool {
+        false
+    }
+    fn visit_struct(
+        &mut self,
+        module: ModuleIdent,
+        struct_name: DatatypeName,
+        sdef: &mut H::StructDefinition,
+    ) {
+        self.push_warning_filter_scope(sdef.warning_filter.clone());
+        if self.visit_struct_custom(module, struct_name, sdef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        self.pop_warning_filter_scope();
+    }
+
+    fn visit_enum_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _enum_name: DatatypeName,
+        _edef: &mut H::EnumDefinition,
+    ) -> bool {
+        false
+    }
+    fn visit_enum(
+        &mut self,
+        module: ModuleIdent,
+        enum_name: DatatypeName,
+        edef: &mut H::EnumDefinition,
+    ) {
+        self.push_warning_filter_scope(edef.warning_filter.clone());
+        if self.visit_enum_custom(module, enum_name, edef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        self.pop_warning_filter_scope();
+    }
+
+    fn visit_constant_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _constant_name: ConstantName,
+        _cdef: &mut G::Constant,
+    ) -> bool {
+        false
+    }
+    fn visit_constant(
+        &mut self,
+        module: ModuleIdent,
+        constant_name: ConstantName,
+        cdef: &mut G::Constant,
+    ) {
+        self.push_warning_filter_scope(cdef.warning_filter.clone());
+        if self.visit_constant_custom(module, constant_name, cdef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        self.pop_warning_filter_scope();
+    }
+
+    fn visit_function_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _function_name: FunctionName,
+        _fdef: &mut G::Function,
+    ) -> bool {
+        false
+    }
+    fn visit_function(
+        &mut self,
+        module: ModuleIdent,
+        function_name: FunctionName,
+        fdef: &mut G::Function,
+    ) {
+        self.push_warning_filter_scope(fdef.warning_filter.clone());
+        if self.visit_function_custom(module, function_name, fdef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        if let G::FunctionBody_::Defined {
+            locals: _,
+            start: _,
+            block_info: _,
+            blocks,
+        } = &mut fdef.body.value
+        {
+            for (lbl, block) in blocks {
+                self.visit_block(*lbl, block);
+            }
+        }
+        self.pop_warning_filter_scope();
+    }
+
+    fn visit_block_custom(&mut self, _lbl: Label, _block: &mut G::BasicBlock) -> bool {
+        false
+    }
+    fn visit_block(&mut self, lbl: Label, block: &mut G::BasicBlock) {
+        if self.visit_block_custom(lbl, block) {
+            return;
+        }
+        for cmd in block {
+            self.visit_command(cmd)
+        }
+    }
+
+    fn visit_command_custom(&mut self, _cmd: &mut H::Command) -> bool {
+        false
+    }
+    fn visit_command(&mut self, cmd: &mut H::Command) {
+        use H::Command_ as C;
+        if self.visit_command_custom(cmd) {
+            return;
+        }
+        match &mut cmd.value {
+            C::Assign(_, _, e)
+            | C::Abort(_, e)
+            | C::Return { exp: e, .. }
+            | C::IgnoreAndPop { exp: e, .. }
+            | C::JumpIf { cond: e, .. }
+            | C::VariantSwitch { subject: e, .. } => {
+                self.visit_exp(e);
+            }
+            C::Mutate(el, er) => {
+                self.visit_exp(el);
+                self.visit_exp(er);
+            }
+            C::Jump { .. } => (),
+            C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
+        }
+    }
+
+    fn visit_exp_custom(&mut self, _e: &mut H::Exp) -> bool {
+        false
+    }
+    #[growing_stack]
+    fn visit_exp(&mut self, e: &mut H::Exp) {
+        use H::UnannotatedExp_ as E;
+        if self.visit_exp_custom(e) {
+            return;
+        }
+        match &mut e.exp.value {
+            E::Unit { .. }
+            | E::Move { .. }
+            | E::Copy { .. }
+            | E::Constant(_, _)
+            | E::ErrorConstant { .. }
+            | E::BorrowLocal(_, _)
+            | E::Unreachable
+            | E::UnresolvedError => (),
+
+            E::Value(v) => self.visit_value(v),
+
+            E::Freeze(e)
+            | E::Dereference(e)
+            | E::UnaryExp(_, e)
+            | E::Borrow(_, e, _, _)
+            | E::Cast(e, _) => self.visit_exp(e),
+
+            E::BinopExp(el, _, er) => {
+                self.visit_exp(el);
+                self.visit_exp(er);
+            }
+
+            E::ModuleCall(m) => {
+                for arg in &mut m.arguments {
+                    self.visit_exp(arg)
+                }
+            }
+            E::Vector(_, _, _, es) | E::Multiple(es) => {
+                for e in es {
+                    self.visit_exp(e)
+                }
+            }
+
+            E::Pack(_, _, es) | E::PackVariant(_, _, _, es) => {
+                for (_, _, e) in es {
+                    self.visit_exp(e)
+                }
+            }
+        }
+    }
+
+    fn visit_value_custom(&mut self, _v: &mut H::Value) -> bool {
+        false
+    }
+    #[growing_stack]
+    fn visit_value(&mut self, v: &mut H::Value) {
+        use H::Value_ as V;
+        if self.visit_value_custom(v) {
+            return;
+        }
+        match &mut v.value {
+            V::Address(_)
+            | V::U8(_)
+            | V::U16(_)
+            | V::U32(_)
+            | V::U64(_)
+            | V::U128(_)
+            | V::U256(_)
+            | V::Bool(_) => (),
+            V::Vector(_, vs) => {
+                for v in vs {
+                    self.visit_value(v)
+                }
+            }
+        }
+    }
+}
+
+impl<V: CFGIRMutVisitorConstructor> CFGIRMutVisitor for V {
+    fn visit(
+        &self,
+        env: &CompilationEnv,
+        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+        program: &mut G::Program,
+    ) {
+        Self::visit(env, pre_compiled_program, program)
+    }
+}
 
 //**************************************************************************************************
 // simple absint visitor

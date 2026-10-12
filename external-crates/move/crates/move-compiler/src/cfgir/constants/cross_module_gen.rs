@@ -4,16 +4,17 @@
 //! Rewrites a module's cross-module constant uses into uses of module-local copies, synthesized
 //! on demand from the values `folding` computed.
 
-// TODO(cross-module-constants): the walker below is a hand-rolled mutable HLIR walker; there is no
-// mutable HLIR visitor today. Consider a shared walker if another one appears.
-
 use crate::{
     cfgir::{
         ast as G,
         constants::{ConstantEntry, ConstantId, Constants, unfoldable_constant_use_error},
         translate::{Context as CfgirContext, move_value_from_value},
+        visitor::CFGIRMutVisitorContext,
     },
-    diagnostics::{Diagnostic, DiagnosticReporter, filter::empty_filter_scope},
+    diagnostics::{
+        Diagnostic, DiagnosticReporter,
+        filter::{FilterScope, empty_filter_scope},
+    },
     expansion::ast::{Address, ModuleIdent},
     hlir::{ast as H, translate::NEW_NAME_DELIM},
     ice, ice_assert,
@@ -22,7 +23,6 @@ use crate::{
 };
 
 use move_ir_types::location::*;
-use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 
 use std::collections::BTreeMap;
@@ -200,16 +200,8 @@ pub(crate) fn module(
 ) {
     let mut ctxt = Context::new(context, constants, module, module_constants);
 
-    for (_, _, fdef) in functions.iter_mut() {
-        let G::FunctionBody_::Defined { blocks, .. } = &mut fdef.body.value else {
-            continue;
-        };
-
-        for block in blocks.values_mut() {
-            for cmd in block.iter_mut() {
-                command(&mut ctxt, cmd);
-            }
-        }
+    for (name, fdef) in functions.key_cloned_iter_mut() {
+        ctxt.visit_function(module, name, fdef);
     }
 
     for (name, cdef) in ctxt.into_copies() {
@@ -219,85 +211,33 @@ pub(crate) fn module(
     }
 }
 
-fn command(ctxt: &mut Context, sp!(_, cmd_): &mut H::Command) {
-    use H::Command_ as C;
+impl CFGIRMutVisitorContext for Context<'_, '_> {
+    fn push_warning_filter_scope(&mut self, _filters: FilterScope) {}
 
-    match cmd_ {
-        C::IgnoreAndPop { exp: e, .. }
-        | C::Return { exp: e, .. }
-        | C::Abort(_, e)
-        | C::Assign(_, _, e)
-        | C::JumpIf { cond: e, .. }
-        | C::VariantSwitch { subject: e, .. } => exp(ctxt, e),
-        C::Mutate(lhs, rhs) => {
-            exp(ctxt, lhs);
-            exp(ctxt, rhs)
-        }
-        C::Break(_) | C::Continue(_) | C::Jump { .. } => (),
-    }
-}
+    fn pop_warning_filter_scope(&mut self) {}
 
-#[growing_stack]
-fn exp(ctxt: &mut Context, e: &mut H::Exp) {
-    use H::UnannotatedExp_ as E;
+    fn visit_exp_custom(&mut self, e: &mut H::Exp) -> bool {
+        use H::UnannotatedExp_ as E;
 
-    let eloc = e.exp.loc;
-
-    match &mut e.exp.value {
-        e_ @ E::Constant(_, _) => {
-            let E::Constant(m, c) = e_ else {
-                unreachable!()
-            };
-            let (m, c) = (*m, *c);
-            if m == ctxt.module {
-                return;
-            }
-            if let Some(copy_name) = ctxt.constant_copy(m, c, eloc) {
-                *e_ = E::Constant(ctxt.module, copy_name);
-            } else {
-                // an error was reported at the constant's definition, at this use, or by typing
-                ice_assert!(
-                    ctxt.reporter(),
-                    ctxt.has_errors(),
-                    eloc,
-                    "cross-module constant use failed to resolve to a module-local copy"
-                );
-                *e_ = E::UnresolvedError;
-            }
+        let eloc = e.exp.loc;
+        let E::Constant(m, c) = e.exp.value else {
+            return false;
+        };
+        if m == self.module {
+            return true;
         }
-
-        E::Unit { .. }
-        | E::Value(_)
-        | E::Move { .. }
-        | E::Copy { .. }
-        | E::ErrorConstant { .. }
-        | E::BorrowLocal(_, _)
-        | E::UnresolvedError
-        | E::Unreachable => (),
-
-        E::ModuleCall(mcall) => {
-            for arg in &mut mcall.arguments {
-                exp(ctxt, arg);
-            }
+        if let Some(copy_name) = self.constant_copy(m, c, eloc) {
+            e.exp.value = E::Constant(self.module, copy_name);
+        } else {
+            // an error was reported at the constant's definition, at this use, or by typing
+            ice_assert!(
+                self.reporter(),
+                self.has_errors(),
+                eloc,
+                "cross-module constant use failed to resolve to a module-local copy"
+            );
+            e.exp.value = E::UnresolvedError;
         }
-        E::Freeze(base)
-        | E::Dereference(base)
-        | E::UnaryExp(_, base)
-        | E::Cast(base, _)
-        | E::Borrow(_, base, _, _) => exp(ctxt, base),
-        E::BinopExp(lhs, _, rhs) => {
-            exp(ctxt, lhs);
-            exp(ctxt, rhs)
-        }
-        E::Pack(_, _, fields) | E::PackVariant(_, _, _, fields) => {
-            for (_, _, fe) in fields {
-                exp(ctxt, fe);
-            }
-        }
-        E::Vector(_, _, _, args) | E::Multiple(args) => {
-            for arg in args {
-                exp(ctxt, arg);
-            }
-        }
+        true
     }
 }
