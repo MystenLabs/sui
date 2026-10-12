@@ -361,6 +361,7 @@ impl ConsensusTransactionPool {
             stagger_quota: StaggerQuota::new(
                 max_pending_transactions,
                 metrics.pool_staggered_held.clone(),
+                metrics.pool_staggered_rejected.clone(),
             ),
             inner: Arc::new(Mutex::new(Inner::Open(Pool {
                 user: UserLane::Open(PriorityAdmissionQueue::new(
