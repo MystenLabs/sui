@@ -8,6 +8,10 @@ import { client } from './client.js';
 import { UNDERLYING } from './config.js';
 import { admissibleStrike, tradeableMarket } from './markets.js';
 
+// The immediate path, like `mint.ts`: before the delayed-execution cutover
+// only. On a network past it, plan a range mint with the same descriptor through
+// `read.planMint` and `tx.enqueuePlan`, as `queue-mint.ts` does.
+//
 // A range position pays out when settlement lands inside `(lower, upper]`, which
 // is left-open and right-closed. Both bounds are finite numeric strikes, so both
 // must sit on the market's admission grid. There is no `strike` field on the

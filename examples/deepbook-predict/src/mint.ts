@@ -8,6 +8,12 @@ import { client } from './client.js';
 import { UNDERLYING } from './config.js';
 import { admissibleStrike, tradeableMarket } from './markets.js';
 
+// This is the immediate mint, which fills inside the trader's own transaction.
+// It runs only on a network before the delayed-execution cutover. From Predict
+// protocol version 4 it aborts with `EDelayedExecutionRequired`, and a mint is a
+// queued order instead: see `queue-mint.ts`. Branch on
+// `client.predict.read.executionMode()` rather than on the network name.
+//
 // Quote, then mint with a cap derived from the quote.
 //
 // Both caps are optional, and omitting them is not a safe default: the SDK sends

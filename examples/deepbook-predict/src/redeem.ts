@@ -14,6 +14,12 @@ import type { Transaction } from '@mysten/sui/transactions';
 import { client } from './client.js';
 import { UNDERLYING } from './config.js';
 
+// `closeLive` is the immediate close, before the delayed-execution cutover only.
+// From Predict protocol version 4, `redeem_live` aborts with
+// `EDelayedExecutionRequired`. A position held in the account then has no early
+// exit and is paid at settlement through `claimSettled`, and a queued fill is an
+// Open record in the market's queue, which `queue-sell.ts` sells.
+//
 // Close part or all of a live position. Reuse the descriptor the position was
 // minted with: the close needs it only to resolve the market object, and the
 // order ID identifies the position itself.
