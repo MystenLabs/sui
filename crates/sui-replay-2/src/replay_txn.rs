@@ -24,11 +24,14 @@ use sui_data_store::{
 };
 use sui_types::TypeTag;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    accumulator_root::{AccumulatorObjId, UnsettledObjectFundsRead},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     digests::TransactionDigest,
     effects::{
         InputConsensusObject, TransactionEffects, TransactionEffectsAPI, UnchangedConsensusKind,
     },
+    funds_accumulator::is_object_funds_insufficient_abort,
     object::Object,
     transaction::{
         CallArg, Command, GasData, InputObjects, ObjectArg, TransactionData, TransactionDataAPI,
@@ -101,6 +104,105 @@ pub struct ReplayTransaction {
     pub executor: ReplayExecutor,
     // Objects and packages used by the transaction
     pub object_cache: BTreeMap<ObjectID, BTreeMap<ObjectVersion, Object>>,
+    pub unsettled_object_funds: UnsettledObjectFunds,
+}
+
+/// Object-funds withdrawals that earlier transactions in the same checkpoint had accumulated at
+/// the replayed transaction's accumulator version, as the executor saw them on chain.
+///
+/// Reconstructed only when the transaction aborted for insufficient object funds. An empty view
+/// can only make a balance look larger than it was on chain, and the in-execution check has no
+/// other observable effect than that abort, so every other transaction replays to the same
+/// effects without it.
+pub struct UnsettledObjectFunds {
+    accumulator_version: Option<SequenceNumber>,
+    withdraws: BTreeMap<AccumulatorObjId, u128>,
+}
+
+impl UnsettledObjectFundsRead for UnsettledObjectFunds {
+    fn get_unsettled_object_withdraw(
+        &self,
+        account: &AccumulatorObjId,
+        accumulator_version: SequenceNumber,
+    ) -> u128 {
+        if Some(accumulator_version) != self.accumulator_version {
+            return 0;
+        }
+        self.withdraws.get(account).copied().unwrap_or(0)
+    }
+}
+
+impl UnsettledObjectFunds {
+    fn empty() -> Self {
+        Self {
+            accumulator_version: None,
+            withdraws: BTreeMap::new(),
+        }
+    }
+
+    fn load(
+        digest: &TransactionDigest,
+        effects: &TransactionEffects,
+        checkpoint: u64,
+        txn_store: &dyn TransactionStore,
+    ) -> Result<Self, Error> {
+        let ExecutionStatus::Failure(failure) = effects.status() else {
+            return Ok(Self::empty());
+        };
+        if !is_object_funds_insufficient_abort(&failure.error) {
+            return Ok(Self::empty());
+        }
+        let accumulator_version = accumulator_root_version(effects).ok_or_else(|| {
+            anyhow!(
+                "Transaction {digest} aborted for insufficient object funds without reading the accumulator root"
+            )
+        })?;
+        let digests = txn_store
+            .checkpoint_transaction_digests(checkpoint)?
+            .ok_or_else(|| anyhow!("Checkpoint {checkpoint} not found"))?;
+        let digest_str = digest.to_string();
+        let position = digests
+            .iter()
+            .position(|d| *d == digest_str)
+            .ok_or_else(|| anyhow!("Transaction {digest} not found in checkpoint {checkpoint}"))?;
+
+        let mut withdraws: BTreeMap<AccumulatorObjId, u128> = BTreeMap::new();
+        for earlier in &digests[..position] {
+            let info = txn_store
+                .transaction_data_and_effects(earlier)?
+                .ok_or_else(|| {
+                    anyhow!("Transaction {earlier} of checkpoint {checkpoint} not found")
+                })?;
+            // Failed transactions settle nothing, and a transaction at another accumulator
+            // version settles into a balance this transaction never read.
+            if info.effects.status().is_err()
+                || accumulator_root_version(&info.effects) != Some(accumulator_version)
+            {
+                continue;
+            }
+            // Address-funds withdrawals are folded in as well. They key by address, which the
+            // object-funds check never queries, so they cannot change a result.
+            for event in info.effects.accumulator_events() {
+                if let Some(amount) = event.write.get_fund_withdraw_amount() {
+                    *withdraws.entry(event.accumulator_obj).or_default() += amount;
+                }
+            }
+        }
+        Ok(Self {
+            accumulator_version: Some(accumulator_version),
+            withdraws,
+        })
+    }
+}
+
+fn accumulator_root_version(effects: &TransactionEffects) -> Option<SequenceNumber> {
+    effects
+        .accessed_consensus_objects()
+        .into_iter()
+        .find_map(|object| {
+            let (id, version) = object.id_and_version();
+            (id == SUI_ACCUMULATOR_ROOT_OBJECT_ID && !version.is_cancelled()).then_some(version)
+        })
 }
 
 //
@@ -307,6 +409,8 @@ impl ReplayTransaction {
         //
         // load all objects and packages used by the transaction
         let object_cache = load_transaction_objects(&txn_data, &effects, checkpoint, object_store)?;
+        let unsettled_object_funds =
+            UnsettledObjectFunds::load(&digest, &effects, checkpoint, txn_store)?;
 
         //
         // get or create the executor for this epoch
@@ -322,6 +426,7 @@ impl ReplayTransaction {
             effects,
             executor,
             object_cache,
+            unsettled_object_funds,
         })
     }
 
@@ -748,5 +853,199 @@ fn is_early_execution_error(status: &ExecutionStatus) -> bool {
                 | ExecutionErrorKind::InsufficientFundsForWithdraw
         ),
         ExecutionStatus::Success => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use move_core_types::language_storage::ModuleId;
+    use sui_data_store::{Node, TransactionInfo, TransactionStoreWriter, stores::InMemoryStore};
+    use sui_types::{
+        SUI_FRAMEWORK_ADDRESS,
+        accumulator_event::AccumulatorEvent,
+        accumulator_root::AccumulatorValue,
+        balance::Balance,
+        base_types::random_object_ref,
+        effects::{
+            AccumulatorAddress, AccumulatorOperation, AccumulatorValue as WriteValue,
+            AccumulatorWriteV1, TestEffectsBuilder,
+        },
+        execution_status::MoveLocation,
+        funds_accumulator::{E_OBJECT_FUNDS_INSUFFICIENT, FUNDS_ACCUMULATOR_MODULE_NAME},
+        gas_coin::GAS,
+        transaction::{ProgrammableTransaction, SenderSignedData},
+    };
+
+    const CHECKPOINT: u64 = 7;
+
+    fn root_version(version: u64) -> SequenceNumber {
+        SequenceNumber::from_u64(version)
+    }
+
+    fn account(owner: SuiAddress) -> AccumulatorObjId {
+        AccumulatorValue::get_field_id(owner, &Balance::type_tag(GAS::type_tag())).unwrap()
+    }
+
+    fn withdraw_event(owner: SuiAddress, amount: u64) -> AccumulatorEvent {
+        AccumulatorEvent::new(
+            account(owner),
+            AccumulatorWriteV1 {
+                address: AccumulatorAddress::new(owner, Balance::type_tag(GAS::type_tag())),
+                operation: AccumulatorOperation::Split,
+                value: WriteValue::Integer(amount),
+            },
+        )
+    }
+
+    fn insufficient_funds_abort() -> ExecutionStatus {
+        ExecutionStatus::Failure(ExecutionFailure::new(
+            ExecutionErrorKind::MoveAbort(
+                MoveLocation {
+                    module: ModuleId::new(
+                        SUI_FRAMEWORK_ADDRESS,
+                        FUNDS_ACCUMULATOR_MODULE_NAME.to_owned(),
+                    ),
+                    function: 0,
+                    instruction: 0,
+                    function_name: None,
+                },
+                E_OBJECT_FUNDS_INSUFFICIENT,
+            ),
+            Some(0),
+        ))
+    }
+
+    /// A transaction that read the accumulator root at `version`, if any, with the given status
+    /// and accumulator events.
+    fn transaction(
+        version: Option<u64>,
+        status: ExecutionStatus,
+        events: Vec<AccumulatorEvent>,
+    ) -> TransactionInfo {
+        let sender = SuiAddress::random_for_testing_only();
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![random_object_ref()],
+            ProgrammableTransaction {
+                inputs: vec![],
+                commands: vec![],
+            },
+            1_000_000,
+            1,
+        );
+        let mut builder = TestEffectsBuilder::new(&SenderSignedData::new(data.clone(), vec![]))
+            .with_status(status)
+            .with_accumulator_events(events);
+        if let Some(version) = version {
+            builder = builder.with_shared_input_versions(BTreeMap::from([(
+                SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                root_version(version),
+            )]));
+        }
+        TransactionInfo {
+            data,
+            effects: builder.build(),
+            checkpoint: CHECKPOINT,
+        }
+    }
+
+    fn checkpoint_store(transactions: &[TransactionInfo]) -> InMemoryStore {
+        let store = InMemoryStore::new(Node::Mainnet);
+        let mut digests = Vec::new();
+        for info in transactions {
+            let digest = info.data.digest().to_string();
+            store.write_transaction(&digest, info.clone()).unwrap();
+            digests.push(digest);
+        }
+        store
+            .write_checkpoint_transaction_digests(CHECKPOINT, digests)
+            .unwrap();
+        store
+    }
+
+    fn load(info: &TransactionInfo, store: &InMemoryStore) -> Result<UnsettledObjectFunds> {
+        UnsettledObjectFunds::load(&info.data.digest(), &info.effects, CHECKPOINT, store)
+    }
+
+    #[test]
+    fn folds_earlier_withdrawals_at_the_same_version() {
+        let drained = SuiAddress::random_for_testing_only();
+        let other = SuiAddress::random_for_testing_only();
+        let transactions = vec![
+            transaction(
+                Some(5),
+                ExecutionStatus::Success,
+                vec![withdraw_event(drained, 80)],
+            ),
+            transaction(
+                Some(5),
+                ExecutionStatus::Success,
+                vec![withdraw_event(drained, 20), withdraw_event(other, 7)],
+            ),
+            // Failed transactions settle nothing.
+            transaction(
+                Some(5),
+                insufficient_funds_abort(),
+                vec![withdraw_event(drained, 1000)],
+            ),
+            // A different accumulator version settles into a different balance.
+            transaction(
+                Some(4),
+                ExecutionStatus::Success,
+                vec![withdraw_event(drained, 1000)],
+            ),
+            // No accumulator root read at all.
+            transaction(None, ExecutionStatus::Success, vec![]),
+            // The replayed transaction.
+            transaction(Some(5), insufficient_funds_abort(), vec![]),
+            // Later transactions had not executed yet.
+            transaction(
+                Some(5),
+                ExecutionStatus::Success,
+                vec![withdraw_event(drained, 1000)],
+            ),
+        ];
+        let store = checkpoint_store(&transactions);
+        let unsettled = load(&transactions[5], &store).unwrap();
+        assert_eq!(
+            unsettled.get_unsettled_object_withdraw(&account(drained), root_version(5)),
+            100
+        );
+        assert_eq!(
+            unsettled.get_unsettled_object_withdraw(&account(other), root_version(5)),
+            7
+        );
+        assert_eq!(
+            unsettled.get_unsettled_object_withdraw(&account(drained), root_version(6)),
+            0
+        );
+    }
+
+    #[test]
+    fn only_insufficient_funds_aborts_need_the_checkpoint() {
+        // The store holds no checkpoint contents, so any lookup fails.
+        let store = InMemoryStore::new(Node::Mainnet);
+        let drained = SuiAddress::random_for_testing_only();
+        for status in [
+            ExecutionStatus::Success,
+            ExecutionStatus::Failure(ExecutionFailure::new(
+                ExecutionErrorKind::InsufficientGas,
+                None,
+            )),
+        ] {
+            let unsettled = load(&transaction(Some(5), status, vec![]), &store).unwrap();
+            assert_eq!(
+                unsettled.get_unsettled_object_withdraw(&account(drained), root_version(5)),
+                0
+            );
+        }
+        assert!(
+            load(
+                &transaction(Some(5), insufficient_funds_abort(), vec![]),
+                &store
+            )
+            .is_err()
+        );
     }
 }

@@ -47,6 +47,8 @@ use sui_types::{
 struct InMemoryStoreInner {
     node: Node,
     transaction_cache: BTreeMap<String, TransactionInfo>,
+    /// Transaction digests of a checkpoint, in execution order
+    checkpoint_transactions_cache: BTreeMap<u64, Vec<String>>,
     epoch_data_cache: BTreeMap<u64, EpochData>,
     object_cache: BTreeMap<ObjectID, BTreeMap<u64, Object>>,
     // The next 2 maps can be organized as flat maps or nested maps
@@ -99,6 +101,7 @@ impl InMemoryStore {
         Self(RwLock::new(InMemoryStoreInner {
             node,
             transaction_cache: BTreeMap::new(),
+            checkpoint_transactions_cache: BTreeMap::new(),
             epoch_data_cache: BTreeMap::new(),
             object_cache: BTreeMap::new(),
             root_version_cache: BTreeMap::new(),
@@ -121,6 +124,7 @@ impl InMemoryStore {
     pub fn clear_all_caches(&self) {
         let mut inner = self.0.write().unwrap();
         inner.transaction_cache.clear();
+        inner.checkpoint_transactions_cache.clear();
         inner.epoch_data_cache.clear();
         inner.object_cache.clear();
         inner.root_version_cache.clear();
@@ -201,6 +205,19 @@ impl TransactionStore for InMemoryStore {
         }
         inner.metrics.txn_miss.fetch_add(1, Ordering::Relaxed);
         Ok(None)
+    }
+
+    fn checkpoint_transaction_digests(
+        &self,
+        checkpoint: u64,
+    ) -> Result<Option<Vec<String>>, Error> {
+        Ok(self
+            .0
+            .read()
+            .unwrap()
+            .checkpoint_transactions_cache
+            .get(&checkpoint)
+            .cloned())
     }
 }
 
@@ -324,6 +341,19 @@ impl TransactionStoreWriter for InMemoryStore {
             .unwrap()
             .transaction_cache
             .insert(tx_digest.to_string(), transaction_info);
+        Ok(())
+    }
+
+    fn write_checkpoint_transaction_digests(
+        &self,
+        checkpoint: u64,
+        digests: Vec<String>,
+    ) -> Result<(), Error> {
+        self.0
+            .write()
+            .unwrap()
+            .checkpoint_transactions_cache
+            .insert(checkpoint, digests);
         Ok(())
     }
 }

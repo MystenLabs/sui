@@ -13,6 +13,8 @@
 //!   <chain_id>/
 //!     transaction/
 //!       <tx_digest>              (BCS: TransactionFileData)
+//!     checkpoint/
+//!       <sequence_number>        (BCS: Vec<String>, transaction digests in execution order)
 //!     epoch/
 //!       <epoch_id>               (BCS: EpochFileData)
 //!     objects/
@@ -84,6 +86,7 @@ pub const DATA_STORE_DIR: &str = ".sui_data_store";
 pub const NODE_MAPPING_FILE: &str = "node_mapping.csv";
 pub const OBJECTS_DIR: &str = "objects";
 pub const TRANSACTION_DIR: &str = "transaction";
+pub const CHECKPOINT_DIR: &str = "checkpoint";
 pub const EPOCH_DIR: &str = "epoch";
 pub const ROOT_VERSIONS_FILE: &str = "root_versions";
 pub const CHECKPOINT_VERSIONS_FILE: &str = "checkpoint_versions";
@@ -252,6 +255,10 @@ impl FileSystemStore {
 
     fn transaction_dir(&self) -> Result<PathBuf, Error> {
         Ok(self.node_dir()?.join(TRANSACTION_DIR))
+    }
+
+    fn checkpoint_dir(&self) -> Result<PathBuf, Error> {
+        Ok(self.node_dir()?.join(CHECKPOINT_DIR))
     }
 
     fn epoch_dir(&self) -> Result<PathBuf, Error> {
@@ -505,6 +512,19 @@ impl TransactionStore for FileSystemStore {
             checkpoint: txn_data.checkpoint,
         }))
     }
+
+    fn checkpoint_transaction_digests(
+        &self,
+        checkpoint: u64,
+    ) -> Result<Option<Vec<String>>, Error> {
+        let file_path = self.checkpoint_dir()?.join(checkpoint.to_string());
+        if !file_path.exists() {
+            return Ok(None);
+        }
+        self.read_bcs_file(&file_path).map(Some).with_context(|| {
+            format!("Failed to load transaction digests of checkpoint {checkpoint}")
+        })
+    }
 }
 
 impl EpochStore for FileSystemStore {
@@ -606,6 +626,15 @@ impl TransactionStoreWriter for FileSystemStore {
             checkpoint: transaction_info.checkpoint,
         };
         self.write_bcs_file(&file_path, &txn_file_data)
+    }
+
+    fn write_checkpoint_transaction_digests(
+        &self,
+        checkpoint: u64,
+        digests: Vec<String>,
+    ) -> Result<(), Error> {
+        let file_path = self.checkpoint_dir()?.join(checkpoint.to_string());
+        self.write_bcs_file(&file_path, &digests)
     }
 }
 

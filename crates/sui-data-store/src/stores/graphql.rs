@@ -123,6 +123,14 @@ impl TransactionStore for DataStore {
             }
         }
     }
+
+    fn checkpoint_transaction_digests(
+        &self,
+        checkpoint: u64,
+    ) -> Result<Option<Vec<String>>, Error> {
+        let _span = debug_span!("gql_checkpoint_txns_query", checkpoint).entered();
+        block_on!(gql_queries::checkpoint_txns_query::query(checkpoint, self))
+    }
 }
 
 impl EpochStore for DataStore {
