@@ -290,10 +290,6 @@ fn analyze_upgrade_command<E: ExecutionErrorTrait>(
     store: &VerifiedPackageStore<'_>,
     protocol_config: &ProtocolConfig,
 ) -> Result<(), E> {
-    if !protocol_config.enable_init_on_upgrade() {
-        return Ok(());
-    }
-
     let current_pkg = get_package(current_package_id, store)?;
 
     assert_invariant!(
