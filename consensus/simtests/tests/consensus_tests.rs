@@ -58,6 +58,229 @@ mod consensus_tests {
     }
 
     #[sim_test(config = "test_config()")]
+    async fn test_consensus_tonic_equivocation() {
+        consensus_tonic_equivocation(false).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_consensus_tonic_equivocation_v3() {
+        consensus_tonic_equivocation(true).await;
+    }
+
+    async fn consensus_tonic_equivocation(v3: bool) {
+        telemetry_subscribers::init_for_testing();
+        DBMetrics::init(RegistryService::new(Registry::new()));
+        // V3 needs six equal-stake authorities to tolerate one Byzantine authority.
+        let num_authorities = if v3 { 6 } else { 4 };
+        let (committee, keypairs) = local_committee_and_keys(0, vec![1; num_authorities]);
+        let faulty = AuthorityIndex::new_for_test(num_authorities as u32 - 1);
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_enable_v3_for_testing(v3);
+        let committee = if v3 {
+            Committee::new_v3(
+                committee.epoch(),
+                committee.authorities_slice().to_vec(),
+                1,
+                0,
+            )
+        } else {
+            protocol_config.set_gc_depth_for_testing(3);
+            committee
+        };
+        assert!(committee.stake(faulty) < committee.validity_threshold());
+        assert!(committee.total_stake() - committee.stake(faulty) >= committee.quorum_threshold());
+
+        let addresses = [
+            committee.authority(faulty).address.clone(),
+            get_available_local_address(),
+        ];
+        let mut routes = (0..num_authorities - 1)
+            .map(|index| usize::from(index >= num_authorities / 2))
+            .collect::<Vec<_>>();
+        routes.shuffle(&mut rand::thread_rng());
+        tracing::info!(v3, %faulty, ?routes, ?addresses, "Starting two instances of one authority");
+
+        let mut honest = Vec::new();
+        let mut receivers = Vec::new();
+        // Start honest nodes first, so their address overrides are in place before
+        // either faulty instance can accept a subscription.
+        for (index, instance) in routes.iter().copied().enumerate() {
+            let node = build_node(
+                &committee,
+                &keypairs,
+                &protocol_config,
+                AuthorityIndex::new_for_test(index as u32),
+                0,
+                Arc::new(ReplayTransactionVerifier),
+                |_| {},
+            )
+            .with_peer_address(faulty, addresses[instance].clone());
+            node.start().await.unwrap();
+            node.spawn_committed_subdag_consumer().unwrap();
+            receivers.push(node.commit_consumer_receiver());
+            honest.push(node);
+        }
+
+        let mut twins = Vec::new();
+        for address in &addresses {
+            let node = build_node(
+                &committee,
+                &keypairs,
+                &protocol_config,
+                faulty,
+                0,
+                Arc::new(ReplayTransactionVerifier),
+                |parameters| {
+                    parameters.listen_address_override = Some(address.clone());
+                    parameters.internal.skip_equivocation_validation = true;
+                    // Each instance starts its own history. Normal recovery would
+                    // first retrieve the other instance's last proposed block.
+                    parameters.sync_last_known_own_block_timeout = Duration::ZERO;
+                },
+            );
+            node.start().await.unwrap();
+            node.spawn_committed_subdag_consumer().unwrap();
+            twins.push(node);
+        }
+        assert_ne!(twins[0].sim_node_id(), twins[1].sim_node_id());
+
+        let proposals = Arc::new(Mutex::new([BTreeSet::new(), BTreeSet::new()]));
+        let mut twin_load = Vec::new();
+        for (instance, node) in twins.iter().enumerate() {
+            let client = node.transaction_client();
+            let proposals = proposals.clone();
+            twin_load.push(tokio::spawn(async move {
+                for sequence in 0u64..=u64::MAX {
+                    let mut transaction = vec![instance as u8 + 3];
+                    transaction.extend_from_slice(&sequence.to_le_bytes());
+                    let (block_ref, _, _) = client
+                        .submit(vec![transaction], Priority::Normal)
+                        .await
+                        .unwrap();
+                    assert_eq!(block_ref.author, faulty);
+                    proposals.lock()[instance].insert(block_ref);
+                    sleep(Duration::from_millis(50)).await;
+                }
+            }));
+        }
+        let clients = honest
+            .iter()
+            .map(AuthorityNode::transaction_client)
+            .collect::<Vec<_>>();
+        let honest_load = tokio::spawn(async move {
+            for sequence in 0u64..=u64::MAX {
+                clients[sequence as usize % clients.len()]
+                    .submit(vec![sequence.to_le_bytes().to_vec()], Priority::Normal)
+                    .await
+                    .unwrap();
+                sleep(Duration::from_millis(50)).await;
+            }
+        });
+
+        sleep(Duration::from_secs(30)).await;
+        let recipients = [
+            routes.iter().position(|instance| *instance == 0).unwrap(),
+            routes.iter().position(|instance| *instance == 1).unwrap(),
+        ];
+        timeout(Duration::from_secs(90), async {
+            loop {
+                let proposals = proposals.lock().clone();
+                let mut observed_rounds = BTreeSet::new();
+                for first in &proposals[0] {
+                    for second in &proposals[1] {
+                        if first.round == second.round
+                            && first != second
+                            && honest[recipients[0]]
+                                .store()
+                                .contains_blocks(&[*first])
+                                .unwrap()[0]
+                            && honest[recipients[1]]
+                                .store()
+                                .contains_blocks(&[*second])
+                                .unwrap()[0]
+                        {
+                            observed_rounds.insert(first.round);
+                        }
+                    }
+                }
+                if observed_rounds.len() >= 3
+                    && honest
+                        .iter()
+                        .all(|node| node.commit_consumer_monitor().highest_handled_commit() >= 20)
+                {
+                    tracing::info!(?observed_rounds, "Honest nodes stored both forks");
+                    break;
+                }
+                sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await
+        .expect(
+            "honest nodes must receive equivocations in three rounds and commit during the attack",
+        );
+
+        // The honest authorities form a quorum without the faulty authority.
+        // Require new commits after both faulty instances stop, as well as
+        // agreement on the full prefix produced during the attack.
+        for task in twin_load {
+            task.abort();
+            assert!(task.await.unwrap_err().is_cancelled());
+        }
+        for node in twins {
+            node.stop().await;
+        }
+        let target = honest
+            .iter()
+            .map(|node| node.commit_consumer_monitor().highest_handled_commit())
+            .max()
+            .unwrap()
+            + 20;
+        let mut rejected_transactions = 0;
+        timeout(Duration::from_secs(180), async {
+            for index in 1..=target {
+                let expected = receivers[0].recv().await.unwrap();
+                assert_eq!(expected.commit_ref.index, index);
+                rejected_transactions += expected
+                    .rejected_transactions_by_block
+                    .values()
+                    .map(Vec::len)
+                    .sum::<usize>();
+                for receiver in &mut receivers[1..] {
+                    let actual = receiver.recv().await.unwrap();
+                    assert_eq!(actual.commit_ref, expected.commit_ref);
+                    assert_eq!(actual.leader, expected.leader);
+                    assert_eq!(actual.timestamp_ms, expected.timestamp_ms);
+                    assert_eq!(
+                        actual.rejected_transactions_by_block,
+                        expected.rejected_transactions_by_block,
+                    );
+                    assert_eq!(
+                        actual
+                            .blocks
+                            .iter()
+                            .map(|block| block.reference())
+                            .collect::<Vec<_>>(),
+                        expected
+                            .blocks
+                            .iter()
+                            .map(|block| block.reference())
+                            .collect::<Vec<_>>(),
+                    );
+                }
+            }
+        })
+        .await
+        .expect("honest authorities must agree and keep committing after equivocation");
+        assert!(rejected_transactions > 0);
+
+        honest_load.abort();
+        assert!(honest_load.await.unwrap_err().is_cancelled());
+        for node in honest {
+            node.stop().await;
+        }
+    }
+
+    #[sim_test(config = "test_config()")]
     async fn test_committee_start_simple() {
         committee_start_simple(false).await;
     }
@@ -412,7 +635,7 @@ mod consensus_tests {
             .map(|authority| authority.transaction_client())
             .collect();
         let load = tokio::spawn(async move {
-            for id in 0u64.. {
+            for id in 0u64..=u64::MAX {
                 clients[id as usize % clients.len()]
                     .submit(vec![id.to_le_bytes().to_vec()], Priority::Normal)
                     .await
@@ -1703,6 +1926,7 @@ mod consensus_tests {
             clock_drift: 0,
             transaction_verifier: Arc::new(NoopTransactionVerifier {}),
             parameters: observer1_params,
+            peer_address_overrides: BTreeMap::new(),
             observer_network_keypair: Some(observer1_keypair.clone()),
             observer_ip: Some(observer1_ip.clone()), // Pass the pre-allocated IP
         };
@@ -1747,6 +1971,7 @@ mod consensus_tests {
             clock_drift: 0,
             transaction_verifier: Arc::new(NoopTransactionVerifier {}),
             parameters: observer2_params,
+            peer_address_overrides: BTreeMap::new(),
             observer_network_keypair: Some(observer2_keypair.clone()),
             observer_ip: Some(observer2_ip.clone()), // Pass the pre-allocated IP
         };
@@ -1856,6 +2081,7 @@ mod consensus_tests {
                 clock_drift: 0,
                 transaction_verifier: Arc::new(NoopTransactionVerifier {}),
                 parameters,
+                peer_address_overrides: BTreeMap::new(),
                 observer_network_keypair: None,
                 observer_ip: None,
             };
@@ -1926,6 +2152,7 @@ mod consensus_tests {
             clock_drift: 0,
             transaction_verifier: Arc::new(NoopTransactionVerifier {}),
             parameters: observer_params,
+            peer_address_overrides: BTreeMap::new(),
             observer_network_keypair: Some(observer_keypair),
             observer_ip: Some(observer_ip),
         };
@@ -2094,6 +2321,7 @@ mod consensus_tests {
             clock_drift,
             transaction_verifier,
             parameters,
+            peer_address_overrides: BTreeMap::new(),
             observer_network_keypair: None,
             observer_ip: None,
         })
