@@ -45,7 +45,7 @@ public fun ref_imm_id(ctx: &TxContext): &TxContext {
 //> test::m::make();
 
 //# programmable
-// rejected by the general no-references-in-return rule
+// TxContext cannot be returned by reference
 //> test::m::ref_mut_id();
 
 //# programmable --sender A --dev-inspect

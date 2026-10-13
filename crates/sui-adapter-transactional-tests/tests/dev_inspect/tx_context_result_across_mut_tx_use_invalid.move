@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Flag-off twin of tx_context_result_across_mut_tx_use: without the flag every TxContext
-// injection shares one borrow root, so the held `&mut Y` conflicts with the later use.
+// Flag-on version of tx_context_result_across_mut_tx_use_invalid_v139: the held `&mut Y` no
+// longer conflicts with the later use.
 
 //# init --addresses test=0x0 --accounts A
 
@@ -45,6 +45,7 @@ public fun delete(x: X) {
 //# programmable --sender A --dev-inspect --inputs 1
 //> 0: test::m::new();
 //> 1: test::m::borrow_mut(Result(0));
+// This call used to be rejected, but TxContext is no longer a source of returned references.
 //> 2: test::m::mut_tx();
 //> 3: test::m::write(Result(1));
 //> 4: test::m::check(Result(1), Input(0));

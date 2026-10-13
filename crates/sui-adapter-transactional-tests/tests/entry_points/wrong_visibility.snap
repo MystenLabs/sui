@@ -3,7 +3,7 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 ---
 processed 6 tasks
 
-// invalid, the adapter should yell that the invoked functions have the wrong visibility
+// t2 and t3 have the wrong visibility; t4 and t5 return references, which are allowed
 
 task 1, lines 8-26:
 //# publish
@@ -21,12 +21,14 @@ task 3, line 30:
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Can only call `entry` or `public` functions"), command: Some(0) } }
 
-task 4, line 32:
+task 4, lines 32-33:
+// Used to be disallowed
 //# run Test::M::t4 --args 0
-Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
 
-task 5, line 34:
+task 5, lines 35-36:
+// Used to be disallowed
 //# run Test::M::t5 --args 0
-Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99

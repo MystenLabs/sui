@@ -4,7 +4,7 @@
 // Multiple `&TxContext` parameters in one call are allowed, and the call's result
 // survives a later mutable TxContext use.
 
-//# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0
 
 //# publish
 module test::m;

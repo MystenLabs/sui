@@ -5,7 +5,7 @@
 // so it never blocks a later command. Dropping the reference does not drop the values returned
 // next to it.
 
-//# init --addresses test=0x0 q=0x0 q_2=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 q=0x0 q_2=0x0 --accounts A
 
 //# publish
 module test::m;

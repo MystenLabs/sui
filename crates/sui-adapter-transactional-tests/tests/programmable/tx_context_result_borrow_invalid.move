@@ -6,7 +6,7 @@
 // the TxContext return rule, so TxContext can never become a PTB result even with references
 // allowed in PTBs
 
-//# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0
 
 //# publish
 module test::m;

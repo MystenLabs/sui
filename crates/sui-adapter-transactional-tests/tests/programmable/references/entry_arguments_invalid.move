@@ -5,7 +5,7 @@
 // object consumed into the root's vector, keeps the reference and any read of it out of private
 // entry functions.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

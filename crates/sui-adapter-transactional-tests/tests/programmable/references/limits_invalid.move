@@ -5,7 +5,7 @@
 // live `&mut` references with nothing else live, and it is never reached because metering rejects
 // the transaction first.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

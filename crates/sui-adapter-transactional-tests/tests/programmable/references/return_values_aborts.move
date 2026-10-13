@@ -5,7 +5,7 @@
 // sources, is accepted by the static checks and borrows nothing. The only Move body for such a
 // signature aborts, so every task here fails at runtime inside the callee.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

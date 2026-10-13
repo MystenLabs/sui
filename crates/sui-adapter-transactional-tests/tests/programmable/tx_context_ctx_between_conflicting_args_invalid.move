@@ -4,7 +4,7 @@
 // Conflicting user arguments around an injected `&mut TxContext` are still rejected, and
 // reported argument indices count the injected TxContext.
 
-//# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0
 
 //# publish
 module test::m;

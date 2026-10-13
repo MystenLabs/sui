@@ -4,7 +4,7 @@
 // The last by-value use of a borrowed value is a Copy, not a Move, so a value with `copy` but
 // not `drop` is left behind in its result slot.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

@@ -5,7 +5,7 @@
 // references, siblings from one call, parents reused after their children die, and immutable
 // views of a parent while a mutable child is live.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// invalid, the adapter should yell that the invoked functions have the wrong visibility
+// t2 and t3 have the wrong visibility; t4 and t5 return references, which are allowed
 
 //# init --addresses Test=0x0
 
@@ -29,6 +29,8 @@ module Test::M {
 
 //# run Test::M::t3
 
+// Used to be disallowed
 //# run Test::M::t4 --args 0
 
+// Used to be disallowed
 //# run Test::M::t5 --args 0

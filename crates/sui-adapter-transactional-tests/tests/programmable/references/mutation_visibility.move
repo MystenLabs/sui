@@ -4,7 +4,7 @@
 // Writes through references reach the underlying value: later reads in the same transaction see
 // them, and they persist in objects. Runtime behavior only; every task here is accepted statically.
 
-//# init --addresses test=0x0 p=0x0 q=0x0 q_2=0x0 --accounts A B --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 p=0x0 q=0x0 q_2=0x0 --accounts A B
 
 //# publish
 module test::m;

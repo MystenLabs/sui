@@ -4,7 +4,7 @@
 // Reference results as arguments to private entry functions. The private-entry check sees the
 // new argument forms: a reference passed by reference, and a reference read by value.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

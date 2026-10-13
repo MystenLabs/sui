@@ -4,7 +4,7 @@
 // Stress test with large amounts of inputs/results.
 // Borrows every PTB input at least once, immutably and mutably.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::stress;

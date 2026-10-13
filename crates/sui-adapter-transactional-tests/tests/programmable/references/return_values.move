@@ -5,7 +5,7 @@
 // every mutable argument, an immutable result extends every argument, TxContext is never a source,
 // and the root may be any location kind.
 
-//# init --addresses test=0x0 q=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 q=0x0 --accounts A
 
 //# publish
 module test::m;

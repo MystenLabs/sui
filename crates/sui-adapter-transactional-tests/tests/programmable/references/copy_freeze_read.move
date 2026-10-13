@@ -5,7 +5,7 @@
 // `&mut` is passed as `&`, and a Read when it is passed by value. Copies of a borrowed value stay
 // copies. A Read releases the reference where it appears in the argument list.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

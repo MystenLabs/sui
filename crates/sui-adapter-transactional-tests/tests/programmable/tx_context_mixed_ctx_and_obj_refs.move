@@ -4,7 +4,7 @@
 // A purely TxContext-derived reference (digest) and an object-rooted `&mut Y` coexist
 // across mutable TxContext uses.
 
-//# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0
 
 //# publish
 module test::m;
