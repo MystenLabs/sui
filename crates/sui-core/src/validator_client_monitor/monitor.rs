@@ -20,12 +20,28 @@ use std::{
 };
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::{Committee, CommitteeTrait as _};
-use sui_types::{base_types::AuthorityName, messages_grpc::ValidatorHealthRequest};
+use sui_types::{
+    base_types::{AuthorityName, ConciseableName as _},
+    messages_grpc::ValidatorHealthRequest,
+};
 use tokio::{
+    sync::Notify,
     task::JoinSet,
     time::{interval, timeout},
 };
 use tracing::{debug, info, warn};
+
+/// Minimum spacing between health-check rounds run on request, so a burst of
+/// staggered-submission rejections costs one extra round rather than one per
+/// rejection.
+const REQUESTED_HEALTH_CHECK_SPACING: Duration = Duration::from_secs(2);
+/// Requested rounds allowed between two scheduled rounds. Requests are honored only
+/// while the staggering view is off, so this caps what a validator that rejects
+/// while the network is not staggering can cost: two extra rounds per interval.
+/// Two rather than one so that a round run on the first rejection, before every
+/// validator has processed the activating commit, gets one follow-up for the
+/// laggards before the driver falls back to waiting for the scheduled round.
+const REQUESTED_HEALTH_CHECKS_PER_INTERVAL: u32 = 2;
 
 /// Monitors validator interactions from the client's perspective.
 ///
@@ -50,6 +66,12 @@ pub struct ValidatorClientMonitor<A: Clone> {
     /// The stake-weighted view over `staggering_reports`, recomputed when a report
     /// arrives and after every health-check round (so aged-out reports drop off).
     staggering_active: AtomicBool,
+    /// Wakes the health-check loop for an immediate round; see
+    /// [`Self::request_health_check`].
+    health_check_now: Notify,
+    /// Whether the round in progress was requested rather than scheduled; only read
+    /// to attribute a view flip in the log.
+    requested_round_in_progress: AtomicBool,
 }
 
 impl<A> ValidatorClientMonitor<A>
@@ -74,6 +96,8 @@ where
             cached_latencies: RwLock::new(HashMap::new()),
             staggering_reports: RwLock::new(HashMap::new()),
             staggering_active: AtomicBool::new(false),
+            health_check_now: Notify::new(),
+            requested_round_in_progress: AtomicBool::new(false),
         });
 
         let monitor_clone = monitor.clone();
@@ -102,9 +126,32 @@ where
     /// failures without recording latency to avoid polluting latency statistics.
     async fn run_health_checks(self: Arc<Self>) {
         let mut interval = interval(self.config.health_check_interval);
+        let mut last_round_started = tokio::time::Instant::now() - REQUESTED_HEALTH_CHECK_SPACING;
+        let mut requested_rounds_left = REQUESTED_HEALTH_CHECKS_PER_INTERVAL;
 
         loop {
-            interval.tick().await;
+            let requested = tokio::select! {
+                _ = interval.tick() => {
+                    requested_rounds_left = REQUESTED_HEALTH_CHECKS_PER_INTERVAL;
+                    false
+                }
+                _ = self.health_check_now.notified() => {
+                    // A request only has something to learn while the view is off; once it
+                    // is on, rejections are expected and the scheduled cadence is enough.
+                    if self.staggering_active() || requested_rounds_left == 0 {
+                        continue;
+                    }
+                    requested_rounds_left -= 1;
+                    tokio::time::sleep_until(last_round_started + REQUESTED_HEALTH_CHECK_SPACING)
+                        .await;
+                    // The requested round takes the place of the next scheduled one.
+                    interval.reset();
+                    true
+                }
+            };
+            last_round_started = tokio::time::Instant::now();
+            self.requested_round_in_progress
+                .store(requested, Ordering::Relaxed);
 
             let authority_agg = self.authority_aggregator.load();
 
@@ -175,7 +222,9 @@ where
 
             self.update_cached_latencies(&authority_agg);
             // Ages out reports from validators that stopped answering.
-            self.refresh_staggering_view();
+            self.refresh_staggering_view("end of round");
+            self.requested_round_in_progress
+                .store(false, Ordering::Relaxed);
         }
     }
 }
@@ -272,7 +321,18 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         self.staggering_reports
             .write()
             .insert(validator, (active, Instant::now()));
-        self.refresh_staggering_view();
+        self.refresh_staggering_view(&format!("report from {}", validator.concise()));
+    }
+
+    /// Run a health-check round now rather than at the next interval tick, spaced by
+    /// `REQUESTED_HEALTH_CHECK_SPACING` from the previous round and capped at
+    /// `REQUESTED_HEALTH_CHECKS_PER_INTERVAL` while the staggering view is off (a
+    /// request while it is on is ignored). Validators report their staggering state
+    /// on health responses, so this is how the driver learns of an activation within
+    /// a round trip of its first staggered-submission rejection instead of within a
+    /// health interval. Requests coalesce while a round is pending.
+    pub fn request_health_check(&self) {
+        self.health_check_now.notify_one();
     }
 
     /// Whether staggered submission is currently considered active on the validator
@@ -287,7 +347,9 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         self.staggering_active.load(Ordering::Relaxed)
     }
 
-    fn refresh_staggering_view(&self) {
+    /// Recomputes the view and logs a flip with what caused it, so a run's driver-side
+    /// detection can be timed against the validators' own transition logs.
+    fn refresh_staggering_view(&self, trigger: &str) {
         let authority_agg = self.authority_aggregator.load();
         let committee = &authority_agg.committee;
         let freshness = self.report_freshness();
@@ -302,7 +364,22 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             .map(|(name, _)| committee.weight(name))
             .sum();
         let active = active_stake >= committee.validity_threshold();
-        self.staggering_active.store(active, Ordering::Relaxed);
+        if self.staggering_active.swap(active, Ordering::Relaxed) != active {
+            info!(
+                "Staggering view flipped {}: {} of {} stake reports staggering active \
+                 (validity threshold {}), on {} during a {} health-check round",
+                if active { "on" } else { "off" },
+                active_stake,
+                committee.total_votes(),
+                committee.validity_threshold(),
+                trigger,
+                if self.requested_round_in_progress.load(Ordering::Relaxed) {
+                    "requested"
+                } else {
+                    "scheduled"
+                },
+            );
+        }
         self.metrics
             .staggering_active_stake
             .set(active_stake as i64);
@@ -314,7 +391,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         self.staggering_reports
             .write()
             .insert(validator, (active, at));
-        self.refresh_staggering_view();
+        self.refresh_staggering_view("test report");
     }
 
     /// Select validators based on client-observed performance for the given transaction type.
