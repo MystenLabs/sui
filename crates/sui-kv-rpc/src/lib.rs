@@ -52,6 +52,7 @@ mod operation;
 mod package_store;
 mod pipeline;
 mod render;
+mod request_cache;
 mod resolve;
 mod v2;
 
@@ -482,8 +483,8 @@ impl KvRpcServer {
 
     /// Construct a KvRpcServer backed by a local BigTable emulator with explicit
     /// ledger-history and per-stage configuration. Tests use this to exercise
-    /// scan-budget / chunk-size behaviour (e.g. a small `tx_seq_digest` chunk
-    /// size) against a modest synthetic dataset.
+    /// scan-budget / read-size behaviour (e.g. small `tx_seq_digest` reads)
+    /// against a modest synthetic dataset.
     pub async fn new_local_with_config(
         host: String,
         instance_id: String,

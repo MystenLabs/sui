@@ -26,6 +26,8 @@ mod list_checkpoints;
 mod list_events;
 mod list_transactions;
 mod move_package_service;
+#[cfg(test)]
+mod resume_tests;
 
 #[tonic::async_trait]
 impl LedgerService for KvRpcServer {
@@ -430,7 +432,7 @@ pub(crate) mod test_utils {
         (ctx, registry, server)
     }
 
-    pub(super) async fn query_context_with_mock_and_registry(
+    pub(crate) async fn query_context_with_mock_and_registry(
         method: &'static str,
         checkpoint_hi_exclusive: u64,
     ) -> (
@@ -465,14 +467,24 @@ pub(crate) mod test_utils {
             bitmap_bucket_budget_tx: Some(10),
             bitmap_bucket_budget_event: Some(10),
             bitmap_drain_probe_rows: None,
+            watermark_beacon_buckets: None,
             max_bitmap_filter_literals: Some(1),
         };
         let stage = StageConfig {
-            chunk_size: Some(2),
+            max_seeks_per_read: Some(2),
             concurrency: Some(1),
+            ..Default::default()
+        };
+        // Stages whose seeks are buckets also cap their reads at 2 keys, so
+        // every stage reads 2 keys at a time whichever buckets the test data
+        // uses.
+        let bucket_stage = StageConfig {
+            max_keys_per_read: Some(2),
+            ..stage.clone()
         };
         let stages = StagesConfig {
-            tx_seq_digest: Some(stage.clone()),
+            tx_seq_digest: Some(bucket_stage.clone()),
+            tx_cp_resolve: Some(bucket_stage),
             transactions: Some(stage.clone()),
             objects: Some(stage.clone()),
             checkpoints: Some(stage),

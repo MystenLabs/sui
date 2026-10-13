@@ -33,8 +33,9 @@ pub(super) struct DrainedEventHits {
     pub(super) pending_bucket: Option<PendingBitmapBucket>,
     pub(super) next_bounds: Option<IntraTxScanBounds>,
     pub(super) buckets_scanned: usize,
-    pub(super) frontier: Option<IntraTxCoordinate>,
-    pub(super) chunk_scan_limit_reached: bool,
+    /// [`super::bitmap_scan::DrainedBitmapHits::scan_limit_frontier`], decoded
+    /// to an event position.
+    pub(super) scan_limit_frontier: Option<IntraTxCoordinate>,
 }
 
 pub(super) struct UnfilteredScan {
@@ -85,10 +86,9 @@ pub(super) fn drain_event_bitmap_hits(
         pending_bucket: hits.pending_bucket,
         next_bounds: hits.next_range.map(bounds_from_packed),
         buckets_scanned: hits.buckets_scanned,
-        frontier: hits
-            .coalesced_frontier
+        scan_limit_frontier: hits
+            .scan_limit_frontier
             .map(|seq| IntraTxCoordinate::from(event_seq::decode_event_seq(seq))),
-        chunk_scan_limit_reached: hits.chunk_scan_limit_reached,
     })
 }
 

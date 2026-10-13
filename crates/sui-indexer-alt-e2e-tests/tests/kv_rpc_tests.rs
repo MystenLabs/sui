@@ -4783,15 +4783,21 @@ async fn drain_checkpoint_set(
 /// scan reached the bound. The set under-returned and was order-dependent.
 #[tokio::test]
 async fn test_list_checkpoints_dense_bucket_matches_transactions() {
-    // A small `tx_seq_digest` chunk size lets a modest dataset reproduce the
-    // multi-chunk-within-one-bucket scan. Every matching tx in a feasible
-    // dataset shares bitmap bucket 0 (BUCKET_SIZE = 65_536), so the chunk
-    // boundary — not a bucket boundary — is what drives the loop.
+    // Small reads for the `tx_seq_digest` reads (ListTransactions) and
+    // ListCheckpoints' transaction -> checkpoint lookups (`tx_cp_resolve`) let
+    // a modest dataset reproduce the multi-read-within-one-bucket scan. Every
+    // matching tx in a feasible dataset shares bitmap bucket 0 (BUCKET_SIZE =
+    // 65_536) and `tx_seq_digest` bucket 0 (1,000 transactions), so the read
+    // boundary — set by the 2-key cap, since these stages' seeks are
+    // `tx_seq_digest` buckets — is what drives the loop.
+    let small_reads = StageConfig {
+        max_seeks_per_read: Some(2),
+        max_keys_per_read: Some(2),
+        ..Default::default()
+    };
     let stages = StagesConfig {
-        tx_seq_digest: Some(StageConfig {
-            chunk_size: Some(2),
-            concurrency: None,
-        }),
+        tx_seq_digest: Some(small_reads.clone()),
+        tx_cp_resolve: Some(small_reads),
         ..Default::default()
     };
     let kv_rpc_config = KvRpcConfig {
@@ -4807,7 +4813,7 @@ async fn test_list_checkpoints_dense_bucket_matches_transactions() {
         cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
 
     // Sparse matches spanning the range: two checkpoints densely packed with
-    // matching txs (> chunk_size) at the low and high ends, two single-match
+    // matching txs (> the 2-key cap) at the low and high ends, two single-match
     // checkpoints in the middle, with noise checkpoints interspersed and
     // trailing so the scan crosses empty checkpoint regions and reaches the tip
     // on a non-matching checkpoint.
