@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Without `allow_references_in_ptbs`, a Move call may not return a reference, so the `Read`
-// argument is never reached.
+// Without `allow_references_in_ptbs` (which is enabled after protocol version v139),
+// a Move call may not return a reference, so the `Read` argument is never reached.
 
 //# init --addresses test=0x0 --accounts A --protocol-version 139
 
