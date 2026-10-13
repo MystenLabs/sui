@@ -1003,11 +1003,6 @@ fn convert_withdrawal_to_coin<Mode: ExecutionMode>(
     withdrawal_input: u16,
     owner_input: u16,
 ) -> Result</* Result index */ u16, Mode::Error> {
-    assert_invariant!(
-        env.protocol_config
-            .convert_withdrawal_compatibility_ptb_arguments(),
-        "convert_withdrawal_to_coin called when conversion is disabled"
-    );
     // Grab the owner `address`
     let (owner_location, _owner_ty) = context.resolve_location(
         env,
