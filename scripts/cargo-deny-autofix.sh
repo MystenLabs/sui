@@ -6,7 +6,7 @@
 # attempts to fix them with semver-compatible lockfile bumps
 # (`cargo update -p <pkg>@<version>`), then re-checks to verify.
 #
-# Must be run from the repository root. Requires cargo-deny and jq.
+# Must be run from the repository root. Requires cargo-deny, jq and curl.
 #
 # Usage: scripts/cargo-deny-autofix.sh [workspace-dir...]
 #   Defaults to the workspaces gated by CI: "." and "external-crates/move".
@@ -96,6 +96,57 @@ scan() {
 
 declare -A bumped_pkgs=()
 
+# Prints the newest non-yanked, non-prerelease release of crate $1 that is
+# semver-compatible with version $2, read from the crates.io sparse index.
+latest_compatible() {
+  local name="${1,,}" path
+  case ${#name} in
+    1) path="1/$name" ;;
+    2) path="2/$name" ;;
+    3) path="3/${name:0:1}/$name" ;;
+    *) path="${name:0:2}/${name:2:2}/$name" ;;
+  esac
+  curl -fsSL "https://index.crates.io/$path" 2> /dev/null | jq -rs --arg v "$2" '
+    def parts: split(".") | map(tonumber);
+    def compat: if .[0] > 0 then [.[0]] elif .[1] > 0 then [0, .[1]] else . end;
+    ($v | parts | compat) as $c
+    | [.[] | select(.yanked | not) | .vers | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))
+       | select(parts | compat == $c)]
+    | max_by(parts) // empty
+  ' || true
+}
+
+# Bumps $2@$3 in workspace $1 to a newer semver-compatible version, leaving
+# cargo's output in UPDATE_LOG. A plain `cargo update -p` changes nothing when
+# the newer release needs a newer version of a crate that is already locked
+# (e.g. quinn-proto 0.11.17 needs rand >= 0.10.1 while rand 0.10.0 is locked),
+# so on no-op ask cargo for the latest compatible version with --precise, read
+# the blocking crate off the resolver error and unlock it alongside. This
+# touches only the crates in the conflict chain, unlike `--recursive`.
+bump() {
+  local ws="$1" pkg="$2" ver="$3" target log conflict
+  local args=(-p "${pkg}@${ver}")
+  UPDATE_LOG=$(cargo update --manifest-path "$ws/Cargo.toml" "${args[@]}" 2>&1) || true
+  grep -q "Updating ${pkg} v${ver} -> " <<< "$UPDATE_LOG" && return
+  target=$(latest_compatible "$pkg" "$ver")
+  [[ -n "$target" && "$target" != "$ver" ]] || return 0
+  for _ in 1 2 3 4 5; do
+    log=$(cargo update --manifest-path "$ws/Cargo.toml" -p "${pkg}@${ver}" --precise "$target" 2>&1) && {
+      UPDATE_LOG="$log"
+      return
+    }
+    # shellcheck disable=SC2016 # literal backticks from cargo's message
+    conflict=$(sed -n 's/.*previously selected package `\([^ ]*\) v\([^`]*\)`.*/\1@\2/p' <<< "$log" | head -n1)
+    [[ -n "$conflict" ]] || return 0
+    args+=(-p "$conflict")
+    log=$(cargo update --manifest-path "$ws/Cargo.toml" "${args[@]}" 2>&1) || true
+    if grep -q "Updating ${pkg} v${ver} -> " <<< "$log"; then
+      UPDATE_LOG="$log"
+      return
+    fi
+  done
+}
+
 for ws in "${WORKSPACES[@]}"; do
   echo "==> Checking advisories in '$ws'"
   scan "$ws"
@@ -106,19 +157,28 @@ for ws in "${WORKSPACES[@]}"; do
   fi
 
   # Attempt a semver-compatible bump for each vulnerable pkg@version.
-  declare -A new_ver=()
+  declare -A new_ver=() new_ver_by_pkg=()
   for adv in "${found[@]}"; do
     id=$(jq -r '.id' <<< "$adv")
     pkg=$(jq -r '.pkg' <<< "$adv")
     ver=$(jq -r '.ver' <<< "$adv")
     echo "    $id: $pkg@$ver"
-    update_log=$(cargo update --manifest-path "$ws/Cargo.toml" -p "${pkg}@${ver}" 2>&1) || true
-    echo "      ${update_log//$'\n'/$'\n'      }"
+    # Several advisories can share a pkg@version; bump it only once.
+    if [[ -n "${new_ver_by_pkg["${pkg}@${ver}"]:-}" ]]; then
+      new_ver["${id}|${pkg}|${ver}"]="${new_ver_by_pkg["${pkg}@${ver}"]}"
+      echo "      already bumped to ${new_ver_by_pkg["${pkg}@${ver}"]}"
+      continue
+    fi
+    bump "$ws" "$pkg" "$ver"
+    echo "      ${UPDATE_LOG//$'\n'/$'\n'      }"
     # cargo prints "Updating <pkg> v<old> -> v<new>" when the bump succeeds.
-    bumped=$(sed -n "s/^ *Updating ${pkg} v${ver} -> v\([^ ]*\).*/\1/p" <<< "$update_log")
+    bumped=$(sed -n "s/^ *Updating ${pkg} v${ver} -> v\([^ ]*\).*/\1/p" <<< "$UPDATE_LOG")
     if [[ -n "$bumped" ]]; then
       new_ver["${id}|${pkg}|${ver}"]="$bumped"
-      bumped_pkgs["$pkg"]=1
+      new_ver_by_pkg["${pkg}@${ver}"]="$bumped"
+      while read -r name; do
+        bumped_pkgs["$name"]=1
+      done < <(sed -n 's/^ *Updating \([^ ]*\) v.* -> v.*/\1/p' <<< "$UPDATE_LOG")
     fi
   done
 
@@ -142,7 +202,7 @@ for ws in "${WORKSPACES[@]}"; do
       echo "- [${id}](https://rustsec.org/advisories/${id}): \`${pkg}\` ${ver} → ${new_ver[$key]} in \`${ws}\`" >> "$FIXED_MD"
     fi
   done
-  unset new_ver still_keys
+  unset new_ver new_ver_by_pkg still_keys
 done
 
 # Propagate bumps to the standalone example lockfiles so they don't drift.

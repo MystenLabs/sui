@@ -70,6 +70,10 @@ ignore = [
     # or if bulletproofs releases a zeroize-based replacement. Upstream proposal:
     # https://github.com/zkcrypto/bulletproofs/pull/17
     "RUSTSEC-2026-0283",
+    # `unsafe-libyaml` is unmaintained. Transitive via serde_yaml 0.9 (itself
+    # deprecated), used only by the sui-metric-checker CLI to parse its own
+    # config file. Remove once sui-metric-checker moves off serde_yaml.
+    "RUSTSEC-2024-0449",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
