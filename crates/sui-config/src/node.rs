@@ -301,6 +301,34 @@ pub struct ConsensusTransactionPoolConfig {
     /// matching the existing admission queue. Defaults to the consensus
     /// `max_pending_transactions` setting.
     pub max_pending_transactions: Option<usize>,
+
+    /// User transaction admission starts being paced by this validator's execution
+    /// progress once the oldest transaction waiting for execution has waited longer
+    /// than this. Pacing ends when the pool's user lane drains.
+    #[serde(default = "default_execution_backlog_engage_above")]
+    pub execution_backlog_engage_above: Duration,
+
+    /// While paced, admission equals the executed rate when that wait sits at this
+    /// target, runs above it while the wait is shorter, and falls linearly below it as
+    /// the wait grows.
+    #[serde(default = "default_execution_backlog_target")]
+    pub execution_backlog_target: Duration,
+
+    /// While paced, admission reaches zero when the wait grows to this value.
+    #[serde(default = "default_execution_backlog_admission_zero_at")]
+    pub execution_backlog_admission_zero_at: Duration,
+}
+
+fn default_execution_backlog_target() -> Duration {
+    Duration::from_millis(500)
+}
+
+fn default_execution_backlog_engage_above() -> Duration {
+    Duration::from_secs(1)
+}
+
+fn default_execution_backlog_admission_zero_at() -> Duration {
+    Duration::from_secs(4)
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -308,6 +336,9 @@ impl Default for ConsensusTransactionPoolConfig {
         Self {
             enabled: true,
             max_pending_transactions: None,
+            execution_backlog_engage_above: default_execution_backlog_engage_above(),
+            execution_backlog_target: default_execution_backlog_target(),
+            execution_backlog_admission_zero_at: default_execution_backlog_admission_zero_at(),
         }
     }
 }

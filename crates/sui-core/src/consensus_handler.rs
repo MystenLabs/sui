@@ -85,6 +85,7 @@ use crate::{
         randomness::{AdvanceDkgError, DkgStatus, RandomnessManager},
         reconfiguration::ReconfigState,
     },
+    execution_backlog::ExecutionBacklog,
     execution_cache::ObjectCacheRead,
     execution_scheduler::{SettlementBatchInfo, SettlementScheduler},
     gasless_rate_limiter::ConsensusGaslessCounter,
@@ -197,6 +198,7 @@ impl ConsensusHandlerInitializer {
             self.congestion_logger.clone(),
             self.consensus_gasless_counter.clone(),
             self.state.transaction_deny_config_manager().clone(),
+            self.state.execution_backlog.clone(),
         )
     }
 }
@@ -752,6 +754,8 @@ pub struct ConsensusHandler<C> {
 
     transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
 
+    execution_backlog: Arc<ExecutionBacklog>,
+
     checkpoint_queue: Mutex<CheckpointQueue>,
 }
 
@@ -801,6 +805,7 @@ impl<C> ConsensusHandler<C> {
         congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
         consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
         transaction_deny_config_manager: Arc<TransactionDenyConfigManager>,
+        execution_backlog: Arc<ExecutionBacklog>,
     ) -> Self {
         assert_supported_protocol_config(epoch_store.protocol_config());
 
@@ -847,6 +852,7 @@ impl<C> ConsensusHandler<C> {
             congestion_logger,
             consensus_gasless_counter,
             transaction_deny_config_manager,
+            execution_backlog,
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -909,6 +915,7 @@ impl<C> ConsensusHandler<C> {
             congestion_logger: None,
             consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
             transaction_deny_config_manager,
+            execution_backlog: Arc::new(ExecutionBacklog::default()),
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -3024,6 +3031,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut occurrence_counts: HashMap<SequencedConsensusTransactionKey, u32> = HashMap::new();
         // Keys being seen for the first time (not duplicates from previous commits).
         let mut first_commit_keys: HashSet<SequencedConsensusTransactionKey> = HashSet::new();
+        let own_index = self
+            .epoch_store
+            .committee()
+            .authority_index(&self.epoch_store.name);
 
         for (seq, (transaction, cert_origin)) in transactions.into_iter().enumerate() {
             // In process_consensus_transactions_and_commit_boundary(), we will add a system consensus commit
@@ -3071,16 +3082,23 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let in_commit = *count > 1;
 
             let in_cache = self.processed_cache.put(key.clone(), ()).is_some();
-            if in_commit || in_cache {
-                self.metrics.skipped_consensus_txns_cache_hit.inc();
-                continue;
-            }
-            if self
-                .epoch_store
-                .is_consensus_message_processed(&key)
-                .expect("db error")
-            {
-                self.metrics.skipped_consensus_txns.inc();
+            let duplicate = in_commit
+                || in_cache
+                || self
+                    .epoch_store
+                    .is_consensus_message_processed(&key)
+                    .expect("db error");
+            if duplicate {
+                if in_commit || in_cache {
+                    self.metrics.skipped_consensus_txns_cache_hit.inc();
+                } else {
+                    self.metrics.skipped_consensus_txns.inc();
+                }
+                if own_index == Some(cert_origin) && key.user_transaction_digest().is_some() {
+                    self.execution_backlog
+                        .duplicate_proposals
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
                 continue;
             }
 
@@ -4086,6 +4104,7 @@ mod tests {
             None,
             state.consensus_gasless_counter.clone(),
             state.transaction_deny_config_manager().clone(),
+            state.execution_backlog.clone(),
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -4663,6 +4682,7 @@ mod tests {
             None,
             state.consensus_gasless_counter.clone(),
             state.transaction_deny_config_manager().clone(),
+            state.execution_backlog.clone(),
         );
 
         handler.handle_consensus_commit_for_test(commit).await;
@@ -4787,6 +4807,7 @@ mod tests {
             None,
             state.consensus_gasless_counter.clone(),
             state.transaction_deny_config_manager().clone(),
+            state.execution_backlog.clone(),
         );
 
         handler.handle_consensus_commit_for_test(commit).await;
@@ -4917,6 +4938,7 @@ mod tests {
             None,
             state.consensus_gasless_counter.clone(),
             state.transaction_deny_config_manager().clone(),
+            state.execution_backlog.clone(),
         );
 
         handler.handle_consensus_commit_for_test(commit).await;
