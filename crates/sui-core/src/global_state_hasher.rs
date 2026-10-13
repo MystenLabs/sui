@@ -65,10 +65,6 @@ pub trait GlobalStateHashStore: ObjectStore + Send + Sync {
         epoch: EpochId,
     ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>>;
 
-    fn get_root_state_hash_for_highest_epoch(
-        &self,
-    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, GlobalStateHash))>>;
-
     fn insert_state_hash_for_epoch(
         &self,
         epoch: EpochId,
@@ -104,12 +100,6 @@ impl GlobalStateHashStore for InMemoryStorage {
         &self,
         _epoch: EpochId,
     ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>> {
-        unreachable!("not used for testing")
-    }
-
-    fn get_root_state_hash_for_highest_epoch(
-        &self,
-    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, GlobalStateHash))>> {
         unreachable!("not used for testing")
     }
 
@@ -484,12 +474,15 @@ impl GlobalStateHasher {
         assert!(checkpoint_seq_num > 0);
 
         // Check if this is the first checkpoint of the new epoch, in which case
-        // there is nothing to wait for.
-        if self
-            .store
-            .get_root_state_hash_for_highest_epoch()?
-            .map(|(_, (last_checkpoint_prev_epoch, _))| last_checkpoint_prev_epoch)
-            == Some(checkpoint_seq_num - 1)
+        // there is nothing to wait for. Look up the previous epoch explicitly: when
+        // this checkpoint is rebuilt after a restart, the root of the current epoch
+        // may already be stored.
+        if let Some(prev_epoch) = epoch_store.epoch().checked_sub(1)
+            && self
+                .store
+                .get_root_state_hash_for_epoch(prev_epoch)?
+                .map(|(last_checkpoint_prev_epoch, _)| last_checkpoint_prev_epoch)
+                == Some(checkpoint_seq_num - 1)
         {
             return Ok(());
         }
