@@ -45,11 +45,6 @@ impl QueryDepth {
     pub(crate) fn get(&self) -> u32 {
         self.0.load(Ordering::Relaxed)
     }
-
-    #[cfg(test)]
-    pub(crate) fn new_for_test(depth: u32) -> Self {
-        Self(Arc::new(AtomicU32::new(depth)))
-    }
 }
 
 pub(crate) struct QueryLimitsConfig {
