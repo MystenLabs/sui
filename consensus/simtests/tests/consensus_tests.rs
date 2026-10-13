@@ -4,7 +4,7 @@
 #[cfg(msim)]
 mod consensus_tests {
     use std::{
-        collections::{BTreeMap, HashMap},
+        collections::{BTreeMap, BTreeSet, HashMap},
         sync::{
             Arc,
             atomic::{AtomicBool, AtomicU64, Ordering},
@@ -22,7 +22,7 @@ mod consensus_tests {
         Priority, TransactionVerifier, ValidationError, storage::Store,
     };
     use consensus_simtests::node::{AuthorityNode, Config};
-    use consensus_types::block::{BlockRef, BlockTimestampMs, TransactionIndex};
+    use consensus_types::block::{BlockRef, BlockTimestampMs, Round, TransactionIndex};
     use fastcrypto::traits::{KeyPair as _, ToFromBytes as _};
     use mysten_metrics::RegistryService;
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
@@ -59,13 +59,21 @@ mod consensus_tests {
 
     #[sim_test(config = "test_config()")]
     async fn test_committee_start_simple() {
+        committee_start_simple(false).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_committee_start_simple_v3() {
+        committee_start_simple(true).await;
+    }
+
+    async fn committee_start_simple(v3: bool) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(RegistryService::new(db_registry));
         const NUM_OF_AUTHORITIES: usize = 10;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
-        let mut protocol_config = ConsensusProtocolConfig::for_testing();
-        protocol_config.set_gc_depth_for_testing(3);
+        let (committee, protocol_config) = crash_fault_test_setup(committee, v3);
 
         let mut authorities = Vec::with_capacity(committee.size());
         let mut transaction_clients = Vec::with_capacity(committee.size());
@@ -133,13 +141,21 @@ mod consensus_tests {
     // on-disk state. Verifies that every authority recovers and keeps making commit progress.
     #[sim_test(config = "test_config()")]
     async fn test_consensus_crash_and_restart() {
+        consensus_crash_and_restart(false).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_consensus_crash_and_restart_v3() {
+        consensus_crash_and_restart(true).await;
+    }
+
+    async fn consensus_crash_and_restart(v3: bool) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(RegistryService::new(db_registry));
         const NUM_OF_AUTHORITIES: usize = 10;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
-        let mut protocol_config = ConsensusProtocolConfig::for_testing();
-        protocol_config.set_gc_depth_for_testing(3);
+        let (committee, protocol_config) = crash_fault_test_setup(committee, v3);
 
         // Start the whole committee so crashes hit a fully running network.
         let clock_drifts = test_clock_drifts::<NUM_OF_AUTHORITIES>();
@@ -221,14 +237,22 @@ mod consensus_tests {
     // Verifies that the final instances all reconnect and make new commit progress.
     #[sim_test(config = "test_config()")]
     async fn test_consensus_rolling_restarts_all_validators() {
+        consensus_rolling_restarts_all_validators(false).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_consensus_rolling_restarts_all_validators_v3() {
+        consensus_rolling_restarts_all_validators(true).await;
+    }
+
+    async fn consensus_rolling_restarts_all_validators(v3: bool) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(RegistryService::new(db_registry));
         const NUM_OF_AUTHORITIES: usize = 4;
         const NUM_RESTART_ROUNDS: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
-        let mut protocol_config = ConsensusProtocolConfig::for_testing();
-        protocol_config.set_gc_depth_for_testing(3);
+        let (committee, protocol_config) = crash_fault_test_setup(committee, v3);
 
         let authorities = start_committee(
             &committee,
@@ -338,7 +362,6 @@ mod consensus_tests {
     }
 
     #[sim_test(config = "test_config()")]
-    #[ignore = "requires the v3 timestamp and finalizer fixes in https://github.com/MystenLabs/sui/pull/27655"]
     async fn test_full_replay_restart_v3() {
         full_replay_restart(true, true).await;
     }
@@ -650,14 +673,22 @@ mod consensus_tests {
     // recover its last own block from peers before it proposes another block.
     #[sim_test(config = "test_config()")]
     async fn test_consensus_amnesia_recovery() {
+        consensus_amnesia_recovery(false).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_consensus_amnesia_recovery_v3() {
+        consensus_amnesia_recovery(true).await;
+    }
+
+    async fn consensus_amnesia_recovery(v3: bool) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(RegistryService::new(db_registry));
         const NUM_OF_AUTHORITIES: usize = 4;
         const RESTARTED_AUTHORITY: usize = 0;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
-        let mut protocol_config = ConsensusProtocolConfig::for_testing();
-        protocol_config.set_gc_depth_for_testing(3);
+        let (committee, protocol_config) = crash_fault_test_setup(committee, v3);
 
         let authorities = start_committee(
             &committee,
@@ -720,6 +751,15 @@ mod consensus_tests {
     // ensuring they are consistent, including commits replayed after crash recovery.
     #[sim_test(config = "test_config()")]
     async fn test_consensus_transaction_votes() {
+        consensus_transaction_votes(false).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_consensus_transaction_votes_v3() {
+        consensus_transaction_votes(true).await;
+    }
+
+    async fn consensus_transaction_votes(v3: bool) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(RegistryService::new(db_registry));
@@ -729,8 +769,7 @@ mod consensus_tests {
         const MAX_TRANSACTIONS_BATCH_SIZE: u16 = 8;
 
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
-        let mut protocol_config = ConsensusProtocolConfig::for_testing();
-        protocol_config.set_gc_depth_for_testing(3);
+        let (committee, protocol_config) = crash_fault_test_setup(committee, v3);
 
         // Initialize consensus authorities and transaction clients.
         let clock_drifts = test_clock_drifts::<NUM_OF_AUTHORITIES>();
@@ -924,6 +963,663 @@ mod consensus_tests {
             "Total rejected transactions: {}",
             total_rejected_transactions
         );
+    }
+
+    // One validator equivocates in its blocks and in its transaction votes. The v3 thresholds
+    // tolerate its stake as Byzantine stake, and tolerate no crashed stake.
+    #[sim_test(config = "test_config()")]
+    async fn test_consensus_v3_equivocating_validator() {
+        consensus_v3_equivocation(EquivocationTestConfig {
+            num_authorities: 6,
+            malicious_stake: 1,
+            crash_stake: 0,
+            num_equivocators: 1,
+            crash_interval: None,
+        })
+        .await;
+    }
+
+    // Two validators equivocate, which uses the whole Byzantine fault budget.
+    #[sim_test(config = "test_config()")]
+    async fn test_consensus_v3_two_equivocating_validators() {
+        consensus_v3_equivocation(EquivocationTestConfig {
+            num_authorities: 11,
+            malicious_stake: 2,
+            crash_stake: 0,
+            num_equivocators: 2,
+            crash_interval: None,
+        })
+        .await;
+    }
+
+    // One validator equivocates while simulator nodes randomly crash and recover, one at a time.
+    // Crashes hit honest validators and the equivocator's twins.
+    #[sim_test(config = "test_config()")]
+    async fn test_consensus_v3_equivocating_validator_with_crashes() {
+        consensus_v3_equivocation(EquivocationTestConfig {
+            num_authorities: 9,
+            malicious_stake: 1,
+            crash_stake: 1,
+            num_equivocators: 1,
+            crash_interval: Some(Duration::from_secs(20)),
+        })
+        .await;
+    }
+
+    struct EquivocationTestConfig {
+        num_authorities: usize,
+        malicious_stake: Stake,
+        crash_stake: Stake,
+        // The validators with the highest indexes equivocate.
+        num_equivocators: usize,
+        // When set, injects random crashes with this interval between crashes.
+        crash_interval: Option<Duration>,
+    }
+
+    // Runs a v3 committee with equivocating validators under transaction load, and checks that
+    // honest validators output the same commits and the same rejected transactions.
+    //
+    // Each honest validator votes with `AcceptMaskTransactionVerifier`, and the twins vote with
+    // `twin_accepts()`. So the test knows the largest stake that can accept each transaction. A
+    // transaction needs at least a certificate of accept votes to be accepted, and each
+    // equivocator counts once. So when the largest accept stake is below the certification
+    // threshold, the transaction must be rejected, even when an equivocator accepts it on one or
+    // both of its chains.
+    async fn consensus_v3_equivocation(config: EquivocationTestConfig) {
+        telemetry_subscribers::init_for_testing();
+        DBMetrics::init(RegistryService::new(Registry::new()));
+        const NUM_HONEST_SUBMISSIONS: u64 = 1500;
+        const MAX_TRANSACTIONS_PER_SUBMISSION: u64 = 4;
+
+        let (committee, keypairs) = local_committee_and_keys(0, vec![1; config.num_authorities]);
+        let equivocators: Vec<_> = (config.num_authorities - config.num_equivocators
+            ..config.num_authorities)
+            .map(|index| AuthorityIndex::new_for_test(index as u32))
+            .collect();
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        protocol_config.set_enable_v3_for_testing(true);
+        let network = EquivocatingCommittee::start(
+            &committee,
+            &keypairs,
+            &protocol_config,
+            equivocators.clone(),
+            config.malicious_stake,
+            config.crash_stake,
+        )
+        .await;
+        let committee = network.committee.clone();
+        let equivocator_stake: Stake = equivocators
+            .iter()
+            .map(|equivocator| committee.stake(*equivocator))
+            .sum();
+        // The validity threshold is f + 1, so the equivocators use at most the Byzantine budget.
+        assert!(
+            equivocator_stake < committee.validity_threshold(),
+            "Equivocator stake {equivocator_stake} exceeds the Byzantine fault budget"
+        );
+        tracing::info!(
+            ?equivocators,
+            quorum = committee.quorum_threshold(),
+            certification = committee.certification_threshold(),
+            validity = committee.validity_threshold(),
+            "Started v3 committee with equivocating validators"
+        );
+
+        // Take the commit receivers before any commit or crash happens.
+        let mut commit_receivers: Vec<_> = network
+            .honest
+            .iter()
+            .map(|authority| authority.commit_consumer_receiver())
+            .collect();
+        let crashes = config
+            .crash_interval
+            .map(|crash_interval| inject_random_crashes(&network.all_nodes(), crash_interval));
+
+        let honest_mask = network.honest.iter().fold(0u64, |mask, authority| {
+            mask | (1 << authority.index().value())
+        });
+        let total_sequenced_transactions = Arc::new(AtomicU64::new(0));
+        let mut honest_submissions = JoinSet::new();
+        let mut twin_submissions = JoinSet::new();
+        let mut transaction_id = 0u64;
+        for submission in 0..NUM_HONEST_SUBMISSIONS {
+            let proposer = &network.honest[rand::thread_rng().gen_range(0..network.honest.len())];
+            let num_transactions =
+                rand::thread_rng().gen_range(1..=MAX_TRANSACTIONS_PER_SUBMISSION);
+            let transactions: Vec<_> = (0..num_transactions)
+                .map(|_| {
+                    transaction_id += 1;
+                    let mask = random_accept_mask(honest_mask, proposer.index());
+                    mask_transaction(mask, transaction_id)
+                })
+                .collect();
+            if let Some(client) = proposer.transaction_client_if_running() {
+                let total_sequenced_transactions = total_sequenced_transactions.clone();
+                honest_submissions.spawn(async move {
+                    let Ok((_, _, status_waiter)) =
+                        client.submit(transactions, Priority::Normal).await
+                    else {
+                        // The validator crashed during the submission.
+                        return;
+                    };
+                    if let Ok(BlockStatus::Sequenced(_)) = status_waiter.await {
+                        total_sequenced_transactions.fetch_add(num_transactions, Ordering::SeqCst);
+                    }
+                });
+            }
+
+            // Each twin includes only its own transactions in its blocks, which identifies the
+            // twin of a committed block.
+            for (equivocator_position, twins) in network.twins.iter().enumerate() {
+                for (twin, node) in twins.iter().enumerate() {
+                    let Some(client) = node.transaction_client_if_running() else {
+                        continue;
+                    };
+                    let transaction = mask_transaction(
+                        u64::MAX,
+                        twin_transaction_id(equivocator_position, twin, submission),
+                    );
+                    // A twin can stop proposing, so its submissions are never awaited.
+                    twin_submissions.spawn(async move {
+                        let _ = client.submit(vec![transaction], Priority::Normal).await;
+                    });
+                }
+            }
+            let delay = Duration::from_millis(rand::thread_rng().gen_range(1..40));
+            sleep(delay).await;
+        }
+
+        tracing::info!("Test phase: waiting for transaction statuses");
+        while let Some(result) = honest_submissions.join_next().await {
+            result.unwrap();
+        }
+        twin_submissions.abort_all();
+        if let Some(crashes) = crashes {
+            let completed_crashes = crashes.stop().await;
+            tracing::info!("Test phase: stopped crashes after {completed_crashes} crashes");
+        }
+
+        let total_sequenced_transactions = total_sequenced_transactions.load(Ordering::SeqCst);
+        tracing::info!(
+            total_sequenced_transactions,
+            "Test phase: comparing commits across honest validators"
+        );
+        let mut stats = EquivocationStats::default();
+        let mut last_seen_commit_indexes = vec![0; network.honest.len()];
+        let mut observed_commits = vec![ObservedCommits::new(); network.honest.len()];
+        while stats.committed_honest_transactions < total_sequenced_transactions {
+            let mut sub_dags = Vec::with_capacity(network.honest.len());
+            for (position, authority) in network.honest.iter().enumerate() {
+                let sub_dag = timeout(
+                    Duration::from_secs(90),
+                    next_sub_dag(
+                        authority,
+                        &mut commit_receivers[position],
+                        last_seen_commit_indexes[position],
+                        &mut observed_commits[position],
+                    ),
+                )
+                .await
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Timed out waiting for commit {} from authority {}",
+                        last_seen_commit_indexes[position] + 1,
+                        authority.index()
+                    )
+                });
+                last_seen_commit_indexes[position] = sub_dag.commit_ref.index;
+                sub_dags.push(sub_dag);
+            }
+            for sub_dag in &sub_dags[1..] {
+                assert_eq!(sub_dags[0].commit_ref, sub_dag.commit_ref);
+                assert_eq!(
+                    sub_dags[0].rejected_transactions_by_block,
+                    sub_dag.rejected_transactions_by_block,
+                    "Rejected transactions diverged in commit {:?}",
+                    sub_dag.commit_ref
+                );
+            }
+            stats.record_commit(&sub_dags[0], &committee, &equivocators, equivocator_stake);
+        }
+
+        stats.log_and_check(&equivocators);
+
+        // Twins run unmodified commit logic, so their persisted commits must match too.
+        let last_commit_index = *stats.commit_refs.keys().last().unwrap();
+        for twin in network.twins.iter().flatten() {
+            let stored_commits = twin
+                .store()
+                .scan_commits((1..=last_commit_index).into())
+                .unwrap();
+            for commit in &stored_commits {
+                let commit_ref = commit.reference();
+                assert_eq!(
+                    commit_ref,
+                    stats.commit_refs[&commit_ref.index],
+                    "A twin of equivocator {} diverged from the honest commits",
+                    twin.index()
+                );
+            }
+            tracing::info!(
+                equivocator = %twin.index(),
+                stored_commits = stored_commits.len(),
+                "Twin commits match the honest commits"
+            );
+        }
+
+        for node in network.all_nodes() {
+            node.stop().await;
+        }
+    }
+
+    // Returns a random accept mask over the honest validators, for a transaction proposed by
+    // `proposer`. The proposer does not vote on its own transactions with its verifier, so it
+    // accepts them regardless of the mask.
+    fn random_accept_mask(honest_mask: u64, proposer: AuthorityIndex) -> u64 {
+        let mut rng = rand::thread_rng();
+        let voters: Vec<u32> = (0..u64::BITS)
+            .filter(|index| (honest_mask >> index) & 1 == 1 && *index != proposer.value() as u32)
+            .collect();
+        match rng.gen_range(0..4) {
+            // Every honest validator accepts.
+            0 => honest_mask,
+            // Only the proposer accepts.
+            1 => 0,
+            // One honest validator rejects, so an equivocator's accept vote can complete a quorum.
+            2 => honest_mask & !(1 << voters[rng.gen_range(0..voters.len())]),
+            // A random set of honest validators accepts.
+            _ => rng.r#gen::<u64>() & honest_mask,
+        }
+    }
+
+    // A v3 committee where each equivocator runs as two simulator nodes, called twins, with the
+    // same keys.
+    //
+    // Each twin has its own network address. Each honest validator connects to one twin of every
+    // equivocator, so honest validators first receive different blocks for the same slot. Block
+    // synchronization then fetches the other twin's blocks, so every validator sees both chains.
+    // A twin accepts the other twin's blocks for its own slots, and proposes after the highest of
+    // them, so the two chains can also cross.
+    //
+    // The twins vote with `twin_accepts()`. So on the same transaction, the two chains of an
+    // equivocator can both accept, both reject, or cast conflicting votes.
+    struct EquivocatingCommittee {
+        // The committee as seen by validators that connect to the first twins.
+        committee: Committee,
+        honest: Vec<Arc<AuthorityNode>>,
+        // Both twins of each equivocator, in the order of the equivocators.
+        twins: Vec<[Arc<AuthorityNode>; 2]>,
+    }
+
+    impl EquivocatingCommittee {
+        async fn start(
+            committee: &Committee,
+            keypairs: &[(NetworkKeyPair, ProtocolKeyPair)],
+            protocol_config: &ConsensusProtocolConfig,
+            equivocators: Vec<AuthorityIndex>,
+            malicious_stake: Stake,
+            crash_stake: Stake,
+        ) -> Self {
+            let second_twin_addresses: Vec<_> = equivocators
+                .iter()
+                .map(|_| get_available_local_address())
+                .collect();
+            // Bit `k` of a view selects the twin of equivocator `k` that a node connects to.
+            // Only the network addresses differ between views, so the thresholds are the same.
+            let committee_view = |view: usize| {
+                let mut authorities = committee.authorities_slice().to_vec();
+                for (position, equivocator) in equivocators.iter().enumerate() {
+                    if (view >> position) & 1 == 1 {
+                        authorities[equivocator.value()].address =
+                            second_twin_addresses[position].clone();
+                    }
+                }
+                Committee::new_v3(committee.epoch(), authorities, malicious_stake, crash_stake)
+            };
+            let num_views = 1usize << equivocators.len();
+
+            let mut honest = Vec::new();
+            for (authority_index, _) in committee.authorities() {
+                if equivocators.contains(&authority_index) {
+                    continue;
+                }
+                let node = build_node(
+                    &committee_view(honest.len() % num_views),
+                    keypairs,
+                    protocol_config,
+                    authority_index,
+                    test_clock_drift(authority_index),
+                    Arc::new(AcceptMaskTransactionVerifier { authority_index }),
+                    set_fast_commit_sync,
+                );
+                node.start().await.unwrap();
+                node.spawn_committed_subdag_consumer().unwrap();
+                honest.push(Arc::new(node));
+            }
+
+            let mut twins = Vec::new();
+            for &equivocator in &equivocators {
+                let pair = [0, 1].map(|twin| {
+                    // Each twin must see its own address, and connects to the same twin index of
+                    // other equivocators.
+                    let view = if twin == 0 { 0 } else { num_views - 1 };
+                    Arc::new(build_node(
+                        &committee_view(view),
+                        keypairs,
+                        protocol_config,
+                        equivocator,
+                        0,
+                        Arc::new(TwinTransactionVerifier { twin }),
+                        |parameters| {
+                            set_fast_commit_sync(parameters);
+                            // Twins receive blocks for their own slots from the other twin.
+                            parameters.internal.skip_equivocation_validation = true;
+                        },
+                    ))
+                });
+                for node in &pair {
+                    node.start().await.unwrap();
+                    node.spawn_committed_subdag_consumer().unwrap();
+                }
+                twins.push(pair);
+            }
+
+            Self {
+                committee: committee_view(0),
+                honest,
+                twins,
+            }
+        }
+
+        fn all_nodes(&self) -> Vec<Arc<AuthorityNode>> {
+            self.honest
+                .iter()
+                .chain(self.twins.iter().flatten())
+                .cloned()
+                .collect()
+        }
+    }
+
+    // The msim commit sync defaults fetch fewer commits than the committee produces, so a node
+    // that restarts behind never catches up. A twin that cannot catch up stops proposing, which
+    // ends the equivocation. Use production-like batches, as the observer catch-up test does.
+    fn set_fast_commit_sync(parameters: &mut Parameters) {
+        parameters.commit_sync_batch_size = 10;
+        parameters.max_blocks_per_fetch = 1000;
+    }
+
+    // What the honest validators committed in the equivocation tests.
+    #[derive(Default)]
+    struct EquivocationStats {
+        commit_refs: BTreeMap<CommitIndex, CommitRef>,
+        committed_equivocator_leaders: BTreeMap<AuthorityIndex, u64>,
+        committed_honest_transactions: u64,
+        accepted_honest_transactions: u64,
+        rejected_honest_transactions: u64,
+        // Transactions that cannot reach a certificate of accept votes.
+        required_rejections: u64,
+        // Committed blocks in each equivocator slot, with the twins whose transactions each block
+        // contains. Each twin includes only its own transactions in its blocks.
+        equivocator_slot_blocks:
+            BTreeMap<(AuthorityIndex, Round), BTreeMap<BlockRef, BTreeSet<usize>>>,
+        // Committed transactions submitted to each twin, by (equivocator position, twin).
+        committed_twin_transactions: BTreeMap<(usize, usize), u64>,
+    }
+
+    impl EquivocationStats {
+        fn record_commit(
+            &mut self,
+            sub_dag: &CommittedSubDag,
+            committee: &Committee,
+            equivocators: &[AuthorityIndex],
+            equivocator_stake: Stake,
+        ) {
+            self.commit_refs
+                .insert(sub_dag.commit_ref.index, sub_dag.commit_ref);
+            if equivocators.contains(&sub_dag.leader.author) {
+                *self
+                    .committed_equivocator_leaders
+                    .entry(sub_dag.leader.author)
+                    .or_default() += 1;
+            }
+            for block in &sub_dag.blocks {
+                let author = block.author();
+                if equivocators.contains(&author) {
+                    let mut twins = BTreeSet::new();
+                    for transaction in block.transactions() {
+                        let id = transaction_id(transaction.data());
+                        let (equivocator_position, twin) = twin_of_transaction(id)
+                            .expect("An equivocator block contains an honest transaction");
+                        assert_eq!(
+                            equivocators[equivocator_position],
+                            author,
+                            "Block {} contains a transaction of another equivocator",
+                            block.reference()
+                        );
+                        twins.insert(twin);
+                        *self
+                            .committed_twin_transactions
+                            .entry((equivocator_position, twin))
+                            .or_default() += 1;
+                    }
+                    self.equivocator_slot_blocks
+                        .entry((author, block.round()))
+                        .or_default()
+                        .insert(block.reference(), twins);
+                    continue;
+                }
+
+                let rejected: BTreeSet<TransactionIndex> = sub_dag
+                    .rejected_transactions_by_block
+                    .get(&block.reference())
+                    .into_iter()
+                    .flatten()
+                    .copied()
+                    .collect();
+                for (index, transaction) in block.transactions().iter().enumerate() {
+                    let mask = accept_mask(transaction.data());
+                    let honest_accept_stake: Stake = committee
+                        .authorities()
+                        .filter(|(authority_index, _)| {
+                            !equivocators.contains(authority_index)
+                                && (*authority_index == author
+                                    || (mask >> authority_index.value()) & 1 == 1)
+                        })
+                        .map(|(_, authority)| authority.stake)
+                        .sum();
+                    let id = transaction_id(transaction.data());
+                    let equivocator_accept_stake = if (0..2).any(|twin| twin_accepts(twin, id)) {
+                        equivocator_stake
+                    } else {
+                        0
+                    };
+                    let is_rejected = rejected.contains(&(index as TransactionIndex));
+                    if honest_accept_stake + equivocator_accept_stake
+                        < committee.certification_threshold()
+                    {
+                        assert!(
+                            is_rejected,
+                            "Transaction {index} in block {} of commit {:?} was accepted with at \
+                             most {honest_accept_stake} honest accept stake and \
+                             {equivocator_accept_stake} equivocator accept stake, below the \
+                             certification threshold {}",
+                            block.reference(),
+                            sub_dag.commit_ref,
+                            committee.certification_threshold(),
+                        );
+                        self.required_rejections += 1;
+                    }
+                    if is_rejected {
+                        self.rejected_honest_transactions += 1;
+                    } else {
+                        self.accepted_honest_transactions += 1;
+                    }
+                    self.committed_honest_transactions += 1;
+                }
+            }
+        }
+
+        // Checks that the run covered equivocating blocks and conflicting transaction votes.
+        fn log_and_check(&self, equivocators: &[AuthorityIndex]) {
+            tracing::info!(
+                commits = self.commit_refs.len(),
+                committed_equivocator_leaders = ?self.committed_equivocator_leaders,
+                committed = self.committed_honest_transactions,
+                accepted = self.accepted_honest_transactions,
+                rejected = self.rejected_honest_transactions,
+                required_rejections = self.required_rejections,
+                committed_twin_transactions = ?self.committed_twin_transactions,
+                "Committed honest transactions"
+            );
+            assert!(self.accepted_honest_transactions > 0);
+            assert!(self.required_rejections > 0);
+
+            for (position, equivocator) in equivocators.iter().enumerate() {
+                let slots: Vec<_> = self
+                    .equivocator_slot_blocks
+                    .iter()
+                    .filter(|((author, _), _)| author == equivocator)
+                    .map(|(_, blocks)| blocks)
+                    .collect();
+                let equivocating_slots = slots.iter().filter(|blocks| blocks.len() > 1).count();
+                // These slots have committed blocks from both chains. The two chains cast
+                // conflicting votes on a third of the transactions.
+                let both_twin_slots = slots
+                    .iter()
+                    .filter(|blocks| {
+                        let twins: BTreeSet<_> = blocks.values().flatten().collect();
+                        twins.len() == 2
+                    })
+                    .count();
+                tracing::info!(
+                    %equivocator,
+                    committed_slots = slots.len(),
+                    equivocating_slots,
+                    both_twin_slots,
+                    "Committed equivocator slots"
+                );
+                assert!(
+                    equivocating_slots > 0,
+                    "No slot of equivocator {equivocator} has more than one committed block"
+                );
+                assert!(
+                    both_twin_slots > 0,
+                    "No slot of equivocator {equivocator} has committed blocks from both twins"
+                );
+                for twin in 0..2 {
+                    assert!(
+                        self.committed_twin_transactions
+                            .get(&(position, twin))
+                            .is_some_and(|count| *count > 0),
+                        "No transaction of twin {twin} of equivocator {equivocator} was committed"
+                    );
+                }
+            }
+        }
+    }
+
+    // Transactions in the equivocation tests have an accept mask, then an id. Bit `i` of the
+    // accept mask means that honest validator `i` votes to accept the transaction.
+    fn mask_transaction(accept_mask: u64, id: u64) -> Vec<u8> {
+        let mut transaction = accept_mask.to_le_bytes().to_vec();
+        transaction.extend_from_slice(&id.to_le_bytes());
+        transaction
+    }
+
+    fn accept_mask(transaction: &[u8]) -> u64 {
+        u64::from_le_bytes(transaction[..8].try_into().unwrap())
+    }
+
+    fn transaction_id(transaction: &[u8]) -> u64 {
+        u64::from_le_bytes(transaction[8..16].try_into().unwrap())
+    }
+
+    // Ids of transactions submitted to twins have the highest bit set, and identify the twin.
+    const TWIN_TRANSACTION_ID_FLAG: u64 = 1 << 63;
+    const TWIN_TRANSACTION_ID_SHIFT: u32 = 48;
+
+    fn twin_transaction_id(equivocator_position: usize, twin: usize, sequence: u64) -> u64 {
+        let twin_tag = (equivocator_position * 2 + twin) as u64;
+        TWIN_TRANSACTION_ID_FLAG | (twin_tag << TWIN_TRANSACTION_ID_SHIFT) | sequence
+    }
+
+    // Returns the (equivocator position, twin) that a transaction was submitted to.
+    fn twin_of_transaction(id: u64) -> Option<(usize, usize)> {
+        if id & TWIN_TRANSACTION_ID_FLAG == 0 {
+            return None;
+        }
+        let twin_tag = ((id & !TWIN_TRANSACTION_ID_FLAG) >> TWIN_TRANSACTION_ID_SHIFT) as usize;
+        Some((twin_tag / 2, twin_tag % 2))
+    }
+
+    // Votes on transactions created by `mask_transaction()`. The validator accepts a transaction
+    // only when the transaction's accept mask contains the validator's index.
+    struct AcceptMaskTransactionVerifier {
+        authority_index: AuthorityIndex,
+    }
+
+    impl TransactionVerifier for AcceptMaskTransactionVerifier {
+        fn verify_batch(
+            &self,
+            _block_ref: &BlockRef,
+            _transactions: &[&[u8]],
+        ) -> Result<(), ValidationError> {
+            Ok(())
+        }
+
+        fn verify_and_vote_batch(
+            &self,
+            _block_ref: &BlockRef,
+            transactions: &[&[u8]],
+        ) -> Result<Vec<TransactionIndex>, ValidationError> {
+            Ok(transactions
+                .iter()
+                .enumerate()
+                .filter(|(_, transaction)| {
+                    (accept_mask(transaction) >> self.authority_index.value()) & 1 == 0
+                })
+                .map(|(index, _)| index as TransactionIndex)
+                .collect())
+        }
+    }
+
+    // Returns whether a twin of an equivocator votes to accept a transaction. Both twins accept
+    // when `id % 3 == 0`, only the first twin accepts when `id % 3 == 1`, and both twins reject
+    // when `id % 3 == 2`. Agreeing twins can expose an equivocator counted twice, and conflicting
+    // twins can expose an equivocator counted on both sides.
+    fn twin_accepts(twin: usize, id: u64) -> bool {
+        match id % 3 {
+            0 => true,
+            1 => twin == 0,
+            _ => false,
+        }
+    }
+
+    struct TwinTransactionVerifier {
+        twin: usize,
+    }
+
+    impl TransactionVerifier for TwinTransactionVerifier {
+        fn verify_batch(
+            &self,
+            _block_ref: &BlockRef,
+            _transactions: &[&[u8]],
+        ) -> Result<(), ValidationError> {
+            Ok(())
+        }
+
+        fn verify_and_vote_batch(
+            &self,
+            _block_ref: &BlockRef,
+            transactions: &[&[u8]],
+        ) -> Result<Vec<TransactionIndex>, ValidationError> {
+            Ok(transactions
+                .iter()
+                .enumerate()
+                .filter(|(_, transaction)| !twin_accepts(self.twin, transaction_id(transaction)))
+                .map(|(index, _)| index as TransactionIndex)
+                .collect())
+        }
     }
 
     // Test with multiple Observer nodes in a chain
@@ -1323,11 +2019,54 @@ mod consensus_tests {
     // Clock drifts for the first few nodes (their time will be ahead of the others), providing
     // extra reassurance around the block timestamp checks.
     fn test_clock_drifts<const N: usize>() -> [BlockTimestampMs; N] {
-        let mut drifts = [0; N];
-        drifts[0] = 50;
-        drifts[1] = 100;
-        drifts[2] = 120;
-        drifts
+        std::array::from_fn(|index| test_clock_drift(AuthorityIndex::new_for_test(index as u32)))
+    }
+
+    fn test_clock_drift(authority_index: AuthorityIndex) -> BlockTimestampMs {
+        match authority_index.value() {
+            0 => 50,
+            1 => 100,
+            2 => 120,
+            _ => 0,
+        }
+    }
+
+    // Returns the committee and protocol config for a test that injects only crash faults.
+    //
+    // V2 runs with GC depth 3. V3 keeps its testing GC depth, and uses v3 committee thresholds
+    // that tolerate one crashed validator. Committees of at least 9 validators also tolerate one
+    // Byzantine validator, like the production fault budget with equal Byzantine and crash stake.
+    fn crash_fault_test_setup(
+        committee: Committee,
+        v3: bool,
+    ) -> (Committee, ConsensusProtocolConfig) {
+        let mut protocol_config = ConsensusProtocolConfig::for_testing();
+        if !v3 {
+            protocol_config.set_gc_depth_for_testing(3);
+            return (committee, protocol_config);
+        }
+        protocol_config.set_enable_v3_for_testing(true);
+        let (malicious_stake, crash_stake) = if committee.size() >= 9 {
+            (1, 1)
+        } else {
+            (0, 1)
+        };
+        let committee = Committee::new_v3(
+            committee.epoch(),
+            committee.authorities_slice().to_vec(),
+            malicious_stake,
+            crash_stake,
+        );
+        let max_stake = committee
+            .authorities()
+            .map(|(_, authority)| authority.stake)
+            .max()
+            .unwrap();
+        assert!(
+            committee.quorum_threshold() + max_stake <= committee.total_stake(),
+            "The v3 committee must tolerate a crashed validator"
+        );
+        (committee, protocol_config)
     }
 
     // Builds an AuthorityNode with its own temp DB dir and default parameters, which
