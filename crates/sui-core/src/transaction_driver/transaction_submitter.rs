@@ -313,7 +313,9 @@ impl TransactionSubmitter {
             TransactionRequestError::TimedOutSubmittingTransaction
         })?
         .map_err(|error| {
-            if is_validator_error(&error) {
+            if is_staggered_rejection(&error) {
+                client_monitor.request_health_check();
+            } else if is_validator_error(&error) {
                 client_monitor.record_interaction_result(OperationFeedback {
                     authority_name: validator,
                     display_name: display_name.clone(),
@@ -335,7 +337,9 @@ impl TransactionSubmitter {
 
         // Since only one transaction is submitted, it is ok to return error when the submission is rejected.
         if let SubmitTxResult::Rejected { error } = &result {
-            if is_validator_error(error) {
+            if is_staggered_rejection(error) {
+                client_monitor.request_health_check();
+            } else if is_validator_error(error) {
                 client_monitor.record_interaction_result(OperationFeedback {
                     authority_name: validator,
                     display_name,
@@ -359,14 +363,22 @@ impl TransactionSubmitter {
     }
 }
 
-// Whether the failure is caused by the peer validator, as opposed to the user or this node.
-fn is_validator_error(error: &SuiError) -> bool {
-    // A non-proposer declining a staggered submission is the schedule working, not a
-    // fault of that validator: it must not count against its score.
-    if matches!(
+/// A non-proposer declining a staggered submission. The schedule working, not a fault
+/// of that validator, so it never counts against its score — and the first such
+/// rejection is the driver's earliest sign that validators started staggering, which
+/// only its preferred few would ever tell it in-band: it asks the monitor for an
+/// immediate health round so the view flips on f+1 stake's own reports instead of
+/// waiting out the health interval.
+fn is_staggered_rejection(error: &SuiError) -> bool {
+    matches!(
         error.as_inner(),
         SuiErrorKind::StaggeredSubmissionNotProposer
-    ) {
+    )
+}
+
+// Whether the failure is caused by the peer validator, as opposed to the user or this node.
+fn is_validator_error(error: &SuiError) -> bool {
+    if is_staggered_rejection(error) {
         return false;
     }
     matches!(

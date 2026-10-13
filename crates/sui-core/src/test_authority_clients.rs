@@ -4,6 +4,7 @@
 
 use std::{
     net::SocketAddr,
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -203,6 +204,10 @@ pub struct MockAuthorityApi {
     delay: Duration,
     count: Arc<Mutex<u32>>,
     handle_object_info_request_result: Option<SuiResult<ObjectInfoResponse>>,
+    /// What this mock validator reports as its staggering state on health checks.
+    pub staggering_active: Arc<AtomicBool>,
+    /// Health checks answered so far.
+    pub health_checks: Arc<AtomicU32>,
 }
 
 impl MockAuthorityApi {
@@ -211,6 +216,8 @@ impl MockAuthorityApi {
             delay,
             count,
             handle_object_info_request_result: None,
+            staggering_active: Arc::new(AtomicBool::new(false)),
+            health_checks: Arc::new(AtomicU32::new(0)),
         }
     }
 
@@ -293,9 +300,11 @@ impl AuthorityAPI for MockAuthorityApi {
         &self,
         _request: ValidatorHealthRequest,
     ) -> Result<ValidatorHealthResponse, SuiError> {
+        self.health_checks.fetch_add(1, Ordering::Relaxed);
         Ok(ValidatorHealthResponse {
             last_committed_leader_round: 1000,
             last_locally_built_checkpoint: 500,
+            staggering_active: Some(self.staggering_active.load(Ordering::Relaxed)),
             ..Default::default()
         })
     }
