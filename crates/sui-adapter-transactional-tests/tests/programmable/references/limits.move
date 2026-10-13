@@ -6,7 +6,7 @@
 // moves do not, reads free one, TxContext parameters are not counted, and unused results are
 // freed at the end of their command.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

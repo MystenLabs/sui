@@ -6,7 +6,7 @@
 // `&mut` in the same call. The reported index is the first `&mut` parameter holding the offending
 // reference, counting an injected TxContext.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

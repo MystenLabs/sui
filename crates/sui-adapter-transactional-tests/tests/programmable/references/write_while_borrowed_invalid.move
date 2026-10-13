@@ -4,7 +4,7 @@
 // SplitCoins and MergeCoins reject a coin argument that has a live extension, mutable or
 // immutable, with CannotWriteToExtendedReference.
 
-//# init --addresses test=0x0 --accounts A B --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A B
 
 //# publish
 module test::m;

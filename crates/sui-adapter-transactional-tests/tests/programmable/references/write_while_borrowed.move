@@ -4,7 +4,7 @@
 // SplitCoins and MergeCoins write through their coin argument. The write is allowed through a
 // `&mut Coin` result, and once every extension of the coin is dead.
 
-//# init --addresses test=0x0 --accounts A B --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A B
 
 //# publish
 module test::m;

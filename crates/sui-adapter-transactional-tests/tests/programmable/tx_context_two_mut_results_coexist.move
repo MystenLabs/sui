@@ -3,7 +3,7 @@
 
 // Two `&mut Y` results from two ctx-taking calls coexist and can both be written through.
 
-//# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0
 
 //# publish
 module test::m;

@@ -4,7 +4,7 @@
 // Generated `Read`s require the dereferenced type to have `copy`.
 // Generated `Read`s require the underlying reference to still be live (i.e. not moved).
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m {

@@ -4,7 +4,7 @@
 // A returned reference extends every mutable argument of its call (every argument, when
 // immutable), regardless of which one the callee actually returned.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

@@ -5,7 +5,7 @@
 // `SplitCoins` amounts and `TransferObjects` recipients are always `u64` and `address`, which
 // have `copy`, so they cannot be tested here.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m {

@@ -5,7 +5,7 @@
 // move, a frozen move, a last-use read, and twenty TxContext parameters at the limit; execution
 // then aborts inside `boom16`.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

@@ -4,7 +4,7 @@
 // A location may be moved once every reference into it is dead, for every kind of location a
 // reference can be rooted in and every command that consumes a value.
 
-//# init --addresses test=0x0 q=0x0 q_2=0x0 --accounts A B --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 q=0x0 q_2=0x0 --accounts A B
 
 //# publish
 module test::m;

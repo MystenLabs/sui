@@ -4,7 +4,7 @@
 // Stress test with many distinct borrowed result locations.
 // Borrows 64 distinct non-reference results per command (max_ptb_live_references).
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::worst;

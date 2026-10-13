@@ -4,7 +4,7 @@
 // A `&mut Coin` with no sources has no borrowers, so the coin commands accept it as a write
 // target. The only Move body for such a signature aborts.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

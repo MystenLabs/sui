@@ -4,7 +4,7 @@
 // Only TxContext is stripped: the result still borrows the object, so mutably using the
 // object while the result is live is rejected.
 
-//# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0
 
 //# publish
 module test::m;

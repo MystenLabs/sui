@@ -5,7 +5,7 @@
 // for every kind of location and every consuming command. Borrowing a location after it was moved
 // is rejected with ArgumentWithoutValue. Both checks run per argument, in argument order.
 
-//# init --addresses test=0x0 q=0x0 q_2=0x0 --accounts A B --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 q=0x0 q_2=0x0 --accounts A B
 
 //# publish
 module test::m;
