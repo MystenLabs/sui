@@ -29,9 +29,8 @@ mkdir -p "$OCI_OUTPUT"
 
 docker build -f "$DOCKERFILE" "$REPO_ROOT" \
 	--build-arg GIT_REVISION="$GIT_REVISION" \
+	--build-arg SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \
+	--output type=oci,rewrite-timestamp=true,force-compression=true,tar=false,dest=$OCI_OUTPUT/multisig-toolkit,name=multisig-toolkit \
 	--platform "$PLATFORM" \
 	--tag multisig-toolkit:latest \
 	"$@"
-
-# Export the image to OCI format
-docker save multisig-toolkit:latest | gzip > "$OCI_OUTPUT/multisig-toolkit.tar.gz" 
