@@ -143,17 +143,22 @@ impl TransactionVoteTracker {
     }
 
     /// Retrieves own votes on peer block transactions.
-    /// Every input block must be above the vote tracker GC round.
+    /// With V3, every input block must be above the vote tracker GC round.
+    /// V2 skips blocks at or below that round.
     pub(crate) fn get_own_votes(&self, block_refs: Vec<BlockRef>) -> Vec<BlockTransactionVotes> {
         let mut votes = vec![];
         let vote_tracker_state = self.vote_tracker_state.read();
         for block_ref in block_refs {
-            assert!(
-                block_ref.round > vote_tracker_state.gc_round,
-                "Transaction vote target {} is at or below vote tracker GC round {}",
-                block_ref,
-                vote_tracker_state.gc_round,
-            );
+            if vote_tracker_state.context.protocol_config.enable_v3() {
+                assert!(
+                    block_ref.round > vote_tracker_state.gc_round,
+                    "Transaction vote target {} is at or below vote tracker GC round {}",
+                    block_ref,
+                    vote_tracker_state.gc_round,
+                );
+            } else if block_ref.round <= vote_tracker_state.gc_round {
+                continue;
+            }
             let vote_info = vote_tracker_state.votes.get(&block_ref).unwrap_or_else(|| {
                 panic!(
                     "Ancestor block {} not found in vote tracker state",
@@ -343,11 +348,64 @@ mod test {
     use consensus_config::{AuthorityIndex, Parameters};
 
     use crate::{
-        TestBlock, Transaction, VerifiedBlock, block::BlockTransactionVotes, context::Context,
-        metrics::test_metrics,
+        TestBlock, Transaction, VerifiedBlock, block::BlockTransactionVotes,
+        block_verifier::NoopBlockVerifier, context::Context, metrics::test_metrics,
+        storage::mem_store::MemStore,
     };
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_get_own_votes_v2_skips_gc_targets() {
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(false);
+        let context = Arc::new(context);
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let tracker = TransactionVoteTracker::new(context, Arc::new(NoopBlockVerifier), dag_state);
+        let blocks: Vec<_> = (1..=3)
+            .map(|round| {
+                VerifiedBlock::new_for_test(
+                    TestBlock::new(round, 0)
+                        .set_transactions(vec![Transaction::new(vec![1])])
+                        .build(),
+                )
+            })
+            .collect();
+        tracker.add_voted_blocks(
+            blocks
+                .iter()
+                .cloned()
+                .map(|block| (block, vec![0]))
+                .collect(),
+        );
+        tracker.vote_tracker_state.write().update_gc_round(2);
+
+        let votes = tracker.get_own_votes(blocks.iter().map(|block| block.reference()).collect());
+        assert_eq!(votes.len(), 1);
+        assert_eq!(votes[0].block_ref, blocks[2].reference());
+        assert_eq!(votes[0].rejects, vec![0]);
+    }
+
+    #[rstest::rstest]
+    #[tokio::test]
+    #[should_panic(expected = "is at or below vote tracker GC round")]
+    async fn test_get_own_votes_v3_rejects_gc_targets(#[values(1, 2)] round: Round) {
+        let (mut context, _) = Context::new_for_test(4);
+        context.protocol_config.set_enable_v3_for_testing(true);
+        let context = Arc::new(context);
+        let dag_state = Arc::new(RwLock::new(DagState::new(
+            context.clone(),
+            Arc::new(MemStore::new()),
+        )));
+        let tracker = TransactionVoteTracker::new(context, Arc::new(NoopBlockVerifier), dag_state);
+        tracker.vote_tracker_state.write().update_gc_round(2);
+        let block = VerifiedBlock::new_for_test(TestBlock::new(round, 0).build_v3(0));
+
+        tracker.get_own_votes(vec![block.reference()]);
+    }
 
     // 4 authorities with stakes [1, 2, 3, 4], total 10.
     #[tokio::test]
