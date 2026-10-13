@@ -45,7 +45,7 @@ public fun delete(x: X) {
 //# programmable --sender A --dev-inspect --inputs 1
 //> 0: test::m::new();
 //> 1: test::m::borrow_mut(Result(0));
-// This write used to be disallowed
+// This call used to be rejected, but TxContext is no longer a source of returned references.
 //> 2: test::m::mut_tx();
 //> 3: test::m::write(Result(1));
 //> 4: test::m::check(Result(1), Input(0));
