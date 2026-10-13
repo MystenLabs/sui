@@ -376,7 +376,7 @@ pub fn transaction<Mode: ExecutionMode>(
     }
     let mut ast = context.finish();
     // mark the last usage of references as Move instead of Copy
-    scope_references::transaction(env.protocol_config, &mut ast);
+    scope_references::transaction(&mut ast);
     // mark unused results to be dropped
     unused_results::transaction(&mut ast)?;
     // track shared object IDs
@@ -1132,23 +1132,17 @@ pub(crate) fn withdrawal_inner_type(ty: &Type) -> Option<&Type> {
 //**************************************************************************************************
 
 mod scope_references {
-    use crate::{
-        sp,
-        static_programmable_transactions::typing::ast::{self as T, Type},
-    };
+    use crate::{sp, static_programmable_transactions::typing::ast as T};
     use std::collections::BTreeSet;
-    use sui_protocol_config::ProtocolConfig;
 
-    struct Context<'pc> {
-        protocol_config: &'pc ProtocolConfig,
+    struct Context {
         used: BTreeSet<(u16, u16)>,
     }
 
     /// To mimic proper scoping of references, the last usage of a reference is made a Move instead
     /// of a Copy.
-    pub fn transaction(protocol_config: &ProtocolConfig, ast: &mut T::Transaction) {
+    pub fn transaction(ast: &mut T::Transaction) {
         let mut context = Context {
-            protocol_config,
             used: BTreeSet::new(),
         };
         for c in ast.commands.iter_mut().rev() {
@@ -1183,15 +1177,7 @@ mod scope_references {
         }
     }
 
-    fn argument(context: &mut Context, arg: &mut T::Argument) {
-        if context.protocol_config.fix_ptb_generated_reads() {
-            argument_v2(context, arg)
-        } else {
-            argument_v1(context, arg)
-        }
-    }
-
-    fn argument_v2(context: &mut Context, sp!(_, (arg_, ty)): &mut T::Argument) {
+    fn argument(context: &mut Context, sp!(_, (arg_, ty)): &mut T::Argument) {
         use T::Argument__ as TArg;
         let usage = match arg_ {
             // `Read` has the referenced value's type, while its usage location has a reference type
@@ -1210,35 +1196,6 @@ mod scope_references {
                 location: T::Location::Result(i, j),
                 ..
             } => {
-                // we are at the last usage of a reference result if it was not yet added to the set
-                let last_usage = context.used.insert((*i, *j));
-                if last_usage {
-                    // if it was the last usage, we need to change the Copy to a Move
-                    let loc = T::Location::Result(*i, *j);
-                    *usage = T::Usage::Move(loc);
-                }
-            }
-            _ => (),
-        }
-    }
-
-    fn argument_v1(context: &mut Context, sp!(_, (arg_, ty)): &mut T::Argument) {
-        let usage = match arg_ {
-            T::Argument__::Use(u) | T::Argument__::Read(u) | T::Argument__::Freeze(u) => u,
-            T::Argument__::Borrow(_, _) => return,
-        };
-        match (&usage, ty) {
-            (T::Usage::Move(T::Location::Result(i, j)), Type::Reference(_, _)) => {
-                debug_assert!(false, "No reference should be moved at this point");
-                context.used.insert((*i, *j));
-            }
-            (
-                T::Usage::Copy {
-                    location: T::Location::Result(i, j),
-                    ..
-                },
-                Type::Reference(_, _),
-            ) => {
                 // we are at the last usage of a reference result if it was not yet added to the set
                 let last_usage = context.used.insert((*i, *j));
                 if last_usage {
