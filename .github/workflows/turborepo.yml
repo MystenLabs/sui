@@ -24,11 +24,6 @@ jobs:
   build:
     name: Lint, Build, and Test
     runs-on: ubuntu-latest
-    environment: sui-typescript-aws-kms-test-env
-    env:
-      E2E_AWS_KMS_TEST_ENABLE: "false"
-      E2E_GCP_KMS_TEST_ENABLE: "false"
-      E2E_SIGNER_TEST_ENABLE: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
@@ -54,28 +49,7 @@ jobs:
             turbo-${{ runner.os }}-
       - name: Lint
         run: pnpm turbo lint
-      - name: Install wasm-pack for mbf package
-        uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa # pin@v0.4.0
-        with:
-          version: 'latest'
-      - name: configure gcp/gke service user auth
-        if: env.E2E_SIGNER_TEST_ENABLE == 'true'
-        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # pin@v3.0.0
-        with:
-            credentials_json: ${{ secrets.GKE_TEST_KMS_SVCUSER_CREDENTIALS }}
       - name: Build
         run: pnpm turbo build
       - name: Test
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KMS_TEST_KEY_ID}}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_KMS_TEST_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ vars.AWS_KMS_AWS_REGION }}
-          AWS_KMS_KEY_ID: ${{ secrets.AWS_KMS_TEST_KMS_KEY_ID }}
-          E2E_AWS_KMS_TEST_ENABLE: ${{ env.E2E_AWS_KMS_TEST_ENABLE }}
-          GOOGLE_PROJECT_ID: ${{ secrets.GOOGLE_PROJECT_ID }}
-          GOOGLE_LOCATION: ${{ secrets.GOOGLE_LOCATION }}
-          GOOGLE_KEYRING: ${{ secrets.GOOGLE_KEYRING }}
-          GOOGLE_KEY_NAME: ${{ secrets.GOOGLE_KEY_NAME }}
-          GOOGLE_KEY_NAME_VERSION: ${{ secrets.GOOGLE_KEY_NAME_VERSION }}
-          E2E_GCP_KMS_TEST_ENABLE: ${{ env.E2E_GCP_KMS_TEST_ENABLE }}
         run: pnpm turbo test
