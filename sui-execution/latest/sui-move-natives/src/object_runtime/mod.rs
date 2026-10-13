@@ -657,10 +657,7 @@ impl<'a> ObjectRuntime<'a> {
             return Ok(None);
         };
 
-        if self
-            .protocol_config
-            .early_return_receive_object_mismatched_type()
-            && let ObjectResult::MismatchedType = &value
+        if let ObjectResult::MismatchedType = &value
             && self.state.received.contains_key(&child)
         {
             // New case due to the new adapter and being able to re-use receiving values at
