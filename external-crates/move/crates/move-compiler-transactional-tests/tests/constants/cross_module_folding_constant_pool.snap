@@ -1,0 +1,95 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 3-55:
+//# print-bytecode
+// Move bytecode v7
+module 42.a {
+
+Constants [
+	0 => u64: 7
+	1 => bool: true
+	2 => u16: 65535
+	3 => u8: 104
+	4 => u8: 105
+	5 => vector<u8>: "hi" // interpreted as UTF8 string
+]
+}
+// Move bytecode v7
+module 42.folded_only {
+
+public arith(): u64 {
+B0:
+	0: LdU64(8)
+	1: Ret
+}
+
+public branch(): u64 {
+B0:
+	0: LdU64(1)
+	1: Ret
+}
+
+}
+// Move bytecode v7
+module 42.folded_vector {
+
+public copied(): vector<u8> {
+B0:
+	0: LdConst[0](vector<u8>: "hi"..)
+	1: Ret
+}
+
+public folded(): vector<u8> {
+B0:
+	0: LdConst[0](vector<u8>: "hi"..)
+	1: Ret
+}
+
+Constants [
+	0 => vector<u8>: "hi" // interpreted as UTF8 string
+]
+}
+// Move bytecode v7
+module 42.in_constant {
+
+public eight(): u64 {
+B0:
+	0: LdConst[0](u64: 8)
+	1: Ret
+}
+
+Constants [
+	0 => u64: 8
+]
+}
+// Move bytecode v7
+module 42.shared_entry {
+
+public both(): u64 * u64 {
+B0:
+	0: LdConst[0](u64: 7)
+	1: LdConst[0](u64: 7)
+	2: Ret
+}
+
+Constants [
+	0 => u64: 7
+]
+}
+// Move bytecode v7
+module 42.unfoldable {
+
+public cast(): u8 {
+B0:
+	0: LdConst[0](u16: 65535)
+	1: CastU8
+	2: Ret
+}
+
+Constants [
+	0 => u16: 65535
+]
+}

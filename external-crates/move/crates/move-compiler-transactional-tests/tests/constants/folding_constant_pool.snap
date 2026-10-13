@@ -1,0 +1,48 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 3-24:
+//# print-bytecode
+// Move bytecode v7
+module 42.m {
+
+public reuses(): vector<u8> {
+B0:
+	0: LdConst[2](vector<u8>: "ab"..)
+	1: Ret
+}
+
+public creates(): vector<u8> {
+B0:
+	0: LdConst[4](vector<u8>: "ba"..)
+	1: Ret
+}
+
+public creates_again(): vector<u8> {
+B0:
+	0: LdConst[4](vector<u8>: "ba"..)
+	1: Ret
+}
+
+public scalar(): u8 {
+B0:
+	0: LdU8(195)
+	1: Ret
+}
+
+public compare(): bool {
+B0:
+	0: LdTrue
+	1: Ret
+}
+
+Constants [
+	0 => u8: 97
+	1 => u8: 98
+	2 => vector<u8>: "ab" // interpreted as UTF8 string
+	3 => address: 0x0000000000000000000000000000000000000000000000000000000000000001
+	4 => vector<u8>: "ba" // interpreted as UTF8 string
+]
+}
