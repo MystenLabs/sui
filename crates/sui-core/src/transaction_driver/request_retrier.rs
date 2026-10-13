@@ -17,7 +17,7 @@ use crate::{
         AggregatedEffectsDigests, TransactionDriverError, TransactionRequestError,
         aggregate_request_errors,
     },
-    validator_client_monitor::{TransactionClass, ValidatorClientMonitor},
+    validator_client_monitor::ValidatorClientMonitor,
 };
 
 /// Select validators with latencies within 2% of the lowest latency.
@@ -76,11 +76,7 @@ impl<A: Clone> RequestRetrier<A> {
             // order rather than fall back to latency ranking: the latency-preferred
             // validators are exactly the ones that would hold the transaction.
             let latency_rank: HashMap<AuthorityName, usize> = client_monitor
-                .select_shuffled_preferred_validators(
-                    &auth_agg.committee,
-                    SELECT_LATENCY_DELTA,
-                    TransactionClass::Unrestricted,
-                )
+                .select_shuffled_preferred_validators(&auth_agg.committee, SELECT_LATENCY_DELTA)
                 .into_iter()
                 .enumerate()
                 .map(|(rank, name)| (name, rank))
@@ -94,18 +90,8 @@ impl<A: Clone> RequestRetrier<A> {
                 .sort_by_key(|name| latency_rank.get(name).copied().unwrap_or(usize::MAX));
             order
         } else {
-            // Restricted transactions rank on restricted-class stats, which staggering
-            // holds can never inflate; everything else ranks on the unrestricted view.
-            let tx_class = if allowed_proposers.is_some() {
-                TransactionClass::Restricted
-            } else {
-                TransactionClass::Unrestricted
-            };
-            client_monitor.select_shuffled_preferred_validators(
-                &auth_agg.committee,
-                SELECT_LATENCY_DELTA,
-                tx_class,
-            )
+            client_monitor
+                .select_shuffled_preferred_validators(&auth_agg.committee, SELECT_LATENCY_DELTA)
         };
         let ranked_clients = ranked_validators
             .into_iter()
@@ -453,7 +439,6 @@ mod tests {
                 authority_name: *validator,
                 display_name: auth_agg.get_display_name(validator),
                 operation: OperationType::SharedObjectFinality,
-                tx_class: None,
                 ping_type: None,
                 result: Ok(Duration::from_millis(400 - (i as u64) * 100)),
             });
