@@ -284,6 +284,25 @@ Local execution maintains the answer forward from there, so later reads are pure
 Completeness is the point, so a partial answer is worse than none: a scan that could not run
 must never be recorded as one that ran and found nothing.
 
+Dynamic-field parents join the seed the same way addresses do, named by the user at startup
+with `--dynamic-fields-of`. Inside the consistent window the parent's fields are listed at the
+fork checkpoint directly. Unlike an address, a parent can also be resolved after the window
+has closed, because its fields at the fork checkpoint can be rebuilt from its history. Every
+field the parent held at the fork either still exists at the remote's latest checkpoint or was
+removed by a transaction that took the parent as a mutable input, since removing a field
+borrows the parent's `UID` mutably and a top-level object is only borrowed that way as an
+input. The fields listed at the latest checkpoint, together with the parent's children that
+those transactions consumed, therefore form a candidate set that contains every field held at
+the fork. Resolving each candidate at the fork checkpoint keeps exactly those fields and drops
+the ones created later.
+
+The rebuild holds only while the parent stays a top-level object, and its cost grows with the
+number of parent versions since the fork. The seed therefore fails, rather than recording a
+list, for a parent owned by another object, for a parent whose history has a gap (which
+wrapping and unwrapping it leaves behind), and for a parent with more than 1,000 versions to
+walk. Those failures follow the same rule as the address window, because a list that could not
+be built must never be recorded as complete.
+
 A *log-position* index answers what sits at a given position in the total order of every
 transaction ever executed. That is not a function of state at any checkpoint, and no query
 pinned anywhere can produce it. The fork inherits its position numbering from the fork point

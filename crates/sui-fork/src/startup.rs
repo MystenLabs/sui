@@ -305,6 +305,7 @@ mod tests {
                 network: network.to_owned(),
                 checkpoint,
                 addresses: Vec::new(),
+                dynamic_field_parents: Vec::new(),
                 entries: Vec::new(),
             })
             .expect("seed manifest should write");

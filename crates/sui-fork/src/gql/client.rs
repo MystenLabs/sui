@@ -27,9 +27,12 @@ use sui_types::object::Object;
 use crate::Node;
 use crate::gql::AddressOwnedObject;
 use crate::gql::CheckpointRead;
+use crate::gql::ObjectChange;
 use crate::gql::ObjectKey;
 use crate::gql::ObjectRead;
 use crate::gql::ObjectSeedMetadata;
+use crate::gql::ObjectState;
+use crate::gql::ObjectVersion;
 use crate::gql::TransactionInfo;
 use crate::gql::TransactionRead;
 use crate::gql::queries;
@@ -294,6 +297,52 @@ impl GraphQLClient {
         queries::object_seed_query::query(object_ids, checkpoint, self).await
     }
 
+    /// List references to the dynamic fields of `parent` at a checkpoint, which must be inside the
+    /// remote's consistent window.
+    pub(crate) async fn get_dynamic_field_refs_at_checkpoint(
+        &self,
+        parent: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Vec<ObjectRef>, Error> {
+        queries::dynamic_fields_query::query(parent, checkpoint, self).await
+    }
+
+    /// Resolve the reference and owner of each object at a checkpoint, in the order requested.
+    pub(crate) async fn get_object_states_at_checkpoint(
+        &self,
+        object_ids: &[ObjectID],
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Vec<Option<ObjectState>>, Error> {
+        queries::object_history_query::states_at_checkpoint(object_ids, checkpoint, self).await
+    }
+
+    /// List the versions of an object in `(after_version, through_version]`, oldest first, failing
+    /// once more than `max_versions` have been seen.
+    pub(crate) async fn get_object_versions(
+        &self,
+        object_id: ObjectID,
+        after_version: u64,
+        through_version: u64,
+        max_versions: usize,
+    ) -> Result<Vec<ObjectVersion>, Error> {
+        queries::object_history_query::versions(
+            object_id,
+            after_version,
+            through_version,
+            max_versions,
+            self,
+        )
+        .await
+    }
+
+    /// List the objects each transaction changed, with their state going into the transaction.
+    pub(crate) async fn get_transaction_object_changes(
+        &self,
+        digests: &[String],
+    ) -> Result<Vec<Vec<ObjectChange>>, Error> {
+        queries::object_history_query::object_changes(digests, self).await
+    }
+
     /// Get the latest checkpoint sequence number from GraphQL RPC.
     pub async fn get_latest_checkpoint_sequence_number(
         &self,
@@ -335,6 +384,14 @@ impl GraphQLClient {
         &self,
     ) -> Result<CheckpointSequenceNumber, Error> {
         block_on!(queries::available_range_query::query("Object", self))
+    }
+
+    /// Query `serviceConfig.availableRange` for `Address.dynamicFields`, the start of the window in
+    /// which the remote can list a parent's dynamic fields at a checkpoint.
+    pub(crate) async fn get_lowest_available_checkpoint_dynamic_fields(
+        &self,
+    ) -> Result<CheckpointSequenceNumber, Error> {
+        queries::available_range_query::query_field("Address", Some("dynamicFields"), self).await
     }
 }
 

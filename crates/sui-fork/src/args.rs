@@ -41,6 +41,11 @@ pub struct StartArgs {
     #[arg(long = "object")]
     pub object_ids: Vec<ObjectID>,
 
+    /// Objects whose dynamic fields at the fork checkpoint are recorded in the seed manifest, so
+    /// that listing their dynamic fields on the fork includes the pre-fork ones.
+    #[arg(long = "dynamic-fields-of", value_name = "PARENT")]
+    pub dynamic_field_parents: Vec<ObjectID>,
+
     /// Address for the fork's RPC server.
     #[arg(long, default_value = DEFAULT_RPC_ADDR)]
     pub rpc_addr: SocketAddr,
@@ -54,6 +59,7 @@ impl Default for StartArgs {
             data_dir: None,
             addresses: Vec::new(),
             object_ids: Vec::new(),
+            dynamic_field_parents: Vec::new(),
             rpc_addr: DEFAULT_RPC_ADDR
                 .parse()
                 .expect("default RPC address should be valid"),

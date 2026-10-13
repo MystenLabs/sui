@@ -140,11 +140,13 @@ async fn cmd_start(args: StartArgs, json_output: bool, version: &'static str) ->
         data_dir,
         addresses,
         object_ids,
+        dynamic_field_parents,
         rpc_addr,
     } = args;
     let seed_input = SeedInput {
         addresses: addresses.into_iter().collect(),
         object_ids: object_ids.into_iter().collect(),
+        dynamic_field_parents: dynamic_field_parents.into_iter().collect(),
     };
     let network_name = node.network_name();
 

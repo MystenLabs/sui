@@ -387,6 +387,7 @@ async fn test_seed_load_survives_restart_without_remote() {
         network: "custom".to_owned(),
         checkpoint,
         addresses: vec![owner],
+        dynamic_field_parents: Vec::new(),
         entries: vec![SeedEntry {
             object_ref: object.compute_object_reference(),
         }],

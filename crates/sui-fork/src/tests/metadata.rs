@@ -75,6 +75,7 @@ fn seed_manifest_round_trips_and_is_immutable() {
         network: "custom".to_owned(),
         checkpoint: 42,
         addresses: Vec::new(),
+        dynamic_field_parents: Vec::new(),
         entries: Vec::new(),
     };
 

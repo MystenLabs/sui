@@ -8,6 +8,10 @@ mod queries;
 
 pub use client::GraphQLClient;
 pub(crate) use queries::address_owned_objects_query::AddressOwnedObject;
+pub(crate) use queries::object_history_query::ObjectChange;
+pub(crate) use queries::object_history_query::ObjectState;
+pub(crate) use queries::object_history_query::ObjectVersion;
+pub(crate) use queries::object_history_query::OwnerSummary;
 pub(crate) use queries::object_seed_query::ObjectSeedMetadata;
 
 use anyhow::Error;

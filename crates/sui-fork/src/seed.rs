@@ -4,10 +4,15 @@
 //! Fork manifest and seed resolution for seed-bounded index reads.
 //!
 //! Seeding happens once, at fork creation, in two steps. Resolution enumerates the requested
-//! addresses and objects against GraphQL pinned at the fork checkpoint and records the resulting
-//! object references in an immutable manifest stored on disk. The fork fetches that data from the
-//! live netork RPC and hands them to `sui-rpc-store`'s `Restore` pipelines, which is where the
-//! fork's whole pre-fork derived-index surface comes from.
+//! addresses, objects, and dynamic-field parents against GraphQL pinned at the fork checkpoint and
+//! records the resulting object references in an immutable manifest stored on disk. The fork
+//! fetches that data from the live netork RPC and hands them to `sui-rpc-store`'s `Restore`
+//! pipelines, which is where the fork's whole pre-fork derived-index surface comes from.
+//!
+//! A dynamic-field parent is enumerated directly when the fork checkpoint is inside the remote's
+//! consistent window. Outside it, the remote can no longer list the parent's fields at the fork
+//! checkpoint, so [`reconstruct_dynamic_field_refs`] rebuilds the list from the parent's version
+//! history instead.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -31,12 +36,22 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use crate::ForkStore;
 use crate::gql::AddressOwnedObject;
 use crate::gql::ObjectSeedMetadata;
+use crate::gql::ObjectState;
+use crate::gql::OwnerSummary;
 use crate::metadata::MetadataStore;
 use crate::remote::RemoteSource;
 
 /// Objects fetched per GraphQL query when querying for seed objects. The load commits as one batch
 /// regardless, and this only bounds the size of an individual query.
 const OBJECTS_PER_QUERY: usize = 50;
+
+/// Most parent versions a dynamic-field reconstruction walks before giving up.
+///
+/// Each version costs a share of a batched effects request, so the walk's cost grows with how
+/// often the parent changed between the fork checkpoint and now. A busy shared object can change
+/// thousands of times an hour, and the bound makes such a parent fail after a few cheap version
+/// pages instead of paging through its whole history.
+const MAX_RECONSTRUCTION_VERSIONS: usize = 1_000;
 
 /// CLI seed input before it has been resolved against the upstream chain.
 #[derive(Clone, Debug, Default)]
@@ -45,6 +60,8 @@ pub struct SeedInput {
     pub addresses: BTreeSet<SuiAddress>,
     /// Object IDs to fetch and seed.
     pub object_ids: BTreeSet<ObjectID>,
+    /// Objects whose dynamic fields at the fork checkpoint should be recorded in the seed manifest.
+    pub dynamic_field_parents: BTreeSet<ObjectID>,
 }
 
 /// Object reference recorded in the manifest and hydrated by the seed load.
@@ -63,6 +80,10 @@ pub(crate) struct SeedManifest {
     /// used.
     #[serde(default)]
     pub(crate) addresses: Vec<SuiAddress>,
+    /// Parents whose dynamic fields were fully resolved to produce this manifest. Like
+    /// `addresses`, the list is a record for whoever inspects the fork directory.
+    #[serde(default)]
+    pub(crate) dynamic_field_parents: Vec<ObjectID>,
     pub(crate) entries: Vec<SeedEntry>,
 }
 
@@ -72,15 +93,18 @@ impl SeedManifest {
             network,
             checkpoint,
             addresses: Vec::new(),
+            dynamic_field_parents: Vec::new(),
             entries: Vec::new(),
         }
     }
 }
 
 impl SeedInput {
-    /// Return true when no addresses or objects were requested for seeding.
+    /// Return true when no addresses, objects, or dynamic-field parents were requested for seeding.
     pub fn is_empty(&self) -> bool {
-        self.addresses.is_empty() && self.object_ids.is_empty()
+        self.addresses.is_empty()
+            && self.object_ids.is_empty()
+            && self.dynamic_field_parents.is_empty()
     }
 }
 
@@ -301,6 +325,143 @@ async fn resolve_object_seeds(
     Ok(entries)
 }
 
+/// Resolve the dynamic fields `parent` held at the fork checkpoint.
+///
+/// Inside the remote's consistent window the fields are listed at the fork checkpoint directly.
+/// Outside it that listing is no longer available, so the fields are reconstructed from the
+/// parent's version history instead.
+async fn resolve_dynamic_field_seed(
+    remote: &RemoteSource,
+    parent: ObjectID,
+    within_consistent_window: bool,
+) -> Result<Vec<SeedEntry>, Error> {
+    let refs = if within_consistent_window {
+        remote.dynamic_field_refs_at_fork(parent).await?
+    } else {
+        reconstruct_dynamic_field_refs(remote, parent).await?
+    };
+    Ok(refs
+        .into_iter()
+        .map(|object_ref| SeedEntry { object_ref })
+        .collect())
+}
+
+/// Rebuild the references to the dynamic fields `parent` held at the fork checkpoint, from its
+/// fields at the remote's latest checkpoint and its version history since the fork.
+///
+/// A field the parent held at the fork checkpoint either still exists at the latest checkpoint, or
+/// a transaction since the fork removed it. Removing a field takes `&mut UID` on the parent, and a
+/// top-level parent can only be borrowed mutably as a transaction input, which bumps its version.
+/// Walking the parent's versions between the two checkpoints therefore visits every transaction
+/// that could have removed a field, and the children of the parent those transactions took as
+/// inputs are the removed candidates. Each candidate is then resolved at the fork checkpoint, and
+/// only those that existed there as children of the parent are kept, which also drops fields
+/// created after the fork.
+///
+/// The argument holds only while the parent stays a top-level object, so reconstruction fails for a
+/// parent owned by another object at either end of the walk or anywhere along it. It also fails
+/// for a parent whose history has a gap, meaning a transaction whose input version of the parent
+/// is not the previous version in the walk. Wrapping and later unwrapping the parent leaves such a
+/// gap, and fields removed while it was wrapped would otherwise go unnoticed.
+async fn reconstruct_dynamic_field_refs(
+    remote: &RemoteSource,
+    parent: ObjectID,
+) -> Result<Vec<ObjectRef>, Error> {
+    let fork_checkpoint = remote.forked_at_checkpoint();
+    let at_fork = top_level_state(remote, parent, fork_checkpoint).await?;
+
+    // The current fields and the walk's starting version are read at the same checkpoint. Starting
+    // the walk at an earlier version would miss a field removed between that version and the
+    // listing.
+    let latest_checkpoint = remote.latest_checkpoint().await?;
+    let at_latest = top_level_state(remote, parent, latest_checkpoint).await?;
+    let current_fields = remote
+        .dynamic_field_refs_at(parent, latest_checkpoint)
+        .await?;
+
+    let fork_version = at_fork.object_ref.1.value();
+    let versions = remote
+        .object_versions(
+            parent,
+            fork_version,
+            at_latest.object_ref.1.value(),
+            MAX_RECONSTRUCTION_VERSIONS,
+        )
+        .await?;
+    let digests: Vec<_> = versions
+        .iter()
+        .map(|version| version.transaction.clone())
+        .collect();
+    let changes = remote.transaction_object_changes(&digests).await?;
+
+    let mut candidates: BTreeSet<ObjectID> = current_fields
+        .iter()
+        .map(|object_ref| object_ref.0)
+        .collect();
+    let mut previous_version = fork_version;
+    for (version, changes) in versions.iter().zip_eq(changes) {
+        if version.owner != OwnerSummary::TopLevel {
+            bail!(
+                "{parent} was owned by another object at version {}, and only a top-level \
+                 parent's dynamic fields can be reconstructed",
+                version.version,
+            );
+        }
+        let input_version = changes
+            .iter()
+            .find(|change| change.object_id == parent)
+            .and_then(|change| change.input_version);
+        if input_version != Some(previous_version) {
+            bail!(
+                "the history of {parent} has a gap before version {}, because it was wrapped or \
+                 deleted after version {previous_version}",
+                version.version,
+            );
+        }
+        previous_version = version.version;
+
+        candidates.extend(
+            changes
+                .iter()
+                .filter(|change| change.input_owner == Some(OwnerSummary::Object(parent)))
+                .map(|change| change.object_id),
+        );
+    }
+
+    let candidates: Vec<_> = candidates.into_iter().collect();
+    let states = remote.object_states_at_fork(&candidates).await?;
+    Ok(states
+        .into_iter()
+        .flatten()
+        .filter(|state| state.owner == OwnerSummary::Object(parent))
+        .map(|state| state.object_ref)
+        .collect())
+}
+
+/// Resolve `parent` at `checkpoint`, failing unless it is a top-level object there.
+async fn top_level_state(
+    remote: &RemoteSource,
+    parent: ObjectID,
+    checkpoint: CheckpointSequenceNumber,
+) -> Result<ObjectState, Error> {
+    let state = remote
+        .object_states_at(&[parent], checkpoint)
+        .await?
+        .pop()
+        .flatten();
+    match state {
+        Some(state) if state.owner == OwnerSummary::TopLevel => Ok(state),
+        Some(_) => bail!(
+            "{parent} is owned by another object at checkpoint {checkpoint}, and only a top-level \
+             parent's dynamic fields can be reconstructed"
+        ),
+        None => bail!(
+            "{parent} is not an object at checkpoint {checkpoint}, because it does not exist there \
+             or is wrapped, and only a top-level parent's dynamic fields can be reconstructed"
+        ),
+    }
+}
+
 /// Resolve the requested addresses and object ids against the remote source at the fork checkpoint.
 async fn resolve_seeds(
     input: &SeedInput,
@@ -351,6 +512,43 @@ async fn resolve_seeds(
         }
     }
 
+    let mut dynamic_field_parents = Vec::new();
+    if !input.dynamic_field_parents.is_empty() {
+        let lowest_available = store
+            .remote()
+            .lowest_available_checkpoint_dynamic_fields()
+            .await?;
+        let within_consistent_window = checkpoint >= lowest_available;
+        for parent in input.dynamic_field_parents.iter().copied() {
+            let parent_entries =
+                resolve_dynamic_field_seed(store.remote(), parent, within_consistent_window)
+                    .await
+                    .with_context(|| {
+                        if within_consistent_window {
+                            format!(
+                                "failed to list the dynamic fields of {parent} at checkpoint \
+                                 {checkpoint}"
+                            )
+                        } else {
+                            format!(
+                                "failed to reconstruct the dynamic fields of {parent} at \
+                                 checkpoint {checkpoint}, which is older than the remote's \
+                                 consistent window (available from checkpoint \
+                                 {lowest_available}, roughly the last hour). Forking at a \
+                                 checkpoint inside the window lists them directly."
+                            )
+                        }
+                    })?;
+            if parent_entries.is_empty() {
+                warn!(%parent, checkpoint, "dynamic-field parent seed resolved no fields");
+            }
+            for entry in parent_entries {
+                entries.insert(entry.object_ref.0, entry);
+            }
+            dynamic_field_parents.push(parent);
+        }
+    }
+
     let remaining_object_ids: Vec<_> = input
         .object_ids
         .iter()
@@ -365,6 +563,7 @@ async fn resolve_seeds(
         network,
         checkpoint,
         addresses,
+        dynamic_field_parents,
         entries: entries.into_values().collect(),
     })
 }
@@ -380,6 +579,7 @@ mod tests {
     use sui_types::object::Owner;
     use wiremock::Mock;
     use wiremock::MockServer;
+    use wiremock::Request;
     use wiremock::ResponseTemplate;
     use wiremock::matchers::body_partial_json;
     use wiremock::matchers::body_string_contains;
@@ -485,6 +685,7 @@ mod tests {
                 network: "custom".to_owned(),
                 checkpoint: 11,
                 addresses: Vec::new(),
+                dynamic_field_parents: Vec::new(),
                 entries: Vec::new(),
             }
         );
@@ -508,6 +709,7 @@ mod tests {
             &SeedInput {
                 addresses: BTreeSet::new(),
                 object_ids: BTreeSet::from([ObjectID::random()]),
+                dynamic_field_parents: BTreeSet::new(),
             },
         )
         .await
@@ -559,6 +761,7 @@ mod tests {
             &SeedInput {
                 addresses: BTreeSet::new(),
                 object_ids: BTreeSet::from([object.id()]),
+                dynamic_field_parents: BTreeSet::new(),
             },
         )
         .await
@@ -624,6 +827,7 @@ mod tests {
             &SeedInput {
                 addresses: BTreeSet::new(),
                 object_ids: BTreeSet::from([object.id()]),
+                dynamic_field_parents: BTreeSet::new(),
             },
         )
         .await
@@ -684,6 +888,7 @@ mod tests {
             &SeedInput {
                 addresses: BTreeSet::from([skipped_address]),
                 object_ids: BTreeSet::from([object.id()]),
+                dynamic_field_parents: BTreeSet::new(),
             },
         )
         .await
@@ -803,6 +1008,275 @@ mod tests {
             .await;
     }
 
+    /// A GraphQL remote for dynamic-field seeding, which serves every query the direct listing and
+    /// the reconstruction issue from fixed tables keyed the way the queries are.
+    ///
+    /// A single dispatching responder stands in for per-query mocks because the reconstruction's
+    /// queries overlap in their variables, and matching on the selection set keeps each table
+    /// independent of the order in which the walk issues requests.
+    #[derive(Clone, Default)]
+    struct FakeHistory {
+        lowest_available: CheckpointSequenceNumber,
+        latest_checkpoint: CheckpointSequenceNumber,
+        /// Object state by `(id, checkpoint)`, absent where the object does not exist.
+        states: BTreeMap<(ObjectID, CheckpointSequenceNumber), serde_json::Value>,
+        /// Dynamic fields by `(parent, checkpoint)`.
+        fields: BTreeMap<(ObjectID, CheckpointSequenceNumber), Vec<Object>>,
+        /// The version nodes `objectVersions` returns, whatever the filter.
+        versions: Vec<serde_json::Value>,
+        /// Object change nodes by transaction digest.
+        changes: BTreeMap<String, Vec<serde_json::Value>>,
+    }
+
+    impl FakeHistory {
+        fn respond(&self, request: &Request) -> ResponseTemplate {
+            let body: serde_json::Value = request.body_json().expect("request body should be json");
+            let query = body["query"].as_str().expect("query should be a string");
+            let variables = &body["variables"];
+            let data = if query.contains("availableRange") {
+                // Only the field the listing reads carries the consistent window. The type alone
+                // reports the start of the chain, as the hosted endpoints do, so a gate that asked
+                // for the type would take the reconstruction scenario down the direct path.
+                let lowest_available = if variables["field"] == "dynamicFields" {
+                    self.lowest_available
+                } else {
+                    0
+                };
+                return ResponseTemplate::new(200)
+                    .set_body_json(available_range_response(lowest_available));
+            } else if query.contains("multiGetTransactionEffects") {
+                let effects: Vec<_> = variables["keys"]
+                    .as_array()
+                    .expect("keys should be an array")
+                    .iter()
+                    .map(|digest| {
+                        let nodes = &self.changes[digest.as_str().expect("digest")];
+                        json!({
+                            "objectChanges": {
+                                "nodes": nodes,
+                                "pageInfo": { "hasNextPage": false, "endCursor": null },
+                            }
+                        })
+                    })
+                    .collect();
+                json!({ "multiGetTransactionEffects": effects })
+            } else if query.contains("objectVersions") {
+                json!({
+                    "objectVersions": {
+                        "nodes": self.versions,
+                        "pageInfo": { "hasNextPage": false, "endCursor": null },
+                    }
+                })
+            } else if query.contains("dynamicFields") {
+                let parent: ObjectID = variables["address"].as_str().unwrap().parse().unwrap();
+                let checkpoint = variables["sequenceNumber"].as_u64().unwrap();
+                let nodes: Vec<_> = self
+                    .fields
+                    .get(&(parent, checkpoint))
+                    .into_iter()
+                    .flatten()
+                    .map(|field| {
+                        json!({
+                            "address": field.id().to_string(),
+                            "version": field.version().value(),
+                            "digest": field.digest().to_string(),
+                        })
+                    })
+                    .collect();
+                json!({
+                    "checkpoint": {
+                        "query": {
+                            "address": {
+                                "dynamicFields": {
+                                    "nodes": nodes,
+                                    "pageInfo": { "hasNextPage": false, "endCursor": null },
+                                }
+                            }
+                        }
+                    }
+                })
+            } else if query.contains("multiGetObjects") {
+                let objects: Vec<_> = variables["keys"]
+                    .as_array()
+                    .expect("keys should be an array")
+                    .iter()
+                    .map(|key| {
+                        let id: ObjectID = key["address"].as_str().unwrap().parse().unwrap();
+                        let checkpoint = key["atCheckpoint"].as_u64().unwrap();
+                        self.states
+                            .get(&(id, checkpoint))
+                            .cloned()
+                            .unwrap_or(serde_json::Value::Null)
+                    })
+                    .collect();
+                json!({ "multiGetObjects": objects })
+            } else if query.contains("checkpoint") {
+                json!({ "checkpoint": { "sequenceNumber": self.latest_checkpoint } })
+            } else {
+                panic!("unexpected query: {query}");
+            };
+            ResponseTemplate::new(200).set_body_json(json!({ "data": data }))
+        }
+
+        async fn serve(self) -> MockServer {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/"))
+                .respond_with(move |request: &Request| self.respond(request))
+                .mount(&server)
+                .await;
+            server
+        }
+    }
+
+    fn shared_owner() -> serde_json::Value {
+        json!({ "__typename": "Shared", "initialSharedVersion": 1 })
+    }
+
+    fn object_owner(parent: ObjectID) -> serde_json::Value {
+        json!({ "__typename": "ObjectOwner", "address": { "address": parent.to_string() } })
+    }
+
+    fn state(object: &Object, owner: serde_json::Value) -> serde_json::Value {
+        json!({
+            "version": object.version().value(),
+            "digest": object.digest().to_string(),
+            "owner": owner,
+        })
+    }
+
+    fn version_node(version: u64, digest: &str) -> serde_json::Value {
+        json!({
+            "version": version,
+            "owner": shared_owner(),
+            "previousTransaction": { "digest": digest },
+        })
+    }
+
+    fn change_node(id: ObjectID, input: Option<(u64, serde_json::Value)>) -> serde_json::Value {
+        match input {
+            Some((version, owner)) => json!({
+                "address": id.to_string(),
+                "inputState": { "version": version, "owner": owner },
+            }),
+            None => json!({ "address": id.to_string(), "inputState": null }),
+        }
+    }
+
+    fn field_of(parent: ObjectID, version: u64) -> Object {
+        Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            SequenceNumber::from_u64(version),
+            Owner::ObjectOwner(parent.into()),
+        )
+    }
+
+    fn shared_object(id: ObjectID, version: u64) -> Object {
+        Object::with_id_owner_version_for_testing(
+            id,
+            SequenceNumber::from_u64(version),
+            Owner::Shared {
+                initial_shared_version: SequenceNumber::from_u64(1),
+            },
+        )
+    }
+
+    /// A shared parent forked at checkpoint 11 and observed again at checkpoint 30. It held `kept`
+    /// and `removed` at the fork, transaction `tx-7` removed `removed`, and transaction `tx-9`
+    /// added `created`.
+    struct ReconstructionScenario {
+        parent: ObjectID,
+        kept: Object,
+        removed: Object,
+        created: Object,
+        history: FakeHistory,
+    }
+
+    fn reconstruction_scenario() -> ReconstructionScenario {
+        let parent = ObjectID::random();
+        let kept = field_of(parent, 3);
+        let removed = field_of(parent, 4);
+        let created = field_of(parent, 9);
+        let unrelated = ObjectID::random();
+        let history = FakeHistory {
+            lowest_available: 20,
+            latest_checkpoint: 30,
+            states: BTreeMap::from([
+                (
+                    (parent, 11),
+                    state(&shared_object(parent, 5), shared_owner()),
+                ),
+                (
+                    (parent, 30),
+                    state(&shared_object(parent, 9), shared_owner()),
+                ),
+                ((kept.id(), 11), state(&kept, object_owner(parent))),
+                ((removed.id(), 11), state(&removed, object_owner(parent))),
+            ]),
+            fields: BTreeMap::from([((parent, 30), vec![kept.clone(), created.clone()])]),
+            versions: vec![version_node(7, "tx-7"), version_node(9, "tx-9")],
+            changes: BTreeMap::from([
+                (
+                    "tx-7".to_owned(),
+                    vec![
+                        change_node(parent, Some((5, shared_owner()))),
+                        change_node(removed.id(), Some((4, object_owner(parent)))),
+                        change_node(
+                            unrelated,
+                            Some((2, json!({ "__typename": "AddressOwner", "address": null }))),
+                        ),
+                    ],
+                ),
+                (
+                    "tx-9".to_owned(),
+                    vec![
+                        change_node(parent, Some((7, shared_owner()))),
+                        change_node(created.id(), None),
+                    ],
+                ),
+            ]),
+        };
+        ReconstructionScenario {
+            parent,
+            kept,
+            removed,
+            created,
+            history,
+        }
+    }
+
+    async fn seed_dynamic_fields_of(
+        server: &MockServer,
+        parent: ObjectID,
+    ) -> (
+        tempfile::TempDir,
+        ForkStore,
+        ServiceManager,
+        Result<SeedManifest, Error>,
+    ) {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let (store, services) = test_data_store_with_remote(temp.path(), server.uri(), 11);
+        let manifest = prepare_seed_manifest(
+            &store,
+            "custom".to_owned(),
+            &SeedInput {
+                addresses: BTreeSet::new(),
+                object_ids: BTreeSet::new(),
+                dynamic_field_parents: BTreeSet::from([parent]),
+            },
+        )
+        .await;
+        (temp, store, services, manifest)
+    }
+
+    fn entry_ids(manifest: &SeedManifest) -> BTreeSet<ObjectID> {
+        manifest
+            .entries
+            .iter()
+            .map(|entry| entry.object_ref.0)
+            .collect()
+    }
+
     #[test]
     fn seed_manifest_without_addresses_field_deserializes_with_empty_addresses() {
         // Manifests written before the `addresses` field existed must keep
@@ -846,6 +1320,7 @@ mod tests {
             &SeedInput {
                 addresses: BTreeSet::from([owner, empty_owner]),
                 object_ids: BTreeSet::new(),
+                dynamic_field_parents: BTreeSet::new(),
             },
         )
         .await
@@ -922,6 +1397,7 @@ mod tests {
             &SeedInput {
                 addresses: BTreeSet::from([owner]),
                 object_ids: BTreeSet::new(),
+                dynamic_field_parents: BTreeSet::new(),
             },
         )
         .await
@@ -958,6 +1434,7 @@ mod tests {
             &SeedInput {
                 addresses: BTreeSet::from([owner]),
                 object_ids: BTreeSet::new(),
+                dynamic_field_parents: BTreeSet::new(),
             },
         )
         .await
@@ -987,6 +1464,112 @@ mod tests {
         assert!(
             accumulator_field_id(owner, "not::a::type").is_err(),
             "an unparseable coin type must not derive an id",
+        );
+    }
+
+    /// Inside the consistent window the parent's fields are listed at the fork checkpoint
+    /// directly, and the parent is recorded as fully resolved.
+    #[tokio::test]
+    async fn dynamic_field_seed_lists_fields_at_the_fork_checkpoint_inside_the_window() {
+        let parent = ObjectID::random();
+        let field = field_of(parent, 3);
+        let server = FakeHistory {
+            lowest_available: 0,
+            fields: BTreeMap::from([((parent, 11), vec![field.clone()])]),
+            ..FakeHistory::default()
+        }
+        .serve()
+        .await;
+
+        let (_temp, store, _services, manifest) = seed_dynamic_fields_of(&server, parent).await;
+        let manifest = manifest.expect("seed manifest should resolve");
+
+        assert_eq!(
+            manifest.entries,
+            vec![SeedEntry {
+                object_ref: field.compute_object_reference(),
+            }],
+        );
+        assert_eq!(manifest.dynamic_field_parents, vec![parent]);
+        assert_eq!(store.metadata().read_seed_manifest().unwrap(), manifest);
+    }
+
+    /// Outside the window the fields are rebuilt from the parent's history. A field still present
+    /// and a field removed after the fork are both seeded at their fork-checkpoint versions, and a
+    /// field created after the fork is not.
+    #[tokio::test]
+    async fn dynamic_field_seed_reconstructs_fields_outside_the_window() {
+        let scenario = reconstruction_scenario();
+        let server = scenario.history.serve().await;
+
+        let (_temp, _store, _services, manifest) =
+            seed_dynamic_fields_of(&server, scenario.parent).await;
+        let manifest = manifest.expect("seed manifest should resolve");
+
+        assert_eq!(
+            entry_ids(&manifest),
+            BTreeSet::from([scenario.kept.id(), scenario.removed.id()]),
+        );
+        assert!(!entry_ids(&manifest).contains(&scenario.created.id()));
+        let removed_entry = manifest
+            .entries
+            .iter()
+            .find(|entry| entry.object_ref.0 == scenario.removed.id())
+            .expect("the removed field should be seeded");
+        assert_eq!(
+            removed_entry.object_ref,
+            scenario.removed.compute_object_reference(),
+        );
+        assert_eq!(manifest.dynamic_field_parents, vec![scenario.parent]);
+    }
+
+    /// A transaction whose input version of the parent skips the previous version in the walk
+    /// means the parent left the ownership tree in between, where its fields could change unseen,
+    /// so the reconstruction refuses rather than record a list it cannot vouch for.
+    #[tokio::test]
+    async fn dynamic_field_reconstruction_fails_on_a_gap_in_the_parent_history() {
+        let mut scenario = reconstruction_scenario();
+        scenario
+            .history
+            .changes
+            .insert("tx-9".to_owned(), vec![change_node(scenario.parent, None)]);
+        let server = scenario.history.serve().await;
+
+        let (_temp, store, _services, manifest) =
+            seed_dynamic_fields_of(&server, scenario.parent).await;
+        let err = manifest.expect_err("a gap in the history should fail the seed");
+
+        assert!(
+            format!("{err:#}").contains("has a gap before version 9"),
+            "{err:#}"
+        );
+        assert!(!store.metadata().seed_manifest_exists());
+    }
+
+    /// A parent owned by another object can have its fields changed without its own version
+    /// moving, so its history cannot bound what changed and the reconstruction refuses it.
+    #[tokio::test]
+    async fn dynamic_field_reconstruction_fails_for_an_object_owned_parent() {
+        let mut scenario = reconstruction_scenario();
+        let parent_object = shared_object(scenario.parent, 5);
+        scenario.history.states.insert(
+            (scenario.parent, 11),
+            state(&parent_object, object_owner(ObjectID::random())),
+        );
+        let server = scenario.history.serve().await;
+
+        let (_temp, _store, _services, manifest) =
+            seed_dynamic_fields_of(&server, scenario.parent).await;
+        let err = manifest.expect_err("an object-owned parent should fail the seed");
+
+        let message = format!("{err:#}");
+        assert!(
+            message.contains("owned by another object at checkpoint 11"),
+            "{message}"
+        );
+        assert!(
+            message.contains("older than the remote's consistent window"),
+            "{message}"
         );
     }
 }

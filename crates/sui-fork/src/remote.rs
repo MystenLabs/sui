@@ -7,6 +7,10 @@
 //! policy. Object queries are pinned at the fork checkpoint, and checkpoint and transaction lookups
 //! refuse to return anything finalized after the fork point, so upstream activity that happened
 //! after the fork cannot leak into a fork that has already diverged.
+//!
+//! Dynamic-field reconstruction is the one reader of post-fork history. Its reads only discover
+//! candidate field ids, and each candidate is then resolved at the fork checkpoint before the seed
+//! records it, so the leak guarantee still holds for everything the fork stores.
 
 use anyhow::Context as _;
 use anyhow::anyhow;
@@ -27,9 +31,12 @@ use sui_types::object::Object;
 use crate::gql::AddressOwnedObject;
 use crate::gql::CheckpointRead;
 use crate::gql::GraphQLClient;
+use crate::gql::ObjectChange;
 use crate::gql::ObjectKey;
 use crate::gql::ObjectRead;
 use crate::gql::ObjectSeedMetadata;
+use crate::gql::ObjectState;
+use crate::gql::ObjectVersion;
 use crate::gql::TransactionInfo;
 use crate::gql::TransactionRead;
 use crate::gql::VersionQuery;
@@ -100,6 +107,43 @@ impl RemoteSource {
     ) -> anyhow::Result<Vec<ObjectSeedMetadata>> {
         self.gql
             .get_object_seed_metadata_at_checkpoint(object_ids, self.forked_at_checkpoint)
+            .await
+    }
+
+    /// Fetch the lowest checkpoint at which the remote can list a parent's dynamic fields.
+    ///
+    /// The listing reads the remote's consistent store, so this bound tracks the consistent window
+    /// rather than the object-data range, which reaches much further back.
+    pub(crate) async fn lowest_available_checkpoint_dynamic_fields(
+        &self,
+    ) -> anyhow::Result<CheckpointSequenceNumber> {
+        self.gql
+            .get_lowest_available_checkpoint_dynamic_fields()
+            .await
+    }
+
+    /// Fetch references to the dynamic fields of `parent` at the fork checkpoint, from the remote's
+    /// checkpoint-scoped enumeration.
+    ///
+    /// The enumeration only serves checkpoints inside the remote's consistent window, and a fork
+    /// checkpoint outside it fails rather than resolving to an empty list.
+    pub(crate) async fn dynamic_field_refs_at_fork(
+        &self,
+        parent: ObjectID,
+    ) -> anyhow::Result<Vec<ObjectRef>> {
+        self.gql
+            .get_dynamic_field_refs_at_checkpoint(parent, self.forked_at_checkpoint)
+            .await
+    }
+
+    /// Resolve the reference and owner of each object at the fork checkpoint, in the order
+    /// requested.
+    pub(crate) async fn object_states_at_fork(
+        &self,
+        object_ids: &[ObjectID],
+    ) -> anyhow::Result<Vec<Option<ObjectState>>> {
+        self.gql
+            .get_object_states_at_checkpoint(object_ids, self.forked_at_checkpoint)
             .await
     }
 
@@ -261,5 +305,67 @@ impl RemoteSource {
         &self,
     ) -> anyhow::Result<CheckpointSequenceNumber> {
         self.gql.get_lowest_available_checkpoint_objects()
+    }
+}
+
+/// Reads past the fork checkpoint, which dynamic-field reconstruction uses to find fields a parent
+/// held at the fork checkpoint but has since lost.
+///
+/// None of these results reach the fork's state directly. Reconstruction collects candidate field
+/// ids from them and resolves each candidate through [`RemoteSource::object_states_at_fork`] before
+/// the seed records it.
+impl RemoteSource {
+    /// Return the remote's latest checkpoint, the anchor a reconstruction lists current fields at.
+    pub(crate) async fn latest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
+        self.gql
+            .get_latest_checkpoint_sequence_number()
+            .await?
+            .ok_or_else(|| anyhow!("the remote reported no latest checkpoint"))
+    }
+
+    /// Fetch references to the dynamic fields of `parent` at `checkpoint`, which must be inside the
+    /// remote's consistent window.
+    pub(crate) async fn dynamic_field_refs_at(
+        &self,
+        parent: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> anyhow::Result<Vec<ObjectRef>> {
+        self.gql
+            .get_dynamic_field_refs_at_checkpoint(parent, checkpoint)
+            .await
+    }
+
+    /// Resolve the reference and owner of each object at `checkpoint`, in the order requested.
+    pub(crate) async fn object_states_at(
+        &self,
+        object_ids: &[ObjectID],
+        checkpoint: CheckpointSequenceNumber,
+    ) -> anyhow::Result<Vec<Option<ObjectState>>> {
+        self.gql
+            .get_object_states_at_checkpoint(object_ids, checkpoint)
+            .await
+    }
+
+    /// List the versions of `object_id` in `(after_version, through_version]`, oldest first,
+    /// failing once more than `max_versions` have been seen.
+    pub(crate) async fn object_versions(
+        &self,
+        object_id: ObjectID,
+        after_version: u64,
+        through_version: u64,
+        max_versions: usize,
+    ) -> anyhow::Result<Vec<ObjectVersion>> {
+        self.gql
+            .get_object_versions(object_id, after_version, through_version, max_versions)
+            .await
+    }
+
+    /// List the objects each transaction changed, with their state going into the transaction, as
+    /// one list per digest in the order requested.
+    pub(crate) async fn transaction_object_changes(
+        &self,
+        digests: &[String],
+    ) -> anyhow::Result<Vec<Vec<ObjectChange>>> {
+        self.gql.get_transaction_object_changes(digests).await
     }
 }

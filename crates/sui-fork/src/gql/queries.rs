@@ -177,6 +177,7 @@ pub(crate) mod available_range_query {
     #[derive(cynic::QueryVariables)]
     pub(crate) struct AvailableRangeArgs {
         pub type_name: String,
+        pub field: Option<String>,
     }
 
     #[derive(cynic::QueryFragment)]
@@ -188,7 +189,7 @@ pub(crate) mod available_range_query {
     #[derive(cynic::QueryFragment)]
     #[cynic(variables = "AvailableRangeArgs")]
     pub(crate) struct ServiceConfig {
-        #[arguments(type: $type_name)]
+        #[arguments(type: $type_name, field: $field)]
         available_range: AvailableRange,
     }
 
@@ -205,8 +206,23 @@ pub(crate) mod available_range_query {
     /// Query the lowest available checkpoint sequence number for a given type (e.g., "Checkpoint"
     /// or "Transaction").
     pub(crate) async fn query(type_name: &str, client: &GraphQLClient) -> Result<u64, Error> {
+        query_field(type_name, None, client).await
+    }
+
+    /// Query the lowest available checkpoint sequence number for one field of a type, which can be
+    /// far narrower than the type's own range.
+    ///
+    /// On the hosted endpoints, `Object` alone reports the start of the chain while
+    /// `Address.dynamicFields` reports the start of the consistent window, roughly an hour back,
+    /// because the field reads the consistent store and the type does not.
+    pub(crate) async fn query_field(
+        type_name: &str,
+        field: Option<&str>,
+        client: &GraphQLClient,
+    ) -> Result<u64, Error> {
         let operation = Query::build(AvailableRangeArgs {
             type_name: type_name.to_owned(),
+            field: field.map(str::to_owned),
         });
         let response = client.run_query(&operation).await.context(format!(
             "Failed to query availableRange for type '{}'",
@@ -1225,6 +1241,1112 @@ pub(crate) mod object_seed_query {
                     "expected error containing {expected_error:?}, got {err:?}",
                 );
             }
+        }
+    }
+}
+
+/// Dynamic fields of a parent at a checkpoint, from the remote's checkpoint-scoped enumeration.
+///
+/// The enumeration reads the remote's consistent store, which retains only a recent window of
+/// checkpoints (roughly the last hour on the hosted endpoints). A checkpoint outside that window
+/// comes back as a GraphQL error next to a null connection, so any error fails the query, because
+/// reading the null connection as "no fields" would record an incomplete enumeration as a complete
+/// one.
+pub(crate) mod dynamic_fields_query {
+    use anyhow::Context;
+    use anyhow::Error;
+    use anyhow::anyhow;
+    use anyhow::bail;
+    use cynic::QueryBuilder as _;
+    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::ObjectRef;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::digests::ObjectDigest;
+    use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+
+    use crate::gql::GraphQLClient;
+    use crate::gql::queries::schema;
+
+    const PAGE_SIZE: i32 = 50;
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct DynamicFieldsArgs {
+        pub sequence_number: Option<u64>,
+        pub address: SuiAddress,
+        pub first: Option<i32>,
+        pub after: Option<String>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "DynamicFieldsArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct Query {
+        #[arguments(sequenceNumber: $sequence_number)]
+        checkpoint: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "DynamicFieldsArgs",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct Checkpoint {
+        query: Option<ScopedQuery>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "DynamicFieldsArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct ScopedQuery {
+        #[arguments(address: $address)]
+        address: Option<Address>,
+    }
+
+    /// `Address.dynamicFields` rather than `Object.dynamicFields`, because the address form also
+    /// serves a parent whose UID is wrapped inside another object, such as a `Table` field.
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "DynamicFieldsArgs",
+        graphql_type = "Address",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct Address {
+        #[arguments(first: $first, after: $after)]
+        dynamic_fields: Option<DynamicFieldConnection>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct DynamicFieldConnection {
+        nodes: Vec<DynamicField>,
+        page_info: PageInfo,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct PageInfo {
+        has_next_page: bool,
+        end_cursor: Option<String>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct DynamicField {
+        address: SuiAddress,
+        version: Option<u64>,
+        digest: Option<String>,
+    }
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "SuiAddress")]
+    pub(crate) struct SuiAddress(pub String);
+
+    /// Return a reference to every dynamic field of `parent` at `checkpoint`, paginating through
+    /// the checkpoint-scoped connection.
+    ///
+    /// A parent that does not exist at `checkpoint` has no fields and resolves to an empty list.
+    /// Any GraphQL error, including a checkpoint outside the consistent window, fails the query.
+    pub(crate) async fn query(
+        parent: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+        client: &GraphQLClient,
+    ) -> Result<Vec<ObjectRef>, Error> {
+        let mut refs = Vec::new();
+        let mut cursor = None;
+
+        loop {
+            let operation = Query::build(DynamicFieldsArgs {
+                sequence_number: Some(checkpoint),
+                address: SuiAddress(parent.to_string()),
+                first: Some(PAGE_SIZE),
+                after: cursor,
+            });
+            let response = client.run_query(&operation).await.with_context(|| {
+                format!("failed to query dynamic fields of {parent} at checkpoint {checkpoint}")
+            })?;
+            if let Some(errors) = response.errors.filter(|errors| !errors.is_empty()) {
+                bail!(
+                    "failed to list dynamic fields of {parent} at checkpoint {checkpoint}: \
+                     {errors:?}"
+                );
+            }
+
+            let data = response.data.ok_or_else(|| {
+                anyhow!("missing data in dynamic fields query response for {parent}")
+            })?;
+            let checkpoint_data = data.checkpoint.ok_or_else(|| {
+                anyhow!("checkpoint {checkpoint} not found while listing dynamic fields")
+            })?;
+            let scoped_query = checkpoint_data.query.ok_or_else(|| {
+                anyhow!("missing checkpoint-scoped query while listing dynamic fields")
+            })?;
+            let Some(fields) = scoped_query
+                .address
+                .and_then(|address| address.dynamic_fields)
+            else {
+                return Ok(refs);
+            };
+
+            for node in fields.nodes {
+                refs.push(decode_dynamic_field(node)?);
+            }
+
+            if !fields.page_info.has_next_page {
+                break;
+            }
+            cursor = fields.page_info.end_cursor;
+        }
+
+        Ok(refs)
+    }
+
+    fn decode_dynamic_field(node: DynamicField) -> Result<ObjectRef, Error> {
+        let field_id = node
+            .address
+            .0
+            .parse::<ObjectID>()
+            .with_context(|| format!("invalid dynamic field id {}", node.address.0))?;
+        let digest = node
+            .digest
+            .ok_or_else(|| anyhow!("dynamic field {field_id} is missing digest"))?
+            .parse::<ObjectDigest>()
+            .with_context(|| format!("invalid dynamic field digest for {field_id}"))?;
+        let version = node
+            .version
+            .ok_or_else(|| anyhow!("dynamic field {field_id} is missing version"))?;
+        Ok((field_id, SequenceNumber::from_u64(version), digest))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use sui_types::object::Object;
+        use sui_types::object::Owner;
+        use wiremock::Mock;
+        use wiremock::MockServer;
+        use wiremock::ResponseTemplate;
+        use wiremock::matchers::body_partial_json;
+        use wiremock::matchers::method;
+        use wiremock::matchers::path;
+
+        use super::*;
+        use crate::Node;
+
+        fn dynamic_fields_response(
+            fields: &[&Object],
+            has_next_page: bool,
+            end_cursor: Option<&str>,
+        ) -> serde_json::Value {
+            serde_json::json!({
+                "data": {
+                    "checkpoint": {
+                        "query": {
+                            "address": {
+                                "dynamicFields": {
+                                    "nodes": fields
+                                        .iter()
+                                        .map(|field| serde_json::json!({
+                                            "address": field.id().to_string(),
+                                            "version": field.version().value(),
+                                            "digest": field.digest().to_string(),
+                                        }))
+                                        .collect::<Vec<_>>(),
+                                    "pageInfo": {
+                                        "hasNextPage": has_next_page,
+                                        "endCursor": end_cursor,
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+        }
+
+        #[tokio::test]
+        async fn query_paginates_dynamic_field_refs() {
+            let server = MockServer::start().await;
+            let parent = ObjectID::random();
+            let first = Object::with_id_owner_version_for_testing(
+                ObjectID::random(),
+                SequenceNumber::from_u64(3),
+                Owner::ObjectOwner(parent.into()),
+            );
+            let second = Object::with_id_owner_version_for_testing(
+                ObjectID::random(),
+                SequenceNumber::from_u64(4),
+                Owner::ObjectOwner(parent.into()),
+            );
+            Mock::given(method("POST"))
+                .and(path("/"))
+                .and(body_partial_json(serde_json::json!({
+                    "variables": { "sequenceNumber": 10, "after": null }
+                })))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(dynamic_fields_response(
+                        &[&first],
+                        true,
+                        Some("cursor-1"),
+                    )),
+                )
+                .mount(&server)
+                .await;
+            Mock::given(method("POST"))
+                .and(path("/"))
+                .and(body_partial_json(serde_json::json!({
+                    "variables": { "sequenceNumber": 10, "after": "cursor-1" }
+                })))
+                .respond_with(
+                    ResponseTemplate::new(200).set_body_json(dynamic_fields_response(
+                        &[&second],
+                        false,
+                        None,
+                    )),
+                )
+                .mount(&server)
+                .await;
+
+            let gql = GraphQLClient::new(Node::Custom(server.uri()), "test")
+                .expect("graphql client should build");
+            let refs = query(parent, 10, &gql)
+                .await
+                .expect("dynamic fields should resolve");
+
+            assert_eq!(
+                refs,
+                vec![
+                    first.compute_object_reference(),
+                    second.compute_object_reference(),
+                ],
+            );
+        }
+
+        /// The remote reports a checkpoint outside its consistent window as an error next to a
+        /// null connection, which must not read as a parent with no fields.
+        #[tokio::test]
+        async fn query_fails_when_the_checkpoint_is_outside_the_consistent_window() {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "data": {
+                        "checkpoint": {
+                            "query": { "address": { "dynamicFields": null } }
+                        }
+                    },
+                    "errors": [{
+                        "message": "Request is outside consistent range",
+                        "path": ["checkpoint", "query", "address", "dynamicFields"],
+                    }]
+                })))
+                .mount(&server)
+                .await;
+
+            let gql = GraphQLClient::new(Node::Custom(server.uri()), "test")
+                .expect("graphql client should build");
+            let err = query(ObjectID::random(), 10, &gql)
+                .await
+                .expect_err("an out-of-range enumeration should fail");
+
+            assert!(
+                err.to_string().contains("outside consistent range"),
+                "unexpected error: {err:#}",
+            );
+        }
+    }
+}
+
+/// Object state, version history, and transaction object changes, which together let the seed
+/// reconstruct a parent's dynamic fields at a checkpoint older than the consistent window.
+///
+/// None of these reads depend on the consistent store. Point lookups and version history are served
+/// from the remote's object-version index and transaction effects, which reach back much further
+/// than the consistent window.
+pub(crate) mod object_history_query {
+    use anyhow::Context;
+    use anyhow::Error;
+    use anyhow::anyhow;
+    use anyhow::bail;
+    use cynic::QueryBuilder as _;
+    use itertools::Itertools as _;
+    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::ObjectRef;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::digests::ObjectDigest;
+    use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+
+    use crate::gql::GraphQLClient;
+    use crate::gql::queries::schema;
+
+    const PAGE_SIZE: i32 = 50;
+
+    /// Keys per `multiGetObjects` request, matching the conservative bound the other multi-get
+    /// queries in this file use.
+    const MAX_KEYS_SIZE: usize = 30;
+
+    /// Transactions per `multiGetTransactionEffects` request. Each one carries a first page of
+    /// object changes, so a batch holds at most this many times `PAGE_SIZE` change nodes.
+    const TRANSACTIONS_PER_QUERY: usize = 20;
+
+    /// Where an object version sits in the ownership tree.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub(crate) enum OwnerSummary {
+        /// Owned by an address, shared, or immutable, which means any transaction that mutates the
+        /// object or its dynamic fields takes it as an input and bumps its version.
+        TopLevel,
+        /// Owned by the object with this id, which is how a dynamic field sits under its parent.
+        Object(ObjectID),
+    }
+
+    /// An object's reference and owner at some checkpoint.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub(crate) struct ObjectState {
+        pub(crate) object_ref: ObjectRef,
+        pub(crate) owner: OwnerSummary,
+    }
+
+    /// One version from an object's history, with the transaction that wrote it.
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub(crate) struct ObjectVersion {
+        pub(crate) version: u64,
+        pub(crate) owner: OwnerSummary,
+        pub(crate) transaction: String,
+    }
+
+    /// One object a transaction changed, described by its state going into the transaction.
+    ///
+    /// Both input fields are `None` for an object the transaction created or unwrapped, because it
+    /// was not an input.
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub(crate) struct ObjectChange {
+        pub(crate) object_id: ObjectID,
+        pub(crate) input_version: Option<u64>,
+        pub(crate) input_owner: Option<OwnerSummary>,
+    }
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "SuiAddress")]
+    pub(crate) struct SuiAddress(pub String);
+
+    #[derive(cynic::InlineFragments, Debug)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) enum Owner {
+        AddressOwner(AddressOwner),
+        ConsensusAddressOwner(ConsensusAddressOwner),
+        Shared(Shared),
+        Immutable(Immutable),
+        ObjectOwner(ObjectOwner),
+        #[cynic(fallback)]
+        Unknown,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct AddressOwner {
+        address: Option<OwnerAddress>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct ConsensusAddressOwner {
+        start_version: Option<u64>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct Shared {
+        initial_shared_version: Option<u64>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct Immutable {
+        #[cynic(rename = "_")]
+        placeholder: Option<bool>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct ObjectOwner {
+        address: Option<OwnerAddress>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(
+        graphql_type = "Address",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct OwnerAddress {
+        address: SuiAddress,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct PageInfo {
+        has_next_page: bool,
+        end_cursor: Option<String>,
+    }
+
+    #[derive(cynic::InputObject, Debug)]
+    #[cynic(
+        graphql_type = "ObjectKey",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct ObjectKey {
+        pub address: SuiAddress,
+        pub version: Option<u64>,
+        pub root_version: Option<u64>,
+        pub at_checkpoint: Option<u64>,
+    }
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct ObjectStatesArgs {
+        pub keys: Vec<ObjectKey>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectStatesArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct ObjectStatesQuery {
+        #[arguments(keys: $keys)]
+        multi_get_objects: Vec<Option<StateObject>>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(graphql_type = "Object", schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct StateObject {
+        version: Option<u64>,
+        digest: Option<String>,
+        owner: Option<Owner>,
+    }
+
+    #[derive(cynic::InputObject, Debug)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct VersionFilter {
+        pub after_version: Option<u64>,
+        pub before_version: Option<u64>,
+    }
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct ObjectVersionsArgs {
+        pub address: SuiAddress,
+        pub filter: Option<VersionFilter>,
+        pub first: Option<i32>,
+        pub after: Option<String>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectVersionsArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct ObjectVersionsQuery {
+        #[arguments(address: $address, filter: $filter, first: $first, after: $after)]
+        object_versions: Option<ObjectConnection>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct ObjectConnection {
+        nodes: Vec<VersionObject>,
+        page_info: PageInfo,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(graphql_type = "Object", schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct VersionObject {
+        version: Option<u64>,
+        owner: Option<Owner>,
+        previous_transaction: Option<Transaction>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct Transaction {
+        digest: Option<String>,
+    }
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct EffectsBatchArgs {
+        pub keys: Vec<String>,
+        pub first: Option<i32>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "EffectsBatchArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct EffectsBatchQuery {
+        #[arguments(keys: $keys)]
+        multi_get_transaction_effects: Vec<Option<BatchEffects>>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "EffectsBatchArgs",
+        graphql_type = "TransactionEffects",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct BatchEffects {
+        #[arguments(first: $first)]
+        object_changes: Option<ObjectChangeConnection>,
+    }
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct ObjectChangesArgs {
+        pub digest: String,
+        pub first: Option<i32>,
+        pub after: Option<String>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectChangesArgs",
+        graphql_type = "Query",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct ObjectChangesQuery {
+        #[arguments(digest: $digest)]
+        transaction: Option<ChangesTransaction>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectChangesArgs",
+        graphql_type = "Transaction",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct ChangesTransaction {
+        effects: Option<TransactionEffects>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        variables = "ObjectChangesArgs",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct TransactionEffects {
+        #[arguments(first: $first, after: $after)]
+        object_changes: Option<ObjectChangeConnection>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct ObjectChangeConnection {
+        nodes: Vec<ObjectChangeNode>,
+        page_info: PageInfo,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(
+        graphql_type = "ObjectChange",
+        schema_module = "crate::gql::queries::schema"
+    )]
+    pub(crate) struct ObjectChangeNode {
+        address: SuiAddress,
+        input_state: Option<InputObject>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(graphql_type = "Object", schema_module = "crate::gql::queries::schema")]
+    pub(crate) struct InputObject {
+        version: Option<u64>,
+        owner: Option<Owner>,
+    }
+
+    /// Resolve the reference and owner of each object at `checkpoint`, in the order requested.
+    ///
+    /// An object that does not exist at `checkpoint` resolves to `None`.
+    pub(crate) async fn states_at_checkpoint(
+        object_ids: &[ObjectID],
+        checkpoint: CheckpointSequenceNumber,
+        client: &GraphQLClient,
+    ) -> Result<Vec<Option<ObjectState>>, Error> {
+        let mut results = Vec::with_capacity(object_ids.len());
+
+        for object_ids in object_ids.chunks(MAX_KEYS_SIZE) {
+            let keys = object_ids
+                .iter()
+                .map(|object_id| ObjectKey {
+                    address: SuiAddress(object_id.to_string()),
+                    version: None,
+                    root_version: None,
+                    at_checkpoint: Some(checkpoint),
+                })
+                .collect();
+            let operation = ObjectStatesQuery::build(ObjectStatesArgs { keys });
+            let response = client.run_query(&operation).await.with_context(|| {
+                format!("failed to query object states at checkpoint {checkpoint}")
+            })?;
+            if let Some(errors) = response.errors.filter(|errors| !errors.is_empty()) {
+                bail!("failed to query object states at checkpoint {checkpoint}: {errors:?}");
+            }
+            let data = response.data.ok_or_else(|| {
+                anyhow!("missing data in object state query response at checkpoint {checkpoint}")
+            })?;
+
+            if data.multi_get_objects.len() != object_ids.len() {
+                bail!(
+                    "object state query returned {} results for {} object IDs",
+                    data.multi_get_objects.len(),
+                    object_ids.len(),
+                );
+            }
+
+            for (object_id, object) in object_ids.iter().copied().zip_eq(data.multi_get_objects) {
+                results.push(match object {
+                    Some(object) => Some(decode_state(object_id, object)?),
+                    None => None,
+                });
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Return the versions of `object_id` strictly after `after_version` and up to
+    /// `through_version` inclusive, oldest first, with the transaction that wrote each one.
+    ///
+    /// Fails once more than `max_versions` versions have been seen, so a caller walking a busy
+    /// object stops after a bounded number of requests instead of paging through its whole history.
+    pub(crate) async fn versions(
+        object_id: ObjectID,
+        after_version: u64,
+        through_version: u64,
+        max_versions: usize,
+        client: &GraphQLClient,
+    ) -> Result<Vec<ObjectVersion>, Error> {
+        let mut versions = Vec::new();
+        let mut cursor = None;
+
+        loop {
+            let operation = ObjectVersionsQuery::build(ObjectVersionsArgs {
+                address: SuiAddress(object_id.to_string()),
+                filter: Some(VersionFilter {
+                    after_version: Some(after_version),
+                    before_version: Some(through_version + 1),
+                }),
+                first: Some(PAGE_SIZE),
+                after: cursor,
+            });
+            let response = client
+                .run_query(&operation)
+                .await
+                .with_context(|| format!("failed to query the versions of {object_id}"))?;
+            if let Some(errors) = response.errors.filter(|errors| !errors.is_empty()) {
+                bail!("failed to query the versions of {object_id}: {errors:?}");
+            }
+            let connection = response
+                .data
+                .and_then(|data| data.object_versions)
+                .ok_or_else(|| {
+                    anyhow!("missing data in versions query response for {object_id}")
+                })?;
+
+            for node in connection.nodes {
+                versions.push(decode_version(object_id, node)?);
+            }
+            if versions.len() > max_versions {
+                bail!(
+                    "{object_id} has more than {max_versions} versions after version \
+                     {after_version}"
+                );
+            }
+
+            if !connection.page_info.has_next_page {
+                break;
+            }
+            cursor = connection.page_info.end_cursor;
+        }
+
+        Ok(versions)
+    }
+
+    /// Return every object each transaction in `digests` changed, with each one's state going into
+    /// the transaction, as one list per digest in the order requested.
+    ///
+    /// The first page of changes for a batch of transactions comes from a single
+    /// `multiGetTransactionEffects` request, so a walk over many small transactions costs one
+    /// request per batch rather than one per transaction. Only a transaction with more changes than
+    /// one page holds is paged on its own. A digest the remote cannot find fails the query, because
+    /// it was named by an object's version history and its effects are needed to see what it
+    /// removed.
+    pub(crate) async fn object_changes(
+        digests: &[String],
+        client: &GraphQLClient,
+    ) -> Result<Vec<Vec<ObjectChange>>, Error> {
+        let mut results = Vec::with_capacity(digests.len());
+
+        for digests in digests.chunks(TRANSACTIONS_PER_QUERY) {
+            let operation = EffectsBatchQuery::build(EffectsBatchArgs {
+                keys: digests.to_vec(),
+                first: Some(PAGE_SIZE),
+            });
+            let response = client
+                .run_query(&operation)
+                .await
+                .context("failed to query a batch of transaction effects")?;
+            if let Some(errors) = response.errors.filter(|errors| !errors.is_empty()) {
+                bail!("failed to query a batch of transaction effects: {errors:?}");
+            }
+            let effects = response
+                .data
+                .ok_or_else(|| anyhow!("missing data in transaction effects batch response"))?
+                .multi_get_transaction_effects;
+            if effects.len() != digests.len() {
+                bail!(
+                    "transaction effects query returned {} results for {} digests",
+                    effects.len(),
+                    digests.len(),
+                );
+            }
+
+            for (digest, effects) in digests.iter().zip_eq(effects) {
+                let connection = effects
+                    .and_then(|effects| effects.object_changes)
+                    .ok_or_else(|| anyhow!("effects of transaction {digest} not found"))?;
+                let mut changes = connection
+                    .nodes
+                    .into_iter()
+                    .map(decode_change)
+                    .collect::<Result<Vec<_>, _>>()?;
+                if connection.page_info.has_next_page {
+                    changes.extend(
+                        remaining_object_changes(digest, connection.page_info.end_cursor, client)
+                            .await?,
+                    );
+                }
+                results.push(changes);
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Page through the object changes of the transaction with `digest`, starting after `cursor`.
+    async fn remaining_object_changes(
+        digest: &str,
+        mut cursor: Option<String>,
+        client: &GraphQLClient,
+    ) -> Result<Vec<ObjectChange>, Error> {
+        let mut changes = Vec::new();
+
+        loop {
+            let operation = ObjectChangesQuery::build(ObjectChangesArgs {
+                digest: digest.to_owned(),
+                first: Some(PAGE_SIZE),
+                after: cursor,
+            });
+            let response = client
+                .run_query(&operation)
+                .await
+                .with_context(|| format!("failed to query the object changes of {digest}"))?;
+            if let Some(errors) = response.errors.filter(|errors| !errors.is_empty()) {
+                bail!("failed to query the object changes of {digest}: {errors:?}");
+            }
+            let connection = response
+                .data
+                .and_then(|data| data.transaction)
+                .and_then(|transaction| transaction.effects)
+                .and_then(|effects| effects.object_changes)
+                .ok_or_else(|| anyhow!("transaction {digest} or its effects not found"))?;
+
+            for node in connection.nodes {
+                changes.push(decode_change(node)?);
+            }
+
+            if !connection.page_info.has_next_page {
+                break;
+            }
+            cursor = connection.page_info.end_cursor;
+        }
+
+        Ok(changes)
+    }
+
+    fn decode_state(object_id: ObjectID, object: StateObject) -> Result<ObjectState, Error> {
+        let digest = object
+            .digest
+            .with_context(|| format!("object {object_id} is missing digest"))?
+            .parse::<ObjectDigest>()
+            .with_context(|| format!("invalid object digest for {object_id}"))?;
+        let version = object
+            .version
+            .with_context(|| format!("object {object_id} is missing version"))?;
+        Ok(ObjectState {
+            object_ref: (object_id, SequenceNumber::from_u64(version), digest),
+            owner: decode_owner(object_id, object.owner)?,
+        })
+    }
+
+    fn decode_version(object_id: ObjectID, object: VersionObject) -> Result<ObjectVersion, Error> {
+        let version = object
+            .version
+            .with_context(|| format!("a version of {object_id} is missing its number"))?;
+        let transaction = object
+            .previous_transaction
+            .and_then(|transaction| transaction.digest)
+            .with_context(|| {
+                format!("version {version} of {object_id} is missing its previous transaction")
+            })?;
+        Ok(ObjectVersion {
+            version,
+            owner: decode_owner(object_id, object.owner)
+                .with_context(|| format!("invalid owner for version {version} of {object_id}"))?,
+            transaction,
+        })
+    }
+
+    fn decode_change(node: ObjectChangeNode) -> Result<ObjectChange, Error> {
+        let object_id = node
+            .address
+            .0
+            .parse::<ObjectID>()
+            .with_context(|| format!("invalid changed object id {}", node.address.0))?;
+        let Some(input) = node.input_state else {
+            return Ok(ObjectChange {
+                object_id,
+                input_version: None,
+                input_owner: None,
+            });
+        };
+        let input_version = input
+            .version
+            .with_context(|| format!("input state of {object_id} is missing its version"))?;
+        Ok(ObjectChange {
+            object_id,
+            input_version: Some(input_version),
+            input_owner: Some(decode_owner(object_id, input.owner)?),
+        })
+    }
+
+    /// Reduce a GraphQL owner to an [`OwnerSummary`].
+    ///
+    /// An owner kind this client does not recognize fails rather than defaulting, because guessing
+    /// wrong in either direction would let a reconstruction skip a field or trust a history it
+    /// cannot vouch for.
+    fn decode_owner(object_id: ObjectID, owner: Option<Owner>) -> Result<OwnerSummary, Error> {
+        match owner {
+            Some(
+                Owner::AddressOwner(_)
+                | Owner::ConsensusAddressOwner(_)
+                | Owner::Shared(_)
+                | Owner::Immutable(_),
+            ) => Ok(OwnerSummary::TopLevel),
+            Some(Owner::ObjectOwner(owner)) => {
+                let address = owner
+                    .address
+                    .with_context(|| format!("object {object_id} is missing its owner address"))?
+                    .address
+                    .0;
+                let parent = address
+                    .parse::<ObjectID>()
+                    .with_context(|| format!("invalid owner {address} for object {object_id}"))?;
+                Ok(OwnerSummary::Object(parent))
+            }
+            Some(Owner::Unknown) => bail!("object {object_id} has an unrecognized owner kind"),
+            None => bail!("object {object_id} is missing its owner"),
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use wiremock::Mock;
+        use wiremock::MockServer;
+        use wiremock::ResponseTemplate;
+        use wiremock::matchers::body_partial_json;
+        use wiremock::matchers::body_string_contains;
+        use wiremock::matchers::method;
+        use wiremock::matchers::path;
+
+        use super::*;
+        use crate::Node;
+
+        #[tokio::test]
+        async fn versions_filter_the_range_and_read_owners_and_transactions() {
+            let server = MockServer::start().await;
+            let object_id = ObjectID::random();
+            let parent = ObjectID::random();
+            Mock::given(method("POST"))
+                .and(path("/"))
+                .and(body_partial_json(serde_json::json!({
+                    "variables": {
+                        "address": object_id.to_string(),
+                        "filter": { "afterVersion": 5, "beforeVersion": 10 },
+                    }
+                })))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "data": {
+                        "objectVersions": {
+                            "nodes": [
+                                {
+                                    "version": 7,
+                                    "owner": { "__typename": "Shared", "initialSharedVersion": 1 },
+                                    "previousTransaction": { "digest": "tx-7" },
+                                },
+                                {
+                                    "version": 9,
+                                    "owner": {
+                                        "__typename": "ObjectOwner",
+                                        "address": { "address": parent.to_string() },
+                                    },
+                                    "previousTransaction": { "digest": "tx-9" },
+                                },
+                            ],
+                            "pageInfo": { "hasNextPage": false, "endCursor": null },
+                        }
+                    }
+                })))
+                .mount(&server)
+                .await;
+
+            let gql = GraphQLClient::new(Node::Custom(server.uri()), "test")
+                .expect("graphql client should build");
+            let resolved = versions(object_id, 5, 9, 10, &gql)
+                .await
+                .expect("versions should resolve");
+
+            assert_eq!(
+                resolved,
+                vec![
+                    ObjectVersion {
+                        version: 7,
+                        owner: OwnerSummary::TopLevel,
+                        transaction: "tx-7".to_owned(),
+                    },
+                    ObjectVersion {
+                        version: 9,
+                        owner: OwnerSummary::Object(parent),
+                        transaction: "tx-9".to_owned(),
+                    },
+                ],
+            );
+
+            let err = versions(object_id, 5, 9, 1, &gql)
+                .await
+                .expect_err("a history longer than the bound should fail");
+            assert!(err.to_string().contains("more than 1 versions"), "{err:#}");
+        }
+
+        /// The first page of every transaction arrives in one batched request, and only a
+        /// transaction with more changes than one page is paged on its own.
+        #[tokio::test]
+        async fn object_changes_batch_transactions_and_page_large_ones() {
+            let server = MockServer::start().await;
+            let parent = ObjectID::random();
+            let field = ObjectID::random();
+            let created = ObjectID::random();
+            Mock::given(method("POST"))
+                .and(path("/"))
+                .and(body_string_contains("multiGetTransactionEffects"))
+                .and(body_partial_json(serde_json::json!({
+                    "variables": { "keys": ["tx-a", "tx-b"] }
+                })))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "data": {
+                        "multiGetTransactionEffects": [
+                            {
+                                "objectChanges": {
+                                    "nodes": [{
+                                        "address": parent.to_string(),
+                                        "inputState": {
+                                            "version": 4,
+                                            "owner": { "__typename": "Immutable", "_": null },
+                                        },
+                                    }],
+                                    "pageInfo": { "hasNextPage": true, "endCursor": "cursor-1" },
+                                }
+                            },
+                            {
+                                "objectChanges": {
+                                    "nodes": [
+                                        { "address": created.to_string(), "inputState": null },
+                                    ],
+                                    "pageInfo": { "hasNextPage": false, "endCursor": null },
+                                }
+                            },
+                        ]
+                    }
+                })))
+                .mount(&server)
+                .await;
+            Mock::given(method("POST"))
+                .and(path("/"))
+                .and(body_partial_json(serde_json::json!({
+                    "variables": { "digest": "tx-a", "after": "cursor-1" }
+                })))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "data": {
+                        "transaction": {
+                            "effects": {
+                                "objectChanges": {
+                                    "nodes": [{
+                                        "address": field.to_string(),
+                                        "inputState": {
+                                            "version": 3,
+                                            "owner": {
+                                                "__typename": "ObjectOwner",
+                                                "address": { "address": parent.to_string() },
+                                            },
+                                        },
+                                    }],
+                                    "pageInfo": { "hasNextPage": false, "endCursor": null },
+                                }
+                            }
+                        }
+                    }
+                })))
+                .mount(&server)
+                .await;
+
+            let gql = GraphQLClient::new(Node::Custom(server.uri()), "test")
+                .expect("graphql client should build");
+            let changes = object_changes(&["tx-a".to_owned(), "tx-b".to_owned()], &gql)
+                .await
+                .expect("object changes should resolve");
+
+            assert_eq!(
+                changes,
+                vec![
+                    vec![
+                        ObjectChange {
+                            object_id: parent,
+                            input_version: Some(4),
+                            input_owner: Some(OwnerSummary::TopLevel),
+                        },
+                        ObjectChange {
+                            object_id: field,
+                            input_version: Some(3),
+                            input_owner: Some(OwnerSummary::Object(parent)),
+                        },
+                    ],
+                    vec![ObjectChange {
+                        object_id: created,
+                        input_version: None,
+                        input_owner: None,
+                    }],
+                ],
+            );
+            assert_eq!(
+                server
+                    .received_requests()
+                    .await
+                    .expect("wiremock should record requests")
+                    .len(),
+                2,
+                "one batched request plus one continuation page",
+            );
         }
     }
 }

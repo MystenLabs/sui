@@ -144,7 +144,7 @@ The table below summarizes when to use each option:
 Owned-object enumeration can be seeded when starting the fork:
 
 ```bash
-sui-fork start --checkpoint 12345678 --address 0x... --object 0x...
+sui-fork start --checkpoint 12345678 --address 0x... --object 0x... --dynamic-fields-of 0x...
 ```
 
 - `--data-dir <path>` is the exact filesystem root for local fork data.
@@ -162,6 +162,14 @@ sui-fork start --checkpoint 12345678 --address 0x... --object 0x...
 - `--object` is repeatable and resolves lightweight metadata for that object at
   the fork checkpoint. If the object is address-owned, it is recorded in the seed
   manifest.
+- `--dynamic-fields-of` is repeatable and seeds the dynamic fields that a parent
+  object held at the fork checkpoint, so that listing the parent's dynamic fields
+  on the fork includes them. When the checkpoint is in the GraphQL object
+  enumeration range, the fields are listed directly. For an older checkpoint,
+  they are reconstructed from the parent's version history between the fork
+  checkpoint and the latest checkpoint. Reconstruction requires the parent to be
+  a top-level object (address-owned, shared, or immutable) that was not wrapped
+  in between, and it fails if the parent has more than 1,000 versions to walk.
 - Fork metadata is written once to `seed_manifest.json` under the fork
   directory. The manifest is immutable and records the source network, original
   fork checkpoint, and any optional seed object references. When no seed inputs
@@ -183,6 +191,7 @@ builds it from the manifest by fetching the exact seeded object versions.
 - Object fetching overhead: First access to objects requires network download.
 - Forking from a checkpoint older than 1 hour requires explicit object seeding (you need to know which owned objects should be recorded in the seed manifest).
 - Owned-object enumeration covers seeded objects plus locally materialized post-fork state; it is not a full inventory of every object an address owned at the fork checkpoint unless those objects were seeded.
+- Dynamic-field listing covers the parents named with `--dynamic-fields-of` plus fields created by local execution. A pre-fork parent that was not named lists none of its pre-fork fields.
 - Objects deleted or wrapped after the fork point are no longer available through direct current-ID lookup, but exact historical versions remain readable when available.
 - If it forks at checkpoint X, you cannot depend on objects created after checkpoint X from the actual real network. You'll need to restart the network at that checkpoint or a later one.
 - Not recommended for parallel test execution since all transactions are executed sequentially on a single validator.
