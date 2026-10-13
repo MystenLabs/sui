@@ -389,11 +389,10 @@ fn next_transaction_chunk(
                 if cancel.is_cancelled() {
                     return Err(cancelled());
                 }
-                let chunk_scan_limit_reached = hits.chunk_scan_limit_reached;
-                let coalesced_frontier = hits.coalesced_frontier;
+                let scan_limit_frontier = hits.scan_limit_frontier;
                 // A chunk scan-limit only ends the request when the request
                 // budget is also exhausted, or when there is no continuation.
-                let request_scan_limit_reached = chunk_scan_limit_reached
+                let request_scan_limit_reached = scan_limit_frontier.is_some()
                     && (remaining_scan_budget == 0
                         || (hits.next_range.is_none() && hits.pending_bucket.is_none()));
                 let rows = get_tx_seq_digest_multi(&service, &hits.items)?;
@@ -412,28 +411,17 @@ fn next_transaction_chunk(
                         },
                     )
                 };
-                let coalesced_frontier = if chunk_scan_limit_reached {
-                    Some(coalesced_frontier.ok_or_else(|| {
-                        RpcError::new(
-                            tonic::Code::Internal,
-                            "transaction scan limit missing authoritative frontier",
-                        )
-                    })?)
-                } else {
-                    None
-                };
-                let frontier_watermark = if request_scan_limit_reached
-                    || (chunk_scan_limit_reached && rows.is_empty())
-                {
-                    Some(scan_transaction_watermark(
-                        &service,
-                        &options,
-                        coalesced_frontier.expect("checked for scan-limit chunk"),
-                        entry_checkpoint,
-                        ascending,
-                    )?)
-                } else {
-                    None
+                let frontier_watermark = match scan_limit_frontier {
+                    Some(frontier) if request_scan_limit_reached || rows.is_empty() => {
+                        Some(scan_transaction_watermark(
+                            &service,
+                            &options,
+                            frontier,
+                            entry_checkpoint,
+                            ascending,
+                        )?)
+                    }
+                    _ => None,
                 };
                 let scan_watermark = if !request_scan_limit_reached && rows.is_empty() {
                     frontier_watermark.clone().map(watermark_response)

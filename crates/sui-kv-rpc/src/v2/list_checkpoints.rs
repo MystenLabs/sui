@@ -51,6 +51,7 @@ use crate::pipeline::InputOrderEmitter;
 use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
+use crate::pipeline::SeekUnit;
 use crate::pipeline::Watermarked;
 use crate::pipeline::dedup_consecutive;
 use crate::pipeline::pipelined_chunks;
@@ -100,7 +101,7 @@ pub(crate) async fn list_checkpoints(
     let checkpoints_stage = ctx.stage(PipelineStage::Checkpoints);
     let transactions_stage = ctx.stage(PipelineStage::Transactions);
     let objects_stage = ctx.stage(PipelineStage::Objects);
-    let tx_seq_digest_stage = ctx.stage(PipelineStage::TxSeqDigest);
+    let tx_cp_resolve_stage = ctx.stage(PipelineStage::TxCpResolve);
 
     validate_checkpoint_bounds(request.start_checkpoint, request.end_checkpoint)?;
     let read_mask = {
@@ -193,6 +194,7 @@ pub(crate) async fn list_checkpoints(
                 direction,
                 scan_budget,
                 ctx.bitmap_skip_policy(),
+                ctx.watermark_pacing(exhaustion),
                 ctx.bitmap_scan_observer(),
             );
             // Stage A2: resolve tx_seq -> cp_seq, streaming each cp as soon as the
@@ -202,8 +204,16 @@ pub(crate) async fn list_checkpoints(
             // boundaries.
             let cp_seq_stream = pipelined_chunks(
                 tx_seq_stream,
-                tx_seq_digest_stage.chunk_size,
-                tx_seq_digest_stage.concurrency,
+                tx_cp_resolve_stage.max_seeks_per_read,
+                tx_cp_resolve_stage.concurrency,
+                tx_cp_resolve_stage.min_seeks_per_split_read,
+                SeekUnit::BucketRun {
+                    group: |tx_seq: &u64| tables::tx_seq_digest::forward_bucket_id(*tx_seq),
+                    key: |tx_seq: &u64| *tx_seq,
+                    max_keys_per_read: tx_cp_resolve_stage
+                        .max_keys_per_read
+                        .expect("tx-cp-resolve reads have a key cap"),
+                },
                 {
                     let client = client.clone();
                     move |tx_seqs| {
@@ -221,8 +231,10 @@ pub(crate) async fn list_checkpoints(
             // Stage A3: fetch checkpoint rows for the deduped cp_seqs.
             pipelined_chunks(
                 cp_seq_stream,
-                checkpoints_stage.chunk_size,
+                checkpoints_stage.max_seeks_per_read,
                 checkpoints_stage.concurrency,
+                checkpoints_stage.min_seeks_per_split_read,
+                SeekUnit::Item,
                 {
                     let client = client.clone();
                     let columns = cp_columns.clone();

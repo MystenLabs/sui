@@ -17,8 +17,9 @@
 //!   `PassAllFilter(true)` true branch and no false branch. Rows failing a
 //!   `Condition` predicate are dropped before `rows_limit` is applied, mirroring
 //!   BigTable where the limit counts emitted rows. Records each call for
-//!   assertions, can emit rows in reverse request order, and serves row-range
-//!   scans in either direction (reversed scans are range-only).
+//!   assertions, can emit rows in reverse request order, can stream a response
+//!   one row per message with a fixed delay before each row, and serves
+//!   row-range scans in either direction (reversed scans are range-only).
 //! - `CheckAndMutateRow`: `PassAllFilter(true)` and the CAS helper shape used
 //!   by this crate (`Chain` of family regex, column qualifier regex, optional
 //!   value range, and optional cells-per-column limit).
@@ -214,6 +215,9 @@ struct MockState {
     read_rows_calls: Vec<ReadRowsCall>,
     /// Order in which `ReadRows` emits matching rows.
     read_rows_response_order: ReadRowsResponseOrder,
+    /// Delay before each row of a `ReadRows` response; when nonzero, rows
+    /// are sent one message each, so tests can model backend latency.
+    read_rows_latency: std::time::Duration,
 }
 
 /// Mock BigTable server with injectable failures and call recording.
@@ -366,6 +370,14 @@ impl MockBigtableServer {
         self.state.lock().await.read_rows_response_order = order;
     }
 
+    /// Stream every subsequent `ReadRows` response one row per message, each
+    /// sent `latency` after the previous one, so tests can model a backend
+    /// that returns rows over time. The delay is a tokio sleep, so it follows
+    /// a paused test clock.
+    pub async fn set_read_rows_latency(&self, latency: std::time::Duration) {
+        self.state.lock().await.read_rows_latency = latency;
+    }
+
     /// Start the mock server on a random available port.
     /// Returns the socket address the server is listening on.
     pub async fn start(&self) -> Result<(SocketAddr, tokio::task::JoinHandle<()>)> {
@@ -374,7 +386,17 @@ impl MockBigtableServer {
         let mock = self.clone();
 
         let handle = tokio::spawn(async move {
-            let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
+            // Responses streamed as several small messages (see
+            // `set_read_rows_latency`) would otherwise stall on Nagle's
+            // algorithm and delayed ACKs, arriving in bursts.
+            let incoming = tokio_stream::StreamExt::map(
+                tokio_stream::wrappers::TcpListenerStream::new(listener),
+                |stream| {
+                    let stream = stream?;
+                    stream.set_nodelay(true)?;
+                    Ok::<_, std::io::Error>(stream)
+                },
+            );
             Server::builder()
                 .add_service(BigtableServer::new(mock))
                 .serve_with_incoming(incoming)
@@ -844,12 +866,15 @@ impl Bigtable for MockBigtableServer {
             requested_keys.reverse();
         }
 
-        let mut chunks = Vec::new();
+        // One message per row when the test models row latency, else one
+        // message for the whole response.
+        let row_latency = state.read_rows_latency;
+        let mut messages: Vec<Vec<CellChunk>> = vec![Vec::new()];
         for row_key in requested_keys {
             let Some(row) = state.rows.get(&(table.clone(), row_key.clone())) else {
                 continue;
             };
-            let start = chunks.len();
+            let mut row_chunks = Vec::new();
             for ((family, qualifier), cell) in row {
                 if allowed_qualifiers
                     .as_ref()
@@ -857,7 +882,7 @@ impl Bigtable for MockBigtableServer {
                 {
                     continue;
                 }
-                chunks.push(CellChunk {
+                row_chunks.push(CellChunk {
                     row_key: row_key.clone(),
                     family_name: Some(family.clone()),
                     qualifier: Some(qualifier.to_vec()),
@@ -870,19 +895,32 @@ impl Bigtable for MockBigtableServer {
             }
             // Emit CommitRow on this row's last emitted chunk. Skip rows that
             // produced no matching cells so we don't tag a prior row's chunk.
-            if chunks.len() > start
-                && let Some(last) = chunks.last_mut()
-            {
-                last.row_status = Some(RowStatus::CommitRow(true));
+            let Some(last) = row_chunks.last_mut() else {
+                continue;
+            };
+            last.row_status = Some(RowStatus::CommitRow(true));
+            if row_latency.is_zero() {
+                messages[0].extend(row_chunks);
+            } else {
+                messages.push(row_chunks);
             }
         }
 
-        let response = ReadRowsResponse {
-            chunks,
-            last_scanned_row_key: Bytes::new(),
-            request_stats: None,
+        let stream = async_stream::stream! {
+            for chunks in messages {
+                if !row_latency.is_zero() {
+                    if chunks.is_empty() {
+                        continue;
+                    }
+                    tokio::time::sleep(row_latency).await;
+                }
+                yield Ok(ReadRowsResponse {
+                    chunks,
+                    last_scanned_row_key: Bytes::new(),
+                    request_stats: None,
+                });
+            }
         };
-        let stream = tokio_stream::once(Ok(response));
         Ok(Response::new(Box::pin(stream)))
     }
 
