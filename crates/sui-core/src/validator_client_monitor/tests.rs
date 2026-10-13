@@ -954,4 +954,121 @@ mod client_monitor_tests {
         monitor.record_staggering_report(validators[1], Some(true));
         assert!(monitor.staggering_active());
     }
+
+    /// A requested health round runs within a round trip (plus spacing) instead of at
+    /// the next interval tick, so the staggering view flips on the validators' own
+    /// reports as soon as the driver has reason to ask.
+    #[tokio::test]
+    async fn test_requested_health_check_flips_staggering_view_before_the_interval() {
+        let auth_agg = get_authority_aggregator(4);
+        let config = ValidatorClientMonitorConfig {
+            health_check_interval: Duration::from_secs(3600),
+            ..Default::default()
+        };
+        let monitor = ValidatorClientMonitor::new(
+            config,
+            Arc::new(ValidatorClientMetrics::new_for_tests()),
+            Arc::new(ArcSwap::new(auth_agg.clone())),
+        );
+        // The startup round sees every validator inactive.
+        wait_until(|| monitor.has_observed_latencies(), "startup health round").await;
+        assert!(!monitor.staggering_active());
+
+        for client in auth_agg.authority_clients.values() {
+            client
+                .authority_client()
+                .staggering_active
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        // Nothing asks, so the next scheduled round is an hour away.
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(!monitor.staggering_active());
+
+        monitor.request_health_check();
+        wait_until(|| monitor.staggering_active(), "requested health round").await;
+
+        // With the view on, requests are ignored: validators going quiet is learned on
+        // the scheduled cadence, where lag is harmless.
+        let rounds = health_check_rounds(&auth_agg);
+        for client in auth_agg.authority_clients.values() {
+            client
+                .authority_client()
+                .staggering_active
+                .store(false, std::sync::atomic::Ordering::Relaxed);
+        }
+        monitor.request_health_check();
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        assert_eq!(health_check_rounds(&auth_agg), rounds);
+        assert!(monitor.staggering_active());
+    }
+
+    /// While the view is off, at most two requested rounds run per scheduled interval,
+    /// two seconds apart; further requests wait for the scheduled round. This bounds
+    /// what a validator rejecting while the network is not staggering can cost.
+    #[tokio::test]
+    async fn test_requested_health_checks_are_capped_per_interval() {
+        let auth_agg = get_authority_aggregator(4);
+        let config = ValidatorClientMonitorConfig {
+            health_check_interval: Duration::from_secs(3600),
+            ..Default::default()
+        };
+        let monitor = ValidatorClientMonitor::new(
+            config,
+            Arc::new(ValidatorClientMetrics::new_for_tests()),
+            Arc::new(ArcSwap::new(auth_agg.clone())),
+        );
+        wait_until(|| monitor.has_observed_latencies(), "startup health round").await;
+        let startup = health_check_rounds(&auth_agg);
+
+        monitor.request_health_check();
+        wait_until(
+            || health_check_rounds(&auth_agg) == startup + 1,
+            "first request",
+        )
+        .await;
+        let first = Instant::now();
+        monitor.request_health_check();
+        wait_until(
+            || health_check_rounds(&auth_agg) == startup + 2,
+            "second request",
+        )
+        .await;
+        assert!(
+            first.elapsed() >= Duration::from_millis(1500),
+            "rounds must be spaced"
+        );
+
+        // The budget is spent: even an activation now waits for the scheduled round.
+        for client in auth_agg.authority_clients.values() {
+            client
+                .authority_client()
+                .staggering_active
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        monitor.request_health_check();
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        assert_eq!(health_check_rounds(&auth_agg), startup + 2);
+        assert!(!monitor.staggering_active());
+    }
+
+    /// Completed health-check rounds, as the number of checks the first mock
+    /// validator has answered.
+    fn health_check_rounds(auth_agg: &AuthorityAggregator<MockAuthorityApi>) -> u32 {
+        auth_agg
+            .authority_clients
+            .values()
+            .next()
+            .unwrap()
+            .authority_client()
+            .health_checks
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    async fn wait_until(condition: impl Fn() -> bool, what: &str) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !condition() {
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
 }
