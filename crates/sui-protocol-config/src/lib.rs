@@ -422,6 +422,7 @@ const MAINNET_USDB: &str =
 // Version 140: Add native vector bulk operations (keep_range, copy_range, replace_range
 //              and reverse) and their gas costs.
 //              Shuffle the block order within each round of a consensus commit on devnet.
+//              Enable check_object_funds_withdraw_in_execution on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4886,6 +4887,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.shuffle_consensus_commit_blocks = true;
                     }
+                    cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                 }
                 // Use this template when making changes:
                 //
