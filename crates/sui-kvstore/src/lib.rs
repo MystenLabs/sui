@@ -247,9 +247,9 @@ pub struct EpochData {
 /// The actual serialized object is stored in the `objects` table.
 #[derive(Clone, Debug)]
 pub struct PackageData {
-    pub package_id: Vec<u8>,
+    pub package_id: [u8; 32],
     pub package_version: u64,
-    pub original_id: Vec<u8>,
+    pub original_id: [u8; 32],
     pub is_system_package: bool,
     pub cp_sequence_number: u64,
 }

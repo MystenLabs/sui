@@ -658,8 +658,8 @@ async fn test_indexer_e2e() -> Result<()> {
         .get_packages_by_version(&[(original_id, package_version)])
         .await?;
     assert_eq!(pkgs.len(), 1);
-    assert_eq!(pkgs[0].package_id, package_id.to_vec());
-    assert_eq!(pkgs[0].original_id, original_id.to_vec());
+    assert_eq!(pkgs[0].package_id, package_id.into_bytes());
+    assert_eq!(pkgs[0].original_id, original_id.into_bytes());
     assert_eq!(pkgs[0].package_version, package_version);
     assert!(!pkgs[0].is_system_package);
 
@@ -669,7 +669,7 @@ async fn test_indexer_e2e() -> Result<()> {
         .get_package_latest(original_id, max_checkpoint)
         .await?
         .expect("package should exist");
-    assert_eq!(latest_pkg.package_id, package_id.to_vec());
+    assert_eq!(latest_pkg.package_id, package_id.into_bytes());
     assert_eq!(latest_pkg.package_version, package_version);
 
     // get_package_versions: paginate versions
@@ -686,7 +686,9 @@ async fn test_indexer_e2e() -> Result<()> {
         .get_packages_by_checkpoint_range(None, None, 100, false)
         .await?;
     assert!(
-        by_cp.iter().any(|p| p.package_id == package_id.to_vec()),
+        by_cp
+            .iter()
+            .any(|p| p.package_id == package_id.into_bytes()),
         "published package should appear in checkpoint range scan",
     );
 
