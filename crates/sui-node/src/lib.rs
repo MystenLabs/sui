@@ -933,6 +933,7 @@ impl SuiNode {
                         ConsensusAdapterMetrics::new(&registry_service.default_registry())
                     })
                     .clone(),
+                state.execution_backlog.clone(),
             ))
         });
         let node_role = epoch_store.node_role();
@@ -1775,6 +1776,10 @@ impl SuiNode {
 
     pub fn state(&self) -> Arc<AuthorityState> {
         self.state.clone()
+    }
+
+    pub fn metrics_registry(&self) -> Registry {
+        self.registry_service.default_registry()
     }
 
     /// The embedded `sui-rpc-store` index backend, when the node is a
