@@ -1,0 +1,122 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+// Two gas coins smashed together. The PTB sees `sum of coin values - gas budget`
+// as the Gas coin; the smash target keeps `gas budget - net gas` at the end and
+// the secondary coin is deleted.
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 10-13:
+// Two pairs of coins worth 0.6 SUI and 0.4 SUI.
+//# programmable --sender A --inputs 600000000 400000000 @A
+//> 0: SplitCoins(Gas, [Input(0), Input(1)]);
+//> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(2))
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-17:
+//# programmable --sender A --inputs 600000000 400000000 @A
+//> 0: SplitCoins(Gas, [Input(0), Input(1)]);
+//> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(2))
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 987901, non_refundable_storage_fee: 99
+
+task 3, line 19:
+//# view-object 1,0
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 600000000u64,
+    },
+}
+
+task 4, line 21:
+//# view-object 1,1
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,1),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 400000000u64,
+    },
+}
+
+task 5, lines 23-26:
+// Budget 0.5 SUI on 1 SUI smashed: surplus is exactly 500_000_000.
+//# programmable --sender A --gas-budget 500000000 --gas-payment object(1,0) --gas-payment object(1,1) --inputs 500000000 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(5,0)
+mutated: object(1,0)
+deleted: object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1975802, non_refundable_storage_fee: 198
+
+task 6, lines 28-29:
+// Smash target holds budget minus net gas.
+//# view-object 1,0
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 498999802u64,
+    },
+}
+
+task 7, line 31:
+//# view-object 5,0
+Owner: Account Address ( B )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 500000000u64,
+    },
+}
+
+task 8, lines 33-36:
+// One MIST over the surplus fails.
+//# programmable --sender A --gas-budget 500000000 --gas-payment object(2,0) --gas-payment object(2,1) --inputs 500000001 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+Error: Transaction Effects Status: Insufficient coin balance for operation.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientCoinBalance, source: Some("balance: 500000000 required: 500000001"), command: Some(0) } }
+
+task 9, line 38:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 999987802u64,
+    },
+}
