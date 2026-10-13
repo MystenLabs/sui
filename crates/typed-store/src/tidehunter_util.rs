@@ -153,9 +153,26 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
     let batch_codec = metric_conf
         .enable_th_batch_compression
         .then_some(BatchCodec::Lz4);
-    let compressed_batch_cache_bytes = metric_conf
-        .enable_th_batch_compression
-        .then_some(4 * 1024 * 1024 * 1024);
+    let compressed_batch_cache_bytes = metric_conf.enable_th_batch_compression.then(|| {
+        parse_env_usize("TH_COMPRESSED_BATCH_CACHE_BYTES", 1).unwrap_or(4 * 1024 * 1024 * 1024)
+    });
+    let default_config = Config::default();
+    // Whole-blob cache for index blobs that aged out of the index WAL mmap window. Only the
+    // perpetual db grows micro-cell sections to most of a fragment (fullnodes keep every object
+    // version until pruning, and all system objects share one micro-cell); elsewhere the
+    // admission floor keeps every blob out and the cache would only cost its bookkeeping.
+    // The budget is twice the fragment size, so a blob at the fragment ceiling and the fills in
+    // flight around it fit; it is never below the floor, which `Config::validate` requires.
+    // TH_INDEX_BLOB_CACHE_BYTES=0 disables the cache.
+    let index_blob_cache_min_bytes = parse_env_usize("TH_INDEX_BLOB_CACHE_MIN_BYTES", 0)
+        .unwrap_or(default_config.index_blob_cache_min_bytes);
+    let index_blob_cache_bytes = if metric_conf.db_name.starts_with("perpetual") {
+        parse_env_usize("TH_INDEX_BLOB_CACHE_BYTES", 0)
+            .unwrap_or((2 * frag_size as usize).max(index_blob_cache_min_bytes))
+    } else {
+        0
+    };
+    let index_blob_cache_bytes = (index_blob_cache_bytes > 0).then_some(index_blob_cache_bytes);
     let mut config = Config {
         frag_size,
         // run snapshot every 8 Gb written to wal
@@ -172,8 +189,10 @@ fn thdb_config(metric_conf: &MetricConf) -> Config {
         num_flusher_threads,
         batch_codec,
         compressed_batch_cache_bytes,
+        index_blob_cache_bytes,
+        index_blob_cache_min_bytes,
         relocation_max_reclaim_pct: 100,
-        ..Config::default()
+        ..default_config
     };
 
     if parse_env_bool("TH_AUTOSHARD").unwrap_or(false) {
