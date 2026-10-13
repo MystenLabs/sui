@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module.exports = {
-	plugins: ['@tanstack/query', 'unused-imports', 'prettier', 'header', 'require-extensions'],
+	plugins: ['@tanstack/query', 'prettier', 'header', 'require-extensions'],
 	extends: [
 		'eslint:recommended',
 		'react-app',
@@ -71,22 +71,6 @@ module.exports = {
 		],
 	},
 	overrides: [
-		{
-			files: ['dapps/kiosk/**/*'],
-			rules: {
-				'no-unused-vars': 'off', // or "@typescript-eslint/no-unused-vars": "off",
-				'unused-imports/no-unused-imports': 'error',
-				'unused-imports/no-unused-vars': [
-					'warn',
-					{
-						vars: 'all',
-						varsIgnorePattern: '^_',
-						args: 'after-used',
-						argsIgnorePattern: '^_',
-					},
-				],
-			},
-		},
 		{
 			files: ['*.test.*', '*.spec.*'],
 			rules: {
