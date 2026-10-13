@@ -28,11 +28,17 @@ mod test {
     };
     use sui_benchmark::{
         FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
-        drivers::{Interval, SubmissionAmplification, bench_driver::BenchDriver, driver::Driver},
+        drivers::{
+            BenchmarkStats, Interval, SubmissionAmplification, bench_driver::BenchDriver,
+            driver::Driver,
+        },
         util::get_ed25519_keypair_from_keystore,
     };
     use sui_config::ExecutionCacheConfig;
-    use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
+    use sui_config::node::{
+        AuthorityOverloadConfig, ConsensusTransactionPoolConfig, ForkCrashBehavior,
+        ForkRecoveryConfig,
+    };
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::AuthorityState;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -659,6 +665,361 @@ mod test {
             true, // enable_surfer
         )
         .await;
+    }
+
+    // Saturates user transaction execution on validators by holding each execution slot
+    // for a fixed delay. The pool's execution pacer must engage, hold the backlog wait
+    // near its target without cycling, keep throughput near execution capacity, and
+    // checkpoints must keep advancing.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_execution_saturation() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        // Pin execution concurrency so capacity is the same on every host, then size the
+        // per transaction delay so every validator executes 16 user transactions per
+        // second, and offer six times as much.
+        let execution_concurrency = 4u64;
+        register_fail_point_arg("execution-concurrency-limit", move || {
+            Some(execution_concurrency as usize)
+        });
+        let capacity_per_second = 16u64;
+        let user_execution_delay =
+            Duration::from_millis(1000 * execution_concurrency / capacity_per_second);
+        let target_qps = capacity_per_second * 6;
+        let test_duration_secs = 360u64;
+        let warmup_secs = 60usize;
+        // Only validators are slowed. The fullnode serving the load generator executes
+        // every transaction locally too, and delaying it would cap the offered load at
+        // execution capacity instead of building a backlog on the validators.
+        let delayed_nodes: Arc<Mutex<HashSet<sui_simulator::task::NodeId>>> =
+            Arc::new(Mutex::new(HashSet::new()));
+        {
+            let delayed_nodes = delayed_nodes.clone();
+            register_fail_point_async("user_transaction_execution_delay", move || {
+                let delayed = delayed_nodes
+                    .lock()
+                    .unwrap()
+                    .contains(&sui_simulator::current_simnode_id());
+                async move {
+                    if delayed {
+                        tokio::time::sleep(user_execution_delay).await;
+                    }
+                }
+            });
+        }
+
+        let test_cluster: Arc<TestCluster> = init_test_cluster_builder(4, 0)
+            .with_num_unpruned_validators(1)
+            .build()
+            .await
+            .into();
+        let pool_config = ConsensusTransactionPoolConfig::default();
+
+        delayed_nodes.lock().unwrap().extend(
+            test_cluster
+                .swarm
+                .validator_node_handles()
+                .iter()
+                .map(|handle| handle.with(|node| node.get_sim_node_id())),
+        );
+
+        let stats = Arc::new(Mutex::new(SaturationStats::default()));
+        let sampler = {
+            let handles = test_cluster.swarm.validator_node_handles();
+            let stats = stats.clone();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    let mut stats = stats.lock().unwrap();
+                    let mut sample = SaturationSample::default();
+                    for (index, handle) in handles.iter().enumerate() {
+                        handle.with(|node| {
+                            let checkpoint = node
+                                .state()
+                                .get_checkpoint_store()
+                                .get_highest_executed_checkpoint_seq_number()
+                                .expect("checkpoint store read failed")
+                                .unwrap_or(0);
+                            let backlog = &node.state().execution_backlog;
+                            let wait = backlog
+                                .oldest_ready_wait()
+                                .unwrap_or_default()
+                                .as_secs_f64();
+                            let executed = backlog.executed_transactions.load(Ordering::Relaxed);
+                            sample.record(
+                                index,
+                                &node.metrics_registry(),
+                                checkpoint,
+                                wait,
+                                executed,
+                            );
+                        });
+                    }
+                    stats.push(sample);
+                }
+            })
+        };
+
+        let simulated_load_config = SimulatedLoadConfig {
+            shared_counter_weight: 5,
+            transfer_object_weight: 95,
+            slow_weight: 0,
+            delegation_weight: 0,
+            batch_payment_weight: 0,
+            shared_deletion_weight: 0,
+            randomness_weight: 0,
+            randomized_transaction_weight: 0,
+            composite_weight: 0,
+            composite_config: None,
+            gas_double_spend_weight: 0,
+            shared_counter_gas_price_multiplier: 2.0,
+            ..Default::default()
+        };
+        let benchmark_stats = test_simulated_load_with_test_config(
+            test_cluster,
+            test_duration_secs,
+            simulated_load_config,
+            Some(target_qps),
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
+        sampler.abort();
+        clear_fail_point("user_transaction_execution_delay");
+
+        let stats = stats.lock().unwrap();
+        let summary = stats.summary(warmup_secs);
+        let success_per_second =
+            benchmark_stats.num_success_txes as f64 / test_duration_secs as f64;
+        info!(
+            "execution saturation: concurrency {execution_concurrency}, capacity {capacity_per_second}/s, \
+             target qps {target_qps}, pool config {pool_config:?}, client success {success_per_second:.1}/s, \
+             {summary:?}"
+        );
+        info!("execution saturation series: {}", stats.series(5));
+        assert!(
+            summary.min_admission_percentage < 100,
+            "pacer never engaged: {summary:?}"
+        );
+        assert!(
+            success_per_second >= 0.7 * capacity_per_second as f64,
+            "throughput locked in below execution capacity: {success_per_second:.1}/s, {summary:?}"
+        );
+        assert!(
+            (0.1..=1.5).contains(&summary.median_wait_secs),
+            "backlog wait did not settle near the target: {summary:?}"
+        );
+        assert!(
+            summary.admission_p90 < 130 && summary.admission_p10 > 60,
+            "admission swung instead of settling: {summary:?}"
+        );
+        assert!(
+            summary.checkpoints_after_warmup >= 20,
+            "too few checkpoints executed under saturation: {summary:?}"
+        );
+        assert!(
+            summary.longest_checkpoint_stall_secs < 15,
+            "checkpoint execution stalled under saturation: {summary:?}"
+        );
+    }
+
+    #[derive(Default)]
+    struct SaturationSample {
+        admission_percentages: Vec<i64>,
+        waits_secs: Vec<f64>,
+        executed: Vec<u64>,
+        take_budgets: Vec<i64>,
+        already_processed: Vec<i64>,
+        max_user_pool_depth: i64,
+        max_ready_certificates: i64,
+        max_pending_certificates: i64,
+        checkpoint: u64,
+    }
+
+    impl SaturationSample {
+        fn record(
+            &mut self,
+            validator_index: usize,
+            registry: &prometheus::Registry,
+            checkpoint: u64,
+            wait_secs: f64,
+            executed: u64,
+        ) {
+            self.waits_secs.push(wait_secs);
+            self.executed.push(executed);
+            for family in registry.gather() {
+                let Some(metric) = family.get_metric().first() else {
+                    continue;
+                };
+                match family.name() {
+                    "consensus_transaction_pool_execution_pacer_admission_percentage" => {
+                        self.admission_percentages.push(metric.gauge.value() as i64);
+                    }
+                    "consensus_transaction_pool_user_take_budget" => {
+                        self.take_budgets.push(metric.gauge.value() as i64);
+                    }
+                    "consensus_transaction_pool_already_processed" => {
+                        let user: f64 = family
+                            .get_metric()
+                            .iter()
+                            .filter(|m| m.get_label().iter().any(|l| l.value() == "user"))
+                            .map(|m| m.counter.value())
+                            .sum();
+                        self.already_processed.push(user as i64);
+                    }
+                    "consensus_transaction_pool_depth" => {
+                        for metric in family.get_metric() {
+                            if metric.get_label().iter().any(|l| l.value() == "user") {
+                                self.max_user_pool_depth =
+                                    self.max_user_pool_depth.max(metric.gauge.value() as i64);
+                            }
+                        }
+                    }
+                    "transaction_manager_num_executing_certificates" => {
+                        self.max_ready_certificates =
+                            self.max_ready_certificates.max(metric.gauge.value() as i64);
+                    }
+                    "transaction_manager_num_pending_certificates" => {
+                        self.max_pending_certificates = self
+                            .max_pending_certificates
+                            .max(metric.gauge.value() as i64);
+                    }
+                    _ => {}
+                }
+            }
+            if validator_index == 0 {
+                self.checkpoint = checkpoint;
+            }
+        }
+
+        fn mean_admission(&self) -> Option<f64> {
+            (!self.admission_percentages.is_empty()).then(|| {
+                self.admission_percentages.iter().sum::<i64>() as f64
+                    / self.admission_percentages.len() as f64
+            })
+        }
+    }
+
+    #[derive(Default)]
+    struct SaturationStats {
+        samples: Vec<SaturationSample>,
+    }
+
+    #[derive(Debug)]
+    struct SaturationSummary {
+        samples: usize,
+        min_admission_percentage: i64,
+        admission_p10: i64,
+        admission_p90: i64,
+        median_wait_secs: f64,
+        p90_wait_secs: f64,
+        max_wait_secs: f64,
+        max_ready_certificates: i64,
+        max_pending_certificates: i64,
+        checkpoints_after_warmup: u64,
+        longest_checkpoint_stall_secs: u64,
+    }
+
+    impl SaturationStats {
+        fn push(&mut self, sample: SaturationSample) {
+            self.samples.push(sample);
+        }
+
+        /// One line per `step` seconds: mean admission %, median wait, validator 0's user
+        /// executions in the interval, max ready certs.
+        fn series(&self, step: usize) -> String {
+            self.samples
+                .windows(2)
+                .enumerate()
+                .filter(|(i, _)| i % step == 0)
+                .map(|(i, w)| {
+                    let (prev, cur) = (&w[0], &w[1]);
+                    let mut waits = cur.waits_secs.clone();
+                    waits.sort_by(f64::total_cmp);
+                    let executed = cur
+                        .executed
+                        .first()
+                        .zip(prev.executed.first())
+                        .map(|(c, p)| c.saturating_sub(*p))
+                        .unwrap_or(0);
+                    let dup: i64 = cur
+                        .already_processed
+                        .iter()
+                        .zip(prev.already_processed.iter())
+                        .map(|(c, p)| c - p)
+                        .sum();
+                    format!(
+                        "t{i}: adm {:.0} wait {:.2} exec {executed} ready {} pool {} budget {:?} dup {dup}",
+                        cur.mean_admission().unwrap_or(100.0),
+                        waits.get(waits.len() / 2).copied().unwrap_or(0.0),
+                        cur.max_ready_certificates,
+                        cur.max_user_pool_depth,
+                        cur.take_budgets
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" | ")
+        }
+
+        fn summary(&self, warmup_secs: usize) -> SaturationSummary {
+            let percentile = |sorted: &[f64], p: f64| -> f64 {
+                if sorted.is_empty() {
+                    return 0.0;
+                }
+                let index = ((sorted.len() - 1) as f64 * p).round() as usize;
+                sorted[index]
+            };
+            let settled = &self.samples[self.samples.len().min(warmup_secs)..];
+            let mut waits: Vec<f64> = settled.iter().flat_map(|s| s.waits_secs.clone()).collect();
+            waits.sort_by(f64::total_cmp);
+            let mut admissions: Vec<f64> =
+                settled.iter().filter_map(|s| s.mean_admission()).collect();
+            admissions.sort_by(f64::total_cmp);
+            let mut longest_stall = 0u64;
+            let mut current_stall = 0u64;
+            let mut last_checkpoint = None;
+            for sample in settled {
+                match last_checkpoint {
+                    Some(last) if sample.checkpoint > last => current_stall = 0,
+                    Some(_) => {
+                        current_stall += 1;
+                        longest_stall = longest_stall.max(current_stall);
+                    }
+                    None => {}
+                }
+                last_checkpoint = Some(sample.checkpoint);
+            }
+            SaturationSummary {
+                samples: self.samples.len(),
+                min_admission_percentage: self
+                    .samples
+                    .iter()
+                    .flat_map(|s| s.admission_percentages.iter().copied())
+                    .min()
+                    .unwrap_or(100),
+                admission_p10: percentile(&admissions, 0.1) as i64,
+                admission_p90: percentile(&admissions, 0.9) as i64,
+                median_wait_secs: percentile(&waits, 0.5),
+                p90_wait_secs: percentile(&waits, 0.9),
+                max_wait_secs: waits.last().copied().unwrap_or(0.0),
+                max_ready_certificates: settled
+                    .iter()
+                    .map(|s| s.max_ready_certificates)
+                    .max()
+                    .unwrap_or(0),
+                max_pending_certificates: settled
+                    .iter()
+                    .map(|s| s.max_pending_certificates)
+                    .max()
+                    .unwrap_or(0),
+                checkpoints_after_warmup: match (settled.first(), settled.last()) {
+                    (Some(first), Some(last)) => last.checkpoint.saturating_sub(first.checkpoint),
+                    _ => 0,
+                },
+                longest_checkpoint_stall_secs: longest_stall,
+            }
+        }
     }
 
     // Tests cluster defense against failing transaction floods Traffic Control
@@ -1395,7 +1756,8 @@ mod test {
         num_workers: Option<u64>,
         pre_load_setup: Option<F>,
         enable_surfer: bool,
-    ) where
+    ) -> BenchmarkStats
+    where
         F: FnOnce(Arc<TestCluster>) -> Fut + Send,
         Fut: std::future::Future<Output = ()> + Send,
     {
@@ -1583,9 +1945,10 @@ mod test {
             // TODO: make this stricter (== 0) when we have reliable error retrying on the client.
             tracing::info!("end of test {:?}", benchmark_stats);
             assert!(benchmark_stats.num_error_txes < 100);
+            benchmark_stats
         });
 
-        if enable_surfer {
+        let benchmark_stats = if enable_surfer {
             let surfer_cluster = test_cluster.clone();
             let surfer_task = tokio::spawn(async move {
                 // now do a sui-surfer test
@@ -1614,15 +1977,17 @@ mod test {
                 assert!(!results.unique_move_functions_called.is_empty());
             });
 
-            let _ = futures::join!(bench_task, surfer_task);
+            let (benchmark_stats, _) = futures::join!(bench_task, surfer_task);
+            benchmark_stats.unwrap()
         } else {
             info!("Surfer disabled, running only benchmark task");
-            bench_task.await.unwrap();
-        }
+            bench_task.await.unwrap()
+        };
 
         // With load stopped, the observer (when present) must be able to reach the
         // network's latest checkpoint via block streaming, in any scenario.
         wait_for_observer_catch_up(&test_cluster, Duration::from_secs(120)).await;
+        benchmark_stats
     }
 
     // A checkpoint fork (vs the transaction fork below): one validator participates in consensus
