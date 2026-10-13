@@ -3,7 +3,7 @@
 
 // Every value position a reference result can flow into that produces a `Read` argument.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m {

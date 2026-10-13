@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Dev-inspect twin of programmable/tx_context_mut_result_across_mut_tx_use; see the
-// flag-off twin tx_context_result_across_mut_tx_use_invalid for what the flag changes.
+// flag-off twin tx_context_result_across_mut_tx_use_invalid_v139 for what the flag changes.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::m;

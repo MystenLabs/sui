@@ -10,7 +10,7 @@
 // the TxContext return rule rejects any standalone reference-returning call
 // (see tx_context_result_borrow_invalid).
 
-//# init --addresses test=0x0 --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0
 
 //# publish
 module test::m;

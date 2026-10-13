@@ -3,7 +3,7 @@
 
 // Simple test of hot value rules each location and usage
 
-//# init --addresses test=0x0 a=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 a=0x0 --accounts A
 
 //# publish
 

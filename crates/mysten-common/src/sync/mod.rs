@@ -3,6 +3,7 @@
 
 /// Low level utilities shared across Sui.
 pub mod async_once_cell;
+pub mod high_water_mark;
 pub mod notify_once;
 pub mod notify_read;
 pub mod oneshot;

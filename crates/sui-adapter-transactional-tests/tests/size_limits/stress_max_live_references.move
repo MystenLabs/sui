@@ -4,7 +4,7 @@
 // Stress test with max_ptb_live_references (64) concurrent mutable borrows of distinct inputs in a
 // single command.
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::stress;

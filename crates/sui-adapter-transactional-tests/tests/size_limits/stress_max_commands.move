@@ -4,7 +4,7 @@
 // Stress test with max programmable commands (1023) that all create references, including a
 // returned-reference chain of length max_ptb_total_returned_references (256).
 
-//# init --addresses test=0x0 --accounts A --enable-feature-flags allow_references_in_ptbs
+//# init --addresses test=0x0 --accounts A
 
 //# publish
 module test::stress;

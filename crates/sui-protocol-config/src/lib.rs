@@ -421,6 +421,7 @@ const MAINNET_USDB: &str =
 //              Charge package inputs 1% of the per-byte object read cost.
 // Version 140: Add native vector bulk operations (keep_range, copy_range, replace_range
 //              and reverse) and their gas costs.
+//              Shuffle the block order within each round of a consensus commit on devnet.
 //              Disable the ID leak verifier.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -1332,8 +1333,14 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     merge_colliding_deferrals: bool,
 
-    // If true, skip the Sui ID leak verifier, allowing an existing `UID` to be packed into an
-    // object.
+    // If true, consensus orders the blocks of each committed sub-dag within a round by a hash
+    // seeded from the leader block's digest, instead of by authority index. Rounds stay in
+    // ascending order, and transactions within a block keep their relative order.
+    #[serde(skip_serializing_if = "is_false")]
+    shuffle_consensus_commit_blocks: bool,
+
+    // If true, skip the Sui ID leak verifier, allowing an existing `UID` to be used as an objects
+    // id.
     #[serde(skip_serializing_if = "is_false")]
     disable_id_leak_verifier: bool,
 }
@@ -4882,6 +4889,11 @@ impl ProtocolConfig {
                     cfg.vector_replace_range_base_cost = Some(52);
                     cfg.vector_replace_range_per_elem_cost = Some(8);
 
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.shuffle_consensus_commit_blocks = true;
+                    }
+
+                    cfg.feature_flags.allow_references_in_ptbs = true;
                     cfg.feature_flags.disable_id_leak_verifier = true;
                 }
                 // Use this template when making changes:

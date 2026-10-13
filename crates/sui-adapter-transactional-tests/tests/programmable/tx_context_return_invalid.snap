@@ -44,10 +44,10 @@ Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext } in 
 
 task 6, lines 47-49:
 //# programmable
-// rejected by the general no-references-in-return rule
+// TxContext cannot be returned by reference
 //> test::m::ref_mut_id();
-Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of TxContext in the function signature. TxContext can only be used by reference, `&TxContext` or `&mut TxContext`. If used mutably, it must be the only TxContext parameter, and TxContext can never be returned from a Move call.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTxContext }, source: Some("TxContext cannot be returned from a Move call"), command: Some(0) } }
 
 task 7, lines 51-53:
 //# programmable --sender A --dev-inspect

@@ -149,6 +149,7 @@ feature_flags:
   use_new_commit_handler: true
   better_loader_errors: true
   generate_df_type_layouts: true
+  allow_references_in_ptbs: true
   framework_tx_context_mut_restrictions: true
   include_function_signatures_in_instantiation_limits: true
   ptb_tx_context_restrictions: true
@@ -196,6 +197,7 @@ feature_flags:
   memory_safety_invariant_check_v2: true
   disable_effects_tx_dependencies: true
   merge_colliding_deferrals: true
+  shuffle_consensus_commit_blocks: true
   disable_id_leak_verifier: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
