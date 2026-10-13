@@ -47,8 +47,7 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     validator_client_monitor::{
-        OperationFeedback, OperationType, TransactionClass, ValidatorClientMetrics,
-        ValidatorClientMonitor,
+        OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
 };
 
@@ -150,17 +149,10 @@ where
         &self.authority_aggregator
     }
 
-    pub fn select_preferred_validators(
-        &self,
-        delta: f64,
-        tx_class: TransactionClass,
-    ) -> Vec<AuthorityName> {
+    pub fn select_preferred_validators(&self, delta: f64) -> Vec<AuthorityName> {
         let authority_aggregator = self.authority_aggregator.load();
-        self.client_monitor.select_shuffled_preferred_validators(
-            &authority_aggregator.committee,
-            delta,
-            tx_class,
-        )
+        self.client_monitor
+            .select_shuffled_preferred_validators(&authority_aggregator.committee, delta)
     }
 
     /// The validators this node would prefer to submit to, as committee indices.
@@ -176,15 +168,9 @@ where
 
         let authority_aggregator = self.authority_aggregator.load();
         let committee = &authority_aggregator.committee;
-        // The set restricts the transaction, so it is chosen from restricted-class
-        // stats — the view staggering holds cannot pollute.
         let mut proposers: Vec<u32> = self
             .client_monitor
-            .select_shuffled_preferred_validators(
-                committee,
-                SELECT_LATENCY_DELTA,
-                TransactionClass::Restricted,
-            )
+            .select_shuffled_preferred_validators(committee, SELECT_LATENCY_DELTA)
             .into_iter()
             .filter_map(|name| committee.authority_index(&name))
             .take(max)
@@ -379,18 +365,18 @@ where
         let tx_type = request.tx_type();
         let tx_digest = request.tx_digest();
         let ping_type = request.ping_type;
-        // Pings carry no transaction, so they are neither restricted nor unrestricted.
-        let tx_class = request.transaction.as_ref().map(|tx| {
-            if tx
-                .transaction_data()
+        // Staggering holds only ever delay unrestricted transactions. While validators
+        // stagger, this transaction's end-to-end latency is skipped from the ranking so
+        // holds cannot inflate it: the ranking routes restricted transactions and
+        // chooses proposer sets, both of which should reflect the validators' own speed.
+        // Restricted transactions and pings keep every validator's window fresh. The
+        // window is 40 samples, not time-based, so samples taken in the interval before
+        // this node learns of an activation can linger in the ranking for minutes.
+        let skip_latency = request.transaction.as_ref().is_some_and(|tx| {
+            !tx.transaction_data()
                 .expiration()
                 .restricts_proposers(auth_agg.committee.epoch())
-            {
-                TransactionClass::Restricted
-            } else {
-                TransactionClass::Unrestricted
-            }
-        });
+        }) && self.client_monitor.staggering_active();
 
         let (name, submit_txn_result) = self
             .submitter
@@ -426,7 +412,7 @@ where
             )
             .await;
 
-        if result.is_ok() {
+        if result.is_ok() && !skip_latency {
             self.client_monitor
                 .record_interaction_result(OperationFeedback {
                     authority_name: name,
@@ -436,7 +422,6 @@ where
                     } else {
                         OperationType::SharedObjectFinality
                     },
-                    tx_class,
                     ping_type,
                     result: Ok(start_time.elapsed()),
                 });
