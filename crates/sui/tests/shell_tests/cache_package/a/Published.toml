@@ -3,3 +3,9 @@ chain-id = "4c78adac"
 published-at = "0xcafe"
 original-id = "0xdeadbeef"
 version = 2
+
+[published.custom_env]
+chain-id = "c057011d"
+published-at = "0xbeef"
+original-id = "0xfeed"
+version = 1
