@@ -75,7 +75,6 @@ sui/
 │   └── sui-indexer-alt/                # Blockchain data indexer
 ├── consensus/                          # Consensus mechanism (Mysticeti)
 ├── sui-execution/                      # Move execution layer with versions
-├── dapps/                              # Frontend applications
 └── external-crates/                    # Move compiler and VM
 ```
 
