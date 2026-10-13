@@ -144,6 +144,8 @@ jobs:
         working-directory: bridge/evm
         run: |
           forge soldeer update
+          # Install Solc before parallel Rust tests race to download it.
+          forge build
       - name: Add postgres to PATH
         shell: bash
         run: |
