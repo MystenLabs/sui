@@ -107,14 +107,9 @@ fn argument<E: ExecutionErrorTrait>(
             true
         }
         T::Argument__::Read(u) => {
-            if context.protocol_config.fix_ptb_generated_reads() {
-                // `ty` is the dereferenced value type, so the location's type must be
-                // a reference
-                reference_usage::<E>(context, u)?;
-            } else {
-                let usage_is_ref = usage::<E>(context, u, ty)?;
-                assert_invariant!(usage_is_ref, "read argument must be a reference type");
-            }
+            // `ty` is the dereferenced value type, so the location's type must be
+            // a reference
+            reference_usage::<E>(context, u)?;
             context.free::<E>()?;
             false
         }
