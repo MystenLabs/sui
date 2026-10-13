@@ -1315,7 +1315,24 @@ fun create_system_objects() {
     scenario.end();
 }
 
-// === macros ===
+// === Macros ===
+
+#[test]
+fun tx_macro() {
+    let mut test = test_scenario::begin(@0);
+    let effects = test.tx!(@0xa11ce, |test| {
+        let object = Object {
+            id: object::new(test.ctx()),
+            value: 10,
+        };
+
+        transfer::share_object(object);
+    });
+
+    assert_eq!(effects.shared().length(), 1);
+
+    test.end();
+}
 
 #[test]
 #[allow(unused_mut_ref)]
