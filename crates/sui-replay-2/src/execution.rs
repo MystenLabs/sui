@@ -47,18 +47,28 @@ pub struct ReplayExecutor {
     execution_metrics: Arc<ExecutionMetrics>,
 }
 
-// Returned struct from execution. Contains all the data related to a transaction.
-// Transaction data and effects (both expected and actual) and the caches containing
-// the objects used during execution.
+/// Transaction data, effects, and retained state produced by one replay execution.
+///
+/// Historical replay uses one inclusion checkpoint. Simulation replay can combine fullnode effects
+/// with an independently selected GraphQL read bound, so its fields do not identify one coherent
+/// fullnode snapshot.
 pub struct TxnContextAndEffects {
-    pub txn_data: TransactionData,             // original transaction data
-    pub execution_effects: TransactionEffects, // effects of the replay execution
-    pub expected_effects: TransactionEffects,  // expected effects as found in the transaction data
-    pub gas_status: SuiGasStatus,              // gas status of the replay execution
-    pub object_cache: BTreeMap<ObjectID, BTreeMap<u64, Object>>, // object cache
-    pub inner_store: InnerTemporaryStore,      // temporary store used during execution
-    pub checkpoint: u64,                       // checkpoint where the transaction was included
-    pub protocol_version: u64,                 // protocol version used for execution
+    /// Transaction executed by the replay engine.
+    pub txn_data: TransactionData,
+    /// Effects produced by the replay execution.
+    pub execution_effects: TransactionEffects,
+    /// Historical effects or fullnode simulation effects used as the expected result.
+    pub expected_effects: TransactionEffects,
+    /// Final gas status from replay execution.
+    pub gas_status: SuiGasStatus,
+    /// Object and package bodies retained while loading and executing the transaction.
+    pub object_cache: BTreeMap<ObjectID, BTreeMap<u64, Object>>,
+    /// Temporary writes and events produced by replay execution.
+    pub inner_store: InnerTemporaryStore,
+    /// Historical inclusion checkpoint or simulation fallback read bound.
+    pub checkpoint: u64,
+    /// Protocol version used by the replay executor.
+    pub protocol_version: u64,
 }
 
 // Entry point. Executes a transaction.
