@@ -20,7 +20,7 @@ use tracing::{debug, error, info, trace};
 
 use crate::{
     CommittedSubDag,
-    block::{BlockAPI, GENESIS_ROUND, Slot, VerifiedBlock, genesis_blocks},
+    block::{BlockAPI, GENESIS_ROUND, Slot, SlotDigest, VerifiedBlock, genesis_blocks},
     commit::{
         CommitAPI as _, CommitDigest, CommitIndex, CommitInfo, CommitRef, CommitVote,
         GENESIS_COMMIT_INDEX, TrustedCommit, load_committed_subdag_from_store,
@@ -523,6 +523,24 @@ impl DagState {
             results.push(block_info.clone());
         }
         results
+    }
+
+    /// Whether `slot` holds no block, exactly one, or several -- the only distinction
+    /// callers need. Stops at the second match and takes the digest from the key, so
+    /// answering costs the same at an equivocating slot as anywhere else.
+    pub(crate) fn digest_at_slot(&self, slot: Slot) -> SlotDigest {
+        let mut blocks = self
+            .recent_blocks
+            .range((
+                Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
+                Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
+            ))
+            .take(2);
+        match (blocks.next(), blocks.next()) {
+            (None, _) => SlotDigest::Absent,
+            (Some((block_ref, _)), None) => SlotDigest::Unique(block_ref.digest),
+            _ => SlotDigest::Equivocated,
+        }
     }
 
     /// Gets all uncommitted blocks in a slot.
