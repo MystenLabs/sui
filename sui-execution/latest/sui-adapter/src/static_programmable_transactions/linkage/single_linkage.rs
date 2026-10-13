@@ -57,7 +57,7 @@ pub fn refine_to_single_linkage<E: ExecutionErrorTrait>(
     let mut seen_fixed_inputs = BTreeSet::new();
 
     for (i, command) in txn.commands.iter().enumerate() {
-        analyze_command::<E>(command, &mut base_linkage, package_store, protocol_config)
+        analyze_command::<E>(command, &mut base_linkage, package_store)
             .map_err(|e| e.with_command_index(i))?;
         add_used_input_linkage::<E>(
             command.arguments(),
@@ -77,22 +77,19 @@ pub fn refine_to_single_linkage<E: ExecutionErrorTrait>(
         protocol_config,
     )?;
 
-    if protocol_config.enable_order_independent_upgrade_init_linkage() {
-        for (i, command) in txn.commands.iter().enumerate() {
-            let Command::Upgrade(payload, _, current_package_id, _, resolved_linkage) = command
-            else {
-                continue;
-            };
-            analyze_upgrade_command::<E>(
-                payload,
-                current_package_id,
-                resolved_linkage,
-                &mut base_linkage,
-                package_store,
-                protocol_config,
-            )
-            .map_err(|e| e.with_command_index(i))?;
-        }
+    for (i, command) in txn.commands.iter().enumerate() {
+        let Command::Upgrade(payload, _, current_package_id, _, resolved_linkage) = command else {
+            continue;
+        };
+        analyze_upgrade_command::<E>(
+            payload,
+            current_package_id,
+            resolved_linkage,
+            &mut base_linkage,
+            package_store,
+            protocol_config,
+        )
+        .map_err(|e| e.with_command_index(i))?;
     }
 
     // Constraint-level invariant check, run before `from_resolution_table` erases the
@@ -242,7 +239,6 @@ fn analyze_command<E: ExecutionErrorTrait>(
     command: &Command,
     resolution_table: &mut ResolutionTable,
     store: &VerifiedPackageStore<'_>,
-    protocol_config: &ProtocolConfig,
 ) -> Result<(), E> {
     match command {
         Command::MoveCall(move_call) => {
@@ -264,18 +260,7 @@ fn analyze_command<E: ExecutionErrorTrait>(
                 }
             }
         }
-        Command::Upgrade(_, _, _, _, _)
-            if protocol_config.enable_order_independent_upgrade_init_linkage() => {}
-        Command::Upgrade(payload, _, current_package_id, _, resolved_linkage) => {
-            analyze_upgrade_command::<E>(
-                payload,
-                current_package_id,
-                resolved_linkage,
-                resolution_table,
-                store,
-                protocol_config,
-            )?;
-        }
+        Command::Upgrade(_, _, _, _, _) => {}
         Command::MakeMoveVec(Some(ty), _) => {
             add_type_packages::<E>(resolution_table, std::iter::once(ty), store)?;
         }
