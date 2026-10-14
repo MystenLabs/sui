@@ -46,7 +46,7 @@ use std::time::Duration;
 use sui_types::committee::Committee;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_grpc::WaitForEffectsResponse;
-use sui_types::transaction::{Transaction, TransactionDataAPI};
+use sui_types::transaction::{Transaction, TransactionDataAPI, TransactionExpiration};
 use sui_types::transaction_driver_types::TransactionSubmissionError;
 use sysinfo::System;
 use tokio::sync::Barrier;
@@ -55,7 +55,7 @@ use tokio::{time, time::Instant};
 use tracing::{debug, error, info, warn};
 
 use super::Interval;
-use super::{BenchmarkStats, StressStats, SubmissionAmplification};
+use super::{BenchmarkStats, ProposerRestriction, StressStats, SubmissionAmplification};
 
 /// Randomly partitions a list of transactions into groups for soft bundle submission.
 /// Each group will be submitted as a separate soft bundle.
@@ -113,6 +113,8 @@ pub struct BenchMetrics {
     pub num_submitted: IntCounterVec,
     pub num_in_flight: IntGaugeVec,
     pub latency_s: HistogramVec,
+    pub proposer_restriction_latency_s: HistogramVec,
+    pub proposer_restriction_submitted: IntCounterVec,
     pub latency_squared_s: CounterVec,
     pub validators_in_tx_cert: IntCounterVec,
     pub validators_in_effects_cert: IntCounterVec,
@@ -176,6 +178,21 @@ impl BenchMetrics {
                 "Total time in seconds to return a response",
                 &["workload"],
                 mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            proposer_restriction_latency_s: register_histogram_vec_with_registry!(
+                "proposer_restriction_latency_s",
+                "Transaction latency split by proposer restriction class",
+                &["workload", "proposer_restriction"],
+                mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            proposer_restriction_submitted: register_int_counter_vec_with_registry!(
+                "proposer_restriction_submitted",
+                "Transactions submitted split by proposer restriction class",
+                &["workload", "proposer_restriction"],
                 registry,
             )
             .unwrap(),
@@ -250,6 +267,37 @@ async fn print_and_start_benchmark() -> &'static Instant {
     .await
 }
 
+fn proposer_restriction_label(transaction: &Transaction, epoch: u64) -> &'static str {
+    if transaction
+        .data()
+        .transaction_data()
+        .expiration()
+        .restricts_proposers(epoch)
+    {
+        "restricted"
+    } else {
+        "unrestricted"
+    }
+}
+
+fn restricted_transaction_expiration(
+    execution_proxy: &dyn ValidatorProxy,
+) -> Option<TransactionExpiration> {
+    let current_epoch = execution_proxy.get_current_epoch();
+    let allowed_proposers = execution_proxy
+        .preferred_proposers()
+        .filter(|allowed| allowed.epoch == current_epoch)?;
+    Some(TransactionExpiration::Validity {
+        min_epoch: Some(current_epoch),
+        max_epoch: Some(current_epoch.saturating_add(1)),
+        min_timestamp: None,
+        max_timestamp: None,
+        chain: execution_proxy.get_chain_identifier(),
+        nonce: rand::random(),
+        allowed_proposers: Some(allowed_proposers),
+    })
+}
+
 pub struct BenchWorker {
     pub id: u64,
     pub target_qps: u64,
@@ -258,6 +306,7 @@ pub struct BenchWorker {
     pub group: u32,
     pub duration: Interval,
     pub submission_amplification: SubmissionAmplification,
+    pub proposer_restriction: ProposerRestriction,
 }
 
 impl Debug for BenchWorker {
@@ -351,6 +400,7 @@ impl BenchDriver {
                     group: workload_info.workload_params.group,
                     duration: workload_info.workload_params.duration,
                     submission_amplification: workload_info.submission_amplification,
+                    proposer_restriction: workload_info.proposer_restriction,
                 });
                 payloads = remaining;
                 qps -= target_qps;
@@ -804,6 +854,7 @@ async fn run_bench_worker(
                                                committee: Arc<Committee>|
      -> NextOp {
         let payload_str = payload.to_string();
+        let proposer_restriction = proposer_restriction_label(&transaction, committee.epoch());
         match result {
             Ok(effects) => {
                 assert!(
@@ -828,6 +879,10 @@ async fn run_bench_worker(
                 metrics
                     .latency_s
                     .with_label_values(&[payload_str.as_str()])
+                    .observe(latency.as_secs_f64());
+                metrics
+                    .proposer_restriction_latency_s
+                    .with_label_values(&[payload_str.as_str(), proposer_restriction])
                     .observe(latency.as_secs_f64());
                 metrics
                     .latency_squared_s
@@ -1020,13 +1075,19 @@ async fn run_bench_worker(
                     let metrics = Arc::clone(&metrics);
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.execution_proxy.clone_committee();
+                    let proposer_restriction =
+                        proposer_restriction_label(&tx, committee.epoch());
                     let start = Arc::new(Instant::now());
                     let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
                     let res = worker.execution_proxy
                         .execute_transaction_block(tx.clone())
-                        .then(|res| async move  {
+                        .then(move |res| async move  {
                             let payload_str = payload.to_string();
                             metrics.num_submitted.with_label_values(&[payload_str.as_str()]).inc();
+                            metrics
+                                .proposer_restriction_submitted
+                                .with_label_values(&[payload_str.as_str(), proposer_restriction])
+                                .inc();
                             handle_execute_transaction_response(res, start, tx, payload, committee)
                         }).count_in_flight(num_in_flight_metric);
                     futures.push(Box::pin(res));
@@ -1071,17 +1132,33 @@ async fn run_bench_worker(
                         };
                         futures.push(Box::pin(res));
                     } else {
-                        let tx = payload.make_transaction();
+                        let expiration = worker
+                            .proposer_restriction
+                            .sample(&mut rand::thread_rng())
+                            .then(|| {
+                                restricted_transaction_expiration(worker.execution_proxy.as_ref())
+                            })
+                            .flatten();
+                        let tx = match expiration {
+                            Some(expiration) => {
+                                payload.make_transaction_with_expiration(expiration)
+                            }
+                            None => payload.make_transaction(),
+                        };
                         let start = Arc::new(Instant::now());
                         let metrics = Arc::clone(&metrics);
                         let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
                         // TODO: clone committee for each request is not ideal.
                         let committee = worker.execution_proxy.clone_committee();
+                        let proposer_restriction =
+                            proposer_restriction_label(&tx, committee.epoch());
 
                         let submission_amplification = worker.submission_amplification;
                         let proxy = worker.execution_proxy.clone_new();
                         let res = async move {
-                            let res = if submission_amplification.is_enabled() {
+                            let res = if submission_amplification.is_enabled()
+                                && proposer_restriction == "unrestricted"
+                            {
                                 proxy
                                     .execute_transaction_block_with_submission_amplification(
                                         tx.clone(),
@@ -1093,6 +1170,10 @@ async fn run_bench_worker(
                             };
                             let payload_str = payload.to_string();
                             metrics.num_submitted.with_label_values(&[payload_str.as_str()]).inc();
+                            metrics
+                                .proposer_restriction_submitted
+                                .with_label_values(&[payload_str.as_str(), proposer_restriction])
+                                .inc();
                             handle_execute_transaction_response(res, start, tx, payload, committee)
                         }.count_in_flight(num_in_flight_metric);
                         futures.push(Box::pin(res));

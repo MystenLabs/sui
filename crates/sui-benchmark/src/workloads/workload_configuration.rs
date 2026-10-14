@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::bank::BenchmarkBank;
-use crate::drivers::{Interval, SubmissionAmplification};
+use crate::drivers::{Interval, ProposerRestriction, SubmissionAmplification};
 use crate::options::{Opts, RunSpec};
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::addr_bal_deposit::{AddrBalDepositConfig, AddrBalDepositWorkloadBuilder};
@@ -84,6 +84,7 @@ impl WorkloadConfiguration {
     ) -> Result<BTreeMap<GroupID, Vec<WorkloadInfo>>> {
         let mut workload_builders = vec![];
         let mut submission_amplification_by_group = BTreeMap::new();
+        let mut proposer_restriction_by_group = BTreeMap::new();
 
         // Create the workload builders for each Run spec
         match opts.run_spec.clone() {
@@ -123,6 +124,7 @@ impl WorkloadConfiguration {
                 duplicate_probability,
                 duplicate_copies_per_validator,
                 validator_selection,
+                restricted_proposer_probability,
                 duration,
                 deposit_target_address,
                 deposit_seed_sui,
@@ -158,6 +160,38 @@ impl WorkloadConfiguration {
                     }
                     submission_amplification_by_group
                         .insert(workload_group, submission_amplification);
+                    let proposer_restriction =
+                        ProposerRestriction::new(restricted_proposer_probability[i])?;
+                    if opts.use_fullnode_for_execution && proposer_restriction.is_enabled() {
+                        bail!(
+                            "restricted proposer traffic requires local validator execution; set --use-fullnode-for-execution false"
+                        );
+                    }
+                    if proposer_restriction.is_enabled() {
+                        let unsupported_weight = delegation[i]
+                            + batch_payment[i]
+                            + adversarial[i]
+                            + large_transaction[i]
+                            + shared_deletion[i]
+                            + randomness[i]
+                            + expected_failure[i]
+                            + randomized_transaction[i]
+                            + slow[i]
+                            + party[i]
+                            + conflicting_transfer[i]
+                            + composite[i]
+                            + gas_double_spend[i];
+                        if unsupported_weight > 0 || deposit_target_address.is_some() {
+                            bail!(
+                                "restricted proposer traffic currently supports shared-counter and transfer-object workloads only"
+                            );
+                        }
+                        info!(
+                            "Benchmark group {} restricted proposer probability: {}",
+                            workload_group, proposer_restriction.probability
+                        );
+                    }
+                    proposer_restriction_by_group.insert(workload_group, proposer_restriction);
 
                     let config = WorkloadConfig {
                         group: workload_group,
@@ -232,6 +266,7 @@ impl WorkloadConfiguration {
                     system_state_observer,
                     opts.gas_request_chunk_size,
                     submission_amplification_by_group,
+                    proposer_restriction_by_group,
                 )
                 .await
             }
@@ -244,6 +279,7 @@ impl WorkloadConfiguration {
         system_state_observer: Arc<SystemStateObserver>,
         gas_request_chunk_size: u64,
         submission_amplification_by_group: BTreeMap<GroupID, SubmissionAmplification>,
+        proposer_restriction_by_group: BTreeMap<GroupID, ProposerRestriction>,
     ) -> Result<BTreeMap<GroupID, Vec<WorkloadInfo>>> {
         // Generate the workloads and init them
         let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
@@ -276,6 +312,10 @@ impl WorkloadConfiguration {
             |mut acc, (workload, workload_params)| {
                 let w = WorkloadInfo {
                     submission_amplification: submission_amplification_by_group
+                        .get(&workload_params.group)
+                        .copied()
+                        .unwrap_or_default(),
+                    proposer_restriction: proposer_restriction_by_group
                         .get(&workload_params.group)
                         .copied()
                         .unwrap_or_default(),

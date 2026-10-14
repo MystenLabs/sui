@@ -29,8 +29,10 @@ use sui_rpc_api::{Client, client::ExecutedTransaction};
 use sui_types::transaction::Argument;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::ObjectArg;
+use sui_types::transaction::{AllowedProposers, MAX_UNPAID_ALLOWED_PROPOSERS};
 use sui_types::transaction_driver_types::EffectsFinalityInfo;
 use sui_types::transaction_driver_types::FinalizedEffects;
+use sui_types::transaction_executor::ProposerSelector;
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId},
@@ -371,6 +373,10 @@ pub trait ValidatorProxy {
 
     fn get_current_epoch(&self) -> EpochId;
 
+    fn preferred_proposers(&self) -> Option<AllowedProposers> {
+        None
+    }
+
     fn clone_new(&self) -> Box<dyn ValidatorProxy + Send + Sync>;
 
     async fn get_validators(&self) -> Result<Vec<SuiAddress>, anyhow::Error>;
@@ -641,6 +647,11 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
     fn get_current_epoch(&self) -> EpochId {
         self.td.authority_aggregator().load().committee.epoch
+    }
+
+    fn preferred_proposers(&self) -> Option<AllowedProposers> {
+        self.td
+            .preferred_proposers(MAX_UNPAID_ALLOWED_PROPOSERS as usize)
     }
 
     fn clone_new(&self) -> Box<dyn ValidatorProxy + Send + Sync> {
