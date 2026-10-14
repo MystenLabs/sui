@@ -29,22 +29,10 @@ pub const NOT_SUPPORTED_ERROR: u64 = 0;
 pub const INVALID_INPUT_ERROR: u64 = 1;
 pub const INPUT_TOO_LONG_ERROR: u64 = 2;
 
-fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(get_extension!(context, ObjectRuntime)?
-        .protocol_config
-        .enable_group_ops_native_functions())
-}
-
 fn is_msm_supported(context: &NativeContext) -> PartialVMResult<bool> {
     Ok(get_extension!(context, ObjectRuntime)?
         .protocol_config
         .enable_group_ops_native_function_msm())
-}
-
-fn is_uncompressed_g1_supported(context: &NativeContext) -> PartialVMResult<bool> {
-    Ok(get_extension!(context, ObjectRuntime)?
-        .protocol_config
-        .uncompressed_g1_group_elements())
 }
 
 fn is_ristretto_supported(context: &NativeContext) -> PartialVMResult<bool> {
@@ -53,34 +41,17 @@ fn is_ristretto_supported(context: &NativeContext) -> PartialVMResult<bool> {
         .enable_ristretto255_group_ops())
 }
 
-fn v2_native_charge(context: &NativeContext, cost: InternalGas) -> PartialVMResult<InternalGas> {
-    Ok(
-        if get_extension!(context, ObjectRuntime)?
-            .protocol_config
-            .native_charging_v2()
-        {
-            context.gas_used()
-        } else {
-            cost
-        },
-    )
-}
-
 fn map_op_result(
     context: &NativeContext,
-    cost: InternalGas,
     result: FastCryptoResult<Vec<u8>>,
 ) -> PartialVMResult<NativeResult> {
     match result {
         Ok(bytes) => Ok(NativeResult::ok(
-            v2_native_charge(context, cost)?,
+            context.gas_used(),
             smallvec![Value::vector_u8(bytes)],
         )),
         // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong or inputs are invalid.
-        Err(_) => Ok(NativeResult::err(
-            v2_native_charge(context, cost)?,
-            INVALID_INPUT_ERROR,
-        )),
+        Err(_) => Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
     }
 }
 
@@ -250,10 +221,6 @@ pub fn internal_validate(
     safe_assert_eq!(args.len(), 2);
 
     let cost = context.gas_used();
-    if !is_supported(context)? {
-        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
-    }
-
     let bytes_ref = pop_arg!(args, VectorRef);
     let bytes = bytes_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
@@ -293,7 +260,7 @@ pub fn internal_validate(
     };
 
     Ok(NativeResult::ok(
-        v2_native_charge(context, cost)?,
+        context.gas_used(),
         smallvec![Value::bool(result)],
     ))
 }
@@ -312,10 +279,6 @@ pub fn internal_add(
     safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
-    if !is_supported(context)? {
-        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
-    }
-
     let e2_ref = pop_arg!(args, VectorRef);
     let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
@@ -368,7 +331,7 @@ pub fn internal_add(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    map_op_result(context, cost, result)
+    map_op_result(context, result)
 }
 
 /***************************************************************************************************
@@ -385,10 +348,6 @@ pub fn internal_sub(
     safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
-    if !is_supported(context)? {
-        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
-    }
-
     let e2_ref = pop_arg!(args, VectorRef);
     let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
@@ -441,7 +400,7 @@ pub fn internal_sub(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    map_op_result(context, cost, result)
+    map_op_result(context, result)
 }
 
 /***************************************************************************************************
@@ -458,10 +417,6 @@ pub fn internal_mul(
     safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
-    if !is_supported(context)? {
-        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
-    }
-
     let e2_ref = pop_arg!(args, VectorRef);
     let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
@@ -530,7 +485,7 @@ pub fn internal_mul(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    map_op_result(context, cost, result)
+    map_op_result(context, result)
 }
 
 /***************************************************************************************************
@@ -547,10 +502,6 @@ pub fn internal_div(
     safe_assert_eq!(args.len(), 3);
 
     let cost = context.gas_used();
-    if !is_supported(context)? {
-        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
-    }
-
     let e2_ref = pop_arg!(args, VectorRef);
     let e2 = e2_ref.as_bytes_ref()?;
     let e1_ref = pop_arg!(args, VectorRef);
@@ -619,7 +570,7 @@ pub fn internal_div(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    map_op_result(context, cost, result)
+    map_op_result(context, result)
 }
 
 /***************************************************************************************************
@@ -637,10 +588,6 @@ pub fn internal_hash_to(
     safe_assert_eq!(args.len(), 2);
 
     let cost = context.gas_used();
-    if !is_supported(context)? {
-        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
-    }
-
     let m_ref = pop_arg!(args, VectorRef);
     let m = m_ref.as_bytes_ref()?;
     let group_type = pop_arg!(args, u8);
@@ -683,7 +630,7 @@ pub fn internal_hash_to(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    map_op_result(context, cost, result)
+    map_op_result(context, result)
 }
 
 // Based on calculation from https://github.com/supranational/blst/blob/master/src/multi_scalar.c#L270
@@ -842,10 +789,7 @@ pub fn internal_multi_scalar_mul(
             scalars.as_ref(),
             elements.as_ref(),
         ),
-        _ => Ok(NativeResult::err(
-            v2_native_charge(context, cost)?,
-            INVALID_INPUT_ERROR,
-        )),
+        _ => Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
     }
 }
 
@@ -861,11 +805,6 @@ pub fn internal_pairing(
 ) -> PartialVMResult<NativeResult> {
     safe_assert!(ty_args.is_empty());
     safe_assert_eq!(args.len(), 3);
-
-    let cost = context.gas_used();
-    if !is_supported(context)? {
-        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
-    }
 
     let e2_ref = pop_arg!(args, VectorRef);
     let e2 = e2_ref.as_bytes_ref()?;
@@ -890,7 +829,7 @@ pub fn internal_pairing(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    map_op_result(context, cost, result)
+    map_op_result(context, result)
 }
 
 /***************************************************************************************************
@@ -905,12 +844,6 @@ pub fn internal_convert(
 ) -> PartialVMResult<NativeResult> {
     safe_assert!(ty_args.is_empty());
     safe_assert_eq!(args.len(), 3);
-
-    let cost = context.gas_used();
-
-    if !(is_uncompressed_g1_supported(context))? {
-        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
-    }
 
     let e_ref = pop_arg!(args, VectorRef);
     let e = e_ref.as_bytes_ref()?;
@@ -946,7 +879,7 @@ pub fn internal_convert(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    map_op_result(context, cost, result)
+    map_op_result(context, result)
 }
 
 /***************************************************************************************************
@@ -963,10 +896,6 @@ pub fn internal_sum(
     safe_assert_eq!(args.len(), 2);
 
     let cost = context.gas_used();
-
-    if !(is_uncompressed_g1_supported(context))? {
-        return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
-    }
 
     let cost_params = get_extension!(context, NativesCostTable)?
         .group_ops_cost_params
@@ -1029,5 +958,5 @@ pub fn internal_sum(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    map_op_result(context, cost, result)
+    map_op_result(context, result)
 }
