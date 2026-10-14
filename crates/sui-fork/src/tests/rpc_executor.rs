@@ -14,13 +14,17 @@ use std::time::Duration;
 use rand::rngs::OsRng;
 use wiremock::MockServer;
 
+use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
 use prometheus::Registry;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -38,6 +42,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::storage::RpcIndexes;
+use sui_types::storage::RpcStateReader;
 use sui_types::transaction::Argument;
 use sui_types::transaction::GasData;
 use sui_types::transaction::Transaction;
@@ -660,4 +665,45 @@ async fn test_include_input_and_output_objects() {
         !output_objects.is_empty(),
         "output_objects should contain mutated/created objects",
     );
+}
+
+/// The harness forks at the genesis checkpoint and the embedded indexer starts after it, so the
+/// rpc-store holds no `epochs` row, which is the situation of any fork started mid-epoch. The stock
+/// reader therefore resolves no layout, while the fork resolves one from its own system state and
+/// packages, which is what lets `ListDynamicFields` report a field's kind, name, and value type.
+#[tokio::test]
+async fn test_rpc_resolves_struct_layouts_without_an_epoch_row() {
+    let harness = TestHarness::new().await;
+    let store = harness.context.simulacrum().read().await.store().clone();
+    let field_type = StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: Identifier::new("dynamic_field").unwrap(),
+        name: Identifier::new("Field").unwrap(),
+        type_params: vec![TypeTag::U64, TypeTag::U64],
+    };
+
+    let stock_layout = RpcStateReader::get_struct_layout(
+        harness.context.services().local_store().reader(),
+        &field_type,
+    )
+    .expect("the stock layout read should not fail");
+    assert!(
+        stock_layout.is_none(),
+        "the stock reader should have no protocol version to resolve with, or this test no longer \
+         covers the mid-epoch case",
+    );
+
+    let layout = RpcStateReader::get_struct_layout(&store, &field_type)
+        .expect("the fork's layout read should not fail")
+        .expect("the fork should resolve a layout without an epochs row");
+    let MoveTypeLayout::Struct(layout) = layout else {
+        panic!("a Field<u64, u64> layout should be a struct, got {layout:?}");
+    };
+    assert_eq!(layout.type_, field_type);
+    let field_names: Vec<_> = layout
+        .fields
+        .iter()
+        .map(|field| field.name.as_str())
+        .collect();
+    assert_eq!(field_names, ["id", "name", "value"]);
 }

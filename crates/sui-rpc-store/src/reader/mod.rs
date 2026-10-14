@@ -29,6 +29,8 @@ mod object_store;
 mod read_store;
 mod state_reader;
 
+pub use layout::resolve_struct_layout_with;
+
 use std::sync::Arc;
 
 use sui_consistent_store::Db;

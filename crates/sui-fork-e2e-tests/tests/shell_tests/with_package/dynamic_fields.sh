@@ -2,15 +2,15 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Fill a shared object's dynamic fields on the localnet, fork, and check that the fork lists,
-# reads, mutates, and extends those fields on its own copy of the parent.
+# Fill a shared object's dynamic fields on the localnet, fork with the object named in
+# `--dynamic-fields-of`, and check that the fork lists, reads, mutates, and extends those
+# fields on its own copy of the parent.
 set -euo pipefail
 source ./lib.sh
 localnet_setup
 
 # trailing_u64 <where> <object id>: the last eight bytes of an object's BCS as a number, which is
-# the `value` of a Field<u64, u64> and the `size` of a Registry. BCS is used because the fork
-# cannot render the fields of a package it only fetched on demand.
+# the `value` of a Field<u64, u64> and the `size` of a Registry.
 trailing_u64() {
   "$1" object "$2" --bcs --json | jq -r \
     '.data.Move.contents[-8:] as $b | reduce range(0; 8) as $i (0; . + $b[$i] * pow(2; 8 * $i))'
@@ -22,12 +22,6 @@ field_count() { "$1" dynamic-field "$2" --json | jq -r '.dynamicFields | length'
 field_id_for() {
   "$1" dynamic-field "$2" --json | jq -r --arg key "$3" \
     '.dynamicFields[] | select((.name.value | @base64d | explode | .[0]) == ($key | tonumber)) | .fieldId'
-}
-# Listing dynamic fields is a known gap on the fork: `dynamic-field` lists nothing there, even
-# for fields the fork created itself, while reads by id and execution against the fields work.
-# The counts are printed rather than asserted so that the snapshot records the gap.
-report_field_counts() {
-  echo "the localnet lists $(field_count on_localnet "$1") fields, the fork lists $(field_count on_fork "$1")"
 }
 
 sender=$(on_localnet active-address)
@@ -50,9 +44,11 @@ field2=$(field_id_for on_localnet "$registry" 2)
 assert_eq "$(trailing_u64 on_localnet "$field1")" 10 "field 1 holds 10 on the localnet"
 
 echo "=== fork: the pre-fork fields are visible ==="
-fork_start --checkpoint "$fork_point" --address "$sender"
+fork_start --checkpoint "$fork_point" --address "$sender" --dynamic-fields-of "$registry"
 fork_env
-report_field_counts "$registry"
+assert_eq "$(field_count on_fork "$registry")" 2 "the fork lists the two pre-fork fields"
+assert_eq "$(field_id_for on_fork "$registry" 1)" "$field1" "the fork lists field 1 under its id"
+assert_eq "$(field_id_for on_fork "$registry" 2)" "$field2" "the fork lists field 2 under its id"
 assert_eq "$(trailing_u64 on_fork "$field1")" 10 "field 1 reads 10 on the fork"
 assert_eq "$(trailing_u64 on_fork "$field2")" 20 "field 2 reads 20 on the fork"
 assert_eq "$(trailing_u64 on_fork "$registry")" 2 "the registry's size is 2 on the fork"
@@ -70,7 +66,8 @@ assert_eq "$(tx_status_of add3.json)" success "add executed on the fork"
 field3=$(created_object_id add3.json "::dynamic_field::Field<u64, u64>")
 assert_eq "$(trailing_u64 on_fork "$field3")" 30 "the new field reads 30 on the fork"
 assert_eq "$(trailing_u64 on_fork "$registry")" 3 "the registry's size is 3 on the fork"
-report_field_counts "$registry"
+assert_eq "$(field_count on_fork "$registry")" 3 "the fork lists all three fields"
+assert_eq "$(field_id_for on_fork "$registry" 3)" "$field3" "the fork lists field 3 under its id"
 assert_eq "$(field_count on_localnet "$registry")" 2 "the localnet still lists two fields"
 
 echo "=== localnet: move on after the fork ==="

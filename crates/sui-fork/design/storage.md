@@ -234,6 +234,15 @@ though the object policy one layer down would have fetched it happily. The rule 
 composing a derived read out of raw storage discards the policy that makes its inputs
 correct, so derived reads compose over the policy, never under it.
 
+Type layouts follow the rule. The fork reuses the stock resolver through
+`sui_rpc_store::reader::resolve_struct_layout_with` but supplies both of its inputs itself.
+Packages load through the fork's object policy, so a pre-fork package that was never
+materialized is fetched at the fork checkpoint, and a system package resolves at its current
+version rather than at whichever stored version a scan finds first. The protocol version comes
+from the fork's own system state, because the stock source is the rpc-store's `epochs` table,
+which only gains a row at genesis and end-of-epoch checkpoints and so holds nothing for a fork
+started mid-epoch.
+
 Coin metadata is worth naming here because it looks like an enumeration and is not. It
 resolves three type-keyed lookups — `CoinMetadata`, `TreasuryCap`, `RegulatedCoinMetadata`
 for the coin type — and composes them into one answer, so it belongs to this section rather
@@ -342,14 +351,6 @@ to the current schemas in `sui-rpc-store`, it seems reasonable to use the same c
 Fork directories written before the seal became a single batch may hold orphaned object
 rows from a crash mid-publication — rows a checkpoint wrote whose seal never landed.
 Nothing sweeps those on open; the atomic seal only guarantees that no new ones appear.
-
-Type layout resolution reaches under the object policy rather than composing over it. It
-loads the packages a type references straight from stored rows, so a pre-fork type whose
-package has never been materialized resolves to no layout at all, even though an object
-read for that same package would have fetched it. Every read that renders Move values as
-JSON depends on this. The same shortcut also picks packages by scanning stored versions,
-which is safe for ordinary packages, immutable at one version per id, but not for system
-packages, which carry every version they have ever had under one id.
 
 Coin metadata does not resolve for pre-fork coin types. `get_coin_info` composes three
 type-keyed lookups, but it takes them from the local type index rather than resolving each on

@@ -121,9 +121,9 @@ network, so they are answered by asking it, on every call.
 ```mermaid
 flowchart TD
     req[incoming gRPC read] --> route{"ForkStore RPC trait impls"}
-    route -->|"fork policy, with a remote leg:<br/>objects, transactions,<br/>checkpoints by sequence"| fs["fork-policy helpers"]
+    route -->|"fork policy, with a remote leg:<br/>objects, transactions,<br/>checkpoints by sequence, layouts"| fs["fork-policy helpers"]
     route -->|"fork policy, local only:<br/>checkpoints by digest, the local tip"| loc["local rpc-store rows"]
-    route -->|"stock-only: owner, type, coin and balance indexes,<br/>events, full contents, unchanged loaded runtime<br/>objects, committees, epoch info, layouts,<br/>ledger and bitmap indexes"| stock[RpcStoreReader]
+    route -->|"stock-only: owner, type, coin and balance indexes,<br/>events, full contents, unchanged loaded runtime<br/>objects, committees, epoch info,<br/>ledger and bitmap indexes"| stock[RpcStoreReader]
     route -->|"hybrid: chain identifier"| hybrid[stock first, fork fallback]
     route -->|"remote-only: lowest available checkpoint,<br/>for chain data and for objects"| rs[RemoteSource]
     hybrid --> stock

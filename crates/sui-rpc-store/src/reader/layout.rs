@@ -68,19 +68,10 @@ impl<R: Reader + Send + Sync> RpcStoreReader<R> {
             return Ok(None);
         };
 
-        let executor = sui_execution::executor(&protocol_config, /* silent */ true)
-            .map_err(StorageError::custom)?;
-
         let backing = PackageStoreOverObjects {
             schema: self.schema(),
         };
-        let overlay_store = OverlayBackingPackageStore::new(overlay, &backing);
-
-        let layout = executor
-            .type_layout_resolver(&protocol_config, Box::new(overlay_store))
-            .get_annotated_layout(struct_tag)
-            .map_err(StorageError::custom)?;
-        Ok(Some(layout.into_layout()))
+        resolve_struct_layout_with(struct_tag, overlay, &protocol_config, &backing).map(Some)
     }
 
     /// Resolve the live [`ProtocolConfig`], combining the protocol
@@ -142,6 +133,33 @@ impl<R: Reader + Send + Sync> RpcStoreReader<R> {
         };
         Ok(Some(ProtocolVersion::new(state.protocol_version())))
     }
+}
+
+/// Resolve the [`MoveTypeLayout`] for a given [`StructTag`] under
+/// an explicit [`ProtocolConfig`], loading packages from `overlay`
+/// first and from `packages` after that.
+///
+/// [`RpcStoreReader::resolve_struct_layout`] calls this with the
+/// live protocol config and the store's own `objects` CF. A caller
+/// that keeps its own package policy (a store that fetches missing
+/// packages from a remote, say) or its own source for the protocol
+/// version passes both in instead, without depending on
+/// `sui-execution` itself. Surfaces executor and resolver failures
+/// as [`StorageError::custom`].
+pub fn resolve_struct_layout_with(
+    struct_tag: &StructTag,
+    overlay: &ObjectSet,
+    protocol_config: &ProtocolConfig,
+    packages: &dyn BackingPackageStore,
+) -> StorageResult<MoveTypeLayout> {
+    let executor = sui_execution::executor(protocol_config, /* silent */ true)
+        .map_err(StorageError::custom)?;
+    let overlay_store = OverlayBackingPackageStore::new(overlay, packages);
+    let layout = executor
+        .type_layout_resolver(protocol_config, Box::new(overlay_store))
+        .get_annotated_layout(struct_tag)
+        .map_err(StorageError::custom)?;
+    Ok(layout.into_layout())
 }
 
 /// [`BackingPackageStore`] backed by the typed

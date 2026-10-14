@@ -12,7 +12,10 @@ use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use simulacrum::store::SimulatorStore;
 use sui_protocol_config::Chain;
+use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::ProtocolVersion;
 use sui_rpc_store::RpcStoreReader;
+use sui_rpc_store::reader::resolve_struct_layout_with;
 use sui_rpc_store::schema::objects::Status;
 use sui_rpc_store::schema::objects::TombstoneKind;
 use sui_types::base_types::ObjectID;
@@ -55,6 +58,8 @@ use sui_types::storage::error::Kind as StorageErrorKind;
 use sui_types::storage::error::Result as StorageResult;
 use sui_types::storage::load_package_object_from_object_store;
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::transaction::VerifiedTransaction;
 
 use crate::gql::GraphQLClient;
@@ -624,6 +629,24 @@ impl ForkStore {
         self.local_store().reader()
     }
 
+    /// Return the protocol config of the fork's current epoch, or `None` when this binary does not
+    /// support that protocol version.
+    ///
+    /// The version is read from the fork's own system state rather than from the rpc-store's
+    /// `epochs` table, because that table only gains a row at genesis and end-of-epoch checkpoints,
+    /// and a fork started mid-epoch has no row until it crosses an epoch locally. Reading the
+    /// system state on each call also follows a protocol change the fork makes when it advances an
+    /// epoch.
+    fn protocol_config(&self) -> StorageResult<Option<ProtocolConfig>> {
+        let system_state = get_sui_system_state(self)
+            .map_err(|err| StorageError::custom(format!("failed to read system state: {err}")))?;
+        let chain = RpcStateReader::get_chain_identifier(self)?.chain();
+        Ok(ProtocolConfig::get_for_version_if_supported(
+            ProtocolVersion::new(system_state.protocol_version()),
+            chain,
+        ))
+    }
+
     /// Return the chain identifier for the forked network. Known networks use their fixed
     /// identifiers, and custom networks derive one from the fork checkpoint digest.
     fn chain_identifier(&self) -> StorageResult<ChainIdentifier> {
@@ -911,14 +934,18 @@ impl SimulatorStore for ForkStore {
 // the stock rpc-store reader: every read the fork has policy for resolves
 // through the local-first, remote-fallback helpers above, while surfaces the
 // fork keeps no policy for -- events, full checkpoint contents, committees,
-// epoch info, struct layouts, and the ledger/bitmap indexes, all written by
-// the embedded indexer -- are served straight from the stock reader.
+// epoch info, and the ledger/bitmap indexes, all written by the embedded
+// indexer -- are served straight from the stock reader.
 //
 // The one read the stock reader could answer but must not is `get_object`
 // without a version: a stock reverse scan over the fork's sparse `objects` CF
 // would serve cached history as current, so latest-semantics reads resolve
 // through the checkpoint-pinned version index instead (see the `ObjectStore`
 // impl above).
+//
+// Struct layouts reuse the stock resolver but not its inputs. The protocol
+// version comes from the fork's system state and packages load through the
+// fork's object policy (see `get_struct_layout_with_overlay` below).
 
 impl ReadStore for ForkStore {
     /// Read committee information from committed `sui-rpc-store` data.
@@ -1079,14 +1106,23 @@ impl RpcStateReader for ForkStore {
         Some(self.stock_reader())
     }
 
-    /// Read a struct layout from `sui-rpc-store`.
+    /// Resolve a struct layout under the fork's own protocol version, loading packages through the
+    /// fork's object policy.
+    ///
+    /// The stock reader cannot serve a fork, because it takes the protocol version from an `epochs`
+    /// row a fork started mid-epoch does not have, and it loads packages only from stored rows, so
+    /// a type from a package the fork has not fetched yet would have no layout. Loading packages
+    /// through [`ForkStore`] fetches a missing package at the fork checkpoint like any other object
+    /// read.
     fn get_struct_layout_with_overlay(
         &self,
         struct_tag: &StructTag,
         overlay: &ObjectSet,
     ) -> StorageResult<Option<MoveTypeLayout>> {
-        self.stock_reader()
-            .get_struct_layout_with_overlay(struct_tag, overlay)
+        let Some(protocol_config) = self.protocol_config()? else {
+            return Ok(None);
+        };
+        resolve_struct_layout_with(struct_tag, overlay, &protocol_config, self).map(Some)
     }
 }
 
