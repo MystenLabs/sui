@@ -367,7 +367,7 @@ impl MovePackage {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DerivedObjectKey>,
-    ) -> Result<Vec<Option<MoveObject>>, RpcError<dynamic_field::Error>> {
+    ) -> Result<Vec<Option<Result<MoveObject, RpcError<dynamic_field::Error>>>>, RpcError> {
         self.super_.multi_get_derived_objects(ctx, keys).await
     }
 

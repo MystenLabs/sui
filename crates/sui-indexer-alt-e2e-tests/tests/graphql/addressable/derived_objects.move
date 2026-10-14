@@ -105,6 +105,24 @@ fragment Child on MoveObject {
   contents { json }
 }
 
+//# run-graphql
+{ # Invalid literals are isolated to their list entries, unlike missing objects which have no error.
+  root: multiGetDerivedObjects(keys: [
+    { parent: "@{obj_2_0}", name: { literal: "7u64" } },
+    { parent: "@{obj_2_0}", name: { literal: "{" } },
+    { parent: "@{obj_2_0}", name: { literal: "10u64" } },
+    { parent: "@{obj_2_0}", name: { literal: "8u64" } },
+  ]) { contents { json } }
+  address(address: "@{obj_2_0}") {
+    nested: multiGetDerivedObjects(keys: [
+      { name: { literal: "7u64" } },
+      { name: { literal: "{" } },
+      { name: { literal: "10u64" } },
+      { name: { literal: "8u64" } },
+    ]) { contents { json } }
+  }
+}
+
 //# run-graphql --cursors bcs(8u64)
 { # Fetch derived objects directly from their parent/name keys
   multiGetDerivedObjects(keys: [

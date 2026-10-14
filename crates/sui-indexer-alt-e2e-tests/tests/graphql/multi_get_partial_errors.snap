@@ -1,0 +1,156 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, lines 6-31:
+//# run-graphql
+Response: {
+  "data": {
+    "addresses": [
+      {
+        "address": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      null,
+      {
+        "address": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      }
+    ],
+    "objects": [
+      {
+        "address": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      null,
+      null,
+      {
+        "address": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      }
+    ],
+    "packages": [
+      {
+        "address": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      null,
+      null,
+      {
+        "address": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      }
+    ],
+    "types": [
+      {
+        "repr": "u64"
+      },
+      null,
+      null,
+      {
+        "repr": "bool"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "message": "Exactly one of `address` or `name` must be specified",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "addresses",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "At most one of a version, a root version, or a checkpoint bound can be specified when fetching an object",
+      "locations": [
+        {
+          "line": 7,
+          "column": 3
+        }
+      ],
+      "path": [
+        "objects",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "At most one of a version, or a checkpoint bound can be specified when fetching a package",
+      "locations": [
+        {
+          "line": 13,
+          "column": 3
+        }
+      ],
+      "path": [
+        "packages",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Error resolving type: Expected 1 type parameters, but got 2",
+      "locations": [
+        {
+          "line": 19,
+          "column": 3
+        }
+      ],
+      "path": [
+        "types",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 2, lines 33-44:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": {
+      "query": {
+        "objects": [
+          {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000001"
+          },
+          null,
+          {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000002"
+          }
+        ]
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "At most one of a version, a root version, or a checkpoint bound can be specified when fetching an object",
+      "locations": [
+        {
+          "line": 4,
+          "column": 7
+        }
+      ],
+      "path": [
+        "checkpoint",
+        "query",
+        "objects",
+        1
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
