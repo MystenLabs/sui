@@ -296,6 +296,11 @@ pub enum RunSpec {
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [SubmissionAmplification::DEFAULT_VALIDATOR_SELECTION])]
         validator_selection: Vec<ValidatorSelection>,
 
+        /// Probability that a transaction is restricted to the score-ranked proposer set
+        /// selected by the local TransactionDriver.
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0.0])]
+        restricted_proposer_probability: Vec<f64>,
+
         // Setting the duration of each benchmark. Benchmarks will run in sequence.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [Interval::from_str("unbounded").unwrap()])]
         duration: Vec<Interval>,
@@ -338,5 +343,21 @@ mod tests {
         assert!(parse_multiplier("0.99").is_err());
         assert!(parse_multiplier("0").is_err());
         assert!(parse_multiplier("nan").is_err());
+    }
+
+    #[test]
+    fn parses_restricted_proposer_probability() {
+        let opts = Opts::try_parse_from([
+            "stress",
+            "bench",
+            "--restricted-proposer-probability",
+            "0.25,0.75",
+        ])
+        .unwrap();
+        let RunSpec::Bench {
+            restricted_proposer_probability,
+            ..
+        } = opts.run_spec;
+        assert_eq!(restricted_proposer_probability, vec![0.25, 0.75]);
     }
 }

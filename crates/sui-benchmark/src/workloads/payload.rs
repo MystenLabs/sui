@@ -4,8 +4,9 @@
 use crate::{ExecutionEffects, workloads::ExpectedFailureType};
 use async_trait::async_trait;
 use std::{fmt::Display, num::NonZeroUsize};
+use sui_types::crypto::AccountKeyPair;
 use sui_types::digests::TransactionDigest;
-use sui_types::transaction::Transaction;
+use sui_types::transaction::{Transaction, TransactionDataAPI as _, TransactionExpiration};
 
 /// Results from executing a batch of transactions.
 pub struct BatchExecutionResults {
@@ -103,6 +104,17 @@ impl BatchedTransactionResult {
 pub trait Payload: Send + Sync + std::fmt::Debug + Display {
     fn make_new_payload(&mut self, effects: &ExecutionEffects);
     fn make_transaction(&mut self) -> Transaction;
+
+    fn make_transaction_with_expiration(
+        &mut self,
+        expiration: TransactionExpiration,
+    ) -> Transaction {
+        assert!(
+            matches!(expiration, TransactionExpiration::None),
+            "this workload does not support restricted proposer traffic"
+        );
+        self.make_transaction()
+    }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
         None // Default implementation returns None
     }
@@ -146,5 +158,67 @@ pub trait Payload: Send + Sync + std::fmt::Debug + Display {
     /// transactions succeeded or failed.
     fn handle_batch_results(&mut self, _results: &BatchExecutionResults) {
         // Default: do nothing
+    }
+}
+
+pub fn resign_transaction_with_expiration(
+    transaction: Transaction,
+    expiration: TransactionExpiration,
+    signer: &AccountKeyPair,
+) -> Transaction {
+    let mut transaction_data = transaction.into_data().into_inner().intent_message.value;
+    *transaction_data.expiration_mut() = expiration;
+    Transaction::from_data_and_signer(transaction_data, vec![signer])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resign_transaction_with_expiration;
+    use sui_types::base_types::random_object_ref;
+    use sui_types::crypto::get_key_pair;
+    use sui_types::digests::ChainIdentifier;
+    use sui_types::signature::VerifyParams;
+    use sui_types::transaction::{
+        AllowedProposers, Transaction, TransactionData, TransactionDataAPI as _,
+        TransactionExpiration,
+    };
+
+    #[test]
+    fn restricted_transaction_is_resigned() {
+        let (sender, keypair) = get_key_pair();
+        let transaction = Transaction::from_data_and_signer(
+            TransactionData::new_transfer_sui(
+                sender,
+                sender,
+                Some(1),
+                random_object_ref(),
+                1_000_000,
+                1_000,
+            ),
+            vec![&keypair],
+        );
+        let expiration = TransactionExpiration::Validity {
+            min_epoch: Some(7),
+            max_epoch: Some(8),
+            min_timestamp: None,
+            max_timestamp: None,
+            chain: ChainIdentifier::default(),
+            nonce: 9,
+            allowed_proposers: Some(AllowedProposers {
+                epoch: 7,
+                proposers: vec![0, 1, 2].try_into().unwrap(),
+            }),
+        };
+
+        let transaction =
+            resign_transaction_with_expiration(transaction, expiration.clone(), &keypair);
+
+        assert_eq!(
+            transaction.data().transaction_data().expiration(),
+            &expiration
+        );
+        transaction
+            .verify_signature_for_testing(7, &VerifyParams::default())
+            .unwrap();
     }
 }

@@ -21,6 +21,35 @@ pub enum ValidatorSelection {
     HighestPerformance,
 }
 
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct ProposerRestriction {
+    pub probability: f64,
+}
+
+impl Default for ProposerRestriction {
+    fn default() -> Self {
+        Self { probability: 0.0 }
+    }
+}
+
+impl ProposerRestriction {
+    pub fn new(probability: f64) -> anyhow::Result<Self> {
+        ensure!(
+            probability.is_finite() && (0.0..=1.0).contains(&probability),
+            "restricted proposer probability must be between 0.0 and 1.0"
+        );
+        Ok(Self { probability })
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.probability > 0.0
+    }
+
+    pub fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> bool {
+        rng.gen_bool(self.probability)
+    }
+}
+
 impl std::fmt::Display for ValidatorSelection {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -204,7 +233,6 @@ impl std::fmt::Display for Interval {
 }
 
 // wrapper which implements serde
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct HistogramWrapper {
     histogram: Histogram<u64>,
@@ -581,4 +609,21 @@ fn format_num_with_separators<T: Into<u128> + std::fmt::Display>(
         .collect::<Result<Vec<&str>, _>>()
         .unwrap()
         .join(delim)
+}
+
+#[cfg(test)]
+mod proposer_restriction_tests {
+    use super::ProposerRestriction;
+    use rand::{SeedableRng, rngs::StdRng};
+
+    #[test]
+    fn validates_and_samples_probability() {
+        assert!(ProposerRestriction::new(-0.1).is_err());
+        assert!(ProposerRestriction::new(1.1).is_err());
+        assert!(ProposerRestriction::new(f64::NAN).is_err());
+
+        let mut rng = StdRng::seed_from_u64(0);
+        assert!(!ProposerRestriction::new(0.0).unwrap().sample(&mut rng));
+        assert!(ProposerRestriction::new(1.0).unwrap().sample(&mut rng));
+    }
 }
