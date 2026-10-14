@@ -1,0 +1,111 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 13 tasks
+
+// Tests that a dynamic object field child (and its own dynamic field) is read at the root's version
+// while its parent UID is stored bare in a dynamic field, moved between parents, and revived as an
+// object of a different type.
+
+init:
+A: object(0,0)
+
+task 1, lines 10-70:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 12023200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 72:
+//# run ex::m::setup --sender A
+created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 9910400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 74:
+//# view-object 2,3
+Owner: Object ID: ( fake(2,4) )
+Version: 2
+Contents: ex::m::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    value: 1u64,
+}
+
+task 4, line 76:
+//# run ex::m::stash --args object(2,0) object(2,2) --sender A
+created: object(4,0)
+mutated: object(0,0), object(2,0)
+wrapped: object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 4218000,  storage_rebate: 3442456, non_refundable_storage_fee: 344
+
+task 5, line 78:
+//# run ex::m::bump_stashed --args object(2,0) --sender A
+mutated: object(0,0), object(2,0), object(2,3), object(2,5)
+gas summary: computation_cost: 1000000, storage_cost: 5000800,  storage_rebate: 5000300, non_refundable_storage_fee: 500
+
+task 6, line 80:
+//# view-object 2,3
+Owner: Object ID: ( fake(2,4) )
+Version: 4
+Contents: ex::m::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    value: 2u64,
+}
+
+task 7, line 82:
+//# run ex::m::move_stashed --args object(2,0) object(2,1) --sender A
+created: object(7,0)
+mutated: object(0,0), object(2,0), object(2,1), object(2,3), object(2,5)
+deleted: object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 8230800,  storage_rebate: 8229977, non_refundable_storage_fee: 823
+
+task 8, line 84:
+//# view-object 2,3
+Owner: Object ID: ( fake(2,4) )
+Version: 5
+Contents: ex::m::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    value: 3u64,
+}
+
+task 9, line 86:
+//# run ex::m::unstash_as_b --args object(2,1) --sender A
+mutated: object(0,0), object(2,1), object(2,3), object(2,5)
+unwrapped: object(2,2)
+deleted: object(7,0)
+gas summary: computation_cost: 1000000, storage_cost: 6209200,  storage_rebate: 6983702, non_refundable_storage_fee: 698
+
+task 10, line 88:
+//# run ex::m::bump_b --args object(2,2) --sender A
+mutated: object(0,0), object(2,2), object(2,3), object(2,5)
+gas summary: computation_cost: 1000000, storage_cost: 4962800,  storage_rebate: 4962304, non_refundable_storage_fee: 496
+
+task 11, line 90:
+//# view-object 2,3
+Owner: Object ID: ( fake(2,4) )
+Version: 7
+Contents: ex::m::Child {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    value: 5u64,
+}
+
+task 12, line 92:
+//# run ex::m::check_b --args object(2,2) 5 14 --sender A
+mutated: object(0,0), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220

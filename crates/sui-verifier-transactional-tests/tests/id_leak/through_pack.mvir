@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-// not allowed since C is not packed with a fresh UID
+// allowed, C is packed with a non-fresh UID
 mvir 0x0::test {
     import 0x2::object;
     import 0x2::transfer;

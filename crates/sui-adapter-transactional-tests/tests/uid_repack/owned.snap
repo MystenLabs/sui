@@ -1,0 +1,109 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 13 tasks
+
+// Tests repacking the UID of an owned object into the same type and into a different type.
+// Uses the core flavor since the Sui compiler still rejects packing an existing UID.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-40:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6878000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 42:
+//# run ex::m::mint --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 44:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 2
+Contents: ex::m::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 0u64,
+}
+
+task 4, lines 46-47:
+// Same-type repack is a plain mutation
+//# run ex::m::repack_a --args object(2,0) --sender A
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
+
+task 5, line 49:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: ex::m::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 1u64,
+}
+
+task 6, lines 51-54:
+// B has store, so the PTB can transfer the repacked object
+//# programmable --inputs object(2,0) @A --sender A
+//> 0: ex::m::a_to_b(Input(0));
+//> TransferObjects([Result(0)], Input(1))
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
+
+task 7, line 56:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 4
+Contents: ex::m::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 2u64,
+}
+
+task 8, lines 58-59:
+// The object is now a B
+//# run ex::m::use_a --args object(2,0) --sender A
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+
+task 9, line 61:
+//# run ex::m::use_b --args object(2,0) --sender A
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
+
+task 10, line 63:
+//# run ex::m::b_to_a --args object(2,0) --sender A
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226
+
+task 11, line 65:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 7
+Contents: ex::m::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 3u64,
+}
+
+task 12, line 67:
+//# run ex::m::use_a --args object(2,0) --sender A
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2256974, non_refundable_storage_fee: 226

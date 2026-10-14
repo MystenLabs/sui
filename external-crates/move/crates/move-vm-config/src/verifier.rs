@@ -48,6 +48,7 @@ pub struct VerifierConfig {
     pub max_generic_instantiation_type_nodes_per_module: Option<usize>,
     /// Count function signatures as part of of the generic instantiation type-node budgets.
     pub include_function_signatures_in_instantiation_limits: bool,
+    pub disable_id_leak_verifier: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +106,7 @@ impl Default for VerifierConfig {
             max_generic_instantiation_type_nodes_per_function: Some(10_000),
             max_generic_instantiation_type_nodes_per_module: Some(500_000),
             include_function_signatures_in_instantiation_limits: true,
+            disable_id_leak_verifier: false,
         }
     }
 }

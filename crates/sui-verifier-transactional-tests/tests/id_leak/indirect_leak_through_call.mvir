@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-// not allowed since Foo is not packed with a fresh UID
+// allowed, Foo is packed with a non-fresh UID
 mvir 0x0::m {
     import 0x2::object;
 

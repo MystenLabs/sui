@@ -1,0 +1,36 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# init --protocol-version 139
+
+//# publish
+// no allowed, the call tries to make a new UID
+mvir 0x0::m {
+    import 0x2::object;
+    import 0x2::transfer;
+
+    public struct S has copy, drop { f: u64 }
+
+    public struct Object has key { id: object::UID }
+
+    fun new(id: object::UID): Self::Object {
+        label l0:
+        return Object { id: move(id) };
+    }
+
+    entry fun bad(obj: Self::Object) {
+        let id: object::UID;
+        let s: Self::S;
+        let new: Self::Object;
+        label l0:
+
+        s = S { f: 0 };
+        Object { id: id } = move(obj);
+        (move(id));
+        _ = (&(&s).S::f);
+        new = Self::new();
+        transfer::transfer<Self::Object>(move(new), 0x42);
+        return;
+    }
+
+}

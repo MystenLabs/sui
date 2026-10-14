@@ -1,0 +1,91 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+// Tests changing the type of a dynamic object field child, keeping its dynamic fields, and
+// moving it out of its parent with a different type.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-52:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 10032000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 54:
+//# run ex::m::setup --sender A
+created: object(2,0), object(2,1), object(2,2), object(2,3)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7356800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 56:
+//# view-object 2,0
+Owner: Object ID: ( fake(2,2) )
+Version: 2
+Contents: ex::m::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, line 58:
+//# run ex::m::borrow_a --args object(2,1) --sender A
+mutated: object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 5, line 60:
+//# run ex::m::child_a_to_b --args object(2,1) --sender A
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 3442456, non_refundable_storage_fee: 344
+
+task 6, line 62:
+//# view-object 2,0
+Owner: Object ID: ( fake(2,2) )
+Version: 4
+Contents: ex::m::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 7, lines 64-65:
+// The child is now a B
+//# run ex::m::borrow_a --args object(2,1) --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::borrow_child_object (function index 14) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 14, instruction: 0, function_name: Some("borrow_child_object") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("dynamic_field") }), indices: [], offsets: [(FunctionDefinitionIndex(14), 0)] }), command: Some(0) } }
+
+task 8, line 67:
+//# run ex::m::borrow_b --args object(2,1) --sender A
+mutated: object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 9, lines 69-70:
+// The child leaves the parent as an A
+//# run ex::m::child_b_to_a_transfer --args object(2,1) --sender A
+mutated: object(0,0), object(2,0), object(2,1)
+deleted: object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 5897010, non_refundable_storage_fee: 590
+
+task 10, line 72:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 7
+Contents: ex::m::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 11, line 74:
+//# run ex::m::use_a --args object(2,0) --sender A
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220

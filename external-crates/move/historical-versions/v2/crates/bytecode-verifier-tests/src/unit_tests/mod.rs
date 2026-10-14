@@ -65,6 +65,7 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             max_generic_instantiation_type_nodes_per_function: None,
             max_generic_instantiation_type_nodes_per_module: None,
             include_function_signatures_in_instantiation_limits: false,
+            disable_id_leak_verifier: false,
         },
         MeterConfig::old_default(),
     )

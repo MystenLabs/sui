@@ -198,6 +198,7 @@ feature_flags:
   disable_effects_tx_dependencies: true
   merge_colliding_deferrals: true
   shuffle_consensus_commit_blocks: true
+  disable_id_leak_verifier: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

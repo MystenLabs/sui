@@ -24,7 +24,9 @@ pub fn sui_verify_module_metered(
 ) -> Result<(), ExecutionError> {
     struct_with_key_verifier::verify_module(module)?;
     global_storage_access_verifier::verify_module(module)?;
-    id_leak_verifier::verify_module(module, meter)?;
+    if !verifier_config.disable_id_leak_verifier {
+        id_leak_verifier::verify_module(module, meter)?;
+    }
     if verifier_config.private_generics_verifier_v2 {
         private_generics_verifier_v2::verify_module(module, verifier_config)?;
     } else {

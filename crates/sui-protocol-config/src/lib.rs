@@ -422,6 +422,7 @@ const MAINNET_USDB: &str =
 // Version 140: Add native vector bulk operations (keep_range, copy_range, replace_range
 //              and reverse) and their gas costs.
 //              Shuffle the block order within each round of a consensus commit on devnet.
+//              Disable the ID leak verifier.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1337,6 +1338,11 @@ struct FeatureFlags {
     // ascending order, and transactions within a block keep their relative order.
     #[serde(skip_serializing_if = "is_false")]
     shuffle_consensus_commit_blocks: bool,
+
+    // If true, skip the Sui ID leak verifier, allowing an existing `UID` to be used as an objects
+    // id.
+    #[serde(skip_serializing_if = "is_false")]
+    disable_id_leak_verifier: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4888,6 +4894,7 @@ impl ProtocolConfig {
                     }
 
                     cfg.feature_flags.allow_references_in_ptbs = true;
+                    cfg.feature_flags.disable_id_leak_verifier = true;
                 }
                 // Use this template when making changes:
                 //
@@ -5000,6 +5007,7 @@ impl ProtocolConfig {
                 .map(|limit| limit as u128),
             deprecate_global_storage_ops,
             disable_entry_point_signature_check: self.disable_entry_point_signature_check(),
+            disable_id_leak_verifier: self.disable_id_leak_verifier(),
             switch_to_regex_reference_safety: false,
             framework_tx_context_mut_restrictions: self.framework_tx_context_mut_restrictions(),
             disallow_jump_orphans: self.disallow_jump_orphans(),

@@ -1,0 +1,67 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+// Tests repacking the UID of a party object into a different type.
+
+init:
+A: object(0,0)
+
+task 1, lines 8-34:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6612000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 36:
+//# run ex::m::mint --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 38:
+//# view-object 2,0
+Owner: ConsensusAddressOwner( 2, A )
+Version: 2
+Contents: ex::m::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, line 40:
+//# run ex::m::a_to_b_party --args object(2,0) --sender A
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
+
+task 5, line 42:
+//# view-object 2,0
+Owner: ConsensusAddressOwner( 2, A )
+Version: 3
+Contents: ex::m::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 6, line 44:
+//# run ex::m::b_to_a_transfer --args object(2,0) --sender A
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2196180, non_refundable_storage_fee: 220
+
+task 7, line 46:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 4
+Contents: ex::m::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}

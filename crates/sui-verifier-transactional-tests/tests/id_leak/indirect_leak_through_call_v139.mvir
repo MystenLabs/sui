@@ -1,0 +1,52 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# init --protocol-version 139
+
+//# publish
+// not allowed since Foo is not packed with a fresh UID
+mvir 0x0::m {
+    import 0x2::object;
+
+    public struct Foo has key {
+        id: object::UID,
+    }
+
+    fun transfer(id: Self::Foo) {
+        label l0:
+        abort 0;
+    }
+
+    fun foo(f: Self::Foo, v: &mut vector<object::UID>) {
+        let id: object::UID;
+        label l0:
+        Foo { id } = move(f);
+        Self::transfer(Foo { id: move(id) });
+        return;
+    }
+
+}
+
+//# publish
+// allowed since no packing occurs
+mvir 0x0::m {
+    import 0x2::object;
+
+    public struct Foo has key {
+        id: object::UID,
+    }
+
+    fun transfer(id: object::UID) {
+        label l0:
+        abort 0;
+    }
+
+    fun foo(f: Self::Foo, v: &mut vector<object::UID>) {
+        let id: object::UID;
+        label l0:
+        Foo { id } = move(f);
+        Self::transfer(move(id));
+        return;
+    }
+
+}
