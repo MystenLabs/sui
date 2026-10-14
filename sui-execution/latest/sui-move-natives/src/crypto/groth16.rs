@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
+use crate::{NativesCostTable, get_extension};
 use move_binary_format::{errors::PartialVMResult, safe_assert};
 use move_binary_format::{partial_vm_error, safe_assert_eq};
 use move_core_types::gas_algebra::InternalGas;
@@ -79,22 +79,17 @@ pub fn prepare_verifying_key_internal(
     native_charge_gas_early_exit!(context, base_cost);
     let cost = context.gas_used();
 
-    if get_extension!(context, ObjectRuntime)?
-        .protocol_config
-        .limit_groth16_pvk_inputs()
-    {
-        // The type parameter is not used by get_public_inputs_num, only the const generics matter.
-        let num_public_inputs = match curve {
-            BLS12381 => fastcrypto_zkp::bls12381::api::get_public_inputs_num(verifying_key.len()),
-            BN254 => fastcrypto_zkp::bn254::api::get_public_inputs_num(verifying_key.len()),
-            _ => return Err(partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR)),
-        };
-        let Ok(n) = num_public_inputs else {
-            return Ok(NativeResult::err(cost, INVALID_VERIFYING_KEY));
-        };
-        if n > MAX_PUBLIC_INPUTS {
-            return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
-        }
+    // The type parameter is not used by get_public_inputs_num, only the const generics matter.
+    let num_public_inputs = match curve {
+        BLS12381 => fastcrypto_zkp::bls12381::api::get_public_inputs_num(verifying_key.len()),
+        BN254 => fastcrypto_zkp::bn254::api::get_public_inputs_num(verifying_key.len()),
+        _ => return Err(partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR)),
+    };
+    let Ok(n) = num_public_inputs else {
+        return Ok(NativeResult::err(cost, INVALID_VERIFYING_KEY));
+    };
+    if n > MAX_PUBLIC_INPUTS {
+        return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
     }
 
     let result = if curve == BLS12381 {
@@ -208,15 +203,7 @@ pub fn verify_groth16_proof_internal(
         _ => {
             // Charge for failure but dont fail if we run out of gas otherwise the actual error is masked by OUT_OF_GAS error
             context.charge_gas(crypto_invalid_arguments_cost)?;
-            let cost = if get_extension!(context, ObjectRuntime)?
-                .protocol_config
-                .native_charging_v2()
-            {
-                context.gas_used()
-            } else {
-                context.gas_budget()
-            };
-            return Ok(NativeResult::err(cost, INVALID_CURVE));
+            return Ok(NativeResult::err(context.gas_used(), INVALID_CURVE));
         }
     };
     // Charge the base cost for this oper
