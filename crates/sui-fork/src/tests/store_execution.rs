@@ -224,6 +224,42 @@ async fn mock_seed_object(server: &MockServer, checkpoint: u64, object: &Object)
         .await;
 }
 
+async fn mock_available_range(server: &MockServer, first_sequence_number: u64) {
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_string_contains("availableRange"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": {
+                "serviceConfig": {
+                    "availableRange": {
+                        "first": { "sequenceNumber": first_sequence_number }
+                    }
+                }
+            }
+        })))
+        .mount(server)
+        .await;
+}
+
+fn gas_balance(store: &ForkStore, owner: SuiAddress) -> u64 {
+    RpcIndexes::get_balance(store.local_store().reader(), &owner, &GAS::type_())
+        .expect("balance lookup should succeed")
+        .map(|balance| balance.coin_balance)
+        .unwrap_or(0)
+}
+
+fn owned_gas_ids(store: &ForkStore, owner: SuiAddress) -> Vec<ObjectID> {
+    RpcIndexes::owned_objects_iter(
+        store.local_store().reader(),
+        owner,
+        Some(GasCoin::type_()),
+        None,
+    )
+    .expect("owned-object iterator should open")
+    .map(|result| result.expect("owned-object entry should decode").object_id)
+    .collect()
+}
+
 #[tokio::test]
 async fn test_current_object_read_saves_into_rpc_store_when_attached() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
@@ -546,23 +582,6 @@ async fn test_rpc_latest_read_ignores_stale_cached_history() {
             .unwrap(),
         Some((SequenceNumber::from_u64(9), Status::Live(current))),
     );
-}
-
-async fn mock_available_range(server: &MockServer, first_sequence_number: u64) {
-    Mock::given(method("POST"))
-        .and(path("/"))
-        .and(body_string_contains("availableRange"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "data": {
-                "serviceConfig": {
-                    "availableRange": {
-                        "first": { "sequenceNumber": first_sequence_number }
-                    }
-                }
-            }
-        })))
-        .mount(server)
-        .await;
 }
 
 /// A remote whose retention window has passed the fork point must not make the fork report its own
@@ -1203,4 +1222,121 @@ async fn test_read_child_object_propagates_store_errors() {
         err.to_string().contains(&child.to_string()),
         "error should name the child object: {err}",
     );
+}
+
+/// A runtime seed writes the same rows a startup seed does, so a coin it loads is owned, counted,
+/// and readable as current right away.
+#[test]
+fn runtime_seed_loads_new_objects_into_the_indexes() {
+    let (_temp, store) = data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let coin = make_gas_object(ObjectID::random(), 7, Owner::AddressOwner(owner));
+
+    let outcome = store
+        .seed_objects_at_runtime(vec![coin.clone()])
+        .expect("runtime seed should load");
+
+    assert_eq!(outcome.seeded, vec![coin.compute_object_reference()]);
+    assert!(outcome.already_present.is_empty());
+    assert_eq!(owned_gas_ids(&store, owner), vec![coin.id()]);
+    assert_eq!(gas_balance(&store, owner), 1_000_000);
+    assert_eq!(
+        ForkStore::get_object(&store, &coin.id()).expect("seeded object should read locally"),
+        Some(coin),
+    );
+}
+
+/// The balance index accumulates, so a coin seeded at startup or by an earlier runtime seed must
+/// be reported as already present and never loaded again, or its balance would count twice.
+#[test]
+fn runtime_seed_does_not_recount_objects_already_seeded() {
+    let (_temp, store) = data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let startup_coin = make_gas_object(ObjectID::random(), 7, Owner::AddressOwner(owner));
+    let runtime_coin = make_gas_object(ObjectID::random(), 8, Owner::AddressOwner(owner));
+    store
+        .local_store()
+        .restore_seed_objects(std::slice::from_ref(&startup_coin))
+        .expect("startup seed should load");
+
+    let first = store
+        .seed_objects_at_runtime(vec![startup_coin.clone(), runtime_coin.clone()])
+        .expect("first runtime seed should load");
+    assert_eq!(first.seeded, vec![runtime_coin.compute_object_reference()]);
+    assert_eq!(first.already_present, vec![startup_coin.id()]);
+
+    let second = store
+        .seed_objects_at_runtime(vec![startup_coin.clone(), runtime_coin.clone()])
+        .expect("second runtime seed should succeed");
+    assert!(second.seeded.is_empty());
+    assert_eq!(
+        second.already_present,
+        vec![startup_coin.id(), runtime_coin.id()]
+    );
+
+    assert_eq!(gas_balance(&store, owner), 2_000_000);
+}
+
+/// An on-demand read stores an object as current without writing any index row, so a runtime seed
+/// must still load it, or the object would stay invisible to owner and balance reads.
+#[test]
+fn runtime_seed_indexes_objects_fetched_on_demand() {
+    let (_temp, store) = data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let coin = make_gas_object(ObjectID::random(), 7, Owner::AddressOwner(owner));
+    store
+        .local_store()
+        .save_live_object_if_current(&coin)
+        .expect("on-demand save should succeed");
+    assert!(owned_gas_ids(&store, owner).is_empty());
+    assert_eq!(gas_balance(&store, owner), 0);
+
+    let outcome = store
+        .seed_objects_at_runtime(vec![coin.clone()])
+        .expect("runtime seed should load");
+
+    assert_eq!(outcome.seeded, vec![coin.compute_object_reference()]);
+    assert_eq!(owned_gas_ids(&store, owner), vec![coin.id()]);
+    assert_eq!(gas_balance(&store, owner), 1_000_000);
+}
+
+/// The fork's own state outranks the fork-checkpoint version, so an object local execution has
+/// changed or deleted, whether sealed or still staged, is left alone and reported as present.
+#[test]
+fn runtime_seed_leaves_objects_changed_since_the_fork() {
+    let (_temp, mut store) = data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let changed_id = ObjectID::random();
+    let staged_id = ObjectID::random();
+    let deleted_id = ObjectID::random();
+    let changed_at_fork = make_gas_object(changed_id, 7, Owner::AddressOwner(owner));
+    let staged_at_fork = make_gas_object(staged_id, 7, Owner::AddressOwner(owner));
+    let deleted_at_fork = make_gas_object(deleted_id, 7, Owner::AddressOwner(owner));
+
+    store
+        .local_store()
+        .save_live_object_if_current(&make_gas_object(changed_id, 9, Owner::AddressOwner(owner)))
+        .expect("a newer current version should save");
+    store.update_objects(
+        BTreeMap::from([(
+            staged_id,
+            make_gas_object(staged_id, 9, Owner::AddressOwner(owner)),
+        )]),
+        vec![(
+            deleted_id,
+            SequenceNumber::from_u64(9),
+            ObjectDigest::OBJECT_DIGEST_DELETED,
+        )],
+    );
+
+    let outcome = store
+        .seed_objects_at_runtime(vec![changed_at_fork, staged_at_fork, deleted_at_fork])
+        .expect("runtime seed should succeed");
+
+    assert!(outcome.seeded.is_empty(), "{:?}", outcome.seeded);
+    assert_eq!(
+        outcome.already_present,
+        vec![changed_id, staged_id, deleted_id]
+    );
+    assert_eq!(gas_balance(&store, owner), 0);
 }

@@ -42,6 +42,61 @@ pub struct GetStatusResponse {
     #[prost(uint64, tag = "4")]
     pub forked_at_checkpoint: u64,
 }
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SeedObjectRequest {
+    /// ID of the object to seed.
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SeedObjectResponse {
+    #[prost(message, optional, tag = "1")]
+    pub outcome: ::core::option::Option<SeedOutcome>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SeedAddressRequest {
+    /// Address whose owned objects and balances to seed.
+    #[prost(string, optional, tag = "1")]
+    pub address: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SeedAddressResponse {
+    #[prost(message, optional, tag = "1")]
+    pub outcome: ::core::option::Option<SeedOutcome>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SeedDynamicFieldsOfRequest {
+    /// ID of the parent whose dynamic fields to seed.
+    #[prost(string, optional, tag = "1")]
+    pub parent: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SeedDynamicFieldsOfResponse {
+    #[prost(message, optional, tag = "1")]
+    pub outcome: ::core::option::Option<SeedOutcome>,
+}
+/// What a seed request changed in the fork.
+///
+/// Seeding never overrides local state. An object the fork already indexes, or one that local
+/// execution changed or removed since the fork, is reported as already present and left unchanged.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SeedOutcome {
+    /// Objects added to the fork at their fork-checkpoint versions.
+    #[prost(message, repeated, tag = "1")]
+    pub seeded: ::prost::alloc::vec::Vec<SeededObject>,
+    /// IDs of resolved objects the fork already holds and left unchanged.
+    #[prost(string, repeated, tag = "2")]
+    pub already_present: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SeededObject {
+    #[prost(string, tag = "1")]
+    pub object_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub version: u64,
+    #[prost(string, tag = "3")]
+    pub digest: ::prost::alloc::string::String,
+}
 /// Generated client implementations.
 pub mod forking_service_client {
     #![allow(
@@ -218,6 +273,94 @@ pub mod forking_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        /// Seed an address-owned object at its fork-checkpoint version, as `--object` does at startup.
+        pub async fn seed_object(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SeedObjectRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SeedObjectResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.forking.v1alpha.ForkingService/SeedObject",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.forking.v1alpha.ForkingService", "SeedObject"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        /// Seed every object an address owned at the fork checkpoint, together with its address balances,
+        /// as `--address` does at startup. Requires the fork checkpoint to be inside the remote's
+        /// consistent window, which is roughly the last hour.
+        pub async fn seed_address(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SeedAddressRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SeedAddressResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.forking.v1alpha.ForkingService/SeedAddress",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.forking.v1alpha.ForkingService", "SeedAddress"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        /// Seed the dynamic fields a parent held at the fork checkpoint, as `--dynamic-fields-of` does at
+        /// startup. Outside the remote's consistent window the fields are reconstructed from the parent's
+        /// version history.
+        pub async fn seed_dynamic_fields_of(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SeedDynamicFieldsOfRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SeedDynamicFieldsOfResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.forking.v1alpha.ForkingService/SeedDynamicFieldsOf",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "sui.forking.v1alpha.ForkingService",
+                        "SeedDynamicFieldsOf",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -255,6 +398,34 @@ pub mod forking_service_server {
             request: tonic::Request<super::GetStatusRequest>,
         ) -> std::result::Result<
             tonic::Response<super::GetStatusResponse>,
+            tonic::Status,
+        >;
+        /// Seed an address-owned object at its fork-checkpoint version, as `--object` does at startup.
+        async fn seed_object(
+            &self,
+            request: tonic::Request<super::SeedObjectRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SeedObjectResponse>,
+            tonic::Status,
+        >;
+        /// Seed every object an address owned at the fork checkpoint, together with its address balances,
+        /// as `--address` does at startup. Requires the fork checkpoint to be inside the remote's
+        /// consistent window, which is roughly the last hour.
+        async fn seed_address(
+            &self,
+            request: tonic::Request<super::SeedAddressRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SeedAddressResponse>,
+            tonic::Status,
+        >;
+        /// Seed the dynamic fields a parent held at the fork checkpoint, as `--dynamic-fields-of` does at
+        /// startup. Outside the remote's consistent window the fields are reconstructed from the parent's
+        /// version history.
+        async fn seed_dynamic_fields_of(
+            &self,
+            request: tonic::Request<super::SeedDynamicFieldsOfRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SeedDynamicFieldsOfResponse>,
             tonic::Status,
         >;
     }
@@ -456,6 +627,145 @@ pub mod forking_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetStatusSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.forking.v1alpha.ForkingService/SeedObject" => {
+                    #[allow(non_camel_case_types)]
+                    struct SeedObjectSvc<T: ForkingService>(pub Arc<T>);
+                    impl<
+                        T: ForkingService,
+                    > tonic::server::UnaryService<super::SeedObjectRequest>
+                    for SeedObjectSvc<T> {
+                        type Response = super::SeedObjectResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SeedObjectRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ForkingService>::seed_object(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SeedObjectSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.forking.v1alpha.ForkingService/SeedAddress" => {
+                    #[allow(non_camel_case_types)]
+                    struct SeedAddressSvc<T: ForkingService>(pub Arc<T>);
+                    impl<
+                        T: ForkingService,
+                    > tonic::server::UnaryService<super::SeedAddressRequest>
+                    for SeedAddressSvc<T> {
+                        type Response = super::SeedAddressResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SeedAddressRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ForkingService>::seed_address(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SeedAddressSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.forking.v1alpha.ForkingService/SeedDynamicFieldsOf" => {
+                    #[allow(non_camel_case_types)]
+                    struct SeedDynamicFieldsOfSvc<T: ForkingService>(pub Arc<T>);
+                    impl<
+                        T: ForkingService,
+                    > tonic::server::UnaryService<super::SeedDynamicFieldsOfRequest>
+                    for SeedDynamicFieldsOfSvc<T> {
+                        type Response = super::SeedDynamicFieldsOfResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SeedDynamicFieldsOfRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ForkingService>::seed_dynamic_fields_of(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SeedDynamicFieldsOfSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -29,8 +29,6 @@ mod object_store;
 mod read_store;
 mod state_reader;
 
-pub use layout::resolve_struct_layout_with;
-
 use std::sync::Arc;
 
 use sui_consistent_store::Db;
@@ -39,6 +37,8 @@ use sui_consistent_store::Snapshot;
 use sui_consistent_store::reader::Reader;
 
 use crate::RpcStoreSchema;
+
+pub use self::layout::resolve_struct_layout_with;
 
 /// Adapter exposing [`RpcStoreSchema`] through the
 /// `sui-rpc-api` reader-trait stack.

@@ -273,3 +273,7 @@ must run exactly once.
 Nothing has to maintain the seeded index rows afterwards. When a seeded object moves, the
 checkpoint that moved it is a local checkpoint, and the indexer reads each such checkpoint as
 a diff: inputs retract at the prior key, outputs write at the posterior one.
+
+Runtime seeding through the forking service reuses the same resolution and the same `Restore`
+impls, but it loads only objects the fork does not hold yet, while local execution is held off.
+See storage.md § "Seeding a running fork".

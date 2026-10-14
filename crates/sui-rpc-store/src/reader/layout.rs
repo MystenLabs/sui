@@ -135,33 +135,6 @@ impl<R: Reader + Send + Sync> RpcStoreReader<R> {
     }
 }
 
-/// Resolve the [`MoveTypeLayout`] for a given [`StructTag`] under
-/// an explicit [`ProtocolConfig`], loading packages from `overlay`
-/// first and from `packages` after that.
-///
-/// [`RpcStoreReader::resolve_struct_layout`] calls this with the
-/// live protocol config and the store's own `objects` CF. A caller
-/// that keeps its own package policy (a store that fetches missing
-/// packages from a remote, say) or its own source for the protocol
-/// version passes both in instead, without depending on
-/// `sui-execution` itself. Surfaces executor and resolver failures
-/// as [`StorageError::custom`].
-pub fn resolve_struct_layout_with(
-    struct_tag: &StructTag,
-    overlay: &ObjectSet,
-    protocol_config: &ProtocolConfig,
-    packages: &dyn BackingPackageStore,
-) -> StorageResult<MoveTypeLayout> {
-    let executor = sui_execution::executor(protocol_config, /* silent */ true)
-        .map_err(StorageError::custom)?;
-    let overlay_store = OverlayBackingPackageStore::new(overlay, packages);
-    let layout = executor
-        .type_layout_resolver(protocol_config, Box::new(overlay_store))
-        .get_annotated_layout(struct_tag)
-        .map_err(StorageError::custom)?;
-    Ok(layout.into_layout())
-}
-
 /// [`BackingPackageStore`] backed by the typed
 /// [`RpcStoreSchema`] CFs. Looks each package up by its storage
 /// id through `get_object` (a reverse scan of `objects`); packages
@@ -215,6 +188,33 @@ impl<R: Reader> ObjectStore for SchemaObjectStore<'_, R> {
             .ok()
             .flatten()
     }
+}
+
+/// Resolve the [`MoveTypeLayout`] for a given [`StructTag`] under
+/// an explicit [`ProtocolConfig`], loading packages from `overlay`
+/// first and from `packages` after that.
+///
+/// [`RpcStoreReader::resolve_struct_layout`] calls this with the
+/// live protocol config and the store's own `objects` CF. A caller
+/// that keeps its own package policy (a store that fetches missing
+/// packages from a remote, say) or its own source for the protocol
+/// version passes both in instead, without depending on
+/// `sui-execution` itself. Surfaces executor and resolver failures
+/// as [`StorageError::custom`].
+pub fn resolve_struct_layout_with(
+    struct_tag: &StructTag,
+    overlay: &ObjectSet,
+    protocol_config: &ProtocolConfig,
+    packages: &dyn BackingPackageStore,
+) -> StorageResult<MoveTypeLayout> {
+    let executor = sui_execution::executor(protocol_config, /* silent */ true)
+        .map_err(StorageError::custom)?;
+    let overlay_store = OverlayBackingPackageStore::new(overlay, packages);
+    let layout = executor
+        .type_layout_resolver(protocol_config, Box::new(overlay_store))
+        .get_annotated_layout(struct_tag)
+        .map_err(StorageError::custom)?;
+    Ok(layout.into_layout())
 }
 
 #[cfg(test)]

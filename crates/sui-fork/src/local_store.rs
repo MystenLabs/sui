@@ -14,7 +14,10 @@
 //! The one difference is when seeding addresses and objects at startup. It runs at fork creation,
 //! before anything executes, and writes the raw rows and the whole derived-index surface
 //! synchronously, because the indexer only processes post-fork checkpoints and never sees the
-//! pre-fork state the seed establishes. Historical data writes also commit eagerly as needed.
+//! pre-fork state the seed establishes. Runtime seeding through the forking service writes the
+//! same rows later, also synchronously, and only for objects the fork does not hold yet, so it
+//! never writes an object the indexer maintains. Historical data writes also commit eagerly as
+//! needed.
 
 use std::collections::BTreeMap;
 use std::ops::Bound;
@@ -43,6 +46,7 @@ use sui_rpc_store::schema::checkpoint_seq_by_digest;
 use sui_rpc_store::schema::checkpoint_summary;
 use sui_rpc_store::schema::effects as schema_effects;
 use sui_rpc_store::schema::events as schema_events;
+use sui_rpc_store::schema::object_by_owner;
 use sui_rpc_store::schema::object_version_by_checkpoint;
 use sui_rpc_store::schema::objects;
 use sui_rpc_store::schema::objects::Status;
@@ -468,6 +472,46 @@ impl LocalStore {
 
         batch.commit().context("failed to load seed objects")?;
         Ok(())
+    }
+
+    /// Load objects resolved by a runtime seed request, with every index `sui-rpc-store` derives
+    /// from them, in one atomic batch.
+    ///
+    /// Unlike [`Self::restore_seed_objects`], this runs after the fork has started executing, so it
+    /// writes no completion marker and leaves the pipeline watermarks to the embedded indexer. The
+    /// rows assert each object's fork-checkpoint version as its current one, and the balance index
+    /// accumulates rather than overwrites. Callers must therefore exclude every object local
+    /// execution has changed since the fork and every object already in the owner index (see
+    /// [`Self::owner_index_contains`]).
+    pub(crate) fn restore_runtime_seed_objects(&self, objects: &[Object]) -> anyhow::Result<()> {
+        let mut batch = self.db.batch();
+        for object in objects {
+            self.stage_restored_object(&mut batch, object)
+                .with_context(|| format!("failed to stage runtime seed object {}", object.id()))?;
+        }
+        batch
+            .commit()
+            .context("failed to load runtime seed objects")
+    }
+
+    /// Report whether `object` already has its row in the owner index.
+    ///
+    /// Every writer of the derived indexes (the seed load, the embedded indexer, and runtime
+    /// seeding) writes an object's owner row together with its balance contribution, so a present
+    /// owner row means the object's balance is already counted. An object fetched on demand has a
+    /// raw row but no owner row, because on-demand reads write no derived indexes. An object the
+    /// owner index does not cover, such as a package, reports `false`, and restoring one writes
+    /// nothing that accumulates.
+    pub(crate) fn owner_index_contains(&self, object: &Object) -> anyhow::Result<bool> {
+        let Some((key, _)) = object_by_owner::store(object) else {
+            return Ok(false);
+        };
+        Ok(self
+            .schema
+            .object_by_owner
+            .get(&key)
+            .context("failed to read the owner index")?
+            .is_some())
     }
 
     /// Stage every row `sui-rpc-store` derives from one live object, covering the raw object

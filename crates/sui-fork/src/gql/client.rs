@@ -316,8 +316,8 @@ impl GraphQLClient {
         queries::object_history_query::states_at_checkpoint(object_ids, checkpoint, self).await
     }
 
-    /// List the versions of an object in `(after_version, through_version]`, oldest first, failing
-    /// once more than `max_versions` have been seen.
+    /// List the versions of an object in `(after_version, through_version]`, oldest first,
+    /// truncated once more than `max_versions` have been collected.
     pub(crate) async fn get_object_versions(
         &self,
         object_id: ObjectID,
@@ -392,6 +392,14 @@ impl GraphQLClient {
         &self,
     ) -> Result<CheckpointSequenceNumber, Error> {
         queries::available_range_query::query_field("Address", Some("dynamicFields"), self).await
+    }
+
+    /// Query `serviceConfig.availableRange` for `Address.objects`, the start of the window in which
+    /// the remote can enumerate the objects an address owns at a checkpoint.
+    pub(crate) async fn get_lowest_available_checkpoint_address_objects(
+        &self,
+    ) -> Result<CheckpointSequenceNumber, Error> {
+        queries::available_range_query::query_field("Address", Some("objects"), self).await
     }
 }
 

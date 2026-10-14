@@ -1425,6 +1425,8 @@ pub(crate) mod dynamic_fields_query {
 
     #[cfg(test)]
     mod tests {
+        use sui_types::base_types::ObjectID;
+        use sui_types::base_types::SequenceNumber;
         use sui_types::object::Object;
         use sui_types::object::Owner;
         use wiremock::Mock;
@@ -1434,8 +1436,10 @@ pub(crate) mod dynamic_fields_query {
         use wiremock::matchers::method;
         use wiremock::matchers::path;
 
-        use super::*;
         use crate::Node;
+        use crate::gql::GraphQLClient;
+
+        use super::query;
 
         fn dynamic_fields_response(
             fields: &[&Object],
@@ -1918,8 +1922,10 @@ pub(crate) mod object_history_query {
     /// Return the versions of `object_id` strictly after `after_version` and up to
     /// `through_version` inclusive, oldest first, with the transaction that wrote each one.
     ///
-    /// Fails once more than `max_versions` versions have been seen, so a caller walking a busy
-    /// object stops after a bounded number of requests instead of paging through its whole history.
+    /// Stops paging once more than `max_versions` versions have been collected, so a caller walking
+    /// a busy object spends a bounded number of requests instead of paging through its whole
+    /// history. The result is longer than `max_versions` exactly when the history is, and is then
+    /// truncated.
     pub(crate) async fn versions(
         object_id: ObjectID,
         after_version: u64,
@@ -1958,10 +1964,7 @@ pub(crate) mod object_history_query {
                 versions.push(decode_version(object_id, node)?);
             }
             if versions.len() > max_versions {
-                bail!(
-                    "{object_id} has more than {max_versions} versions after version \
-                     {after_version}"
-                );
+                break;
             }
 
             if !connection.page_info.has_next_page {
@@ -2162,6 +2165,7 @@ pub(crate) mod object_history_query {
 
     #[cfg(test)]
     mod tests {
+        use sui_types::base_types::ObjectID;
         use wiremock::Mock;
         use wiremock::MockServer;
         use wiremock::ResponseTemplate;
@@ -2170,8 +2174,14 @@ pub(crate) mod object_history_query {
         use wiremock::matchers::method;
         use wiremock::matchers::path;
 
-        use super::*;
         use crate::Node;
+        use crate::gql::GraphQLClient;
+
+        use super::ObjectChange;
+        use super::ObjectVersion;
+        use super::OwnerSummary;
+        use super::object_changes;
+        use super::versions;
 
         #[tokio::test]
         async fn versions_filter_the_range_and_read_owners_and_transactions() {
@@ -2233,10 +2243,13 @@ pub(crate) mod object_history_query {
                 ],
             );
 
-            let err = versions(object_id, 5, 9, 1, &gql)
+            let truncated = versions(object_id, 5, 9, 1, &gql)
                 .await
-                .expect_err("a history longer than the bound should fail");
-            assert!(err.to_string().contains("more than 1 versions"), "{err:#}");
+                .expect("a history longer than the bound should still resolve");
+            assert!(
+                truncated.len() > 1,
+                "a history longer than the bound should read as longer than the bound",
+            );
         }
 
         /// The first page of every transaction arrives in one batched request, and only a

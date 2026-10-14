@@ -110,6 +110,18 @@ impl RemoteSource {
             .await
     }
 
+    /// Fetch the lowest checkpoint at which the remote can enumerate the objects an address owns.
+    ///
+    /// The enumeration reads the remote's consistent store, so this bound tracks the consistent
+    /// window rather than the object-data range, which reaches much further back.
+    pub(crate) async fn lowest_available_checkpoint_address_objects(
+        &self,
+    ) -> anyhow::Result<CheckpointSequenceNumber> {
+        self.gql
+            .get_lowest_available_checkpoint_address_objects()
+            .await
+    }
+
     /// Fetch the lowest checkpoint at which the remote can list a parent's dynamic fields.
     ///
     /// The listing reads the remote's consistent store, so this bound tracks the consistent window
@@ -347,7 +359,7 @@ impl RemoteSource {
     }
 
     /// List the versions of `object_id` in `(after_version, through_version]`, oldest first,
-    /// failing once more than `max_versions` have been seen.
+    /// truncated once more than `max_versions` have been collected.
     pub(crate) async fn object_versions(
         &self,
         object_id: ObjectID,

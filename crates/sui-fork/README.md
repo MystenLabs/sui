@@ -184,6 +184,26 @@ authoritative over the manifest seed entries. If the owned-object index has not
 been initialized yet, the first owned-object read or local execution update
 builds it from the manifest by fetching the exact seeded object versions.
 
+### Seeding a running fork
+
+A running fork can be seeded under the same rules, with the CLI or through the
+`sui.forking.v1alpha.ForkingService` gRPC API (`SeedObject`, `SeedAddress`,
+`SeedDynamicFieldsOf`):
+
+```bash
+sui-fork seed --object 0x... --address 0x... --dynamic-fields-of 0x...
+```
+
+- Address seeding still requires the fork checkpoint to be in the GraphQL object
+  enumeration range, so it is only possible for roughly the first hour of a
+  fork started at the latest checkpoint. Outside the range the request fails
+  rather than being skipped.
+- Objects that local execution changed or deleted since the fork, and objects
+  that were already seeded, are reported as already present and left unchanged.
+- Runtime seeds are stored in the fork's database and survive restarts, but
+  they are not added to `seed_manifest.json`, which records only the startup
+  seed.
+
 ## Limitations
 - Sequential execution: Transactions are executed one at a time, no parallelism.
 - Staking and related operations are not supported.

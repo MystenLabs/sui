@@ -159,6 +159,25 @@ moves, the checkpoint that moved it is a local checkpoint, and the indexer reads
 checkpoint as a diff: inputs retract at the prior key, outputs write at the posterior one. The
 seeded row is retracted by the same mechanism that maintains every other row.
 
+### Seeding a running fork
+
+A running fork can be seeded as well, through the forking service's `SeedObject`,
+`SeedAddress`, and `SeedDynamicFieldsOf` RPCs and the `sui-fork seed` command. Resolution
+follows the startup rules unchanged, so an address still needs the fork checkpoint inside the
+consistent window. A refusal that startup would log becomes a failed precondition instead,
+because a runtime request names one thing and its caller is there to read the reason.
+
+Loading cannot write blind, because the fork has executed since the fork point and the
+balance index accumulates. It therefore runs while local execution and checkpoint publication
+are held off, and it loads only objects the fork does not hold yet. An object local execution
+has changed or removed is left alone, because the fork's state outranks the fork-checkpoint
+version. An object already in the owner index is left alone too, because every index writer
+writes an object's owner row together with its balance contribution, so a present owner row
+means a reload would double the balance. An object fetched on demand is loaded, because
+on-demand reads write no index rows. Runtime seeds bypass the manifest, which stays the record
+of the startup seed, and they need no completion marker, because the owner index itself
+records what is already loaded.
+
 ## Where reads resolve
 
 A fork is a chain that diverged from another at a checkpoint. It shares history at or below
@@ -273,7 +292,8 @@ Because that is a question about state at a point in time, the live network can 
 it pinned at the fork point — but only for as long as the remote retains ownership data for
 that checkpoint, and only if something thought to ask.
 
-Nothing asks at read time. These indexes are populated once, by the seed, and read locally
+Nothing asks at read time. These indexes are populated by the seed, at startup or on request
+through the forking service, and read locally
 ever after; an owner, parent, or type outside the seed set answers empty. That is a real
 limit and it is worth being plain about which way it fails: an empty answer is
 indistinguishable from a complete one that found nothing, so a client cannot tell "this

@@ -14,6 +14,19 @@ service ForkingService {
 
   // Return the current state of the forked network.
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+
+  // Seed an address-owned object at its fork-checkpoint version, as `--object` does at startup.
+  rpc SeedObject(SeedObjectRequest) returns (SeedObjectResponse);
+
+  // Seed every object an address owned at the fork checkpoint, together with its address balances,
+  // as `--address` does at startup. Requires the fork checkpoint to be inside the remote's
+  // consistent window, which is roughly the last hour.
+  rpc SeedAddress(SeedAddressRequest) returns (SeedAddressResponse);
+
+  // Seed the dynamic fields a parent held at the fork checkpoint, as `--dynamic-fields-of` does at
+  // startup. Outside the remote's consistent window the fields are reconstructed from the parent's
+  // version history.
+  rpc SeedDynamicFieldsOf(SeedDynamicFieldsOfRequest) returns (SeedDynamicFieldsOfResponse);
 }
 
 message AdvanceClockRequest {
@@ -53,4 +66,49 @@ message GetStatusResponse {
 
   // The upstream checkpoint at which the fork was created.
   uint64 forked_at_checkpoint = 4;
+}
+
+message SeedObjectRequest {
+  // ID of the object to seed.
+  optional string object_id = 1;
+}
+
+message SeedObjectResponse {
+  SeedOutcome outcome = 1;
+}
+
+message SeedAddressRequest {
+  // Address whose owned objects and balances to seed.
+  optional string address = 1;
+}
+
+message SeedAddressResponse {
+  SeedOutcome outcome = 1;
+}
+
+message SeedDynamicFieldsOfRequest {
+  // ID of the parent whose dynamic fields to seed.
+  optional string parent = 1;
+}
+
+message SeedDynamicFieldsOfResponse {
+  SeedOutcome outcome = 1;
+}
+
+// What a seed request changed in the fork.
+//
+// Seeding never overrides local state. An object the fork already indexes, or one that local
+// execution changed or removed since the fork, is reported as already present and left unchanged.
+message SeedOutcome {
+  // Objects added to the fork at their fork-checkpoint versions.
+  repeated SeededObject seeded = 1;
+
+  // IDs of resolved objects the fork already holds and left unchanged.
+  repeated string already_present = 2;
+}
+
+message SeededObject {
+  string object_id = 1;
+  uint64 version = 2;
+  string digest = 3;
 }

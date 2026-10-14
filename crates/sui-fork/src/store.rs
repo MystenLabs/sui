@@ -71,6 +71,15 @@ use crate::pending::PendingCheckpointBuffer;
 use crate::remote::RemoteSource;
 use tracing::info;
 
+/// The objects a runtime seed request loaded and the ones it left alone.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct RuntimeSeedOutcome {
+    /// References to the objects loaded at their fork-checkpoint versions.
+    pub(crate) seeded: Vec<ObjectRef>,
+    /// IDs of resolved objects the fork already held, which were left unchanged.
+    pub(crate) already_present: Vec<ObjectID>,
+}
+
 /// The fork's state store. Reads check `LocalStore` first and fall back to `RemoteSource` (pinned
 /// at the fork checkpoint), persisting fetched pre-fork data back into the local store, while the
 /// metadata sidecar keeps fork metadata and the immutable seed manifest.
@@ -584,6 +593,52 @@ impl ForkStore {
             .fetch_objects_by_obj_refs(object_refs, "seed objects")
     }
 
+    /// Load objects resolved by a runtime seed request, skipping every object the fork already
+    /// holds.
+    ///
+    /// An object is skipped when local execution has changed or removed it since the fork,
+    /// including in the checkpoint still being built, because the fork's own state outranks the
+    /// fork-checkpoint version. It is also skipped when it is already in the owner index, because
+    /// it was seeded before and loading it again would double-count its balance. An object the fork
+    /// fetched on demand at its fork-checkpoint version is loaded, because on-demand reads write no
+    /// indexes. Callers must hold off local execution for the duration, which
+    /// [`crate::context::Context::seed_objects`] does.
+    pub(crate) fn seed_objects_at_runtime(
+        &self,
+        objects: Vec<Object>,
+    ) -> anyhow::Result<RuntimeSeedOutcome> {
+        let _local_snapshot_guard = self
+            .write_local_snapshot()
+            .context("failed to lock local snapshot for runtime seeding")?;
+        let local_store = self.local_store();
+
+        let mut outcome = RuntimeSeedOutcome::default();
+        let mut to_load = Vec::new();
+        for object in objects {
+            let id = object.id();
+            let already_present = if self.inner.pending.latest_object(id)?.is_some() {
+                true
+            } else {
+                match local_store.get_latest_object_status(id)? {
+                    None => false,
+                    Some((version, Status::Live(_))) if version == object.version() => {
+                        local_store.owner_index_contains(&object)?
+                    }
+                    Some(_) => true,
+                }
+            };
+            if already_present {
+                outcome.already_present.push(id);
+            } else {
+                outcome.seeded.push(object.compute_object_reference());
+                to_load.push(object);
+            }
+        }
+
+        local_store.restore_runtime_seed_objects(&to_load)?;
+        Ok(outcome)
+    }
+
     /// Seal the staged checkpoint matching `contents` into the rpc-store, committing every staged
     /// object diff, the summary and contents, and every staged transaction in one atomic batch and
     /// dropping the staged entries afterwards. Idempotent when the contents are already persisted.
@@ -621,10 +676,11 @@ impl ForkStore {
     ///
     /// This is also what [`RpcStateReader::indexes`] hands out, which makes every index read
     /// seed-bounded. Owner, dynamic-field, type, and balance lookups resolve from the local index
-    /// alone, which holds the seed set loaded at fork creation plus whatever local execution has
-    /// produced since, and an owner, parent, or type outside the seed set reads as empty rather
-    /// than being resolved against the live network, because the checkpoint-pinned enumeration that
-    /// could resolve it belongs to fork creation and cannot be re-run at read time.
+    /// alone, which holds the seed set loaded at fork creation or seeded later through the forking
+    /// service, plus whatever local execution has produced since. An owner, parent, or type outside
+    /// the seed set reads as empty rather than being resolved against the live network, because
+    /// the checkpoint-pinned enumeration that could resolve it runs only when a user asks for it,
+    /// never on a read.
     fn stock_reader(&self) -> &RpcStoreReader {
         self.local_store().reader()
     }

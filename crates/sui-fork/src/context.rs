@@ -13,9 +13,11 @@ use tokio::sync::broadcast;
 use simulacrum::Simulacrum;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::object::Object;
 
 use crate::services::ServiceManager;
 use crate::store::ForkStore;
+use crate::store::RuntimeSeedOutcome;
 
 type ForkedSimulacrum = Simulacrum<OsRng, ForkStore>;
 
@@ -80,6 +82,18 @@ impl Context {
     /// the next executed transaction.
     pub(crate) async fn indexer_stopped(&self) -> anyhow::Result<()> {
         self.services.indexer_stopped().await
+    }
+
+    /// Load objects resolved by a runtime seed request into the fork, holding off local execution
+    /// and checkpoint publication for the duration.
+    ///
+    /// Every execution runs under the publication lock and the Simulacrum write lock, and
+    /// publication waits for the indexer, so holding both means no transaction is in flight and the
+    /// indexer has caught up while the seed decides which objects the fork already holds.
+    pub(crate) async fn seed_objects(&self, objects: Vec<Object>) -> Result<RuntimeSeedOutcome> {
+        let _checkpoint_publication_guard = self.checkpoint_publication_lock.lock().await;
+        let sim = self.simulacrum.write().await;
+        sim.store().seed_objects_at_runtime(objects)
     }
 
     /// Execute `operation`, create a checkpoint afterward, and publish that checkpoint to
