@@ -11,7 +11,6 @@ use crate::{
     natives::extensions::NativeExtensions,
     runtime::telemetry::{TelemetryContext, TransactionTelemetryContext},
     shared::{
-        TypeLimits,
         gas::GasMeter,
         linkage_context::LinkageContext,
         types::{DefiningTypeId, OriginalId},
@@ -144,7 +143,6 @@ impl<'extensions> MoveVM<'extensions> {
             None,
             gas_meter,
             bypass_declared_entry_check,
-            TypeLimits::VM_DEFAULT,
         )
     }
 
@@ -159,32 +157,6 @@ impl<'extensions> MoveVM<'extensions> {
         gas_meter: &mut impl GasMeter,
         tracer: Option<&mut MoveTraceBuilder>,
     ) -> VMResult<Vec<Value>> {
-        self.execute_function_bypass_visibility_with_max_type_nodes(
-            module,
-            function_name,
-            ty_args,
-            args,
-            gas_meter,
-            tracer,
-            None,
-        )
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn execute_function_bypass_visibility_with_max_type_nodes(
-        &mut self,
-        module: &ModuleId,
-        function_name: &IdentStr,
-        ty_args: Vec<Type>,
-        args: Vec<Value>,
-        gas_meter: &mut impl GasMeter,
-        tracer: Option<&mut MoveTraceBuilder>,
-        max_type_nodes: Option<u64>,
-    ) -> VMResult<Vec<Value>> {
-        let type_limits = match max_type_nodes {
-            Some(max_type_nodes) => TypeLimits::VM_DEFAULT.raise_max_type_nodes_to(max_type_nodes),
-            None => TypeLimits::VM_DEFAULT,
-        };
         let tracer = if cfg!(feature = "tracing") {
             tracer
         } else {
@@ -207,7 +179,6 @@ impl<'extensions> MoveVM<'extensions> {
             tracer,
             gas_meter,
             bypass_declared_entry_check,
-            type_limits,
         )
     }
 
@@ -366,7 +337,6 @@ impl<'extensions> MoveVM<'extensions> {
         tracer: Option<&mut MoveTraceBuilder>,
         gas_meter: &mut impl GasMeter,
         bypass_declared_entry_check: bool,
-        type_limits: TypeLimits,
     ) -> VMResult<Vec<Value>> {
         let telemetry = Arc::clone(&self.telemetry);
         telemetry.with_transaction_telemetry(|txn_telemetry| {
@@ -416,7 +386,6 @@ impl<'extensions> MoveVM<'extensions> {
                     function,
                     type_arguments,
                     args,
-                    type_limits,
                 )
             };
 
@@ -486,13 +455,11 @@ impl<'extensions> MoveVM<'extensions> {
         func: VMPointer<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
-        type_limits: TypeLimits,
     ) -> VMResult<Vec<Value>> {
         interpreter::run(
             &mut self.virtual_tables,
             txn_telemetry,
             self.vm_config.clone(),
-            type_limits,
             &mut *self.native_extensions.try_borrow_mut().map_err(|e| {
                 partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
