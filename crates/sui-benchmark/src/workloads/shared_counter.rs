@@ -5,7 +5,7 @@ use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
 use crate::workloads::GasCoinConfig;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{Payload, resign_transaction_with_expiration};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COUNTER,
     Workload, WorkloadBuilder,
@@ -21,7 +21,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::get_key_pair;
 use sui_types::{
     base_types::{ObjectDigest, ObjectID, SequenceNumber},
-    transaction::Transaction,
+    transaction::{Transaction, TransactionExpiration},
 };
 use tracing::{debug, error, info};
 
@@ -77,6 +77,15 @@ impl Payload for SharedCounterTestPayload {
             )
             .ensure_unique()
             .build_and_sign(self.gas.2.as_ref())
+    }
+
+    fn make_transaction_with_expiration(
+        &mut self,
+        expiration: TransactionExpiration,
+    ) -> Transaction {
+        let signer = self.gas.2.clone();
+        let transaction = self.make_transaction();
+        resign_transaction_with_expiration(transaction, expiration, signer.as_ref())
     }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
         None

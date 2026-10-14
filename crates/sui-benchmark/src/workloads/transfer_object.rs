@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{Payload, resign_transaction_with_expiration};
 use crate::workloads::workload::WorkloadBuilder;
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN,
@@ -23,7 +23,7 @@ use sui_core::test_utils::make_transfer_object_transaction;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
-    transaction::Transaction,
+    transaction::{Transaction, TransactionExpiration},
 };
 
 /// TODO: This should be the amount that is being transferred instead of MAX_GAS.
@@ -81,6 +81,21 @@ impl Payload for TransferObjectTestPayload {
                 .borrow()
                 .reference_gas_price,
         )
+    }
+
+    fn make_transaction_with_expiration(
+        &mut self,
+        expiration: TransactionExpiration,
+    ) -> Transaction {
+        let signer = self
+            .gas
+            .iter()
+            .find(|x| x.1 == self.transfer_from)
+            .unwrap()
+            .2
+            .clone();
+        let transaction = self.make_transaction();
+        resign_transaction_with_expiration(transaction, expiration, signer.as_ref())
     }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
         None
