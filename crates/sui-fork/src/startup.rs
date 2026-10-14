@@ -7,10 +7,14 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::anyhow;
+use axum::http::Method;
 use prometheus::Registry;
 use rand::rngs::OsRng;
+use tower_http::cors::Any;
+use tower_http::cors::CorsLayer;
 use tracing::info;
 
 use simulacrum::Simulacrum;
@@ -211,7 +215,11 @@ pub(crate) fn resume_base_checkpoint(store: &ForkStore) -> Result<VerifiedCheckp
 }
 
 /// Run the forked network. Spawns the `sui-rpc-api` `RpcService` bound to `rpc_addr`, backed by the
-/// `ForkStore`'s RPC trait impls, then blocks on Ctrl+C.
+/// `ForkStore`'s RPC trait impls and served with the permissive CORS policy of
+/// [`with_permissive_cors`], then blocks on Ctrl+C.
+///
+/// Fails when `rpc_addr` cannot be bound, for example because another fork is already serving on
+/// it.
 pub async fn run(
     context: Context,
     subscription_handle: SubscriptionServiceHandle,
@@ -238,7 +246,11 @@ pub async fn run(
     service.with_file_descriptor_set(crate::proto::FILE_DESCRIPTOR_SET);
 
     info!("starting sui-rpc-api server on {rpc_addr}");
-    let server_handle = tokio::spawn(async move { service.start_service(rpc_addr).await });
+    let router = with_permissive_cors(service.into_router().await);
+    let listener = tokio::net::TcpListener::bind(rpc_addr)
+        .await
+        .with_context(|| format!("failed to bind the rpc server to {rpc_addr}"))?;
+    let server_handle = tokio::spawn(async move { axum::serve(listener, router).await });
 
     info!("forked network running, waiting for shutdown signal (Ctrl+C)");
     tokio::select! {
@@ -247,10 +259,11 @@ pub async fn run(
             info!("shutdown signal received, stopping forked network");
         }
         join = server_handle => {
-            if let Err(e) = join {
-                return Err(anyhow!("rpc server task panicked: {e}"));
-            }
-            return Err(anyhow!("rpc server task exited unexpectedly"));
+            return Err(match join {
+                Err(e) => anyhow!("rpc server task panicked: {e}"),
+                Ok(Err(e)) => anyhow!(e).context("rpc server failed"),
+                Ok(Ok(())) => anyhow!("rpc server task exited unexpectedly"),
+            });
         }
         stopped = context.indexer_stopped() => {
             // Without this watchdog an indexer failure would only surface as
@@ -262,6 +275,23 @@ pub async fn run(
         }
     }
     Ok(())
+}
+
+/// Allow cross-origin requests from any origin, so that browser clients such as TypeScript dApps
+/// can call the fork over gRPC-web.
+///
+/// The policy matches the one full nodes serve, because a frontend under development should work
+/// against the fork the same way it works against a full node. It also lets any page open in the
+/// browser reach the fork, including its admin service and unsigned transaction submission, which
+/// is acceptable for a local network whose state is disposable.
+fn with_permissive_cors(router: axum::Router) -> axum::Router {
+    router.layer(
+        CorsLayer::new()
+            .allow_methods([Method::GET, Method::POST])
+            .allow_origin(Any)
+            .allow_headers(Any)
+            .expose_headers(Any),
+    )
 }
 
 /// Replace the validator set in the system state with local validators from the NetworkConfig
@@ -293,7 +323,10 @@ fn override_validators(
 
 #[cfg(test)]
 mod tests {
+    use axum::body::Body;
+    use axum::http::Request;
     use sui_types::digests::get_mainnet_chain_identifier;
+    use tower::ServiceExt as _;
 
     use crate::seed::SeedManifest;
 
@@ -390,5 +423,50 @@ mod tests {
                 resuming: false,
             }
         );
+    }
+
+    /// A browser sends a preflight before a cross-origin gRPC-web call and only sends the call when
+    /// the preflight allows it, and it only hands the call's response to the page, gRPC status
+    /// headers included, when that response allows the origin and exposes those headers.
+    #[tokio::test]
+    async fn rpc_router_allows_cross_origin_grpc_web_calls() {
+        let method_path = "/sui.rpc.v2.LedgerService/GetServiceInfo";
+        let router = with_permissive_cors(
+            axum::Router::new().route(method_path, axum::routing::post(|| async {})),
+        );
+
+        let preflight = Request::builder()
+            .method(Method::OPTIONS)
+            .uri(method_path)
+            .header("origin", "http://localhost:5173")
+            .header("access-control-request-method", "POST")
+            .header(
+                "access-control-request-headers",
+                "content-type,x-grpc-web,x-user-agent",
+            )
+            .body(Body::empty())
+            .unwrap();
+        let response = router.clone().oneshot(preflight).await.unwrap();
+        let headers = response.headers();
+        assert_eq!(headers["access-control-allow-origin"], "*");
+        assert_eq!(headers["access-control-allow-headers"], "*");
+        assert!(
+            headers["access-control-allow-methods"]
+                .to_str()
+                .unwrap()
+                .contains("POST"),
+            "{headers:?}",
+        );
+
+        let call = Request::builder()
+            .method(Method::POST)
+            .uri(method_path)
+            .header("origin", "http://localhost:5173")
+            .header("content-type", "application/grpc-web+proto")
+            .body(Body::empty())
+            .unwrap();
+        let response = router.oneshot(call).await.unwrap();
+        assert_eq!(response.headers()["access-control-allow-origin"], "*");
+        assert_eq!(response.headers()["access-control-expose-headers"], "*");
     }
 }

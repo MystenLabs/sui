@@ -14774,6 +14774,7 @@ version = "1.83.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum 0.8.3",
  "backoff",
  "bcs",
  "bin-version",
@@ -14804,6 +14805,8 @@ dependencies = [
  "tokio",
  "tonic 0.14.6",
  "tonic-prost",
+ "tower 0.5.3",
+ "tower-http",
  "tracing",
  "tracing-subscriber",
  "wiremock",
