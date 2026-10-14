@@ -19,7 +19,6 @@ use sui_types::error::ExecutionError;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
 use sui_types::full_checkpoint_content::ExecutedTransaction;
-use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GAS;
 use sui_types::message_envelope::Message as _;
 use sui_types::object::Object;
@@ -103,20 +102,15 @@ struct OnChainStatus {
     is_success: bool,
 }
 
-/// How a transaction's execution should be metered — or that it can't be. Carries only the
-/// budget/price *decision* (not the built `SuiGasStatus`, which is large); the caller builds the
-/// gas status so its `from_balance` tally is recorded even if that build fails.
+/// Whether a transaction's execution can be metered faithfully. The executor derives the budget
+/// and price itself from the gas data and the epoch's reference gas price.
 enum GasPlan {
     /// Price-0 but not the gasless pattern. The gas model asserts `price > 0`, so it can't be
     /// metered faithfully — skip it.
     Skip,
-    /// Meter with this budget/price. `from_balance` = gas paid from the address balance (empty
-    /// payment), counted for visibility.
-    Meter {
-        budget: u64,
-        price: u64,
-        from_balance: bool,
-    },
+    /// `from_balance` = gas paid from the address balance (empty payment), counted for
+    /// visibility.
+    Meter { from_balance: bool },
 }
 
 /// The fully-prepared, metered inputs for one execution. Bundled so [`run_execution`] takes a small
@@ -129,7 +123,6 @@ struct PreparedTx {
     /// every such object the transaction touched.
     system_object_versions: SystemObjectVersions,
     gas_data: GasData,
-    gas_status: SuiGasStatus,
     txn_kind: TransactionKind,
     rewritten_inputs: Option<Vec<bool>>,
     signer: SuiAddress,
@@ -218,31 +211,19 @@ pub(crate) fn execute_one_transaction(
     // Execution must be *metered*: unmetered execution routes storage rebate through the 0x5
     // system-state object (see the adapter's `conserve_unmetered_storage_rebate`), which we do not
     // carry for user transactions.
-    let gas_status = match plan_gas(&gas_data, ctx) {
+    match plan_gas(&gas_data) {
         GasPlan::Skip => {
             stats.execute_skipped += 1;
             return stats;
         }
-        GasPlan::Meter {
-            budget,
-            price,
-            from_balance,
-        } => {
+        GasPlan::Meter { from_balance } => {
             if from_balance {
                 // Gas (and possibly funds) from the address balance via the accumulator; the
                 // executor handles this without us reconstructing accumulator state.
                 stats.gas_from_balance += 1;
             }
-            match SuiGasStatus::new(budget, price, ctx.reference_gas_price, &ctx.protocol_config) {
-                Ok(gas_status) => gas_status,
-                Err(e) => {
-                    stats.reconstruction_errors += 1;
-                    error!(%digest, "building gas status: {e}");
-                    return stats;
-                }
-            }
         }
-    };
+    }
 
     stats.checked += 1;
 
@@ -250,7 +231,6 @@ pub(crate) fn execute_one_transaction(
         input_objects,
         system_object_versions,
         gas_data,
-        gas_status,
         txn_kind: TransactionKind::ProgrammableTransaction(pt),
         rewritten_inputs,
         signer,
@@ -427,27 +407,13 @@ fn collect_struct_types(tt: &TypeTag, out: &mut Vec<TypeTag>) {
 /// Decide how to meter, mirroring `sui-transaction-checks::check_gas`: gasless transactions (empty
 /// payment + price 0; gas paid from the address balance) are metered at the epoch RGP with the
 /// gasless compute cap, not their zero price/budget.
-fn plan_gas(gas_data: &GasData, ctx: &EpochCtx) -> GasPlan {
+fn plan_gas(gas_data: &GasData) -> GasPlan {
     let gasless = gas_data.price == 0 && gas_data.payment.is_empty();
     if gas_data.price == 0 && !gasless {
         return GasPlan::Skip;
     }
-    let from_balance = gas_data.payment.is_empty();
-    let (budget, price) = if gasless {
-        let r = ctx.reference_gas_price.max(1);
-        (
-            ctx.protocol_config
-                .gasless_max_computation_units()
-                .saturating_mul(r),
-            r,
-        )
-    } else {
-        (gas_data.budget, gas_data.price)
-    };
     GasPlan::Meter {
-        budget,
-        price,
-        from_balance,
+        from_balance: gas_data.payment.is_empty(),
     }
 }
 
@@ -463,7 +429,6 @@ fn run_execution(
         input_objects,
         system_object_versions,
         gas_data,
-        gas_status,
         txn_kind,
         rewritten_inputs,
         signer,
@@ -485,7 +450,7 @@ fn run_execution(
             // information to reproduce the original execution.
             &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
             gas_data,
-            gas_status,
+            ctx.reference_gas_price,
             txn_kind,
             rewritten_inputs,
             signer,

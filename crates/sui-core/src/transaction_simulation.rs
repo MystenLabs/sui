@@ -21,7 +21,6 @@ use sui_types::{
     execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
     execution_status::ExecutionErrorKind,
     full_checkpoint_content::ObjectSet,
-    gas::SuiGasStatus,
     messages_checkpoint::CheckpointTimestamp,
     metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
     object::{MoveObject, OBJECT_START_VERSION, Object, Owner},
@@ -159,7 +158,7 @@ pub fn simulate_transaction(
         id
     });
 
-    let (gas_status, checked_input_objects) = if dev_inspect {
+    let checked_input_objects = if dev_inspect {
         check_dev_inspect_input(
             protocol_config,
             &transaction,
@@ -222,7 +221,7 @@ pub fn simulate_transaction(
         checked_input_objects,
         system_object_versions,
         gas_data,
-        gas_status,
+        validity_check_context.reference_gas_price,
         kind,
         rewritten_inputs.clone(),
         signer,
@@ -247,12 +246,6 @@ pub fn simulate_transaction(
             });
 
         if has_insufficient_object_funds {
-            let retry_gas_status = SuiGasStatus::new(
-                cloned_gas.budget,
-                cloned_gas.price,
-                validity_check_context.reference_gas_price,
-                protocol_config,
-            )?;
             let (store, _, effects, result) = executor.dev_inspect_transaction(
                 &tracking_store,
                 protocol_config,
@@ -267,7 +260,7 @@ pub fn simulate_transaction(
                 cloned_input_objects,
                 system_object_versions,
                 cloned_gas,
-                retry_gas_status,
+                validity_check_context.reference_gas_price,
                 cloned_kind,
                 rewritten_inputs,
                 signer,

@@ -42,9 +42,6 @@ VALID_DIFF_MODES = ("strict", "status-only", "gas-only", "status-and-gas")
 MARKER = "// DUAL_REPLAY_INJECTED"
 
 LATEST_RS = "sui-execution/src/latest.rs"
-GAS_RS = "crates/sui-types/src/gas.rs"
-GAS_V2_RS = "crates/sui-types/src/gas_model/gas_v2.rs"
-GAS_TABLES_RS = "crates/sui-types/src/gas_model/tables.rs"
 EXECUTION_LAYER = "scripts/execution_layer.py"
 
 # Exit codes by failing step. The driver uses these to dispatch recovery.
@@ -86,12 +83,17 @@ impl Executor {
 TPL_FN_NORMAL_BODY = """\
         ${marker}
         let tip_start = std::time::Instant::now();
-        let (tip_store, tip_gas_status, tip_effects, _tip_timings, _tip_result) =
-            execute_transaction_to_effects::<execution_mode::Normal>(
+        let ExecutionOutput {
+            inner_store: tip_store,
+            gas_status: tip_gas_status,
+            effects: tip_effects,
+            timings: _,
+            execution_result: _,
+        } = execute_transaction_to_effects::<execution_mode::Normal>(
                 store,
                 input_objects.clone(),
                 gas.clone(),
-                gas_status.clone(),
+                reference_gas_price,
                 transaction_kind.clone(),
                 rewritten_inputs.clone(),
                 transaction_signer,
@@ -115,7 +117,7 @@ TPL_FN_NORMAL_BODY = """\
                 store,
                 input_objects,
                 gas,
-                gas_status,
+                reference_gas_price,
                 transaction_kind,
                 rewritten_inputs,
                 transaction_signer,
@@ -131,28 +133,47 @@ TPL_FN_NORMAL_BODY = """\
             )
         };
         let base_ns = base_start.elapsed().as_nanos() as u64;
+        let base_gas_report = {
+            use sui_types::gas::SuiGasStatusAPI;
+            base.gas_status.gas_usage_report()
+        };
         self::latest_dual_replay::compare_dual_replay(
-            (&base.0, &base.1, &base.2),
-            (&tip_store, &tip_gas_status, &tip_effects),
+            (&base.inner_store, base_gas_report.cost_summary.computation_cost, &base.effects),
+            (
+                &tip_store,
+                tip_gas_status.gas_usage_report().cost_summary.computation_cost,
+                &tip_effects,
+            ),
             transaction_digest,
             base_ns,
             tip_ns,
         );
-        if let Err(error) = &base.4 {
+        if let Err(error) = &base.execution_result {
             log_execution_error(transaction_digest, error);
         }
-        base
+        (
+            base.inner_store,
+            base_gas_report,
+            base.effects,
+            base.timings,
+            base.execution_result,
+        )
 """
 
 TPL_FN_NORMAL_WITH_ERR_BODY = """\
         ${marker}
         let tip_start = std::time::Instant::now();
-        let (tip_store, tip_gas_status, tip_effects, _tip_timings, _tip_result) =
-            execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
+        let ExecutionOutput {
+            inner_store: tip_store,
+            gas_status: tip_gas_status,
+            effects: tip_effects,
+            timings: _,
+            execution_result: _,
+        } = execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
                 store,
                 input_objects.clone(),
                 gas.clone(),
-                gas_status.clone(),
+                reference_gas_price,
                 transaction_kind.clone(),
                 rewritten_inputs.clone(),
                 transaction_signer,
@@ -176,7 +197,7 @@ TPL_FN_NORMAL_WITH_ERR_BODY = """\
                 store,
                 input_objects,
                 gas,
-                gas_status,
+                reference_gas_price,
                 transaction_kind,
                 rewritten_inputs,
                 transaction_signer,
@@ -192,17 +213,31 @@ TPL_FN_NORMAL_WITH_ERR_BODY = """\
             )
         };
         let base_ns = base_start.elapsed().as_nanos() as u64;
+        let base_gas_report = {
+            use sui_types::gas::SuiGasStatusAPI;
+            base.gas_status.gas_usage_report()
+        };
         self::latest_dual_replay::compare_dual_replay(
-            (&base.0, &base.1, &base.2),
-            (&tip_store, &tip_gas_status, &tip_effects),
+            (&base.inner_store, base_gas_report.cost_summary.computation_cost, &base.effects),
+            (
+                &tip_store,
+                tip_gas_status.gas_usage_report().cost_summary.computation_cost,
+                &tip_effects,
+            ),
             transaction_digest,
             base_ns,
             tip_ns,
         );
-        if let Err(error) = &base.4 {
+        if let Err(error) = &base.execution_result {
             log_execution_error(transaction_digest, error);
         }
-        base
+        (
+            base.inner_store,
+            base_gas_report,
+            base.effects,
+            base.timings,
+            base.execution_result,
+        )
 """
 
 TPL_DUAL_REPLAY_MODULE = """\
@@ -215,7 +250,6 @@ mod latest_dual_replay {
     use sui_types::digests::TransactionDigest;
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
     use sui_types::execution_status::ExecutionStatus;
-    use sui_types::gas::{SuiGasStatus, SuiGasStatusAPI};
     use sui_types::inner_temporary_store::InnerTemporaryStore;
 
     const OUTPUT_DIR: &str = "${output_dir}";
@@ -223,7 +257,8 @@ mod latest_dual_replay {
     const TIMINGS_FILE: &str = "${timings_file}";
     const TIMINGS_FLUSH_EVERY: usize = 500;
 
-    type View<'a> = (&'a InnerTemporaryStore, &'a SuiGasStatus, &'a TransactionEffects);
+    /// Store, computation cost in MIST, effects.
+    type View<'a> = (&'a InnerTemporaryStore, u64, &'a TransactionEffects);
 
     pub(super) fn compare_dual_replay(
         base: View<'_>,
@@ -234,8 +269,8 @@ mod latest_dual_replay {
     ) {
         let (_, base_gas, base_effects) = base;
         let (_, tip_gas, tip_effects) = tip;
-        let base_gas_used = base_gas.gas_used();
-        let tip_gas_used = tip_gas.gas_used();
+        let base_gas_used = base_gas;
+        let tip_gas_used = tip_gas;
         let status_match = matches!(
             (base_effects.status(), tip_effects.status()),
             (ExecutionStatus::Success, ExecutionStatus::Success)
@@ -349,7 +384,7 @@ ${diff_body}
 TPL_DIFF_BODIES = {
     "strict": """\
             let status_differs = base_effects.status() != tip_effects.status();
-            let gas_differs = !gas_within_tolerance(base_gas.gas_used(), tip_gas.gas_used());
+            let gas_differs = !gas_within_tolerance(base_gas, tip_gas);
             let shape_differs = base_effects != tip_effects;
             status_differs || gas_differs || shape_differs
 """,
@@ -363,7 +398,7 @@ TPL_DIFF_BODIES = {
 """,
     "gas-only": """\
             let _ = (base_effects, tip_effects);
-            !gas_within_tolerance(base_gas.gas_used(), tip_gas.gas_used())
+            !gas_within_tolerance(base_gas, tip_gas)
 """,
     "status-and-gas": """\
             let status_differs = match (base_effects.status(), tip_effects.status()) {
@@ -371,7 +406,7 @@ TPL_DIFF_BODIES = {
                 (ExecutionStatus::Failure { .. }, ExecutionStatus::Failure { .. }) => false,
                 _ => true,
             };
-            let gas_differs = !gas_within_tolerance(base_gas.gas_used(), tip_gas.gas_used());
+            let gas_differs = !gas_within_tolerance(base_gas, tip_gas);
             status_differs || gas_differs
 """,
 }
@@ -530,7 +565,6 @@ RE_FN_NORMAL_WITH_ERR = re.compile(
 
 def do_inject(repo: Path, state: State) -> None:
     _inject_latest_rs(repo, state)
-    _ensure_gas_clone(repo)
     _ensure_sui_execution_serde_json_dep(repo)
 
 
@@ -722,53 +756,6 @@ def _matching(src: str, open_idx: int, open_c: str, close_c: str) -> int:
     return -1
 
 
-# The dual-exec body clones `SuiGasStatus` (gas.rs enum). That cascades through
-# its field types — every nested type that participates in `Clone` must derive it.
-# This list is the empirical minimum from running the pipeline against current
-# HEAD; extend if a future tip introduces another field type that breaks.
-GAS_CLONE_TARGETS = [
-    (GAS_RS, "SuiGasStatus", "enum"),
-    (GAS_V2_RS, "SuiGasStatus", "struct"),
-    (GAS_V2_RS, "SuiCostTable", "struct"),
-    (GAS_V2_RS, "ComputationBucket", "struct"),
-    (GAS_TABLES_RS, "GasStatus", "struct"),
-]
-
-
-def _ensure_gas_clone(repo: Path) -> None:
-    for relpath, name, kind in GAS_CLONE_TARGETS:
-        _ensure_clone_derive(repo / relpath, name, kind)
-
-
-def _ensure_clone_derive(path: Path, type_name: str, kind: str) -> None:
-    src = path.read_text()
-    # Visibility prefix is optional (matches `pub`, `pub(crate)`, or none).
-    vis = r"(?:pub(?:\([^)]*\))?\s+)?"
-    decl_re = re.compile(rf"{vis}{kind}\s+{re.escape(type_name)}\b", re.MULTILINE)
-    derive_re = re.compile(
-        rf"(#\[derive\(([^)]*)\)\])(\s*(?:#\[[^\]]*\]\s*)*)({vis}{kind}\s+{re.escape(type_name)}\b)",
-        re.MULTILINE,
-    )
-
-    m = derive_re.search(src)
-    if m:
-        derives = [d.strip() for d in m.group(2).split(",") if d.strip()]
-        if "Clone" in derives:
-            return
-        new_attr = f"#[derive({', '.join(derives + ['Clone'])})]"
-        replacement = new_attr + m.group(3) + m.group(4)
-        path.write_text(src[: m.start()] + replacement + src[m.end() :])
-        return
-
-    s = decl_re.search(src)
-    if not s:
-        raise InjectError(f"anchor `{kind} {type_name}` not found in {path}")
-    line_start = src.rfind("\n", 0, s.start()) + 1
-    indent_match = re.match(r"\s*", src[line_start : s.start()])
-    indent = indent_match.group(0) if indent_match else ""
-    path.write_text(src[:line_start] + f"{indent}#[derive(Clone)]\n" + src[line_start:])
-
-
 # The injected `latest_dual_replay` helper module calls `serde_json::to_string_pretty`
 # on `TransactionEffects`. `sui-execution` doesn't depend on `serde_json` by default
 # at HEAD, so the cargo check fails until we add it. Idempotent.
@@ -812,9 +799,6 @@ def do_build(repo: Path) -> None:
 
 COMMIT_FIXED_PATHS = [
     LATEST_RS,
-    GAS_RS,
-    GAS_V2_RS,
-    GAS_TABLES_RS,
     "sui-execution/Cargo.toml",
     "Cargo.toml",
     "external-crates/move/Cargo.toml",

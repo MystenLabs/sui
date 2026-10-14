@@ -18,7 +18,7 @@ use sui_types::{
     error::{ExecutionError, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
     execution_status::ExecutionFailure,
-    gas::SuiGasStatus,
+    gas::{GasUsageReport, SuiGasStatus, SuiGasStatusAPI},
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
     metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
@@ -76,7 +76,7 @@ impl executor::Executor for Executor {
         _system_object_versions: sui_types::base_types::SystemObjectVersions,
         _unsettled_object_funds: &dyn sui_types::accumulator_root::UnsettledObjectFundsRead,
         gas: GasData,
-        gas_status: SuiGasStatus,
+        reference_gas_price: u64,
         transaction_kind: TransactionKind,
         _rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
@@ -84,11 +84,17 @@ impl executor::Executor for Executor {
         _trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
-        SuiGasStatus,
+        GasUsageReport,
         TransactionEffects,
         Vec<ExecutionTiming>,
         Result<(), ExecutionFailure>,
     ) {
+        let gas_status = SuiGasStatus::for_execution(
+            &gas,
+            &transaction_kind,
+            reference_gas_price,
+            protocol_config,
+        );
         let gas_coins = gas.payment;
         let (inner_temp_store, gas_status, effects, result) =
             execute_transaction_to_effects::<execution_mode::Normal>(
@@ -113,7 +119,7 @@ impl executor::Executor for Executor {
         // note: old versions do not report timings.
         (
             inner_temp_store,
-            gas_status,
+            gas_status.gas_usage_report(),
             effects,
             vec![],
             result.map_err(ExecutionFailure::from),
@@ -132,7 +138,7 @@ impl executor::Executor for Executor {
         input_objects: CheckedInputObjects,
         _system_object_versions: sui_types::base_types::SystemObjectVersions,
         gas: GasData,
-        gas_status: SuiGasStatus,
+        reference_gas_price: u64,
         transaction_kind: TransactionKind,
         _rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
@@ -140,10 +146,16 @@ impl executor::Executor for Executor {
         skip_all_checks: bool,
     ) -> (
         InnerTemporaryStore,
-        SuiGasStatus,
+        GasUsageReport,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
+        let gas_status = SuiGasStatus::for_execution(
+            &gas,
+            &transaction_kind,
+            reference_gas_price,
+            protocol_config,
+        );
         let gas_coins = gas.payment;
         let (inner_temp_store, gas_status, effects, result) = if skip_all_checks {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
@@ -183,7 +195,12 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (inner_temp_store, gas_status, effects, result)
+        (
+            inner_temp_store,
+            gas_status.gas_usage_report(),
+            effects,
+            result,
+        )
     }
 
     fn execute_transaction_to_effects_and_execution_error(
@@ -199,7 +216,7 @@ impl executor::Executor for Executor {
         _system_object_versions: sui_types::base_types::SystemObjectVersions,
         _unsettled_object_funds: &dyn sui_types::accumulator_root::UnsettledObjectFundsRead,
         gas: GasData,
-        gas_status: SuiGasStatus,
+        reference_gas_price: u64,
         transaction_kind: TransactionKind,
         _rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
@@ -207,11 +224,17 @@ impl executor::Executor for Executor {
         _trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
-        SuiGasStatus,
+        GasUsageReport,
         TransactionEffects,
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
+        let gas_status = SuiGasStatus::for_execution(
+            &gas,
+            &transaction_kind,
+            reference_gas_price,
+            protocol_config,
+        );
         let gas_coins = gas.payment;
         let (inner_temp_store, gas_status, effects, result) =
             execute_transaction_to_effects::<execution_mode::Normal>(
@@ -233,7 +256,13 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (inner_temp_store, gas_status, effects, vec![], result)
+        (
+            inner_temp_store,
+            gas_status.gas_usage_report(),
+            effects,
+            vec![],
+            result,
+        )
     }
 
     fn update_genesis_state(

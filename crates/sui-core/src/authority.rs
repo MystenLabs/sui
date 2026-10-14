@@ -122,7 +122,7 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionStatus;
-use sui_types::gas::{GasCostSummary, SuiGasStatus};
+use sui_types::gas::{GasCostSummary, GasUsageReport};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -1095,7 +1095,7 @@ impl AuthorityState {
             epoch_store.epoch(),
         )?;
 
-        let (_gas_status, checked_input_objects) = sui_transaction_checks::check_transaction_input(
+        let checked_input_objects = sui_transaction_checks::check_transaction_input(
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
             tx_data,
@@ -1877,19 +1877,19 @@ impl AuthorityState {
         system_object_versions: SystemObjectVersions,
         unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas_data: GasData,
-        gas_status: SuiGasStatus,
+        reference_gas_price: u64,
         kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
         signer: SuiAddress,
         tx_digest: TransactionDigest,
     ) -> (
         InnerTemporaryStore,
-        SuiGasStatus,
+        GasUsageReport,
         TransactionEffects,
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
-        let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
+        let (inner_temp_store, gas_report, effects, timings, execution_error) = executor
             // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
             .execute_transaction_to_effects_and_execution_error(
                 store,
@@ -1903,7 +1903,7 @@ impl AuthorityState {
                 system_object_versions,
                 unsettled_object_funds,
                 gas_data,
-                gas_status,
+                reference_gas_price,
                 kind,
                 rewritten_inputs,
                 signer,
@@ -1913,7 +1913,7 @@ impl AuthorityState {
 
         (
             inner_temp_store,
-            gas_status,
+            gas_report,
             effects,
             timings,
             execution_error,
@@ -1956,7 +1956,7 @@ impl AuthorityState {
         // The cost of partially re-auditing a transaction before execution is tolerated.
         // This step is required for correctness because, for example, ConsensusAddressOwner
         // object owner may have changed between signing and execution.
-        let (gas_status, input_objects) = match sui_transaction_checks::check_certificate_input(
+        let input_objects = match sui_transaction_checks::check_certificate_input(
             certificate,
             input_objects,
             epoch_store.protocol_config(),
@@ -2025,7 +2025,7 @@ impl AuthorityState {
                 system_object_versions,
                 unsettled_object_funds,
                 gas_data,
-                gas_status,
+                epoch_store.reference_gas_price(),
                 kind,
                 rewritten_inputs,
                 signer,
