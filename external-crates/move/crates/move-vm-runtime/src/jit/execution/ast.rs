@@ -12,7 +12,7 @@ use crate::{
     },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
     shared::{
-        TypeLimits, TypeSize,
+        TypeSize,
         safe_ops::SafeArithmetic as _,
         types::{OriginalId, VersionId},
         vm_pointer::VMPointer,
@@ -987,11 +987,7 @@ impl VariantInstantiation {
 impl ArenaType {
     /// Convert to a runtime type by performing a deep copy
     pub fn to_type(&self) -> PartialVMResult<Type> {
-        self.to_type_with_limits(&TypeLimits::VM_DEFAULT)
-    }
-
-    pub fn to_type_with_limits(&self, limits: &TypeLimits) -> PartialVMResult<Type> {
-        self.to_type_impl(&mut limits.traversal())
+        self.to_type_impl(&mut TypeSize::for_type_traversal())
     }
 
     fn to_type_impl(&self, type_size: &mut TypeSize) -> PartialVMResult<Type> {
@@ -1254,7 +1250,6 @@ pub trait TypeSubst {
     where
         F: Fn(u16, &mut TypeSize) -> PartialVMResult<Type> + Copy;
     fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type>;
-    fn subst_with_limits(&self, limits: &TypeLimits, ty_args: &[Type]) -> PartialVMResult<Type>;
 }
 
 // Macro that generates the implementations.
@@ -1312,14 +1307,6 @@ macro_rules! impl_deep_subst {
             }
 
             fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
-                self.subst_with_limits(&$crate::shared::TypeLimits::VM_DEFAULT, ty_args)
-            }
-
-            fn subst_with_limits(
-                &self,
-                limits: &$crate::shared::TypeLimits,
-                ty_args: &[Type],
-            ) -> PartialVMResult<Type> {
                 self.apply_subst(
                     |idx, type_size| match ty_args.get(idx as usize) {
                         Some(ty) => ty.clone_impl(type_size),
@@ -1330,7 +1317,7 @@ macro_rules! impl_deep_subst {
                             idx
                         )),
                     },
-                    &mut limits.traversal(),
+                    &mut $crate::shared::TypeSize::for_type_traversal(),
                 )
             }
         }
