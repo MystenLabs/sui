@@ -76,7 +76,7 @@ public struct ValidatorMetadata has store {
     /// The public key bytes corresponding to the private key that the validator
     /// uses to establish TLS connections
     network_pubkey_bytes: vector<u8>,
-    /// The public key bytes correstponding to the Narwhal Worker
+    /// The public key bytes corresponding to the Narwhal Worker
     worker_pubkey_bytes: vector<u8>,
     /// This is a proof that the validator has ownership of the private key
     proof_of_possession: vector<u8>,
@@ -239,6 +239,7 @@ public(package) fun new(
     );
     assert!(commission_rate <= MAX_COMMISSION_RATE, ECommissionRateTooHigh);
     assert!(gas_price < MAX_VALIDATOR_GAS_PRICE, EGasPriceHigherThanThreshold);
+    assert!(protocol_pubkey_bytes.length() == 96, EInvalidProtocolPubKeyLength);
 
     let metadata = new_metadata(
         sui_address,
