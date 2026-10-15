@@ -34,7 +34,7 @@ pub mod reachability;
 #[doc(hidden)]
 pub use antithesis_sdk::linkme;
 #[doc(hidden)]
-pub use mysten_common::assert_reachable_simtest;
+pub use mysten_common::assert_reachable_gated_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
