@@ -40,9 +40,7 @@ use move_binary_format::{
     },
     partial_vm_error,
 };
-use move_core_types::{
-    identifier::Identifier, language_storage::ModuleId, resolver::IntraPackageName,
-};
+use move_core_types::{language_storage::ModuleId, resolver::IntraPackageName};
 use move_vm_config::runtime::VMConfig;
 
 use indexmap::IndexMap;
@@ -174,7 +172,7 @@ impl PackageContext<'_> {
                 FUNCTION_RESOLUTION_FAILURE,
                 "Could not find function with name: {}::{}",
                 self.version_id,
-                self.interner.resolve_ident(
+                self.interner.resolve_str(
                     &vtable_entry.intra_package_key().member_name,
                     "function name"
                 )
@@ -456,13 +454,26 @@ fn module(
     version_id: VersionId,
     module: &input::Module,
 ) -> PartialVMResult<Module> {
-    tracing::trace!(version_id = %version_id, module_name = %module.compiled_module.self_id(), "translating module");
-    let self_id = module.compiled_module.self_id();
-    dbg_println!("Loading module: {}", self_id);
-
-    let mkey = context.interner.intern_ident_str(self_id.name());
-
     let cmodule = &module.compiled_module;
+    let self_handle = cmodule.self_handle();
+    let module_address = cmodule.address_identifier_at(self_handle.address);
+    let module_name = cmodule.identifier_at(self_handle.name);
+    tracing::trace!(
+        version_id = %version_id,
+        module_name = %format_args!(
+            "{}::{}",
+            module_address.to_canonical_display(/* with_prefix */ false),
+            module_name,
+        ),
+        "translating module"
+    );
+    dbg_println!(
+        "Loading module: {}::{}",
+        module_address.to_canonical_display(/* with_prefix */ false),
+        module_name
+    );
+
+    let mkey = context.interner.intern_ident_str(module_name);
 
     // Initialize module data
     let type_refs = initialize_type_refs(context, cmodule)?;
@@ -524,7 +535,6 @@ fn module(
 
     // Build and return the module
     Ok(Module {
-        id: self_id,
         datatype_descriptors,
         type_refs,
         structs,
@@ -557,8 +567,9 @@ fn initialize_type_refs(
                 .interner
                 .intern_ident_str(module.identifier_at(datatype_handle.name));
             let module_handle = module.module_handle_at(datatype_handle.module);
-            let original_id = module.module_id_for_handle(module_handle);
-            let module_name = context.interner.intern_ident_str(original_id.name());
+            let module_name = context
+                .interner
+                .intern_ident_str(module.identifier_at(module_handle.name));
             Ok(IntraPackageKey {
                 module_name,
                 member_name: struct_name,
@@ -583,12 +594,6 @@ fn datatypes(
     ArenaVec<EnumDef>,
     ArenaVec<DatatypeDescriptor>,
 )> {
-    fn resolve_member_name(context: &PackageContext, name: &VirtualTableKey) -> Identifier {
-        context
-            .interner
-            .resolve_ident(&name.intra_package_key().member_name, "datatype name")
-    }
-
     // NB: It is the responsibility of the adapter to determine the correct type origin table,
     // and pass a full and complete representation of it in with the package.
     fn defining_id(
@@ -612,8 +617,8 @@ fn datatypes(
         Ok(ModuleIdKey::from_parts(*defining_address, module_id))
     }
 
-    let original_id = module.self_id();
-    let original_address = *original_id.address();
+    let self_handle = module.self_handle();
+    let original_address = *module.address_identifier_at(self_handle.address);
 
     let structs: ArenaVec<StructDef> = structs(context, &original_address, module_name, module)?;
     let enums: ArenaVec<EnumDef> = enums(context, &original_address, module_name, module)?;
@@ -629,7 +634,7 @@ fn datatypes(
     let struct_descriptors = structs
         .iter()
         .map(|struct_| {
-            let name = resolve_member_name(context, &struct_.def_vtable_key);
+            let name = struct_.def_vtable_key.intra_package_key().member_name;
             let defining_id = defining_id(context, version_id, &struct_.def_vtable_key)?;
             let original_id = module_original_id;
             let datatype_info =
@@ -639,7 +644,6 @@ fn datatypes(
                 &context.package_arena,
                 context.type_limits,
             )?;
-            let name = context.interner.intern_identifier(&name);
             let descriptor = DatatypeDescriptor::new(
                 name,
                 defining_id,
@@ -654,7 +658,7 @@ fn datatypes(
     let enum_descriptors = enums
         .iter()
         .map(|enum_| {
-            let name = resolve_member_name(context, &enum_.def_vtable_key);
+            let name = enum_.def_vtable_key.intra_package_key().member_name;
             let defining_id = defining_id(context, version_id, &enum_.def_vtable_key)?;
             let original_id = module_original_id;
             let datatype_info = context.arena_box(Datatype::Enum(VMPointer::from_ref(enum_)))?;
@@ -663,7 +667,6 @@ fn datatypes(
                 &context.package_arena,
                 context.type_limits,
             )?;
-            let name = context.interner.intern_identifier(&name);
             let descriptor = DatatypeDescriptor::new(
                 name,
                 defining_id,
@@ -722,17 +725,17 @@ fn structs(
                 .collect::<PartialVMResult<Vec<VMPointer<ArenaType>>>>()?;
             let fields = context.arena_vec(fields.into_iter())?;
 
-            let field_names = match &struct_def.field_information {
+            let field_names: Vec<IdentifierKey> = match &struct_def.field_information {
                 StructFieldInformation::Native => vec![],
                 StructFieldInformation::Declared(field_info) => field_info
                     .iter()
-                    .map(|f| module.identifier_at(f.name).to_owned())
+                    .map(|f| {
+                        context
+                            .interner
+                            .intern_ident_str(module.identifier_at(f.name))
+                    })
                     .collect(),
             };
-            let field_names: Vec<IdentifierKey> = field_names
-                .iter()
-                .map(|name| context.interner.intern_identifier(name))
-                .collect::<Vec<_>>();
             let field_names = context.arena_vec(field_names.into_iter())?;
 
             let type_parameters =
@@ -1136,7 +1139,7 @@ fn preallocate_functions(
             UNKNOWN_INVARIANT_VIOLATION_ERROR,
             "Duplicate function key {}::{}",
             package_context.version_id,
-            key.member_name(package_context.interner)
+            key.member_name_str(package_context.interner)
         )
     })?;
     Ok((loaded_functions, fun_map))
@@ -1200,13 +1203,15 @@ fn alloc_function(
 ) -> PartialVMResult<Function> {
     let handle = module.function_handle_at(def.function);
     let name_ident_str = module.identifier_at(handle.name);
-    let module_id = module.self_id();
+    let module_handle = module.self_handle();
+    let module_address = module.address_identifier_at(module_handle.address);
+    let module_name_str = module.identifier_at(module_handle.name);
     let is_entry = def.is_entry;
     let (native, def_is_native) = if def.is_native() {
         (
             context.natives.resolve(
-                module_id.address(),
-                module_id.name().as_str(),
+                module_address,
+                module_name_str.as_str(),
                 name_ident_str.as_str(),
             ),
             true,
@@ -1724,9 +1729,11 @@ fn call(
         .interner
         .intern_ident_str(module.identifier_at(func_handle.name));
     let module_handle = module.module_handle_at(func_handle.module);
-    let original_id = module.module_id_for_handle(module_handle);
-    let module_name = context.interner.intern_ident_str(original_id.name());
-    let vtable_key = VirtualTableKey::from_parts(*original_id.address(), module_name, member_name);
+    let original_id = *module.address_identifier_at(module_handle.address);
+    let module_name = context
+        .interner
+        .intern_ident_str(module.identifier_at(module_handle.name));
+    let vtable_key = VirtualTableKey::from_parts(original_id, module_name, member_name);
 
     dbg_println!(flag: function_resolution, "Resolving function: {:?}", vtable_key);
     Ok(

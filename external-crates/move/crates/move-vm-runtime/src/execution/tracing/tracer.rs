@@ -20,9 +20,8 @@ use crate::{
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMError, VMResult};
 use move_core_types::{
-    account_address::AccountAddress,
-    annotated_value::MoveTypeLayout as AnnotatedTypeLayout,
-    language_storage::{ModuleId, TypeTag},
+    account_address::AccountAddress, annotated_value::MoveTypeLayout as AnnotatedTypeLayout,
+    language_storage::TypeTag,
 };
 use move_trace_format::{
     format::{
@@ -785,16 +784,17 @@ impl VMTracer<'_> {
             },
         );
 
-        let Ok(version_id) = get_version_id(vtables, &function.module_id(&self.interner)) else {
+        let Ok(version_id) = get_version_id(vtables, &function.vtable_key().package_key()) else {
             self.report_error("Failed to get version id");
             return None;
         };
+        let module_id = function.module_id(&self.interner);
 
         self.trace.open_frame(
             self.current_frame_identifier()?,
             function.index(),
-            function.name(&self.interner).to_string(),
-            function.module_id(&self.interner).clone(),
+            function.name_str(&self.interner).to_owned(),
+            module_id,
             version_id,
             call_args
                 .into_iter()
@@ -921,16 +921,17 @@ impl VMTracer<'_> {
             },
         );
 
-        let Ok(version_id) = get_version_id(vtables, &function.module_id(&self.interner)) else {
+        let Ok(version_id) = get_version_id(vtables, &function.vtable_key().package_key()) else {
             self.report_error("Failed to get version id");
             return None;
         };
+        let module_id = function.module_id(&self.interner);
 
         self.trace.open_frame(
             self.current_frame_identifier()?,
             function.index(),
-            function.name(&self.interner).to_string(),
-            function.module_id(&self.interner).clone(),
+            function.name_str(&self.interner).to_owned(),
+            module_id,
             version_id,
             call_args,
             function_type_info.ty_args,
@@ -1008,7 +1009,7 @@ impl VMTracer<'_> {
                 .current_frame
                 .function
                 .to_ref()
-                .name(&self.interner),
+                .name_str(&self.interner),
             pc,
         );
 
@@ -2041,9 +2042,7 @@ fn into_annotated_move_value(
 
 fn get_version_id(
     vtables: &VMDispatchTables,
-    original_id: &ModuleId,
+    original_id: &AccountAddress,
 ) -> PartialVMResult<AccountAddress> {
-    vtables
-        .get_package(original_id.address())
-        .map(|pkg| pkg.version_id)
+    vtables.get_package(original_id).map(|pkg| pkg.version_id)
 }

@@ -151,7 +151,7 @@ fn step(
             PC_OVERFLOW,
             "PC {} out of bounds for function {} with {} instructions",
             pc,
-            fun_ref.name(&run_context.vtables.interner),
+            fun_ref.name_str(&run_context.vtables.interner),
             instructions.len()
         )));
     }
@@ -1000,7 +1000,7 @@ fn call_native(
             e
         };
         e.at_code_offset(function.index(), 0)
-            .finish(Location::Module(id.clone()))
+            .finish(Location::Module(id))
     })?;
     Ok(StepStatus::Running)
 }

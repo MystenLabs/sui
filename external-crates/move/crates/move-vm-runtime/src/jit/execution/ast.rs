@@ -66,8 +66,6 @@ pub struct Package {
 // the arena-allocated data. It seems prudent to track them here.
 #[allow(dead_code)]
 pub(crate) struct Module {
-    pub id: ModuleId,
-
     /// Types as indexes into the package's vtable
     pub type_refs: ArenaVec<IntraPackageKey>,
 
@@ -901,13 +899,8 @@ impl Function {
         self.return_.len()
     }
 
-    #[allow(dead_code)]
-    pub fn name_str(&self, interner: &IdentifierInterner) -> String {
-        self.name(interner).to_string()
-    }
-
-    pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
-        self.name.member_name(interner)
+    pub fn name_str<'a>(&self, interner: &'a IdentifierInterner) -> &'a str {
+        self.name.member_name_str(interner)
     }
 
     pub fn code(&self) -> &[Bytecode] {
@@ -1537,8 +1530,7 @@ pub trait InternedDisplay<B: std::fmt::Write> {
 
 impl<B: std::fmt::Write> InternedDisplay<B> for IdentifierKey {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result {
-        let name = interner.resolve_ident(self, "module name");
-        write!(f, "{}", name)
+        write!(f, "{}", interner.resolve_str(self, "identifier"))
     }
 }
 
