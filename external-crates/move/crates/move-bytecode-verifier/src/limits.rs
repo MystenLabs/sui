@@ -419,7 +419,7 @@ impl<'a> LimitsVerifier<'a> {
                 ));
             }
 
-            if config.disallow_self_identifier && identifier.as_str() == "<SELF>" {
+            if identifier.as_str() == "<SELF>" {
                 return Err(verification_error(
                     StatusCode::INVALID_IDENTIFIER,
                     IndexKind::Identifier,
