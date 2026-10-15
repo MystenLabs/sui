@@ -105,16 +105,6 @@ fn verify_command<Mode: ExecutionMode>(
                 Ok(())
             }
         }
-        T::Command__::Publish(PackagePayload::Serialized(_), ..) => {
-            invariant_violation!(
-                "Unexpected serialized package payload in linkage consistency check"
-            )
-        }
-        T::Command__::Upgrade(PackagePayload::Serialized(_), ..) => {
-            invariant_violation!(
-                "Unexpected serialized package payload in linkage consistency check"
-            )
-        }
         T::Command__::MakeMoveVec(ty, _) => {
             verify_type_linkage::<Mode>(std::iter::once(ty), unified_linkage)
         }
