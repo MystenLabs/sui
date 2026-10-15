@@ -5,6 +5,7 @@ use sui_types::error::ErrorCategory;
 use tonic::Code;
 
 use crate::proto::google::rpc::{BadRequest, ErrorInfo, RetryInfo};
+use crate::proto::sui::rpc::v2::ExecutionError;
 pub use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 
 pub type Result<T, E = RpcError> = std::result::Result<T, E>;
@@ -36,6 +37,11 @@ impl RpcError {
             message: None,
             details: None,
         }
+    }
+
+    pub fn with_details(mut self, details: ErrorDetails) -> Self {
+        self.details = Some(Box::new(details));
+        self
     }
 
     pub fn into_status_proto(self) -> crate::proto::google::rpc::Status {
@@ -270,6 +276,7 @@ pub struct ErrorDetails {
     error_info: Option<ErrorInfo>,
     bad_request: Option<BadRequest>,
     retry_info: Option<RetryInfo>,
+    execution_error: Option<ExecutionError>,
 }
 
 impl ErrorDetails {
@@ -289,12 +296,26 @@ impl ErrorDetails {
         self.retry_info.as_ref()
     }
 
+    pub fn execution_error(&self) -> Option<&ExecutionError> {
+        self.execution_error.as_ref()
+    }
+
     pub fn details(&self) -> &[prost_types::Any] {
         &[]
     }
 
+    pub fn with_error_info(mut self, error_info: ErrorInfo) -> Self {
+        self.error_info = Some(error_info);
+        self
+    }
+
     pub fn with_bad_request(mut self, bad_request: BadRequest) -> Self {
         self.bad_request = Some(bad_request);
+        self
+    }
+
+    pub fn with_execution_error(mut self, execution_error: ExecutionError) -> Self {
+        self.execution_error = Some(execution_error);
         self
     }
 
@@ -317,6 +338,12 @@ impl ErrorDetails {
         if let Some(retry_info) = &self.retry_info {
             details.push(
                 prost_types::Any::from_msg(retry_info).expect("Message encoding cannot fail"),
+            );
+        }
+
+        if let Some(execution_error) = &self.execution_error {
+            details.push(
+                prost_types::Any::from_msg(execution_error).expect("Message encoding cannot fail"),
             );
         }
         details
@@ -436,5 +463,69 @@ impl std::error::Error for EpochNotFoundError {}
 impl From<EpochNotFoundError> for crate::RpcError {
     fn from(value: EpochNotFoundError) -> Self {
         Self::new(tonic::Code::NotFound, value.to_string())
+    }
+}
+
+/// Gas selection could not find enough SUI to cover the transaction's gas budget.
+#[derive(Debug)]
+pub struct InsufficientGasBalanceError {
+    owner: sui_types::base_types::SuiAddress,
+    required_budget: u64,
+    coin_balance: u64,
+    address_balance: u64,
+}
+
+impl InsufficientGasBalanceError {
+    pub fn new(
+        owner: sui_types::base_types::SuiAddress,
+        required_budget: u64,
+        coin_balance: u64,
+        address_balance: u64,
+    ) -> Self {
+        Self {
+            owner,
+            required_budget,
+            coin_balance,
+            address_balance,
+        }
+    }
+}
+
+impl std::fmt::Display for InsufficientGasBalanceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Unable to perform gas selection due to insufficient SUI \
+            balance (in address balance or coins) for account {} \
+            to satisfy required budget {}.",
+            self.owner, self.required_budget,
+        )
+    }
+}
+
+impl std::error::Error for InsufficientGasBalanceError {}
+
+impl From<InsufficientGasBalanceError> for crate::RpcError {
+    fn from(value: InsufficientGasBalanceError) -> Self {
+        let metadata = [
+            ("owner", value.owner.to_string()),
+            ("requiredBudget", value.required_budget.to_string()),
+            ("coinBalance", value.coin_balance.to_string()),
+            ("addressBalance", value.address_balance.to_string()),
+        ]
+        .into_iter()
+        .map(|(key, metadata_value)| (key.to_owned(), metadata_value))
+        .collect();
+        let error_info = ErrorInfo::default()
+            .with_reason(ErrorReason::InsufficientGasBalance.as_str_name())
+            .with_domain(ErrorReason::DOMAIN)
+            .with_metadata(metadata);
+        let details = ErrorDetails::new().with_error_info(error_info);
+
+        Self {
+            code: Code::InvalidArgument,
+            message: Some(value.to_string()),
+            details: Some(Box::new(details)),
+        }
     }
 }

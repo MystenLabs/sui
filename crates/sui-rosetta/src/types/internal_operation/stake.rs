@@ -23,8 +23,8 @@ use crate::errors::Error;
 use crate::types::internal_operation::MAX_GAS_COINS;
 
 use super::{
-    MAX_COMMAND_ARGS, TransactionObjectData, TryConstructTransaction, simulate_transaction,
-    withdraw_coin_from_address_balance,
+    MAX_COMMAND_ARGS, TransactionObjectData, TryConstructTransaction,
+    path_b_error_or_larger_gas_shortfall, simulate_transaction, withdraw_coin_from_address_balance,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -176,7 +176,10 @@ impl TryConstructTransaction for Stake {
                 )?;
                 let (budget, gas_coin_objs) =
                     simulate_transaction(client, pt_b, sender, gas_coins, gas_price, budget)
-                        .await?;
+                        .await
+                        .map_err(|path_b_error| {
+                            path_b_error_or_larger_gas_shortfall(path_b_error, sim_result.err())
+                        })?;
 
                 let gas_coins = gas_coin_objs
                     .iter()
