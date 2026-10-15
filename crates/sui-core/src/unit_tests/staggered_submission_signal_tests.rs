@@ -267,8 +267,8 @@ async fn within_commit_eviction_preserves_known_counts_and_ignores_system_messag
         transactions,
     );
     assert_eq!(unique.len(), 2);
-    assert_eq!(commit_state.staggering_unique_user_txns, 1);
-    assert_eq!(commit_state.staggering_excess_copies, 1);
+    assert_eq!(commit_state.staggering.unique_user_txns, 1);
+    assert_eq!(commit_state.staggering.excess_copies, 1);
     assert_eq!(
         commit_state
             .occurrence_counts
