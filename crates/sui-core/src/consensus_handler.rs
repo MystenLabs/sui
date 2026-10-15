@@ -1873,14 +1873,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .protocol_config()
                 .staggered_submission_signal();
         let staggered = self.epoch_store.staggered_submission();
-        let (transition, duplication_ratio) = staggered.record_commit(
+        let outcome = staggered.record_commit(
             state.staggering_excess_copies,
             state.staggering_unique_user_txns,
             apply,
         );
+        let transition = outcome.transition;
         self.metrics
             .staggered_submission_duplication_ratio
-            .set(duplication_ratio);
+            .set(outcome.duplication_ratio);
         // Set every commit rather than on transitions so both gauges pick up the fresh
         // per-epoch state after reconfiguration.
         self.metrics
