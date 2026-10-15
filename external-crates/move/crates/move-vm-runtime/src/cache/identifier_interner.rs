@@ -34,6 +34,10 @@ impl IdentifierInterner {
     }
 
     /// Borrows an identifier's string from the interner and panics if the key is absent.
+    // [SAFETY] If we fail to find the
+    // key or the key is not a valid identifier, this code will panic. This is preferred, however,
+    // as it indicates a serious runtime issue: interner keys can no longer be trusted, and we
+    // should panic immediately rather than risk a network fork by propagating this issue.
     #[allow(clippy::panic)]
     pub(crate) fn resolve_str<'a>(&'a self, key: &IdentifierKey, key_type: &str) -> &'a str {
         self.0.try_resolve(&key.0).unwrap_or_else(|| {
@@ -44,6 +48,8 @@ impl IdentifierInterner {
     /// Materializes an owned identifier from an interned key containing a valid identifier.
     #[allow(unsafe_code)]
     pub(crate) fn resolve_ident(&self, key: &IdentifierKey, key_type: &str) -> Identifier {
+        // [SAFETY] The unsafe code is creating an identifier without checking its vailidity, but it
+        // was added as a valid identifier to the interner in the first place.
         unsafe { Identifier::new_unchecked(self.resolve_str(key, key_type)) }
     }
 
