@@ -789,3 +789,24 @@ fn test_address_balance_with_shared_objects_and_coin_reservation_allows_relaxed_
         "Transaction with shared objects + coin reservation should allow None expiration"
     );
 }
+
+#[test]
+fn test_gasless_allowed_token_types_cached_per_chain() {
+    let mainnet = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Mainnet);
+    let testnet = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Testnet);
+    let expected = |config: &ProtocolConfig| -> BTreeMap<TypeTag, u64> {
+        config
+            .gasless_allowed_token_types()
+            .iter()
+            .map(|(s, amount)| (s.parse().unwrap(), *amount))
+            .collect()
+    };
+    let expected_mainnet = expected(&mainnet);
+    let expected_testnet = expected(&testnet);
+    assert_ne!(expected_mainnet, expected_testnet);
+
+    for _ in 0..2 {
+        assert_eq!(*get_gasless_allowed_token_types(&mainnet), expected_mainnet);
+        assert_eq!(*get_gasless_allowed_token_types(&testnet), expected_testnet);
+    }
+}
