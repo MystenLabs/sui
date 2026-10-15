@@ -42,6 +42,10 @@ pub(crate) fn resolve_package(
     type_limits: &TypeLimits,
     package_to_read: VersionId,
 ) -> VMResult<ResolvedPackageResult> {
+    if let Some(package) = cache.cached_package_at(package_to_read) {
+        return Ok(ResolvedPackageResult::Found(package));
+    }
+
     let mut packages = resolve_packages(
         store,
         telemetry,
