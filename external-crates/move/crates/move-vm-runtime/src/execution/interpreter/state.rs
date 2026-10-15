@@ -238,10 +238,14 @@ impl MachineState {
         let func = frame.function();
 
         debug_write!(buf, "    [{}] ", idx);
-        let module = func.module_id(&vtables.interner);
-        debug_write!(buf, "{}::{}::", module.address(), module.name());
-
-        debug_write!(buf, "{}", func.name(&vtables.interner));
+        let name = func.vtable_key();
+        debug_write!(
+            buf,
+            "{}::{}::{}",
+            name.package_key(),
+            name.module_name_str(&vtables.interner),
+            name.member_name_str(&vtables.interner),
+        );
         let mut ty_tags = vec![];
         for ty in frame.ty_args().types() {
             ty_tags.push(vtables.type_to_type_tag(ty)?);
@@ -379,7 +383,7 @@ impl MachineState {
             .take(count)
             .map(|frame| {
                 let fun = frame.function();
-                (fun.module_id(interner).clone(), fun.index(), frame.pc)
+                (fun.module_id(interner), fun.index(), frame.pc)
             })
             .collect();
         ExecutionState::new(stack_trace)
