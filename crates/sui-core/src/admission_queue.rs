@@ -187,6 +187,8 @@ pub struct AdmissionQueueMetrics {
     pub pool_already_processed: IntCounterVec,
     pub pool_commit_latency: HistogramVec,
     pub pool_abandoned: IntCounterVec,
+    pub pool_byte_budget_bytes: IntGauge,
+    pub pool_byte_budget_exhausted: IntCounter,
 }
 
 impl AdmissionQueueMetrics {
@@ -282,6 +284,18 @@ impl AdmissionQueueMetrics {
                 "consensus_transaction_pool_abandoned",
                 "Pool entries dropped at proposal time because their submitter stopped waiting",
                 &["lane"],
+                registry,
+            )
+            .unwrap(),
+            pool_byte_budget_bytes: register_int_gauge_with_registry!(
+                "consensus_transaction_pool_byte_budget_bytes",
+                "User-lane bytes the rate limiter allows the next proposal to take",
+                registry,
+            )
+            .unwrap(),
+            pool_byte_budget_exhausted: register_int_counter_with_registry!(
+                "consensus_transaction_pool_byte_budget_exhausted",
+                "Proposals in which the user-lane byte rate limit stopped the take",
                 registry,
             )
             .unwrap(),

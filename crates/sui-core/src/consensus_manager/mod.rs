@@ -310,6 +310,11 @@ impl ConsensusManager {
             let pool = Arc::new(ConsensusTransactionPool::new(
                 epoch_store.clone(),
                 config.max_pending_transactions(&self.consensus_config),
+                config.max_user_bytes_per_second(
+                    epoch_store
+                        .protocol_config()
+                        .max_transactions_in_block_bytes(),
+                ),
                 context.metrics().clone(),
                 context.adapter_metrics().clone(),
             ));

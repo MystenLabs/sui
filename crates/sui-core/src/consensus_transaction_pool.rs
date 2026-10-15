@@ -272,8 +272,48 @@ impl UserLane {
     }
 }
 
+/// Token bucket over the BCS-encoded, uncompressed bytes of user-lane entries handed to the
+/// proposer: the same measure as `max_transactions_in_block_bytes`, not wire bytes.
+struct UserByteBudget {
+    bytes_per_second: u64,
+    capacity: u64,
+    tokens: f64,
+    last_refill: Instant,
+}
+
+impl UserByteBudget {
+    fn new(bytes_per_second: u64, max_block_bytes: u64, now: Instant) -> Self {
+        let capacity = bytes_per_second.max(max_block_bytes);
+        Self {
+            bytes_per_second,
+            capacity,
+            tokens: capacity as f64,
+            last_refill: now,
+        }
+    }
+
+    fn available(&mut self, now: Instant) -> usize {
+        let elapsed = now
+            .saturating_duration_since(self.last_refill)
+            .as_secs_f64();
+        self.tokens =
+            (self.tokens + elapsed * self.bytes_per_second as f64).min(self.capacity as f64);
+        self.last_refill = now;
+        self.tokens as usize
+    }
+
+    fn consume(&mut self, bytes: usize) {
+        self.tokens = (self.tokens - bytes as f64).max(0.0);
+    }
+
+    fn refund(&mut self, bytes: usize) {
+        self.tokens = (self.tokens + bytes as f64).min(self.capacity as f64);
+    }
+}
+
 struct Pool {
     user: UserLane,
+    user_byte_budget: Option<Box<UserByteBudget>>,
     // Unbounded: system transactions are correctness-critical, produced by trusted
     // internal components at bounded rates, and must never be evicted or outbid.
     system: VecDeque<PoolEntry>,
@@ -320,6 +360,7 @@ impl ConsensusTransactionPool {
     pub fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
         max_pending_transactions: usize,
+        max_user_bytes_per_second: Option<u64>,
         metrics: Arc<AdmissionQueueMetrics>,
         adapter_metrics: ConsensusAdapterMetrics,
     ) -> Self {
@@ -339,6 +380,19 @@ impl ConsensusTransactionPool {
                 .max_num_transactions_in_block()
         );
 
+        let user_byte_budget = max_user_bytes_per_second.map(|bytes_per_second| {
+            assert!(
+                bytes_per_second > 0,
+                "consensus transaction pool max_user_bytes_per_second must be > 0"
+            );
+            Box::new(UserByteBudget::new(
+                bytes_per_second,
+                epoch_store
+                    .protocol_config()
+                    .max_transactions_in_block_bytes(),
+                Instant::now(),
+            ))
+        });
         Self {
             epoch_store,
             metrics: metrics.clone(),
@@ -348,6 +402,7 @@ impl ConsensusTransactionPool {
                     max_pending_transactions,
                     metrics,
                 )),
+                user_byte_budget,
                 system: VecDeque::new(),
                 pings: VecDeque::new(),
                 blocks: BTreeMap::new(),
@@ -364,6 +419,7 @@ impl ConsensusTransactionPool {
         Self::new(
             epoch_store,
             max_pending_transactions,
+            None,
             metrics,
             ConsensusAdapterMetrics::new_test(),
         )
@@ -867,6 +923,9 @@ impl Drop for TakenTransactionsGuard {
                             .pool_bytes
                             .with_label_values(&["user"])
                             .add(taken.entry.total_bytes as i64);
+                        if let Some(budget) = &mut pool.user_byte_budget {
+                            budget.refund(taken.entry.total_bytes);
+                        }
                         user.reinsert_front(taken.entry);
                     }
                     UserLane::Closed => halted.push(taken.entry),
@@ -991,13 +1050,25 @@ impl TransactionPool for ConsensusTransactionPool {
         {
             let mut pending_count = transactions.len();
             let mut pending_bytes = total_bytes;
+            let user_max_bytes = match &mut pool.user_byte_budget {
+                Some(budget) => {
+                    max_bytes.min(total_bytes.saturating_add(budget.available(Instant::now())))
+                }
+                None => max_bytes,
+            };
             let popped;
             (popped, already_processed) = user.pop_batch_while(|entry| {
                 // An already-processed entry is excluded without consuming block budget.
                 if all_processed(&mut entry.processed).is_some() {
                     return PopAction::Exclude;
                 }
-                match entry_limit(entry, pending_count, pending_bytes, max_count, max_bytes) {
+                match entry_limit(
+                    entry,
+                    pending_count,
+                    pending_bytes,
+                    max_count,
+                    user_max_bytes,
+                ) {
                     Some(limit) => {
                         limit_reached = limit;
                         PopAction::Stop
@@ -1009,6 +1080,15 @@ impl TransactionPool for ConsensusTransactionPool {
                     }
                 }
             });
+            if let Some(budget) = &mut pool.user_byte_budget {
+                budget.consume(pending_bytes.saturating_sub(total_bytes));
+                self.metrics
+                    .pool_byte_budget_bytes
+                    .set(budget.tokens as i64);
+                if user_max_bytes < max_bytes && limit_reached == LimitReached::MaxBytes {
+                    self.metrics.pool_byte_budget_exhausted.inc();
+                }
+            }
             for entry in popped {
                 self.decrement_lane_metrics("user", &entry);
                 transactions.extend(entry.transactions.iter().cloned());
@@ -1421,6 +1501,26 @@ mod tests {
         ))
     }
 
+    async fn test_state_and_rate_limited_pool(
+        max_block_bytes: u64,
+        max_user_bytes_per_second: u64,
+    ) -> (Arc<AuthorityState>, Arc<ConsensusTransactionPool>) {
+        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+        config.set_consensus_max_transactions_in_block_bytes_for_testing(max_block_bytes);
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(config)
+            .build()
+            .await;
+        let pool = Arc::new(ConsensusTransactionPool::new(
+            state.epoch_store_for_testing().clone(),
+            10,
+            Some(max_user_bytes_per_second),
+            Arc::new(AdmissionQueueMetrics::new_for_tests()),
+            ConsensusAdapterMetrics::new_test(),
+        ));
+        (state, pool)
+    }
+
     fn transaction() -> ConsensusTransaction {
         ConsensusTransaction::new_end_of_publish(AuthorityName::ZERO)
     }
@@ -1513,6 +1613,80 @@ mod tests {
                 .as_inner(),
             SuiErrorKind::ValidatorHaltedAtEpochEnd
         ));
+    }
+
+    #[test]
+    fn user_byte_budget_refills_at_rate_up_to_capacity() {
+        let start = Instant::now();
+        let mut budget = UserByteBudget::new(1_000, 4_000, start);
+        assert_eq!(budget.available(start), 4_000);
+        budget.consume(4_000);
+        assert_eq!(budget.available(start), 0);
+        assert_eq!(budget.available(start + Duration::from_millis(500)), 500);
+        assert_eq!(budget.available(start + Duration::from_secs(10)), 4_000);
+        budget.consume(1_000);
+        budget.refund(10_000);
+        assert_eq!(budget.available(start + Duration::from_secs(10)), 4_000);
+
+        let mut budget = UserByteBudget::new(5_000, 4_000, start);
+        assert_eq!(budget.available(start), 5_000);
+    }
+
+    #[tokio::test]
+    async fn take_rate_limits_user_bytes_but_not_system() {
+        let serialized_len = bcs::to_bytes(&transaction()).unwrap().len();
+        let block_bytes = u64::try_from(serialized_len * 2).unwrap();
+        let (_state, pool) = test_state_and_rate_limited_pool(block_bytes, 1).await;
+        let epoch = pool.epoch();
+        for gas_price in [10, 20, 30] {
+            let (_receiver, _) = pool
+                .try_insert(epoch, gas_price, vec![transaction()])
+                .unwrap();
+        }
+
+        let (transactions, ack, limit) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(transactions.len(), 2);
+        assert_eq!(limit, LimitReached::MaxBytes);
+        ack(block(1));
+        assert_eq!(pool.metrics.pool_byte_budget_exhausted.get(), 1);
+
+        let (transactions, ack, limit) = pool.take(usize::MAX, usize::MAX);
+        assert!(transactions.is_empty());
+        assert_eq!(limit, LimitReached::MaxBytes);
+        drop(ack);
+        assert_eq!(pool.queue_depth("user"), 1);
+
+        let _system_receiver = pool.submit(epoch, &[transaction()]).unwrap();
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(pool.queue_depth("system"), 0);
+        assert_eq!(pool.queue_depth("user"), 1);
+        drop(ack);
+        pool.close();
+    }
+
+    #[tokio::test]
+    async fn dropped_ack_refunds_user_byte_budget() {
+        let serialized_len = bcs::to_bytes(&transaction()).unwrap().len();
+        let block_bytes = u64::try_from(serialized_len).unwrap();
+        let (_state, pool) = test_state_and_rate_limited_pool(block_bytes, 1).await;
+        let epoch = pool.epoch();
+        let (_receiver, _) = pool.try_insert(epoch, 10, vec![transaction()]).unwrap();
+
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(transactions.len(), 1);
+        drop(ack);
+        assert_eq!(pool.queue_depth("user"), 1);
+
+        let (transactions, ack, _) = pool.take(usize::MAX, usize::MAX);
+        assert_eq!(transactions.len(), 1);
+        ack(block(1));
+
+        let (transactions, ack, limit) = pool.take(usize::MAX, usize::MAX);
+        assert!(transactions.is_empty());
+        assert_eq!(limit, LimitReached::AllTransactionsIncluded);
+        drop(ack);
+        pool.close();
     }
 
     #[tokio::test]
