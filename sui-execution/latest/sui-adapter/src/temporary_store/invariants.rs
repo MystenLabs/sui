@@ -35,7 +35,7 @@ use sui_types::layout_resolver::LayoutResolver;
 use sui_types::object::{Object, ObjectPermissions, Owner};
 
 use crate::execution_mode::ExecutionMode;
-use crate::gas_charger::{GasCharger, PaymentLocation};
+use crate::gas_charger::GasCharger;
 use crate::temporary_store::TemporaryStore;
 use crate::type_layout_resolver::TypeLayoutResolver;
 
@@ -725,13 +725,9 @@ impl InvariantChecker {
         // Check that all funds accumulator splits are authorized
         let sui_balance_type =
             sui_types::balance::Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
-        let gas_payment_address_balance =
-            gas_charger
-                .gas_payment_location()
-                .and_then(|location| match location {
-                    PaymentLocation::Coin(_) => None,
-                    PaymentLocation::AddressBalance(address) => Some(address),
-                });
+        let gas_payment_address_balance = gas_charger
+            .gas_payment_location()
+            .and_then(|location| location.address_balance());
         // A Split at a non-signer key requires every allowance id declared for it as a loaded,
         // matching input.
         let is_allowance_backed = |key: &(SuiAddress, TypeTag)| {
