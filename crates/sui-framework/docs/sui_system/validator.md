@@ -175,7 +175,7 @@ title: Module `sui_system::validator`
 <code><a href="../sui_system/validator.md#sui_system_validator_worker_pubkey_bytes">worker_pubkey_bytes</a>: vector&lt;u8&gt;</code>
 </dt>
 <dd>
- The public key bytes correstponding to the Narwhal Worker
+ The public key bytes corresponding to the Narwhal Worker
 </dd>
 <dt>
 <code><a href="../sui_system/validator.md#sui_system_validator_proof_of_possession">proof_of_possession</a>: vector&lt;u8&gt;</code>
@@ -857,6 +857,7 @@ Max gas price a validator can set is 100K MIST.
     );
     <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator_commission_rate">commission_rate</a> &lt;= <a href="../sui_system/validator.md#sui_system_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="../sui_system/validator.md#sui_system_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
     <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator_gas_price">gas_price</a> &lt; <a href="../sui_system/validator.md#sui_system_validator_MAX_VALIDATOR_GAS_PRICE">MAX_VALIDATOR_GAS_PRICE</a>, <a href="../sui_system/validator.md#sui_system_validator_EGasPriceHigherThanThreshold">EGasPriceHigherThanThreshold</a>);
+    <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator_protocol_pubkey_bytes">protocol_pubkey_bytes</a>.length() == 96, <a href="../sui_system/validator.md#sui_system_validator_EInvalidProtocolPubKeyLength">EInvalidProtocolPubKeyLength</a>);
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a> = <a href="../sui_system/validator.md#sui_system_validator_new_metadata">new_metadata</a>(
         <a href="../sui_system/validator.md#sui_system_validator_sui_address">sui_address</a>,
         <a href="../sui_system/validator.md#sui_system_validator_protocol_pubkey_bytes">protocol_pubkey_bytes</a>,

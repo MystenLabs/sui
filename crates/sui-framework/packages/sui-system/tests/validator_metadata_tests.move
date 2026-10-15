@@ -771,6 +771,69 @@ fun add_validator_candidate_failure_duplicate_with_active() {
     abort
 }
 
+#[test, expected_failure(abort_code = validator::EInvalidProtocolPubKeyLength)]
+fun add_validator_candidate_failure_invalid_protocol_pubkey_length() {
+    let mut runner = test_runner::new().validators_count(3).build();
+    // The first 3 validators are using presets 0-2.
+    let preset = validator_preset::preset(3);
+
+    runner.set_sender(preset.account_address()).system_tx!(|system, ctx| {
+        system.request_add_validator_candidate(
+            b"pubkey", // invalid: not 96 bytes
+            preset.network_pubkey_bytes(),
+            preset.worker_pubkey_bytes(),
+            preset.proof_of_possession(),
+            preset.name(),
+            preset.description(),
+            preset.image_url(),
+            preset.project_url(),
+            preset.net_address(),
+            preset.p2p_address(),
+            preset.primary_address(),
+            preset.worker_address(),
+            1,
+            0,
+            ctx,
+        );
+    });
+
+    abort
+}
+
+#[test, expected_failure(abort_code = validator::EInvalidProtocolPubKeyLength)]
+fun cannot_set_next_epoch_protocol_pubkey_of_invalid_length() {
+    let mut runner = test_runner::new().validators_count(1).build();
+    let preset = validator_preset::preset(0);
+
+    runner.set_sender(preset.account_address()).system_tx!(|system, ctx| {
+        system.update_validator_next_epoch_protocol_pubkey(
+            b"pubkey",
+            preset.proof_of_possession(),
+            ctx,
+        );
+    });
+
+    abort
+}
+
+#[test, expected_failure(abort_code = validator::EInvalidProtocolPubKeyLength)]
+fun cannot_set_candidate_protocol_pubkey_of_invalid_length() {
+    let mut runner = test_runner::new().validators_count(1).build();
+    let candidate = validator_builder::preset(1).initial_stake(10000).build(runner.ctx());
+    let candidate_addr = candidate.sui_address();
+
+    runner.set_sender(candidate_addr).add_validator_candidate(candidate);
+    runner.system_tx!(|system, ctx| {
+        system.update_candidate_validator_protocol_pubkey(
+            b"pubkey",
+            validator_builder::valid_proof_of_possession(),
+            ctx,
+        );
+    });
+
+    abort
+}
+
 // Note: `pop` MUST be a valid signature using sui_address and protocol_pubkey_bytes.
 // To produce a valid PoP, run [fn test_proof_of_possession].
 fun update_metadata(
