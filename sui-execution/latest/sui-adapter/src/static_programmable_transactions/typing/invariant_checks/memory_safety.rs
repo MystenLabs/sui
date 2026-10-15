@@ -68,7 +68,6 @@ struct Location {
 #[derive(Debug)]
 struct Context {
     memory: Memory,
-    allow_references_in_ptbs: bool,
     tx_context: Location,
     gas: Location,
     object_inputs: Vec<Location>,
@@ -467,7 +466,6 @@ impl Context {
             .collect::<anyhow::Result<_>>()?;
         Ok(Self {
             memory,
-            allow_references_in_ptbs: _env.protocol_config.allow_references_in_ptbs(),
             tx_context,
             gas,
             object_inputs,
@@ -858,24 +856,21 @@ fn call(
             );
         }
     }
-    if context.allow_references_in_ptbs {
-        // Returned references cannot borrow from TxContext, so exclude arguments derived from it
-        // when choosing parents for return nodes. Keep the old behavior when the flag is off:
-        // dev-inspect can return references derived from TxContext in that mode.
-        if let Some(tx_context_root) = context
-            .memory
-            .get_root(RootLocation::Known(T::Location::TxContext))
-        {
-            let mut tx_context_nodes = BTreeSet::new();
-            // `mut_nodes` is a subset of `all_nodes`, so all candidates are covered.
-            for node in &all_nodes {
-                if context.memory.is_ancestor(*node, tx_context_root)? {
-                    tx_context_nodes.insert(*node);
-                }
+    // Returned references cannot borrow from TxContext, so exclude arguments derived from it
+    // when choosing parents for return nodes.
+    if let Some(tx_context_root) = context
+        .memory
+        .get_root(RootLocation::Known(T::Location::TxContext))
+    {
+        let mut tx_context_nodes = BTreeSet::new();
+        // `mut_nodes` is a subset of `all_nodes`, so all candidates are covered.
+        for node in &all_nodes {
+            if context.memory.is_ancestor(*node, tx_context_root)? {
+                tx_context_nodes.insert(*node);
             }
-            mut_nodes.retain(|node| !tx_context_nodes.contains(node));
-            all_nodes.retain(|node| !tx_context_nodes.contains(node));
         }
+        mut_nodes.retain(|node| !tx_context_nodes.contains(node));
+        all_nodes.retain(|node| !tx_context_nodes.contains(node));
     }
     let command = context.current_command()?;
     // Reference returns derive from an unknown root when no reference arguments feed them. Calls
