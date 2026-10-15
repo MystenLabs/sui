@@ -186,6 +186,8 @@ pub struct AdmissionQueueMetrics {
     pub pool_staggered_held: IntGauge,
     pub pool_staggered_rejected: IntCounter,
     pub pool_staggered_delay: Histogram,
+    pub pool_stagger_shadow_decisions: IntCounterVec,
+    pub pool_stagger_shadow_delay: Histogram,
     pub pool_taken_per_proposal: Histogram,
     pub pool_requeued_on_dropped_ack: IntCounter,
     pub pool_gc_notified: IntCounter,
@@ -259,6 +261,20 @@ impl AdmissionQueueMetrics {
             pool_staggered_delay: register_histogram_with_registry!(
                 "consensus_transaction_pool_staggered_delay",
                 "The staggered-submission hold applied to a user-lane entry without allowed proposers before it may be proposed",
+                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            pool_stagger_shadow_decisions: register_int_counter_vec_with_registry!(
+                "consensus_transaction_pool_stagger_shadow_decisions",
+                "Decision (free, hold or reject) staggering would have made per user-lane submission while inactive",
+                &["decision"],
+                registry,
+            )
+            .unwrap(),
+            pool_stagger_shadow_delay: register_histogram_with_registry!(
+                "consensus_transaction_pool_stagger_shadow_delay",
+                "Hold staggering would have applied to a user-lane submission while inactive",
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
