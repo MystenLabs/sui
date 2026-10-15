@@ -8,9 +8,8 @@ use move_vm_config::verifier::VerifierConfig;
 use sui_types::{error::ExecutionError, move_package::FnInfoMap};
 
 use crate::{
-    entry_points_verifier, global_storage_access_verifier, id_leak_verifier,
-    one_time_witness_verifier, private_generics_verifier_v2, struct_with_key_verifier,
-    tx_context_restrictions_verifier,
+    entry_points_verifier, global_storage_access_verifier, one_time_witness_verifier,
+    private_generics_verifier_v2, struct_with_key_verifier, tx_context_restrictions_verifier,
 };
 use move_bytecode_verifier_meter::Meter;
 use move_bytecode_verifier_meter::dummy::DummyMeter;
@@ -19,14 +18,11 @@ use move_bytecode_verifier_meter::dummy::DummyMeter;
 pub fn sui_verify_module_metered(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
-    meter: &mut (impl Meter + ?Sized),
+    _meter: &mut (impl Meter + ?Sized),
     verifier_config: &VerifierConfig,
 ) -> Result<(), ExecutionError> {
     struct_with_key_verifier::verify_module(module)?;
     global_storage_access_verifier::verify_module(module)?;
-    if !verifier_config.disable_id_leak_verifier {
-        id_leak_verifier::verify_module(module, meter)?;
-    }
     private_generics_verifier_v2::verify_module(module, verifier_config)?;
     entry_points_verifier::verify_module(module, fn_info_map, verifier_config)?;
     tx_context_restrictions_verifier::verify_module(module, verifier_config)?;
