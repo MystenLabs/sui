@@ -215,12 +215,6 @@ fn validate_init_linkage_pinning<E: ExecutionErrorTrait>(
                 Ok(())
             }
         }
-        Command::Publish(PackagePayload::Serialized(_), ..) => {
-            invariant_violation!("Unexpected serialized package payload in linkage analysis")
-        }
-        Command::Upgrade(PackagePayload::Serialized(_), ..) => {
-            invariant_violation!("Unexpected serialized package payload in linkage analysis")
-        }
         Command::MoveCall(_)
         | Command::MakeMoveVec(_, _)
         | Command::TransferObjects(_, _)
@@ -239,9 +233,6 @@ fn analyze_command<E: ExecutionErrorTrait>(
     match command {
         Command::MoveCall(move_call) => {
             add_call_to_table::<E>(resolution_table, &move_call.function, store)?;
-        }
-        Command::Publish(PackagePayload::Serialized(_), ..) => {
-            invariant_violation!("Unexpected serialized package payload in linkage analysis")
         }
         Command::Publish(PackagePayload::Deserialized(pkg), _, resolved_linkage) => {
             // A publish only affects the transaction's linkage if the package has an `init`
@@ -282,14 +273,10 @@ fn analyze_upgrade_command<E: ExecutionErrorTrait>(
         "Unified linkage must be enabled before init on upgrade is supported"
     );
 
-    let upgrade_modules_with_init = match payload {
-        PackagePayload::Serialized(_) => {
-            invariant_violation!("Unexpected serialized package payload in linkage analysis")
-        }
-        PackagePayload::Deserialized(DeserializedPackage {
-            modules_with_init, ..
-        }) => modules_with_init,
-    };
+    let PackagePayload::Deserialized(DeserializedPackage {
+        modules_with_init: upgrade_modules_with_init,
+        ..
+    }) = payload;
 
     // Whether each module already present in the current package defines an `init`.
     let current_module_inits = current_pkg
