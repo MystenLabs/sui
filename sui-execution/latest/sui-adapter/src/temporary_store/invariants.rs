@@ -506,10 +506,6 @@ impl InvariantChecker {
         &self,
         store: &TemporaryStore<'_>,
     ) -> Result<(), ExecutionError> {
-        if !store.protocol_config().harden_linkage_consistency() {
-            return Ok(());
-        }
-
         let Some(declared) = &store.post_execution_check_inputs.declared_packages else {
             return Ok(());
         };
