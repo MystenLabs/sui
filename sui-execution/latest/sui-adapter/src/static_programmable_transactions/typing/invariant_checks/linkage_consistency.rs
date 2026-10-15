@@ -26,9 +26,6 @@ pub fn verify<Mode: ExecutionMode>(
     tt: &T::Transaction,
     unified_linkage: Option<&ExecutableLinkage>,
 ) -> Result<(), Mode::Error> {
-    if !env.protocol_config.harden_linkage_consistency() {
-        return Ok(());
-    }
     let Some(unified_linkage) = unified_linkage else {
         invariant_violation!("unified linkage is enabled but was not recorded on the transaction")
     };
