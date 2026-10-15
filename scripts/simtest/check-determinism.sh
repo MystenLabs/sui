@@ -54,7 +54,7 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 # Reduce two runs to their genuinely-comparable content. Simulation content and event
 # order are deterministic; what legitimately differs between two processes is stripped:
 # ANSI color, leading log timestamps (sim-clock and any real-clock lines), temp dir
-# names, and real OS thread ids.
+# names, real OS thread ids, and kernel-reported socket buffer sizes.
 normalize() {
   sed -E \
     -e 's/\x1b\[[0-9;]*m//g' \
@@ -64,7 +64,8 @@ normalize() {
     -e 's#/tmp/[^ "]*#TMPPATH#g' \
     -e 's#tmp\.[A-Za-z0-9]+#TMP#g' \
     -e 's#\.tmp[A-Za-z0-9]+#TMP#g' \
-    -e 's#ThreadId\([0-9]+\)#ThreadId(N)#g'
+    -e 's#ThreadId\([0-9]+\)#ThreadId(N)#g' \
+    -e 's/(expected socket receive buffer size to be at least [0-9]+, got )[0-9]+/\1N/g'
 }
 
 run() {
