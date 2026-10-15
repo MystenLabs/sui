@@ -16,6 +16,7 @@ use move_vm_runtime::{
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
+use sui_types::object::Owner;
 
 #[derive(Clone)]
 pub struct BorrowUidCostParams {
@@ -123,7 +124,7 @@ pub fn record_new_uid(
  * Implementation of the Move native function
  *   `record_new_uid_from_hash(parent: address, bytes: address)`
  * Marks `bytes` as a newly created id (as `record_new_uid` does) and, when `parent` has a tracked
- * root version, records the same root version for `bytes`.
+ * root version and `bytes` does not, records the same root version for `bytes`.
  *   gas cost: object_record_new_uid_from_hash_cost_base       | this is a simple ID addition
  **************************************************************************************************/
 pub fn record_new_uid_from_hash(
@@ -148,4 +149,43 @@ pub fn record_new_uid_from_hash(
     let obj_runtime: &mut ObjectRuntime = get_extension_mut!(context)?;
     obj_runtime.new_id_from_hash(parent.into(), uid_bytes.into())?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
+}
+
+#[derive(Clone)]
+pub struct IsSharedInputCostParams {
+    pub object_is_shared_input_cost_base: Option<InternalGas>,
+}
+/***************************************************************************************************
+ * native fun is_shared_input_impl
+ * Implementation of the Move native function `is_shared_input_impl(id: address): bool`
+ * Returns true if `id` belongs to a shared object that is an input to the transaction.
+ *   gas cost: object_is_shared_input_cost_base                | this is a simple lookup
+ **************************************************************************************************/
+pub fn is_shared_input_impl(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.len() == 1);
+
+    let object_is_shared_input_cost_base = safe_unwrap!(
+        get_extension!(context, NativesCostTable)?
+            .is_shared_input_cost_params
+            .object_is_shared_input_cost_base
+    );
+
+    native_charge_gas_early_exit!(context, object_is_shared_input_cost_base);
+
+    let id = pop_arg!(args, AccountAddress);
+
+    let obj_runtime: &ObjectRuntime = get_extension!(context)?;
+    let is_shared_input = matches!(
+        obj_runtime.input_owner(&id.into()),
+        Some(Owner::Shared { .. })
+    );
+    Ok(NativeResult::ok(
+        context.gas_used(),
+        smallvec![Value::bool(is_shared_input)],
+    ))
 }

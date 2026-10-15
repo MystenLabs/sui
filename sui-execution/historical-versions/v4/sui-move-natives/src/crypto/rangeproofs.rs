@@ -126,7 +126,7 @@ pub fn verify_bulletproofs_with_dst_ristretto255(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
                 "verify_bulletproofs_ristretto255_cost_per_bit_and_commitment not available",
             ))?
-            * total_bits.into()
+            .saturating_mul(total_bits)
     );
 
     let commitments = (0..length)

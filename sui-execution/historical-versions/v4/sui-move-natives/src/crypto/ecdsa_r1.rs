@@ -3,7 +3,6 @@
 use crate::{NativesCostTable, get_extension};
 use fastcrypto::error::FastCryptoError;
 use fastcrypto::hash::{Keccak256, Sha256};
-use fastcrypto::traits::RecoverableSignature;
 use fastcrypto::{
     secp256r1::{
         Secp256r1PublicKey, Secp256r1Signature, recoverable::Secp256r1RecoverableSignature,
@@ -116,8 +115,8 @@ pub fn ecrecover(
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
-        cost_per_byte * (msg_ref.len() as u64).into()
-            + cost_per_block * (msg_ref.len().div_ceil(block_size) as u64).into()
+        cost_per_byte.saturating_mul(msg_ref.len() as u64)
+            + cost_per_block.saturating_mul(msg_ref.len().div_ceil(block_size) as u64)
     );
 
     let cost = context.gas_used();
@@ -126,9 +125,10 @@ pub fn ecrecover(
         return Ok(NativeResult::err(cost, INVALID_SIGNATURE));
     };
 
+    // Keep the wrapping recovery of older fastcrypto until a protocol flag enables the strict one.
     let pk = match hash {
-        KECCAK256 => sig.recover_with_hash::<Keccak256>(&msg_ref),
-        SHA256 => sig.recover_with_hash::<Sha256>(&msg_ref),
+        KECCAK256 => sig.recover_with_hash_legacy::<Keccak256>(&msg_ref),
+        SHA256 => sig.recover_with_hash_legacy::<Sha256>(&msg_ref),
         _ => Err(FastCryptoError::InvalidInput),
     };
 
@@ -225,8 +225,8 @@ pub fn secp256r1_verify(
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
-        cost_per_byte * (msg_ref.len() as u64).into()
-            + cost_per_block * (msg_ref.len().div_ceil(block_size) as u64).into()
+        cost_per_byte.saturating_mul(msg_ref.len() as u64)
+            + cost_per_block.saturating_mul(msg_ref.len().div_ceil(block_size) as u64)
     );
 
     let cost = context.gas_used();

@@ -23,6 +23,7 @@ use move_core_types::{
     language_storage::StructTag,
     runtime_value as R,
     u256::U256,
+    vm_status::StatusCode,
 };
 use move_vm_runtime::execution::values::{GlobalValue, Value};
 use move_vm_runtime::natives::extensions::NativeExtensionMarker;

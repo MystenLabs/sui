@@ -219,8 +219,9 @@ async fn test_coin_reservation_gating() {
     if has_mainnet_protocol_config_override() {
         return;
     }
-    // Explicitly disable coin reservation flags to test the gating logic
+    // Explicitly disable coin reservation flags to test the gating logic.
     let mut test_env = TestEnvBuilder::new()
+        .with_protocol_version(140.into())
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.disable_coin_reservation_for_testing();
             cfg
@@ -2250,6 +2251,7 @@ async fn test_fake_coin_reservation_dry_run_safe_when_flag_disabled() {
         return;
     }
     let test_env = TestEnvBuilder::new()
+        .with_protocol_version(140.into())
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.disable_coin_reservation_for_testing();
             cfg
@@ -2305,6 +2307,7 @@ async fn test_fake_coin_reservation_dev_inspect_safe_when_flag_disabled() {
         return;
     }
     let test_env = TestEnvBuilder::new()
+        .with_protocol_version(140.into())
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.disable_coin_reservation_for_testing();
             cfg

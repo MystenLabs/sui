@@ -50,6 +50,29 @@ pub(crate) struct Verifier<'m> {
 
 impl Executor {
     pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
+        sui_protocol_config::assert_set!(
+            protocol_config,
+            fix_ptb_generated_reads,
+            enable_group_ops_native_functions,
+            native_charging_v2,
+            uncompressed_g1_group_elements,
+            enable_poseidon,
+            limit_groth16_pvk_inputs,
+            enable_nitro_attestation_upgraded_parsing,
+            enable_nitro_attestation_all_nonzero_pcrs_parsing,
+            enable_nitro_attestation_always_include_required_pcrs_parsing,
+            simple_conservation_checks,
+            object_runtime_charge_cache_load_gas,
+            gasless_transaction_drop_safety,
+            early_return_receive_object_mismatched_type,
+            generate_df_type_layouts,
+            convert_withdrawal_compatibility_ptb_arguments,
+            enable_init_on_upgrade,
+            enable_order_independent_upgrade_init_linkage,
+            ptb_tx_context_restrictions,
+            validate_ptb_argument_indices,
+        );
+
         Ok(Executor(Arc::new(new_move_runtime(
             all_natives(silent, protocol_config),
             protocol_config,

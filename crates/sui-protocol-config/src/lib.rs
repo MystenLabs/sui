@@ -5311,6 +5311,20 @@ pub fn check_limit_in_range<T: Into<V>, U: Into<V>, V: PartialOrd + Into<u128>>(
 }
 
 #[macro_export]
+macro_rules! assert_set {
+    ($protocol_config:expr, $($flag:ident),+ $(,)?) => {{
+        let protocol_config = $protocol_config;
+        $(
+            assert!(
+                protocol_config.$flag(),
+                "protocol config flag `{}` must be set",
+                stringify!($flag),
+            );
+        )+
+    }};
+}
+
+#[macro_export]
 macro_rules! check_limit {
     ($x:expr, $hard:expr) => {
         check_limit!($x, $hard, $hard)

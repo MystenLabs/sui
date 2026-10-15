@@ -12,8 +12,7 @@ use move_binary_format::{
     partial_vm_error,
 };
 use move_core_types::gas_algebra::{
-    AbstractMemorySize, GasQuantity, InternalGas, InternalGasUnit, NumArgs, NumBytes, ToUnit,
-    ToUnitFractional,
+    AbstractMemorySize, GasQuantity, InternalGas, InternalGasUnit, ToUnit, ToUnitFractional,
 };
 
 use crate::{
@@ -56,9 +55,6 @@ pub const STRUCT_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
 
 /// The size of a vector (without its containing data) in bytes
 pub const VEC_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
-
-/// For exists checks on data that doesn't exists this is the multiplier that is used.
-pub const MIN_EXISTS_DATA_SIZE: AbstractMemorySize = AbstractMemorySize::new(100);
 
 pub const INSTRUCTION_TIER_DEFAULT: u64 = 1;
 
@@ -520,7 +516,7 @@ impl<'b> GasMeter for GasStatus<'b> {
     fn charge_call(
         &mut self,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
-        _num_locals: NumArgs,
+        _num_locals: u64,
     ) -> PartialVMResult<()> {
         // We will have to perform this many pops for the call.
         let pops = args.len() as u64;
@@ -535,7 +531,7 @@ impl<'b> GasMeter for GasStatus<'b> {
     fn charge_call_generic(
         &mut self,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
-        _num_locals: NumArgs,
+        _num_locals: u64,
     ) -> PartialVMResult<()> {
         // We have to perform this many pops from the operand stack for this function call.
         let pops = args.len() as u64;
@@ -548,9 +544,9 @@ impl<'b> GasMeter for GasStatus<'b> {
         self.charge(1, 0, pops, 0, stack_reduction_size.into())
     }
 
-    fn charge_ld_const(&mut self, size: NumBytes) -> PartialVMResult<()> {
+    fn charge_ld_const(&mut self, size: u64) -> PartialVMResult<()> {
         // Charge for the load from the locals onto the stack.
-        self.charge(1, 1, 0, u64::from(size), 0)
+        self.charge(1, 1, 0, size, 0)
     }
 
     fn charge_ld_const_after_deserialization(
@@ -691,11 +687,11 @@ impl<'b> GasMeter for GasStatus<'b> {
 
     fn charge_vec_unpack(
         &mut self,
-        expect_num_elements: NumArgs,
+        expect_num_elements: u64,
         _elems: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         // Charge for the pushes
-        let pushes = u64::from(expect_num_elements);
+        let pushes = expect_num_elements;
         // The stack size stays pretty much the same modulo the additional vector size
         self.charge(1, pushes, 1, 0, VEC_SIZE.into())
     }

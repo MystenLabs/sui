@@ -7,7 +7,7 @@ use crate::{
 };
 use std::{
     borrow::Borrow,
-    collections::{BTreeMap, btree_map::Entry},
+    collections::{BTreeMap, BTreeSet, btree_map::Entry},
 };
 use sui_types::base_types::ObjectID;
 use sui_types::{error::ExecutionErrorTrait, execution_status::ExecutionErrorKind};
@@ -40,6 +40,8 @@ pub struct PackageResolution {
 pub(crate) struct ResolutionTable {
     pub(crate) config: ResolutionConfig,
     pub(crate) resolution_table: BTreeMap<ObjectID, VersionConstraint>,
+    /// Type-defining packages whose linkage tables have already been expanded.
+    seen_type_packages: BTreeSet<ObjectID>,
     /// For every version of every package that we have seen, a mapping of the ObjectID for that
     /// package to its runtime ID.
     pub(crate) all_versions_resolution_table: BTreeMap<ObjectID, PackageResolution>,
@@ -50,6 +52,7 @@ impl ResolutionTable {
         Self {
             config,
             resolution_table: BTreeMap::new(),
+            seen_type_packages: BTreeSet::new(),
             all_versions_resolution_table: BTreeMap::new(),
         }
     }
@@ -65,7 +68,11 @@ impl ResolutionTable {
         I::Item: Borrow<ObjectID>,
     {
         for id in ids {
-            let pkg = get_package(id.borrow(), store)?;
+            let id = id.borrow();
+            if !self.seen_type_packages.insert(*id) {
+                continue;
+            }
+            let pkg = get_package(id, store)?;
             let transitive_deps = self
                 .config
                 .linkage_table(&pkg)

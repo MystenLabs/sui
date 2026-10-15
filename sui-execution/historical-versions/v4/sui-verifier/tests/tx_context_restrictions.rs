@@ -18,7 +18,7 @@ use move_binary_format::{
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_vm_config::verifier::VerifierConfig;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use sui_verifier_v4::tx_context_restrictions_verifier::verify_module;
+use sui_verifier_latest::tx_context_restrictions_verifier::verify_module;
 
 /// A module at `self_addr` with a single public function `f` of the given
 /// signature. `Datatype(0)` in the signature tokens is `0x2::tx_context::TxContext`.

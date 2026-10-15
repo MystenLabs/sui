@@ -15,6 +15,7 @@ use sui_types::{
     effects::{AccumulatorValue, TransactionEffectsAPI},
     messages_checkpoint::CheckpointSequenceNumber,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
+    supported_protocol_versions::SupportedProtocolVersions,
     transaction::TransactionData,
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -36,7 +37,11 @@ async fn setup_test_cluster_with_auth_events_disabled() -> TestCluster {
             cfg
         });
 
-    TestClusterBuilder::new().build().await
+    TestClusterBuilder::new()
+        .with_protocol_version(140.into())
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(140, 140))
+        .build()
+        .await
 }
 
 async fn publish_auth_event_package(test_cluster: &TestCluster) -> ObjectID {
