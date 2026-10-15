@@ -63,40 +63,9 @@ fn move_call<Mode: ExecutionMode>(env: &Env<Mode>, call: &T::MoveCall) -> Result
         function,
         arguments: _,
     } = call;
-    check_signature::<Mode>(env, function)?;
     check_tx_context::<Mode>(function)?;
     check_private_generics_v2(&function.original_mid, function.name.as_ident_str())?;
     check_visibility::<Mode>(env, function)?;
-    Ok(())
-}
-
-fn check_signature<Mode: ExecutionMode>(
-    env: &Env<Mode>,
-    function: &T::LoadedFunction,
-) -> Result<(), Mode::Error> {
-    fn check_return_type<Mode: ExecutionMode, E: ExecutionErrorTrait>(
-        idx: usize,
-        return_type: &T::Type,
-    ) -> Result<(), E> {
-        if let Type::Reference(_, _) = return_type
-            && !Mode::allow_arbitrary_values()
-        {
-            return Err(E::from_kind(
-                ExecutionErrorKind::InvalidPublicFunctionReturnType {
-                    idx: checked_as!(idx, u16)?,
-                },
-            ));
-        }
-        Ok(())
-    }
-
-    if env.protocol_config.allow_references_in_ptbs() {
-        return Ok(());
-    }
-
-    for (idx, ty) in function.signature.return_.iter().enumerate() {
-        check_return_type::<Mode, Mode::Error>(idx, ty)?;
-    }
     Ok(())
 }
 
