@@ -33,7 +33,7 @@ use std::time::{Duration, Instant};
 use fastcrypto::hash::HashFunction;
 use mysten_common::debug_fatal;
 use parking_lot::RwLock;
-use prometheus::{IntCounter, IntGauge};
+use prometheus::{Histogram, IntCounter, IntCounterVec, IntGauge};
 use rand::SeedableRng as _;
 use rand::rngs::StdRng;
 use sui_types::base_types::{AuthorityName, ObjectID};
@@ -162,6 +162,17 @@ impl StaggeredSubmission {
         if !epoch_store.protocol_config().allowed_proposers() {
             return StaggerDecision::Free;
         }
+        self.projected_decision(txs, epoch_store)
+    }
+
+    /// The decision staggering would make for `txs` if it were active, ignoring the
+    /// activation state and the `allowed_proposers` flag, so an inactive validator can
+    /// measure what the schedule would do with its live inflow before enablement.
+    pub fn projected_decision(
+        &self,
+        txs: &[&Transaction],
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> StaggerDecision {
         let epoch = epoch_store.epoch();
         let tx_data: Vec<_> = txs
             .iter()
@@ -218,6 +229,17 @@ pub enum StaggerDecision {
     Reject,
 }
 
+impl StaggerDecision {
+    /// Metric label for the decision kind.
+    pub fn label(&self) -> &'static str {
+        match self {
+            StaggerDecision::Free => "free",
+            StaggerDecision::Hold(_) => "hold",
+            StaggerDecision::Reject => "reject",
+        }
+    }
+}
+
 /// The transaction pool's admission gate for staggered (held) submissions, created with
 /// the pool's capacity and metrics so slot requests carry no limits or metrics. The
 /// stagger policy itself (mode, schedule) stays on the per-epoch [`StaggeredSubmission`]
@@ -236,6 +258,10 @@ pub struct StaggerQuota {
     metric: IntGauge,
     /// Submissions rejected because this validator is outside the proposer set.
     rejected_metric: IntCounter,
+    /// Dry-run records while staggering is inactive: the decision it would have made
+    /// per submission and the hold it would have applied.
+    shadow_decisions_metric: IntCounterVec,
+    shadow_delay_metric: Histogram,
 }
 
 impl StaggerQuota {
@@ -243,12 +269,16 @@ impl StaggerQuota {
         max_pending_transactions: usize,
         held_metric: IntGauge,
         rejected_metric: IntCounter,
+        shadow_decisions_metric: IntCounterVec,
+        shadow_delay_metric: Histogram,
     ) -> Self {
         Self {
             quota: (max_pending_transactions / STAGGERED_HELD_QUOTA_DIVISOR).max(1),
             held: Arc::new(AtomicUsize::new(0)),
             metric: held_metric,
             rejected_metric,
+            shadow_decisions_metric,
+            shadow_delay_metric,
         }
     }
 
@@ -261,10 +291,19 @@ impl StaggerQuota {
         txs: &[&Transaction],
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<StaggeredSlot>> {
-        let delay = match epoch_store
-            .staggered_submission()
-            .submission_delay(txs, epoch_store)
-        {
+        let staggered = epoch_store.staggered_submission();
+        if !staggered.is_active() {
+            // Dry run: record what would have been held or rejected, hold nothing.
+            let decision = staggered.projected_decision(txs, epoch_store);
+            self.shadow_decisions_metric
+                .with_label_values(&[decision.label()])
+                .inc();
+            if let StaggerDecision::Hold(delay) = decision {
+                self.shadow_delay_metric.observe(delay.as_secs_f64());
+            }
+            return Ok(None);
+        }
+        let delay = match staggered.submission_delay(txs, epoch_store) {
             StaggerDecision::Free => return Ok(None),
             StaggerDecision::Hold(delay) => delay,
             StaggerDecision::Reject => {
@@ -1076,5 +1115,64 @@ mod pool_tests {
         assert_eq!(metrics.pool_staggered_rejected.get(), 1);
         assert_eq!(metrics.pool_staggered_held.get(), 0);
         assert_eq!(pool.queue_depth("user"), 0);
+    }
+
+    #[tokio::test]
+    async fn inactive_staggering_records_shadow_decisions() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
+            c.set_allowed_proposers_for_testing(true);
+            c
+        });
+        let (state, sender, keypair, staggered_gas, immediate_gas, candidates) = setup().await;
+        let epoch_store = state.epoch_store_for_testing();
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let pool = Arc::new(ConsensusTransactionPool::new_for_tests(
+            epoch_store.clone(),
+            10,
+            metrics.clone(),
+        ));
+        let shadow = |decision: &str| {
+            metrics
+                .pool_stagger_shadow_decisions
+                .with_label_values(&[decision])
+                .get()
+        };
+        assert!(!epoch_store.staggered_submission().is_active());
+
+        // Inactive: nothing is held or rejected, but each would-be decision is recorded.
+        let (_receiver, _) = insert(&pool, &state, sender, &keypair, staggered_gas).await;
+        assert_eq!(
+            (shadow("free"), shadow("hold"), shadow("reject")),
+            (0, 1, 0)
+        );
+        assert_eq!(metrics.pool_stagger_shadow_delay.get_sample_count(), 1);
+        assert_eq!(metrics.pool_staggered_held.get(), 0);
+
+        let (_receiver, _) = insert(&pool, &state, sender, &keypair, immediate_gas).await;
+        assert_eq!(
+            (shadow("free"), shadow("hold"), shadow("reject")),
+            (1, 1, 0)
+        );
+
+        let past_proposer_set = candidates
+            .iter()
+            .find(|object| slot_for_gas(&epoch_store, &[object.id()]) > HELD_SLOT)
+            .expect("no candidate gas object lands past the proposer set")
+            .clone();
+        let (_receiver, _) = insert(&pool, &state, sender, &keypair, past_proposer_set).await;
+        assert_eq!(
+            (shadow("free"), shadow("hold"), shadow("reject")),
+            (1, 1, 1)
+        );
+        assert_eq!(metrics.pool_staggered_rejected.get(), 0);
+
+        let (transactions, ack, _) = pool.take(10, usize::MAX);
+        assert_eq!(
+            transactions.len(),
+            3,
+            "inactive staggering held or rejected an entry"
+        );
+        drop(ack);
+        pool.close();
     }
 }
