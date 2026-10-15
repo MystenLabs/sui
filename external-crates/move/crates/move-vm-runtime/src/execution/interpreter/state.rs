@@ -514,12 +514,13 @@ impl CallStack {
             return Err(err);
         };
         let frame = std::mem::replace(&mut self.current_frame, return_frame);
-        let index = frame.function().index();
+        let function = frame.function.ptr_clone();
+        let index = function.index();
         let pc = frame.pc;
-        let loc = frame.location(interner);
-        self.heap
-            .free_stack_frame(frame.stack_frame)
-            .map_err(|e| e.at_code_offset(index, pc).finish(loc))
+        self.heap.free_stack_frame(frame.stack_frame).map_err(|e| {
+            let location = Location::Module(function.module_id(interner));
+            e.at_code_offset(index, pc).finish(location)
+        })
     }
 }
 
