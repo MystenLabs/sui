@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::move_cache::{MoveCache, Package},
+    cache::move_cache::{MoveCache, Package, ResolvedPackageResult},
     dev_utils::{
         compilation_utils::{
             compile_packages, compile_packages_in_file, expect_modules, make_base_path,
@@ -24,11 +24,30 @@ use move_compiler::Compiler;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
-    resolver::{IntraPackageName, ModuleResolver},
+    resolver::{IntraPackageName, ModuleResolver, SerializedPackage},
 };
 use move_vm_config::runtime::VMConfig;
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, convert::Infallible, sync::Arc};
+
+struct UnreachableResolver;
+
+impl ModuleResolver for UnreachableResolver {
+    type Error = Infallible;
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        _ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        panic!("cached package resolution accessed storage")
+    }
+
+    fn get_packages<'a>(
+        &self,
+        _ids: impl ExactSizeIterator<Item = &'a AccountAddress>,
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        panic!("cached package resolution accessed storage")
+    }
+}
 
 fn load_linkage_packages_into_runtime<DataSource: ModuleResolver + Send + Sync>(
     adapter: &mut impl VMTestAdapter<DataSource>,
@@ -46,6 +65,29 @@ fn load_linkage_packages_into_runtime<DataSource: ModuleResolver + Send + Sync>(
         &crate::shared::TypeLimits::VM_DEFAULT,
         all_packages,
     )
+}
+
+#[test]
+fn resolve_cached_package_does_not_access_storage() {
+    let package_address = AccountAddress::from_hex_literal("0x1").unwrap();
+    let mut adapter = InMemoryTestAdapter::new();
+    for pkg in compile_packages_in_file("package1.move", &[]) {
+        adapter.insert_package_into_storage(pkg);
+    }
+
+    let link_context = adapter.get_linkage_context(package_address).unwrap();
+    let mut packages = load_linkage_packages_into_runtime(&mut adapter, &link_context).unwrap();
+    let expected = packages.remove(&package_address).unwrap();
+
+    let result = adapter
+        .runtime()
+        .resolve_and_cache_package(UnreachableResolver, package_address)
+        .unwrap();
+    let ResolvedPackageResult::Found(actual) = result else {
+        panic!("cached package was not found")
+    };
+
+    assert!(Arc::ptr_eq(&actual, &expected));
 }
 
 #[test]
