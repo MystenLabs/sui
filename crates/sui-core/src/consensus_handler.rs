@@ -946,6 +946,33 @@ struct CommitHandlerInput {
     transaction_deny_config_updates: Vec<(AuthorityName, SharedTransactionDenyConfig)>,
 }
 
+/// One commit's inputs to the staggered-submission duplication signal, counted before
+/// deduplication so copies discarded in later commits still count.
+#[derive(Default)]
+struct StaggeringCommitCounts {
+    /// Copies of transactions without allowed proposers beyond their paid allowance:
+    /// the signal's numerator.
+    excess_copies: u64,
+    /// First occurrences of user transactions: the signal's denominator.
+    unique_user_txns: u64,
+    /// Duplicate copies the signal does not count, within the paid allowance...
+    paid_duplicate_copies: u64,
+    /// ...or of transactions that restrict their proposers.
+    restricted_duplicate_copies: u64,
+}
+
+impl StaggeringCommitCounts {
+    /// The counts with their `staggered_submission_commit_copies` metric labels.
+    fn by_kind(&self) -> [(&'static str, u64); 4] {
+        [
+            ("unique", self.unique_user_txns),
+            ("excess", self.excess_copies),
+            ("paid_duplicate", self.paid_duplicate_copies),
+            ("restricted_duplicate", self.restricted_duplicate_copies),
+        ]
+    }
+}
+
 struct CommitHandlerState {
     dkg_failed: bool,
     randomness_round: Option<RandomnessRound>,
@@ -954,9 +981,7 @@ struct CommitHandlerState {
     initial_reconfig_state: ReconfigState,
     // Intra-commit occurrence counts used by the consensus-critical amplification deferral.
     occurrence_counts: HashMap<TransactionDigest, u32>,
-    // Signal accounting includes copies discarded by deduplication in later commits.
-    staggering_excess_copies: u64,
-    staggering_unique_user_txns: u64,
+    staggering: StaggeringCommitCounts,
     // Transactions involved in same commit owned object lock contention (double-spend),
     // mapped to conflict info (gas vs non-gas breakdown).
     contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo>,
@@ -971,8 +996,7 @@ impl CommitHandlerState {
             indirect_state_observer: Some(IndirectStateObserver::new()),
             initial_reconfig_state: epoch_store.get_reconfig_state_read_lock_guard().clone(),
             occurrence_counts: HashMap::new(),
-            staggering_excess_copies: 0,
-            staggering_unique_user_txns: 0,
+            staggering: StaggeringCommitCounts::default(),
             contested_transaction_digests: HashMap::new(),
         }
     }
@@ -1866,16 +1890,23 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     fn record_duplication_signal(&self, state: &CommitHandlerState) {
         self.metrics
             .staggered_submission_excess_copies
-            .observe(state.staggering_excess_copies as f64);
+            .observe(state.staggering.excess_copies as f64);
         let apply = self.enable_staggered_submission_signal
             && self
                 .epoch_store
                 .protocol_config()
                 .staggered_submission_signal();
+        // Counters of the signal's inputs, so the ratio can be recomputed over any window.
+        for (kind, copies) in state.staggering.by_kind() {
+            self.metrics
+                .staggered_submission_commit_copies
+                .with_label_values(&[kind])
+                .inc_by(copies);
+        }
         let staggered = self.epoch_store.staggered_submission();
         let outcome = staggered.record_commit(
-            state.staggering_excess_copies,
-            state.staggering_unique_user_txns,
+            state.staggering.excess_copies,
+            state.staggering.unique_user_txns,
             apply,
         );
         let transition = outcome.transition;
@@ -1895,6 +1926,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .staggered_submission_signal_transitions
                 .with_label_values(&[crate::staggered_submission::signal_band_label(band)])
                 .inc();
+            self.metrics
+                .staggered_submission_band_duration_commits
+                .with_label_values(&[crate::staggered_submission::signal_band_label(
+                    outcome.previous_band,
+                )])
+                .observe(outcome.commits_in_previous_band as f64);
         }
     }
 
@@ -3166,8 +3203,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 if !tx_data.expiration().restricts_proposers(epoch) {
                     let allowance = paid_proposer_count(tx_data.gas_price(), rgp);
                     if total_occurrences > allowance {
-                        state.staggering_excess_copies += 1;
+                        state.staggering.excess_copies += 1;
+                    } else if total_occurrences > 1 {
+                        state.staggering.paid_duplicate_copies += 1;
                     }
+                } else if total_occurrences > 1 {
+                    state.staggering.restricted_duplicate_copies += 1;
                 }
             }
             if in_commit || in_cache {
@@ -3183,7 +3224,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 continue;
             }
 
-            state.staggering_unique_user_txns += u64::from(user_transaction.is_some());
+            state.staggering.unique_user_txns += u64::from(user_transaction.is_some());
             first_commit_keys.insert(key.clone());
 
             state.output.record_consensus_message_processed(key);
