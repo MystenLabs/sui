@@ -75,14 +75,10 @@ struct PostExecutionCheckInputs {
 }
 
 impl PostExecutionCheckInputs {
-    fn new(transaction: (&TransactionKind, &GasData, SuiAddress), enable_gasless: bool) -> Self {
+    fn new(transaction: (&TransactionKind, &GasData, SuiAddress)) -> Self {
         let (transaction_kind, gas_data, transaction_signer) = transaction;
-        let (input_reservations, allowance_ids) = compute_input_reservations(
-            transaction_kind,
-            gas_data,
-            transaction_signer,
-            enable_gasless,
-        );
+        let (input_reservations, allowance_ids) =
+            compute_input_reservations(transaction_kind, gas_data, transaction_signer);
         Self {
             input_reservations,
             allowance_ids,
@@ -166,8 +162,7 @@ impl<'backing> TemporaryStore<'backing> {
         transaction: (&TransactionKind, &GasData, SuiAddress),
         unsettled_object_funds: &'backing dyn UnsettledObjectFundsRead,
     ) -> Self {
-        let post_execution_check_inputs =
-            PostExecutionCheckInputs::new(transaction, protocol_config.enable_gasless());
+        let post_execution_check_inputs = PostExecutionCheckInputs::new(transaction);
         Self::new_with_input_objects(
             store,
             input_objects,
@@ -1244,13 +1239,12 @@ fn compute_input_reservations(
     transaction_kind: &TransactionKind,
     gas_data: &GasData,
     transaction_signer: SuiAddress,
-    enable_gasless: bool,
 ) -> (BTreeMap<(SuiAddress, TypeTag), u64>, AllowanceIds) {
     use sui_types::balance::Balance;
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
 
-    let is_gasless = enable_gasless && is_gasless_transaction(gas_data, transaction_kind);
+    let is_gasless = is_gasless_transaction(gas_data, transaction_kind);
     let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
     let mut allowance_ids = AllowanceIds::new();
     let sui_balance_type = Balance::type_tag(GAS::type_tag());
