@@ -37,7 +37,7 @@ pub struct Transaction {
     /// < `original_command_len`
     pub original_command_len: usize,
     pub commands: Commands,
-    pub unified_linkage: Option<ExecutableLinkage>,
+    pub unified_linkage: ExecutableLinkage,
 }
 
 /// The original index into the `input` vector of the transaction, before the inputs were split
