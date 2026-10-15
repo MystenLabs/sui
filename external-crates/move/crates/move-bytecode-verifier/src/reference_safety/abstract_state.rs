@@ -352,9 +352,9 @@ impl AbstractState {
         &self,
         idx: LocalIndex,
         meter: &mut (impl Meter + ?Sized),
-        config: &VerifierConfig,
+        _config: &VerifierConfig,
     ) -> PartialVMResult<bool> {
-        if config.additional_borrow_checks && self.has_full_borrows(self.frame_root()) {
+        if self.has_full_borrows(self.frame_root()) {
             return Ok(true);
         }
         charge_graph_size(self.graph_size(), meter)?;
@@ -550,7 +550,7 @@ impl AbstractState {
             return Err(self.error(StatusCode::BORROWLOC_EXISTS_BORROW_ERROR, offset));
         }
 
-        if config.additional_borrow_checks && mut_ && self.has_full_borrows(self.frame_root()) {
+        if mut_ && self.has_full_borrows(self.frame_root()) {
             return Err(self.error(StatusCode::BORROWLOC_EXISTS_BORROW_ERROR, offset));
         }
 
