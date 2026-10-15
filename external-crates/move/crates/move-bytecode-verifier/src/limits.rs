@@ -219,23 +219,15 @@ impl<'a> LimitsVerifier<'a> {
         let mut size_table = BTreeMap::new();
         let mut function_totals = vec![0; self.module.function_handles().len()];
 
-        if config.include_function_signatures_in_instantiation_limits {
-            for (idx, function_handle) in self.module.function_handles().iter().enumerate() {
-                let mut fn_total = 0;
-                let weight = self
-                    .signature_type_size(function_handle.return_, &mut size_table)
-                    .saturating_add(
-                        self.signature_type_size(function_handle.parameters, &mut size_table),
-                    );
-                Self::charge_type_nodes(
-                    max_fun,
-                    max_mod,
-                    &mut fn_total,
-                    &mut module_total,
-                    weight,
-                )?;
-                function_totals[idx] = fn_total;
-            }
+        for (idx, function_handle) in self.module.function_handles().iter().enumerate() {
+            let mut fn_total = 0;
+            let weight = self
+                .signature_type_size(function_handle.return_, &mut size_table)
+                .saturating_add(
+                    self.signature_type_size(function_handle.parameters, &mut size_table),
+                );
+            Self::charge_type_nodes(max_fun, max_mod, &mut fn_total, &mut module_total, weight)?;
+            function_totals[idx] = fn_total;
         }
 
         for func_def in self.module.function_defs() {
@@ -245,16 +237,8 @@ impl<'a> LimitsVerifier<'a> {
                 .copied()
                 .unwrap_or_default();
 
-            if config.include_function_signatures_in_instantiation_limits {
-                let weight = self.signature_type_size(code.locals, &mut size_table);
-                Self::charge_type_nodes(
-                    max_fun,
-                    max_mod,
-                    &mut fn_total,
-                    &mut module_total,
-                    weight,
-                )?;
-            }
+            let weight = self.signature_type_size(code.locals, &mut size_table);
+            Self::charge_type_nodes(max_fun, max_mod, &mut fn_total, &mut module_total, weight)?;
             for instr in &code.code {
                 let sig_idx = match instr {
                     Bytecode::CallGeneric(idx) => {

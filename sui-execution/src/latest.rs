@@ -71,6 +71,7 @@ impl Executor {
             framework_tx_context_mut_restrictions,
             additional_borrow_checks,
             disallow_jump_orphans,
+            include_function_signatures_in_instantiation_limits,
             convert_withdrawal_compatibility_ptb_arguments,
             enable_init_on_upgrade,
             enable_order_independent_upgrade_init_linkage,
