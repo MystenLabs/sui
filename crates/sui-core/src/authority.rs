@@ -297,6 +297,8 @@ pub struct AuthorityMetrics {
     pub(crate) staggered_submission_signal_band: IntGauge,
     pub(crate) staggered_submission_active: IntGauge,
     pub(crate) staggered_submission_signal_transitions: IntCounterVec,
+    pub(crate) staggered_submission_commit_copies: IntCounterVec,
+    pub(crate) staggered_submission_band_duration_commits: HistogramVec,
     pub(crate) staggered_submission_duplication_ratio: Gauge,
 
     pub(crate) authority_overload_status: IntGauge,
@@ -633,6 +635,21 @@ impl AuthorityMetrics {
                 "staggered_submission_signal_transitions",
                 "Number of duplication-signal transitions, labeled by the band entered",
                 &["state"],
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_commit_copies: register_int_counter_vec_with_registry!(
+                "staggered_submission_commit_copies",
+                "User transaction copies in commits by kind: unique (first occurrences, the duplication signal's denominator), excess (copies beyond the paid allowance of transactions without allowed proposers, its numerator), paid_duplicate (within the allowance), restricted_duplicate (of transactions that restrict their proposers)",
+                &["kind"],
+                registry,
+            )
+            .unwrap(),
+            staggered_submission_band_duration_commits: register_histogram_vec_with_registry!(
+                "staggered_submission_band_duration_commits",
+                "Commits the duplication signal spent in a band before leaving it, by band left",
+                &["band"],
+                prometheus::exponential_buckets(1.0, 2.0, 18).unwrap(),
                 registry,
             )
             .unwrap(),
