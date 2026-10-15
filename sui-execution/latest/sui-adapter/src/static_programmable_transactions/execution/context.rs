@@ -1190,7 +1190,6 @@ where
             self.gas_charger.move_gas_status().stack_height_current(),
             expected_stack_height,
         );
-        let check_expected_inits = self.env.protocol_config.harden_linkage_consistency();
         for module in modules {
             let Some((fdef_idx, fdef)) = module.find_function_def_by_name(INIT_FN_NAME.as_str())
             else {
@@ -1212,13 +1211,11 @@ where
             // balance the stack after borrowing the tx context
             charge_gas!(self, charge_store_loc, &tx_context)?;
 
-            if check_expected_inits {
-                assert_invariant!(
-                    expected_inits.remove(module_name),
-                    "module {module_name} defines an `init` but was not recorded as doing so when \
-                     the package payload was deserialized"
-                );
-            }
+            assert_invariant!(
+                expected_inits.remove(module_name),
+                "module {module_name} defines an `init` but was not recorded as doing so when \
+                 the package payload was deserialized"
+            );
 
             let args = if has_otw {
                 vec![CtxValue(Value::one_time_witness()?), CtxValue(tx_context)]
@@ -1265,7 +1262,7 @@ where
 
         // Every module we expected to initialize from earlier was initialized.
         assert_invariant!(
-            !check_expected_inits || expected_inits.is_empty(),
+            expected_inits.is_empty(),
             "modules {expected_inits:?} define an `init` that was never run"
         );
 
