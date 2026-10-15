@@ -25,6 +25,7 @@ use sui_types::{
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::RuntimeObjectResolver,
+    supported_protocol_versions::SupportedProtocolVersions,
     transaction::{
         CallArg, FundsWithdrawalArg, GasData, ObjectArg, TransactionData, TransactionDataV1,
         TransactionExpiration, TransactionKind,
@@ -36,6 +37,7 @@ use sui_types::{
 
 pub struct TestEnvBuilder {
     num_validators: usize,
+    protocol_version: Option<ProtocolVersion>,
     test_cluster_builder_cb: Option<Box<dyn Fn(TestClusterBuilder) -> TestClusterBuilder + Send>>,
     proto_override_cb:
         Option<Box<dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send + Sync>>,
@@ -53,12 +55,18 @@ impl TestEnvBuilder {
             test_cluster_builder_cb: None,
             proto_override_cb: None,
             num_validators: 1,
+            protocol_version: None,
         }
     }
 
     #[allow(dead_code)]
     pub fn with_num_validators(mut self, num_validators: usize) -> Self {
         self.num_validators = num_validators;
+        self
+    }
+
+    pub fn with_protocol_version(mut self, protocol_version: ProtocolVersion) -> Self {
+        self.protocol_version = Some(protocol_version);
         self
     }
 
@@ -85,6 +93,16 @@ impl TestEnvBuilder {
 
         let mut test_cluster_builder =
             TestClusterBuilder::new().with_num_validators(self.num_validators);
+        if let Some(protocol_version) = self.protocol_version {
+            let supported_versions = SupportedProtocolVersions::new_for_testing(
+                protocol_version.as_u64(),
+                protocol_version.as_u64(),
+            );
+            test_cluster_builder = test_cluster_builder
+                .with_protocol_version(protocol_version)
+                .with_supported_protocol_versions(supported_versions)
+                .with_fullnode_supported_protocol_versions_config(supported_versions);
+        }
 
         if let Some(cb) = self.test_cluster_builder_cb {
             test_cluster_builder = cb(test_cluster_builder);

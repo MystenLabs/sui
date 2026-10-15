@@ -3368,8 +3368,7 @@ mod tests {
     pub async fn checkpoint_builder_test() {
         telemetry_subscribers::init_for_testing();
 
-        let mut protocol_config =
-            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        let mut protocol_config = ProtocolConfig::get_for_version(140.into(), Chain::Unknown);
         protocol_config.disable_accumulators_for_testing();
         // This fixture supplies historical effects dependencies rather than consensus input order.
         protocol_config.set_disable_effects_tx_dependencies_for_testing(false);

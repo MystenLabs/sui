@@ -246,6 +246,7 @@ async fn test_gasless_multi_recipient() {
 #[sim_test]
 async fn test_gasless_disabled_rejects_transaction() {
     let mut test_env = TestEnvBuilder::new()
+        .with_protocol_version(140.into())
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.disable_gasless_for_testing();
             cfg
