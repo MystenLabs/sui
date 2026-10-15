@@ -24,7 +24,7 @@ pub fn sui_verify_module_metered(
     struct_with_key_verifier::verify_module(module)?;
     global_storage_access_verifier::verify_module(module)?;
     private_generics_verifier_v2::verify_module(module, verifier_config)?;
-    entry_points_verifier::verify_module(module, fn_info_map, verifier_config)?;
+    entry_points_verifier::verify_module(module, fn_info_map)?;
     tx_context_restrictions_verifier::verify_module(module)?;
     one_time_witness_verifier::verify_module(module, fn_info_map)
 }
