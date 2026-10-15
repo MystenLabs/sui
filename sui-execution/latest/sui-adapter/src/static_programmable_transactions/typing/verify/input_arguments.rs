@@ -230,14 +230,14 @@ pub fn is_valid_receiving(constraint: &Type) -> bool {
 //**************************************************************************************************
 
 fn command<Mode: ExecutionMode>(
-    env: &Env<Mode>,
+    _env: &Env<Mode>,
     context: &mut Context,
     sp!(_, c): &T::Command,
 ) -> Result<(), Mode::Error> {
     match &c.command {
         T::Command__::MoveCall(mc) => {
             check_obj_usages(context, &mc.arguments)?;
-            if !(env.protocol_config.enable_accumulators() && is_coin_send_funds(&mc.function)) {
+            if !is_coin_send_funds(&mc.function) {
                 // We allow the gas coin to be used with `sui::coin::send_funds`
                 check_gas_by_values(&mc.arguments)?;
             }
