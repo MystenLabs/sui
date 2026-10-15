@@ -16,7 +16,6 @@ use move_binary_format::{
     },
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
-use move_vm_config::verifier::VerifierConfig;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_verifier_latest::tx_context_restrictions_verifier::verify_module;
 
@@ -76,13 +75,6 @@ fn mut_u64() -> SignatureToken {
     SignatureToken::MutableReference(Box::new(SignatureToken::U64))
 }
 
-fn config(enabled: bool) -> VerifierConfig {
-    VerifierConfig {
-        framework_tx_context_mut_restrictions: enabled,
-        ..VerifierConfig::default()
-    }
-}
-
 const USER_ADDRESS: AccountAddress = AccountAddress::new([0xCA; AccountAddress::LENGTH]);
 
 #[test]
@@ -92,7 +84,7 @@ fn rejects_mut_return_without_root_on_system_package() {
         vec![mut_tx_context()],
         vec![mut_u64()],
     );
-    let err = verify_module(&m, &config(true)).unwrap_err();
+    let err = verify_module(&m).unwrap_err();
     let msg = err.to_string();
     assert!(msg.contains("::f"), "unexpected error: {msg}");
     assert!(
@@ -108,7 +100,7 @@ fn rejects_mut_tx_context_identity_on_system_package() {
         vec![mut_tx_context()],
         vec![mut_tx_context()],
     );
-    assert!(verify_module(&m, &config(true)).is_err());
+    assert!(verify_module(&m).is_err());
 }
 
 #[test]
@@ -118,7 +110,7 @@ fn accepts_mut_return_with_non_tx_context_root() {
         vec![mut_tx_context(), mut_u64()],
         vec![mut_u64()],
     );
-    assert!(verify_module(&m, &config(true)).is_ok());
+    assert!(verify_module(&m).is_ok());
 }
 
 #[test]
@@ -133,7 +125,7 @@ fn accepts_without_mut_return() {
             SignatureToken::U64,
         ],
     );
-    assert!(verify_module(&m, &config(true)).is_ok());
+    assert!(verify_module(&m).is_ok());
 }
 
 #[test]
@@ -144,21 +136,11 @@ fn accepts_without_mut_tx_context_param() {
         vec![imm_tx_context()],
         vec![mut_u64()],
     );
-    assert!(verify_module(&m, &config(true)).is_ok());
+    assert!(verify_module(&m).is_ok());
 }
 
 #[test]
 fn exempts_user_packages() {
     let m = module_with_function(USER_ADDRESS, vec![mut_tx_context()], vec![mut_u64()]);
-    assert!(verify_module(&m, &config(true)).is_ok());
-}
-
-#[test]
-fn no_ops_with_flag_off() {
-    let m = module_with_function(
-        SUI_FRAMEWORK_ADDRESS,
-        vec![mut_tx_context()],
-        vec![mut_u64()],
-    );
-    assert!(verify_module(&m, &config(false)).is_ok());
+    assert!(verify_module(&m).is_ok());
 }

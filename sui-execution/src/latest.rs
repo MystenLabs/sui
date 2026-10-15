@@ -68,6 +68,7 @@ impl Executor {
             generate_df_type_layouts,
             private_generics_verifier_v2,
             disable_id_leak_verifier,
+            framework_tx_context_mut_restrictions,
             convert_withdrawal_compatibility_ptb_arguments,
             enable_init_on_upgrade,
             enable_order_independent_upgrade_init_linkage,
