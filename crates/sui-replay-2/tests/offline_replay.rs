@@ -8,6 +8,38 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+#[allow(dead_code)]
+#[path = "../examples/offline_replay_corpus.rs"]
+mod offline_replay_corpus;
+
+#[test]
+#[cfg_attr(msim, ignore)]
+fn offline_replay_corpus_readme_is_in_sync() {
+    let fixture_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/offline-replay");
+    let previous_store_root = std::env::var_os("SUI_DATA_STORE");
+    // FileSystemStore only accepts its cache root through the environment. This test executable
+    // has a single table test, so restoring the previous value afterwards keeps it isolated.
+    unsafe {
+        std::env::set_var("SUI_DATA_STORE", &fixture_root);
+    }
+    let result = if std::env::var_os("SUI_REPLAY_2_UPDATE_OFFLINE_CORPUS").is_some() {
+        offline_replay_corpus::sync(&fixture_root)
+    } else {
+        offline_replay_corpus::check(&fixture_root)
+    };
+    unsafe {
+        if let Some(value) = previous_store_root {
+            std::env::set_var("SUI_DATA_STORE", value);
+        } else {
+            std::env::remove_var("SUI_DATA_STORE");
+        }
+    }
+    result.expect(
+        "offline replay corpus README must match digests.txt and its local cache; set \
+         SUI_REPLAY_2_UPDATE_OFFLINE_CORPUS=1 to regenerate the table",
+    );
+}
+
 #[test]
 #[cfg_attr(msim, ignore)]
 fn replays_mainnet_corpus_from_filesystem_cache_without_executor_cache() {
