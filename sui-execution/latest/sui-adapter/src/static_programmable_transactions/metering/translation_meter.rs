@@ -113,16 +113,9 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
         &mut self,
         payload: &PackagePayload,
     ) -> Result<(), E> {
-        match payload {
-            PackagePayload::Serialized(_) => {
-                // Payload stays serialized; deserialization (and charge) happen at execution time.
-                Ok(())
-            }
-            PackagePayload::Deserialized(DeserializedPackage { total_bytes, .. }) => {
-                self.charger.charge_publish_package(*total_bytes)?;
-                Ok(())
-            }
-        }
+        let PackagePayload::Deserialized(DeserializedPackage { total_bytes, .. }) = payload;
+        self.charger.charge_publish_package(*total_bytes)?;
+        Ok(())
     }
 
     // We use a non-linear cost function for type references to account for the increased

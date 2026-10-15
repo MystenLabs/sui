@@ -75,6 +75,7 @@ impl Executor {
             disallow_self_identifier,
             charge_ld_const_abstract_size,
             granular_post_execution_checks,
+            enable_unified_linkage,
             convert_withdrawal_compatibility_ptb_arguments,
             enable_init_on_upgrade,
             enable_order_independent_upgrade_init_linkage,
