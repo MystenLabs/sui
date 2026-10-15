@@ -32,7 +32,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     annotated_value,
-    identifier::{IdentStr, Identifier},
+    identifier::IdentStr,
     language_storage::{ModuleId, StructTag, TypeTag},
     runtime_value,
 };
@@ -797,12 +797,12 @@ impl VMDispatchTables {
         let (address, module) = match tag_type {
             DatatypeTagType::Runtime => (
                 *datatype.original_id.address(),
-                datatype.original_id.name(&self.interner).to_owned(),
+                datatype.original_id.name(&self.interner),
             ),
 
             DatatypeTagType::Defining => (
                 *datatype.defining_id.address(),
-                datatype.defining_id.name(&self.interner).to_owned(),
+                datatype.defining_id.name(&self.interner),
             ),
         };
         let name = self.interner.resolve_ident(&datatype.name, "datatype name");
@@ -1425,8 +1425,12 @@ impl VirtualTableKey {
         ModuleId::new(self.0.package_key, module_name)
     }
 
-    pub fn member_name(&self, interner: &IdentifierInterner) -> Identifier {
-        interner.resolve_ident(&self.0.inner_pkg_key.member_name, "member name")
+    pub fn module_name_str<'a>(&self, interner: &'a IdentifierInterner) -> &'a str {
+        interner.resolve_str(&self.0.inner_pkg_key.module_name, "module name")
+    }
+
+    pub fn member_name_str<'a>(&self, interner: &'a IdentifierInterner) -> &'a str {
+        interner.resolve_str(&self.0.inner_pkg_key.member_name, "member name")
     }
 
     pub fn to_string(&self, interner: &IdentifierInterner) -> String {
@@ -1452,8 +1456,8 @@ impl VirtualTableKey {
 
 impl IntraPackageKey {
     pub fn to_string(self, interner: &IdentifierInterner) -> String {
-        let module_name = interner.resolve_ident(&self.module_name, "module name");
-        let member_name = interner.resolve_ident(&self.member_name, "member name");
+        let module_name = interner.resolve_str(&self.module_name, "module name");
+        let member_name = interner.resolve_str(&self.member_name, "member name");
         format!("{}::{}", module_name, member_name)
     }
 }

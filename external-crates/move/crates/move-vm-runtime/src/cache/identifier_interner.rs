@@ -33,21 +33,18 @@ impl IdentifierInterner {
         Self(rodeo)
     }
 
-    // [SAFETY] The unsafe code is creating an identifier without checking its vailidity, but it
-    // was added as a valid identifier to the interner in the first place. If we fail to find the
-    // key or the key is not a valid identifier, this code will panic. This is preferred, however,
-    // as it indicates a serious runtime issue: interner keys ca no longer be trusted, and we
-    // should panic immediately rather than risk a network fork by propagating this issue.
-    #[allow(unsafe_code, clippy::panic)]
-    /// Resolve an identifier in the interner or produce an invariant violation. This is for use
-    /// when the key _must_ be there, as it produces an error when it is not found. The `key_type`
-    /// is used to make a more-informative error message.
-    pub(crate) fn resolve_ident(&self, key: &IdentifierKey, key_type: &str) -> Identifier {
-        if let Some(result) = self.0.try_resolve(&key.0) {
-            unsafe { Identifier::new_unchecked(result) }
-        } else {
+    /// Borrows an identifier's string from the interner and panics if the key is absent.
+    #[allow(clippy::panic)]
+    pub(crate) fn resolve_str<'a>(&'a self, key: &IdentifierKey, key_type: &str) -> &'a str {
+        self.0.try_resolve(&key.0).unwrap_or_else(|| {
             panic!("Failed to resolve {key_type} key in ident interner: {key:?}")
-        }
+        })
+    }
+
+    /// Materializes an owned identifier from an interned key containing a valid identifier.
+    #[allow(unsafe_code)]
+    pub(crate) fn resolve_ident(&self, key: &IdentifierKey, key_type: &str) -> Identifier {
+        unsafe { Identifier::new_unchecked(self.resolve_str(key, key_type)) }
     }
 
     /// Get the interned identifier value. This may raise an invariant error if `try_get_or_intern`

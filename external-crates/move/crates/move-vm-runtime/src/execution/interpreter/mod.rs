@@ -65,9 +65,7 @@ pub(crate) fn run(
             )
             .map_err(|e| {
                 e.at_code_offset(fun_ref.index(), 0)
-                    .finish(Location::Module(
-                        fun_ref.module_id(&vtables.interner).clone(),
-                    ))
+                    .finish(Location::Module(fun_ref.module_id(&vtables.interner)))
             });
             trace!(tracer, |tracer| {
                 tracer.exit_initial_native_frame(&return_result, &gas_meter.remaining_gas().into())
@@ -78,15 +76,11 @@ pub(crate) fn run(
             // execution is pure arithmetic from here on.
             let ty_args = TypeArguments::new(vtables, ty_args, &type_limits).map_err(|e| {
                 e.at_code_offset(fun_ref.index(), 0)
-                    .finish(Location::Module(
-                        fun_ref.module_id(&vtables.interner).clone(),
-                    ))
+                    .finish(Location::Module(fun_ref.module_id(&vtables.interner)))
             })?;
             let call_stack = CallStack::new(function, ty_args, args).map_err(|e| {
                 e.at_code_offset(fun_ref.index(), 0)
-                    .finish(Location::Module(
-                        fun_ref.module_id(&vtables.interner).clone(),
-                    ))
+                    .finish(Location::Module(fun_ref.module_id(&vtables.interner)))
             })?;
             let state = MachineState::new(Arc::clone(&vtables.interner), type_limits, call_stack);
             eval::run(state, vtables, telemetry, vm_config, extensions, tracer, gas_meter)
