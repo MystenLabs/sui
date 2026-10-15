@@ -60,7 +60,6 @@ use std::{
 struct PackageContext<'borrows> {
     pub natives: &'borrows NativeFunctions,
     pub interner: &'borrows IdentifierInterner,
-    pub vm_config: &'borrows VMConfig,
     pub type_limits: &'borrows TypeLimits,
 
     pub type_origin_table: HashMap<IntraPackageKey, DefiningTypeId>,
@@ -272,7 +271,6 @@ pub fn package(
     let mut package_context = PackageContext {
         natives,
         interner,
-        vm_config,
         type_limits,
         version_id,
         original_id,
@@ -291,7 +289,6 @@ pub fn package(
         version_id,
         natives: _,
         interner: _,
-        vm_config: _,
         type_limits: _,
         original_id,
         loaded_modules,
@@ -1074,22 +1071,12 @@ fn constants(
                     "Verifier failed to verify the deserialization of constants"
                 )
             })?;
-            let size = if context.vm_config.charge_ld_const_abstract_size {
-                // Charge for the abstract value size of the constant -- the cost of materializing
-                // it on the operand stack -- rather than its serialized byte length. Serialized
-                // length undercharges values that are cheap to encode but expensive to
-                // materialize, e.g. nested vectors, where an empty inner vector is a single
-                // serialized byte but materializes as a heap-allocated container.
-                //
-                // Constants cannot contain references, so `traverse_references` is irrelevant;
-                // `include_vector_size` matches the non-legacy size config in the Sui gas meter.
-                u64::from(deserialized_value.abstract_memory_size(&SizeConfig {
-                    traverse_references: false,
-                    include_vector_size: true,
-                })?)
-            } else {
-                constant.data.len() as u64
-            };
+            // Constants cannot contain references, so `traverse_references` is irrelevant;
+            // `include_vector_size` matches the non-legacy size config in the Sui gas meter.
+            let size = u64::from(deserialized_value.abstract_memory_size(&SizeConfig {
+                traverse_references: false,
+                include_vector_size: true,
+            })?);
             let value = deserialized_value.into_constant_value(&context.package_arena)?;
             let type_ = make_arena_type(context, module, &constant.type_)?;
             let const_ = Constant { value, type_, size };
