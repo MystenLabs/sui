@@ -123,7 +123,7 @@ use crate::execution_cache::cache_types::CacheResult;
 use crate::fallback_fetch::do_fallback_lookup;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::*;
-use crate::staggered_submission::StaggeredSubmission;
+use crate::staggered_submission::{SignalConfig, StaggeredSubmission};
 use crate::stake_aggregator::{GenericMultiStakeAggregator, StakeAggregator};
 use sui_types::execution::ExecutionTimeObservationChunkKey;
 
@@ -925,6 +925,8 @@ impl AuthorityPerEpochStore {
         // Tell antithesis which flag-gated reachability assertions are live under the config
         // this epoch actually runs with. See sui_protocol_config::reachability.
         sui_protocol_config::reachability::register_reachability_for_config(&protocol_config);
+        let staggered_submission =
+            StaggeredSubmission::new(SignalConfig::from_protocol_config(&protocol_config));
 
         let execution_component = ExecutionComponents::new(
             &protocol_config,
@@ -1080,7 +1082,7 @@ impl AuthorityPerEpochStore {
             tx_reject_reason_cache,
             submitted_transaction_cache,
             finalized_transactions_cache,
-            staggered_submission: StaggeredSubmission::new(),
+            staggered_submission,
             node_role: NodeRole::from_committee(&committee, &name, fullnode_sync_mode),
         });
 
