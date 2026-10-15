@@ -55,9 +55,6 @@ pub const REFERENCE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
 /// The size of a struct in bytes
 pub const STRUCT_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
 
-/// For exists checks on data that doesn't exists this is the multiplier that is used.
-pub const MIN_EXISTS_DATA_SIZE: AbstractMemorySize = AbstractMemorySize::new(100);
-
 /// Default size config for gas metering when running Move unit tests.
 const MOVE_TEST_SIZE_CONFIG: SizeConfig = SizeConfig {
     traverse_references: false,

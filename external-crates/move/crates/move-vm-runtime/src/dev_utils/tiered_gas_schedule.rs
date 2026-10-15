@@ -57,9 +57,6 @@ pub const STRUCT_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
 /// The size of a vector (without its containing data) in bytes
 pub const VEC_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
 
-/// For exists checks on data that doesn't exists this is the multiplier that is used.
-pub const MIN_EXISTS_DATA_SIZE: AbstractMemorySize = AbstractMemorySize::new(100);
-
 pub const INSTRUCTION_TIER_DEFAULT: u64 = 1;
 
 pub const STACK_HEIGHT_TIER_DEFAULT: u64 = 1;

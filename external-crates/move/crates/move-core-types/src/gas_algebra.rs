@@ -1,7 +1,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::{Deserialize, Serialize};
 use std::{
     cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd},
     convert::From,
@@ -21,15 +20,6 @@ pub enum InternalGasUnit {}
 
 /// Unit for counting bytes.
 pub enum Byte {}
-
-/// Alternative unit for counting bytes. 1 kibibyte = 1024 bytes.
-pub enum KibiByte {}
-
-/// Alternative unit for counting bytes. 1 mebibyte = 1024 kibibytes.
-pub enum MebiByte {}
-
-/// Alternative unit for counting bytes. 1 gibibyte = 1024 mebibytes.
-pub enum GibiByte {}
 
 /// Unit of abstract memory usage in the Move VM.
 pub enum AbstractMemoryUnit {}
@@ -51,7 +41,6 @@ pub struct UnitDiv<U1, U2> {
  **************************************************************************************************/
 /// An opaque representation of a certain quantity, with the unit being encoded in the type.
 /// This type implements checked addition and subtraction, and only permits type-safe multiplication.
-#[derive(Serialize, Deserialize)]
 pub struct GasQuantity<U> {
     val: u64,
     phantom: PhantomData<U>,
@@ -98,14 +87,6 @@ impl<U> GasQuantity<U> {
 
     pub const fn zero() -> Self {
         Self::new(0)
-    }
-
-    pub const fn one() -> Self {
-        Self::new(1)
-    }
-
-    pub const fn is_zero(&self) -> bool {
-        self.val == 0
     }
 }
 
@@ -255,21 +236,6 @@ fn apply_ratio_round_down(val: u64, nominator: u64, denominator: u64) -> u64 {
     }
 }
 
-fn apply_ratio_round_up(val: u64, nominator: u64, denominator: u64) -> u64 {
-    assert_ne!(nominator, 0);
-    assert_ne!(denominator, 0);
-
-    let n = val as u128 * nominator as u128;
-    let d = denominator as u128;
-
-    let res = n / d + if n.is_multiple_of(d) { 0 } else { 1 };
-    if res > u64::MAX as u128 {
-        u64::MAX
-    } else {
-        res as u64
-    }
-}
-
 /// Trait that defines a conversion from one unit to another, with a statically-determined
 /// integral conversion rate.
 pub trait ToUnit<U> {
@@ -306,130 +272,5 @@ impl<U> GasQuantity<U> {
             U::NOMINATOR,
             U::DENOMINATOR,
         ))
-    }
-
-    /// Convert the quantity to another unit, with the resulting scalar value being rounded up.
-    /// A ratio must have been defined via the `ToUnitFractional` trait.
-    pub fn to_unit_round_up<T>(self) -> GasQuantity<T>
-    where
-        U: ToUnitFractional<T>,
-    {
-        GasQuantity::new(apply_ratio_round_up(self.val, U::NOMINATOR, U::DENOMINATOR))
-    }
-}
-
-impl ToUnit<Byte> for KibiByte {
-    const MULTIPLIER: u64 = 1024;
-}
-
-impl ToUnit<Byte> for MebiByte {
-    const MULTIPLIER: u64 = 1024 * 1024;
-}
-
-impl ToUnit<Byte> for GibiByte {
-    const MULTIPLIER: u64 = 1024 * 1024 * 1024;
-}
-
-impl ToUnit<KibiByte> for MebiByte {
-    const MULTIPLIER: u64 = 1024;
-}
-
-impl ToUnit<KibiByte> for GibiByte {
-    const MULTIPLIER: u64 = 1024 * 1024;
-}
-
-impl ToUnit<MebiByte> for GibiByte {
-    const MULTIPLIER: u64 = 1024;
-}
-
-impl ToUnitFractional<KibiByte> for Byte {
-    const NOMINATOR: u64 = 1;
-    const DENOMINATOR: u64 = 1024;
-}
-
-impl ToUnitFractional<MebiByte> for KibiByte {
-    const NOMINATOR: u64 = 1;
-    const DENOMINATOR: u64 = 1024;
-}
-
-impl ToUnitFractional<MebiByte> for Byte {
-    const NOMINATOR: u64 = 1;
-    const DENOMINATOR: u64 = 1024 * 1024;
-}
-
-impl ToUnitFractional<GibiByte> for MebiByte {
-    const NOMINATOR: u64 = 1;
-    const DENOMINATOR: u64 = 1024;
-}
-
-impl ToUnitFractional<GibiByte> for KibiByte {
-    const NOMINATOR: u64 = 1;
-    const DENOMINATOR: u64 = 1024 * 1024;
-}
-
-impl ToUnitFractional<GibiByte> for Byte {
-    const NOMINATOR: u64 = 1;
-    const DENOMINATOR: u64 = 1024 * 1024 * 1024;
-}
-
-/***************************************************************************************************
- * To Unit With Params
- *
- **************************************************************************************************/
-/// Trait that defines a conversion from one unit to another, with an integral conversion rate
-/// determined from the parameters dynamically.
-pub trait ToUnitWithParams<U> {
-    type Params;
-
-    fn multiplier(params: &Self::Params) -> u64;
-}
-
-/// Trait that defines a conversion from one unit to another, with a fractional conversion rate
-/// determined from the parameters dynamically.
-pub trait ToUnitFractionalWithParams<U> {
-    type Params;
-
-    fn ratio(params: &Self::Params) -> (u64, u64);
-}
-
-impl<U> GasQuantity<U> {
-    /// Convert the quantity to another unit.
-    /// An integral multiplier must have been defined via the `ToUnitWithParams` trait.
-    pub fn to_unit_with_params<T>(
-        self,
-        params: &<U as ToUnitWithParams<T>>::Params,
-    ) -> GasQuantity<T>
-    where
-        U: ToUnitWithParams<T>,
-    {
-        let multiplier = <U as ToUnitWithParams<T>>::multiplier(params);
-        assert_ne!(multiplier, 0);
-        GasQuantity::new(self.val.saturating_mul(multiplier))
-    }
-
-    /// Convert the quantity to another unit, with the resulting scalar value being rounded down.
-    /// A ratio must have been defined via the `ToUnitFractionalWithParams` trait.
-    pub fn to_unit_round_down_with_params<T>(
-        self,
-        params: &<U as ToUnitFractionalWithParams<T>>::Params,
-    ) -> GasQuantity<T>
-    where
-        U: ToUnitFractionalWithParams<T>,
-    {
-        let (n, d) = <U as ToUnitFractionalWithParams<T>>::ratio(params);
-        GasQuantity::new(apply_ratio_round_down(self.val, n, d))
-    }
-
-    /// Convert the quantity to another unit, with the resulting scalar value being rounded up.
-    /// A ratio must have been defined via the `ToUnitFractionalWithParams` trait.
-    pub fn to_unit_round_up_with_params<T>(
-        self,
-        params: &<U as ToUnitFractionalWithParams<T>>::Params,
-    ) -> GasQuantity<T>
-    where
-        U: ToUnitFractionalWithParams<T>,
-    {
-        let (n, d) = <U as ToUnitFractionalWithParams<T>>::ratio(params);
-        GasQuantity::new(apply_ratio_round_up(self.val, n, d))
     }
 }

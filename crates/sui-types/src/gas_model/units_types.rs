@@ -6,18 +6,12 @@ use std::{
     ops::{Add, Bound},
 };
 
-use move_core_types::gas_algebra::{
-    GasQuantity, InternalGas, InternalGasUnit, ToUnit, ToUnitFractional,
-};
+use move_core_types::gas_algebra::{GasQuantity, InternalGas, InternalGasUnit, ToUnitFractional};
 use serde::{Deserialize, Serialize};
 
 pub enum GasUnit {}
 
 pub type Gas = GasQuantity<GasUnit>;
-
-impl ToUnit<InternalGasUnit> for GasUnit {
-    const MULTIPLIER: u64 = 1000;
-}
 
 impl ToUnitFractional<GasUnit> for InternalGasUnit {
     const NOMINATOR: u64 = 1;
@@ -100,13 +94,6 @@ impl GasCost {
     }
 
     /// Convert a GasCost to a total gas charge in `InternalGas`.
-    #[inline]
-    pub fn total(&self) -> u64 {
-        self.instruction_gas
-            .add(self.memory_gas)
-            .add(self.stack_height_gas)
-    }
-
     #[inline]
     pub fn total_internal(&self) -> InternalGas {
         GasQuantity::new(
