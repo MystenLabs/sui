@@ -24,12 +24,8 @@ use sui_types::{base_types::ObjectID, error::ExecutionErrorTrait};
 pub fn verify<Mode: ExecutionMode>(
     env: &env::Env<Mode>,
     tt: &T::Transaction,
-    unified_linkage: Option<&ExecutableLinkage>,
+    unified_linkage: &ExecutableLinkage,
 ) -> Result<(), Mode::Error> {
-    let Some(unified_linkage) = unified_linkage else {
-        invariant_violation!("unified linkage is enabled but was not recorded on the transaction")
-    };
-
     // Every package selected by the transaction linkage must be resolved to a version id,
     // and that version id must resolve back to the same original id in the resolution table.
     for (original_id, version_id) in &unified_linkage.0.linkage {
