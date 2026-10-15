@@ -10,7 +10,7 @@ use move_core_types::language_storage::ModuleId;
 use sui_types::base_types::TxContextKind;
 use sui_types::error::ExecutionErrorTrait;
 use sui_types::execution_status::{CommandArgumentError, ExecutionErrorKind};
-use sui_verifier::private_generics_verifier_v2;
+use sui_verifier::{INIT_FN_NAME, private_generics_verifier_v2};
 
 /// Checks the following
 /// - valid visibility for move function calls
@@ -190,9 +190,19 @@ fn check_no_tx_context_return<E: ExecutionErrorTrait>(return_: &[Type]) -> Resul
 }
 
 fn check_visibility<Mode: ExecutionMode>(
-    _env: &Env<Mode>,
+    env: &Env<Mode>,
     function: &T::LoadedFunction,
 ) -> Result<(), Mode::Error> {
+    if env.protocol_config.ban_entry_init()
+        && function.name.as_ident_str() == INIT_FN_NAME
+        && !Mode::allow_arbitrary_function_calls()
+    {
+        return Err(Mode::Error::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            "Cannot call 'init'",
+        ));
+    }
+
     let visibility = function.visibility;
     let is_entry = function.is_entry;
     match (visibility, is_entry) {
