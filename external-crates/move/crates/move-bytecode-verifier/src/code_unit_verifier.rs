@@ -182,14 +182,12 @@ impl<'env> CodeUnitVerifier<'env, '_> {
             meter,
         )?;
         locals_safety::verify(self.module, &self.function_context, ability_cache, meter)?;
-        if verifier_config.disallow_jump_orphans {
-            jump_table_usage_verifier::verify(
-                verifier_config,
-                self.module,
-                &self.function_context,
-                meter,
-            )?;
-        }
+        jump_table_usage_verifier::verify(
+            verifier_config,
+            self.module,
+            &self.function_context,
+            meter,
+        )?;
         if verifier_config.switch_to_regex_reference_safety {
             regex_reference_safety::verify(
                 verifier_config,
