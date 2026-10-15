@@ -8,7 +8,6 @@ pub mod global_storage_access_verifier;
 pub mod id_leak_verifier;
 pub mod meter;
 pub mod one_time_witness_verifier;
-pub mod private_generics;
 pub mod private_generics_verifier_v2;
 pub mod struct_with_key_verifier;
 pub mod tx_context_restrictions_verifier;
