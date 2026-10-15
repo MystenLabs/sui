@@ -362,6 +362,8 @@ impl ConsensusTransactionPool {
                 max_pending_transactions,
                 metrics.pool_staggered_held.clone(),
                 metrics.pool_staggered_rejected.clone(),
+                metrics.pool_stagger_shadow_decisions.clone(),
+                metrics.pool_stagger_shadow_delay.clone(),
             ),
             inner: Arc::new(Mutex::new(Inner::Open(Pool {
                 user: UserLane::Open(PriorityAdmissionQueue::new(
