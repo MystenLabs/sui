@@ -28,7 +28,6 @@ use crate::{
 };
 
 const E_OVERFLOW: u64 = 0;
-const E_ADDRESS_BALANCE_NOT_ENABLED: u64 = 1;
 const E_ACCUMULATOR_TYPE_TOO_LARGE: u64 = 4;
 
 #[derive(Clone)]
@@ -85,12 +84,7 @@ pub fn add_to_accumulator_address(
     };
 
     let cost = context.gas_used();
-
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
-
-    if !obj_runtime.protocol_config.enable_accumulators() {
-        return Ok(NativeResult::err(cost, E_ADDRESS_BALANCE_NOT_ENABLED));
-    }
 
     if !check_accumulator_type_bounds(obj_runtime.protocol_config, &ty_tag) {
         return Ok(NativeResult::err(cost, E_ACCUMULATOR_TYPE_TOO_LARGE));

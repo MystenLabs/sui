@@ -366,11 +366,6 @@ where
                 let ty = env.gas_coin_type()?;
                 let (gas_metadata, gas_value) = match gas_payment.location {
                     PaymentLocation::AddressBalance(sui_address) => {
-                        assert_invariant!(
-                            env.protocol_config.enable_address_balance_gas_payments(),
-                            "Address balance gas payments must be enabled to have an address \
-                             balance payment location"
-                        );
                         let max_gas_in_balance = gas_charger.gas_budget();
                         assert_invariant!(
                             gas_payment.amount >= max_gas_in_balance,
@@ -467,12 +462,6 @@ where
         &mut self,
         transfer: GasCoinTransfer,
     ) -> Result<(), Mode::Error> {
-        // send funds transfer ==> accumulators/address balances are enabled
-        assert_invariant!(
-            !matches!(transfer, GasCoinTransfer::SendFunds { .. })
-                || self.env.protocol_config.enable_accumulators(),
-            "Gas coin transfers with send_funds are not allowed unless accumulators are enabled"
-        );
         if self.gas_coin_transfer.is_some() {
             invariant_violation!("Gas coin destination set more than once");
         }
