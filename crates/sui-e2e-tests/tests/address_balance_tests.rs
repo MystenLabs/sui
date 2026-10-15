@@ -13,7 +13,7 @@ use std::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::ProtocolConfig;
 use sui_simulator::has_mainnet_protocol_config_override;
 use sui_test_transaction_builder::FundSource;
 use sui_types::{
@@ -29,7 +29,6 @@ use sui_types::{
     gas::GasCostSummary,
     gas_coin::GAS,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    supported_protocol_versions::SupportedProtocolVersions,
     transaction::{
         Argument, Command, FundsWithdrawalArg, GasData, ObjectArg, SharedObjectMutability,
         Transaction, TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
@@ -92,125 +91,19 @@ fn create_transaction_with_expiration(
     })
 }
 
-// Test protocol gating of accumulator root creation. This test can be deleted after the feature
-// is released.
-#[cfg_attr(not(msim), ignore)]
-#[sim_test]
-async fn test_accumulators_root_created() {
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|version, mut cfg| {
-            if version == ProtocolVersion::MAX - 1 {
-                cfg.disable_accumulators_for_testing();
-                cfg.set_create_root_accumulator_object_for_testing(false);
-            } else if version == ProtocolVersion::MAX {
-                // accumulators are enabled for devnet/tests, so we need to disable them to run
-                // this test
-                cfg.disable_accumulators_for_testing();
-                cfg.set_create_root_accumulator_object_for_testing(true);
-                // for some reason all 4 nodes are not reliably submitting capability messages
-                cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
-            } else if version == ProtocolVersion::MAX_ALLOWED {
-                cfg.set_enable_accumulators_for_testing(true);
-            }
-            cfg
-        }))
-        .with_test_cluster_builder_cb(Box::new(|builder| {
-            builder
-                .with_num_validators(1)
-                // We start at MAX - 1 to be sure the root object isn't created in genesis, and then
-                // immediately reconfigure.
-                .with_protocol_version(ProtocolVersion::MAX - 1)
-                .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
-                    ProtocolVersion::MAX.as_u64() - 1,
-                    ProtocolVersion::MAX_ALLOWED.as_u64(),
-                ))
-        }))
-        .build()
-        .await;
-
-    test_env.trigger_reconfiguration().await;
-
-    // accumulator root is not created yet.
-    test_env.cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        assert!(
-            !state
-                .load_epoch_store_one_call_per_task()
-                .accumulator_root_exists()
-        );
-    });
-
-    test_env.trigger_reconfiguration().await;
-
-    // accumulator root was created at the end of previous epoch,
-    // but we didn't upgrade to the next protocol version yet.
-    test_env.cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        assert!(
-            state
-                .load_epoch_store_one_call_per_task()
-                .accumulator_root_exists()
-        );
-        assert_eq!(
-            state
-                .load_epoch_store_one_call_per_task()
-                .protocol_config()
-                .version,
-            ProtocolVersion::MAX
-        );
-    });
-
-    // now we can upgrade to the next protocol version.
-    test_env.trigger_reconfiguration().await;
-
-    test_env.cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        assert_eq!(
-            state
-                .load_epoch_store_one_call_per_task()
-                .protocol_config()
-                .version,
-            ProtocolVersion::MAX_ALLOWED
-        );
-    });
-}
-
 // Test protocol gating of address balances. This test can be deleted after the feature
 // is released.
 #[cfg_attr(not(msim), ignore)]
 #[sim_test]
 async fn test_accumulators_disabled() {
     let mut test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|version, mut cfg| {
-            if version == ProtocolVersion::MAX - 1 {
-                cfg.disable_accumulators_for_testing();
-                cfg.set_create_root_accumulator_object_for_testing(false);
-            } else if version == ProtocolVersion::MAX {
-                // accumulators are enabled for devnet/tests, so we need to disable them to run
-                // this test
-                cfg.disable_accumulators_for_testing();
-                cfg.set_create_root_accumulator_object_for_testing(true);
-                // for some reason all 4 nodes are not reliably submitting capability messages
-                cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
-            } else if version == ProtocolVersion::MAX_ALLOWED {
-                cfg.set_enable_accumulators_for_testing(true);
-            }
+        .with_protocol_version(140.into())
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.disable_accumulators_for_testing();
             cfg
-        }))
-        .with_test_cluster_builder_cb(Box::new(|builder| {
-            builder
-                // We start at MAX - 1 to be sure the root object isn't created in genesis, and then
-                // immediately reconfigure.
-                .with_protocol_version(ProtocolVersion::MAX - 1)
-                .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
-                    ProtocolVersion::MAX.as_u64() - 1,
-                    ProtocolVersion::MAX_ALLOWED.as_u64(),
-                ))
         }))
         .build()
         .await;
-
-    test_env.trigger_reconfiguration().await;
 
     let (sender, gas) = test_env.get_sender_and_gas(0);
 
@@ -235,59 +128,6 @@ async fn test_accumulators_disabled() {
     let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
     let status = effects.status().clone();
     assert!(status.is_err());
-
-    // we reconfigure, and create the accumulator root at the end of this epoch.
-    // but because the root did not exist during this epoch, we don't upgrade to
-    // the next protocol version yet.
-    test_env.trigger_reconfiguration().await;
-
-    // Withdraw must still be rejected at signing.
-    let withdraw_tx = test_env
-        .tx_builder(sender)
-        .transfer_sui_to_address_balance(
-            FundSource::address_fund_with_reservation(1000),
-            vec![(1000, dbg_addr(2))],
-        )
-        .build();
-    test_env.exec_tx_directly(withdraw_tx).await.unwrap_err();
-
-    // transfer fails at execution time
-    let (_, gas) = test_env.get_sender_and_gas(0);
-    let tx = test_env
-        .tx_builder(sender)
-        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1000, recipient)])
-        .build();
-
-    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
-    let status = effects.status().clone();
-    assert!(status.is_err());
-
-    // after one more reconfig, we can upgrade to the next protocol version.
-    test_env.trigger_reconfiguration().await;
-
-    let (_, gas) = test_env.get_sender_and_gas(0);
-    let tx = test_env
-        .tx_builder(sender)
-        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1000, sender)])
-        .build();
-    test_env.exec_tx_directly(tx).await.unwrap();
-
-    test_env.verify_accumulator_exists(sender, 1000);
-
-    // Withdraw can succeed now
-    let withdraw_tx = test_env
-        .tx_builder(sender)
-        .transfer_sui_to_address_balance(
-            FundSource::address_fund_with_reservation(1000),
-            vec![(1000, dbg_addr(2))],
-        )
-        .build();
-    test_env.exec_tx_directly(withdraw_tx).await.unwrap();
-
-    test_env.verify_accumulator_removed(sender);
-
-    // ensure that no conservation failures are detected during reconfig.
-    test_env.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -522,6 +362,7 @@ async fn test_address_balance_gas() {
         return;
     }
     let mut test_env = TestEnvBuilder::new()
+        .with_protocol_version(140.into())
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.disable_gasless_for_testing();
             cfg
@@ -2201,11 +2042,16 @@ fn assert_coin_balance_overflow(effects: &impl TransactionEffectsAPI) {
 
 // Mainnet and testnet still depend on the overflow guards in the flag-off path.
 fn object_funds_test_env(check_in_execution: bool) -> TestEnvBuilder {
-    TestEnvBuilder::new().with_proto_override_cb(Box::new(move |_, mut cfg| {
+    let test_env = TestEnvBuilder::new().with_proto_override_cb(Box::new(move |_, mut cfg| {
         cfg.set_enable_object_funds_withdraw_for_testing(true);
         cfg.set_check_object_funds_withdraw_in_execution_for_testing(check_in_execution);
         cfg
-    }))
+    }));
+    if check_in_execution {
+        test_env
+    } else {
+        test_env.with_protocol_version(140.into())
+    }
 }
 
 /// Regression shape for an old accumulator overflow bug: an unbacked object-sourced `u64::MAX`

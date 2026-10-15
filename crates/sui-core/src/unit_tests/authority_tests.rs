@@ -6393,8 +6393,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         observations_chunk_size: Some(18),
     };
 
-    let mut protocol_config =
-        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    let mut protocol_config = ProtocolConfig::get_for_version(140.into(), Chain::Unknown);
     protocol_config.disable_accumulators_for_testing();
     protocol_config.set_per_object_congestion_control_mode_for_testing(
         PerObjectCongestionControlMode::ExecutionTimeEstimate(execution_time_params),
