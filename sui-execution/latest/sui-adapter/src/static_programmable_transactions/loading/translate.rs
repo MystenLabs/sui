@@ -293,24 +293,16 @@ fn command<Mode: ExecutionMode>(
             let resolved_linkage = env
                 .linkage_analysis
                 .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
-            let payload = if env.protocol_config.enable_unified_linkage() {
-                let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
-                PackagePayload::Deserialized(deserialized_pkg)
-            } else {
-                PackagePayload::Serialized(items)
-            };
+            let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
+            let payload = PackagePayload::Deserialized(deserialized_pkg);
             L::Command::Publish(payload, dep_ids, resolved_linkage)
         }
         P::Command::Upgrade(items, dep_ids, object_id, argument) => {
             let resolved_linkage = env
                 .linkage_analysis
                 .compute_publication_linkage::<Mode::Error>(&dep_ids, env.linkable_store)?;
-            let payload = if env.protocol_config.enable_unified_linkage() {
-                let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
-                PackagePayload::Deserialized(deserialized_pkg)
-            } else {
-                PackagePayload::Serialized(items)
-            };
+            let deserialized_pkg = env.deserialize_package(&items, &dep_ids)?;
+            let payload = PackagePayload::Deserialized(deserialized_pkg);
             L::Command::Upgrade(payload, dep_ids, object_id, argument, resolved_linkage)
         }
     })

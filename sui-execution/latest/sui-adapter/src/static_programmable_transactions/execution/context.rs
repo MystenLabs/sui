@@ -1027,23 +1027,10 @@ where
     pub fn deserialize_package(
         &mut self,
         package_payload: PackagePayload,
-        dep_ids: &[ObjectID],
+        _dep_ids: &[ObjectID],
     ) -> Result<DeserializedPackage, Mode::Error> {
-        Ok(match package_payload {
-            PackagePayload::Deserialized(deserialized_pkg) => deserialized_pkg,
-            PackagePayload::Serialized(module_bytes) => {
-                // This assertion is also checked in the call to `deserialize_modules`, but we
-                // want to check it here first to keep existing behavior around checking this
-                // invariant before the charge on pre-existing pathways.
-                assert_invariant!(
-                    !module_bytes.is_empty(),
-                    "empty package is checked in transaction input checker"
-                );
-                let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
-                self.gas_charger.charge_publish_package(total_bytes)?;
-                self.env.deserialize_package(&module_bytes, dep_ids)?
-            }
-        })
+        let PackagePayload::Deserialized(deserialized_pkg) = package_payload;
+        Ok(deserialized_pkg)
     }
 
     fn fetch_package(&mut self, dependency_id: &ObjectID) -> Result<Rc<MovePackage>, Mode::Error> {
