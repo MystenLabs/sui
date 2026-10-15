@@ -77,6 +77,7 @@ impl Executor {
             granular_post_execution_checks,
             enable_unified_linkage,
             disable_entry_point_signature_check,
+            harden_linkage_consistency,
             convert_withdrawal_compatibility_ptb_arguments,
             enable_init_on_upgrade,
             enable_order_independent_upgrade_init_linkage,

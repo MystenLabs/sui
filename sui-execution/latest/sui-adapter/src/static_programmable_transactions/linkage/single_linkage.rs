@@ -92,24 +92,20 @@ pub fn refine_to_single_linkage<E: ExecutionErrorTrait>(
 
     // Constraint-level invariant check, run before `from_resolution_table` erases the
     // underlying constraints.
-    if protocol_config.harden_linkage_consistency() {
-        for (i, command) in txn.commands.iter().enumerate() {
-            validate_init_linkage_pinning::<E>(command, &base_linkage, package_store)
-                .map_err(|e| e.with_command_index(i))?;
-        }
+    for (i, command) in txn.commands.iter().enumerate() {
+        validate_init_linkage_pinning::<E>(command, &base_linkage, package_store)
+            .map_err(|e| e.with_command_index(i))?;
     }
 
     let resolved_linkage =
         ExecutableLinkage::new(ResolvedLinkage::from_resolution_table(base_linkage));
 
-    // harden_linkage_consistency ==> every package in the unified linkage must resolve to a specific version.
     assert_invariant!(
-        !protocol_config.harden_linkage_consistency()
-            || resolved_linkage
-                .0
-                .linkage_resolution
-                .iter()
-                .all(|(_, resolution)| { resolution.version.is_some() }),
+        resolved_linkage
+            .0
+            .linkage_resolution
+            .iter()
+            .all(|(_, resolution)| { resolution.version.is_some() }),
         "Unified linkage must resolve every package to a specific version, but found: {:?}",
         resolved_linkage
     );
@@ -128,12 +124,8 @@ fn add_used_input_linkage<'a, E: ExecutionErrorTrait>(
     inputs: &Inputs,
     resolution_table: &mut ResolutionTable,
     store: &VerifiedPackageStore<'_>,
-    protocol_config: &ProtocolConfig,
+    _protocol_config: &ProtocolConfig,
 ) -> Result<(), E> {
-    if !protocol_config.harden_linkage_consistency() {
-        return Ok(());
-    }
-
     for argument in arguments {
         if let Argument::Input(i) = argument
             && let Some((_, InputType::Fixed(ty))) = inputs.get(*i as usize)
@@ -148,12 +140,8 @@ fn add_withdrawal_compatibility_input_linkage<E: ExecutionErrorTrait>(
     inputs: &Inputs,
     resolution_table: &mut ResolutionTable,
     store: &VerifiedPackageStore<'_>,
-    protocol_config: &ProtocolConfig,
+    _protocol_config: &ProtocolConfig,
 ) -> Result<(), E> {
-    if !protocol_config.harden_linkage_consistency() {
-        return Ok(());
-    }
-
     add_type_packages::<E>(
         resolution_table,
         inputs.iter().filter_map(|(input_arg, input_ty)| {
@@ -371,7 +359,7 @@ fn add_upgrade_init_linkage_to_table<E: ExecutionErrorTrait>(
     current_package_id: &ObjectID,
     resolved_linkage: &ResolvedLinkage,
     store: &VerifiedPackageStore<'_>,
-    protocol_config: &ProtocolConfig,
+    _protocol_config: &ProtocolConfig,
 ) -> Result<(), E> {
     let current_pkg = get_package(current_package_id, store)?;
     let pkg_original_id: ObjectID = current_pkg.original_id().into();
@@ -397,14 +385,12 @@ fn add_upgrade_init_linkage_to_table<E: ExecutionErrorTrait>(
                 )?;
             }
             Some(existing) if existing.object_id() == *version_id => {
-                if protocol_config.harden_linkage_consistency() {
-                    add_and_unify(
-                        version_id,
-                        store,
-                        resolution_table,
-                        VersionConstraint::exact,
-                    )?;
-                }
+                add_and_unify(
+                    version_id,
+                    store,
+                    resolution_table,
+                    VersionConstraint::exact,
+                )?;
             }
             Some(existing) => {
                 return Err(E::new_with_source(
