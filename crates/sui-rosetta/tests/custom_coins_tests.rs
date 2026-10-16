@@ -25,7 +25,9 @@ use sui_rosetta::types::{
 use sui_rosetta::types::{Currencies, OperationType};
 use test_cluster::TestClusterBuilder;
 use test_coin_utils::{TEST_COIN_DECIMALS, init_package, mint};
-use test_utils::wait_for_transaction;
+use test_utils::{
+    get_sui_balance, get_total_balance, send_all_sui_coins, send_sui_coin, wait_for_transaction,
+};
 
 use crate::rosetta_client::{RosettaEndpoint, start_rosetta_test_server};
 
@@ -497,4 +499,179 @@ async fn test_mint_with_gas_coin_transfer() -> anyhow::Result<()> {
     assert!(gas_used == 0);
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_pay_coin_estimate_only() {
+    const COIN_BALANCE: u64 = 100_000_000;
+    const PAY_AMOUNT: u64 = 30_000_000;
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let minter = test_cluster.get_address_0();
+    let sender = test_cluster.get_address_1();
+    let recipient = test_cluster.get_address_2();
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let init_ret = init_package(&test_cluster, &mut client, keystore, minter, &{
+        let mut test_coin_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        test_coin_path.push("tests/custom_coins/test_coin");
+        test_coin_path
+    })
+    .await
+    .unwrap();
+    let balances_to = vec![(COIN_BALANCE, sender)];
+    let coin_type = init_ret.coin_tag.to_canonical_string(true);
+    let _mint_res = mint(&test_cluster, &mut client, keystore, init_ret, balances_to)
+        .await
+        .unwrap();
+
+    // Leave the sender holding only the test coin: no SUI coins and no SUI address balance.
+    send_all_sui_coins(&mut client, keystore, sender, minter)
+        .await
+        .unwrap();
+    assert_eq!(0, get_sui_balance(&mut client, sender).await);
+
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let ops: Operations = serde_json::from_value(json!(
+        [{
+            "operation_identifier":{"index":0},
+            "type":"PayCoin",
+            "account": { "address" : recipient.to_string() },
+            "amount" : {
+                "value": PAY_AMOUNT.to_string(),
+                "currency": {
+                    "symbol": "TEST_COIN",
+                    "decimals": TEST_COIN_DECIMALS,
+                    "metadata": {
+                        "coin_type": coin_type.clone(),
+                    }
+                }
+            },
+        },
+        {
+            "operation_identifier":{"index":1},
+            "type":"PayCoin",
+            "account": { "address" : sender.to_string() },
+            "amount" : {
+                "value": format!("-{PAY_AMOUNT}"),
+                "currency": {
+                    "symbol": "TEST_COIN",
+                    "decimals": TEST_COIN_DECIMALS,
+                    "metadata": {
+                        "coin_type": coin_type.clone(),
+                    }
+                }
+            },
+        }]
+    ))
+    .unwrap();
+
+    // An estimate-only metadata request quotes the gas budget even though the sender has no SUI.
+    let estimate = rosetta_client
+        .estimate_gas(&ops)
+        .await
+        .expect("estimate_only metadata should succeed for a sender without SUI");
+    assert!(estimate.metadata.estimate_only);
+    assert!(estimate.metadata.gas_coins.is_empty());
+    assert_eq!(
+        Some(coin_type.as_str()),
+        estimate
+            .metadata
+            .currency
+            .as_ref()
+            .map(|currency| currency.metadata.coin_type.as_str())
+    );
+    let quoted_fee = estimate.suggested_fee[0].value;
+    assert!(quoted_fee > 0);
+    assert_eq!(quoted_fee, estimate.metadata.budget as i128);
+
+    // Without estimate_only, metadata fails gas selection.
+    let error = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .metadata
+        .expect("metadata step should run")
+        .expect_err("metadata should fail for a sender without SUI");
+    assert_eq!(16, error.code, "unexpected error: {error:?}");
+    let details = error.details.as_ref().expect("error should carry details");
+    let message = details["error"].as_str().expect("details.error string");
+    assert!(
+        message.contains("Unable to perform gas selection"),
+        "unexpected error message: {message}"
+    );
+    // The error carries the same budget as the quote, plus the balances gas selection saw.
+    assert_eq!(
+        Some(estimate.metadata.budget.to_string().as_str()),
+        details["required_budget"].as_str()
+    );
+    assert_eq!(Some("0"), details["coin_balance"].as_str());
+    assert_eq!(Some("0"), details["address_balance"].as_str());
+
+    // With no other SUI, a single coin worth the quoted fee pays exactly the quoted budget.
+    send_sui_coin(
+        &mut client,
+        keystore,
+        minter,
+        sender,
+        estimate.metadata.budget,
+    )
+    .await
+    .unwrap();
+
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    assert_eq!(
+        estimate.metadata.budget,
+        flow.metadata.unwrap().unwrap().metadata.budget
+    );
+    let response = flow.submit.unwrap().unwrap();
+    wait_for_transaction(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await
+    .unwrap();
+
+    let grpc_request = GetTransactionRequest::default()
+        .with_digest(response.transaction_identifier.hash.to_string())
+        .with_read_mask(FieldMask::from_paths([
+            "digest",
+            "transaction",
+            "effects",
+            "balance_changes",
+            "events.events.event_type",
+            "events.events.json",
+            "events.events.contents",
+        ]));
+
+    let executed_tx = client
+        .ledger_client()
+        .get_transaction(grpc_request)
+        .await
+        .unwrap()
+        .into_inner()
+        .transaction
+        .expect("Response transaction should not be empty");
+
+    assert!(
+        executed_tx.effects().status().success(),
+        "Transaction failed: {:?}",
+        executed_tx.effects().status().error()
+    );
+
+    let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
+    let ops2 = Operations::try_from_executed_transaction(executed_tx, &coin_cache)
+        .await
+        .unwrap();
+    assert!(
+        ops2.contains(&ops),
+        "Operation mismatch. expecting:{}, got:{}",
+        serde_json::to_string(&ops).unwrap(),
+        serde_json::to_string(&ops2).unwrap()
+    );
+
+    assert_eq!(
+        PAY_AMOUNT,
+        get_total_balance(&mut client, recipient, &coin_type).await
+    );
 }

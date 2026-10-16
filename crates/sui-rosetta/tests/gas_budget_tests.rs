@@ -60,6 +60,7 @@ async fn pay_with_gas_budget(budget: u64) -> anyhow::Result<FlowResponses> {
     // We manually use rosetta-flow here to check the intermediate results.
     let metadata = Some(PreprocessMetadata {
         budget: Some(budget),
+        estimate_only: false,
     });
 
     let preprocess_result: Result<ConstructionPreprocessResponse, RosettaError> = rosetta_client

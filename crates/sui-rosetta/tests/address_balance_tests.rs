@@ -35,16 +35,16 @@ use test_cluster::TestClusterBuilder;
 
 mod test_utils;
 use test_coin_utils::{TEST_COIN_DECIMALS, init_package, mint};
-use test_utils::wait_for_transaction;
+use test_utils::{
+    SUI_COIN_TYPE, get_total_balance, send_all_sui_coins, send_sui_coin,
+    send_sui_to_address_balance, wait_for_transaction,
+};
 
 mod rosetta_client;
 use rosetta_client::{RosettaEndpoint, start_rosetta_test_server};
 
 #[path = "custom_coins/test_coin_utils.rs"]
 mod test_coin_utils;
-
-const SUI_COIN_TYPE: &str =
-    "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";
 
 async fn fetch_transaction_and_get_operations(
     test_cluster: &test_cluster::TestCluster,
@@ -142,21 +142,6 @@ fn single_coin_accounts() -> Vec<AccountConfig> {
             gas_amounts: vec![AMOUNT_150K_SUI],
         })
         .collect()
-}
-
-async fn get_total_balance(client: &mut GrpcClient, address: SuiAddress, coin_type: &str) -> u64 {
-    let request = GetBalanceRequest::default()
-        .with_owner(address.to_string())
-        .with_coin_type(coin_type.to_string());
-
-    client
-        .state_client()
-        .get_balance(request)
-        .await
-        .unwrap()
-        .into_inner()
-        .balance()
-        .balance()
 }
 
 /// Return only the address-balance portion of an account's holdings (excludes coin objects),
@@ -1299,6 +1284,202 @@ async fn test_stake_entirely_from_ab() {
     );
 }
 
+/// A Stake below the 1 SUI minimum aborts in `validator_set::request_add_stake`.
+/// `/construction/metadata` reports that abort as the same dry-run error whether or not the sender
+/// can pay for gas. For the sender that cannot, the fullnode's simulation also fails gas selection
+/// and reports the execution failure in its error status instead of in the effects.
+#[tokio::test]
+async fn test_stake_below_minimum_same_error_without_gas() {
+    const STAKE_AMOUNT: u64 = 1_000;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .with_accounts(single_coin_accounts())
+        .with_epoch_duration_ms(36000000)
+        .build()
+        .await;
+    let funded_sender = test_cluster.get_address_0();
+    let unfunded_sender = test_cluster.get_address_1();
+    let coin_recipient = test_cluster.get_address_2();
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    // Both senders hold exactly the stake amount in address balance, so Rosetta builds the same
+    // transaction for both. The funded sender keeps its SUI coin to pay for gas; the unfunded
+    // sender gives away all of its SUI coins and holds nothing beyond the stake amount.
+    for sender in [funded_sender, unfunded_sender] {
+        deposit_to_address_balance(
+            &test_cluster,
+            &mut client,
+            keystore,
+            sender,
+            STAKE_AMOUNT,
+            None,
+        )
+        .await;
+    }
+    send_all_sui_coins(&mut client, keystore, unfunded_sender, coin_recipient)
+        .await
+        .unwrap();
+    assert_eq!(
+        STAKE_AMOUNT,
+        get_total_balance(&mut client, unfunded_sender, SUI_COIN_TYPE).await
+    );
+    assert_eq!(
+        STAKE_AMOUNT,
+        get_address_balance(&mut client, unfunded_sender, SUI_COIN_TYPE).await
+    );
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let validator = response
+        .epoch
+        .and_then(|e| e.system_state)
+        .unwrap()
+        .validators
+        .unwrap()
+        .active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+
+    let mut metadata_errors = vec![];
+    for sender in [funded_sender, unfunded_sender] {
+        let stake_ops: Operations = serde_json::from_value(json!([{
+            "operation_identifier": {"index": 0},
+            "type": "Stake",
+            "account": {"address": sender.to_string()},
+            "amount": {"value": format!("-{STAKE_AMOUNT}")},
+            "metadata": {"Stake": {"validator": validator.to_string()}}
+        }]))
+        .unwrap();
+        let error = rosetta_client
+            .rosetta_flow(&stake_ops, keystore, None)
+            .await
+            .metadata
+            .expect("metadata step should run")
+            .expect_err("metadata should fail for a stake below the minimum");
+        metadata_errors.push(error);
+    }
+    let [funded_error, unfunded_error] = <[_; 2]>::try_from(metadata_errors).unwrap();
+
+    assert_eq!(11, funded_error.code, "unexpected error: {funded_error:?}");
+    assert_eq!("Transaction dry run error", funded_error.message);
+    let message = funded_error
+        .details
+        .as_ref()
+        .and_then(|details| details["error"].as_str())
+        .expect("details.error string");
+    assert!(
+        message.contains("MOVE_ABORT"),
+        "unexpected error message: {message}"
+    );
+    assert_eq!(funded_error, unfunded_error);
+}
+
+/// A Stake or PaySui that spends a sender's entire SUI address balance leaves nothing to pay for
+/// gas. The quote must cover the transaction Rosetta builds after the prefund, whether the prefund
+/// arrives in the address balance or as a new coin.
+#[tokio::test]
+async fn test_estimate_only_spending_entire_address_balance() {
+    const AMOUNT: u64 = 1_000_000_000;
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .with_accounts(single_coin_accounts())
+        .with_epoch_duration_ms(36000000)
+        .build()
+        .await;
+    let addresses = test_cluster.get_addresses();
+    let funder = addresses[0];
+    let keystore = &test_cluster.wallet.config.keystore;
+
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let validator = response
+        .epoch
+        .and_then(|e| e.system_state)
+        .unwrap()
+        .validators
+        .unwrap()
+        .active_validators[0]
+        .address()
+        .parse::<SuiAddress>()
+        .unwrap();
+    let stake_ops = |sender: SuiAddress| -> Operations {
+        serde_json::from_value(json!([{
+            "operation_identifier": {"index": 0},
+            "type": "Stake",
+            "account": {"address": sender.to_string()},
+            "amount": {"value": format!("-{AMOUNT}")},
+            "metadata": {"Stake": {"validator": validator.to_string()}}
+        }]))
+        .unwrap()
+    };
+
+    let cases = [
+        (addresses[1], stake_ops(addresses[1]), true),
+        (addresses[2], stake_ops(addresses[2]), false),
+        (
+            addresses[3],
+            pay_sui_ops(addresses[3], funder, &AMOUNT.to_string()),
+            true,
+        ),
+        (
+            addresses[4],
+            pay_sui_ops(addresses[4], funder, &AMOUNT.to_string()),
+            false,
+        ),
+    ];
+    for (sender, ops, prefund_into_address_balance) in cases {
+        // Leave the sender holding exactly the amount it spends, all in its address balance.
+        deposit_to_address_balance(&test_cluster, &mut client, keystore, sender, AMOUNT, None)
+            .await;
+        send_all_sui_coins(&mut client, keystore, sender, funder)
+            .await
+            .unwrap();
+        assert_eq!(
+            AMOUNT,
+            get_address_balance(&mut client, sender, SUI_COIN_TYPE).await
+        );
+        assert_eq!(
+            AMOUNT,
+            get_total_balance(&mut client, sender, SUI_COIN_TYPE).await
+        );
+
+        let fee = rosetta_client
+            .estimate_gas(&ops)
+            .await
+            .expect("estimate_only metadata must succeed for a sender that can't pay for gas")
+            .metadata
+            .budget;
+        if prefund_into_address_balance {
+            send_sui_to_address_balance(&mut client, keystore, funder, sender, fee)
+                .await
+                .unwrap();
+        } else {
+            send_sui_coin(&mut client, keystore, funder, sender, fee)
+                .await
+                .unwrap();
+        }
+
+        rosetta_flow_success(&rosetta_client, &mut client, &ops, keystore).await;
+    }
+}
+
 /// PayCoin (non-SUI) with SUI address balance available.
 /// 1. Deploy custom coin package + mint coins
 /// 2. Deposit SUI to address balance
@@ -2217,6 +2398,7 @@ async fn test_pay_coin_gasless_ignores_request_budget() {
             keystore,
             Some(PreprocessMetadata {
                 budget: Some(50_000_000),
+                estimate_only: false,
             }),
         )
         .await;

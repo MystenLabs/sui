@@ -674,6 +674,20 @@ pub struct ConstructionPreprocessRequest {
 pub struct PreprocessMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub budget: Option<u64>,
+    /// Quote the gas budget instead of preparing a signable transaction.
+    ///
+    /// `/construction/metadata` returns the budget in `suggested_fee` even when the sender can't
+    /// pay for gas, and marks the metadata so `/construction/payloads` rejects it. The quote is for
+    /// the sender's current SUI. To fund a sender that can't pay, send it a new SUI coin worth the
+    /// whole quote: if the sender already holds SUI coins, the new coin raises the budget by up to
+    /// the cost of loading one more gas coin, which the existing coins cover unless they total less
+    /// than that cost. A coin worth only the quote minus the sender's balance can fall short.
+    ///
+    /// Cannot be combined with `budget`. `PaySui` and `Stake` pay gas with the sender's SUI coins
+    /// when its address balance can't, so for a sender that holds SUI coins but can't pay for gas
+    /// they return an error instead of a quote.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub estimate_only: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -689,6 +703,9 @@ pub struct MetadataOptions {
     pub internal_operation: InternalOperation,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub budget: Option<u64>,
+    /// Set from `PreprocessMetadata::estimate_only`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub estimate_only: bool,
 }
 
 impl IntoResponse for ConstructionPreprocessResponse {
@@ -780,6 +797,9 @@ pub struct ConstructionMetadata {
     /// replayed in a later epoch with a different exchange rate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bind_epoch: Option<u64>,
+    /// Marks a gas quote from an `estimate_only` request; `/construction/payloads` rejects it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub estimate_only: bool,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
@@ -1137,6 +1157,7 @@ mod tests {
             redeem_token_amount: None,
             redeem_plan: None,
             bind_epoch: None,
+            estimate_only: false,
         };
         let prod_metadata_json = serde_json::to_string(&prod_metadata).unwrap();
 
