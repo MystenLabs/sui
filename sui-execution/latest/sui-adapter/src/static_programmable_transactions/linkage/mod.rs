@@ -24,10 +24,6 @@ pub fn refine_linkage<Mode: ExecutionMode>(
     package_store: &VerifiedPackageStore<'_>,
     protocol_config: &ProtocolConfig,
 ) -> Result<loading::Transaction, Mode::Error> {
-    if !protocol_config.enable_unified_linkage() {
-        return Ok(txn);
-    }
-
     single_linkage::refine_to_single_linkage::<Mode::Error>(
         &mut txn,
         linkage_analysis,

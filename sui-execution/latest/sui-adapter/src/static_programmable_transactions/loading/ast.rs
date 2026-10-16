@@ -166,7 +166,6 @@ pub enum Command {
 
 #[derive(Debug, Clone)]
 pub enum PackagePayload {
-    Serialized(Vec<Vec<u8>>),
     Deserialized(DeserializedPackage),
 }
 
