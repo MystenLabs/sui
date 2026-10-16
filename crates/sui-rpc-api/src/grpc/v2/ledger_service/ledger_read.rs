@@ -41,15 +41,33 @@ pub(super) fn checkpoint_to_tx_boundary(
         .inner()
         .get_checkpoint_by_sequence_number(checkpoint - 1)
         .map(|checkpoint| checkpoint.data().network_total_transactions)
-        .ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!(
-                    "missing checkpoint {} while resolving tx boundary",
-                    checkpoint - 1
-                ),
-            )
-        })
+        .ok_or_else(|| missing_checkpoint_error(service, checkpoint))
+}
+
+/// Classify a missing predecessor summary while resolving the tx boundary of
+/// `checkpoint`. Range resolution runs before the serving-floor clamp, so a
+/// boundary below the floor lands here first: report it as `OutOfRange`, as
+/// `list_checkpoints` does. A boundary at or above the floor needs a summary
+/// the store retains, so its absence is `Internal`.
+fn missing_checkpoint_error(
+    service: &RpcService,
+    checkpoint: CheckpointSequenceNumber,
+) -> RpcError {
+    match service.reader.get_lowest_available_checkpoint() {
+        Ok(floor) if checkpoint < floor => RpcError::new(
+            tonic::Code::OutOfRange,
+            format!(
+                "requested data below earliest available; lowest available checkpoint is {floor}"
+            ),
+        ),
+        _ => RpcError::new(
+            tonic::Code::Internal,
+            format!(
+                "missing checkpoint {} while resolving tx boundary",
+                checkpoint - 1
+            ),
+        ),
+    }
 }
 
 /// Resolve a half-open checkpoint range to the tx_sequence_number range it
