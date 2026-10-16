@@ -137,32 +137,12 @@ async fn list_api_cluster_with_config(mut kv_rpc_config: KvRpcConfig) -> FullClu
 }
 
 async fn wait_for_kv_checkpoint(cluster: &FullCluster, required_checkpoint: u64) {
-    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+    cluster
+        .wait_for_kv_rpc(required_checkpoint, Duration::from_secs(30))
         .await
-        .expect("connect to KV RPC service-info endpoint");
-    let mut last_observed = None;
-
-    tokio::time::timeout(Duration::from_secs(30), async {
-        loop {
-            if let Ok(response) = client
-                .get_service_info(GetServiceInfoRequest::default())
-                .await
-            {
-                last_observed = response.into_inner().checkpoint_height;
-                if last_observed.is_some_and(|checkpoint| checkpoint >= required_checkpoint) {
-                    return;
-                }
-            }
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-    })
-    .await
-    .unwrap_or_else(|_| {
-        panic!(
-            "KV RPC did not advertise checkpoint {required_checkpoint} within 30s; \
-             last advertised checkpoint was {last_observed:?}"
-        )
-    });
+        .unwrap_or_else(|_| {
+            panic!("KV RPC did not advertise checkpoint {required_checkpoint} within 30s")
+        });
 }
 
 /// A cluster whose kv-rpc server also binds a second, unencrypted listener
