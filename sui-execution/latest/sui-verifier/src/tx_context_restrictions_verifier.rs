@@ -7,10 +7,6 @@
 //! > return list, its parameter list must also contain at least one `&mut U`
 //! > for some `U != TxContext`.
 //!
-//! Gated on `VerifierConfig::framework_tx_context_mut_restrictions`, populated from
-//! `ProtocolConfig::framework_tx_context_mut_restrictions()`. Activates at protocol
-//! version 131.
-//!
 //! The rule applies only to system packages: it is a checksum on our own
 //! implementations, ensuring no framework function can hand back a mutable
 //! reference rooted in the auto-injected `TxContext`. It cannot be enforced
@@ -30,7 +26,6 @@ use move_binary_format::{
     CompiledModule,
     file_format::{FunctionDefinition, SignatureToken},
 };
-use move_vm_config::verifier::VerifierConfig;
 use sui_types::{
     base_types::{TxContext, TxContextKind},
     error::ExecutionError,
@@ -39,13 +34,7 @@ use sui_types::{
 
 use crate::verification_failure;
 
-pub fn verify_module(
-    module: &CompiledModule,
-    verifier_config: &VerifierConfig,
-) -> Result<(), ExecutionError> {
-    if !verifier_config.framework_tx_context_mut_restrictions {
-        return Ok(());
-    }
+pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
     if !is_system_package(*module.self_id().address()) {
         return Ok(());
     }
