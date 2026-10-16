@@ -109,6 +109,26 @@ sui-fork status
 > If your test depends on address-owned objects in the fork, add repeatable
 > `--address 0x...` or `--object 0x...` flags to `sui-fork start`.
 
+## GraphQL Authentication
+
+Set `SUI_FORK_GRAPHQL_HEADER` to send one custom header with every outbound
+GraphQL request, including retries. The value must have the form `Name: Value`.
+For bearer authentication, with `TOKEN` supplied by your secret manager or shell:
+
+```bash
+export SUI_FORK_GRAPHQL_HEADER="Authorization: Bearer $TOKEN"
+sui-fork start --network https://your-provider.example/graphql
+```
+
+For an API-key header, use `SUI_FORK_GRAPHQL_HEADER="X-API-Key: $API_KEY"` instead.
+The client reads the variable when it is constructed. Unset it to send no custom
+header. Empty or malformed headers fail startup without printing their values.
+
+Use HTTPS for remote endpoints to protect credentials in transit. When a header
+is configured, redirects must preserve the endpoint's scheme, host, and port;
+cross-origin redirects fail rather than forwarding credentials. The header does
+not configure authentication for the fork's local gRPC server.
+
 ## Impersonating Senders
 
 The Sui CLI supports `--skip-signing` on transaction commands such as
