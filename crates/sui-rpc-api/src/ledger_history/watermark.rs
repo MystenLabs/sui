@@ -26,7 +26,8 @@
 use sui_inverted_index::ScanDirection;
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2::Watermark;
-use sui_rpc_cursor::{CursorKind, CursorToken, Position};
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 
 use crate::ledger_history::query_options::{QueryOptions, RangeExhaustion};
 
@@ -109,24 +110,8 @@ pub fn item_watermark(position: Position, boundary: Option<u64>) -> Watermark {
 /// scanners' direction adjustment); `boundary` is the accumulated
 /// completion boundary.
 pub fn boundary_watermark(position: Position, boundary: Option<u64>) -> Watermark {
-    cursor_watermark(position, boundary, sui_rpc_cursor::CursorKind::Boundary)
-}
-
-/// Build a watermark whose cursor kind has been resolved by query-range
-/// bookkeeping. This is needed for an ascending event interval made empty by
-/// an `after` Item cursor, where changing the raw coordinate to Boundary would
-/// re-include the item on resume.
-fn cursor_watermark(
-    position: Position,
-    boundary: Option<u64>,
-    cursor_kind: sui_rpc_cursor::CursorKind,
-) -> Watermark {
-    let cursor = match cursor_kind {
-        sui_rpc_cursor::CursorKind::Item => CursorToken::item(position),
-        sui_rpc_cursor::CursorKind::Boundary => CursorToken::boundary(position),
-    };
     let mut wm = Watermark::default();
-    wm.cursor = Some(cursor.encode());
+    wm.cursor = Some(CursorToken::boundary(position).encode());
     set_checkpoint_bound(&mut wm, boundary);
     wm
 }
@@ -211,10 +196,7 @@ pub enum ScanTerminal {
         interval_empty: bool,
     },
     /// The caller-provided cursor bound truncates the interval at `position`.
-    CursorBound {
-        position: Position,
-        kind: CursorKind,
-    },
+    CursorBound { position: Position },
 }
 
 impl ScanTerminal {
@@ -234,7 +216,7 @@ impl ScanTerminal {
                 position,
                 interval_empty,
             },
-            RangeExhaustion::CursorBound { kind } => Self::CursorBound { position, kind },
+            RangeExhaustion::CursorBound => Self::CursorBound { position },
         }
     }
 
@@ -273,22 +255,41 @@ impl ScanTerminal {
                 ..
             } => {
                 if interval_empty {
-                    boundary_watermark(position, None)
+                    resume_or_boundary_watermark(options, position, None)
                 } else {
                     terminal_boundary_watermark(options, position)
                 }
             }
-            Self::CursorBound { position, kind } => {
-                cursor_watermark(position, covered_checkpoint_bound, kind)
+            Self::CursorBound { position } => {
+                resume_or_boundary_watermark(options, position, covered_checkpoint_bound)
             }
         }
+    }
+}
+
+/// The terminal watermark of a scan that ends at `position` without scanning past it. If that's
+/// the request's own resume cursor (the cursor emptied the window), echo it as is: rewriting an
+/// Item cursor as a Boundary would re-include its item on resume.
+fn resume_or_boundary_watermark(
+    options: &QueryOptions,
+    position: Position,
+    boundary: Option<u64>,
+) -> Watermark {
+    match options.resume_cursor() {
+        Some(cursor) if cursor.position == position => {
+            let mut wm = Watermark::default();
+            wm.cursor = Some(cursor.encode());
+            set_checkpoint_bound(&mut wm, boundary);
+            wm
+        }
+        _ => boundary_watermark(position, boundary),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sui_rpc_cursor::{CursorKind, Position};
+    use sui_rpc_cursor::Position;
 
     fn options(ascending: bool) -> QueryOptions {
         let mut request = sui_rpc::proto::sui::rpc::v2::QueryOptions::default();
@@ -473,24 +474,14 @@ mod tests {
                 },
             ),
             (
-                RangeExhaustion::CursorBound {
-                    kind: CursorKind::Item,
-                },
+                RangeExhaustion::CursorBound,
                 false,
-                ScanTerminal::CursorBound {
-                    position,
-                    kind: CursorKind::Item,
-                },
+                ScanTerminal::CursorBound { position },
             ),
             (
-                RangeExhaustion::CursorBound {
-                    kind: CursorKind::Item,
-                },
+                RangeExhaustion::CursorBound,
                 true,
-                ScanTerminal::CursorBound {
-                    position,
-                    kind: CursorKind::Item,
-                },
+                ScanTerminal::CursorBound { position },
             ),
         ];
 
@@ -597,10 +588,7 @@ mod tests {
             checkpoint: 9,
             tx_seq: 4,
         };
-        let terminal = ScanTerminal::CursorBound {
-            position,
-            kind: CursorKind::Boundary,
-        };
+        let terminal = ScanTerminal::CursorBound { position };
         assert_eq!(terminal.reason(), QueryEndReason::CursorBound);
 
         let watermark = terminal.clone().into_watermark(&ascending, Some(6));
@@ -618,23 +606,153 @@ mod tests {
         assert_eq!(watermark.checkpoint, None);
     }
 
+    /// A caught-up poll: an open-ended ascending scan resumed from a cursor at the indexed tip
+    /// (the last item, or the Boundary just past it) has nothing to scan and ends at the ledger
+    /// tip, not at the cursor, so a client told to repeat until `CURSOR_BOUND` doesn't stop early.
+    /// The terminal hands back a cursor that doesn't re-serve the last item.
     #[test]
-    fn scan_terminal_event_cursor_bound_preserves_item_kind() {
-        let ascending = options(true);
+    fn scan_terminal_caught_up_poll_ends_at_ledger_tip() {
+        use crate::ledger_history::query_options::ResolvedCheckpointRange;
+        use crate::ledger_history::query_options::ResolvedScan;
+
+        // Checkpoint 9 is the indexed tip and holds transactions 90..100.
+        let last_item = CursorToken::item(Position::Transactions {
+            checkpoint: 9,
+            tx_seq: 99,
+        });
+        let past_last = CursorToken::boundary(Position::Transactions {
+            checkpoint: 9,
+            tx_seq: 100,
+        });
+        for after in [last_item, past_last] {
+            let mut request = sui_rpc::proto::sui::rpc::v2::QueryOptions::default();
+            request.after = Some(after.encode());
+            let options = QueryOptions::transactions_from_proto(Some(&request), 100, 100).unwrap();
+
+            let cp_range = ResolvedCheckpointRange::from_request(None, None, 10, &options).unwrap();
+            let resolved = ResolvedScan::resolve(cp_range, 90..100, &options).unwrap();
+            assert_eq!(
+                resolved.exhaustion,
+                RangeExhaustion::LedgerTip,
+                "after {after:?}"
+            );
+
+            let terminal = ScanTerminal::from_range_exhaustion(
+                resolved.exhaustion,
+                Position::Transactions {
+                    checkpoint: resolved.end_checkpoint,
+                    tx_seq: resolved.end_position,
+                },
+                resolved.is_empty(),
+            );
+            assert_eq!(
+                terminal.reason(),
+                QueryEndReason::LedgerTip,
+                "after {after:?}"
+            );
+            let watermark = terminal.into_watermark(&options, None);
+            let cursor = CursorToken::decode(watermark.cursor.as_ref().unwrap()).unwrap();
+            let past_tip = cursor.kind == sui_rpc_cursor::CursorKind::Boundary
+                && matches!(cursor.position, Position::Transactions { tx_seq, .. } if tx_seq >= 100);
+            assert!(
+                cursor == after || past_tip,
+                "after {after:?}: terminal {cursor:?} re-serves the last item"
+            );
+        }
+    }
+
+    /// Ascending, with a `before` cursor that clamps the checkpoint window (so the window ends as
+    /// a cursor bound) but sits past the window's last position (so it doesn't bound the scan),
+    /// and an `after` Item cursor at the window's end (here with a placeholder checkpoint, as
+    /// pg-minted cursors carry). The window is empty and ends at the `after` cursor as a cursor
+    /// bound; the terminal must echo the Item cursor, or resuming from it re-serves the item.
+    #[test]
+    fn scan_terminal_cursor_bound_echoes_resume_item_cursor() {
+        use crate::ledger_history::query_options::ResolvedCheckpointRange;
+        use crate::ledger_history::query_options::ResolvedScan;
+
+        let after = CursorToken::item(Position::Transactions {
+            checkpoint: 0,
+            tx_seq: 20,
+        });
+        let before = CursorToken::boundary(Position::Transactions {
+            checkpoint: 2,
+            tx_seq: 25,
+        });
+        let mut request = sui_rpc::proto::sui::rpc::v2::QueryOptions::default();
+        request.after = Some(after.encode());
+        request.before = Some(before.encode());
+        let options = QueryOptions::transactions_from_proto(Some(&request), 100, 100).unwrap();
+
+        let cp_range = ResolvedCheckpointRange::from_request(None, None, 10, &options).unwrap();
+        assert_eq!(cp_range.range, 0..2);
+        assert_eq!(cp_range.exhaustion, RangeExhaustion::CursorBound);
+
+        // Checkpoints 0 and 1 hold transactions 0..20.
+        let resolved = ResolvedScan::resolve(cp_range, 0..20, &options).unwrap();
+        assert!(resolved.is_empty());
+        assert_eq!(resolved.exhaustion, RangeExhaustion::CursorBound);
+
+        let terminal = ScanTerminal::from_range_exhaustion(
+            resolved.exhaustion,
+            Position::Transactions {
+                checkpoint: resolved.end_checkpoint,
+                tx_seq: resolved.end_position,
+            },
+            resolved.is_empty(),
+        );
+        assert_eq!(terminal.reason(), QueryEndReason::CursorBound);
+        let watermark = terminal.into_watermark(&options, None);
+        assert_eq!(watermark.cursor, Some(after.encode()));
+    }
+
+    /// An empty scan that ends on the request's resume cursor echoes it with its own kind, so
+    /// resuming from an Item cursor doesn't re-serve its item. Other terminals are unaffected.
+    #[test]
+    fn scan_terminal_empty_natural_range_echoes_resume_cursor() {
         let position = Position::Events {
             checkpoint: 9,
             tx_seq: 4,
             event_index: 2,
         };
-        let terminal = ScanTerminal::CursorBound {
-            position,
-            kind: CursorKind::Item,
+        let elsewhere = Position::Events {
+            checkpoint: 10,
+            tx_seq: 5,
+            event_index: 0,
         };
-        assert_eq!(terminal.reason(), QueryEndReason::CursorBound);
+        for ascending in [true, false] {
+            for cursor in [CursorToken::item(position), CursorToken::boundary(position)] {
+                let mut request = sui_rpc::proto::sui::rpc::v2::QueryOptions::default();
+                if ascending {
+                    request.after = Some(cursor.encode());
+                } else {
+                    request.ordering =
+                        Some(sui_rpc::proto::sui::rpc::v2::Ordering::Descending as i32);
+                    request.before = Some(cursor.encode());
+                }
+                let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
 
-        let watermark = terminal.into_watermark(&ascending, Some(6));
-        assert_eq!(watermark.cursor, Some(CursorToken::item(position).encode()));
-        assert_eq!(watermark.checkpoint, Some(6));
+                let terminal = ScanTerminal::NaturalRange {
+                    end: NaturalRangeEnd::CheckpointBound,
+                    position,
+                    interval_empty: true,
+                };
+                let watermark = terminal.into_watermark(&options, None);
+                assert_eq!(watermark.cursor, Some(cursor.encode()));
+                assert_eq!(watermark.checkpoint, None);
+
+                let terminal = ScanTerminal::NaturalRange {
+                    end: NaturalRangeEnd::CheckpointBound,
+                    position: elsewhere,
+                    interval_empty: true,
+                };
+                let watermark = terminal.into_watermark(&options, None);
+                assert_eq!(
+                    watermark.cursor,
+                    Some(CursorToken::boundary(elsewhere).encode())
+                );
+            }
+        }
     }
 
     #[test]
