@@ -290,12 +290,34 @@ mod test {
     async fn test_simulated_load_reconfig_restarts() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 10_000, 1).await;
+        // Graceful stops let async tasks run briefly after blocking work is cancelled, which
+        // hard kills cannot exercise.
         let node_restarter = test_cluster
             .random_node_restarter()
-            .with_kill_interval_secs(5, 15)
-            .with_restart_delay_secs(1, 10);
+            .with_kill_interval_secs(2, 6)
+            .with_restart_delay_secs(1, 5)
+            .with_graceful_shutdown();
         node_restarter.run();
-        test_simulated_load(test_cluster, 120).await;
+
+        // Conflicting transactions get reject votes, which sends them through the commit
+        // finalizer's indirect finalization.
+        let mut composite_config = CompositeWorkloadConfig::balanced();
+        composite_config.conflicting_transaction_probability = 0.5;
+        let simulated_load_config = SimulatedLoadConfig {
+            composite_config: Some(composite_config),
+            gas_double_spend_weight: 3,
+            ..Default::default()
+        };
+        test_simulated_load_with_test_config(
+            test_cluster,
+            120,
+            simulated_load_config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            true, // enable_surfer
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]

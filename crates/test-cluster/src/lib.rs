@@ -202,6 +202,21 @@ impl TestCluster {
         self.swarm.node(name).unwrap().stop();
     }
 
+    /// See `sui_swarm::memory::Node::graceful_stop`.
+    #[cfg(msim)]
+    pub async fn graceful_stop_node(
+        &self,
+        name: &AuthorityName,
+        poll_budget: usize,
+        max_duration: Duration,
+    ) {
+        self.swarm
+            .node(name)
+            .unwrap()
+            .graceful_stop(poll_budget, max_duration)
+            .await;
+    }
+
     pub async fn stop_all_validators(&self) {
         info!("Stopping all validators in the cluster");
         self.swarm.active_validators().for_each(|v| v.stop());
@@ -1123,6 +1138,8 @@ pub struct RandomNodeRestarter {
     kill_interval: Uniform<Duration>,
     // How long should we wait before restarting them.
     restart_delay: Uniform<Duration>,
+    // Stop nodes as SIGTERM would instead of killing them.
+    graceful: bool,
 
     task_handle: Mutex<Option<JoinHandle<()>>>,
 }
@@ -1133,6 +1150,7 @@ impl RandomNodeRestarter {
             test_cluster,
             kill_interval: Uniform::new(Duration::from_secs(10), Duration::from_secs(11)),
             restart_delay: Uniform::new(Duration::from_secs(1), Duration::from_secs(2)),
+            graceful: false,
             task_handle: Default::default(),
         }
     }
@@ -1147,10 +1165,17 @@ impl RandomNodeRestarter {
         self
     }
 
+    #[cfg(msim)]
+    pub fn with_graceful_shutdown(mut self) -> Self {
+        self.graceful = true;
+        self
+    }
+
     pub fn run(&self) {
         let test_cluster = self.test_cluster.clone();
         let kill_interval = self.kill_interval;
         let restart_delay = self.restart_delay;
+        let graceful = self.graceful;
         let validators = self.test_cluster.get_validator_pubkeys();
         let mut task_handle = self.task_handle.lock().unwrap();
         assert!(task_handle.is_none());
@@ -1161,8 +1186,13 @@ impl RandomNodeRestarter {
                 sleep(delay).await;
 
                 let validator = validators.choose(&mut OsRng).unwrap();
-                info!("Killing validator {:?}", validator.concise());
-                test_cluster.stop_node(validator);
+                if graceful {
+                    info!("Gracefully stopping validator {:?}", validator.concise());
+                    Self::graceful_stop(&test_cluster, validator).await;
+                } else {
+                    info!("Killing validator {:?}", validator.concise());
+                    test_cluster.stop_node(validator);
+                }
 
                 let delay = restart_delay.sample(&mut OsRng);
                 info!("Sleeping {delay:?} before restarting");
@@ -1171,6 +1201,23 @@ impl RandomNodeRestarter {
                 test_cluster.start_node(validator).await;
             }
         }));
+    }
+}
+
+impl RandomNodeRestarter {
+    #[cfg(msim)]
+    async fn graceful_stop(test_cluster: &TestCluster, validator: &AuthorityName) {
+        // Each busy tokio worker notices runtime shutdown within 61 task polls; this allows for
+        // up to 8 workers.
+        let poll_budget = OsRng.gen_range(0..=61 * 8);
+        test_cluster
+            .graceful_stop_node(validator, poll_budget, Duration::from_secs(1))
+            .await;
+    }
+
+    #[cfg(not(msim))]
+    async fn graceful_stop(_: &TestCluster, _: &AuthorityName) {
+        unreachable!("graceful shutdown is only available in simtests");
     }
 }
 
