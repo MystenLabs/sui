@@ -3,12 +3,66 @@
 
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use prometheus::{
-    Histogram, IntCounter, IntGauge, Registry, register_histogram_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry,
+    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, Registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry,
 };
 use std::sync::Arc;
+use std::time::Duration;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::Pipe;
+
+/// Buckets for checkpoint contents download latencies. Requests to nearby peers finish in tens
+/// of milliseconds and requests to distant peers in one round trip (up to ~300 ms); the finer
+/// buckets up to 1 s separate one-round-trip responses from responses that needed several.
+const CHECKPOINT_CONTENT_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0, 30.0,
+];
+
+/// How a single checkpoint contents request to one peer ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ContentRequestOutcome {
+    /// The peer returned contents that match the checkpoint's content digest.
+    Success,
+    /// The request failed or timed out, or the peer returned no contents or contents that do
+    /// not match the digest.
+    Failure,
+    /// The request was dropped because another peer's response for the same checkpoint won.
+    Cancelled,
+}
+
+impl ContentRequestOutcome {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Success => "success",
+            Self::Failure => "failure",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
+/// Events of hedged checkpoint contents downloads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum HedgeEvent {
+    /// A hedge request was sent.
+    Sent,
+    /// The checkpoint's contents came from a hedge request.
+    Won,
+    /// The hedge delay passed, but no peer that hadn't been asked yet had announced the
+    /// checkpoint. Counted at most once per download attempt.
+    NoCandidate,
+}
+
+impl HedgeEvent {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Sent => "sent",
+            Self::Won => "won",
+            Self::NoCandidate => "no_candidate",
+        }
+    }
+}
 
 #[derive(Clone)]
 pub(super) struct Metrics(Option<Arc<Inner>>);
@@ -70,6 +124,91 @@ impl Metrics {
         }
     }
 
+    /// Records one finished checkpoint contents request to `peer`. Only successful requests
+    /// enter the response latency histogram; failed and cancelled ones are only counted.
+    pub fn record_checkpoint_content_peer_request(
+        &self,
+        peer: &str,
+        outcome: ContentRequestOutcome,
+        elapsed: Duration,
+    ) {
+        if let Some(inner) = &self.0 {
+            inner
+                .checkpoint_content_peer_requests
+                .with_label_values(&[peer, outcome.as_str()])
+                .inc();
+            if outcome == ContentRequestOutcome::Success {
+                inner
+                    .checkpoint_content_peer_response_latency
+                    .with_label_values(&[peer])
+                    .observe(elapsed.as_secs_f64());
+            }
+        }
+    }
+
+    /// Records one download attempt of a checkpoint's contents: the time from its first request
+    /// to the first valid response, across all peers asked.
+    pub fn record_checkpoint_content_download(&self, elapsed: Duration) {
+        if let Some(inner) = &self.0 {
+            inner
+                .checkpoint_content_download_latency
+                .observe(elapsed.as_secs_f64());
+        }
+    }
+
+    pub fn inc_checkpoint_content_hedge(&self, event: HedgeEvent) {
+        if let Some(inner) = &self.0 {
+            inner
+                .checkpoint_content_hedges
+                .with_label_values(&[event.as_str()])
+                .inc();
+        }
+    }
+
+    pub fn inc_checkpoint_content_fallback_requests(&self) {
+        if let Some(inner) = &self.0 {
+            inner.checkpoint_content_fallback_requests.inc();
+        }
+    }
+
+    #[cfg(test)]
+    pub fn checkpoint_content_hedges(&self, event: HedgeEvent) -> u64 {
+        self.0
+            .as_ref()
+            .map(|inner| {
+                inner
+                    .checkpoint_content_hedges
+                    .with_label_values(&[event.as_str()])
+                    .get()
+            })
+            .unwrap_or(0)
+    }
+
+    #[cfg(test)]
+    pub fn checkpoint_content_fallback_requests(&self) -> u64 {
+        self.0
+            .as_ref()
+            .map(|inner| inner.checkpoint_content_fallback_requests.get())
+            .unwrap_or(0)
+    }
+
+    #[cfg(test)]
+    pub fn checkpoint_content_peer_requests(
+        &self,
+        peer: &str,
+        outcome: ContentRequestOutcome,
+    ) -> u64 {
+        self.0
+            .as_ref()
+            .map(|inner| {
+                inner
+                    .checkpoint_content_peer_requests
+                    .with_label_values(&[peer, outcome.as_str()])
+                    .get()
+            })
+            .unwrap_or(0)
+    }
+
     pub fn get_peers_reported_for_failure(&self) -> u64 {
         self.0
             .as_ref()
@@ -87,6 +226,11 @@ struct Inner {
     checkpoint_summary_age: Histogram,
     // TODO: delete once users are migrated to non-Mysten histogram.
     checkpoint_summary_age_ms: MystenHistogram,
+    checkpoint_content_peer_response_latency: HistogramVec,
+    checkpoint_content_peer_requests: IntCounterVec,
+    checkpoint_content_download_latency: Histogram,
+    checkpoint_content_hedges: IntCounterVec,
+    checkpoint_content_fallback_requests: IntCounter,
 }
 
 impl Inner {
@@ -136,6 +280,51 @@ impl Inner {
                 "Age of checkpoints summaries when they arrive and are verified.",
                 registry,
             ),
+            checkpoint_content_peer_response_latency: register_histogram_vec_with_registry!(
+                "state_sync_checkpoint_content_peer_response_latency",
+                "Time for one peer to answer one checkpoint contents request, for successful \
+                 requests. Only peers in the network's known-peer set (seed and allowlisted \
+                 peers, and committee members on validators) get their own label; all others \
+                 share the `other` label.",
+                &["peer_id"],
+                CHECKPOINT_CONTENT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_content_peer_requests: register_int_counter_vec_with_registry!(
+                "state_sync_checkpoint_content_peer_requests",
+                "Finished checkpoint contents requests by peer and outcome (success, failure, \
+                 cancelled).",
+                &["peer_id", "outcome"],
+                registry,
+            )
+            .unwrap(),
+            checkpoint_content_download_latency: register_histogram_with_registry!(
+                "state_sync_checkpoint_content_download_latency",
+                "Time to get one checkpoint's contents in one download attempt: from the first \
+                 request to the first valid response, across all peers asked. With hedging on, \
+                 this includes time spent waiting for another peer to announce the checkpoint. \
+                 After every peer fails, the retry is a new attempt and starts a new measurement.",
+                CHECKPOINT_CONTENT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_content_hedges: register_int_counter_vec_with_registry!(
+                "state_sync_checkpoint_content_hedges",
+                "Hedged checkpoint contents download events: sent, won, and no_candidate (the \
+                 hedge delay passed with no other peer having the checkpoint; at most once per \
+                 download attempt).",
+                &["event"],
+                registry,
+            )
+            .unwrap(),
+            checkpoint_content_fallback_requests: register_int_counter_with_registry!(
+                "state_sync_checkpoint_content_fallback_requests",
+                "Checkpoint contents requests sent in a download attempt after every earlier \
+                 request in that attempt failed.",
+                registry,
+            )
+            .unwrap(),
         }
         .pipe(Arc::new)
     }

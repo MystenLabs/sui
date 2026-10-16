@@ -571,8 +571,24 @@ async fn sync_with_checkpoints_being_inserted() {
     );
 }
 
+fn watermark_test_config(hedge_delay_ms: Option<u64>) -> StateSyncConfig {
+    StateSyncConfig {
+        checkpoint_content_hedge_delay_ms: hedge_delay_ms.and_then(std::num::NonZeroU64::new),
+        ..StateSyncConfig::randomized_for_testing()
+    }
+}
+
 #[tokio::test]
 async fn sync_with_checkpoints_watermark() {
+    run_sync_with_checkpoints_watermark(None).await;
+}
+
+#[tokio::test]
+async fn sync_with_checkpoints_watermark_hedged() {
+    run_sync_with_checkpoints_watermark(Some(100)).await;
+}
+
+async fn run_sync_with_checkpoints_watermark(hedge_delay_ms: Option<u64>) {
     telemetry_subscribers::init_for_testing();
     let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
     // build mock data
@@ -586,13 +602,13 @@ async fn sync_with_checkpoints_watermark() {
     // Build and connect two nodes
     let (builder, state_sync_router) = Builder::new()
         .store(SharedInMemoryStore::default())
-        .config(StateSyncConfig::randomized_for_testing())
+        .config(watermark_test_config(hedge_delay_ms))
         .build();
     let network_1 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_1, handle_1) = builder.build(network_1.clone());
     let (builder, state_sync_router) = Builder::new()
         .store(SharedInMemoryStore::default())
-        .config(StateSyncConfig::randomized_for_testing())
+        .config(watermark_test_config(hedge_delay_ms))
         .build();
     let network_2 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_2, handle_2) = builder.build(network_2.clone());
@@ -758,7 +774,7 @@ async fn sync_with_checkpoints_watermark() {
     // Add Peer 3
     let (builder, state_sync_router) = Builder::new()
         .store(SharedInMemoryStore::default())
-        .config(StateSyncConfig::randomized_for_testing())
+        .config(watermark_test_config(hedge_delay_ms))
         .build();
     let network_3 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_3, handle_3) = builder.build(network_3.clone());
@@ -874,7 +890,7 @@ async fn sync_with_checkpoints_watermark() {
     // Start Peer 4
     let (builder, state_sync_router) = Builder::new()
         .store(SharedInMemoryStore::default())
-        .config(StateSyncConfig::randomized_for_testing())
+        .config(watermark_test_config(hedge_delay_ms))
         .build();
     let network_4 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_4, handle_4) = builder.build(network_4.clone());
@@ -1636,4 +1652,464 @@ fn test_adaptive_timeout_calculation() {
     // Max checkpoint with 10000 txns: base 30s ± 10%
     let timeout = compute_adaptive_timeout(10000, min_timeout, max_timeout);
     assert_in_range(timeout, 30.0);
+}
+
+/// Serves state sync like `Server`, but waits `delay` before answering each checkpoint
+/// contents request.
+struct DelayedContentsServer<S> {
+    inner: super::server::Server<S>,
+    delay: Duration,
+}
+
+#[anemo::async_trait]
+impl<S> StateSync for DelayedContentsServer<S>
+where
+    S: WriteStore + Send + Sync + 'static,
+{
+    async fn push_checkpoint_summary(
+        &self,
+        request: Request<sui_types::messages_checkpoint::CertifiedCheckpointSummary>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        self.inner.push_checkpoint_summary(request).await
+    }
+
+    async fn get_checkpoint_summary(
+        &self,
+        request: Request<GetCheckpointSummaryRequest>,
+    ) -> Result<
+        anemo::Response<Option<sui_types::messages_checkpoint::CertifiedCheckpointSummary>>,
+        anemo::rpc::Status,
+    > {
+        self.inner.get_checkpoint_summary(request).await
+    }
+
+    async fn get_checkpoint_availability(
+        &self,
+        request: Request<()>,
+    ) -> Result<anemo::Response<super::GetCheckpointAvailabilityResponse>, anemo::rpc::Status> {
+        self.inner.get_checkpoint_availability(request).await
+    }
+
+    async fn get_checkpoint_contents(
+        &self,
+        request: Request<sui_types::digests::CheckpointContentsDigest>,
+    ) -> Result<
+        anemo::Response<Option<sui_types::messages_checkpoint::FullCheckpointContents>>,
+        anemo::rpc::Status,
+    > {
+        tokio::time::sleep(self.delay).await;
+        self.inner.get_checkpoint_contents(request).await
+    }
+
+    async fn get_checkpoint_contents_v2(
+        &self,
+        request: Request<sui_types::digests::CheckpointContentsDigest>,
+    ) -> Result<
+        anemo::Response<Option<sui_types::messages_checkpoint::VersionedFullCheckpointContents>>,
+        anemo::rpc::Status,
+    > {
+        tokio::time::sleep(self.delay).await;
+        self.inner.get_checkpoint_contents_v2(request).await
+    }
+}
+
+/// Builds a peer whose store holds the first `checkpoints_with_contents` of `checkpoints`
+/// (genesis included) with their contents. It answers each contents request after
+/// `contents_delay`.
+fn build_contents_peer(
+    committee: &CommitteeFixture,
+    checkpoints: &[sui_types::messages_checkpoint::VerifiedCheckpoint],
+    contents: &[sui_types::messages_checkpoint::VerifiedCheckpointContents],
+    checkpoints_with_contents: usize,
+    contents_delay: Duration,
+) -> anemo::Network {
+    let store = SharedInMemoryStore::default();
+    store.inner_mut().insert_genesis_state(
+        checkpoints[0].clone(),
+        contents[0].clone(),
+        committee.committee().to_owned(),
+    );
+    for (checkpoint, checkpoint_contents) in checkpoints
+        .iter()
+        .zip_debug_eq(contents)
+        .take(checkpoints_with_contents)
+        .skip(1)
+    {
+        store.insert_checkpoint(checkpoint).unwrap();
+        store
+            .insert_checkpoint_contents(checkpoint, checkpoint_contents.clone())
+            .unwrap();
+        store.update_highest_synced_checkpoint(checkpoint).unwrap();
+    }
+    let (_state_sync, server) = Builder::new().store(store).build_internal();
+    let router =
+        anemo::Router::new().add_rpc_service(super::StateSyncServer::new(DelayedContentsServer {
+            inner: server,
+            delay: contents_delay,
+        }));
+    build_network(|r| r.merge(router))
+}
+
+/// A node that downloads checkpoint contents from test peers, with the peer heights it uses to
+/// pick them.
+struct HedgeTestClient {
+    network: anemo::Network,
+    store: SharedInMemoryStore,
+    peer_heights: std::sync::Arc<std::sync::RwLock<super::PeerHeights>>,
+    metrics: super::metrics::Metrics,
+    genesis_digest: CheckpointDigest,
+}
+
+impl HedgeTestClient {
+    /// Connects to each peer and records it as having announced the given height.
+    async fn new(genesis_digest: CheckpointDigest, peers: &[(&anemo::Network, u64)]) -> Self {
+        let store = SharedInMemoryStore::default();
+        let (state_sync, _) = Builder::new().store(store.clone()).build_internal();
+        let client = Self {
+            network: build_network(|r| r),
+            store,
+            peer_heights: state_sync.peer_heights.clone(),
+            metrics: super::metrics::Metrics::enabled(&prometheus::Registry::new()),
+            genesis_digest,
+        };
+        for (peer, height) in peers {
+            client.network.connect(peer.local_addr()).await.unwrap();
+            client.announce(peer.peer_id(), *height);
+        }
+        client
+    }
+
+    fn announce(&self, peer_id: PeerId, height: u64) {
+        self.peer_heights.write().unwrap().peers.insert(
+            peer_id,
+            PeerStateSyncInfo {
+                genesis_checkpoint_digest: self.genesis_digest,
+                on_same_chain_as_us: true,
+                height,
+                lowest: 0,
+            },
+        );
+    }
+
+    /// Records `peer_id` as having announced `height` after `delay`.
+    fn announce_after(
+        &self,
+        peer_id: PeerId,
+        height: u64,
+        delay: Duration,
+    ) -> tokio::task::JoinHandle<()> {
+        let peer_heights = self.peer_heights.clone();
+        let genesis_checkpoint_digest = self.genesis_digest;
+        tokio::spawn(async move {
+            tokio::time::sleep(delay).await;
+            peer_heights.write().unwrap().peers.insert(
+                peer_id,
+                PeerStateSyncInfo {
+                    genesis_checkpoint_digest,
+                    on_same_chain_as_us: true,
+                    height,
+                    lowest: 0,
+                },
+            );
+        })
+    }
+
+    /// Downloads `checkpoint`'s contents in hedged mode, giving up after `limit`.
+    async fn fetch_hedged(
+        &self,
+        checkpoint: &sui_types::messages_checkpoint::VerifiedCheckpoint,
+        hedge_delay: Duration,
+        highest_synced: u64,
+        limit: Duration,
+    ) -> Result<
+        Option<sui_types::messages_checkpoint::VersionedFullCheckpointContents>,
+        tokio::time::error::Elapsed,
+    > {
+        let hedge = super::ContentHedge {
+            delay: hedge_delay,
+            highest_synced: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(highest_synced)),
+        };
+        let fetch = super::ContentFetch {
+            network: &self.network,
+            peer_heights: &self.peer_heights,
+            checkpoint,
+            use_get_checkpoint_contents_v2: true,
+            timeout: Duration::from_secs(20),
+            metrics: &self.metrics,
+        };
+        timeout(
+            limit,
+            super::get_full_checkpoint_contents(fetch, &self.store, Some(&hedge)),
+        )
+        .await
+    }
+}
+
+/// When the download of checkpoint 1 starts, only a peer that answers after 30 s has announced
+/// it. Another peer announces it 50 ms later. The hedge must go to that peer.
+#[tokio::test]
+async fn hedged_contents_fetch_asks_peer_that_announced_after_start() {
+    use super::metrics::{ContentRequestOutcome, HedgeEvent};
+
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
+    let slow_peer = build_contents_peer(
+        &committee,
+        &checkpoints,
+        &contents,
+        2,
+        Duration::from_secs(30),
+    );
+    let fast_peer = build_contents_peer(&committee, &checkpoints, &contents, 2, Duration::ZERO);
+    let client = HedgeTestClient::new(
+        *checkpoints[0].digest(),
+        &[(&slow_peer, 1), (&fast_peer, 0)],
+    )
+    .await;
+    let announce = client.announce_after(fast_peer.peer_id(), 1, Duration::from_millis(50));
+
+    let fetched = client
+        .fetch_hedged(
+            &checkpoints[1],
+            Duration::from_millis(100),
+            0,
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("the hedge to the second peer should finish long before the slow peer answers");
+    announce.await.unwrap();
+
+    assert!(fetched.is_some());
+    assert!(
+        client
+            .store
+            .get_full_checkpoint_contents(Some(1), &checkpoints[1].content_digest)
+            .is_some()
+    );
+    assert_eq!(
+        client.metrics.checkpoint_content_hedges(HedgeEvent::Sent),
+        1
+    );
+    assert_eq!(client.metrics.checkpoint_content_hedges(HedgeEvent::Won), 1);
+    // Test peers are not in the client's known-peer set, so they share the `other` label.
+    assert_eq!(
+        client
+            .metrics
+            .checkpoint_content_peer_requests("other", ContentRequestOutcome::Success),
+        1
+    );
+    assert_eq!(
+        client
+            .metrics
+            .checkpoint_content_peer_requests("other", ContentRequestOutcome::Cancelled),
+        1
+    );
+}
+
+/// When the download of checkpoint 1 starts, the only peer that has announced it doesn't have
+/// its contents. Another peer announces it 300 ms later. The download must move on to that peer
+/// instead of giving up and waiting for the retry interval.
+#[tokio::test]
+async fn hedged_contents_fetch_falls_back_to_peer_that_announced_after_failure() {
+    use super::metrics::HedgeEvent;
+
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
+    let empty_peer = build_contents_peer(&committee, &checkpoints, &contents, 1, Duration::ZERO);
+    let good_peer = build_contents_peer(&committee, &checkpoints, &contents, 2, Duration::ZERO);
+    let client = HedgeTestClient::new(
+        *checkpoints[0].digest(),
+        &[(&empty_peer, 1), (&good_peer, 0)],
+    )
+    .await;
+    let announce = client.announce_after(good_peer.peer_id(), 1, Duration::from_millis(300));
+
+    let fetched = client
+        .fetch_hedged(
+            &checkpoints[1],
+            Duration::from_millis(100),
+            0,
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("the download should move on to the second peer once it announces the checkpoint");
+    announce.await.unwrap();
+
+    assert!(fetched.is_some());
+    // The second peer is normally reached by a fallback after the first request failed. If the
+    // first request is still running when the second peer announces, a hedge reaches it instead.
+    assert_eq!(
+        client.metrics.checkpoint_content_fallback_requests()
+            + client.metrics.checkpoint_content_hedges(HedgeEvent::Sent),
+        1
+    );
+}
+
+/// A response that arrives before the hedge delay ends the download without a hedge.
+#[tokio::test]
+async fn hedged_contents_fetch_does_not_hedge_a_response_within_the_delay() {
+    use super::metrics::HedgeEvent;
+
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
+    let peer_a = build_contents_peer(&committee, &checkpoints, &contents, 2, Duration::ZERO);
+    let peer_b = build_contents_peer(&committee, &checkpoints, &contents, 2, Duration::ZERO);
+    let client =
+        HedgeTestClient::new(*checkpoints[0].digest(), &[(&peer_a, 1), (&peer_b, 1)]).await;
+
+    let fetched = client
+        .fetch_hedged(
+            &checkpoints[1],
+            Duration::from_secs(2),
+            0,
+            Duration::from_secs(1),
+        )
+        .await
+        .expect("a peer that answers right away should finish the download");
+
+    assert!(fetched.is_some());
+    assert_eq!(
+        client.metrics.checkpoint_content_hedges(HedgeEvent::Sent),
+        0
+    );
+}
+
+/// With three slow peers, a download has at most two requests in flight: the first request
+/// and one hedge.
+#[tokio::test]
+async fn hedged_contents_fetch_keeps_at_most_two_requests_in_flight() {
+    use super::metrics::HedgeEvent;
+
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(2, None);
+    let slow = || {
+        build_contents_peer(
+            &committee,
+            &checkpoints,
+            &contents,
+            2,
+            Duration::from_secs(30),
+        )
+    };
+    let (peer_a, peer_b, peer_c) = (slow(), slow(), slow());
+    let client = HedgeTestClient::new(
+        *checkpoints[0].digest(),
+        &[(&peer_a, 1), (&peer_b, 1), (&peer_c, 1)],
+    )
+    .await;
+
+    // Ten hedge delays pass while every request is still running.
+    let result = client
+        .fetch_hedged(
+            &checkpoints[1],
+            Duration::from_millis(50),
+            0,
+            Duration::from_millis(500),
+        )
+        .await;
+
+    assert!(result.is_err(), "no peer answers within the limit");
+    assert_eq!(
+        client.metrics.checkpoint_content_hedges(HedgeEvent::Sent),
+        1
+    );
+}
+
+/// Checkpoints more than `CONTENT_HEDGE_WINDOW` past the highest synced checkpoint are not
+/// hedged, even when another peer has them.
+#[tokio::test]
+async fn hedged_contents_fetch_does_not_hedge_far_from_release_frontier() {
+    use super::metrics::HedgeEvent;
+
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (checkpoints, contents, _, _) = committee.make_random_checkpoints(11, None);
+    let slow_peer = build_contents_peer(
+        &committee,
+        &checkpoints,
+        &contents,
+        11,
+        Duration::from_secs(30),
+    );
+    let fast_peer = build_contents_peer(&committee, &checkpoints, &contents, 11, Duration::ZERO);
+    let client = HedgeTestClient::new(
+        *checkpoints[0].digest(),
+        &[(&slow_peer, 10), (&fast_peer, 0)],
+    )
+    .await;
+    let announce = client.announce_after(fast_peer.peer_id(), 10, Duration::from_millis(20));
+
+    // Checkpoint 10 is 9 past the highest synced checkpoint 1.
+    let result = client
+        .fetch_hedged(
+            &checkpoints[10],
+            Duration::from_millis(50),
+            1,
+            Duration::from_millis(500),
+        )
+        .await;
+    announce.await.unwrap();
+
+    assert!(
+        result.is_err(),
+        "only the slow peer should be asked for a checkpoint outside the hedge window"
+    );
+    assert_eq!(
+        client.metrics.checkpoint_content_hedges(HedgeEvent::Sent),
+        0
+    );
+}
+
+#[test]
+fn test_content_hedge_window() {
+    use super::{CONTENT_HEDGE_WINDOW, ContentHedge};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    };
+
+    let hedge = ContentHedge {
+        delay: Duration::from_millis(100),
+        highest_synced: Arc::new(AtomicU64::new(100)),
+    };
+    assert!(hedge.covers(101));
+    assert!(hedge.covers(100 + CONTENT_HEDGE_WINDOW));
+    assert!(!hedge.covers(100 + CONTENT_HEDGE_WINDOW + 1));
+
+    // The window end saturates instead of overflowing.
+    hedge.highest_synced.store(u64::MAX - 3, Ordering::Relaxed);
+    assert!(hedge.covers(u64::MAX));
+}
+
+#[test]
+fn test_peer_score_cancelled_samples_never_raise_throughput() {
+    use super::PeerScore;
+
+    let mut score = PeerScore::new(Duration::from_secs(60), 0.3);
+
+    // Without an estimate, a cancelled request says nothing usable and is dropped.
+    score.record_cancelled(100_000, Duration::from_millis(400));
+    assert!(score.effective_throughput().is_none());
+
+    for _ in 0..7 {
+        score.record_success(100_000, Duration::from_secs(1));
+    }
+    let estimate = score.effective_throughput().unwrap();
+    assert!((estimate - 100_000.0).abs() < 0.01);
+
+    // A request cancelled sooner than this peer usually answers would imply a higher
+    // throughput. It is only an upper bound, so it must not raise the estimate.
+    score.record_cancelled(100_000, Duration::from_millis(400));
+    assert!((score.effective_throughput().unwrap() - estimate).abs() < 0.01);
+
+    // A request that ran longer than this peer usually takes lowers the estimate.
+    score.record_cancelled(100_000, Duration::from_secs(4));
+    assert!(score.effective_throughput().unwrap() < estimate);
+
+    // Cancelled requests count as neither successes nor failures: 3 failures out of 10
+    // samples is still a 30% failure rate.
+    for _ in 0..3 {
+        score.record_failure();
+    }
+    score.record_cancelled(100_000, Duration::from_secs(10));
+    assert!(score.is_failing());
 }

@@ -48,11 +48,17 @@
 //! of the newly synchronized checkpoint so that it can help other peers synchronize.
 
 use anemo::{PeerId, Request, Response, Result, types::PeerEvent};
-use futures::{FutureExt, StreamExt, stream::FuturesOrdered};
+use futures::{
+    FutureExt, StreamExt,
+    stream::{FuturesOrdered, FuturesUnordered},
+};
 use rand::Rng;
 use std::{
-    collections::{HashMap, VecDeque},
-    sync::{Arc, RwLock},
+    collections::{HashMap, HashSet, VecDeque},
+    sync::{
+        Arc, RwLock,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, Instant},
 };
 use sui_config::p2p::StateSyncConfig;
@@ -84,7 +90,10 @@ mod server;
 mod tests;
 mod worker;
 
-use self::{metrics::Metrics, server::CheckpointContentsDownloadLimitLayer};
+use self::{
+    metrics::{ContentRequestOutcome, HedgeEvent, Metrics},
+    server::CheckpointContentsDownloadLimitLayer,
+};
 use crate::state_sync::worker::process_archive_checkpoint;
 pub use builder::{Builder, UnstartedStateSync};
 pub use generated::{
@@ -156,6 +165,11 @@ pub(super) fn compute_adaptive_timeout(
 #[cfg_attr(test, derive(Debug))]
 pub(super) struct PeerScore {
     successes: VecDeque<(Instant, u64 /* response_size_bytes */, Duration)>,
+    /// Requests cancelled because another peer delivered the same contents first, with the time
+    /// they had run. That time is a lower bound on the response time, so a sample is kept only
+    /// if it lowers the throughput estimate (see `record_cancelled`). These samples count as
+    /// neither successes nor failures.
+    cancelled: VecDeque<(Instant, u64 /* response_size_bytes */, Duration)>,
     failures: VecDeque<Instant>,
     window: Duration,
     failure_rate: f64,
@@ -169,6 +183,7 @@ impl PeerScore {
     pub(super) fn new(window: Duration, failure_rate: f64) -> Self {
         Self {
             successes: VecDeque::new(),
+            cancelled: VecDeque::new(),
             failures: VecDeque::new(),
             window,
             failure_rate,
@@ -187,6 +202,23 @@ impl PeerScore {
         // `update_failing_state`), so an occasional success while the rate stays high (e.g.
         // a brief reconnect during connection churn) must not keep resetting the clock and
         // prevent the peer from ever being reported.
+    }
+
+    /// Records a request that was cancelled after `elapsed` because another peer delivered `size`
+    /// bytes first. `size / elapsed` is only an upper bound on this peer's throughput, so the
+    /// sample is kept only when it is below the current estimate, which it then lowers. Without
+    /// an estimate the sample carries no usable information and is dropped.
+    pub(super) fn record_cancelled(&mut self, size: u64, elapsed: Duration) {
+        let Some(current) = self.effective_throughput() else {
+            return;
+        };
+        if elapsed.is_zero() || size as f64 / elapsed.as_secs_f64() >= current {
+            return;
+        }
+        self.cancelled.push_back((Instant::now(), size, elapsed));
+        while self.cancelled.len() > Self::MAX_SAMPLES {
+            self.cancelled.pop_front();
+        }
     }
 
     pub(super) fn record_failure(&mut self) {
@@ -249,6 +281,7 @@ impl PeerScore {
         let (total_size, total_time) = self
             .successes
             .iter()
+            .chain(&self.cancelled)
             .filter(|(ts, _, _)| now.duration_since(*ts) < self.window)
             .fold((0u64, Duration::ZERO), |(size, time), (_, s, d)| {
                 (size + s, time + *d)
@@ -459,6 +492,15 @@ impl PeerHeights {
             .record_success(size, response_time);
     }
 
+    /// Records a contents request that was cancelled after `elapsed` because another peer
+    /// delivered the same `size` bytes first. It can only lower the peer's throughput estimate
+    /// (see `PeerScore::record_cancelled`) and counts as neither success nor failure.
+    pub fn record_cancelled_request(&mut self, peer_id: PeerId, size: u64, elapsed: Duration) {
+        if let Some(score) = self.scores.get_mut(&peer_id) {
+            score.record_cancelled(size, elapsed);
+        }
+    }
+
     pub fn record_failure(&mut self, peer_id: PeerId) {
         if !self.peers.contains_key(&peer_id) {
             return;
@@ -575,6 +617,17 @@ impl PeerBalancer {
 
     pub fn with_checkpoint(mut self, checkpoint: CheckpointSequenceNumber) -> Self {
         self.requested_checkpoint = Some(checkpoint);
+        self
+    }
+
+    /// Removes `peers` from the candidates.
+    pub fn excluding(mut self, peers: &HashSet<PeerId>) -> Self {
+        self.known_peers
+            .retain(|(peer, _, _)| !peers.contains(&peer.peer_id()));
+        self.unknown_peers
+            .retain(|(peer, _, _)| !peers.contains(&peer.peer_id()));
+        self.failing_peers
+            .retain(|(peer, _)| !peers.contains(&peer.peer_id()));
         self
     }
 
@@ -746,6 +799,8 @@ where
             self.config.checkpoint_content_download_concurrency(),
             self.config.checkpoint_content_download_tx_concurrency(),
             self.config.use_get_checkpoint_contents_v2(),
+            self.config.checkpoint_content_hedge_delay(),
+            self.metrics.clone(),
             target_checkpoint_contents_sequence_receiver,
         );
         let task_handle = self.tasks.spawn(task);
@@ -1654,6 +1709,8 @@ async fn sync_checkpoint_contents<S>(
     checkpoint_content_download_concurrency: usize,
     checkpoint_content_download_tx_concurrency: u64,
     use_get_checkpoint_contents_v2: bool,
+    checkpoint_content_hedge_delay: Option<Duration>,
+    metrics: Metrics,
     mut target_sequence_channel: watch::Receiver<CheckpointSequenceNumber>,
 ) where
     S: WriteStore + Clone,
@@ -1668,6 +1725,11 @@ async fn sync_checkpoint_contents<S>(
     let mut checkpoint_contents_tasks = FuturesOrdered::new();
 
     let mut tx_concurrency_remaining = checkpoint_content_download_tx_concurrency;
+
+    let hedge = checkpoint_content_hedge_delay.map(|delay| ContentHedge {
+        delay,
+        highest_synced: Arc::new(AtomicU64::new(*highest_synced.sequence_number())),
+    });
 
     loop {
         tokio::select! {
@@ -1694,6 +1756,11 @@ async fn sync_checkpoint_contents<S>(
                         let _ = checkpoint_event_sender.send(checkpoint.clone());
                         tx_concurrency_remaining += checkpoint.network_total_transactions - highest_synced.network_total_transactions;
                         highest_synced = checkpoint;
+                        if let Some(hedge) = &hedge {
+                            hedge
+                                .highest_synced
+                                .store(*highest_synced.sequence_number(), Ordering::Relaxed);
+                        }
 
                     }
                     Err(checkpoint) => {
@@ -1723,6 +1790,8 @@ async fn sync_checkpoint_contents<S>(
                             &store,
                             peer_heights.clone(),
                             use_get_checkpoint_contents_v2,
+                            hedge.clone(),
+                            metrics.clone(),
                             retry_tx_count,
                             checkpoint,
                         ));
@@ -1757,6 +1826,8 @@ async fn sync_checkpoint_contents<S>(
                 &store,
                 peer_heights.clone(),
                 use_get_checkpoint_contents_v2,
+                hedge.clone(),
+                metrics.clone(),
                 tx_count,
                 next_checkpoint,
             ));
@@ -1785,6 +1856,8 @@ async fn sync_one_checkpoint_contents<S>(
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
     use_get_checkpoint_contents_v2: bool,
+    hedge: Option<ContentHedge>,
+    metrics: Metrics,
     tx_count: u64,
     checkpoint: VerifiedCheckpoint,
 ) -> Result<VerifiedCheckpoint, VerifiedCheckpoint>
@@ -1817,23 +1890,16 @@ where
     }
 
     // Request checkpoint contents from peers.
-    let peers = PeerBalancer::new(
-        &network,
-        peer_heights.clone(),
-        PeerCheckpointRequestType::Content,
-    )
-    .with_checkpoint(*checkpoint.sequence_number());
     let now = tokio::time::Instant::now();
-    let Some(_contents) = get_full_checkpoint_contents(
-        peers,
-        &store,
-        peer_heights.clone(),
-        &checkpoint,
+    let fetch = ContentFetch {
+        network: &network,
+        peer_heights: &peer_heights,
+        checkpoint: &checkpoint,
         use_get_checkpoint_contents_v2,
         timeout,
-    )
-    .await
-    else {
+        metrics: &metrics,
+    };
+    let Some(_contents) = get_full_checkpoint_contents(fetch, &store, hedge.as_ref()).await else {
         // Delay completion in case of error so we don't hammer the network with retries.
         let duration = peer_heights
             .read()
@@ -1850,18 +1916,316 @@ where
     Ok(checkpoint)
 }
 
-#[instrument(level = "debug", skip_all)]
-async fn get_full_checkpoint_contents<S>(
-    peers: PeerBalancer,
-    store: S,
-    peer_heights: Arc<RwLock<PeerHeights>>,
-    checkpoint: &VerifiedCheckpoint,
+/// In hedged mode, the most requests for one checkpoint's contents that are in flight at once.
+const MAX_CONCURRENT_CONTENT_REQUESTS: usize = 2;
+
+/// In hedged mode, only checkpoints at most this far past the highest synced checkpoint are
+/// hedged, or keep looking for a peer after every peer that had the checkpoint failed.
+/// Checkpoints are released in order, so a later checkpoint can't be released before the ones
+/// ahead of it. Extra requests for it would add load (for example during catch-up, with hundreds
+/// of downloads in flight) without reducing how long it takes to release.
+const CONTENT_HEDGE_WINDOW: CheckpointSequenceNumber = 8;
+
+/// Settings for hedged checkpoint contents downloads.
+#[derive(Clone)]
+struct ContentHedge {
+    /// How long a request may run before another peer is also asked.
+    delay: Duration,
+    /// Sequence number of the highest checkpoint whose contents are synced and released.
+    highest_synced: Arc<AtomicU64>,
+}
+
+impl ContentHedge {
+    fn covers(&self, sequence_number: CheckpointSequenceNumber) -> bool {
+        sequence_number
+            <= self
+                .highest_synced
+                .load(Ordering::Relaxed)
+                .saturating_add(CONTENT_HEDGE_WINDOW)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ContentRequestKind {
+    /// The first request for a checkpoint's contents.
+    First,
+    /// A request sent while an earlier request for the same checkpoint was still running.
+    Hedge,
+    /// A request sent after every earlier request for the same checkpoint failed.
+    Fallback,
+}
+
+/// A finished request for one checkpoint's contents to one peer.
+struct ContentResponse {
+    peer_id: PeerId,
+    kind: ContentRequestKind,
+    elapsed: Duration,
+    /// `None` if the request failed or timed out, or the peer had no contents.
+    contents: Option<VersionedFullCheckpointContents>,
+}
+
+/// Downloads the contents of one checkpoint from peers.
+struct ContentFetch<'a> {
+    network: &'a anemo::Network,
+    peer_heights: &'a Arc<RwLock<PeerHeights>>,
+    checkpoint: &'a VerifiedCheckpoint,
     use_get_checkpoint_contents_v2: bool,
     timeout: Duration,
+    metrics: &'a Metrics,
+}
+
+impl ContentFetch<'_> {
+    /// Peers that, as of now, have announced the checkpoint and still have its contents.
+    fn candidates(&self) -> PeerBalancer {
+        PeerBalancer::new(
+            self.network,
+            self.peer_heights.clone(),
+            PeerCheckpointRequestType::Content,
+        )
+        .with_checkpoint(*self.checkpoint.sequence_number())
+    }
+
+    fn request(
+        &self,
+        mut peer: StateSyncClient<anemo::Peer>,
+        kind: ContentRequestKind,
+    ) -> impl Future<Output = ContentResponse> {
+        let peer_id = peer.inner().peer_id();
+        let digest = self.checkpoint.content_digest;
+        let timeout = self.timeout;
+        let use_get_checkpoint_contents_v2 = self.use_get_checkpoint_contents_v2;
+        debug!(
+            ?timeout,
+            ?kind,
+            "requesting checkpoint contents from {}",
+            peer_id
+        );
+        async move {
+            let request = Request::new(digest).with_timeout(timeout);
+            let start = Instant::now();
+            let result = if use_get_checkpoint_contents_v2 {
+                peer.get_checkpoint_contents_v2(request).await
+            } else {
+                peer.get_checkpoint_contents(request)
+                    .await
+                    .map(|r| r.map(|c| c.map(VersionedFullCheckpointContents::V1)))
+            };
+            let elapsed = start.elapsed();
+            let contents = match result {
+                Ok(response) => {
+                    let contents = response.into_inner();
+                    if contents.is_none() {
+                        trace!("peer unable to help sync");
+                    }
+                    contents
+                }
+                Err(e) => {
+                    trace!("{e:?}");
+                    None
+                }
+            };
+            ContentResponse {
+                peer_id,
+                kind,
+                elapsed,
+                contents,
+            }
+        }
+    }
+
+    /// Scores the peer and records metrics for a finished request. Returns the contents and
+    /// their serialized size if they match the checkpoint's content digest.
+    fn record_response(
+        &self,
+        response: ContentResponse,
+    ) -> Option<(VersionedFullCheckpointContents, u64)> {
+        let ContentResponse {
+            peer_id,
+            elapsed,
+            contents,
+            ..
+        } = response;
+        let peer_label = content_metrics_peer_label(self.network, peer_id);
+        let Some(contents) = contents else {
+            self.peer_heights.write().unwrap().record_failure(peer_id);
+            self.metrics.record_checkpoint_content_peer_request(
+                &peer_label,
+                ContentRequestOutcome::Failure,
+                elapsed,
+            );
+            return None;
+        };
+        if contents
+            .verify_digests(self.checkpoint.content_digest)
+            .is_err()
+        {
+            self.metrics.record_checkpoint_content_peer_request(
+                &peer_label,
+                ContentRequestOutcome::Failure,
+                elapsed,
+            );
+            return None;
+        }
+        let size = bcs::serialized_size(&contents).expect("serialization should not fail") as u64;
+        self.peer_heights
+            .write()
+            .unwrap()
+            .record_success(peer_id, size, elapsed);
+        self.metrics.record_checkpoint_content_peer_request(
+            &peer_label,
+            ContentRequestOutcome::Success,
+            elapsed,
+        );
+        Some((contents, size))
+    }
+
+    /// Tries the peers that had the checkpoint when the download started, one at a time.
+    async fn one_peer_at_a_time(&self) -> Option<VersionedFullCheckpointContents> {
+        let mut kind = ContentRequestKind::First;
+        for peer in self.candidates() {
+            if kind == ContentRequestKind::Fallback {
+                self.metrics.inc_checkpoint_content_fallback_requests();
+            }
+            let response = self.request(peer, kind).await;
+            if let Some((contents, _size)) = self.record_response(response) {
+                return Some(contents);
+            }
+            kind = ContentRequestKind::Fallback;
+        }
+        None
+    }
+
+    /// Sends a hedge request to another peer when `hedge.delay` passes after the latest request
+    /// without a valid response, with at most [`MAX_CONCURRENT_CONTENT_REQUESTS`] requests in
+    /// flight. When every request has failed, asks another peer right away. Peers are picked
+    /// from the peers that have announced the checkpoint at the time each request is sent, not
+    /// when the download started. The first valid response wins, and the other request is
+    /// cancelled.
+    async fn hedged(&self, hedge: &ContentHedge) -> Option<VersionedFullCheckpointContents> {
+        let sequence_number = *self.checkpoint.sequence_number();
+        let wait_interval = self
+            .peer_heights
+            .read()
+            .unwrap()
+            .wait_interval_when_no_peer_to_sync_content();
+        let download_start = tokio::time::Instant::now();
+        let mut asked = HashSet::new();
+        let mut in_flight = FuturesUnordered::new();
+        let mut in_flight_start_times = HashMap::new();
+        let mut no_hedge_candidate_reported = false;
+        let next_hedge = tokio::time::sleep(hedge.delay);
+        tokio::pin!(next_hedge);
+
+        loop {
+            if in_flight.is_empty() {
+                // Either nothing was sent yet or every request failed. Ask the next peer that has
+                // the checkpoint now instead of waiting for the retry interval.
+                if let Some(peer) = self.candidates().excluding(&asked).next() {
+                    let kind = if asked.is_empty() {
+                        ContentRequestKind::First
+                    } else {
+                        self.metrics.inc_checkpoint_content_fallback_requests();
+                        ContentRequestKind::Fallback
+                    };
+                    let peer_id = peer.inner().peer_id();
+                    asked.insert(peer_id);
+                    in_flight_start_times.insert(peer_id, Instant::now());
+                    in_flight.push(self.request(peer, kind));
+                    next_hedge
+                        .as_mut()
+                        .reset(tokio::time::Instant::now() + hedge.delay);
+                } else if hedge.covers(sequence_number) && download_start.elapsed() < wait_interval
+                {
+                    // No peer that hasn't been asked has the checkpoint yet. Near the release
+                    // frontier, check again after the hedge delay, or when the retry interval
+                    // ends if that is sooner.
+                    tokio::time::sleep_until(
+                        next_hedge.deadline().min(download_start + wait_interval),
+                    )
+                    .await;
+                    next_hedge
+                        .as_mut()
+                        .reset(tokio::time::Instant::now() + hedge.delay);
+                    continue;
+                } else {
+                    return None;
+                }
+            }
+
+            tokio::select! {
+                biased;
+                Some(response) = in_flight.next() => {
+                    in_flight_start_times.remove(&response.peer_id);
+                    let kind = response.kind;
+                    let Some((contents, size)) = self.record_response(response) else {
+                        continue;
+                    };
+                    if kind == ContentRequestKind::Hedge {
+                        self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Won);
+                    }
+                    // Dropping `in_flight` on return cancels the requests that lost.
+                    for (peer_id, start) in in_flight_start_times {
+                        let cancelled_after = start.elapsed();
+                        self.metrics.record_checkpoint_content_peer_request(
+                            &content_metrics_peer_label(self.network, peer_id),
+                            ContentRequestOutcome::Cancelled,
+                            cancelled_after,
+                        );
+                        self.peer_heights.write().unwrap().record_cancelled_request(
+                            peer_id,
+                            size,
+                            cancelled_after,
+                        );
+                    }
+                    return Some(contents);
+                }
+                () = next_hedge.as_mut(), if in_flight.len() < MAX_CONCURRENT_CONTENT_REQUESTS => {
+                    next_hedge
+                        .as_mut()
+                        .reset(tokio::time::Instant::now() + hedge.delay);
+                    if !hedge.covers(sequence_number) {
+                        continue;
+                    }
+                    match self.candidates().excluding(&asked).next() {
+                        Some(peer) => {
+                            self.metrics.inc_checkpoint_content_hedge(HedgeEvent::Sent);
+                            let peer_id = peer.inner().peer_id();
+                            asked.insert(peer_id);
+                            in_flight_start_times.insert(peer_id, Instant::now());
+                            in_flight.push(self.request(peer, ContentRequestKind::Hedge));
+                        }
+                        None if !no_hedge_candidate_reported => {
+                            no_hedge_candidate_reported = true;
+                            self.metrics.inc_checkpoint_content_hedge(HedgeEvent::NoCandidate);
+                        }
+                        None => {}
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Label for per-peer content request metrics. Only peers in the network's known-peer set get
+/// their own label, which bounds the label cardinality.
+fn content_metrics_peer_label(network: &anemo::Network, peer_id: PeerId) -> String {
+    if network.known_peers().get(&peer_id).is_some() {
+        peer_id.to_string()
+    } else {
+        "other".to_owned()
+    }
+}
+
+#[instrument(level = "debug", skip_all)]
+async fn get_full_checkpoint_contents<S>(
+    fetch: ContentFetch<'_>,
+    store: S,
+    hedge: Option<&ContentHedge>,
 ) -> Option<VersionedFullCheckpointContents>
 where
     S: WriteStore,
 {
+    let checkpoint = fetch.checkpoint;
     let sequence_number = checkpoint.sequence_number;
     let digest = checkpoint.content_digest;
     if let Some(contents) = store.get_full_checkpoint_contents(Some(sequence_number), &digest) {
@@ -1869,58 +2233,23 @@ where
         return Some(contents);
     }
 
-    // Iterate through our selected peers trying each one in turn until we're able to
-    // successfully get the target checkpoint
-    for mut peer in peers {
-        let peer_id = peer.inner().peer_id();
-        debug!(?timeout, "requesting checkpoint contents from {}", peer_id);
-        let request = Request::new(digest).with_timeout(timeout);
-        let start = Instant::now();
-        let result = if use_get_checkpoint_contents_v2 {
-            peer.get_checkpoint_contents_v2(request).await
-        } else {
-            peer.get_checkpoint_contents(request)
-                .await
-                .map(|r| r.map(|c| c.map(VersionedFullCheckpointContents::V1)))
-        };
-        let elapsed = start.elapsed();
-
-        let contents = match result {
-            Ok(response) => match response.into_inner() {
-                Some(c) => Some(c),
-                None => {
-                    trace!("peer unable to help sync");
-                    peer_heights.write().unwrap().record_failure(peer_id);
-                    None
-                }
-            },
-            Err(e) => {
-                trace!("{e:?}");
-                peer_heights.write().unwrap().record_failure(peer_id);
-                None
-            }
-        };
-
-        let Some(contents) = contents else {
-            continue;
-        };
-
-        if contents.verify_digests(digest).is_ok() {
-            let size =
-                bcs::serialized_size(&contents).expect("serialization should not fail") as u64;
-            peer_heights
-                .write()
-                .unwrap()
-                .record_success(peer_id, size, elapsed);
-            let verified_contents = VerifiedCheckpointContents::new_unchecked(contents.clone());
-            store
-                .insert_checkpoint_contents(checkpoint, verified_contents)
-                .expect("store operation should not fail");
-            return Some(contents);
-        }
-    }
-    debug!("no peers had checkpoint contents");
-    None
+    let start = Instant::now();
+    let contents = match hedge {
+        None => fetch.one_peer_at_a_time().await,
+        Some(hedge) => fetch.hedged(hedge).await,
+    };
+    let Some(contents) = contents else {
+        debug!("no peers had checkpoint contents");
+        return None;
+    };
+    fetch
+        .metrics
+        .record_checkpoint_content_download(start.elapsed());
+    let verified_contents = VerifiedCheckpointContents::new_unchecked(contents.clone());
+    store
+        .insert_checkpoint_contents(checkpoint, verified_contents)
+        .expect("store operation should not fail");
+    Some(contents)
 }
 
 async fn update_checkpoint_watermark_metrics<S>(
