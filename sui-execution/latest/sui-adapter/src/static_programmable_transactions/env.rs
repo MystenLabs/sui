@@ -198,7 +198,7 @@ where
             function.to_string(),
             type_arguments,
         )?;
-        if self.protocol_config.harden_linkage_consistency() {
+        {
             let Some(unified_linkage) = unified_linkage else {
                 invariant_violation!(
                     "Unified linkage is required when hardened linkage consistency is enabled"
