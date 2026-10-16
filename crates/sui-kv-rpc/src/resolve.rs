@@ -269,11 +269,32 @@ async fn fetch_checkpoint_transactions(
                 yield ready;
             }
         }
+        if !pending_by_digest.is_empty() {
+            Err(missing_checkpoint_transactions(&pending_by_digest))?;
+        }
         for ready in emitter.finish(MISSING_CHECKPOINT_TRANSACTIONS)? {
             yield ready;
         }
     }
     .boxed())
+}
+
+/// The error for a `resolve_checkpoints` read that returned fewer `transactions` rows than it
+/// requested. Names the checkpoints whose rows are missing and up to four of the digests, so the
+/// failing checkpoint can be found from the message alone.
+fn missing_checkpoint_transactions(
+    missing: &HashMap<TransactionDigest, (usize, CheckpointTransaction)>,
+) -> anyhow::Error {
+    let mut checkpoints: Vec<u64> = missing.values().map(|(_, item)| item.cp_seq).collect();
+    checkpoints.sort_unstable();
+    checkpoints.dedup();
+    let digests: Vec<String> = missing.keys().take(4).map(ToString::to_string).collect();
+    anyhow::anyhow!(
+        "{MISSING_CHECKPOINT_TRANSACTIONS}: missing {} row(s) of checkpoint(s) {checkpoints:?}, \
+         including {}",
+        missing.len(),
+        digests.join(", "),
+    )
 }
 
 /// A checkpoint whose transactions [`regroup_checkpoints`] is gathering.
@@ -868,12 +889,14 @@ mod tests {
 
         let status = tonic::Status::from(err);
         assert_eq!(status.code(), tonic::Code::Internal);
+        let message = status.message();
         assert!(
-            status.message().contains(
-                "resolve_checkpoints: BigTable returned fewer transactions than requested"
-            ),
-            "unexpected message: {}",
-            status.message()
+            message.contains(&format!(
+                "resolve_checkpoints: BigTable returned fewer transactions than requested: \
+                 missing 1 row(s) of checkpoint(s) [7], including {}",
+                digests[1]
+            )),
+            "unexpected message: {message}"
         );
     }
 
