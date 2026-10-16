@@ -11,6 +11,13 @@
 //! Once the scan comes within `handoff_threshold` of the tip, the driver subscribes to the broadcast,
 //! so reading is handed off to the live phase at `handoff + 1` with no gap or duplicate. A coverage
 //! marker at each page's end lets the handoff advance even through stretches that match nothing.
+//!
+//! Alongside matches, the driver delivers progress: a cursor with no item, valid as `after`, that
+//! resumes past a range in which every match has already been delivered. Without it a sparse filter
+//! leaves the client's resume point at its last match, so a reconnect re-scans everything since.
+//! Progress is emitted at a scan page's end when the page's end cursor is ahead of the last delivered
+//! cursor, and in the live phase after a run of `progress_quiet_checkpoints` checkpoints without a
+//! match.
 
 use std::future::Future;
 use std::ops::RangeInclusive;
@@ -110,12 +117,27 @@ pub(super) trait Subscribable {
         filter: &Self::Filter,
     ) -> Result<Vec<Edge<String, Self::Item, EmptyFields>>, RpcError>;
 
+    /// Mints live progress: a `Boundary` cursor at the start of the checkpoint after the given one,
+    /// so resuming `after` it delivers everything from the next checkpoint on. It must equal the
+    /// cursor a list scan ends with when it drains through that checkpoint.
+    ///
+    /// `None` for a feed that sends no progress, backfill or live. The checkpoints feed matches
+    /// every checkpoint, so progress would add nothing there.
+    const BOUNDARY_AFTER: Option<fn(&ProcessedCheckpoint) -> Self::Cursor>;
+
     /// The feed's name, used to label its lifecycle metrics.
     fn subscription_type() -> &'static str;
 }
 
+/// One payload delivered to the subscriber: a matching edge, or a progress cursor with no item.
+pub(super) enum Delivery<I: OutputType> {
+    Match(Edge<String, I, EmptyFields>),
+    Progress(String),
+}
+
 /// One backfill scan output: either a matching edge, or a coverage marker whose `checkpoint` is the
-/// fully-scanned frontier (advances the handoff even on a match-less page).
+/// fully-scanned frontier (advances the handoff even on a match-less page) and whose `cursor` is the
+/// page's end cursor (`None` for a feed that sends no progress).
 enum Scanned<I: OutputType> {
     Match {
         checkpoint: u64,
@@ -123,7 +145,25 @@ enum Scanned<I: OutputType> {
     },
     Covered {
         checkpoint: u64,
+        cursor: Option<String>,
     },
+}
+
+/// Decides when to deliver a progress cursor. Every progress cursor sits at or past the last
+/// delivered cursor and only after all matches up to it have been delivered, so resuming `after` it
+/// neither skips nor repeats.
+struct Progress {
+    /// Emit live progress after this many consecutive checkpoints with no match (0 disables it).
+    quiet_threshold: u64,
+    /// Consecutive live checkpoints without a match since the last delivery.
+    quiet: u64,
+    /// The cursor of the last payload the backfill delivered, match or progress. Only the backfill
+    /// reads it: live progress is paced by `quiet` and is always past `covered`.
+    last_cursor: Option<String>,
+    /// The highest checkpoint a delivered progress cursor covers. A backfill page can scan past the
+    /// handoff, so live must not deliver anything at or below it, or the resume point would move
+    /// backwards.
+    covered: Option<u64>,
 }
 
 /// Where the backfill scan hands off to the live broadcast. The scan delivers every match at or
@@ -154,8 +194,80 @@ impl<I: OutputType> Scanned<I> {
     /// The checkpoint this output sits at (the match's, or the covered frontier).
     fn checkpoint(&self) -> u64 {
         match self {
-            Scanned::Match { checkpoint, .. } | Scanned::Covered { checkpoint } => *checkpoint,
+            Scanned::Match { checkpoint, .. } | Scanned::Covered { checkpoint, .. } => *checkpoint,
         }
+    }
+}
+
+impl<I: OutputType> Delivery<I> {
+    /// The payload's cursor and node, which is `None` for progress.
+    pub(super) fn into_parts(self) -> (String, Option<I>) {
+        match self {
+            Delivery::Match(edge) => (edge.cursor, Some(edge.node)),
+            Delivery::Progress(cursor) => (cursor, None),
+        }
+    }
+
+    /// The matching edge, dropping progress (for feeds whose edges cannot carry a `null` node).
+    pub(super) fn into_match(self) -> Option<Edge<String, I, EmptyFields>> {
+        match self {
+            Delivery::Match(edge) => Some(edge),
+            Delivery::Progress(_) => None,
+        }
+    }
+}
+
+impl Progress {
+    fn new(quiet_threshold: u64) -> Self {
+        Self {
+            quiet_threshold,
+            quiet: 0,
+            last_cursor: None,
+            covered: None,
+        }
+    }
+
+    /// Record a match the backfill delivered.
+    fn scan_matched(&mut self, cursor: &str) {
+        self.last_cursor = Some(cursor.to_owned());
+    }
+
+    /// At a scan page's end, which covers through `checkpoint`: the progress cursor to deliver, if
+    /// the page's end `cursor` is ahead of the last delivered one (a page with no matches, or with
+    /// scanned checkpoints after its last match). A full page ends at its last match, so it has none.
+    fn page_end(&mut self, checkpoint: u64, cursor: String) -> Option<String> {
+        if self.last_cursor.as_ref() == Some(&cursor) {
+            return None;
+        }
+        self.covered = Some(checkpoint);
+        self.last_cursor = Some(cursor.clone());
+        Some(cursor)
+    }
+
+    /// Whether a delivered progress cursor already covers live `checkpoint`.
+    fn covers(&self, checkpoint: u64) -> bool {
+        self.covered.is_some_and(|c| checkpoint <= c)
+    }
+
+    /// Record a live checkpoint with matches, which restarts the quiet run.
+    fn live_matched(&mut self) {
+        self.quiet = 0;
+    }
+
+    /// After a live checkpoint with no match, whose matches (none) are all delivered: the progress
+    /// cursor to deliver, minted by `cursor` only once a quiet run reaches the threshold.
+    fn quiet_checkpoint(
+        &mut self,
+        checkpoint: u64,
+        cursor: impl FnOnce() -> String,
+    ) -> Option<String> {
+        self.quiet += 1;
+        if self.quiet_threshold == 0 || self.quiet < self.quiet_threshold {
+            return None;
+        }
+        self.quiet = 0;
+        self.covered = Some(checkpoint);
+        Some(cursor())
     }
 }
 
@@ -193,7 +305,7 @@ impl Handoff {
             // checkpoint after the one it covers. Either way the scan stays responsible for it.
             let floor = match &scanned {
                 Scanned::Match { checkpoint, .. } => *checkpoint,
-                Scanned::Covered { checkpoint } => checkpoint.saturating_add(1),
+                Scanned::Covered { checkpoint, .. } => checkpoint.saturating_add(1),
             };
             self.resume_from = Some(self.resume_from.map_or(floor, |from| from.max(floor)));
         }
@@ -210,7 +322,7 @@ impl Handoff {
                     ScanStep::Done
                 }
             }
-            Scanned::Covered { checkpoint } => {
+            Scanned::Covered { checkpoint, .. } => {
                 if self.pinned.is_some_and(|h| checkpoint >= h) {
                     ScanStep::Done
                 } else {
@@ -251,22 +363,11 @@ pub(super) fn subscribe<S: Subscribable>(
     after_checkpoint: Option<u64>,
     subscriber_limit: SubscriberLimit,
     config: SubscriptionConfig,
-) -> Result<impl Stream<Item = Result<Edge<String, S::Item, EmptyFields>, RpcError>>, RpcError<Error>>
+) -> Result<impl Stream<Item = Result<Delivery<S::Item>, RpcError>>, RpcError<Error>>
 where
     for<'a> CursorToken: From<&'a S::Cursor>,
 {
-    // The checkpoint to resume after: the later of the `after` cursor and `afterCheckpoint`. A
-    // cursor's checkpoint is read through its `CursorToken` position, so the driver needs no
-    // per-feed accessor.
-    let start_from = match (
-        after
-            .as_ref()
-            .map(|c| CursorToken::from(c).position.checkpoint()),
-        after_checkpoint,
-    ) {
-        (Some(a), Some(b)) => Some(a.max(b)),
-        (a, b) => a.or(b),
-    };
+    let start_from = start_from(after.as_ref().map(CursorToken::from), after_checkpoint);
 
     // Reject a far-ahead resume before admitting, so bad input never claims a slot or lands in the
     // subscription lifecycle metrics.
@@ -290,6 +391,11 @@ where
     // Pin the handoff once the scan comes within half the live buffer of the tip, leaving room for
     // checkpoints that arrive during the handoff so the receiver does not lag.
     let handoff_threshold = config.broadcast_buffer as u64 / 2;
+    let progress_quiet_checkpoints = if S::BOUNDARY_AFTER.is_some() {
+        config.progress_quiet_checkpoints
+    } else {
+        0
+    };
 
     Ok(stream! {
         let mut pending_receiver = None;
@@ -297,6 +403,7 @@ where
         if after.as_ref().is_some_and(|c| has_placeholder_checkpoint(&CursorToken::from(c))) {
             handoff = handoff.resume_from_first_output();
         }
+        let mut progress = Progress::new(progress_quiet_checkpoints);
         let mut last_checkpoint: Option<u64> = None;
 
         // Phase 1: scan toward the tip, pinning the live receiver near it. `after` and/or
@@ -336,13 +443,34 @@ where
                 };
                 scanned_any = true;
 
+                // A page's end is progress once every match on it has been delivered: a match past
+                // the handoff ends the scan before its page's coverage marker is reached.
+                //
+                // Consecutive match-less pages each send one, uncoalesced. That is at most one small
+                // payload per ledger request, which the scan already paces (it waits at the ledger
+                // tip, and a repeated end cursor is not resent), and each moves a deep backfill's
+                // resume point forward, which is what progress is for.
+                let page_end = match &scanned {
+                    Scanned::Covered { checkpoint, cursor: Some(cursor) } => {
+                        Some((*checkpoint, cursor.clone()))
+                    }
+                    Scanned::Covered { cursor: None, .. } | Scanned::Match { .. } => None,
+                };
                 let step = handoff.step(scanned, broadcast.network_tip(), || {
                     pending_receiver = Some(broadcast.broadcaster().resubscribe());
                     broadcast.network_tip()
                 });
+                if let ScanStep::Deliver(edge) = &step {
+                    progress.scan_matched(&edge.cursor);
+                }
+                if let Some((checkpoint, cursor)) = page_end
+                    && let Some(cursor) = progress.page_end(checkpoint, cursor)
+                {
+                    yield Ok(Delivery::Progress(cursor));
+                }
                 match step {
                     ScanStep::Deliver(edge) => {
-                        yield Ok(edge);
+                        yield Ok(Delivery::Match(edge));
                         guard.record_backfill_delivered();
                     }
                     ScanStep::Continue => {}
@@ -354,10 +482,16 @@ where
 
         // Phase 2: follow live from `handoff + 1` (a fresh receiver if there was no backfill).
         let receiver = pending_receiver.unwrap_or_else(|| broadcast.broadcaster().resubscribe());
-        for await edge in
-            live::<S>(receiver, last_checkpoint, caches, resolver_limits, filter, guard)
-        {
-            yield edge;
+        for await delivery in live::<S>(
+            receiver,
+            last_checkpoint,
+            caches,
+            resolver_limits,
+            filter,
+            progress,
+            guard,
+        ) {
+            yield delivery;
         }
     })
 }
@@ -371,6 +505,17 @@ fn pruned_during_backfill(detail: &str) -> RpcError {
          no longer be resumed from; resubscribe with `afterCheckpoint` at or above the lowest \
          available checkpoint"
     ))
+}
+
+/// The checkpoint to resume after: the later of the `after` cursor's and `afterCheckpoint`. A
+/// cursor's checkpoint is read through its `CursorToken` position, so the driver needs no per-feed
+/// accessor. For a `Boundary` cursor at `c` (nothing in `c` delivered yet) this is `c` rather than
+/// `c - 1`, which only makes the scan responsible for one more checkpoint.
+fn start_from(after: Option<CursorToken>, after_checkpoint: Option<u64>) -> Option<u64> {
+    match (after.map(|c| c.position.checkpoint()), after_checkpoint) {
+        (Some(a), Some(b)) => Some(a.max(b)),
+        (a, b) => a.or(b),
+    }
 }
 
 /// Reject a start point sitting more than `max_ahead` checkpoints past the chain tip. There is
@@ -467,8 +612,9 @@ fn live<S: Subscribable>(
     caches: Arc<StreamedCaches>,
     resolver_limits: sui_package_resolver::Limits,
     filter: S::Filter,
+    mut progress: Progress,
     guard: SubscriptionLifecycleGuard,
-) -> impl Stream<Item = Result<Edge<String, S::Item, EmptyFields>, RpcError>> {
+) -> impl Stream<Item = Result<Delivery<S::Item>, RpcError>> {
     stream! {
         let mut delivered_live = false;
         loop {
@@ -491,6 +637,23 @@ fn live<S: Subscribable>(
                             return;
                         }
                     }
+                    // The last backfill page can scan past the handoff, and its end went out as
+                    // progress. The scan found nothing to deliver up to there, so a live match there
+                    // means the ledger and the stream disagree. Dropping it keeps the client's cursor
+                    // from moving backwards.
+                    if progress.covers(seq) {
+                        if let Ok(edges) = S::matching_edges(&checkpoint, &caches, &resolver_limits, &filter)
+                            && !edges.is_empty()
+                        {
+                            warn!(
+                                checkpoint = seq,
+                                matches = edges.len(),
+                                "Dropping live matches in a checkpoint backfill progress already covered"
+                            );
+                        }
+                        last_checkpoint = Some(seq);
+                        continue;
+                    }
                     // Deliver each matching item as its own payload, ordered within the checkpoint.
                     // Empty checkpoints yield nothing.
                     let edges = match S::matching_edges(&checkpoint, &caches, &resolver_limits, &filter) {
@@ -501,8 +664,20 @@ fn live<S: Subscribable>(
                             return;
                         }
                     };
+                    if edges.is_empty() {
+                        // One progress payload per quiet run rather than per checkpoint, which on a
+                        // busy chain would be several a second.
+                        if let Some(boundary_after) = S::BOUNDARY_AFTER
+                            && let Some(cursor) = progress
+                                .quiet_checkpoint(seq, || boundary_after(&checkpoint).encode_cursor())
+                        {
+                            yield Ok(Delivery::Progress(cursor));
+                        }
+                    } else {
+                        progress.live_matched();
+                    }
                     for edge in edges {
-                        yield Ok(edge);
+                        yield Ok(Delivery::Match(edge));
                         guard.record_delivered(checkpoint.summary.timestamp_ms);
                     }
                     last_checkpoint = Some(seq);
@@ -627,13 +802,18 @@ where
                 ),
             });
         }
-        // Coverage marker at the fully-scanned end: advances the handoff even on a match-less page.
-        if let Some(checkpoint) = covered_checkpoint(&end_cursor) {
-            items.push(Scanned::Covered { checkpoint });
-        }
-
+        let covered = covered_checkpoint(&end_cursor);
         let next_after =
             S::Cursor::try_from(end_cursor).context("Unexpected position in scan end cursor")?;
+
+        // Coverage marker at the fully-scanned end: advances the handoff even on a match-less page.
+        if let Some(checkpoint) = covered {
+            items.push(Scanned::Covered {
+                checkpoint,
+                cursor: S::BOUNDARY_AFTER.map(|_| next_after.encode_cursor()),
+            });
+        }
+
         return Ok((items, next_after));
     }
 }
@@ -695,6 +875,9 @@ fn classify_scan_error(err: RpcError, ledger_floor: u64) -> backoff::Error<RpcEr
         }
     }
 }
+
+#[cfg(test)]
+mod driver_tests;
 
 #[cfg(test)]
 mod tests {
@@ -769,6 +952,8 @@ mod tests {
         ) -> Result<Vec<Edge<String, u64, EmptyFields>>, RpcError> {
             unreachable!("only scans are exercised")
         }
+
+        const BOUNDARY_AFTER: Option<fn(&ProcessedCheckpoint) -> CCheckpoint> = None;
 
         fn subscription_type() -> &'static str {
             "scripted"
@@ -848,7 +1033,10 @@ mod tests {
                     edge: Edge::new(String::new(), *checkpoint),
                 },
                 Out::End(token) => match covered_checkpoint(token) {
-                    Some(checkpoint) => Scanned::Covered { checkpoint },
+                    Some(checkpoint) => Scanned::Covered {
+                        checkpoint,
+                        cursor: None,
+                    },
                     None => continue,
                 },
             };
@@ -890,7 +1078,7 @@ mod tests {
         script: Vec<Result<StreamPage<()>, RpcError>>,
         after_checkpoint: Option<u64>,
     ) -> (
-        Vec<Result<Edge<String, u64, EmptyFields>, RpcError>>,
+        Vec<Result<Delivery<u64>, RpcError>>,
         Arc<SubscriptionMetrics>,
     ) {
         let metrics = SubscriptionMetrics::new_for_test();
@@ -1234,5 +1422,140 @@ mod tests {
         assert!(made_progress(&tx(B, 17, 4), Some(&tx(I, 16, 3))));
         // With no `after`, the first page always counts.
         assert!(made_progress(&cp(B, 16), None));
+    }
+
+    /// A page with no matches ends past the last delivered cursor, so its end is progress. Polling at
+    /// the tip returns the same end cursor again, which is not repeated.
+    #[test]
+    fn backfill_empty_page_delivers_progress() {
+        let mut progress = Progress::new(20);
+        assert_eq!(progress.page_end(10, "b11".into()), Some("b11".into()));
+        assert_eq!(progress.page_end(10, "b11".into()), None);
+        assert_eq!(progress.page_end(14, "b15".into()), Some("b15".into()));
+    }
+
+    /// A page whose last match is followed by scanned checkpoints with no match delivers its end as
+    /// progress, moving the resume point past that tail.
+    #[test]
+    fn backfill_page_with_trailing_empty_range_delivers_progress() {
+        let mut progress = Progress::new(20);
+        progress.scan_matched("i10");
+        assert_eq!(progress.page_end(12, "b13".into()), Some("b13".into()));
+    }
+
+    /// A full page ends at its last match, so the client already holds that cursor.
+    #[test]
+    fn backfill_page_ending_at_its_last_match_has_no_progress() {
+        let mut progress = Progress::new(20);
+        progress.scan_matched("i10");
+        assert_eq!(progress.page_end(9, "i10".into()), None);
+    }
+
+    /// Live delivers one progress cursor per run of `quiet_threshold` checkpoints with no match, and a
+    /// match restarts the run.
+    #[test]
+    fn live_quiet_stretch_delivers_progress_per_run() {
+        let mut progress = Progress::new(3);
+        let mut emitted = vec![];
+        for cp in 21..=26 {
+            if let Some(c) = progress.quiet_checkpoint(cp, || format!("b{}", cp + 1)) {
+                emitted.push(c);
+            }
+        }
+        assert_eq!(emitted, vec!["b24", "b27"]);
+
+        // Checkpoints 27 and 28 are quiet, then 29 matches: the run restarts after it.
+        assert_eq!(progress.quiet_checkpoint(27, || "b28".into()), None);
+        assert_eq!(progress.quiet_checkpoint(28, || "b29".into()), None);
+        progress.live_matched();
+        assert_eq!(progress.quiet_checkpoint(30, || "b31".into()), None);
+        assert_eq!(progress.quiet_checkpoint(31, || "b32".into()), None);
+        assert_eq!(
+            progress.quiet_checkpoint(32, || "b33".into()),
+            Some("b33".into())
+        );
+    }
+
+    /// The last backfill page can scan past the handoff. Live skips the checkpoints its end
+    /// covers, delivering neither matches nor progress behind it, and live progress past it
+    /// advances the covered checkpoint.
+    #[test]
+    fn live_progress_does_not_move_behind_backfill_progress() {
+        let mut progress = Progress::new(1);
+        assert!(progress.page_end(30, "b31".into()).is_some());
+        assert!((21..=30).all(|cp| progress.covers(cp)));
+        assert!(!progress.covers(31));
+        assert_eq!(
+            progress.quiet_checkpoint(31, || "b32".into()),
+            Some("b32".into())
+        );
+        assert!(progress.covers(31));
+    }
+
+    #[test]
+    fn zero_threshold_disables_live_progress() {
+        let mut progress = Progress::new(0);
+        for cp in 0..100 {
+            assert_eq!(progress.quiet_checkpoint(cp, || unreachable!()), None);
+        }
+    }
+
+    /// Resuming after a progress cursor (a `Boundary` at 12, minted once 11 was fully delivered)
+    /// makes the scan responsible for 12 onward, even when this replica has only streamed up to 11.
+    /// Nothing at or below 11 is scanned again, and nothing at 12 is left to live.
+    #[test]
+    fn resume_from_progress_cursor_neither_skips_nor_repeats() {
+        let progress = CursorToken::boundary(Position::Transactions {
+            checkpoint: 12,
+            tx_seq: 40,
+        });
+        let resume_from = start_from(Some(progress), None);
+        assert_eq!(resume_from, Some(12));
+
+        // Streamed tip behind the cursor: the scan delivers 12 and live starts after it.
+        let outputs = [Out::Match(12), boundary(13)];
+        let (delivered, live_after) = drive(5, resume_from, 11, &outputs);
+        assert_eq!(delivered, vec![12]);
+        assert_eq!(live_after, Some(12));
+
+        // Streamed tip ahead: the scan delivers every match up to the tip, live takes the rest.
+        let outputs = [Out::Match(12), Out::Match(15), boundary(21), Out::Match(21)];
+        let (delivered, live_after) = drive(5, resume_from, 20, &outputs);
+        assert_eq!(delivered, vec![12, 15]);
+        assert_eq!(live_after, Some(20));
+    }
+
+    /// A progress cursor from a page that scanned past this replica's streamed tip resumes at its own
+    /// checkpoint: the handoff floors at it, so live does not re-deliver the scanned range.
+    #[test]
+    fn resume_from_progress_cursor_ahead_of_streamed_tip() {
+        let progress = CursorToken::boundary(Position::Transactions {
+            checkpoint: 31,
+            tx_seq: 90,
+        });
+        let resume_from = start_from(Some(progress), Some(5));
+        assert_eq!(resume_from, Some(31));
+
+        let (delivered, live_after) = drive(5, resume_from, 25, &[Out::Match(31), boundary(32)]);
+        assert_eq!(delivered, vec![31]);
+        assert_eq!(live_after, Some(31));
+    }
+
+    /// A progress cursor resumes at the start of a checkpoint the ledger may not have indexed yet
+    /// (live mints it at the streamed tip). Until the ledger catches up it rejects the cursor as out
+    /// of range (#28308) and the scan retries; after that, a page that only echoes the cursor is not
+    /// progress, so no progress edge goes out behind or at the cursor.
+    #[test]
+    fn echoed_progress_cursor_is_not_progress() {
+        // `boundary_after` checkpoint 30: the start of 31, whose first transaction is 900.
+        let progress = tx(B, 31, 900);
+        assert!(!made_progress(&tx(B, 31, 900), Some(&progress)));
+        // Draining 31 ends at the start of 32; a match in 31 is past the cursor too.
+        assert!(made_progress(&tx(B, 32, 950), Some(&progress)));
+        assert!(made_progress(&tx(I, 31, 900), Some(&progress)));
+
+        // The checkpoints feed's progress is a boundary at the next checkpoint.
+        assert!(!made_progress(&cp(B, 31), Some(&cp(B, 31))));
+        assert!(made_progress(&cp(I, 31), Some(&cp(B, 31))));
     }
 }

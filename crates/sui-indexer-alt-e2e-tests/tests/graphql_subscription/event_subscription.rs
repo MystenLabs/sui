@@ -14,6 +14,7 @@ use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
 use serde_json::Value;
 use serde_json::json;
+use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::base_types::ObjectID;
@@ -22,6 +23,7 @@ use tokio_stream::StreamExt;
 use crate::testing::SubscriptionTestCluster;
 use crate::testing::emit_event_harness;
 use crate::testing::graphql_redactions;
+use crate::testing::is_progress;
 use crate::testing::sort_object_changes;
 use crate::testing::wait_for_matching_item;
 
@@ -702,6 +704,133 @@ async fn test_event_subscription_resume_with_after_cursor_ahead_of_ledger() {
     })
     .await
     .expect("test timed out");
+}
+
+/// The `(checkpoint, tx_seq, event_index)` position and kind of an event edge's cursor.
+fn decode_event_cursor(edge: &Value) -> (CursorKind, (u64, u64, u32)) {
+    let cursor = edge["cursor"].as_str().expect("event edge missing cursor");
+    let token = CursorToken::decode(&Base64::decode(cursor).expect("cursor is not base64"))
+        .expect("cursor is not a cursor token");
+    match token.position {
+        Position::Events {
+            checkpoint,
+            tx_seq,
+            event_index,
+        } => (token.kind, (checkpoint, tx_seq, event_index)),
+        position => panic!("expected an events cursor, got {position:?}"),
+    }
+}
+
+/// Check one payload of a subscription that keeps progress against the previous cursor: a match's
+/// cursor is an item past the previous one, and progress is a boundary at or past it.
+fn check_event_cursor_order(edge: &Value, prev: &mut Option<(CursorKind, (u64, u64, u32))>) {
+    let (kind, pos) = decode_event_cursor(edge);
+    let expected_kind = if edge["node"].is_null() {
+        CursorKind::Boundary
+    } else {
+        CursorKind::Item
+    };
+    assert_eq!(kind, expected_kind, "unexpected cursor kind: {edge}");
+    match *prev {
+        Some((CursorKind::Item, p)) => assert!(pos > p, "{pos:?} not after item {p:?}"),
+        Some((_, p)) => assert!(pos >= p, "{pos:?} before boundary {p:?}"),
+        None => {}
+    }
+    *prev = Some((kind, pos));
+}
+
+/// A progress cursor must sit at the start of its checkpoint: its first transaction (the network
+/// total as of the checkpoint before) and that transaction's first event. The ledger's own end
+/// cursor (backfill progress) and the one live mints both have this shape, so either resumes the
+/// same way.
+fn assert_progress_at_checkpoint_start(cluster: &SubscriptionTestCluster, edge: &Value) {
+    let (kind, (checkpoint, tx_seq, event_index)) = decode_event_cursor(edge);
+    assert_eq!(kind, CursorKind::Boundary);
+    let expected_tx_seq = cluster.network_total_transactions(checkpoint - 1);
+    assert_eq!(
+        (tx_seq, event_index),
+        (expected_tx_seq, 0),
+        "progress at checkpoint {checkpoint} is not at its start: {edge}",
+    );
+}
+
+/// A sparse event filter's subscriber receives progress past its last match, from the backfill
+/// (the ledger's end cursor) and then live. Resuming `after` a live progress cursor delivers the next
+/// match without repeating the earlier one.
+#[tokio::test]
+async fn test_event_subscription_progress_edges_resume_without_skip_or_repeat() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history_and_progress(2).await;
+    let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+    // One match before subscribing, so the backfill scans it.
+    let resume_from = cluster.validator_checkpoint_tip();
+    emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 1000).await;
+    tokio::time::sleep(BACKFILL_SETTLE).await;
+
+    let query = r#"subscription($filter: EventFilter!) {
+        events(filter: $filter) {
+            cursor
+            node { contents { json } }
+        }
+    }"#;
+    let subscribed_at = cluster.validator_checkpoint_tip();
+    let mut stream = cluster
+        .subscribe_with_progress(query, type_filter_var(&package_id, Some(resume_from)))
+        .await;
+
+    // The match, then progress past it. Read on until progress well past the subscription's start,
+    // which only live can send: the backfill hands off near the tip it subscribed at.
+    let mut prev = None;
+    let mut seen_first = false;
+    let live_progress = loop {
+        let item = stream.next().await.expect("stream ended");
+        let edge = &item["data"]["events"];
+        check_event_cursor_order(edge, &mut prev);
+        if !is_progress(&item) {
+            assert_eq!(event_value(&item), Some("1000"), "unexpected match: {item}");
+            seen_first = true;
+            continue;
+        }
+        // The first progress after the match is the end of a backfill page, from the ledger.
+        assert!(seen_first, "progress before the backfilled match: {item}");
+        assert_progress_at_checkpoint_start(&cluster, edge);
+        if decode_event_cursor(edge).1.0 > subscribed_at + 20 {
+            break event_cursor(&item);
+        }
+    };
+    drop(stream);
+
+    // A match after the live progress cursor, then resume from it.
+    emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 2000).await;
+    let resume_query = r#"subscription($after: String!, $filter: EventFilter!) {
+        events(after: $after, filter: $filter) {
+            cursor
+            node { contents { json } }
+        }
+    }"#;
+    let mut vars = type_filter_var(&package_id, None).unwrap();
+    vars["after"] = json!(live_progress);
+    let mut stream = cluster
+        .subscribe_with_progress(resume_query, Some(vars))
+        .await;
+
+    // The next match is delivered (a skip would time out) and the earlier one is not repeated.
+    let mut prev = Some(decode_event_cursor(&json!({ "cursor": live_progress })));
+    loop {
+        let item = stream.next().await.expect("stream ended");
+        let edge = &item["data"]["events"];
+        check_event_cursor_order(edge, &mut prev);
+        if is_progress(&item) {
+            assert_progress_at_checkpoint_start(&cluster, edge);
+            continue;
+        }
+        assert_eq!(
+            event_value(&item),
+            Some("2000"),
+            "resuming from progress delivered another event: {item}",
+        );
+        break;
+    }
 }
 
 #[tokio::test]

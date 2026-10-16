@@ -15,6 +15,7 @@ use fastcrypto::encoding::Encoding;
 use serde_json::Value;
 use serde_json::json;
 use sui_indexer_alt_graphql::CTransaction;
+use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use sui_rpc_cursor::Position;
 use sui_types::base_types::SuiAddress;
@@ -23,6 +24,7 @@ use tokio_stream::StreamExt;
 
 use super::testing::SubscriptionTestCluster;
 use super::testing::graphql_redactions;
+use super::testing::is_progress;
 use super::testing::object_wrapping_harness::create_item;
 use super::testing::object_wrapping_harness::publish;
 use super::testing::object_wrapping_harness::unwrap_wrapper;
@@ -38,16 +40,41 @@ use super::testing::wait_for_matching_item;
 /// delivered through the backfill scan (never the live path).
 const BACKFILL_SETTLE: Duration = Duration::from_secs(5);
 
-/// Decode a transaction edge's `cursor` field into its `(checkpoint, tx_sequence)` position.
-fn decode_tx_cursor(edge: &serde_json::Value) -> (u64, u64) {
+/// Decode a transaction edge's `cursor` field into its token.
+fn decode_tx_token(edge: &serde_json::Value) -> CursorToken {
     let cursor = edge["cursor"]
         .as_str()
         .expect("transaction edge missing cursor");
     let ct = CTransaction::decode_cursor(cursor).expect("cursor is not a valid CTransaction");
-    match CursorToken::from(&*ct).position {
+    CursorToken::from(&*ct)
+}
+
+/// Decode a transaction edge's `cursor` field into its `(checkpoint, tx_sequence)` position.
+fn decode_tx_cursor(edge: &serde_json::Value) -> (u64, u64) {
+    match decode_tx_token(edge).position {
         Position::Transactions { checkpoint, tx_seq } => (checkpoint, tx_seq),
         position => panic!("expected a transactions cursor, got {position:?}"),
     }
+}
+
+/// Check one payload of a subscription that keeps progress against the previous cursor: a match's
+/// cursor is an item past the previous one, and a progress payload's cursor is a boundary past the
+/// last match (a boundary resumes at its own position, so the next match may sit exactly on it).
+fn check_cursor_order(edge: &Value, prev: &mut Option<(CursorKind, (u64, u64))>) {
+    let kind = decode_tx_token(edge).kind;
+    let pos = decode_tx_cursor(edge);
+    let expected_kind = if edge["node"].is_null() {
+        CursorKind::Boundary
+    } else {
+        CursorKind::Item
+    };
+    assert_eq!(kind, expected_kind, "unexpected cursor kind: {edge}");
+    match *prev {
+        Some((CursorKind::Item, p)) => assert!(pos > p, "{pos:?} not after item {p:?}"),
+        Some((CursorKind::Boundary, p)) => assert!(pos >= p, "{pos:?} before boundary {p:?}"),
+        None => {}
+    }
+    *prev = Some((kind, pos));
 }
 
 /// The `after` cursor string from a delivered transaction edge.
@@ -721,6 +748,229 @@ async fn test_transaction_subscription_backfill_spans_scan_pages() {
 
     // All eight arrive exactly once, in cursor order across the page seams.
     collect_matches(&mut stream, &expected).await;
+}
+
+/// A sparse filter's subscriber receives progress past its last match, and resuming `after` that
+/// progress cursor delivers the next match without repeating the earlier one.
+#[tokio::test]
+async fn test_transaction_subscription_progress_edges_resume_without_skip_or_repeat() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history_and_progress(2).await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    // One match, then checkpoints with none, all before subscribing so the backfill scans them.
+    let resume_from = cluster.validator_checkpoint_tip();
+    let first: BTreeSet<String> = transfer_coins(&mut cluster.validator, &[1000])
+        .await
+        .into_iter()
+        .collect();
+    tokio::time::sleep(BACKFILL_SETTLE).await;
+
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions(filter: {{ afterCheckpoint: {resume_from}, sentAddress: $sender }}) {{
+                cursor
+                node {{ digest }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_progress(&query, sender_var(sender))
+        .await;
+
+    // Read until the match has arrived and progress has moved past it.
+    let mut seen = BTreeSet::new();
+    let mut prev = None;
+    let progress_cursor = loop {
+        let item = stream.next().await.expect("stream ended");
+        let edge = &item["data"]["transactions"];
+        check_cursor_order(edge, &mut prev);
+        if is_progress(&item) {
+            if first.is_subset(&seen) {
+                break cursor_of(&item);
+            }
+        } else {
+            seen.insert(edge["node"]["digest"].as_str().unwrap().to_string());
+        }
+    };
+    drop(stream);
+
+    // A match after the progress cursor, then resume from it.
+    let second = transfer_coins(&mut cluster.validator, &[2000]).await;
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions(after: "{progress_cursor}", filter: {{ sentAddress: $sender }}) {{
+                cursor
+                node {{ digest }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_progress(&query, sender_var(sender))
+        .await;
+
+    // The next match is delivered (a skip would time out) and the earlier one is not repeated.
+    let resumed = json!({ "cursor": progress_cursor });
+    let mut prev = Some((CursorKind::Boundary, decode_tx_cursor(&resumed)));
+    loop {
+        let item = stream.next().await.expect("stream ended");
+        let edge = &item["data"]["transactions"];
+        check_cursor_order(edge, &mut prev);
+        if is_progress(&item) {
+            continue;
+        }
+        let digest = edge["node"]["digest"].as_str().unwrap().to_string();
+        assert!(
+            !first.contains(&digest),
+            "resuming from progress re-delivered an earlier match",
+        );
+        if second.contains(&digest) {
+            break;
+        }
+    }
+}
+
+/// Resume `after` a progress cursor the ledger has not indexed up to yet, as one minted live at the
+/// streamed tip can be. The ledger rejects it as out of range until it catches up, and the backfill
+/// retries rather than resuming from the ledger's tip: no payload, match or progress, may sit
+/// behind the cursor.
+#[tokio::test]
+async fn test_transaction_subscription_progress_cursor_ahead_of_ledger() {
+    tokio::time::timeout(Duration::from_secs(180), async {
+        let mut cluster = SubscriptionTestCluster::new_with_ledger_history_and_progress(2).await;
+        let sender = cluster.validator.wallet.active_address().unwrap();
+
+        // A progress cursor at the start of a checkpoint the ledger can't have indexed yet, ahead
+        // of its tip in both checkpoint and transaction sequence number, as a live one is.
+        let (tip, total) = cluster.validator_tip_and_total_transactions();
+        let resume_tx = total + RESUME_TX_MARGIN;
+        let progress_cursor = Base64::encode(
+            CursorToken::boundary(Position::Transactions {
+                checkpoint: tip + 1,
+                tx_seq: resume_tx,
+            })
+            .encode(),
+        );
+        let query = format!(
+            r#"subscription($sender: SuiAddress!) {{
+                transactions(after: "{progress_cursor}", filter: {{ sentAddress: $sender }}) {{
+                    cursor
+                    node {{ digest }}
+                }}
+            }}"#,
+        );
+        let mut stream = cluster
+            .subscribe_with_progress(&query, sender_var(sender))
+            .await;
+
+        // Lands after the ledger's tip but before the cursor's transaction.
+        let before_cursor = transfer_coins(&mut cluster.validator, &[100]).await;
+        assert!(cluster.validator_tip_and_total_transactions().1 <= resume_tx);
+
+        // Every checkpoint carries at least one transaction, so the chain passes the cursor.
+        cluster
+            .wait_for_total_transactions_past(resume_tx, Duration::from_secs(120))
+            .await;
+        let after_cursor = transfer_coins(&mut cluster.validator, &[200]).await;
+
+        let resumed = json!({ "cursor": progress_cursor });
+        let mut prev = Some((CursorKind::Boundary, decode_tx_cursor(&resumed)));
+        loop {
+            let item = stream.next().await.expect("stream ended");
+            let edge = &item["data"]["transactions"];
+            check_cursor_order(edge, &mut prev);
+            if is_progress(&item) {
+                continue;
+            }
+            let digest = edge["node"]["digest"].as_str().unwrap().to_string();
+            assert!(
+                !before_cursor.contains(&digest),
+                "delivered a transaction before the progress cursor: {edge}",
+            );
+            if after_cursor.contains(&digest) {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("test timed out");
+}
+
+/// A match whose selected field fails to resolve arrives as an error, not as progress, even on a
+/// subscription that keeps progress: its cursor must not be saved as a resume point.
+#[tokio::test]
+async fn test_transaction_subscription_field_error_is_not_progress() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history_and_progress(2).await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    // `after` is not a valid cursor, which fails only when the field resolves, on a real match.
+    let mut stream = cluster
+        .subscribe_with_progress(
+            r#"subscription($sender: SuiAddress!) {
+                transactions(filter: { sentAddress: $sender }) {
+                    cursor
+                    node {
+                        digest
+                        effects { objectChanges(after: "not a cursor") { nodes { address } } }
+                    }
+                }
+            }"#,
+            sender_var(sender),
+        )
+        .await;
+
+    let digests = transfer_coins(&mut cluster.validator, &[1000]).await;
+    let item = loop {
+        let item = stream.next().await.expect("stream ended");
+        if item.get("errors").is_some() {
+            break item;
+        }
+        // Anything without errors before the match is progress from the quiet chain.
+        assert!(is_progress(&item), "unexpected payload: {item}");
+    };
+
+    assert!(
+        !is_progress(&item),
+        "a failed match counted as progress: {item}"
+    );
+    let digest = item["data"]["transactions"]["node"]["digest"].as_str();
+    assert!(
+        digest.is_some_and(|d| digests.iter().any(|e| e == d)),
+        "error payload is not the match: {item}",
+    );
+}
+
+/// A live subscription whose filter matches nothing still receives progress, one per quiet run,
+/// each further along than the last.
+#[tokio::test]
+async fn test_transaction_subscription_live_progress_on_quiet_filter() {
+    let cluster = SubscriptionTestCluster::new_with_ledger_history_and_progress(2).await;
+    let nobody = SuiAddress::random_for_testing_only();
+
+    let mut stream = cluster
+        .subscribe_with_progress(
+            r#"subscription($sender: SuiAddress!) {
+                transactions(filter: { sentAddress: $sender }) {
+                    cursor
+                    node { digest }
+                }
+            }"#,
+            sender_var(nobody),
+        )
+        .await;
+
+    let mut prev = None;
+    let mut checkpoints = vec![];
+    for _ in 0..3 {
+        let item = stream.next().await.expect("stream ended");
+        assert!(is_progress(&item), "unexpected match: {item}");
+        let edge = &item["data"]["transactions"];
+        check_cursor_order(edge, &mut prev);
+        checkpoints.push(decode_tx_cursor(edge).0);
+    }
+    assert!(
+        checkpoints.windows(2).all(|w| w[0] < w[1]),
+        "progress did not advance: {checkpoints:?}",
+    );
 }
 
 #[tokio::test]

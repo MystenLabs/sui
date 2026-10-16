@@ -576,6 +576,15 @@ impl TransactionToken {
             tx_seq,
         })
     }
+
+    /// Mint a scan-frontier cursor at the given coordinates: resuming after it includes them.
+    pub(crate) fn boundary(checkpoint: u64, tx_seq: u64) -> CTransaction {
+        OpaqueCursor::new(Self {
+            kind: CursorKind::Boundary,
+            checkpoint,
+            tx_seq,
+        })
+    }
 }
 
 impl TxBoundsCursor for CTransaction {

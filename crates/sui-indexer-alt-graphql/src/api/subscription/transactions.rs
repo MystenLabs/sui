@@ -86,4 +86,16 @@ impl Subscribable for Transaction {
         }
         Ok(edges)
     }
+
+    const BOUNDARY_AFTER: Option<fn(&ProcessedCheckpoint) -> CTransaction> = Some(boundary_after);
+}
+
+/// The `Boundary` cursor at the start of the checkpoint after `checkpoint`.
+fn boundary_after(checkpoint: &ProcessedCheckpoint) -> CTransaction {
+    // `network_total_transactions` counts through this checkpoint, so it is the sequence number of
+    // the next checkpoint's first transaction.
+    TransactionToken::boundary(
+        checkpoint.summary.sequence_number + 1,
+        checkpoint.summary.network_total_transactions,
+    )
 }

@@ -51,7 +51,7 @@ mod streamed_store;
 mod streamed_transaction_store;
 mod subscription_readiness;
 #[cfg(test)]
-mod test_utils;
+pub(crate) mod test_utils;
 
 use std::sync::Arc;
 
