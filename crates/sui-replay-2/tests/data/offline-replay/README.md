@@ -36,6 +36,7 @@ cached data should be pruned.
 | 1,250 | 136 | 322,337,899 | success | `MergeCoins → SplitCoins → MoveCall(wheel::play_v2) → TransferObjects`; inputs: pure, owned/immutable, mutable shared, immutable shared; coin gas | [5nUQabAosL96ASjfeBvzbaQNaXQEkHH6AXeLifRFwfWX](https://devxplorer.io/?search=5nUQabAosL96ASjfeBvzbaQNaXQEkHH6AXeLifRFwfWX&network=mainnet) |
 | 1,252 | 136 | 323,439,438 | failure | `MoveCall(tto_demo::uid_mut) → MoveCall(transfer::public_receive) → TransferObjects`; inputs: pure, owned/immutable, receiving; address-balance gas | [DuWXhNqZ1Cy9DjD4VdvNygR42eM9BaDckU6itrKFshrn](https://devxplorer.io/?search=DuWXhNqZ1Cy9DjD4VdvNygR42eM9BaDckU6itrKFshrn&network=mainnet) |
 | 1,275 | 138 | 331,854,382 | success | `ProgrammableSystemTransaction` (not a PTB) | [BkcuC2ZhhabUwNnZnJS1Rrs9cUuxGc7d7ENFPBfv8qre](https://devxplorer.io/?search=BkcuC2ZhhabUwNnZnJS1Rrs9cUuxGc7d7ENFPBfv8qre&network=mainnet) |
+| 1,282 | 138 | 334,734,128 | success | `MergeCoins`; inputs: owned/immutable, coin reservation; address-balance gas | [FYMZ3dBgQfSqRLVkHxYZLHiEDXdKQTZNTAq7tt3AoYpZ](https://devxplorer.io/?search=FYMZ3dBgQfSqRLVkHxYZLHiEDXdKQTZNTAq7tt3AoYpZ&network=mainnet) |
 
 Capture additions through the network, then prove the resulting corpus is complete offline:
 

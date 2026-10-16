@@ -12,7 +12,7 @@
 //! the store (BackingPackageStore, ObjectStore, RuntimeObjectResolver)
 
 use crate::replay_txn::ReplayTransaction;
-use anyhow::{Context, Error, anyhow};
+use anyhow::{Context, Error, anyhow, bail};
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_trace_format::format::MoveTraceBuilder;
 use std::{
@@ -23,9 +23,15 @@ use std::{
 use sui_data_store::{EpochStore, ObjectKey, ObjectStore, VersionQuery};
 use sui_execution::Executor;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SystemObjectVersions, VersionNumber},
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+    base_types::{
+        ObjectID, ObjectRef, SequenceNumber, SuiAddress, SystemObjectVersions, VersionNumber,
+    },
+    coin_reservation::{
+        BorrowedCoinReservationResolver, CoinReservationResolverTrait, ParsedObjectRefWithdrawal,
+    },
     committee::EpochId,
-    digests::TransactionDigest,
+    digests::{TransactionDigest, get_mainnet_chain_identifier, get_testnet_chain_identifier},
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{ExecutionError, SuiErrorKind, SuiResult},
     execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
@@ -34,8 +40,11 @@ use sui_types::{
     metrics::ExecutionMetrics,
     object::Object,
     storage::{BackingPackageStore, PackageObject, ParentSync, RuntimeObjectResolver},
-    supported_protocol_versions::ProtocolConfig,
-    transaction::{CheckedInputObjects, TransactionData, TransactionDataAPI},
+    supported_protocol_versions::{Chain, ProtocolConfig},
+    transaction::{
+        CallArg, CheckedInputObjects, ObjectArg, TransactionData, TransactionDataAPI,
+        TransactionKind,
+    },
 };
 use tracing::{debug, debug_span, trace};
 
@@ -125,11 +134,28 @@ pub fn execute_transaction_to_effects(
         // TODO(address-balances): Support balance withdraw status for replay
         &FundsWithdrawStatus::MaybeSufficient,
     );
+    let system_object_versions = SystemObjectVersions::from_effects(&expected_effects, &store);
+    let mut kind = txn_data.kind().clone();
+    // As in sui-core, skip the rewrite on an early error: the transaction fails before reading
+    // its inputs, and the accumulator behind a reservation may no longer exist.
+    let rewritten_inputs = if early_execution_error.is_none() {
+        rewrite_coin_reservation_inputs(
+            protocol_config.chain(),
+            &store,
+            txn_data.sender(),
+            &mut kind,
+            system_object_versions
+                .get(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                .map(|v| v.version),
+        )
+        .with_context(|| format!("Failed to resolve coin reservation inputs of {digest}"))?
+    } else {
+        None
+    };
     let execution_params = match early_execution_error {
         None => ExecutionOrEarlyError::ok(None),
         Some(errors) => ExecutionOrEarlyError::failed(errors, None),
     };
-    let system_object_versions = SystemObjectVersions::from_effects(&expected_effects, &store);
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor
         .execute_transaction_to_effects_and_execution_error(
@@ -150,8 +176,8 @@ pub fn execute_transaction_to_effects(
             &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
             txn_data.gas_data().clone(),
             gas_status,
-            txn_data.kind().clone(),
-            None, // compat_args
+            kind,
+            rewritten_inputs,
             txn_data.sender(),
             digest,
             trace_builder_opt,
@@ -195,6 +221,44 @@ pub fn execute_transaction_to_effects(
             protocol_version: protocol_config.version.as_u64(),
         },
     ))
+}
+
+// Mirrors sui-core's `rewrite_transaction_for_coin_reservations`. A coin reservation passed as a
+// PTB input is a masked object ref with no object behind it: it becomes a FundsWithdrawal arg,
+// and the returned mask tells the executor to present that withdrawal as a coin.
+fn rewrite_coin_reservation_inputs(
+    chain: Chain,
+    store: &ReplayStore<'_>,
+    sender: SuiAddress,
+    kind: &mut TransactionKind,
+    accumulator_version: Option<SequenceNumber>,
+) -> Result<Option<Vec<bool>>, Error> {
+    let TransactionKind::ProgrammableTransaction(pt) = kind else {
+        return Ok(None);
+    };
+    if pt.coin_reservation_obj_refs().next().is_none() {
+        return Ok(None);
+    }
+    let chain_identifier = match chain {
+        Chain::Mainnet => get_mainnet_chain_identifier(),
+        Chain::Testnet => get_testnet_chain_identifier(),
+        Chain::Unknown => bail!("coin reservation inputs need a mainnet or testnet chain id"),
+    };
+    let resolver = BorrowedCoinReservationResolver::new(store);
+    let mut rewritten_inputs = Vec::with_capacity(pt.inputs.len());
+    for input in pt.inputs.iter_mut() {
+        if let CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) = input
+            && let Some(parsed) = ParsedObjectRefWithdrawal::parse(object_ref, chain_identifier)
+        {
+            let withdrawal =
+                resolver.resolve_funds_withdrawal(sender, parsed, accumulator_version)?;
+            *input = CallArg::FundsWithdrawal(withdrawal);
+            rewritten_inputs.push(true);
+        } else {
+            rewritten_inputs.push(false);
+        }
+    }
+    Ok(Some(rewritten_inputs))
 }
 
 impl ReplayExecutor {
