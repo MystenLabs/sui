@@ -29,6 +29,7 @@ use crate::api::scalars::id::Id;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::available_range::AvailableRangeKey;
 use crate::api::types::checkpoint::filter::CheckpointFilter;
+use crate::api::types::checkpoint::filter::after_skips_pruned;
 use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::checkpoint::filter::cp_by_epoch;
 use crate::api::types::checkpoint::filter::cp_unfiltered;
@@ -40,6 +41,7 @@ use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::validator_aggregated_signature::ValidatorAggregatedSignature;
 use crate::error::RpcError;
+use crate::error::out_of_range;
 use crate::error::upcast;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
@@ -367,6 +369,22 @@ impl Checkpoint {
         ) else {
             return Ok(Connection::new(false, false));
         };
+
+        // A cursor from before the data was pruned must not quietly resume at the floor. Checked
+        // only once the filters leave a range, so a filter outside the available range (such as
+        // `atCheckpoint` below the floor) returns an empty page with or without a cursor.
+        if let Some(after) = page.after()
+            && after_skips_pruned(
+                after.sequence_number(),
+                filter.after_checkpoint.map(u64::from),
+                filter.at_checkpoint.map(u64::from),
+                reader_lo,
+            )
+        {
+            return Err(out_of_range(format!(
+                "`after` cursor resumes below the lowest available checkpoint {reader_lo}"
+            )));
+        }
 
         let results = if let Some(epoch) = filter.at_epoch {
             cp_by_epoch(ctx, &page, &cp_bounds, epoch.into()).await?

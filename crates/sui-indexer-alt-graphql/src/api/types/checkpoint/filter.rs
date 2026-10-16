@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::convert::Infallible;
+use std::ops::Bound;
 use std::ops::RangeInclusive;
 
 use anyhow::Context as _;
@@ -128,6 +129,43 @@ pub(crate) fn checkpoint_bounds(
     cp_hi
         .checked_sub(cp_lo)
         .map(|_| RangeInclusive::new(cp_lo, cp_hi))
+}
+
+/// The checkpoint range to send with a ledger List request covering `cp_bounds`. The lower bound
+/// is sent only when the request set one (`afterCheckpoint` or `atCheckpoint`): the fullnode treats
+/// an explicit start below its retention floor as out of range, but clamps an open start up to the
+/// floor, so a lower bound that only comes from GraphQL's own floor must be left open.
+pub(crate) fn ledger_scan_bounds(
+    cp_bounds: &RangeInclusive<u64>,
+    cp_after: Option<u64>,
+    cp_at: Option<u64>,
+) -> (Bound<u64>, Bound<u64>) {
+    let lo = if cp_after.is_some() || cp_at.is_some() {
+        Bound::Included(*cp_bounds.start())
+    } else {
+        Bound::Unbounded
+    };
+    (lo, Bound::Included(*cp_bounds.end()))
+}
+
+/// Whether resuming after checkpoint `after` would skip checkpoints below `reader_lo`.
+///
+/// The page starts at `reader_lo` regardless, so the checkpoints between the cursor and the floor
+/// would be missing with no error. Filters that exclude them anyway (`afterCheckpoint` or
+/// `atCheckpoint` at or above the floor) leave nothing to skip.
+pub(super) fn after_skips_pruned(
+    after: u64,
+    cp_after: Option<u64>,
+    cp_at: Option<u64>,
+    reader_lo: u64,
+) -> bool {
+    let requested_lo = max_option([
+        Some(after.saturating_add(1)),
+        cp_after.map(|cp| cp.saturating_add(1)),
+        cp_at,
+    ])
+    .unwrap_or(0);
+    requested_lo < reader_lo
 }
 
 /// The cp_sequence_numbers within checkpoint bounds with cursors applied inclusively.
@@ -314,6 +352,45 @@ mod tests {
         let page = page(Some(3), None, None, Some(20));
         assert_eq!(paginate(10..=11, &page), vec![10, 11]);
         assert_eq!(paginate(0..=19, &page), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_ledger_scan_bounds_omits_floor_only_start() {
+        use std::ops::Bound::Included;
+        use std::ops::Bound::Unbounded;
+
+        // No lower-bound filter: the start is GraphQL's floor, so it is left open.
+        assert_eq!(
+            ledger_scan_bounds(&(0..=100), None, None),
+            (Unbounded, Included(100))
+        );
+        assert_eq!(
+            ledger_scan_bounds(&(7..=100), None, None),
+            (Unbounded, Included(100))
+        );
+
+        // A lower-bound filter is sent as given.
+        assert_eq!(
+            ledger_scan_bounds(&(6..=100), Some(5), None),
+            (Included(6), Included(100))
+        );
+        assert_eq!(
+            ledger_scan_bounds(&(9..=9), None, Some(9)),
+            (Included(9), Included(9))
+        );
+    }
+
+    #[test]
+    fn test_after_skips_pruned() {
+        // Floor at 10: a cursor at 9 resumes at the floor, one at 8 would skip 9.
+        assert!(!after_skips_pruned(9, None, None, 10));
+        assert!(after_skips_pruned(8, None, None, 10));
+        assert!(!after_skips_pruned(50, None, None, 10));
+
+        // A filter at or above the floor excludes the pruned checkpoints anyway.
+        assert!(!after_skips_pruned(3, Some(9), None, 10));
+        assert!(!after_skips_pruned(3, None, Some(12), 10));
+        assert!(after_skips_pruned(3, Some(5), None, 10));
     }
 
     #[test]

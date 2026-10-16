@@ -264,6 +264,12 @@ impl TryFrom<proto::ListCheckpointsResponse> for FrameKind<proto::Checkpoint> {
     }
 }
 
+/// The gRPC status behind a list call's error, if the server returned one (for example
+/// `OUT_OF_RANGE` for a request below its retained history), looking through any added context.
+pub fn grpc_status(err: &anyhow::Error) -> Option<&tonic::Status> {
+    err.chain().find_map(|e| e.downcast_ref::<tonic::Status>())
+}
+
 /// Classify a raw list-stream response into a [`FrameKind`], given its payload field. Per-API
 /// implementations only select which response field is the payload.
 fn classify_frame<T>(
@@ -320,13 +326,15 @@ where
             {
                 break;
             }
-            // Consider other errors as the request failed, safest to discard partial work.
+            // Consider other errors as the request failed, safest to discard partial work. Keep
+            // the status as the source so callers can tell permanent errors from transient ones.
             Err(status) => {
-                bail!(
+                let context = format!(
                     "{rpc_name}: stream error {:?}: {}",
                     status.code(),
                     status.message()
                 );
+                return Err(anyhow::Error::new(status).context(context));
             }
         }
     }
@@ -637,6 +645,24 @@ mod tests {
         ])
         .await
         .expect_err("non-timeout status should propagate as error");
+    }
+
+    #[tokio::test]
+    async fn drain_preserves_out_of_range_status() {
+        let err = drain_iter(vec![Err(tonic::Status::out_of_range(
+            "requested data below earliest available; lowest available checkpoint is 42",
+        ))])
+        .await
+        .expect_err("out of range should propagate as error")
+        .context("Failed to list transactions");
+
+        let status = grpc_status(&err).expect("status should be preserved");
+        assert_eq!(status.code(), tonic::Code::OutOfRange);
+        assert!(
+            status
+                .message()
+                .contains("lowest available checkpoint is 42")
+        );
     }
 
     #[tokio::test]

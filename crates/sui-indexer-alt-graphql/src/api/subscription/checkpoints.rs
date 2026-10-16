@@ -23,6 +23,7 @@ use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::checkpoint::CheckpointToken;
 use crate::error::RpcError;
+use crate::error::ledger_error;
 use crate::pagination::Page;
 use crate::scope::Scope;
 use crate::task::streaming::ProcessedCheckpoint;
@@ -103,7 +104,8 @@ async fn list_checkpoints_page(
     cp_bounds: RangeInclusive<u64>,
     page: &Page<CCheckpoint>,
 ) -> Result<StreamPage<v2::Checkpoint>, RpcError> {
-    let after = page.after().map(|c| CursorToken::from(&c.token()).encode());
+    let after_token = page.after().map(|c| CursorToken::from(&c.token()));
+    let after = after_token.as_ref().map(CursorToken::encode);
     let before = page
         .before()
         .map(|c| CursorToken::from(&c.token()).encode());
@@ -125,8 +127,9 @@ async fn list_checkpoints_page(
     request.filter = None;
     request.options = Some(options);
 
-    Ok(reader
+    reader
         .list_checkpoints(request)
         .await
-        .context("Failed to list checkpoints")?)
+        .context("Failed to list checkpoints")
+        .map_err(|e| ledger_error(e, Some(*cp_bounds.start()), after_token.as_ref()))
 }
