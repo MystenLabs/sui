@@ -5,23 +5,19 @@ use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use crate::error::CheckpointNotFoundError;
-use mysten_common::ZipDebugEqIteratorExt;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint;
-use sui_rpc::proto::sui::rpc::v2::Event;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointResponse;
 use sui_rpc::proto::sui::rpc::v2::ObjectSet;
-use sui_rpc::proto::sui::rpc::v2::TransactionEvents;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_sdk_types::Digest;
 use sui_types::balance_change::derive_balance_changes_2;
-use sui_types::full_checkpoint_content::ObjectSet as TypesObjectSet;
 
 pub const READ_MASK_DEFAULT: &str = crate::read_mask_defaults::CHECKPOINT;
 
@@ -148,28 +144,13 @@ pub fn get_checkpoint(
                             .contains(ExecutedTransaction::TIMESTAMP_FIELD)
                             .then(|| sui_rpc::proto::timestamp_ms_to_proto(timestamp_ms));
                         transaction.balance_changes = balance_changes;
-
-                        if let Some(events_mask) =
-                            submask.subtree(ExecutedTransaction::EVENTS_FIELD.name)
-                            && let Some(event_mask) =
-                                events_mask.subtree(TransactionEvents::EVENTS_FIELD.name)
-                            && event_mask.contains(Event::JSON_FIELD.name)
-                            && let Some(events) = transaction.events.as_mut()
-                            && let Some(sdk_events) = &t.events
-                        {
-                            for (message, event) in
-                                events.events.iter_mut().zip_debug_eq(&sdk_events.data)
-                            {
-                                message.json = service
-                                    .render_json_with_budget(
-                                        &event.type_,
-                                        &event.contents,
-                                        &TypesObjectSet::default(),
-                                        &mut json_budget,
-                                    )
-                                    .map(Box::new);
-                            }
-                        }
+                        service.annotate_checkpoint_transaction(
+                            &mut transaction,
+                            &t,
+                            &checkpoint_data.object_set,
+                            &submask,
+                            &mut json_budget,
+                        );
 
                         transaction
                     })

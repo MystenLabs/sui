@@ -38,7 +38,6 @@ use sui_rpc::proto::sui::rpc::v2::SubscribeEventsRequest;
 use sui_rpc::proto::sui::rpc::v2::SubscribeEventsResponse;
 use sui_rpc::proto::sui::rpc::v2::SubscribeTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::SubscribeTransactionsResponse;
-use sui_rpc::proto::sui::rpc::v2::TransactionEvents;
 use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionService;
 use sui_rpc_cursor::Position;
@@ -334,8 +333,8 @@ impl SubscriptionService for RpcService {
 }
 
 /// Render a full `Checkpoint` message from live executed-checkpoint data,
-/// including the `transactions.balance_changes` special case that
-/// `merge_from` cannot fill (it needs the checkpoint's `ObjectSet`).
+/// filling what `merge_from` cannot (effects object types, clever errors,
+/// event JSON, and `transactions.balance_changes`) as `GetCheckpoint` does.
 fn render_checkpoint_message(
     service: &RpcService,
     checkpoint: &sui_types::full_checkpoint_content::Checkpoint,
@@ -351,8 +350,7 @@ fn render_checkpoint_message(
             .iter_mut()
             .zip_debug_eq(checkpoint.transactions.iter())
         {
-            render_effects_and_events(
-                service,
+            service.annotate_checkpoint_transaction(
                 message,
                 tx,
                 &checkpoint.object_set,
@@ -403,9 +401,15 @@ fn render_transaction_message(
 ) -> ExecutedTransaction {
     let tx = &checkpoint.transactions[index];
     let mut message = ExecutedTransaction::merge_from(tx, read_mask);
+    // Every event in the frame draws its JSON from one per-response budget,
+    // as `GetCheckpoint` does across a checkpoint. `GetTransaction` and
+    // `ListTransactions` instead give each event its own
+    // `max_json_move_value_size` budget, so the same transaction can differ:
+    // an event over that per-value cap has `json` here but not there, and once
+    // a transaction's events exhaust `max_json_move_value_response_size`, the
+    // remaining events have `json` there but not here.
     let mut json_budget = service.config.max_json_move_value_response_size();
-    render_effects_and_events(
-        service,
+    service.annotate_checkpoint_transaction(
         &mut message,
         tx,
         &checkpoint.object_set,
@@ -447,40 +451,6 @@ fn render_transaction_message(
     }
 
     message
-}
-
-/// Render effects and event JSON as `GetTransaction` does. `merge_from` can't
-/// fill object types (they need the checkpoint's `ObjectSet`), clever errors,
-/// or event JSON (it needs the package resolver).
-fn render_effects_and_events(
-    service: &RpcService,
-    message: &mut ExecutedTransaction,
-    tx: &sui_types::full_checkpoint_content::ExecutedTransaction,
-    objects: &sui_types::full_checkpoint_content::ObjectSet,
-    mask: &FieldMaskTree,
-    json_budget: &mut usize,
-) {
-    if let Some(submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD) {
-        message.effects = Some(service.render_effects_to_proto(
-            &tx.effects,
-            &tx.unchanged_loaded_runtime_objects,
-            objects,
-            &submask,
-        ));
-    }
-
-    if let Some(events_mask) = mask.subtree(ExecutedTransaction::EVENTS_FIELD)
-        && let Some(event_mask) = events_mask.subtree(TransactionEvents::EVENTS_FIELD)
-        && event_mask.contains(ProtoEvent::JSON_FIELD)
-        && let Some(rendered) = message.events.as_mut()
-        && let Some(events) = &tx.events
-    {
-        for (event_message, event) in rendered.events.iter_mut().zip_debug_eq(&events.data) {
-            event_message.json = service
-                .render_json_with_budget(&event.type_, &event.contents, objects, json_budget)
-                .map(Box::new);
-        }
-    }
 }
 
 /// Fold a subscription progress tick into the stream's checkpoint coverage.

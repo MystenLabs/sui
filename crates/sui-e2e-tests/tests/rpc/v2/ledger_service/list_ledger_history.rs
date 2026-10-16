@@ -445,6 +445,28 @@ async fn expect_out_of_range_list_checkpoints(
     assert_eq!(status.code(), tonic::Code::OutOfRange);
 }
 
+/// Expect `OutOfRange` from `list_transactions`, either on the call or as
+/// the first stream error (see `expect_out_of_range_list_checkpoints`).
+async fn expect_out_of_range_list_transactions(
+    client: &mut LedgerServiceClient<Channel>,
+    request: ListTransactionsRequest,
+) {
+    let status = match client.list_transactions(request).await {
+        Err(status) => status,
+        Ok(response) => {
+            let mut stream = response.into_inner();
+            loop {
+                match stream.message().await {
+                    Ok(Some(_)) => continue,
+                    Ok(None) => panic!("stream ended without OutOfRange"),
+                    Err(status) => break status,
+                }
+            }
+        }
+    };
+    assert_eq!(status.code(), tonic::Code::OutOfRange);
+}
+
 async fn new_cluster() -> TestCluster {
     TestClusterBuilder::new()
         .with_num_validators(1)
@@ -2857,6 +2879,104 @@ async fn test_list_checkpoints_pruned_serving_floor() {
     );
     assert!(response.end);
     assert_eq!(response.end_reason, Some(QueryEndReason::CheckpointBound));
+}
+
+/// Tx-boundary resolution on a store that has dropped the checkpoint
+/// summaries below its serving floor: the predecessor summary of the floor
+/// is absent, so the floor's starting tx sequence resolves from the floor
+/// checkpoint's own summary and contents. ListTransactions (bare and with
+/// `start_checkpoint = floor`) and filtered ListCheckpoints are served from
+/// the floor, and a `start_checkpoint` below the floor is `OutOfRange`.
+#[sim_test]
+async fn test_list_transactions_pruned_predecessor_summary() {
+    let cluster = new_cluster().await;
+    let sender = cluster.get_address_0();
+    // Advance the chain until the floor checkpoint has two non-genesis
+    // predecessors whose summaries can be dropped.
+    let mut floor_tx = transfer_self(&cluster, sender).await;
+    while tx_checkpoint(&floor_tx) < 3 {
+        floor_tx = transfer_self(&cluster, sender).await;
+    }
+    let floor = tx_checkpoint(&floor_tx);
+
+    // Raise the served floor, then physically drop the summaries of the two
+    // checkpoints below it, as a summary-pruning store would.
+    cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let checkpoint_store = state.get_checkpoint_store();
+        let checkpoint = checkpoint_store
+            .get_checkpoint_by_sequence_number(floor - 1)
+            .unwrap()
+            .expect("checkpoint below the floor should exist");
+        checkpoint_store
+            .update_highest_pruned_checkpoint(&checkpoint)
+            .unwrap();
+        checkpoint_store
+            .delete_certified_checkpoint_test_only(floor - 1)
+            .unwrap();
+        checkpoint_store
+            .delete_certified_checkpoint_test_only(floor - 2)
+            .unwrap();
+    });
+
+    let mut client = new_ledger_client(&cluster).await;
+
+    let first_transaction_checkpoint = |result: &TransactionsResult| {
+        result
+            .transactions
+            .first()
+            .and_then(|item| item.transaction.as_ref())
+            .and_then(|tx| tx.checkpoint)
+    };
+
+    // Bare ascending request: served from the floor.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest", "checkpoint"]));
+    req.options = Some(query_options(3));
+    let response = list_transactions_result(&mut client, req).await;
+    assert_eq!(
+        first_transaction_checkpoint(&response),
+        Some(floor),
+        "an open-ended ascending scan should start at the serving floor"
+    );
+
+    // Explicit start at the floor.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest", "checkpoint"]));
+    req.start_checkpoint = Some(floor);
+    req.options = Some(query_options(3));
+    let response = list_transactions_result(&mut client, req).await;
+    assert_eq!(
+        first_transaction_checkpoint(&response),
+        Some(floor),
+        "a scan starting at the floor should serve the floor checkpoint"
+    );
+
+    // An explicit start below the floor asks for pruned data: OutOfRange.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(floor - 1);
+    req.options = Some(query_options(3));
+    expect_out_of_range_list_transactions(&mut client, req).await;
+
+    // Filtered ListCheckpoints resolves its range through the same
+    // tx-boundary path.
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.filter = Some(tx_sender(sender));
+    req.start_checkpoint = Some(floor);
+    req.options = Some(query_options(3));
+    let response = list_checkpoints_result(&mut client, req).await;
+    let seqs: Vec<_> = response
+        .checkpoints
+        .iter()
+        .map(checkpoint_sequence)
+        .collect();
+    assert_eq!(
+        seqs.first().copied(),
+        Some(floor),
+        "filtered checkpoint scan from the floor should match the floor checkpoint"
+    );
 }
 
 #[sim_test]
