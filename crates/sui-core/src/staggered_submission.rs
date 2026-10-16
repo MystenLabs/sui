@@ -67,33 +67,30 @@ const STAGGERED_HELD_QUOTA_DIVISOR: usize = 4;
 const STAGGER_PROPOSER_STAKE_BPS: u64 = 4_000;
 
 /// Metric label splitting submissions by allowed-proposers restriction:
-/// "unrestricted" when any user transaction in the group could have named its
-/// proposers and did not (the class staggering targets), "restricted" when all of
-/// them did, and "na" for groups without user transactions (system messages).
+/// "unrestricted" when the user transactions could have named their proposers and
+/// did not (the class staggering targets), "restricted" when they did, and "na" for
+/// groups without user transactions (system messages). Only the first user
+/// transaction is inspected: admission requires soft bundle members to name the same
+/// allowed proposers, so it speaks for the group.
 pub fn proposers_metric_label(
     transactions: &[ConsensusTransaction],
     epoch_store: &AuthorityPerEpochStore,
 ) -> &'static str {
-    let epoch = epoch_store.epoch();
-    let mut saw_user_transaction = false;
-    for transaction in transactions
+    let Some(transaction) = transactions
         .iter()
-        .filter_map(|transaction| transaction.kind.as_user_transaction())
+        .find_map(|transaction| transaction.kind.as_user_transaction())
+    else {
+        return "na";
+    };
+    if transaction
+        .data()
+        .transaction_data()
+        .expiration()
+        .restricts_proposers(epoch_store.epoch())
     {
-        saw_user_transaction = true;
-        if !transaction
-            .data()
-            .transaction_data()
-            .expiration()
-            .restricts_proposers(epoch)
-        {
-            return "unrestricted";
-        }
-    }
-    if saw_user_transaction {
         "restricted"
     } else {
-        "na"
+        "unrestricted"
     }
 }
 
