@@ -64,14 +64,6 @@ pub fn emit_authenticated_impl(
     safe_assert_eq!(ty_args.len(), 2);
     safe_assert_eq!(args.len(), 3);
 
-    let cost = context.gas_used();
-    if !get_extension!(context, ObjectRuntime)?
-        .protocol_config
-        .enable_authenticated_event_streams()
-    {
-        return Ok(NativeResult::err(cost, NOT_SUPPORTED));
-    }
-
     let event_ty = safe_unwrap!(ty_args.pop());
     // This type is always sui::event::EventStreamHead
     let stream_head_ty = safe_unwrap!(ty_args.pop());
