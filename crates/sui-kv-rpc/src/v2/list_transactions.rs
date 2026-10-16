@@ -878,6 +878,7 @@ mod tests {
                 let get_transaction = get_transaction(
                     ctx.client().clone(),
                     &stages,
+                    crate::v2::test_utils::UNBOUNDED_SERVED_HEIGHT,
                     get_request,
                     ctx.package_resolver(),
                 )

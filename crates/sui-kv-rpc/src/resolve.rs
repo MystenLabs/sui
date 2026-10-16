@@ -427,9 +427,14 @@ pub(crate) async fn resolve_checkpoint(
 /// types, keyed by digest for request-order reconstruction. Transaction rows
 /// stream in by chunk and their object reads overlap the transaction fetch. An
 /// empty `digests` issues no BigTable read.
+///
+/// A transaction whose checkpoint is above `checkpoint_hi_inclusive` is left out
+/// of the result before its objects are read: its `transactions` row can be
+/// written before the `objects` rows it references, so reading them could fail.
 pub(crate) async fn resolve_transactions(
     client: BigTableClient,
     digests: Vec<TransactionDigest>,
+    checkpoint_hi_inclusive: u64,
     read_mask: &FieldMaskTree,
     transactions_stage: ResolvedStageConfig,
     objects_stage: ResolvedStageConfig,
@@ -459,7 +464,14 @@ pub(crate) async fn resolve_transactions(
             let columns = columns.clone();
             move |chunk| fetch_transaction_rows(client.clone(), columns.clone(), chunk)
         },
-    );
+    )
+    .try_filter(move |item| {
+        std::future::ready(!matches!(
+            item,
+            Watermarked::Item((_, tx)) if tx.checkpoint_number > checkpoint_hi_inclusive
+        ))
+    })
+    .boxed();
 
     // Stage B: attach each tx's own objects.
     let with_objects = with_object_maps(

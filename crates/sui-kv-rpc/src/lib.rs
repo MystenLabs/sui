@@ -55,6 +55,7 @@ mod pipeline;
 mod render;
 mod request_cache;
 mod resolve;
+mod served_height;
 mod v2;
 
 use bigtable_client::Metrics as BigTableLimiterMetrics;

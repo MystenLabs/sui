@@ -227,24 +227,15 @@ impl KvRpcServer {
     }
 
     fn cached_checkpoint_hi_exclusive(&self) -> Result<u64, RpcError> {
-        let checkpoint_hi_inclusive = self
-            .cache
-            .borrow()
-            .as_ref()
-            .and_then(|info| info.checkpoint_height)
+        self.served_height()?
+            .checkpoint
+            .checked_add(1)
             .ok_or_else(|| {
                 RpcError::new(
-                    tonic::Code::Unavailable,
-                    "service info cache missing checkpoint height",
+                    tonic::Code::Internal,
+                    "cached checkpoint height cannot be represented as an exclusive bound",
                 )
-            })?;
-
-        checkpoint_hi_inclusive.checked_add(1).ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                "cached checkpoint height cannot be represented as an exclusive bound",
-            )
-        })
+            })
     }
 
     async fn query_context(&self, operation: &'static str) -> Result<QueryContext, RpcError> {

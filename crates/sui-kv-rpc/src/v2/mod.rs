@@ -88,6 +88,7 @@ impl LedgerService for KvRpcServer {
         get_transaction::get_transaction(
             self.limited_client("GetTransaction"),
             &self.stages,
+            self.served_height()?,
             request.into_inner(),
             &self.package_resolver,
         )
@@ -103,6 +104,7 @@ impl LedgerService for KvRpcServer {
         get_transaction::batch_get_transactions(
             self.limited_client("BatchGetTransactions"),
             &self.stages,
+            self.served_height()?,
             request.into_inner(),
             &self.package_resolver,
         )
@@ -119,7 +121,7 @@ impl LedgerService for KvRpcServer {
             self.client.clone(),
             self.limited_client("GetCheckpoint"),
             &self.stages,
-            &self.service_info_watermark_pipelines,
+            self.served_height()?,
             request.into_inner(),
         )
         .await
@@ -133,6 +135,7 @@ impl LedgerService for KvRpcServer {
     ) -> Result<tonic::Response<GetEpochResponse>, tonic::Status> {
         get_epoch::get_epoch(
             self.client.clone(),
+            self.served_height()?,
             request.into_inner(),
             self.chain_id.chain(),
         )
@@ -244,6 +247,14 @@ pub(crate) mod test_utils {
     use crate::bigtable_client::BigTableClient;
     use crate::operation::QueryContext;
     use crate::package_store::BigTablePackageStore;
+    use crate::served_height::ServedHeight;
+
+    /// A served height above every checkpoint and epoch, for tests of what a handler serves
+    /// rather than of where the served height cuts it off.
+    pub(crate) const UNBOUNDED_SERVED_HEIGHT: ServedHeight = ServedHeight {
+        checkpoint: u64::MAX,
+        epoch: u64::MAX,
+    };
 
     pub(crate) fn two_transaction_object_checkpoint() -> Checkpoint {
         TestCheckpointBuilder::new(0)
