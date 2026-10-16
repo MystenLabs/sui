@@ -14,7 +14,9 @@ use serde_json::{Value, json};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-use sui_rpc::proto::sui::rpc::v2::ExecutionError;
+use prost::Message;
+use sui_rpc::proto::google::rpc::{ErrorInfo, Status as RpcStatus};
+use sui_rpc::proto::sui::rpc::v2::{ErrorReason, ExecutionError};
 use sui_types::error::{SuiError, SuiErrorKind};
 
 use crate::types::{BlockHash, OperationType, PublicKey, SuiEnv};
@@ -95,6 +97,61 @@ impl From<SuiErrorKind> for Error {
     }
 }
 
+/// The `google.rpc.Status` the fullnode encodes into the details of an `InvalidArgument` status,
+/// together with its `ErrorInfo` detail of the given `reason` in domain `ErrorReason::DOMAIN`.
+/// `None` for any other code, for details that do not decode, or when no such `ErrorInfo` exists.
+fn invalid_argument_error_info(
+    status: &tonic::Status,
+    reason: ErrorReason,
+) -> Option<(RpcStatus, ErrorInfo)> {
+    if status.code() != tonic::Code::InvalidArgument {
+        return None;
+    }
+    let rpc_status = RpcStatus::decode(status.details()).ok()?;
+    let info = rpc_status
+        .details
+        .iter()
+        .filter_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .find(|info| info.reason == reason.as_str_name() && info.domain == ErrorReason::DOMAIN)?;
+    Some((rpc_status, info))
+}
+
+/// The `ErrorInfo` detail (reason `INSUFFICIENT_GAS_BALANCE`, domain `ErrorReason::DOMAIN`) the
+/// fullnode attaches to an `InvalidArgument` status when gas selection fails because the gas owner
+/// lacks enough SUI for the budget. `None` for any other error, including statuses whose details do
+/// not decode.
+pub(crate) fn insufficient_gas_balance(error: &Error) -> Option<ErrorInfo> {
+    let Error::SuiRpcError(status) = error else {
+        return None;
+    };
+    invalid_argument_error_info(status, ErrorReason::InsufficientGasBalance).map(|(_, info)| info)
+}
+
+/// The `requiredBudget` metadata entry, in MIST, of the `ErrorInfo` that
+/// [`insufficient_gas_balance`] returns. `None` for any other error, or when the entry is missing
+/// or does not parse.
+pub(crate) fn insufficient_gas_required_budget(error: &Error) -> Option<u64> {
+    insufficient_gas_balance(error)?
+        .metadata
+        .get("requiredBudget")?
+        .parse()
+        .ok()
+}
+
+/// The `ExecutionError` detail the fullnode attaches, next to an `ErrorInfo` with reason
+/// `TRANSACTION_EXECUTION_FAILED` in domain `ErrorReason::DOMAIN`, to an `InvalidArgument` status
+/// when a simulated transaction fails in execution and gas selection cannot cover its budget. It is
+/// the same error a simulation that can pay for gas reports in its effects. `None` for any other
+/// status, including statuses whose details do not decode.
+pub(crate) fn execution_failure(status: &tonic::Status) -> Option<ExecutionError> {
+    let (rpc_status, _) =
+        invalid_argument_error_info(status, ErrorReason::TransactionExecutionFailed)?;
+    rpc_status
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ExecutionError>().ok())
+}
+
 impl Serialize for ErrorType {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -139,7 +196,22 @@ impl Serialize for Error {
         let mut json = type_.json();
         // Safe to unwrap, we know ErrorType must be an object.
         let error = json.as_object_mut().unwrap();
-        error.insert("details".into(), json!({ "error": format!("{self}") }));
+        let mut details = serde_json::Map::new();
+        details.insert("error".into(), json!(format!("{self}")));
+        // When gas selection fails for lack of SUI, include the amounts the fullnode reported so
+        // callers can prefund the account without parsing the error message.
+        if let Some(info) = insufficient_gas_balance(self) {
+            for (metadata_key, details_key) in [
+                ("requiredBudget", "required_budget"),
+                ("coinBalance", "coin_balance"),
+                ("addressBalance", "address_balance"),
+            ] {
+                if let Some(value) = info.metadata.get(metadata_key) {
+                    details.insert(details_key.into(), json!(value));
+                }
+            }
+        }
+        error.insert("details".into(), Value::Object(details));
         error.insert("retriable".into(), json!(self.retriable()));
         error.serialize(serializer)
     }
