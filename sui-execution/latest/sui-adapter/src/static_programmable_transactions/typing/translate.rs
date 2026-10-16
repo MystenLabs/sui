@@ -380,7 +380,7 @@ pub fn transaction<Mode: ExecutionMode>(
     // mark unused results to be dropped
     unused_results::transaction(&mut ast)?;
     // track shared object IDs
-    post_execution_checks::transaction(env.protocol_config, &mut ast)?;
+    post_execution_checks::transaction(&mut ast)?;
     Ok(ast)
 }
 
@@ -1286,7 +1286,6 @@ mod unused_results {
 mod post_execution_checks {
 
     use crate::{sp, static_programmable_transactions::typing::ast as T};
-    use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         error::{ExecutionError, SafeIndex},
         object::ObjectPermissions,
@@ -1298,11 +1297,10 @@ mod post_execution_checks {
         inputs: Vec<bool>,
         // True if the command incurs post-execution checks
         results: Vec<bool>,
-        propagate_through_mut_borrow: bool,
     }
 
     impl Context {
-        pub fn new(protocol_config: &ProtocolConfig, ast: &T::Transaction) -> Self {
+        pub fn new(ast: &T::Transaction) -> Self {
             let T::Transaction {
                 gas_payment: _,
                 bytes: _,
@@ -1326,7 +1324,6 @@ mod post_execution_checks {
             Self {
                 inputs,
                 results: vec![],
-                propagate_through_mut_borrow: protocol_config.granular_post_execution_checks(),
             }
         }
     }
@@ -1335,11 +1332,8 @@ mod post_execution_checks {
     /// MakeMoveVec is the only command that can take objects by-value and propagate them
     /// for another command without directly incurring a check, as such we taint track for
     /// MakeMoveVec
-    pub fn transaction(
-        protocol_config: &ProtocolConfig,
-        ast: &mut T::Transaction,
-    ) -> Result<(), ExecutionError> {
-        let mut context = Context::new(protocol_config, ast);
+    pub fn transaction(ast: &mut T::Transaction) -> Result<(), ExecutionError> {
+        let mut context = Context::new(ast);
 
         // For each command, find what objects are taken by-value and will incur a post-execution
         // check
@@ -1419,12 +1413,8 @@ mod post_execution_checks {
                         *tainted
                     }
                     T::Argument__::Borrow(/* mut */ true, _) => {
-                        if context.propagate_through_mut_borrow {
-                            let tainted = context.results.safe_get(i as usize)?;
-                            *tainted
-                        } else {
-                            false
-                        }
+                        let tainted = context.results.safe_get(i as usize)?;
+                        *tainted
                     }
                     T::Argument__::Use(T::Usage::Copy { .. })
                     | T::Argument__::Borrow(false, _)
