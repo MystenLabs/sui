@@ -29,10 +29,6 @@ pub(super) fn checkpoint_hi_exclusive(service: &RpcService) -> Result<u64, RpcEr
         .ok_or_else(|| RpcError::new(tonic::Code::Internal, "checkpoint bound overflow"))
 }
 
-/// The tx_sequence_number of checkpoint `checkpoint`'s first transaction: the
-/// predecessor's `network_total_transactions`. A store that prunes summaries
-/// keeps the floor checkpoint but not its predecessor, so when the predecessor
-/// is gone this falls back to the checkpoint's own summary and contents.
 pub(super) fn checkpoint_to_tx_boundary(
     service: &RpcService,
     checkpoint: CheckpointSequenceNumber,
@@ -40,21 +36,19 @@ pub(super) fn checkpoint_to_tx_boundary(
     if checkpoint == 0 {
         return Ok(0);
     }
-    let store = service.reader.inner();
-    if let Some(predecessor) = store.get_checkpoint_by_sequence_number(checkpoint - 1) {
-        return Ok(predecessor.data().network_total_transactions);
-    }
-    if let Some(summary) = store.get_checkpoint_by_sequence_number(checkpoint)
-        && let Some(contents) = store.get_checkpoint_contents_by_sequence_number(checkpoint)
-    {
-        return Ok(summary.data().network_total_transactions - contents.size() as u64);
-    }
-    Err(missing_checkpoint_error(service, checkpoint))
+    service
+        .reader
+        .inner()
+        .get_checkpoint_by_sequence_number(checkpoint - 1)
+        .map(|checkpoint| checkpoint.data().network_total_transactions)
+        .ok_or_else(|| missing_checkpoint_error(service, checkpoint))
 }
 
-/// Range resolution runs before the serving-floor clamp, so a boundary below
-/// the floor lands here first. Report it as `OutOfRange`, as
-/// `list_checkpoints` does.
+/// Classify a missing predecessor summary while resolving the tx boundary of
+/// `checkpoint`. Range resolution runs before the serving-floor clamp, so a
+/// boundary below the floor lands here first: report it as `OutOfRange`, as
+/// `list_checkpoints` does. A boundary at or above the floor needs a summary
+/// the store retains, so its absence is `Internal`.
 fn missing_checkpoint_error(
     service: &RpcService,
     checkpoint: CheckpointSequenceNumber,
@@ -69,7 +63,8 @@ fn missing_checkpoint_error(
         _ => RpcError::new(
             tonic::Code::Internal,
             format!(
-                "missing checkpoint {checkpoint} and its predecessor while resolving tx boundary"
+                "missing checkpoint {} while resolving tx boundary",
+                checkpoint - 1
             ),
         ),
     }
@@ -99,11 +94,9 @@ pub(super) fn checkpoint_to_tx_range(
 /// `tx_seq_digest` rows for transactions whose contents are already gone. Serving
 /// must be bounded by content availability, matching `get_transaction`.
 ///
-/// This resolves at the floor whether or not the store retains the floor's
-/// predecessor summary. The fullnode's `certified_checkpoints` keeps every
-/// summary; a summary-pruning store drops every summary below the floor, and
-/// `checkpoint_to_tx_boundary` then derives the boundary from the floor
-/// checkpoint's own summary and contents.
+/// `checkpoint_to_tx_boundary` reads the lowest available checkpoint's predecessor
+/// from `certified_checkpoints`, which is retained across pruning, so this resolves
+/// even at the floor.
 fn lowest_available_tx_seq(service: &RpcService) -> Result<u64, RpcError> {
     let lowest_checkpoint = service.reader.get_lowest_available_checkpoint()?;
     checkpoint_to_tx_boundary(service, lowest_checkpoint)

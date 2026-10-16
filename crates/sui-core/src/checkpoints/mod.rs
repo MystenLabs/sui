@@ -1245,15 +1245,6 @@ impl CheckpointStore {
         Ok(())
     }
 
-    /// Delete one certified checkpoint summary, reproducing a store that prunes
-    /// summaries below its serving floor.
-    pub fn delete_certified_checkpoint_test_only(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Result<(), TypedStoreError> {
-        self.tables.certified_checkpoints.remove(&sequence_number)
-    }
-
     pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
         self.delete_highest_executed_checkpoint_test_only()?;
         Ok(())
