@@ -347,13 +347,13 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn start_accepts_repeated_header_env_flags() {
+    async fn start_accepts_repeated_gql_header_env_flags() {
         let cli = Cli::try_parse_from([
             "sui-fork",
             "start",
-            "--header-env",
+            "--gql-header-env",
             "Authorization=TEST_AUTH",
-            "--header-env",
+            "--gql-header-env",
             "X-Project-ID=TEST_PROJECT",
         ])
         .unwrap();
@@ -373,7 +373,7 @@ mod tests {
             panic!("expected start command");
         };
         assert!(args.headers.is_empty());
-        assert!(Cli::try_parse_from(["sui-fork", "start", "--header-env"]).is_err());
+        assert!(Cli::try_parse_from(["sui-fork", "start", "--gql-header-env"]).is_err());
     }
 
     #[test]

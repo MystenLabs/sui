@@ -47,9 +47,9 @@ pub struct StartArgs {
 
     /// Read a GraphQL header value from an environment variable (repeatable).
     ///
-    /// Use `--header-env Authorization=SUI_AUTHORIZATION` with `SUI_AUTHORIZATION` set to
+    /// Use `--gql-header-env Authorization=SUI_AUTHORIZATION` with `SUI_AUTHORIZATION` set to
     /// the complete header value, such as `Bearer <token>`.
-    #[arg(long = "header-env", value_name = "NAME=ENV_VAR")]
+    #[arg(long = "gql-header-env", value_name = "NAME=ENV_VAR")]
     pub headers: Vec<String>,
 }
 
