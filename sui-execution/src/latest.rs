@@ -66,6 +66,7 @@ impl Executor {
             gasless_transaction_drop_safety,
             early_return_receive_object_mismatched_type,
             generate_df_type_layouts,
+            private_generics_verifier_v2,
             convert_withdrawal_compatibility_ptb_arguments,
             enable_init_on_upgrade,
             enable_order_independent_upgrade_init_linkage,
