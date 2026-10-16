@@ -3209,6 +3209,7 @@ impl AuthorityState {
             self.get_backing_package_store().clone(),
             self.get_object_store().clone(),
             &self.config.expensive_safety_check_config,
+            &self.config,
             self.checkpoint_store
                 .get_epoch_last_checkpoint(epoch_store.epoch())
                 .unwrap()
@@ -4888,6 +4889,7 @@ impl AuthorityState {
             self.get_backing_package_store().clone(),
             self.get_object_store().clone(),
             expensive_safety_check_config,
+            &self.config,
             epoch_last_checkpoint,
             self.config.fullnode_sync_mode,
         )?;
