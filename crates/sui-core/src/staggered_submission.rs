@@ -183,10 +183,9 @@ impl StaggeredSubmission {
         {
             return StaggerDecision::Free;
         }
-        // A non-member has no slot in the order; it also has no consensus to submit to.
-        let Some(own_index) = epoch_store.own_committee_index() else {
-            return StaggerDecision::Free;
-        };
+        let own_index = epoch_store
+            .own_committee_index()
+            .expect("staggering decisions are only made on validators");
 
         let gas_payment: Vec<ObjectID> = tx_data
             .iter()
