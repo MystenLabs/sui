@@ -73,6 +73,7 @@ impl Executor {
             disallow_jump_orphans,
             include_function_signatures_in_instantiation_limits,
             disallow_self_identifier,
+            charge_ld_const_abstract_size,
             convert_withdrawal_compatibility_ptb_arguments,
             enable_init_on_upgrade,
             enable_order_independent_upgrade_init_linkage,
