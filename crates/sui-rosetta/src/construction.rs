@@ -26,7 +26,7 @@ use sui_types::signature_verification::{
 };
 use sui_types::transaction::TransactionDataAPI;
 
-use crate::errors::Error;
+use crate::errors::{Error, insufficient_gas_required_budget};
 use crate::operations::reconstruct_operations;
 use crate::types::internal_operation::{PayCoin, TransactionObjectData, TryConstructTransaction};
 use crate::types::transaction_envelope;
@@ -69,6 +69,13 @@ pub async fn payloads(
 ) -> Result<ConstructionPayloadsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let metadata = request.metadata.ok_or(Error::MissingMetadata)?;
+    if metadata.estimate_only {
+        return Err(Error::InvalidInput(
+            "metadata from an `estimate_only` request is a gas quote and cannot be used to build \
+             a transaction; call /construction/metadata without `estimate_only`"
+                .to_string(),
+        ));
+    }
 
     let internal = request.operations.into_internal()?;
     let data = internal.clone().try_into_data(metadata)?;
@@ -276,11 +283,15 @@ pub async fn preprocess(
 
     let internal_operation = request.operations.into_internal()?;
     let sender = internal_operation.sender();
-    let budget = request.metadata.and_then(|m| m.budget);
+    let (budget, estimate_only) = request
+        .metadata
+        .map_or((None, false), |m| (m.budget, m.estimate_only));
+    check_estimate_only_without_budget(estimate_only, budget)?;
     Ok(ConstructionPreprocessResponse {
         options: Some(MetadataOptions {
             internal_operation,
             budget,
+            estimate_only,
         }),
         required_public_keys: vec![sender.into()],
     })
@@ -337,6 +348,8 @@ pub async fn metadata(
     env.check_network_identifier(&request.network_identifier)?;
     let option = request.options.ok_or(Error::MissingMetadata)?;
     let budget = option.budget;
+    let estimate_only = option.estimate_only;
+    check_estimate_only_without_budget(estimate_only, budget)?;
     let sender = option.internal_operation.sender();
     let currency = match &option.internal_operation {
         InternalOperation::PayCoin(PayCoin { currency, .. }) => Some(currency.clone()),
@@ -353,10 +366,44 @@ pub async fn metadata(
         InternalOperation::PaySui(_) | InternalOperation::Stake(_)
     );
 
-    let needed_objects = option
+    let fetched = option
         .internal_operation
         .try_fetch_needed_objects(&mut context.client.clone(), Some(gas_price), budget)
-        .await?;
+        .await;
+
+    // A quote request for an account that cannot pay gas: the fullnode reports the budget the
+    // transaction needs with the account's current SUI (the `requiredBudget` metadata entry). A
+    // detail without a parseable budget is not a usable quote, so the original error is returned
+    // instead.
+    if estimate_only
+        && let Err(e) = &fetched
+        && let Some(required_budget) = insufficient_gas_required_budget(e)
+    {
+        return Ok(ConstructionMetadataResponse {
+            metadata: ConstructionMetadata {
+                sender,
+                gas_coins: vec![],
+                extra_gas_coins: vec![],
+                objects: vec![],
+                party_objects: vec![],
+                total_coin_value: 0,
+                gas_price,
+                budget: required_budget,
+                currency,
+                address_balance_withdrawal: 0,
+                epoch: None,
+                chain_id: None,
+                nonce: None,
+                fss_object_count: None,
+                redeem_token_amount: None,
+                redeem_plan: None,
+                bind_epoch: None,
+                estimate_only,
+            },
+            suggested_fee: vec![Amount::new(required_budget as i128, None)],
+        });
+    }
+    let needed_objects = fetched?;
 
     // Gasless ("free tier") PayCoin: zero the gas price so the downstream tx is recognized as
     // gasless (`is_gasless_transaction` requires `price == 0`). Priced address-balance gas keeps
@@ -435,9 +482,24 @@ pub async fn metadata(
             redeem_token_amount,
             redeem_plan,
             bind_epoch,
+            estimate_only,
         },
         suggested_fee: vec![Amount::new(budget as i128, None)],
     })
+}
+
+/// `estimate_only` quotes the budget the fullnode estimates, so a caller-supplied budget would make
+/// the quote meaningless.
+fn check_estimate_only_without_budget(
+    estimate_only: bool,
+    budget: Option<u64>,
+) -> Result<(), Error> {
+    if estimate_only && budget.is_some() {
+        return Err(Error::InvalidInput(
+            "`estimate_only` cannot be combined with `budget`".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 ///  This is run as a sanity check before signing (after /construction/payloads)

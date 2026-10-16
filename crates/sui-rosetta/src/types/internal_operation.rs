@@ -28,7 +28,7 @@ use sui_types::transaction::{
     Argument, CallArg, Command, FundsWithdrawalArg, ProgrammableTransaction, TransactionData,
 };
 
-use crate::errors::Error;
+use crate::errors::{Error, execution_failure, insufficient_gas_required_budget};
 use crate::types::{AuxData, ConstructionMetadata};
 pub use consolidate_to_fungible::ConsolidateAllStakedSuiToFungible;
 pub(crate) use consolidate_to_fungible::consolidate_to_fungible_pt;
@@ -404,8 +404,39 @@ pub(crate) fn withdraw_coin_from_address_balance(
     Ok(coin)
 }
 
+/// The error to report when `PaySui` or `Stake` fails on Path B, the transaction that pays gas
+/// from a gas coin, after `path_a_error` on Path A, the one that pays from the address balance.
+/// When both fail gas selection, funding the sender can make either path run: Path A if the funds
+/// arrive in its address balance, Path A or B if they arrive as a coin. So the failure that needs
+/// the larger budget is reported, and the budget quoted from it covers both paths. In any other
+/// case, `path_b_error` is reported.
+pub(crate) fn path_b_error_or_larger_gas_shortfall(
+    path_b_error: Error,
+    path_a_error: Option<Error>,
+) -> Error {
+    match (
+        insufficient_gas_required_budget(&path_b_error),
+        path_a_error,
+    ) {
+        (Some(path_b_budget), Some(path_a_error))
+            if insufficient_gas_required_budget(&path_a_error)
+                .is_some_and(|path_a_budget| path_a_budget > path_b_budget) =>
+        {
+            path_a_error
+        }
+        _ => path_b_error,
+    }
+}
+
 /// RPC auto-selects gas coins if empty, uses reference gas price if None, and estimates budget if None.
 /// Returns the resolved budget and gas coins used by the transaction.
+///
+/// When `gas_coins` is empty and `budget` is `None`, a transaction that fails in execution yields
+/// `Error::TransactionDryRunError` whether or not the sender can pay for gas: the fullnode reports
+/// the failure in the effects when gas selection succeeds, and in the details of the error status
+/// when it does not. Otherwise the fullnode checks the gas payment against the budget before it
+/// reports execution failures, so a sender that can't cover the budget gets an insufficient-gas
+/// error even if the transaction would fail.
 async fn simulate_transaction(
     client: &mut Client,
     pt: ProgrammableTransaction,
@@ -451,7 +482,11 @@ async fn simulate_transaction(
     let response = client
         .execution_client()
         .simulate_transaction(request)
-        .await?
+        .await
+        .map_err(|status| match execution_failure(&status) {
+            Some(execution_error) => Error::TransactionDryRunError(Box::new(execution_error)),
+            None => Error::SuiRpcError(status),
+        })?
         .into_inner();
 
     let executed_tx = response.transaction();

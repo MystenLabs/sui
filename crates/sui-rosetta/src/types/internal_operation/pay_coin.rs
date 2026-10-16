@@ -17,7 +17,10 @@ use sui_types::rpc_proto_conversions::ObjectReferenceExt;
 use sui_types::sui_sdk_types_conversions::type_tag_sdk_to_core;
 use sui_types::transaction::{Argument, Command, ObjectArg, ProgrammableTransaction};
 
-use crate::{Currency, errors::Error};
+use crate::{
+    Currency,
+    errors::{Error, insufficient_gas_balance},
+};
 
 use super::{
     MAX_COMMAND_ARGS, TransactionObjectData, TryConstructTransaction, simulate_transaction,
@@ -143,9 +146,12 @@ impl TryConstructTransaction for PayCoin {
                     bind_epoch: None,
                 });
             }
-            // Priced fallback (gasless ineligible) or an unexpected dry-run failure: fall through
-            // to the smash path. Only transport errors propagate.
+            // Fall through to the smash path when gasless is ineligible (priced simulate), the
+            // probe's dry run fails, or the probe fails gas selection because the account lacks
+            // the SUI to pay for it (the priced path then reports the budget of the transaction
+            // actually sent). Other errors, such as transport failures, propagate.
             Ok(_) | Err(Error::TransactionDryRunError(_)) => {}
+            Err(e) if insufficient_gas_balance(&e).is_some() => {}
             Err(e) => return Err(e),
         }
 

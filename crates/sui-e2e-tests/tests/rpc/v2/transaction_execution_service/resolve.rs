@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use prost::Message;
 use prost_types::FieldMask;
 use shared_crypto::intent::Intent;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
+use sui_rpc::proto::google::rpc::ErrorInfo;
 use sui_rpc::proto::sui::rpc::v2::Argument;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
 use sui_rpc::proto::sui::rpc::v2::Command;
+use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 use sui_rpc::proto::sui::rpc::v2::ExecuteTransactionRequest;
+use sui_rpc::proto::sui::rpc::v2::ExecutionError;
 use sui_rpc::proto::sui::rpc::v2::GasPayment;
 use sui_rpc::proto::sui::rpc::v2::Input;
 use sui_rpc::proto::sui::rpc::v2::MoveCall;
@@ -20,16 +24,18 @@ use sui_rpc::proto::sui::rpc::v2::TransactionExpiration as ProtoTransactionExpir
 use sui_rpc::proto::sui::rpc::v2::TransactionKind;
 use sui_rpc::proto::sui::rpc::v2::TransferObjects;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
+use sui_rpc::proto::sui::rpc::v2::execution_error::ExecutionErrorKind;
 use sui_rpc::proto::sui::rpc::v2::simulate_transaction_request::TransactionChecks as ProtoTransactionChecks;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_expiration::TransactionExpirationKind;
 use sui_rpc_api::Client;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::Command as SuiCommand;
 use sui_types::transaction::{ObjectArg, TransactionData, TransactionDataAPI};
-use test_cluster::TestClusterBuilder;
+use test_cluster::{TestCluster, TestClusterBuilder};
 
 fn proto_to_response(
     proto: sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse,
@@ -399,8 +405,237 @@ async fn resolve_transaction_insufficient_gas() {
             .unwrap();
 
     // Test the case where we don't have enough coins/gas for the required budget
-    let mut unresolved_transaction = Transaction::default();
-    unresolved_transaction.kind = Some(TransactionKind::from({
+    let sender = SuiAddress::random_for_testing_only(); // random account with no SUI
+    let mut unresolved_transaction = read_clock_transaction();
+    unresolved_transaction.sender = Some(sender.to_string());
+
+    let error = alpha_client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    assert_contains(error.message(), "Unable to perform gas selection");
+
+    // With no coins to load, the account needs the budget that an account with one coin gets.
+    let expected_budget =
+        single_coin_budget(&test_cluster, &mut alpha_client, read_clock_transaction()).await;
+    let error_info = extract_error_info(&error);
+    assert_insufficient_gas_balance_error_info(&error_info, sender, expected_budget, 0, 0);
+}
+
+#[sim_test]
+async fn resolve_transaction_insufficient_gas_for_requested_budget() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let client = Client::new(test_cluster.rpc_url()).unwrap();
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+
+    // Fund a fresh account with a single 1 SUI coin, then request a budget its coins can't cover.
+    let sender = SuiAddress::random_for_testing_only();
+    let rgp = test_cluster.get_reference_gas_price().await;
+    test_cluster
+        .fund_address_and_return_gas(rgp, Some(1_000_000_000), sender)
+        .await;
+    let coin_balance = client
+        .get_balance(sender, &GAS::type_())
+        .await
+        .unwrap()
+        .coin_balance();
+    assert!(coin_balance > 0);
+    let requested_budget = coin_balance + 1_000_000_000;
+
+    let mut unresolved_transaction = read_clock_transaction();
+    unresolved_transaction.sender = Some(sender.to_string());
+    unresolved_transaction.gas_payment = Some({
+        let mut message = GasPayment::default();
+        message.owner = Some(sender.to_string());
+        message.budget = Some(requested_budget);
+        message
+    });
+
+    let error = alpha_client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    assert_contains(
+        error.message(),
+        &format!("to satisfy required budget {requested_budget}."),
+    );
+
+    let error_info = extract_error_info(&error);
+    assert_insufficient_gas_balance_error_info(
+        &error_info,
+        sender,
+        requested_budget,
+        coin_balance,
+        0,
+    );
+}
+
+#[sim_test]
+async fn resolve_transaction_failing_transaction_without_gas() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+
+    // `option::destroy_some` on `None` aborts, so the transaction fails regardless of the sender.
+    let mut aborting_transaction = Transaction::default();
+    aborting_transaction.kind = Some(TransactionKind::from({
+        let mut ptb = ProgrammableTransaction::default();
+        ptb.inputs = vec![{
+            let mut message = Input::default();
+            // BCS encoding of `Option<u64>::None`.
+            message.pure = Some(vec![0u8].into());
+            message
+        }];
+        ptb.commands = vec![Command::from({
+            let mut message = MoveCall::default();
+            message.package = Some("0x1".to_owned());
+            message.module = Some("option".to_owned());
+            message.function = Some("destroy_some".to_owned());
+            message.type_arguments = vec!["u64".to_owned()];
+            message.arguments = vec![Argument::new_input(0)];
+            message
+        })];
+        ptb
+    }));
+
+    // An unfunded sender gets the execution failure rather than an insufficient gas error.
+    let unfunded_sender = SuiAddress::random_for_testing_only();
+    let mut unfunded_transaction = aborting_transaction.clone();
+    unfunded_transaction.sender = Some(unfunded_sender.to_string());
+
+    let error = alpha_client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unfunded_transaction).with_do_gas_selection(true),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    let details = sui_rpc::proto::google::rpc::Status::decode(error.details())
+        .unwrap()
+        .details;
+    assert_eq!(details.len(), 2, "unexpected error details: {details:?}");
+
+    let error_info = details[0].to_msg::<ErrorInfo>().unwrap();
+    assert_eq!(
+        error_info.reason,
+        ErrorReason::TransactionExecutionFailed.as_str_name()
+    );
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN);
+    assert_eq!(error_info.metadata.len(), 2);
+    assert_eq!(error_info.metadata["kind"], "MOVE_ABORT");
+    assert_eq!(error_info.metadata["command"], "0");
+
+    let execution_error = details[1].to_msg::<ExecutionError>().unwrap();
+    assert_eq!(execution_error.kind(), ExecutionErrorKind::MoveAbort);
+    assert_eq!(execution_error.command, Some(0));
+
+    // A funded sender still gets a simulation whose effects report the same failure.
+    let (funded_sender, _gas) = test_cluster.wallet.get_one_account().await.unwrap();
+    let mut funded_transaction = aborting_transaction;
+    funded_transaction.sender = Some(funded_sender.to_string());
+
+    let mut request =
+        SimulateTransactionRequest::new(funded_transaction).with_do_gas_selection(true);
+    request.read_mask = Some(FieldMask {
+        paths: vec!["transaction.effects.status".to_owned()],
+    });
+    let simulated = alpha_client
+        .simulate_transaction(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let status = simulated
+        .transaction
+        .and_then(|transaction| transaction.effects)
+        .and_then(|effects| effects.status)
+        .expect("simulation response should carry the effects status");
+
+    assert_eq!(status.success, Some(false));
+    assert_eq!(status.error, Some(execution_error));
+}
+
+#[sim_test]
+async fn resolve_transaction_insufficient_gas_with_address_balance() {
+    let _guard = sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.set_create_root_accumulator_object_for_testing(true);
+        cfg.enable_address_balance_gas_payments_for_testing();
+        cfg
+    });
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let mut client = sui_rpc::Client::new(test_cluster.rpc_url()).unwrap();
+    let mut alpha_client =
+        TransactionExecutionServiceClient::connect(test_cluster.rpc_url().to_owned())
+            .await
+            .unwrap();
+
+    // Give a fresh account one coin and an address balance, each too small to pay for gas.
+    const COIN_VALUE: u64 = 10_000;
+    const ADDRESS_BALANCE: u64 = 20_000;
+    let sender = SuiAddress::random_for_testing_only();
+    let rgp = test_cluster.get_reference_gas_price().await;
+    test_cluster
+        .fund_address_and_return_gas(rgp, Some(COIN_VALUE), sender)
+        .await;
+    let txn = sui_test_transaction_builder::make_transfer_sui_address_balance_transaction(
+        &test_cluster.wallet,
+        Some(sender),
+        ADDRESS_BALANCE,
+    )
+    .await;
+    super::super::execute_transaction(&mut client, &txn).await;
+
+    let mut unresolved_transaction = read_clock_transaction();
+    unresolved_transaction.sender = Some(sender.to_string());
+    let error = alpha_client
+        .simulate_transaction(
+            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    // The account's single coin adds no loading cost, so it needs the budget that any account with
+    // one coin gets.
+    let expected_budget =
+        single_coin_budget(&test_cluster, &mut alpha_client, read_clock_transaction()).await;
+    let error_info = extract_error_info(&error);
+    assert_insufficient_gas_balance_error_info(
+        &error_info,
+        sender,
+        expected_budget,
+        COIN_VALUE,
+        ADDRESS_BALANCE,
+    );
+}
+
+/// A transaction that reads the clock, with no sender or gas payment set.
+fn read_clock_transaction() -> Transaction {
+    let mut transaction = Transaction::default();
+    transaction.kind = Some(TransactionKind::from({
         let mut ptb = ProgrammableTransaction::default();
         ptb.inputs = vec![{
             let mut message = Input::default();
@@ -417,17 +652,72 @@ async fn resolve_transaction_insufficient_gas() {
         })];
         ptb
     }));
-    unresolved_transaction.sender = Some(SuiAddress::random_for_testing_only().to_string()); // random account with no
+    transaction
+}
 
-    let error = alpha_client
+/// The gas budget that simulate with gas selection resolves for `transaction` sent by a fresh
+/// account holding a single 1 SUI coin. Gas selection adds no loading cost for a single coin, so
+/// this is the server's budget estimate.
+async fn single_coin_budget(
+    test_cluster: &TestCluster,
+    alpha_client: &mut TransactionExecutionServiceClient<tonic::transport::Channel>,
+    mut transaction: Transaction,
+) -> u64 {
+    let sender = SuiAddress::random_for_testing_only();
+    let rgp = test_cluster.get_reference_gas_price().await;
+    test_cluster
+        .fund_address_and_return_gas(rgp, Some(1_000_000_000), sender)
+        .await;
+    transaction.sender = Some(sender.to_string());
+
+    let resolved = alpha_client
         .simulate_transaction(
-            SimulateTransactionRequest::new(unresolved_transaction).with_do_gas_selection(true),
+            SimulateTransactionRequest::new(transaction).with_do_gas_selection(true),
         )
         .await
-        .unwrap_err();
+        .unwrap()
+        .into_inner();
+    let (resolved_transaction, effects, _events) = proto_to_response(resolved);
+    assert!(effects.status().is_ok());
+    assert_eq!(resolved_transaction.gas_data().payment.len(), 1);
+    resolved_transaction.gas_data().budget
+}
 
-    assert_eq!(error.code(), tonic::Code::InvalidArgument);
-    assert_contains(error.message(), "Unable to perform gas selection");
+/// Extracts the `ErrorInfo` detail from an error's status details.
+fn extract_error_info(status: &tonic::Status) -> ErrorInfo {
+    sui_rpc::proto::google::rpc::Status::decode(status.details())
+        .unwrap()
+        .details
+        .iter()
+        .find_map(|detail| detail.to_msg::<ErrorInfo>().ok())
+        .expect("error status should carry an ErrorInfo detail")
+}
+
+/// Asserts that `error_info` describes an insufficient gas balance for `owner`, with the given
+/// required budget and balances.
+fn assert_insufficient_gas_balance_error_info(
+    error_info: &ErrorInfo,
+    owner: SuiAddress,
+    required_budget: u64,
+    coin_balance: u64,
+    address_balance: u64,
+) {
+    assert_eq!(
+        error_info.reason,
+        ErrorReason::InsufficientGasBalance.as_str_name()
+    );
+    assert_eq!(error_info.domain, ErrorReason::DOMAIN);
+    assert_eq!(error_info.metadata.len(), 4);
+    assert_eq!(error_info.metadata["owner"], owner.to_string());
+    assert_eq!(
+        error_info.metadata["requiredBudget"],
+        required_budget.to_string()
+    );
+    assert_eq!(error_info.metadata["coinBalance"], coin_balance.to_string());
+    assert_eq!(
+        error_info.metadata["addressBalance"],
+        address_balance.to_string()
+    );
 }
 
 fn assert_contains(haystack: &str, needle: &str) {

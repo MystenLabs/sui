@@ -18,7 +18,7 @@ use crate::errors::Error;
 
 use super::{
     MAX_COMMAND_ARGS, MAX_GAS_COINS, TransactionObjectData, TryConstructTransaction,
-    simulate_transaction, withdraw_coin_from_address_balance,
+    path_b_error_or_larger_gas_shortfall, simulate_transaction, withdraw_coin_from_address_balance,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -154,7 +154,10 @@ impl TryConstructTransaction for PaySui {
                 )?;
                 let (budget, gas_coin_objs) =
                     simulate_transaction(client, pt_b, sender, gas_coins, gas_price, budget)
-                        .await?;
+                        .await
+                        .map_err(|path_b_error| {
+                            path_b_error_or_larger_gas_shortfall(path_b_error, sim_result.err())
+                        })?;
 
                 let gas_coins = gas_coin_objs
                     .iter()

@@ -5,6 +5,7 @@ use crate::ErrorReason;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
+use crate::error::InsufficientGasBalanceError;
 use itertools::Itertools;
 use sui_protocol_config::ProtocolConfig;
 use sui_protocol_config::ProtocolVersion;
@@ -168,7 +169,7 @@ pub fn simulate_transaction(
             // selection picks the coins).
             let budget_was_estimated = request.transaction().gas_payment().budget.is_none()
                 && request.transaction().bcs_opt().is_none();
-            if budget_was_estimated {
+            let estimation_failure = if budget_was_estimated {
                 let mut estimation_transaction = transaction.clone();
                 estimation_transaction.gas_data_mut().payment = Vec::new();
                 estimation_transaction.gas_data_mut().budget = protocol_config.max_tx_gas();
@@ -204,10 +205,17 @@ pub fn simulate_transaction(
                     ));
                 }
                 transaction.gas_data_mut().budget = estimate;
-            }
+
+                match simulation_result.effects.status() {
+                    ExecutionStatus::Success => None,
+                    ExecutionStatus::Failure(failure) => Some(failure.clone()),
+                }
+            } else {
+                None
+            };
 
             if transaction.gas_data().payment.is_empty() {
-                select_gas(
+                let gas_selection = select_gas(
                     service,
                     &mut transaction,
                     // Only adjust the budget for actually-selected coins when we just
@@ -217,6 +225,16 @@ pub fn simulate_transaction(
                     &protocol_config,
                     offer_allowed_proposers,
                 )?;
+                if let Err(insufficient_balance) = gas_selection {
+                    // Clients use the insufficient-gas error as a funding quote, which only makes
+                    // sense for a transaction that succeeded in its estimation run. For one that
+                    // failed, report the execution failure instead; its kind tells the caller what
+                    // to fix.
+                    return Err(match estimation_failure {
+                        Some(failure) => simulation_failure_error(service, failure),
+                        None => insufficient_balance.into(),
+                    });
+                }
             }
 
             // Coin-paid transactions get a proposer restriction too, so that nobody else can
@@ -616,13 +634,15 @@ fn select_allowed_proposers(
         .filter(|allowed| allowed.epoch == current_epoch)
 }
 
+/// Selects gas payment for `transaction`. The outer error reports failures while reading or
+/// preparing gas payment; the inner error reports that the gas owner's funds can't cover the budget.
 fn select_gas(
     service: &RpcService,
     transaction: &mut sui_types::transaction::TransactionData,
     incremental_loading_rgp: Option<u64>,
     protocol_config: &ProtocolConfig,
     offer_allowed_proposers: bool,
-) -> Result<()> {
+) -> Result<Result<(), InsufficientGasBalanceError>> {
     use sui_types::accumulator_root::AccumulatorValue;
     use sui_types::balance::Balance;
     use sui_types::base_types::SequenceNumber;
@@ -647,7 +667,7 @@ fn select_gas(
     // If the gas coin isn't used and there is sufficient address balance budget to satisfy the
     // required budget then we will use the `owner`s address balance to pay for gas. Otherwise we
     // fallback to doing coin selection
-    let selected_gas_value = if !gas_coin_used
+    let (selected_gas_value, coin_balance) = if !gas_coin_used
         && let Some(address_balance) = address_balance
         && address_balance >= budget
     {
@@ -659,7 +679,7 @@ fn select_gas(
             configure_transaction_validity(service, offer_allowed_proposers, transaction)?;
         }
 
-        budget
+        (budget, 0)
     } else {
         let input_objects = transaction
             .input_objects()
@@ -691,14 +711,16 @@ fn select_gas(
             .take(protocol_config.max_gas_payment_objects() as usize);
 
         let mut selected_gas = vec![];
-        let mut selected_gas_value = 0;
+        let mut coin_balance = 0;
 
         for maybe_coin in gas_coins {
             let (object_ref, value) =
                 maybe_coin.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
             selected_gas.push(object_ref);
-            selected_gas_value += value;
+            coin_balance += value;
         }
+
+        let mut selected_gas_value = coin_balance;
 
         // When GasCoin is used and there's address balance, prepend a coin reservation
         // to make all SUI in the account available (coins + address balance)
@@ -736,7 +758,7 @@ fn select_gas(
 
         transaction.gas_data_mut().payment = selected_gas;
 
-        selected_gas_value
+        (selected_gas_value, coin_balance)
     };
 
     // When the caller asked us to top up the budget for the loading cost of the just-picked
@@ -762,17 +784,65 @@ fn select_gas(
     };
 
     if selected_gas_value >= final_budget {
-        Ok(())
+        Ok(Ok(()))
     } else {
-        Err(RpcError::new(
-            tonic::Code::InvalidArgument,
-            format!(
-                "Unable to perform gas selection due to insufficient SUI \
-                balance (in address balance or coins) for account {owner} \
-                to satisfy required budget {final_budget}."
-            ),
-        ))
+        Ok(Err(InsufficientGasBalanceError::new(
+            owner,
+            final_budget,
+            coin_balance,
+            address_balance.unwrap_or(0),
+        )))
     }
+}
+
+/// The error returned for a transaction that fails during simulation. The message names the
+/// failure and, when known, the command that raised it. The details carry a
+/// `TRANSACTION_EXECUTION_FAILED` `ErrorInfo`, whose metadata holds the failure's `kind`
+/// (`ExecutionErrorKind` name) and failing `command` index (empty when unknown), followed by the
+/// `ExecutionError` that a simulation of the same transaction reports in `effects.status.error`.
+fn simulation_failure_error(service: &RpcService, failure: ExecutionFailure) -> RpcError {
+    use crate::ErrorDetails;
+    use sui_rpc::proto::google::rpc::ErrorInfo;
+    use sui_rpc::proto::sui::rpc::v2::TransactionEffects;
+
+    let mut message = format!("Transaction fails in simulation: {}", failure.error);
+    if let Some(command) = failure.command {
+        message.push_str(&format!(" in command {command}"));
+    }
+
+    // Render the failure exactly as simulation effects do, including clever error rendering of
+    // Move aborts.
+    let mut effects = TransactionEffects::default();
+    effects.status = Some(ExecutionStatus::Failure(failure).into());
+    service.render_clever_error(&mut effects);
+    let execution_error = effects
+        .status
+        .and_then(|status| status.error)
+        .expect("a failed execution status carries an error");
+
+    let metadata = [
+        ("kind", execution_error.kind().as_str_name().to_owned()),
+        (
+            "command",
+            execution_error
+                .command
+                .map(|command| command.to_string())
+                .unwrap_or_default(),
+        ),
+    ]
+    .into_iter()
+    .map(|(key, metadata_value)| (key.to_owned(), metadata_value))
+    .collect();
+    let error_info = ErrorInfo::default()
+        .with_reason(ErrorReason::TransactionExecutionFailed.as_str_name())
+        .with_domain(ErrorReason::DOMAIN)
+        .with_metadata(metadata);
+
+    RpcError::new(tonic::Code::InvalidArgument, message).with_details(
+        ErrorDetails::new()
+            .with_error_info(error_info)
+            .with_execution_error(execution_error),
+    )
 }
 
 /// SUI in the gas owner's address balance that is left for gas after the transaction's explicit
