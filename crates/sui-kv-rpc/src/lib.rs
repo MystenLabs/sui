@@ -46,6 +46,7 @@ use tracing::error;
 
 mod bigtable_client;
 mod config;
+mod error_log;
 mod monotonic_read;
 mod object_cache;
 mod operation;
@@ -370,6 +371,9 @@ fn spawn_listener(
                 grpc_method_allowlist,
             ),
         ))
+        // Logs each response that ends in a server-side error; outside the monotonic-read layer so
+        // its rejections are logged too.
+        .layer(CallbackLayer::new(error_log::MakeServerErrorLog))
         .layer(request_log_layer)
         // Innermost, so a request held or rejected here is still counted by the metrics layer and
         // recorded by the request log above it.
