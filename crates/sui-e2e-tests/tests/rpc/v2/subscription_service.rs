@@ -4,6 +4,7 @@
 use crate::transfer_coin;
 use prost::bytes::Bytes;
 use std::path::PathBuf;
+use std::time::Duration;
 use sui_macros::sim_test;
 use sui_rpc::Client;
 use sui_rpc::field::FieldMask;
@@ -884,6 +885,161 @@ async fn subscription_cursor_backfills_via_list() {
     assert!(
         !digests.contains(&digest1),
         "backfill must resume past the already-delivered transfer: {digests:?}"
+    );
+}
+
+/// Pins rendering parity between subscription payloads and the unary Get
+/// APIs clients use to backfill gaps: for the same read mask, a
+/// SubscribeTransactions payload equals GetTransaction's transaction and a
+/// SubscribeCheckpoints payload equals GetCheckpoint's checkpoint, including
+/// resolved effects object types and event JSON.
+#[sim_test]
+async fn subscription_payloads_match_unary_rendering() {
+    let cluster = subscription_cluster().await;
+    let sender = cluster.get_address_0();
+
+    let transaction_mask = FieldMask::from_paths([
+        "digest",
+        "effects.changed_objects",
+        "effects.status",
+        "events.events.event_type",
+        "events.events.json",
+    ]);
+    let checkpoint_mask = FieldMask::from_paths([
+        "sequence_number",
+        "transactions.digest",
+        "transactions.effects.changed_objects",
+        "transactions.effects.status",
+        "transactions.events.events.json",
+    ]);
+
+    let mut client = alpha_subscription_client(&cluster).await;
+    let mut request = v2::SubscribeTransactionsRequest::default();
+    request.read_mask = Some(transaction_mask.clone());
+    request.filter = Some(sender_tx_filter(sender, false));
+    let mut transaction_stream = client
+        .subscribe_transactions(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    let mut request = v2::SubscribeCheckpointsRequest::default();
+    request.read_mask = Some(checkpoint_mask.clone());
+    request.filter = Some(sender_tx_filter(sender, false));
+    let mut checkpoint_stream = client
+        .subscribe_checkpoints(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/rpc/data/ledger_history/event/emit_test_event");
+    let (pkg, _) = super::publish_package(&cluster, sender, path).await;
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder.programmable_move_call(
+        pkg,
+        move_core_types::identifier::Identifier::new("emit_test_event").unwrap(),
+        move_core_types::identifier::Identifier::new("emit_test_event").unwrap(),
+        vec![],
+        vec![],
+    );
+    let tx = execute_programmable(&cluster, sender, builder).await;
+    let expected_digest = tx.digest().to_owned();
+    let expected_checkpoint = tx.checkpoint.expect("executed tx has a checkpoint");
+
+    // The package publish also matches the sender filter; skip its payload
+    // along with progress-only frames.
+    let subscribed_transaction = tokio::time::timeout(Duration::from_secs(60), async {
+        loop {
+            let frame = transaction_stream
+                .next()
+                .await
+                .expect("transaction subscription should remain open")
+                .unwrap();
+            let Some(transaction) = frame.transaction else {
+                continue;
+            };
+            if transaction.digest.as_deref() == Some(expected_digest.as_str()) {
+                break transaction;
+            }
+        }
+    })
+    .await
+    .expect("event transaction should arrive on the transaction subscription");
+
+    let subscribed_checkpoint = tokio::time::timeout(Duration::from_secs(60), async {
+        loop {
+            let frame = checkpoint_stream
+                .next()
+                .await
+                .expect("checkpoint subscription should remain open")
+                .unwrap();
+            let Some(checkpoint) = frame.checkpoint else {
+                continue;
+            };
+            if checkpoint.sequence_number == Some(expected_checkpoint) {
+                break checkpoint;
+            }
+        }
+    })
+    .await
+    .expect("event transaction's checkpoint should arrive on the checkpoint subscription");
+
+    // Guard against an equality where both sides are trivially empty.
+    let changed_objects = &subscribed_transaction
+        .effects
+        .as_ref()
+        .expect("effects requested in read mask")
+        .changed_objects;
+    assert!(
+        changed_objects
+            .iter()
+            .any(|object| object.object_type.as_deref().is_some_and(|t| !t.is_empty())),
+        "subscribed effects should resolve changed object types: {changed_objects:?}"
+    );
+    let events = &subscribed_transaction
+        .events
+        .as_ref()
+        .expect("events requested in read mask")
+        .events;
+    assert!(!events.is_empty(), "transaction should emit a Move event");
+    assert!(
+        events.iter().all(|event| event.json.is_some()),
+        "every subscribed event should carry rendered json: {events:?}"
+    );
+
+    let mut ledger = LedgerServiceClient::connect(cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    let mut request = v2::GetTransactionRequest::default();
+    request.digest = Some(expected_digest.clone());
+    request.read_mask = Some(transaction_mask);
+    let unary_transaction = ledger
+        .get_transaction(request)
+        .await
+        .unwrap()
+        .into_inner()
+        .transaction
+        .expect("GetTransaction should return the transaction");
+    assert_eq!(
+        subscribed_transaction, unary_transaction,
+        "SubscribeTransactions payload should match GetTransaction rendering"
+    );
+
+    let unary_checkpoint = ledger
+        .get_checkpoint(
+            v2::GetCheckpointRequest::by_sequence_number(expected_checkpoint)
+                .with_read_mask(checkpoint_mask),
+        )
+        .await
+        .unwrap()
+        .into_inner()
+        .checkpoint
+        .expect("GetCheckpoint should return the checkpoint");
+    assert_eq!(
+        subscribed_checkpoint, unary_checkpoint,
+        "SubscribeCheckpoints payload should match GetCheckpoint rendering"
     );
 }
 

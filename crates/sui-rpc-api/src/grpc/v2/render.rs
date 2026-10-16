@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::FutureExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use prost_types::Struct;
 use sui_rpc::{
     field::FieldMaskTree,
     merge::Merge,
-    proto::sui::rpc::v2::{Bcs, Display, Event, Object, TransactionEffects, TransactionEvents},
+    proto::sui::rpc::v2::{
+        Bcs, Display, Event, ExecutedTransaction, Object, TransactionEffects, TransactionEvents,
+    },
 };
 use sui_types::full_checkpoint_content::ObjectSet;
 
@@ -283,15 +286,29 @@ impl RpcService {
         mask: &FieldMaskTree,
     ) -> TransactionEffects {
         // TODO consider inlining this function here to avoid needing to do the extra parsing below
-        let mut effects = TransactionEffects::merge_from(effects, mask);
+        let mut message = TransactionEffects::merge_from(effects, mask);
 
         if mask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD) {
-            effects.unchanged_loaded_runtime_objects = unchanged_loaded_runtime_objects
+            message.unchanged_loaded_runtime_objects = unchanged_loaded_runtime_objects
                 .iter()
                 .map(Into::into)
                 .collect();
         }
 
+        self.annotate_effects(&mut message, objects, mask);
+
+        message
+    }
+
+    /// Fill the effects fields that `TransactionEffects::merge_from` cannot: the
+    /// object types of changed and unchanged consensus objects, looked up in
+    /// `objects`, and the clever error of a Move abort.
+    pub fn annotate_effects(
+        &self,
+        effects: &mut TransactionEffects,
+        objects: &ObjectSet,
+        mask: &FieldMaskTree,
+    ) {
         if mask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD) {
             for changed_object in effects.changed_objects.iter_mut() {
                 let Ok(object_id) = changed_object
@@ -333,9 +350,40 @@ impl RpcService {
         }
 
         // Try to render clever error info
-        self.render_clever_error(&mut effects);
+        self.render_clever_error(effects);
+    }
 
-        effects
+    /// Fill the parts of an `ExecutedTransaction` merged from checkpoint data
+    /// that `merge_from` cannot: effects object types and clever errors (see
+    /// [`Self::annotate_effects`]) and event JSON, which needs the package
+    /// resolver. Event JSON draws from `json_budget`, which the caller shares
+    /// across every event in one response.
+    pub fn annotate_checkpoint_transaction(
+        &self,
+        message: &mut ExecutedTransaction,
+        transaction: &sui_types::full_checkpoint_content::ExecutedTransaction,
+        objects: &ObjectSet,
+        mask: &FieldMaskTree,
+        json_budget: &mut usize,
+    ) {
+        if let Some(effects_mask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD)
+            && let Some(effects) = message.effects.as_mut()
+        {
+            self.annotate_effects(effects, objects, &effects_mask);
+        }
+
+        if let Some(events_mask) = mask.subtree(ExecutedTransaction::EVENTS_FIELD)
+            && let Some(event_mask) = events_mask.subtree(TransactionEvents::EVENTS_FIELD)
+            && event_mask.contains(Event::JSON_FIELD)
+            && let Some(rendered) = message.events.as_mut()
+            && let Some(events) = &transaction.events
+        {
+            for (event_message, event) in rendered.events.iter_mut().zip_debug_eq(&events.data) {
+                event_message.json = self
+                    .render_json_with_budget(&event.type_, &event.contents, objects, json_budget)
+                    .map(Box::new);
+            }
+        }
     }
 }
 
