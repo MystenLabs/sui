@@ -111,23 +111,33 @@ sui-fork status
 
 ## GraphQL Authentication
 
-Set `SUI_FORK_GRAPHQL_HEADER` to send one custom header with every outbound
-GraphQL request, including retries. The value must have the form `Name: Value`.
-For bearer authentication, with `TOKEN` supplied by your secret manager or shell:
+Use repeatable `--header-env NAME=ENV_VAR` flags to send custom headers with
+outbound GraphQL requests, including retries. Each named environment variable
+must contain the complete header value. Only variable names, not credentials,
+appear in the command's process arguments.
+
+With `TOKEN` supplied by your secret manager or shell:
 
 ```bash
-export SUI_FORK_GRAPHQL_HEADER="Authorization: Bearer $TOKEN"
-sui-fork start --network https://your-provider.example/graphql
+export SUI_AUTHORIZATION="Bearer $TOKEN"
+export SUI_PROJECT_ID="my-project"
+sui-fork start --network https://your-provider.example/graphql \
+  --header-env Authorization=SUI_AUTHORIZATION \
+  --header-env X-Project-ID=SUI_PROJECT_ID
 ```
 
-For an API-key header, use `SUI_FORK_GRAPHQL_HEADER="X-API-Key: $API_KEY"` instead.
-The client reads the variable when it is constructed. Unset it to send no custom
-header. Empty or malformed headers fail startup without printing their values.
+For an API-key header, use `--header-env X-API-Key=API_KEY` with `API_KEY` set in
+the environment. The client reads the referenced variables when it is
+constructed. Missing, empty, or invalid values fail startup without printing
+the values. Duplicate header names are rejected case-insensitively.
 
-Use HTTPS for remote endpoints to protect credentials in transit. When a header
-is configured, redirects must preserve the endpoint's scheme, host, and port;
-cross-origin redirects fail rather than forwarding credentials. The header does
-not configure authentication for the fork's local gRPC server.
+Omit `--header-env` to send no custom headers. This replaces
+`SUI_FORK_GRAPHQL_HEADER`, which is no longer read.
+
+Use HTTPS for remote endpoints to protect credentials in transit. When headers
+are configured, redirects must preserve the endpoint's scheme, host, and port;
+cross-origin redirects fail rather than forwarding credentials. These headers
+do not configure authentication for the fork's local gRPC server.
 
 ## Impersonating Senders
 

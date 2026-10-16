@@ -44,6 +44,13 @@ pub struct StartArgs {
     /// Address for the fork's RPC server.
     #[arg(long, default_value = DEFAULT_RPC_ADDR)]
     pub rpc_addr: SocketAddr,
+
+    /// Read a GraphQL header value from an environment variable (repeatable).
+    ///
+    /// Use `--header-env Authorization=SUI_AUTHORIZATION` with `SUI_AUTHORIZATION` set to
+    /// the complete header value, such as `Bearer <token>`.
+    #[arg(long = "header-env", value_name = "NAME=ENV_VAR")]
+    pub headers: Vec<String>,
 }
 
 impl Default for StartArgs {
@@ -57,6 +64,7 @@ impl Default for StartArgs {
             rpc_addr: DEFAULT_RPC_ADDR
                 .parse()
                 .expect("default RPC address should be valid"),
+            headers: Vec::new(),
         }
     }
 }

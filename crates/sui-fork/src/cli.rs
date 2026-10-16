@@ -141,6 +141,7 @@ async fn cmd_start(args: StartArgs, json_output: bool, version: &'static str) ->
         addresses,
         object_ids,
         rpc_addr,
+        headers,
     } = args;
     let seed_input = SeedInput {
         addresses: addresses.into_iter().collect(),
@@ -155,14 +156,15 @@ async fn cmd_start(args: StartArgs, json_output: bool, version: &'static str) ->
     )?;
     let checkpoint = match resolved_start.checkpoint {
         Some(cp) => cp,
-        None => GraphQLClient::new(node.clone(), version)?
+        None => GraphQLClient::new(node.clone(), version, headers.clone())?
             .get_latest_checkpoint_sequence_number()
             .await?
             .with_context(|| format!("failed to get latest checkpoint for {}", network_name))?,
     };
 
     let (context, subscription_handle) =
-        crate::startup::initialize(node, checkpoint, version, data_dir, seed_input).await?;
+        crate::startup::initialize(node, checkpoint, version, data_dir, seed_input, headers)
+            .await?;
     let current_checkpoint = {
         let sim = context.simulacrum().read().await;
         sim.store()
@@ -343,6 +345,36 @@ impl std::fmt::Display for StatusOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn start_accepts_repeated_header_env_flags() {
+        let cli = Cli::try_parse_from([
+            "sui-fork",
+            "start",
+            "--header-env",
+            "Authorization=TEST_AUTH",
+            "--header-env",
+            "X-Project-ID=TEST_PROJECT",
+        ])
+        .unwrap();
+        let Command::Start { args } = cli.command else {
+            panic!("expected start command");
+        };
+        assert_eq!(
+            args.headers,
+            ["Authorization=TEST_AUTH", "X-Project-ID=TEST_PROJECT"]
+        );
+    }
+
+    #[tokio::test]
+    async fn start_defaults_to_no_custom_headers() {
+        let cli = Cli::try_parse_from(["sui-fork", "start"]).unwrap();
+        let Command::Start { args } = cli.command else {
+            panic!("expected start command");
+        };
+        assert!(args.headers.is_empty());
+        assert!(Cli::try_parse_from(["sui-fork", "start", "--header-env"]).is_err());
+    }
 
     #[test]
     fn start_output_describes_new_start() {
