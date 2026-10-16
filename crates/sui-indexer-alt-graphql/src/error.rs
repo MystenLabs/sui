@@ -12,7 +12,11 @@ use async_graphql::Response;
 use async_graphql::Value;
 use axum::Json;
 use axum::response::IntoResponse;
+use sui_indexer_alt_reader::alpha_ledger_grpc_reader::grpc_status;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use tower_http::catch_panic::ResponseForPanic;
+use tracing::debug;
 
 use crate::metrics::RpcMetrics;
 use crate::pagination;
@@ -27,6 +31,7 @@ pub(crate) mod code {
     pub const GRAPHQL_PARSE_FAILED: &str = "GRAPHQL_PARSE_FAILED";
     pub const GRAPHQL_VALIDATION_FAILED: &str = "GRAPHQL_VALIDATION_FAILED";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
+    pub const OUT_OF_RANGE: &str = "OUT_OF_RANGE";
     pub const REQUEST_TIMEOUT: &str = "REQUEST_TIMEOUT";
     pub const RESOURCE_EXHAUSTED: &str = "RESOURCE_EXHAUSTED";
 }
@@ -46,6 +51,21 @@ pub(crate) enum RpcError<E: std::error::Error = Infallible> {
 
     /// An error produced by the internal workings of the service (our fault).
     InternalError(Arc<anyhow::Error>),
+
+    /// The request reaches below the history this service retains. Unlike an internal error,
+    /// retrying cannot succeed.
+    OutOfRange(Arc<str>),
+
+    /// The ledger answered `OUT_OF_RANGE`, which it uses both for a start below its retention floor
+    /// and for a starting cursor ahead of its indexed tip. `requested_lo` is the lowest checkpoint
+    /// the request explicitly asked for, if known; [`resolve_ledger_out_of_range`] compares it with
+    /// the ledger's floor to tell the two apart. Until then, and whenever the request reached at or
+    /// above the floor, it is treated as the ledger not having caught up yet: retryable, and never
+    /// reported to the client as pruned history.
+    LedgerOutOfRange {
+        detail: Arc<str>,
+        requested_lo: Option<u64>,
+    },
 
     /// A user error related to pagination and cursors.
     Pagination(#[from] pagination::Error),
@@ -94,6 +114,18 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
                 })
             }
 
+            RpcError::OutOfRange(detail) => format!("Requested range is not available: {detail}")
+                .extend_with(|_, ext| {
+                    ext.set("code", code::OUT_OF_RANGE);
+                }),
+
+            RpcError::LedgerOutOfRange { detail, .. } => format!(
+                "The ledger could not serve the requested range yet: {detail}"
+            )
+            .extend_with(|_, ext| {
+                ext.set("code", code::INTERNAL_SERVER_ERROR);
+            }),
+
             RpcError::Pagination(err) => err.to_string().extend_with(|_, ext| {
                 ext.set("code", code::BAD_USER_INPUT);
             }),
@@ -135,6 +167,14 @@ impl<E: std::error::Error> Clone for RpcError<E> {
             &Self::FeatureUnavailable { what } => Self::FeatureUnavailable { what },
             Self::GraphQlError(e) => Self::GraphQlError(e.clone()),
             Self::InternalError(e) => Self::InternalError(e.clone()),
+            Self::OutOfRange(e) => Self::OutOfRange(e.clone()),
+            Self::LedgerOutOfRange {
+                detail,
+                requested_lo,
+            } => Self::LedgerOutOfRange {
+                detail: detail.clone(),
+                requested_lo: *requested_lo,
+            },
             Self::Pagination(e) => Self::Pagination(e.clone()),
             &Self::RequestTimeout { kind, limit } => Self::RequestTimeout { kind, limit },
             Self::ResourceExhausted(e) => Self::ResourceExhausted(e.clone()),
@@ -192,6 +232,70 @@ pub(crate) fn feature_unavailable<E: std::error::Error>(what: &'static str) -> R
     RpcError::FeatureUnavailable { what }
 }
 
+/// Signal that the request reaches outside the data this service can serve. `detail` says what
+/// was out of range and, where known, the available bound.
+pub(crate) fn out_of_range<E: std::error::Error>(detail: impl Into<Arc<str>>) -> RpcError<E> {
+    RpcError::OutOfRange(detail.into())
+}
+
+/// Classify a failed ledger List call. The server's `OUT_OF_RANGE` becomes
+/// [`RpcError::LedgerOutOfRange`], carrying the lowest checkpoint the request explicitly asked for:
+/// the larger of its `start_checkpoint` and its `after` cursor's checkpoint. A transaction or event
+/// cursor minted by the Postgres path records checkpoint 0 in place of its real one, so with such a
+/// cursor the lowest requested checkpoint is unknown. Anything else is internal.
+pub(crate) fn ledger_error<E: std::error::Error>(
+    err: anyhow::Error,
+    start_checkpoint: Option<u64>,
+    after: Option<&CursorToken>,
+) -> RpcError<E> {
+    match grpc_status(&err) {
+        Some(status) if status.code() == tonic::Code::OutOfRange => {
+            // The user-facing error keeps only the server's message; log the full chain.
+            debug!(error = ?err, "ledger request out of range");
+            let requested_lo = match after {
+                Some(after) if has_placeholder_checkpoint(after) => None,
+                after => start_checkpoint.max(after.map(|a| a.position.checkpoint())),
+            };
+            RpcError::LedgerOutOfRange {
+                detail: status.message().into(),
+                requested_lo,
+            }
+        }
+        _ => err.into(),
+    }
+}
+
+/// Tell apart the two meanings of a ledger `OUT_OF_RANGE`, given the ledger's retention floor (the
+/// lowest checkpoint it serves). A request that explicitly reached below the floor asked for
+/// pruned history, so it is out of range. Any other request was ahead of the ledger's indexed tip:
+/// the ledger has not caught up with a cursor from a newer view, and the error is left as
+/// [`RpcError::LedgerOutOfRange`], which is retryable. With the floor unknown (0), nothing is below
+/// it, so every case is treated as retryable.
+pub(crate) fn resolve_ledger_out_of_range<E: std::error::Error>(
+    err: RpcError<E>,
+    ledger_floor: u64,
+) -> RpcError<E> {
+    match err {
+        RpcError::LedgerOutOfRange {
+            detail,
+            requested_lo: Some(lo),
+        } if lo < ledger_floor => RpcError::OutOfRange(detail),
+        err => err,
+    }
+}
+
+/// Whether `token` is a transaction or event cursor minted by the Postgres path, which records
+/// checkpoint 0 in place of the item's real checkpoint.
+pub(crate) fn has_placeholder_checkpoint(token: &CursorToken) -> bool {
+    match token.position {
+        Position::Checkpoints { .. } => false,
+        Position::Transactions { checkpoint, tx_seq } => checkpoint == 0 && tx_seq != 0,
+        Position::Events {
+            checkpoint, tx_seq, ..
+        } => checkpoint == 0 && tx_seq != 0,
+    }
+}
+
 /// Signal a timeout. `kind` specifies what operation timed out and is included in the error
 /// message.
 pub(crate) fn request_timeout(kind: &'static str, limit: Duration) -> RpcError {
@@ -213,6 +317,14 @@ pub(crate) fn upcast<E: std::error::Error>(err: RpcError) -> RpcError<E> {
         RpcError::Pagination(e) => RpcError::Pagination(e),
         RpcError::GraphQlError(e) => RpcError::GraphQlError(e),
         RpcError::InternalError(e) => RpcError::InternalError(e),
+        RpcError::OutOfRange(e) => RpcError::OutOfRange(e),
+        RpcError::LedgerOutOfRange {
+            detail,
+            requested_lo,
+        } => RpcError::LedgerOutOfRange {
+            detail,
+            requested_lo,
+        },
         RpcError::FeatureUnavailable { what } => RpcError::FeatureUnavailable { what },
         RpcError::RequestTimeout { kind, limit } => RpcError::RequestTimeout { kind, limit },
         RpcError::ResourceExhausted(e) => RpcError::ResourceExhausted(e),
@@ -230,6 +342,14 @@ where
         RpcError::Pagination(e) => RpcError::Pagination(e),
         RpcError::GraphQlError(e) => RpcError::GraphQlError(e),
         RpcError::InternalError(e) => RpcError::InternalError(e),
+        RpcError::OutOfRange(e) => RpcError::OutOfRange(e),
+        RpcError::LedgerOutOfRange {
+            detail,
+            requested_lo,
+        } => RpcError::LedgerOutOfRange {
+            detail,
+            requested_lo,
+        },
         RpcError::FeatureUnavailable { what } => RpcError::FeatureUnavailable { what },
         RpcError::RequestTimeout { kind, limit } => RpcError::RequestTimeout { kind, limit },
         RpcError::ResourceExhausted(e) => RpcError::ResourceExhausted(e),
@@ -366,6 +486,77 @@ mod tests {
             ext.get("chain"),
             Some(&vec!["Immediate predecessor", "Root cause"].into())
         );
+    }
+
+    fn ledger_out_of_range(
+        start_checkpoint: Option<u64>,
+        after: Option<&CursorToken>,
+    ) -> RpcError<Infallible> {
+        let status = tonic::Status::out_of_range("lowest available checkpoint is 42");
+        ledger_error(
+            anyhow::Error::new(status).context("Failed to list"),
+            start_checkpoint,
+            after,
+        )
+    }
+
+    fn code_of(err: RpcError) -> Value {
+        let err: async_graphql::Error = err.into();
+        err.extensions.unwrap().get("code").unwrap().clone()
+    }
+
+    /// Below the ledger's floor is pruned history, reported as `OUT_OF_RANGE`.
+    #[test]
+    fn test_ledger_below_floor_is_out_of_range() {
+        let after = CursorToken::item(Position::Checkpoints { checkpoint: 10 });
+        for err in [
+            ledger_out_of_range(Some(5), None),
+            ledger_out_of_range(None, Some(&after)),
+            ledger_out_of_range(Some(3), Some(&after)),
+        ] {
+            let err: async_graphql::Error = resolve_ledger_out_of_range(err, 42).into();
+            assert_eq!(
+                err.message,
+                "Requested range is not available: lowest available checkpoint is 42"
+            );
+            let ext = err.extensions.as_ref().expect("No extensions");
+            assert_eq!(ext.get("code"), Some(&code::OUT_OF_RANGE.into()));
+        }
+    }
+
+    /// At or above the floor, `OUT_OF_RANGE` means the request was ahead of the ledger's tip. It
+    /// stays retryable and is never reported as pruned history.
+    #[test]
+    fn test_ledger_ahead_of_tip_is_not_out_of_range() {
+        let ahead = CursorToken::item(Position::Checkpoints { checkpoint: 500 });
+        let placeholder = CursorToken::item(Position::Transactions {
+            checkpoint: 0,
+            tx_seq: 7,
+        });
+        for (err, floor) in [
+            (ledger_out_of_range(None, Some(&ahead)), 42),
+            (ledger_out_of_range(Some(42), None), 42),
+            // No explicit lower bound, or one hidden by a placeholder checkpoint: unknown.
+            (ledger_out_of_range(None, None), 42),
+            (ledger_out_of_range(Some(3), Some(&placeholder)), 42),
+            // The floor is unknown.
+            (ledger_out_of_range(Some(3), None), 0),
+        ] {
+            let err = resolve_ledger_out_of_range(err, floor);
+            assert!(matches!(err, RpcError::LedgerOutOfRange { .. }), "{err:?}");
+            assert_eq!(code_of(err), code::INTERNAL_SERVER_ERROR.into());
+        }
+    }
+
+    #[test]
+    fn test_ledger_other_status_is_internal() {
+        let status = tonic::Status::unavailable("connection reset");
+        let err = ledger_error::<Infallible>(
+            anyhow::Error::new(status).context("Failed to list"),
+            None,
+            None,
+        );
+        assert!(matches!(err, RpcError::InternalError(_)));
     }
 
     #[test]
