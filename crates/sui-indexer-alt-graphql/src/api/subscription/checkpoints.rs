@@ -95,6 +95,9 @@ impl Subscribable for Checkpoint {
         };
         Ok(vec![Edge::new(cursor, node)])
     }
+
+    // Every checkpoint is a match, so progress would add nothing.
+    const BOUNDARY_AFTER: Option<fn(&ProcessedCheckpoint) -> CCheckpoint> = None;
 }
 
 /// Scan one page of checkpoints over `cp_bounds`, resuming after `page`'s cursor. Unfiltered, so the

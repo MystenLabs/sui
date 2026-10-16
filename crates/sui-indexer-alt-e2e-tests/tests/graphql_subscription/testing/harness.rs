@@ -106,6 +106,15 @@ impl SubscriptionTestCluster {
         cluster
     }
 
+    /// Like `new_with_ledger_history`, but delivers live progress after `quiet` consecutive
+    /// checkpoints without a match, so tests see it within a few seconds.
+    pub async fn new_with_ledger_history_and_progress(quiet: u64) -> Self {
+        let mut config = GraphQlConfig::default();
+        config.subscription.progress_quiet_checkpoints = quiet;
+        let (cluster, _controller) = Self::new_inner(false, true, config).await;
+        cluster
+    }
+
     /// Same as `new()`, but caps per-subscriber delivery at `budget` output nodes per second so tests
     /// can observe the reactive throttle pacing payloads.
     pub async fn new_with_throttle_budget(budget: u32) -> Self {
@@ -273,6 +282,19 @@ impl SubscriptionTestCluster {
             .expect("Failed to read validator checkpoint tip")
     }
 
+    /// The validator's `network_total_transactions` as of `checkpoint`: the sequence number of the
+    /// first transaction in the checkpoint after it.
+    pub fn network_total_transactions(&self, checkpoint: u64) -> u64 {
+        self.validator
+            .fullnode_handle
+            .sui_node
+            .state()
+            .get_checkpoint_by_sequence_number(checkpoint)
+            .expect("Failed to read checkpoint")
+            .unwrap_or_else(|| panic!("checkpoint {checkpoint} not executed"))
+            .network_total_transactions
+    }
+
     /// The validator's latest checkpoint and its `network_total_transactions`.
     pub fn validator_tip_and_total_transactions(&self) -> (u64, u64) {
         let checkpoint = self
@@ -301,17 +323,29 @@ impl SubscriptionTestCluster {
         .unwrap_or_else(|_| panic!("the chain did not pass transaction {total} within {limit:?}"));
     }
 
-    /// Subscribe and return a stream of GraphQL payloads.
+    /// Subscribe and return a stream of GraphQL payloads, without progress payloads (see
+    /// `subscribe_with_progress`).
     /// Use `tokio_stream::StreamExt` methods (`next`, `take`, `collect`, etc.) to consume.
     pub async fn subscribe(
         &self,
         query: &str,
     ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>> {
-        self.post_subscription(query, None).await
+        self.subscribe_with_variables(query, None).await
     }
 
     /// Like `subscribe`, but binds GraphQL variables (e.g. `json!({"sender": "0x..."})`).
     pub async fn subscribe_with_variables(
+        &self,
+        query: &str,
+        variables: Option<Value>,
+    ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>> {
+        // Most tests assert on matches only; progress payloads arrive interleaved with them.
+        let stream = self.post_subscription(query, variables).await;
+        Box::pin(stream.filter(|item| !is_progress(item)))
+    }
+
+    /// Like `subscribe_with_variables`, but keeps progress payloads (edges with a `null` node).
+    pub async fn subscribe_with_progress(
         &self,
         query: &str,
         variables: Option<Value>,
@@ -424,6 +458,41 @@ fn throttle_config(budget: u32) -> GraphQlConfig {
         .subscription
         .per_subscriber_max_output_nodes_per_second = budget;
     config
+}
+
+/// Whether `item` is a progress payload: a subscription edge whose `node` is `null`, in a payload
+/// with no `errors`. A `null` node with `errors` is a match that failed to resolve, not progress.
+pub fn is_progress(item: &Value) -> bool {
+    let no_errors = item
+        .get("errors")
+        .is_none_or(|errors| errors.as_array().is_some_and(Vec::is_empty));
+    no_errors
+        && item["data"].as_object().is_some_and(|data| {
+            data.values()
+                .any(|edge| edge.get("node").is_some_and(Value::is_null))
+        })
+}
+
+#[test]
+fn test_is_progress_requires_no_errors() {
+    let progress = json!({ "data": { "transactions": { "cursor": "c", "node": null } } });
+    assert!(is_progress(&progress));
+
+    let failed_match = json!({
+        "data": { "transactions": { "cursor": "c", "node": null } },
+        "errors": [{ "message": "boom", "path": ["transactions", "node", "digest"] }],
+    });
+    assert!(!is_progress(&failed_match));
+
+    let partial_match = json!({
+        "data": { "transactions": { "cursor": "c", "node": { "digest": "d" } } },
+        "errors": [{ "message": "boom" }],
+    });
+    assert!(!is_progress(&partial_match));
+
+    let match_ =
+        json!({ "data": { "transactions": { "cursor": "c", "node": { "digest": "d" } } } });
+    assert!(!is_progress(&match_));
 }
 
 /// Take the next `n` payloads from `stream`, each paired with the elapsed time since this call. With

@@ -284,6 +284,14 @@ pub struct SubscriptionConfig {
     /// connections parked waiting longer.
     pub max_start_checkpoints_ahead_of_tip: u64,
 
+    /// Number of consecutive live checkpoints without a match after which a filtered subscription
+    /// delivers a progress edge (a cursor with a `null` node), so a client following a sparse filter
+    /// can resume from near the tip instead of from its last match. Lower values move the resume
+    /// point forward sooner, at the cost of more payloads on quiet filters. The default, 240, is about
+    /// a minute on mainnet. 0 disables live progress edges (backfill still delivers one per scan page
+    /// that ends past its last match).
+    pub progress_quiet_checkpoints: u64,
+
     /// Maximum number of concurrent subscriptions the server admits at once. A subscription opened
     /// while this many are already active is rejected so it can retry later.
     pub max_subscribers: usize,
@@ -299,6 +307,8 @@ impl Default for SubscriptionConfig {
             per_subscriber_max_output_nodes_per_second: 1_000_000,
             // About a minute at the average checkpoint rate.
             max_start_checkpoints_ahead_of_tip: 300,
+            // About a minute on mainnet.
+            progress_quiet_checkpoints: 240,
             max_subscribers: 512,
         }
     }
@@ -313,6 +323,7 @@ pub struct SubscriptionLayer {
     pub max_concurrent_resolutions: Option<usize>,
     pub per_subscriber_max_output_nodes_per_second: Option<u32>,
     pub max_start_checkpoints_ahead_of_tip: Option<u64>,
+    pub progress_quiet_checkpoints: Option<u64>,
     pub max_subscribers: Option<usize>,
 }
 
@@ -335,6 +346,9 @@ impl SubscriptionLayer {
             max_start_checkpoints_ahead_of_tip: self
                 .max_start_checkpoints_ahead_of_tip
                 .unwrap_or(base.max_start_checkpoints_ahead_of_tip),
+            progress_quiet_checkpoints: self
+                .progress_quiet_checkpoints
+                .unwrap_or(base.progress_quiet_checkpoints),
             max_subscribers: self.max_subscribers.unwrap_or(base.max_subscribers),
         }
     }
@@ -661,6 +675,7 @@ impl From<SubscriptionConfig> for SubscriptionLayer {
                 value.per_subscriber_max_output_nodes_per_second,
             ),
             max_start_checkpoints_ahead_of_tip: Some(value.max_start_checkpoints_ahead_of_tip),
+            progress_quiet_checkpoints: Some(value.progress_quiet_checkpoints),
             max_subscribers: Some(value.max_subscribers),
         }
     }
