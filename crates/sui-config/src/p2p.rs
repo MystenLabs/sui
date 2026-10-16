@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, num::NonZeroU32, path::PathBuf, time::Duration};
+use std::{
+    net::SocketAddr,
+    num::{NonZeroU32, NonZeroU64},
+    path::PathBuf,
+    time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
 use sui_types::{
@@ -263,6 +268,23 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to `30,000` (30 seconds).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_disconnect_threshold_ms: Option<u64>,
+
+    /// Delay after which an unfinished checkpoint contents request is hedged: a second request
+    /// for the same contents goes to another peer that has announced the checkpoint by then,
+    /// the first valid response wins, and the other request is cancelled. At most two requests
+    /// per checkpoint are in flight, and only checkpoints close to the next one to be released
+    /// in order are hedged.
+    ///
+    /// When set, every request, including one that replaces a failed request, goes to a peer
+    /// picked from the peers that have announced the checkpoint at that moment, not when the
+    /// download started. Near the next checkpoint to be released, a download whose requests have
+    /// all failed keeps checking for newly announced peers every hedge delay until
+    /// `wait_interval_when_no_peer_to_sync_content_ms` has passed, instead of sleeping for it.
+    ///
+    /// If unspecified, hedging is disabled: the peers that had announced the checkpoint when the
+    /// download started are tried one at a time.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_hedge_delay_ms: Option<NonZeroU64>,
 }
 
 impl StateSyncConfig {
@@ -408,6 +430,11 @@ impl StateSyncConfig {
     pub fn peer_disconnect_threshold(&self) -> Duration {
         const DEFAULT_MS: u64 = 30_000; // 30 seconds
         Duration::from_millis(self.peer_disconnect_threshold_ms.unwrap_or(DEFAULT_MS))
+    }
+
+    pub fn checkpoint_content_hedge_delay(&self) -> Option<Duration> {
+        self.checkpoint_content_hedge_delay_ms
+            .map(|delay_ms| Duration::from_millis(delay_ms.get()))
     }
 
     pub fn randomized_for_testing() -> Self {
