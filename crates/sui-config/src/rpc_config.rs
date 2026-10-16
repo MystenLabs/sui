@@ -42,10 +42,18 @@ pub struct RpcConfig {
 
     /// Aggregate budget for Move-value JSON rendering across a single response.
     ///
-    /// Endpoints that render many Move values in one response (e.g. `GetCheckpoint`
-    /// with a `read_mask` that selects every event's `json` field) share this
-    /// budget across all per-item renders, so the response cannot multiply one
-    /// request into hundreds of MiB of materialized `prost_types::Value`.
+    /// Endpoints that render many Move values in one response share this budget
+    /// across all per-item renders, so the response cannot multiply one request
+    /// into hundreds of MiB of materialized `prost_types::Value`. The budget
+    /// covers one checkpoint in `GetCheckpoint`, `ListCheckpoints`, and
+    /// `SubscribeCheckpoints`, and one transaction frame in
+    /// `SubscribeTransactions`. Values rendered after the budget runs out have
+    /// no `json`.
+    ///
+    /// `GetTransaction`, `ListTransactions`, `ListEvents`, and `SubscribeEvents`
+    /// instead render each value with its own `max_json_move_value_size` budget
+    /// and no aggregate cap, so one transaction's event JSON can differ between
+    /// `SubscribeTransactions` and `GetTransaction`.
     ///
     /// Defaults to `16 MiB` if not specified.
     #[serde(skip_serializing_if = "Option::is_none")]

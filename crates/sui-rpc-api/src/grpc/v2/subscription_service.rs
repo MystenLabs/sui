@@ -83,6 +83,7 @@ impl SubscriptionService for RpcService {
         )
         .await?;
 
+        let service = self.clone();
         let response = Box::pin(async_stream::stream! {
             while let Some(update) = receiver.recv().await {
                 let mut response = SubscribeCheckpointsResponse::default();
@@ -90,8 +91,11 @@ impl SubscriptionService for RpcService {
                     SubscriptionUpdate::Matched(matched) => {
                         let cp = matched.checkpoint.summary.sequence_number;
                         response.cursor = Some(cp);
-                        response.checkpoint =
-                            Some(render_checkpoint_message(&matched.checkpoint, &read_mask));
+                        response.checkpoint = Some(render_checkpoint_message(
+                            &service,
+                            &matched.checkpoint,
+                            &read_mask,
+                        ));
                         SubscriptionFrameKind::Payload
                     }
                     SubscriptionUpdate::WatermarkTick { checkpoint: cp, .. } => {
@@ -329,13 +333,32 @@ impl SubscriptionService for RpcService {
 }
 
 /// Render a full `Checkpoint` message from live executed-checkpoint data,
-/// including the `transactions.balance_changes` special case that
-/// `merge_from` cannot fill (it needs the checkpoint's `ObjectSet`).
+/// filling what `merge_from` cannot (effects object types, clever errors,
+/// event JSON, and `transactions.balance_changes`) as `GetCheckpoint` does.
 fn render_checkpoint_message(
+    service: &RpcService,
     checkpoint: &sui_types::full_checkpoint_content::Checkpoint,
     read_mask: &FieldMaskTree,
 ) -> Checkpoint {
     let mut checkpoint_message = Checkpoint::merge_from(checkpoint, read_mask);
+
+    if let Some(tx_mask) = read_mask.subtree(Checkpoint::TRANSACTIONS_FIELD) {
+        // One JSON budget for the whole checkpoint, as in `GetCheckpoint`.
+        let mut json_budget = service.config.max_json_move_value_response_size();
+        for (message, tx) in checkpoint_message
+            .transactions_mut()
+            .iter_mut()
+            .zip_debug_eq(checkpoint.transactions.iter())
+        {
+            service.annotate_checkpoint_transaction(
+                message,
+                tx,
+                &checkpoint.object_set,
+                &tx_mask,
+                &mut json_budget,
+            );
+        }
+    }
 
     if read_mask.contains("transactions.balance_changes") {
         for (txn, effects) in checkpoint_message
@@ -378,6 +401,21 @@ fn render_transaction_message(
 ) -> ExecutedTransaction {
     let tx = &checkpoint.transactions[index];
     let mut message = ExecutedTransaction::merge_from(tx, read_mask);
+    // Every event in the frame draws its JSON from one per-response budget,
+    // as `GetCheckpoint` does across a checkpoint. `GetTransaction` and
+    // `ListTransactions` instead give each event its own
+    // `max_json_move_value_size` budget, so the same transaction can differ:
+    // an event over that per-value cap has `json` here but not there, and once
+    // a transaction's events exhaust `max_json_move_value_response_size`, the
+    // remaining events have `json` there but not here.
+    let mut json_budget = service.config.max_json_move_value_response_size();
+    service.annotate_checkpoint_transaction(
+        &mut message,
+        tx,
+        &checkpoint.object_set,
+        read_mask,
+        &mut json_budget,
+    );
 
     if let Some(object_mask) = read_mask
         .subtree(ExecutedTransaction::OBJECTS_FIELD)
