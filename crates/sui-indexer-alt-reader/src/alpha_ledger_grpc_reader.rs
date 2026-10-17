@@ -19,6 +19,14 @@ use tracing::warn;
 use crate::ledger_grpc_reader::LedgerGrpcArgs;
 use crate::metrics::GrpcMetricsLayer;
 
+/// Header asking a load-balanced ledger replica to serve a request only once it has indexed at
+/// least this checkpoint. A resume cursor can run ahead of a replica's index (a cursor minted from
+/// a more caught-up replica, or from the live stream), and without this the replica resolves the
+/// window at its own tip, behind the cursor, and the scan either replays or rejects. The server
+/// side is `sui_kv_rpc::monotonic_read` (`X_SUI_MIN_CHECKPOINT`); it holds the request until its
+/// view reaches the checkpoint, then answers `Unavailable` if it cannot within its timeout.
+const X_SUI_MIN_CHECKPOINT: &str = "x-sui-min-checkpoint";
+
 /// A reader backed by the gRPC LedgerService's streaming list APIs.
 #[derive(Clone)]
 pub struct AlphaLedgerGrpcReader {
@@ -80,12 +88,13 @@ impl AlphaLedgerGrpcReader {
     pub async fn list_transactions(
         &self,
         request: proto::ListTransactionsRequest,
+        consistent_read_checkpoint: Option<u64>,
     ) -> anyhow::Result<StreamPage<ExecutedTransaction>> {
         let stream = self
             .client
             .clone()
             .ledger_client()
-            .list_transactions(self.request(request))
+            .list_transactions(self.request(request, consistent_read_checkpoint))
             .await
             .context("ListTransactions stream open failed")?
             .into_inner();
@@ -96,12 +105,13 @@ impl AlphaLedgerGrpcReader {
     pub async fn list_events(
         &self,
         request: proto::ListEventsRequest,
+        consistent_read_checkpoint: Option<u64>,
     ) -> anyhow::Result<StreamPage<proto::Event>> {
         let stream = self
             .client
             .clone()
             .ledger_client()
-            .list_events(self.request(request))
+            .list_events(self.request(request, consistent_read_checkpoint))
             .await
             .context("ListEvents stream open failed")?
             .into_inner();
@@ -112,12 +122,13 @@ impl AlphaLedgerGrpcReader {
     pub async fn list_checkpoints(
         &self,
         request: proto::ListCheckpointsRequest,
+        consistent_read_checkpoint: Option<u64>,
     ) -> anyhow::Result<StreamPage<proto::Checkpoint>> {
         let stream = self
             .client
             .clone()
             .ledger_client()
-            .list_checkpoints(self.request(request))
+            .list_checkpoints(self.request(request, consistent_read_checkpoint))
             .await
             .context("ListCheckpoints stream open failed")?
             .into_inner();
@@ -125,13 +136,30 @@ impl AlphaLedgerGrpcReader {
         drain_list_stream("ListCheckpoints", stream).await
     }
 
-    /// Create a gRPC request, optionally with the grpc-timeout header if configured.
-    fn request<T>(&self, input: T) -> tonic::Request<T> {
+    /// Create a gRPC request with the grpc-timeout header when a statement timeout is configured,
+    /// and the monotonic-read floor header ([`X_SUI_MIN_CHECKPOINT`]) when `consistent_read_checkpoint` is set.
+    fn request<T>(&self, input: T, consistent_read_checkpoint: Option<u64>) -> tonic::Request<T> {
         let mut request = tonic::Request::new(input);
         if let Some(timeout) = self.timeout {
             request.set_timeout(timeout);
         }
+        apply_consistent_read_checkpoint(&mut request, consistent_read_checkpoint);
         request
+    }
+}
+
+/// Stamp the monotonic-read floor header ([`X_SUI_MIN_CHECKPOINT`]) on `request` when a floor is
+/// given; a decimal checkpoint is always a valid ASCII metadata value.
+fn apply_consistent_read_checkpoint<T>(
+    request: &mut tonic::Request<T>,
+    consistent_read_checkpoint: Option<u64>,
+) {
+    if let Some(checkpoint) = consistent_read_checkpoint {
+        let value = checkpoint
+            .to_string()
+            .parse()
+            .expect("decimal checkpoint is a valid ASCII metadata value");
+        request.metadata_mut().insert(X_SUI_MIN_CHECKPOINT, value);
     }
 }
 
@@ -345,6 +373,26 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn consistent_read_checkpoint_sets_the_monotonic_read_header() {
+        let mut request = tonic::Request::new(());
+        apply_consistent_read_checkpoint(&mut request, Some(42));
+        assert_eq!(
+            request
+                .metadata()
+                .get(X_SUI_MIN_CHECKPOINT)
+                .map(|v| v.to_str().unwrap()),
+            Some("42"),
+        );
+    }
+
+    #[test]
+    fn no_consistent_read_checkpoint_leaves_the_header_unset() {
+        let mut request = tonic::Request::new(());
+        apply_consistent_read_checkpoint(&mut request, None);
+        assert!(request.metadata().get(X_SUI_MIN_CHECKPOINT).is_none());
+    }
 
     /// Well-formed frame with both `transaction` payload and a cursor-bearing watermark.
     fn item_response(cursor: &[u8]) -> proto::ListTransactionsResponse {

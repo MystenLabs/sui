@@ -45,9 +45,10 @@ impl Subscribable for Transaction {
         cp_bounds: RangeInclusive<u64>,
         page: &'a Page<CTransaction>,
         filter: &'a TransactionFilter,
+        consistent_read_checkpoint: Option<u64>,
     ) -> impl Future<Output = Result<StreamPage<v2::ExecutedTransaction>, RpcError>> + Send + 'a
     {
-        Transaction::scan_grpc(reader, cp_bounds, page, filter)
+        Transaction::scan_grpc(reader, cp_bounds, page, filter, consistent_read_checkpoint)
     }
 
     fn build_node(
