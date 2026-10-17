@@ -4,8 +4,11 @@
 use std::sync::Arc;
 
 use async_graphql::Context;
+use async_graphql::SimpleObject;
 use async_graphql::connection::Edge;
 use async_graphql::connection::EmptyFields;
+use futures::Stream;
+use futures::StreamExt;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use tokio::sync::watch;
 
@@ -32,6 +35,7 @@ mod events;
 mod scan_then_live;
 mod transactions;
 
+use scan_then_live::Delivery;
 use scan_then_live::subscribe;
 
 #[derive(thiserror::Error, Debug)]
@@ -45,6 +49,34 @@ pub(crate) enum Error {
 
 #[derive(Default)]
 pub struct Subscription;
+
+/// One payload of the `transactions` subscription: a matching transaction, or progress.
+#[derive(SimpleObject)]
+pub(crate) struct TransactionSubscriptionEdge {
+    /// Pass as `after` to resume the subscription after this payload.
+    cursor: String,
+
+    /// The matching transaction, or `null` for progress.
+    ///
+    /// A payload whose `node` is `null` and that has no `errors` is progress: every match before its cursor has been delivered, so save the cursor and resume `after` it to skip the range already scanned.
+    ///
+    /// A payload whose `node` is `null` and that has `errors` is a match that failed to resolve. Do not save its cursor: treat the payload as an error and resume from the previous cursor.
+    node: Option<Transaction>,
+}
+
+/// One payload of the `events` subscription: a matching event, or progress.
+#[derive(SimpleObject)]
+pub(crate) struct EventSubscriptionEdge {
+    /// Pass as `after` to resume the subscription after this payload.
+    cursor: String,
+
+    /// The matching event, or `null` for progress.
+    ///
+    /// A payload whose `node` is `null` and that has no `errors` is progress: every match before its cursor has been delivered, so save the cursor and resume `after` it to skip the range already scanned.
+    ///
+    /// A payload whose `node` is `null` and that has `errors` is a match that failed to resolve. Do not save its cursor: treat the payload as an error and resume from the previous cursor.
+    node: Option<Event>,
+}
 
 #[async_graphql::Subscription]
 impl Subscription {
@@ -70,7 +102,9 @@ impl Subscription {
         let watermarks_rx: &watch::Receiver<Arc<Watermarks>> = ctx.data()?;
         let subscriber_limit: &SubscriberLimit = ctx.data()?;
 
-        subscribe::<Checkpoint>(
+        // The checkpoints feed sends no progress (every checkpoint is a match), so every delivery
+        // is a match and `CheckpointEdge`'s node stays non-null.
+        let stream = subscribe::<Checkpoint>(
             reader.clone(),
             broadcast.clone(),
             caches.clone(),
@@ -81,7 +115,10 @@ impl Subscription {
             after_checkpoint.map(u64::from),
             subscriber_limit.clone(),
             config.clone(),
-        )
+        )?;
+        Ok(stream.filter_map(|delivery| {
+            futures::future::ready(delivery.map(Delivery::into_match).transpose())
+        }))
     }
 
     /// Subscribe to transactions as they are finalized, with optional filtering.
@@ -90,16 +127,18 @@ impl Subscription {
     ///
     /// Each matching transaction is yielded individually as an edge, ordered by checkpoint and then by position within the checkpoint. Each edge carries a cursor for resumption.
     ///
+    /// A payload whose `node` is `null` and that has no `errors` reports progress: every match before its cursor has been delivered, so saving its cursor and resuming `after` it skips the range scanned so far without missing anything. Progress is sent at the end of each backfill scan page that ends past its last match, and during the live stream after a run of checkpoints with no match.
+    ///
+    /// A payload whose `node` is `null` and that has `errors` is a match that failed to resolve, not progress. Do not save its cursor: treat the payload as an error and resume from the previous cursor.
+    ///
     /// This subscription is not yet available for use.
     async fn transactions(
         &self,
         ctx: &Context<'_>,
         filter: Option<TransactionFilter>,
         after: Option<CTransaction>,
-    ) -> Result<
-        impl futures::Stream<Item = Result<Edge<String, Transaction, EmptyFields>, RpcError>>,
-        RpcError<Error>,
-    > {
+    ) -> Result<impl Stream<Item = Result<TransactionSubscriptionEdge, RpcError>>, RpcError<Error>>
+    {
         let caches: &Arc<StreamedCaches> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
         let config: &SubscriptionConfig = ctx.data()?;
@@ -114,7 +153,7 @@ impl Subscription {
         }
         let after_checkpoint = filter.after_checkpoint.map(u64::from);
 
-        subscribe::<Transaction>(
+        let stream = subscribe::<Transaction>(
             reader.clone(),
             broadcast.clone(),
             caches.clone(),
@@ -125,7 +164,13 @@ impl Subscription {
             after_checkpoint,
             subscriber_limit.clone(),
             config.clone(),
-        )
+        )?;
+        Ok(stream.map(|delivery| {
+            delivery.map(|d| {
+                let (cursor, node) = d.into_parts();
+                TransactionSubscriptionEdge { cursor, node }
+            })
+        }))
     }
 
     /// Subscribe to events as they are emitted, with optional filtering.
@@ -134,16 +179,17 @@ impl Subscription {
     ///
     /// Each matching event is yielded individually as an edge, ordered by checkpoint, then by transaction position within the checkpoint, then by position within the transaction. Each edge carries a cursor for resumption.
     ///
+    /// A payload whose `node` is `null` and that has no `errors` reports progress: every match before its cursor has been delivered, so saving its cursor and resuming `after` it skips the range scanned so far without missing anything. Progress is sent at the end of each backfill scan page that ends past its last match, and during the live stream after a run of checkpoints with no match.
+    ///
+    /// A payload whose `node` is `null` and that has `errors` is a match that failed to resolve, not progress. Do not save its cursor: treat the payload as an error and resume from the previous cursor.
+    ///
     /// This subscription is not yet available for use.
     async fn events(
         &self,
         ctx: &Context<'_>,
         filter: Option<EventFilter>,
         after: Option<CEvent>,
-    ) -> Result<
-        impl futures::Stream<Item = Result<Edge<String, Event, EmptyFields>, RpcError>>,
-        RpcError<Error>,
-    > {
+    ) -> Result<impl Stream<Item = Result<EventSubscriptionEdge, RpcError>>, RpcError<Error>> {
         let caches: &Arc<StreamedCaches> = ctx.data()?;
         let limits: &Limits = ctx.data()?;
         let config: &SubscriptionConfig = ctx.data()?;
@@ -158,7 +204,7 @@ impl Subscription {
         }
         let after_checkpoint = filter.after_checkpoint.map(u64::from);
 
-        subscribe::<Event>(
+        let stream = subscribe::<Event>(
             reader.clone(),
             broadcast.clone(),
             caches.clone(),
@@ -169,6 +215,12 @@ impl Subscription {
             after_checkpoint,
             subscriber_limit.clone(),
             config.clone(),
-        )
+        )?;
+        Ok(stream.map(|delivery| {
+            delivery.map(|d| {
+                let (cursor, node) = d.into_parts();
+                EventSubscriptionEdge { cursor, node }
+            })
+        }))
     }
 }
