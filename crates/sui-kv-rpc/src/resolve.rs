@@ -3,10 +3,10 @@
 
 //! Shared BigTable resolution layer: turns streams (or bounded sets) of
 //! checkpoint/transaction identifiers into fully-resolved entities — their
-//! transactions and objects — using the chunked, concurrency-limited pipeline
-//! primitives. Both the v2 point-get handlers and the list handlers
-//! build on these so request-size chunking, stage overlap, and object
-//! deduplication are identical across them.
+//! transactions and objects — using the burst-planned, concurrency-limited
+//! pipeline primitives. Both the v2 point-get handlers and the list handlers
+//! build on these so read sizing, stage overlap, and object deduplication are
+//! identical across them.
 
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
@@ -21,29 +21,56 @@ use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::{Checkpoint, ExecutedTransaction, TransactionEffects};
 use sui_rpc_api::RpcError;
 use sui_types::digests::TransactionDigest;
+use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 
 use crate::bigtable_client::BigTableClient;
 use crate::config::ResolvedStageConfig;
-use crate::object_cache::{BigTableObjectFetcher, ObjectCache, ObjectMap};
-use crate::pipeline::{Watermarked, pipelined_chunks, pipelined_keyed_batches};
+use crate::object_cache::{BigTableObjectFetcher, ObjectMap};
+use crate::pipeline::{
+    InputOrderEmitter, SeekUnit, Watermarked, pipelined_chunks, pipelined_keyed_batches,
+};
+use crate::request_cache::CacheFetcher;
 
-pub(crate) type CpWithTxs = (u64, CheckpointData, Vec<TransactionData>);
 pub(crate) type ResolvedCp = (u64, CheckpointData, Vec<TransactionData>, ObjectMap);
-/// Stage-C keyed-batch output: a checkpoint paired with a map of just its own
-/// transaction rows (the `pipelined_keyed_batches` per-item map).
-type CpTxMap = (
-    (u64, CheckpointData),
-    Arc<HashMap<TransactionDigest, TransactionData>>,
-);
+
+/// One transaction of a checkpoint, as `resolve_checkpoints` reads it: each
+/// checkpoint is flattened into one item per transaction digest, in contents
+/// order.
+struct CheckpointTransaction {
+    cp_seq: u64,
+    /// `None` only for the single item of a checkpoint without transactions.
+    digest: Option<TransactionDigest>,
+    /// The checkpoint itself, carried by its last item only, so that item
+    /// closes the checkpoint when the items are regrouped.
+    checkpoint: Option<CheckpointData>,
+}
+
+/// A [`CheckpointTransaction`] with its `transactions` row (`None` exactly
+/// when the item has no digest).
+type CheckpointTransactionRow = (CheckpointTransaction, Option<TransactionData>);
+
+/// Context of the error raised when a read of `resolve_checkpoints` returns
+/// fewer `transactions` rows than it requested.
+const MISSING_CHECKPOINT_TRANSACTIONS: &str =
+    "resolve_checkpoints: BigTable returned fewer transactions than requested";
+
+/// Context of the errors raised when a read of `resolve_checkpoints` returns a
+/// `transactions` row it did not request, or one row twice.
+const CHECKPOINT_TRANSACTION_ROW: &str = "resolve_checkpoints: transaction row";
 
 /// Attach a per-item `ObjectMap` to each item in `upstream`. When
 /// `needs_objects` is false every item is paired with an empty map (no
 /// BigTable read); otherwise object keys are derived per item via `keys_of`
-/// and fetched through `pipelined_keyed_batches` — chunk-bounded, concurrent,
-/// and deduplicated by a request-scoped `ObjectCache`, overlapping with the
-/// still-arriving upstream. The cache is owned by the returned stream, so its
-/// in-flight dispatches abort if the consumer drops the stream.
+/// and read through `pipelined_keyed_batches`: each object key still to read
+/// in a burst of ready items is one seek, and the burst is planned into reads
+/// of at most `max_seeks_per_read` keys, split over the stage's free
+/// `concurrency` slots when `min_seeks_per_split_read` is set, so one item's
+/// objects may be divided between reads. Reads overlap with
+/// the still-arriving upstream, and an object the request has already read, or
+/// is reading, is not read again. The request-scoped cache is owned by the
+/// returned stream, so its in-flight reads abort if the consumer drops the
+/// stream.
 pub(crate) fn with_object_maps<I, E>(
     upstream: BoxStream<'static, Result<Watermarked<I>, E>>,
     client: BigTableClient,
@@ -56,7 +83,6 @@ where
     E: From<anyhow::Error> + Send + 'static,
 {
     if needs_objects {
-        let object_cache = ObjectCache::new(Arc::new(BigTableObjectFetcher::new(client)));
         let with_keys = upstream
             .map_ok(move |m| {
                 m.map_item(|item| {
@@ -65,22 +91,15 @@ where
                 })
             })
             .boxed();
+        let fetcher: Arc<dyn CacheFetcher<ObjectKey, Object>> =
+            Arc::new(BigTableObjectFetcher::new(client));
         pipelined_keyed_batches(
             with_keys,
-            objects_stage.chunk_size,
-            objects_stage.chunk_size,
+            objects_stage.max_seeks_per_read,
             objects_stage.concurrency,
-            move |keys| {
-                let object_cache = object_cache.clone();
-                async move {
-                    object_cache
-                        .get_many(keys)
-                        .await
-                        .map_err(|e| E::from(anyhow::Error::new(e)))
-                }
-            },
+            objects_stage.min_seeks_per_split_read,
+            fetcher,
         )
-        .boxed()
     } else {
         let empty: ObjectMap = Arc::new(HashMap::new());
         upstream
@@ -93,8 +112,19 @@ where
 }
 
 /// Resolve a stream of `(cp_seq, CheckpointData)` into
-/// `(cp_seq, cp_data, txs, objects)`. Stage C fetches each chunk's
-/// transactions; stage D attaches their objects. Shared by `get_checkpoint`
+/// `(cp_seq, cp_data, txs, objects)`, exactly one item per input checkpoint,
+/// in input order, with watermarks in place. Shared by `get_checkpoint` and
+/// `list_checkpoints`.
+///
+/// Reads work per transaction; only rendering needs the whole checkpoint.
+/// Each checkpoint is flattened into one item per transaction digest, so
+/// stage C plans a checkpoint's digests like any `transactions` read
+/// (`BatchGetTransactions`): split over the stage's free `concurrency` slots,
+/// at most `max_seeks_per_read` per read. Stage C emits transactions in input order,
+/// and stage D attaches each transaction's objects, so a transaction's object
+/// read can start once its row and every earlier transaction's row have
+/// arrived, without waiting for the rest of its checkpoint. The transactions
+/// are then regrouped per checkpoint.
 pub(crate) fn resolve_checkpoints<E>(
     client: BigTableClient,
     read_mask: &FieldMaskTree,
@@ -105,19 +135,61 @@ pub(crate) fn resolve_checkpoints<E>(
 where
     E: From<anyhow::Error> + Send + 'static,
 {
-    let tx_columns: Arc<[&'static str]> = list_transactions_columns(read_mask).into();
+    let columns: Arc<[&'static str]> = list_transactions_columns(read_mask).into();
     let needs_objects = read_mask.contains(Checkpoint::OBJECTS_FIELD);
 
-    // Stage C: (cp_seq, CheckpointData) -> + Vec<TransactionData>. Derive each
-    // checkpoint's transaction digests and fetch them through
-    // `pipelined_keyed_batches` — chunk-bounded and concurrent, batching at
-    // `chunk_size` keys per BigTable request.
-    let with_keys = cp_data_stream
-        .map(|res: Result<Watermarked<(u64, CheckpointData)>, E>| {
-            let m = res?;
-            Ok::<_, E>(match m {
+    // Stage C: one item per transaction -> + its `transactions` row, read in
+    // chunks of digests and emitted in input order.
+    let transaction_stream = pipelined_chunks(
+        flatten_checkpoints(cp_data_stream),
+        transactions_stage.max_seeks_per_read,
+        transactions_stage.concurrency,
+        transactions_stage.min_seeks_per_split_read,
+        SeekUnit::Item,
+        {
+            let client = client.clone();
+            move |items: Vec<CheckpointTransaction>| {
+                let fetch = fetch_checkpoint_transactions(client.clone(), columns.clone(), items);
+                async move {
+                    let rows = fetch.await.map_err(E::from)?;
+                    Ok::<_, E>(rows.map(|row| row.map_err(E::from)).boxed())
+                }
+            }
+        },
+    );
+
+    // Stage D: each transaction's own objects.
+    let with_objects = with_object_maps(
+        transaction_stream,
+        client,
+        objects_stage,
+        needs_objects,
+        |(_, transaction): &CheckpointTransactionRow| {
+            transaction.as_ref().map_or_else(Vec::new, |transaction| {
+                compute_object_keys(transaction).into_iter().collect()
+            })
+        },
+    );
+
+    regroup_checkpoints(with_objects)
+}
+
+/// Flatten each checkpoint into one [`CheckpointTransaction`] per transaction
+/// digest of its contents, in contents order; the last item carries the
+/// checkpoint. A checkpoint without transactions becomes one item with no
+/// digest. Watermarks pass through unchanged.
+fn flatten_checkpoints<E>(
+    checkpoints: BoxStream<'static, Result<Watermarked<(u64, CheckpointData)>, E>>,
+) -> BoxStream<'static, Result<Watermarked<CheckpointTransaction>, E>>
+where
+    E: From<anyhow::Error> + Send + 'static,
+{
+    async_stream::try_stream! {
+        let mut checkpoints = checkpoints;
+        while let Some(frame) = checkpoints.next().await {
+            match frame? {
                 Watermarked::Item((cp_seq, cp_data)) => {
-                    let keys = cp_data
+                    let mut digests = cp_data
                         .contents
                         .as_ref()
                         .ok_or_else(|| {
@@ -128,107 +200,201 @@ where
                         .iter()
                         .map(|d| d.transaction)
                         .collect::<Vec<TransactionDigest>>();
-                    Watermarked::Item(((cp_seq, cp_data), keys))
+                    let last = digests.pop();
+                    for digest in digests {
+                        yield Watermarked::Item(CheckpointTransaction {
+                            cp_seq,
+                            digest: Some(digest),
+                            checkpoint: None,
+                        });
+                    }
+                    yield Watermarked::Item(CheckpointTransaction {
+                        cp_seq,
+                        digest: last,
+                        checkpoint: Some(cp_data),
+                    });
                 }
-                Watermarked::Watermark(p) => Watermarked::Watermark(p),
-            })
-        })
-        .boxed();
+                Watermarked::Watermark(p) => yield Watermarked::Watermark(p),
+            }
+        }
+    }
+    .boxed()
+}
 
-    let cp_with_map_stream = pipelined_keyed_batches(
-        with_keys,
-        transactions_stage.chunk_size,
-        transactions_stage.chunk_size,
-        transactions_stage.concurrency,
-        {
-            let client = client.clone();
-            let columns = tx_columns.clone();
-            move |keys| {
-                let client = client.clone();
-                let columns = columns.clone();
-                async move {
-                    let requested = keys.len();
-                    let stream = fetch_transaction_rows(client, columns, keys)
-                        .await
-                        .map_err(E::from)?;
-                    futures::pin_mut!(stream);
-                    let mut map: HashMap<TransactionDigest, TransactionData> = HashMap::new();
-                    while let Some(row) = stream.next().await {
-                        let (digest, tx) = row.map_err(E::from)?;
-                        map.insert(digest, tx);
+/// Stage-C fetch of `resolve_checkpoints`: read the `transactions` rows of
+/// the items that have a digest and emit every item with its row in input
+/// order. Rows arrive in BigTable key order, so they are reordered by item
+/// index; items without a digest need no row. A row missing from the read is
+/// an error.
+async fn fetch_checkpoint_transactions(
+    client: BigTableClient,
+    columns: Arc<[&'static str]>,
+    items: Vec<CheckpointTransaction>,
+) -> Result<BoxStream<'static, Result<CheckpointTransactionRow, anyhow::Error>>, anyhow::Error> {
+    let item_count = items.len();
+    let mut digests = Vec::with_capacity(item_count);
+    let mut pending_by_digest: HashMap<TransactionDigest, (usize, CheckpointTransaction)> =
+        HashMap::with_capacity(item_count);
+    let mut without_row = Vec::new();
+    for (index, item) in items.into_iter().enumerate() {
+        match item.digest {
+            Some(digest) => {
+                digests.push(digest);
+                pending_by_digest.insert(digest, (index, item));
+            }
+            None => without_row.push((index, item)),
+        }
+    }
+    let rows = fetch_transaction_rows(client, columns, digests).await?;
+    Ok(async_stream::try_stream! {
+        // Keyed by item index so the emitter releases items in input order.
+        let mut emitter: InputOrderEmitter<usize, CheckpointTransactionRow> =
+            InputOrderEmitter::new((0..item_count).collect());
+        for (index, item) in without_row {
+            for ready in emitter.push(index, (item, None), CHECKPOINT_TRANSACTION_ROW)? {
+                yield ready;
+            }
+        }
+        let mut rows = rows;
+        while let Some(row) = rows.next().await {
+            let (digest, transaction) = row?;
+            let (index, item) = pending_by_digest.remove(&digest).ok_or_else(|| {
+                anyhow::anyhow!("resolve_checkpoints: unexpected transaction row {digest}")
+            })?;
+            for ready in emitter.push(
+                index,
+                (item, Some(transaction)),
+                CHECKPOINT_TRANSACTION_ROW,
+            )? {
+                yield ready;
+            }
+        }
+        if !pending_by_digest.is_empty() {
+            Err(missing_checkpoint_transactions(&pending_by_digest))?;
+        }
+        for ready in emitter.finish(MISSING_CHECKPOINT_TRANSACTIONS)? {
+            yield ready;
+        }
+    }
+    .boxed())
+}
+
+/// The error for a `resolve_checkpoints` read that returned fewer `transactions` rows than it
+/// requested. Names the checkpoints whose rows are missing and up to four of the digests, so the
+/// failing checkpoint can be found from the message alone.
+fn missing_checkpoint_transactions(
+    missing: &HashMap<TransactionDigest, (usize, CheckpointTransaction)>,
+) -> anyhow::Error {
+    let mut checkpoints: Vec<u64> = missing.values().map(|(_, item)| item.cp_seq).collect();
+    checkpoints.sort_unstable();
+    checkpoints.dedup();
+    let digests: Vec<String> = missing.keys().take(4).map(ToString::to_string).collect();
+    anyhow::anyhow!(
+        "{MISSING_CHECKPOINT_TRANSACTIONS}: missing {} row(s) of checkpoint(s) {checkpoints:?}, \
+         including {}",
+        missing.len(),
+        digests.join(", "),
+    )
+}
+
+/// A checkpoint whose transactions [`regroup_checkpoints`] is gathering.
+struct GatheredCheckpoint {
+    cp_seq: u64,
+    transactions: Vec<TransactionData>,
+    objects: HashMap<ObjectKey, Object>,
+}
+
+/// Fold consecutive transaction items of one checkpoint back into
+/// `(cp_seq, cp_data, txs, objects)`, emitted when the item carrying the
+/// checkpoint arrives. Each checkpoint's map holds only its own transactions'
+/// objects, since `render_full_checkpoint` folds the whole map into an
+/// `ObjectSet`.
+///
+/// A watermark, another checkpoint's item, or the end of input while a
+/// checkpoint is partly gathered means its flattening was broken: that is an
+/// internal error and the checkpoint is never emitted.
+fn regroup_checkpoints<E>(
+    transactions: BoxStream<'static, Result<Watermarked<(CheckpointTransactionRow, ObjectMap)>, E>>,
+) -> BoxStream<'static, Result<Watermarked<ResolvedCp>, E>>
+where
+    E: From<anyhow::Error> + Send + 'static,
+{
+    async_stream::try_stream! {
+        let mut transactions = transactions;
+        let mut gathering: Option<GatheredCheckpoint> = None;
+        while let Some(frame) = transactions.next().await {
+            match frame? {
+                Watermarked::Item(((item, transaction), objects)) => {
+                    let CheckpointTransaction { cp_seq, checkpoint, .. } = item;
+                    let mut gathered = gathering.take().unwrap_or_else(|| GatheredCheckpoint {
+                        cp_seq,
+                        transactions: Vec::new(),
+                        objects: HashMap::new(),
+                    });
+                    if gathered.cp_seq != cp_seq {
+                        Err::<(), E>(partly_gathered_checkpoint(
+                            gathered.cp_seq,
+                            format!("a transaction of checkpoint {cp_seq} arrived"),
+                        ))?;
                     }
-                    if map.len() != requested {
-                        return Err(E::from(anyhow::anyhow!(
-                            "resolve_checkpoints: BigTable returned fewer transactions than \
-                             requested ({} of {} rows)",
-                            map.len(),
-                            requested
-                        )));
+                    if let Some(transaction) = transaction {
+                        gathered.transactions.push(transaction);
                     }
-                    Ok(map)
+                    // The per-transaction map is uniquely owned unless it is
+                    // the shared empty map, so objects are moved, not cloned.
+                    let objects =
+                        Arc::try_unwrap(objects).unwrap_or_else(|shared| (*shared).clone());
+                    if gathered.objects.is_empty() {
+                        gathered.objects = objects;
+                    } else {
+                        gathered.objects.extend(objects);
+                    }
+                    match checkpoint {
+                        Some(cp_data) => {
+                            yield Watermarked::Item((
+                                cp_seq,
+                                cp_data,
+                                gathered.transactions,
+                                Arc::new(gathered.objects),
+                            ));
+                        }
+                        None => gathering = Some(gathered),
+                    }
+                }
+                Watermarked::Watermark(p) => {
+                    if let Some(gathered) = &gathering {
+                        Err::<(), E>(partly_gathered_checkpoint(
+                            gathered.cp_seq,
+                            "a watermark arrived",
+                        ))?;
+                    }
+                    yield Watermarked::Watermark(p);
                 }
             }
-        },
-    );
-
-    let cp_with_txs_stream = cp_with_map_stream
-        .map(|res: Result<Watermarked<CpTxMap>, E>| {
-            let m = res?;
-            Ok::<_, E>(match m {
-                Watermarked::Item(((cp_seq, cp_data), tx_map)) => {
-                    let contents = cp_data.contents.as_ref().ok_or_else(|| {
-                        E::from(anyhow::anyhow!(
-                            "checkpoint {cp_seq} contents column missing"
-                        ))
-                    })?;
-                    // The per-item map is uniquely owned here — the reassembler
-                    // just built it and handed it over — so move each body out
-                    // in checkpoint-contents order rather than deep-cloning it.
-                    // The `unwrap_or_else` clone is a correctness fallback for
-                    // the (currently impossible) case of a shared map.
-                    let mut tx_map = Arc::try_unwrap(tx_map).unwrap_or_else(|arc| (*arc).clone());
-                    let mut txs: Vec<TransactionData> = Vec::with_capacity(contents.size());
-                    for d in contents.iter() {
-                        let digest = d.transaction;
-                        let tx = tx_map.remove(&digest).ok_or_else(|| {
-                            E::from(anyhow::anyhow!(
-                                "resolve_checkpoints: BigTable returned fewer transactions \
-                                 than requested (checkpoint {cp_seq} missing transaction {digest})"
-                            ))
-                        })?;
-                        txs.push(tx);
-                    }
-                    Watermarked::Item((cp_seq, cp_data, txs))
-                }
-                Watermarked::Watermark(p) => Watermarked::Watermark(p),
-            })
-        })
-        .boxed();
-
-    // Stage D: each cp must see only its own object keys, since
-    // `render_full_checkpoint` folds the whole map into an `ObjectSet`.
-    with_object_maps(
-        cp_with_txs_stream,
-        client,
-        objects_stage,
-        needs_objects,
-        |(_, _, txs): &CpWithTxs| {
-            txs.iter()
-                .flat_map(compute_object_keys)
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect()
-        },
-    )
-    .map_ok(|m| m.map_item(|((cp_seq, cp_data, txs), objects)| (cp_seq, cp_data, txs, objects)))
+        }
+        if let Some(gathered) = &gathering {
+            Err::<(), E>(partly_gathered_checkpoint(gathered.cp_seq, "the stream ended"))?;
+        }
+    }
     .boxed()
+}
+
+/// The internal error of [`regroup_checkpoints`] when `cause` interrupts
+/// checkpoint `cp_seq` before its last transaction.
+fn partly_gathered_checkpoint<E: From<anyhow::Error>>(
+    cp_seq: u64,
+    cause: impl std::fmt::Display,
+) -> E {
+    E::from(anyhow::anyhow!(
+        "resolve_checkpoints: {cause} while checkpoint {cp_seq} was partly gathered"
+    ))
 }
 
 /// Resolve a single already-fetched checkpoint (the point-get path): drive
 /// `resolve_checkpoints` over a one-item stream and return the sole result.
-/// `resolve_checkpoints` emits exactly one item per input checkpoint (empty
-/// checkpoints are pre-emitted) or propagates a fetch error, so the stream is
-/// never empty — hence no "missing result" failure mode.
+/// `resolve_checkpoints` emits exactly one item per input checkpoint (a
+/// checkpoint without transactions reads none) or propagates a fetch error, so
+/// the stream is never empty — hence no "missing result" failure mode.
 pub(crate) async fn resolve_checkpoint(
     client: BigTableClient,
     read_mask: &FieldMaskTree,
@@ -261,9 +427,14 @@ pub(crate) async fn resolve_checkpoint(
 /// types, keyed by digest for request-order reconstruction. Transaction rows
 /// stream in by chunk and their object reads overlap the transaction fetch. An
 /// empty `digests` issues no BigTable read.
+///
+/// A transaction whose checkpoint is above `checkpoint_hi_inclusive` is left out
+/// of the result before its objects are read: its `transactions` row can be
+/// written before the `objects` rows it references, so reading them could fail.
 pub(crate) async fn resolve_transactions(
     client: BigTableClient,
     digests: Vec<TransactionDigest>,
+    checkpoint_hi_inclusive: u64,
     read_mask: &FieldMaskTree,
     transactions_stage: ResolvedStageConfig,
     objects_stage: ResolvedStageConfig,
@@ -284,14 +455,23 @@ pub(crate) async fn resolve_transactions(
     // Stage A: digests -> (digest, TransactionData), chunked & concurrent.
     let tx_stream = pipelined_chunks(
         digest_stream,
-        transactions_stage.chunk_size,
+        transactions_stage.max_seeks_per_read,
         transactions_stage.concurrency,
+        transactions_stage.min_seeks_per_split_read,
+        SeekUnit::Item,
         {
             let client = client.clone();
             let columns = columns.clone();
             move |chunk| fetch_transaction_rows(client.clone(), columns.clone(), chunk)
         },
-    );
+    )
+    .try_filter(move |item| {
+        std::future::ready(!matches!(
+            item,
+            Watermarked::Item((_, tx)) if tx.checkpoint_number > checkpoint_hi_inclusive
+        ))
+    })
+    .boxed();
 
     // Stage B: attach each tx's own objects.
     let with_objects = with_object_maps(
@@ -314,9 +494,10 @@ pub(crate) async fn resolve_transactions(
     Ok(out)
 }
 
-/// Stage-A/C fetch: fetch one chunk of transaction rows as a stream. An empty
-/// chunk issues no read (see the empty-RowSet full-scan trap guarded in
-/// `sui-kvstore`).
+/// Fetch one chunk of transaction rows as a stream, in arrival order.
+/// Used by stage A of `resolve_transactions` and stage C of
+/// `resolve_checkpoints`. An empty chunk issues no read (see the empty-RowSet
+/// full-scan trap guarded in `sui-kvstore`).
 async fn fetch_transaction_rows(
     client: BigTableClient,
     columns: Arc<[&'static str]>,
@@ -486,18 +667,20 @@ mod tests {
 
     use bytes::Bytes;
     use sui_kvstore::BigTableClient as InnerBigTableClient;
-    use sui_kvstore::testing::{MockBigtableServer, ReadRowsResponseOrder};
+    use sui_kvstore::testing::{MockBigtableServer, ReadRowsResponseOrder, insert_checkpoint_rows};
     use sui_rpc::field::{FieldMask, FieldMaskUtil};
     use sui_types::base_types::ExecutionDigests;
     use sui_types::digests::TransactionEffectsDigest;
     use sui_types::messages_checkpoint::CheckpointContents;
 
     use crate::bigtable_client::Metrics;
+    use crate::v2::test_utils::{
+        canonical_transaction_object_keys, two_transaction_object_checkpoint,
+    };
 
-    /// Transactions-stage chunk size used by the resolver tests. Mirrors the
-    /// production default (`DEFAULT_STAGE_CHUNK_SIZE`) and is the per-request
-    /// batch size the pipeline hands to BigTable — deliberately far below the
-    /// backend `MAX_TX_DIGESTS_PER_REQUEST` clamp.
+    /// Transactions-stage `max_seeks_per_read` used by the resolver tests:
+    /// the per-request batch size the pipeline hands to BigTable, deliberately
+    /// far below the backend `MAX_TX_DIGESTS_PER_REQUEST` clamp.
     const TX_CHUNK_SIZE: usize = 100;
 
     /// Deterministic, unique 32-byte digest: `i` big-endian in the low 8 bytes.
@@ -563,6 +746,20 @@ mod tests {
         (mock, client, handle)
     }
 
+    /// Transactions-stage config of the resolver tests: reads of at most
+    /// `TX_CHUNK_SIZE` digests over `concurrency` slots.
+    fn transactions_stage(
+        concurrency: usize,
+        min_seeks_per_split_read: Option<usize>,
+    ) -> ResolvedStageConfig {
+        ResolvedStageConfig {
+            max_seeks_per_read: TX_CHUNK_SIZE,
+            concurrency,
+            min_seeks_per_split_read,
+            max_keys_per_read: None,
+        }
+    }
+
     /// Drive the real `resolve_checkpoints` stream over `cps` and collect the
     /// emitted checkpoint items (dropping watermarks).
     async fn run_resolver(
@@ -570,28 +767,36 @@ mod tests {
         read_mask: &FieldMaskTree,
         cps: Vec<(u64, CheckpointData)>,
     ) -> Result<Vec<ResolvedCp>, RpcError> {
-        let tx_stage = ResolvedStageConfig {
-            chunk_size: TX_CHUNK_SIZE,
-            concurrency: 4,
-        };
+        let frames = cps.into_iter().map(Watermarked::Item).collect();
+        let out =
+            run_resolver_frames(client, read_mask, transactions_stage(4, None), frames).await?;
+        Ok(out
+            .into_iter()
+            .filter_map(|frame| match frame {
+                Watermarked::Item(resolved) => Some(resolved),
+                Watermarked::Watermark(_) => None,
+            })
+            .collect())
+    }
+
+    /// Drive the real `resolve_checkpoints` stream over `frames` with
+    /// `tx_stage` and collect every emitted frame, watermarks included.
+    async fn run_resolver_frames(
+        client: BigTableClient,
+        read_mask: &FieldMaskTree,
+        tx_stage: ResolvedStageConfig,
+        frames: Vec<Watermarked<(u64, CheckpointData)>>,
+    ) -> Result<Vec<Watermarked<ResolvedCp>>, RpcError> {
         let obj_stage = ResolvedStageConfig {
-            chunk_size: 100,
+            max_seeks_per_read: 100,
             concurrency: 1,
+            min_seeks_per_split_read: None,
+            max_keys_per_read: None,
         };
-        let input = stream::iter(
-            cps.into_iter()
-                .map(|cp| Ok::<_, RpcError>(Watermarked::Item(cp))),
-        )
-        .boxed();
-        let stream = resolve_checkpoints(client, read_mask, tx_stage, obj_stage, input);
-        futures::pin_mut!(stream);
-        let mut out = Vec::new();
-        while let Some(item) = stream.next().await {
-            if let Watermarked::Item(resolved) = item? {
-                out.push(resolved);
-            }
-        }
-        Ok(out)
+        let input = stream::iter(frames.into_iter().map(Ok::<_, RpcError>)).boxed();
+        resolve_checkpoints(client, read_mask, tx_stage, obj_stage, input)
+            .try_collect()
+            .await
     }
 
     /// Recorded `ReadRows` calls scoped to the transactions table.
@@ -606,7 +811,7 @@ mod tests {
     #[tokio::test]
     async fn resolve_checkpoints_splits_fat_checkpoint_transaction_reads() {
         let (mock, client, _handle) = setup().await;
-        // One checkpoint with more transactions than the stage `chunk_size`, so
+        // One checkpoint with more transactions than the stage's `max_seeks_per_read`, so
         // the pipeline must split its digests across multiple capped BigTable
         // requests (the objects stage batches the same way). The backend
         // `MAX_TX_DIGESTS_PER_REQUEST` clamp is a separate safety net covered by
@@ -634,7 +839,7 @@ mod tests {
         for c in &calls {
             assert!(
                 c.row_keys.len() <= TX_CHUNK_SIZE,
-                "ReadRows call exceeded chunk_size: {} keys",
+                "ReadRows call exceeded max_seeks_per_read: {} keys",
                 c.row_keys.len()
             );
         }
@@ -696,12 +901,179 @@ mod tests {
 
         let status = tonic::Status::from(err);
         assert_eq!(status.code(), tonic::Code::Internal);
+        let message = status.message();
         assert!(
-            status.message().contains(
-                "resolve_checkpoints: BigTable returned fewer transactions than requested"
-            ),
-            "unexpected message: {}",
-            status.message()
+            message.contains(&format!(
+                "resolve_checkpoints: BigTable returned fewer transactions than requested: \
+                 missing 1 row(s) of checkpoint(s) [7], including {}",
+                digests[1]
+            )),
+            "unexpected message: {message}"
         );
+    }
+
+    #[tokio::test]
+    async fn resolve_checkpoints_spreads_checkpoint_transactions_over_free_slots() {
+        let (mock, client, _handle) = setup().await;
+        // A checkpoint's digests are planned like any `transactions` read: with
+        // four free slots and `min_seeks_per_split_read` 2, its eight digests go out as
+        // four parallel reads of two.
+        let digests: Vec<_> = (0..8).map(digest).collect();
+        for d in &digests {
+            insert_tx_row(&mock, *d).await;
+        }
+        let read_mask = FieldMaskTree::from(FieldMask::from_paths(["transactions.digest"]));
+        let out = run_resolver_frames(
+            client,
+            &read_mask,
+            transactions_stage(4, Some(2)),
+            vec![Watermarked::Item((0, checkpoint_data(&digests)))],
+        )
+        .await
+        .unwrap();
+
+        let [Watermarked::Item((_, _, txs, _))] = out.as_slice() else {
+            panic!(
+                "expected exactly one checkpoint item, got {} frames",
+                out.len()
+            );
+        };
+        let got: Vec<_> = txs.iter().map(|tx| tx.digest).collect();
+        assert_eq!(
+            got, digests,
+            "transactions must follow checkpoint contents order"
+        );
+        let read_sizes: Vec<usize> = tx_read_calls(&mock)
+            .await
+            .iter()
+            .map(|c| c.row_keys.len())
+            .collect();
+        assert_eq!(read_sizes, vec![2; 4], "one read of two digests per slot");
+    }
+
+    #[tokio::test]
+    async fn resolve_checkpoints_emits_one_item_per_checkpoint_around_watermarks() {
+        let (mock, client, _handle) = setup().await;
+        let digests: Vec<_> = (0..5).map(digest).collect();
+        for d in &digests {
+            insert_tx_row(&mock, *d).await;
+        }
+        mock.set_read_rows_response_order(ReadRowsResponseOrder::ReverseRequestOrder)
+            .await;
+        let read_mask = FieldMaskTree::from(FieldMask::from_paths(["transactions.digest"]));
+        // `min_seeks_per_split_read` 1 splits each checkpoint's transactions over
+        // separate reads, so every checkpoint is regrouped from several reads.
+        let frames = vec![
+            Watermarked::Item((1, checkpoint_data(&digests[..2]))),
+            Watermarked::Watermark(1),
+            Watermarked::Item((2, checkpoint_data(&[]))),
+            Watermarked::Item((3, checkpoint_data(&digests[2..]))),
+            Watermarked::Watermark(3),
+        ];
+        let out = run_resolver_frames(client, &read_mask, transactions_stage(4, Some(1)), frames)
+            .await
+            .unwrap();
+
+        let got: Vec<Watermarked<(u64, Vec<TransactionDigest>)>> = out
+            .into_iter()
+            .map(|frame| {
+                frame.map_item(|(cp_seq, _, txs, _)| {
+                    (cp_seq, txs.iter().map(|tx| tx.digest).collect())
+                })
+            })
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                Watermarked::Item((1, digests[..2].to_vec())),
+                Watermarked::Watermark(1),
+                Watermarked::Item((2, Vec::new())),
+                Watermarked::Item((3, digests[2..].to_vec())),
+                Watermarked::Watermark(3),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_checkpoints_merges_each_transactions_objects_per_checkpoint() {
+        let (mock, client, _handle) = setup().await;
+        let checkpoint = two_transaction_object_checkpoint();
+        insert_checkpoint_rows(&mock, &checkpoint).await;
+        let cp_data = CheckpointData {
+            summary: None,
+            contents: Some(checkpoint.contents.clone()),
+            signatures: None,
+        };
+        let read_mask = FieldMaskTree::from(FieldMask::from_paths(["objects"]));
+        let out = run_resolver(client, &read_mask, vec![(0, cp_data)])
+            .await
+            .unwrap();
+
+        assert_eq!(out.len(), 1, "exactly one checkpoint item");
+        let (_, _, txs, objects) = &out[0];
+        assert_eq!(txs.len(), 2);
+        let first: BTreeSet<ObjectKey> = canonical_transaction_object_keys(&checkpoint, 0)
+            .into_iter()
+            .collect();
+        let second: BTreeSet<ObjectKey> = canonical_transaction_object_keys(&checkpoint, 1)
+            .into_iter()
+            .collect();
+        assert!(
+            !first.is_subset(&second) && !second.is_subset(&first),
+            "each transaction must reference objects the other does not"
+        );
+        let expected: BTreeSet<ObjectKey> = first.union(&second).copied().collect();
+        let got: BTreeSet<ObjectKey> = objects.keys().copied().collect();
+        assert_eq!(
+            got, expected,
+            "the checkpoint's map holds both transactions' objects and nothing else"
+        );
+    }
+
+    /// A synthetic stage-D frame for `regroup_checkpoints`: a transaction of
+    /// checkpoint `cp_seq` without row or objects; `last` makes it carry the
+    /// checkpoint.
+    fn transaction_frame(
+        cp_seq: u64,
+        digest_index: u64,
+        last: bool,
+    ) -> Result<Watermarked<(CheckpointTransactionRow, ObjectMap)>, RpcError> {
+        let item = CheckpointTransaction {
+            cp_seq,
+            digest: Some(digest(digest_index)),
+            checkpoint: last.then(|| checkpoint_data(&[])),
+        };
+        Ok(Watermarked::Item(((item, None), Arc::new(HashMap::new()))))
+    }
+
+    #[tokio::test]
+    async fn regroup_checkpoints_rejects_partly_gathered_checkpoint() {
+        // Checkpoint 4's first transaction arrives, then something other than
+        // the rest of checkpoint 4.
+        let interruptions = [
+            ("watermark", Some(Ok(Watermarked::Watermark(4)))),
+            ("other checkpoint", Some(transaction_frame(5, 1, true))),
+            ("end of input", None),
+        ];
+        for (case, interruption) in interruptions {
+            let frames = std::iter::once(transaction_frame(4, 0, false)).chain(interruption);
+            let mut out: Vec<_> = regroup_checkpoints(stream::iter(frames).boxed())
+                .collect()
+                .await;
+
+            assert_eq!(out.len(), 1, "{case}: only the error is emitted");
+            let Some(Err(err)) = out.pop() else {
+                panic!("{case}: expected an error");
+            };
+            let status = tonic::Status::from(err);
+            assert_eq!(status.code(), tonic::Code::Internal, "{case}");
+            assert!(
+                status
+                    .message()
+                    .contains("checkpoint 4 was partly gathered"),
+                "{case}: unexpected message: {}",
+                status.message()
+            );
+        }
     }
 }

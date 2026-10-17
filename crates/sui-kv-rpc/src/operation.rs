@@ -9,12 +9,14 @@ use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use sui_inverted_index::BitmapQuery;
 use sui_inverted_index::SkipPolicy;
+use sui_inverted_index::WatermarkPacing;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::tables::event_bitmap_index;
 use sui_kvstore::tables::transaction_bitmap_index;
 use sui_rpc::proto::sui::rpc::v2::EventFilter;
 use sui_rpc::proto::sui::rpc::v2::TransactionFilter;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::ledger_history::query_options::RangeExhaustion;
 use tokio::time::Instant;
 
 use crate::KvRpcMetrics;
@@ -106,6 +108,27 @@ impl QueryContext {
     }
     pub(crate) fn bitmap_skip_policy(&self) -> SkipPolicy {
         self.ledger_history.bitmap_skip_policy()
+    }
+
+    /// When the bitmap-query evaluator emits the scan watermarks that
+    /// [`crate::pipeline::resolve_scan_watermarks`] turns into progress
+    /// beacons, one BigTable lookup each: the first at once, later ones after
+    /// `watermark-beacon-buckets` of scan work (bucket rows charged, with each
+    /// reopen step counted as `bitmap-drain-probe-rows`) without an item or
+    /// beacon.
+    ///
+    /// Only a range that ends at a cursor bound keeps the held watermark at the
+    /// end of the scan. Its terminal frame claims exactly the coverage of the
+    /// frames before it (`ScanTerminal::into_watermark` claims
+    /// `covered_checkpoint_bound` for `CursorBound`), so the scan's last
+    /// progress must reach the resolver for the terminal frame to claim it. A
+    /// range that ends naturally claims the range's last checkpoint itself, so
+    /// resolving the held watermark there would be a wasted lookup.
+    pub(crate) fn watermark_pacing(&self, exhaustion: RangeExhaustion) -> WatermarkPacing {
+        WatermarkPacing {
+            min_buckets: self.ledger_history.watermark_beacon_buckets().get(),
+            emit_held_at_end: matches!(exhaustion, RangeExhaustion::CursorBound { .. }),
+        }
     }
 
     pub(crate) fn observe_response_render(
@@ -204,24 +227,15 @@ impl KvRpcServer {
     }
 
     fn cached_checkpoint_hi_exclusive(&self) -> Result<u64, RpcError> {
-        let checkpoint_hi_inclusive = self
-            .cache
-            .borrow()
-            .as_ref()
-            .and_then(|info| info.checkpoint_height)
+        self.served_height()?
+            .checkpoint
+            .checked_add(1)
             .ok_or_else(|| {
                 RpcError::new(
-                    tonic::Code::Unavailable,
-                    "service info cache missing checkpoint height",
+                    tonic::Code::Internal,
+                    "cached checkpoint height cannot be represented as an exclusive bound",
                 )
-            })?;
-
-        checkpoint_hi_inclusive.checked_add(1).ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                "cached checkpoint height cannot be represented as an exclusive bound",
-            )
-        })
+            })
     }
 
     async fn query_context(&self, operation: &'static str) -> Result<QueryContext, RpcError> {

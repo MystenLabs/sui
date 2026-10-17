@@ -27,6 +27,7 @@ use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 
 use crate::KvRpcServer;
+use crate::served_height::ServedHeight;
 
 #[tonic::async_trait]
 impl MovePackageService for KvRpcServer {
@@ -36,7 +37,7 @@ impl MovePackageService for KvRpcServer {
     ) -> Result<tonic::Response<GetPackageResponse>, tonic::Status> {
         get_package(
             self.client.clone(),
-            &self.service_info_watermark_pipelines,
+            self.served_height()?,
             request.into_inner(),
         )
         .await
@@ -68,16 +69,23 @@ impl MovePackageService for KvRpcServer {
         &self,
         request: tonic::Request<ListPackageVersionsRequest>,
     ) -> Result<tonic::Response<ListPackageVersionsResponse>, tonic::Status> {
-        list_package_versions(self.client.clone(), request.into_inner())
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        list_package_versions(
+            self.client.clone(),
+            self.served_height()?,
+            request.into_inner(),
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 }
 
+/// Serve a package. `Version` and `AtCheckpoint` lookups are answered as of `served_height`;
+/// the bare-id path reads the package object by its storage ID, whose row records no
+/// checkpoint to compare against.
 async fn get_package(
     mut client: BigTableClient,
-    service_info_watermark_pipelines: &[&str],
+    served_height: ServedHeight,
     request: GetPackageRequest,
 ) -> Result<GetPackageResponse, RpcError> {
     let package_id_str = request.package_id.as_ref().ok_or_else(|| {
@@ -103,24 +111,18 @@ async fn get_package(
                 .await
                 .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
                 .pop()
+                .filter(|data| data.cp_sequence_number <= served_height.checkpoint)
         }
         Selector::AtCheckpoint(at_checkpoint) => {
-            // The response does not echo the checkpoint it resolved at, so a bound above
-            // what this replica has indexed would let a caller persist a wrong answer;
-            // fail closed instead. `Version` and the bare-id path are exact lookups and
-            // need no bound.
-            let highest_indexed = client
-                .get_watermark_for_pipelines(service_info_watermark_pipelines)
-                .await
-                .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-                .and_then(|watermark| watermark.checkpoint_hi_inclusive)
-                .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc index is empty"))?;
-            if at_checkpoint > highest_indexed {
+            // The response does not echo the checkpoint it resolved at, so a bound above the
+            // served height would let a caller persist a wrong answer; fail closed instead.
+            if at_checkpoint > served_height.checkpoint {
                 return Err(RpcError::new(
                     tonic::Code::NotFound,
                     format!(
                         "requested checkpoint {at_checkpoint} is not yet indexed; highest \
-                         indexed checkpoint is {highest_indexed}",
+                         indexed checkpoint is {}",
+                        served_height.checkpoint,
                     ),
                 ));
             }
@@ -209,8 +211,10 @@ async fn get_function(
     get_function_response(&package, module_name, function_name)
 }
 
+/// List the versions of a package published at or below `served_height`.
 async fn list_package_versions(
     mut client: BigTableClient,
+    served_height: ServedHeight,
     request: ListPackageVersionsRequest,
 ) -> Result<ListPackageVersionsResponse, RpcError> {
     let package_id_str = request.package_id.as_ref().ok_or_else(|| {
@@ -242,8 +246,13 @@ async fn list_package_versions(
 
     // The token's version is the first version of the next page (inclusive); the reader's
     // `after_version` bound is exclusive.
+    let first_page = page_token.is_none();
     let after_version = page_token.map(|token| token.version.saturating_sub(1));
 
+    // Versions are published in checkpoint order, so those above the served height can only
+    // come at the end of this ascending scan. Cutting them here rather than passing the height
+    // as `cp_bound` keeps the scan unbounded by checkpoint, which lets BigTable stop at the row
+    // limit.
     let mut versions: Vec<_> = client
         .get_package_versions(
             original_package_id,
@@ -256,12 +265,19 @@ async fn list_package_versions(
         .await
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
         .into_iter()
+        .take_while(|pkg| pkg.cp_sequence_number <= served_height.checkpoint)
         .map(|pkg| {
             let storage_id = ObjectID::from_bytes(&pkg.package_id)
                 .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
             Ok(PackageVersion::new(&storage_id.into(), pkg.package_version))
         })
         .collect::<Result<_, RpcError>>()?;
+
+    // Every package has a first version, so a first page with nothing at or below the served
+    // height means the package is not published yet as of that height.
+    if first_page && versions.is_empty() {
+        return Err(RpcError::not_found());
+    }
 
     let next_page_token = if versions.len() > page_size {
         versions.pop().and_then(|next| {
@@ -349,6 +365,7 @@ mod tests {
     use sui_types::storage::ObjectKey;
 
     use super::*;
+    use crate::v2::test_utils::UNBOUNDED_SERVED_HEIGHT;
 
     #[tokio::test]
     async fn list_package_versions_falls_back_to_object_when_packages_by_id_missing() {
@@ -387,7 +404,9 @@ mod tests {
         let mut req = ListPackageVersionsRequest::default();
         req.package_id = Some(original_id.to_string());
         req.page_size = Some(10);
-        let resp = list_package_versions(client.clone(), req).await.unwrap();
+        let resp = list_package_versions(client.clone(), UNBOUNDED_SERVED_HEIGHT, req)
+            .await
+            .unwrap();
         assert_eq!(resp.versions.len(), 3);
         assert_eq!(resp.versions[0].version, Some(1));
         assert_eq!(resp.versions[1].version, Some(2));
@@ -424,7 +443,9 @@ mod tests {
         let mut req = ListPackageVersionsRequest::default();
         req.package_id = Some(storage_id.to_string());
         req.page_size = Some(10);
-        let resp = list_package_versions(client.clone(), req).await.unwrap();
+        let resp = list_package_versions(client.clone(), UNBOUNDED_SERVED_HEIGHT, req)
+            .await
+            .unwrap();
         assert_eq!(resp.versions.len(), 3);
         assert_eq!(resp.versions[0].version, Some(1));
         assert_eq!(resp.versions[1].version, Some(2));
@@ -451,7 +472,7 @@ mod tests {
         let mut req = ListPackageVersionsRequest::default();
         req.package_id = Some(ObjectID::random().to_string());
         req.page_size = Some(10);
-        let err = list_package_versions(client.clone(), req)
+        let err = list_package_versions(client.clone(), UNBOUNDED_SERVED_HEIGHT, req)
             .await
             .unwrap_err();
         let status: tonic::Status = err.into();
@@ -466,16 +487,15 @@ mod tests {
         _server: tokio::task::JoinHandle<()>,
     }
 
-    /// Pipelines whose watermark bounds `AtCheckpoint` lookups in tests, matching the
-    /// production `DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES` membership.
-    const TEST_WATERMARK_PIPELINES: &[&str] = &[
-        sui_kvstore::PACKAGES_PIPELINE,
-        sui_kvstore::PACKAGES_BY_ID_PIPELINE,
-    ];
+    /// The served height the lineage fixture's tests read at: above both publishes.
+    const FIXTURE_SERVED_HEIGHT: ServedHeight = ServedHeight {
+        checkpoint: 25,
+        epoch: 0,
+    };
 
     /// Seed the mock with a two-version package lineage (v1 at `original_id`
     /// published at checkpoint 5, v2 at `upgraded_id` published at checkpoint
-    /// 20, watermark at checkpoint 25) plus one non-package object.
+    /// 20) plus one non-package object.
     async fn setup_lineage_fixture() -> LineageFixture {
         use bytes::Bytes;
         use move_binary_format::file_format::empty_module;
@@ -485,7 +505,7 @@ mod tests {
 
         let mock = MockBigtableServer::new();
         let (addr, server) = mock.start().await.expect("start mock BigTable");
-        let mut client = BigTableClient::new_local(addr.to_string(), "test".to_string())
+        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
             .await
             .expect("connect to mock BigTable");
 
@@ -543,25 +563,6 @@ mod tests {
             .await;
         }
 
-        for pipeline in TEST_WATERMARK_PIPELINES {
-            client
-                .create_pipeline_watermark_if_absent(
-                    pipeline,
-                    &sui_kvstore::WatermarkV1 {
-                        epoch_hi_inclusive: 0,
-                        checkpoint_hi_inclusive: Some(25),
-                        tx_hi: 0,
-                        timestamp_ms_hi_inclusive: 0,
-                        reader_lo: 0,
-                        pruner_hi: 0,
-                        pruner_timestamp_ms: 0,
-                        bucket_start_cp: None,
-                    },
-                )
-                .await
-                .expect("seed watermark");
-        }
-
         LineageFixture {
             client,
             original_id,
@@ -581,7 +582,7 @@ mod tests {
         fixture: &LineageFixture,
         request: GetPackageRequest,
     ) -> sui_rpc::proto::sui::rpc::v2::Package {
-        get_package(fixture.client.clone(), TEST_WATERMARK_PIPELINES, request)
+        get_package(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, request)
             .await
             .expect("get_package succeeds")
             .package
@@ -589,7 +590,7 @@ mod tests {
     }
 
     async fn fetch_pkg_err(fixture: &LineageFixture, request: GetPackageRequest) -> tonic::Status {
-        get_package(fixture.client.clone(), TEST_WATERMARK_PIPELINES, request)
+        get_package(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, request)
             .await
             .expect_err("get_package fails")
             .into()
@@ -656,7 +657,7 @@ mod tests {
         );
         assert_eq!(package.version, Some(1));
 
-        // A checkpoint bound equal to the watermark resolves the latest version.
+        // A checkpoint bound equal to the served height resolves the latest version.
         let mut req = get_package_req(fixture.original_id);
         req.selector = Some(Selector::AtCheckpoint(25));
         let package = fetch_pkg(&fixture, req).await;
@@ -668,7 +669,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn at_checkpoint_above_indexed_watermark_is_rejected() {
+    async fn at_checkpoint_above_served_height_is_rejected() {
         let fixture = setup_lineage_fixture().await;
 
         for at_checkpoint in [26u64, u64::MAX] {
@@ -687,45 +688,30 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn at_checkpoint_with_empty_index_is_unavailable() {
-        let mock = MockBigtableServer::new();
-        let (addr, _server) = mock.start().await.expect("start mock BigTable");
-        let client = BigTableClient::new_local(addr.to_string(), "test".to_string())
-            .await
-            .expect("connect to mock BigTable");
+    async fn version_published_above_served_height_is_not_found() {
+        let fixture = setup_lineage_fixture().await;
 
-        // A bare-id request is still served without any watermark rows.
-        let mut bare = GetPackageRequest::default();
-        bare.package_id = Some(ObjectID::ZERO.to_canonical_string(true));
-        let bare_status: tonic::Status =
-            get_package(client.clone(), TEST_WATERMARK_PIPELINES, bare)
-                .await
-                .expect_err("bare lookup fails on empty store")
-                .into();
-        assert_eq!(bare_status.code(), tonic::Code::NotFound);
-
-        // The checkpoint selector fails closed instead of clamping to a checkpoint
-        // this replica has not indexed.
-        let mut req = GetPackageRequest::default();
-        req.package_id = Some(ObjectID::ZERO.to_canonical_string(true));
-        req.selector = Some(Selector::AtCheckpoint(5));
-        let status: tonic::Status = get_package(client.clone(), TEST_WATERMARK_PIPELINES, req)
-            .await
-            .expect_err("checkpoint lookup fails on empty index")
-            .into();
-        assert_eq!(status.code(), tonic::Code::Unavailable);
-        assert_eq!(status.message(), "rpc index is empty");
-
-        // The version selector is not bounded, so it reaches the underlying lookup
-        // (not found here, not rejected as unavailable).
-        let mut req = GetPackageRequest::default();
-        req.package_id = Some(ObjectID::ZERO.to_canonical_string(true));
-        req.selector = Some(Selector::Version(1));
-        let version_status: tonic::Status = get_package(client, TEST_WATERMARK_PIPELINES, req)
-            .await
-            .expect_err("version lookup reaches the store")
-            .into();
-        assert_eq!(version_status.code(), tonic::Code::NotFound);
+        // v2 is published at checkpoint 20.
+        for (served_checkpoint, found) in [(19, false), (20, true)] {
+            let mut req = get_package_req(fixture.original_id);
+            req.selector = Some(Selector::Version(2));
+            let served_height = ServedHeight {
+                checkpoint: served_checkpoint,
+                epoch: 0,
+            };
+            let result = get_package(fixture.client.clone(), served_height, req).await;
+            match result {
+                Ok(response) => {
+                    assert!(found, "served height {served_checkpoint} served v2");
+                    assert_eq!(response.package.and_then(|p| p.version), Some(2));
+                }
+                Err(err) => {
+                    assert!(!found, "served height {served_checkpoint} hid v2");
+                    let status: tonic::Status = err.into();
+                    assert_eq!(status.code(), tonic::Code::NotFound);
+                }
+            }
+        }
     }
 
     #[tokio::test]
@@ -766,5 +752,43 @@ mod tests {
         let status = fetch_pkg_err(&fixture, get_package_req(fixture.plain_object_id)).await;
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
         assert!(status.message().contains("not a package"));
+    }
+
+    #[tokio::test]
+    async fn list_package_versions_stops_at_served_height() {
+        let fixture = setup_lineage_fixture().await;
+
+        // v2 is published at checkpoint 20: listed only once the served height reaches it.
+        for (served_checkpoint, expected) in [(19, vec![1]), (20, vec![1, 2])] {
+            let mut req = ListPackageVersionsRequest::default();
+            req.package_id = Some(fixture.upgraded_id.to_string());
+            let served_height = ServedHeight {
+                checkpoint: served_checkpoint,
+                epoch: 0,
+            };
+            let versions: Vec<u64> =
+                list_package_versions(fixture.client.clone(), served_height, req)
+                    .await
+                    .expect("list_package_versions succeeds")
+                    .versions
+                    .into_iter()
+                    .map(|version| version.version.expect("version is set"))
+                    .collect();
+            assert_eq!(versions, expected, "served height {served_checkpoint}");
+        }
+
+        // v1 is published at checkpoint 5: below it the package does not exist yet.
+        let mut req = ListPackageVersionsRequest::default();
+        req.package_id = Some(fixture.upgraded_id.to_string());
+        let served_height = ServedHeight {
+            checkpoint: 4,
+            epoch: 0,
+        };
+        let status: tonic::Status =
+            list_package_versions(fixture.client.clone(), served_height, req)
+                .await
+                .expect_err("package published above the served height")
+                .into();
+        assert_eq!(status.code(), tonic::Code::NotFound);
     }
 }

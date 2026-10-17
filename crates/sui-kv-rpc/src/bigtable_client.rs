@@ -32,15 +32,19 @@ use std::time::Duration;
 use std::time::Instant;
 
 use bytes::Bytes;
+use futures::Stream;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use prometheus::HistogramVec;
+use prometheus::IntCounterVec;
 use prometheus::Registry;
 use prometheus::register_histogram_vec_with_registry;
+use prometheus::register_int_counter_vec_with_registry;
 use sui_inverted_index::BitmapQuery;
 use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
 use sui_inverted_index::SkipPolicy;
+use sui_inverted_index::WatermarkPacing;
 use sui_inverted_index::Watermarked;
 use sui_inverted_index::eval_bitmap_query_stream;
 use sui_kvstore::BigTableBitmapSource;
@@ -68,10 +72,11 @@ pub(crate) mod stage {
     pub const CHECKPOINTS: &str = "checkpoints";
 }
 
-/// Histograms for tuning the request-scoped `BigTableClient` semaphore.
-/// Cardinality is bounded: 3 methods × 5 stages = 15 series each for
-/// `permit_wait_ms` and `permit_hold_ms`, and 3 series each for the request-end
-/// `permits_peak` and `ops_total` histograms.
+/// Metrics for the request-scoped `BigTableClient` limiter and the reads it
+/// gates. Cardinality is bounded: per method, 5 stages for `permit_wait_ms`,
+/// `permit_hold_ms`, and `reads_started`, 5 stages × 3 outcomes for
+/// `reads_finished`, and one series each for the request-end `permits_peak`
+/// and `ops_total` histograms.
 #[derive(Clone)]
 pub(crate) struct Metrics {
     /// Time spent waiting for one limiter permit, recorded once per successful
@@ -85,6 +90,12 @@ pub(crate) struct Metrics {
     /// Total limiter acquisitions issued by a single request, recorded once
     /// when the request's `BigTableClient` is dropped.
     pub ops_total: HistogramVec,
+    /// Gated reads started, counted when the read's permit is acquired, just
+    /// before it is sent.
+    pub reads_started: IntCounterVec,
+    /// Gated reads that ended, by [`ReadOutcome`], counted when the read's
+    /// permit is released.
+    pub reads_finished: IntCounterVec,
 }
 
 impl Metrics {
@@ -122,6 +133,20 @@ impl Metrics {
                 "Total BigTable limiter acquisitions issued by a single list request.",
                 &["method"],
                 prometheus::exponential_buckets(1.0, 2.0, 14).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            reads_started: register_int_counter_vec_with_registry!(
+                "kv_rpc_bigtable_reads_started_total",
+                "BigTable reads started under the request-scoped limiter, counted when the read acquires its permit, just before it is sent. Each read is normally one ReadRows call.",
+                &["method", "stage"],
+                registry,
+            )
+            .unwrap(),
+            reads_finished: register_int_counter_vec_with_registry!(
+                "kv_rpc_bigtable_reads_finished_total",
+                "BigTable reads under the request-scoped limiter that ended, by outcome: completed (the response was read to its end), failed (BigTable or decoding returned an error), or cancelled (dropped before either; a cancelled read that was already sent resets its HTTP/2 stream). Started minus finished is the number in flight.",
+                &["method", "stage", "outcome"],
                 registry,
             )
             .unwrap(),
@@ -203,14 +228,9 @@ impl BigTableClient {
         stage: &'static str,
     ) -> Result<BoxStream<'static, Result<(Bytes, Vec<(Bytes, Bytes)>), anyhow::Error>>, RpcError>
     {
-        let permit = self.acquire(stage).await?;
-        let inner = self
-            .inner
-            .clone()
-            .multi_get_stream(table_name, keys, filter)
+        let mut inner = self.inner.clone();
+        self.open_gated_stream(stage, inner.multi_get_stream(table_name, keys, filter))
             .await
-            .map_err(RpcError::from)?;
-        Ok(gate_stream(permit, inner.boxed()))
     }
 
     pub(crate) async fn get_transactions_stream(
@@ -221,42 +241,33 @@ impl BigTableClient {
         BoxStream<'static, Result<(TransactionDigest, TransactionData), anyhow::Error>>,
         RpcError,
     > {
-        let permit = self.acquire(stage::TRANSACTIONS).await?;
-        let inner = self
-            .inner
-            .clone()
-            .get_transactions_stream(digests, column_filter)
-            .await
-            .map_err(RpcError::from)?;
-        Ok(gate_stream(permit, inner.boxed()))
+        let mut inner = self.inner.clone();
+        self.open_gated_stream(
+            stage::TRANSACTIONS,
+            inner.get_transactions_stream(digests, column_filter),
+        )
+        .await
     }
 
     pub(crate) async fn get_objects_stream(
         &self,
         object_keys: Vec<ObjectKey>,
     ) -> Result<BoxStream<'static, Result<Object, anyhow::Error>>, RpcError> {
-        let permit = self.acquire(stage::OBJECTS).await?;
-        let inner = self
-            .inner
-            .clone()
-            .get_objects_stream(object_keys)
+        let mut inner = self.inner.clone();
+        self.open_gated_stream(stage::OBJECTS, inner.get_objects_stream(object_keys))
             .await
-            .map_err(RpcError::from)?;
-        Ok(gate_stream(permit, inner.boxed()))
     }
 
     pub(crate) async fn resolve_tx_digests_stream(
         &self,
         tx_sequence_numbers: Vec<u64>,
     ) -> Result<BoxStream<'static, Result<TxSeqDigestData, anyhow::Error>>, RpcError> {
-        let permit = self.acquire(stage::TX_SEQ_DIGEST).await?;
-        let inner = self
-            .inner
-            .clone()
-            .resolve_tx_digests_stream(tx_sequence_numbers)
-            .await
-            .map_err(RpcError::from)?;
-        Ok(gate_stream(permit, inner.boxed()))
+        let mut inner = self.inner.clone();
+        self.open_gated_stream(
+            stage::TX_SEQ_DIGEST,
+            inner.resolve_tx_digests_stream(tx_sequence_numbers),
+        )
+        .await
     }
 
     pub(crate) async fn scan_tx_seq_digests_stream(
@@ -292,24 +303,24 @@ impl BigTableClient {
         &self,
         checkpoint_range: Range<u64>,
     ) -> Result<Range<u64>, RpcError> {
-        let _permit = self.acquire(stage::CHECKPOINTS).await?;
-        self.inner
-            .clone()
-            .checkpoint_to_tx_range(checkpoint_range)
-            .await
-            .map_err(RpcError::from)
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::CHECKPOINTS,
+            inner.checkpoint_to_tx_range(checkpoint_range),
+        )
+        .await
     }
 
     pub(crate) async fn resolve_tx_checkpoints(
         &self,
         tx_sequence_numbers: &[u64],
     ) -> Result<Vec<(u64, CheckpointSequenceNumber)>, RpcError> {
-        let _permit = self.acquire(stage::TX_CP_RESOLVE).await?;
-        self.inner
-            .clone()
-            .resolve_tx_checkpoints(tx_sequence_numbers)
-            .await
-            .map_err(RpcError::from)
+        let mut inner = self.inner.clone();
+        self.call_gated(
+            stage::TX_CP_RESOLVE,
+            inner.resolve_tx_checkpoints(tx_sequence_numbers),
+        )
+        .await
     }
 
     /// Streaming variant of `resolve_tx_checkpoints`. The permit is held for the
@@ -319,19 +330,18 @@ impl BigTableClient {
         tx_sequence_numbers: Vec<u64>,
     ) -> Result<BoxStream<'static, Result<(u64, CheckpointSequenceNumber), anyhow::Error>>, RpcError>
     {
-        let permit = self.acquire(stage::TX_CP_RESOLVE).await?;
-        let inner = self
-            .inner
-            .clone()
-            .resolve_tx_checkpoints_stream(tx_sequence_numbers)
-            .await
-            .map_err(RpcError::from)?;
-        Ok(gate_stream(permit, inner.boxed()))
+        let mut inner = self.inner.clone();
+        self.open_gated_stream(
+            stage::TX_CP_RESOLVE,
+            inner.resolve_tx_checkpoints_stream(tx_sequence_numbers),
+        )
+        .await
     }
 
     /// Eval a `BitmapQuery`. Bitmap scans stay outside the downstream request
     /// semaphore; their concurrency is bounded by `max_bitmap_filter_literals`
-    /// during filter validation.
+    /// during filter validation. `pacing` decides which scan watermarks reach
+    /// the stream (see [`crate::operation::QueryContext::watermark_pacing`]).
     pub(crate) fn eval_bitmap_query_stream<F>(
         &self,
         query: BitmapQuery,
@@ -340,6 +350,7 @@ impl BigTableClient {
         direction: ScanDirection,
         budget: u64,
         policy: SkipPolicy,
+        pacing: WatermarkPacing,
         on_metrics: F,
     ) -> BoxStream<'static, Result<Watermarked<u64>, ScanStop>>
     where
@@ -354,6 +365,7 @@ impl BigTableClient {
             direction,
             budget,
             policy,
+            pacing,
             on_metrics,
         )
     }
@@ -362,6 +374,43 @@ impl BigTableClient {
         acquire_limited(self.limiter.clone(), self.context.clone(), stage)
             .await
             .map_err(|_| RpcError::new(tonic::Code::Internal, "request concurrency limiter closed"))
+    }
+
+    /// Open a streaming read under a `stage` permit. The permit stays with the
+    /// returned stream until it is dropped, and records how the read ended.
+    async fn open_gated_stream<T, S>(
+        &self,
+        stage: &'static str,
+        open: impl Future<Output = anyhow::Result<S>>,
+    ) -> Result<BoxStream<'static, Result<T, anyhow::Error>>, RpcError>
+    where
+        T: Send + 'static,
+        S: Stream<Item = anyhow::Result<T>> + Send + 'static,
+    {
+        let mut permit = self.acquire(stage).await?;
+        match open.await {
+            Ok(inner) => Ok(gate_stream(permit, inner.boxed())),
+            Err(error) => {
+                permit.finish(ReadOutcome::Failed);
+                Err(RpcError::from(error))
+            }
+        }
+    }
+
+    /// Run a read that returns its whole result under a `stage` permit.
+    async fn call_gated<T>(
+        &self,
+        stage: &'static str,
+        call: impl Future<Output = anyhow::Result<T>>,
+    ) -> Result<T, RpcError> {
+        let mut permit = self.acquire(stage).await?;
+        let result = call.await;
+        permit.finish(if result.is_ok() {
+            ReadOutcome::Completed
+        } else {
+            ReadOutcome::Failed
+        });
+        result.map_err(RpcError::from)
     }
 
     async fn tx_seq_checkpoint(&self, tx_seq: u64) -> Result<u64, RpcError> {
@@ -442,21 +491,56 @@ impl BigTableClient {
 pub(crate) type WmResolverFut =
     std::pin::Pin<Box<dyn Future<Output = Result<Option<u64>, ScanStop>> + Send>>;
 
+/// How a gated read ended, recorded once when its permit is released.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ReadOutcome {
+    /// The response was read to its end.
+    Completed,
+    /// BigTable or decoding returned an error.
+    Failed,
+    /// Dropped before completing or failing. If the read was already sent,
+    /// dropping it resets its HTTP/2 stream.
+    Cancelled,
+}
+
+impl ReadOutcome {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+}
+
 struct LimitedPermit {
     _permit: OwnedSemaphorePermit,
     context: Arc<BigTableClientContext>,
     stage: &'static str,
     acquired_at: Instant,
+    /// `Cancelled` until the read records how it ended.
+    outcome: ReadOutcome,
+}
+
+impl LimitedPermit {
+    fn finish(&mut self, outcome: ReadOutcome) {
+        self.outcome = outcome;
+    }
 }
 
 impl Drop for LimitedPermit {
     fn drop(&mut self) {
         let hold_ms = self.acquired_at.elapsed().as_secs_f64() * 1000.0;
-        self.context
-            .metrics
+        let metrics = &self.context.metrics;
+        let method = self.context.method;
+        metrics
             .permit_hold_ms
-            .with_label_values(&[self.context.method, self.stage])
+            .with_label_values(&[method, self.stage])
             .observe(hold_ms);
+        metrics
+            .reads_finished
+            .with_label_values(&[method, self.stage, self.outcome.label()])
+            .inc();
         record_release(&self.context);
     }
 }
@@ -475,6 +559,7 @@ async fn acquire_limited(
         context,
         stage,
         acquired_at,
+        outcome: ReadOutcome::Cancelled,
     })
 }
 
@@ -485,6 +570,11 @@ fn record_acquired(context: &BigTableClientContext, stage: &'static str, wait: D
         .permit_wait_ms
         .with_label_values(&[context.method, stage])
         .observe(wait_ms);
+    context
+        .metrics
+        .reads_started
+        .with_label_values(&[context.method, stage])
+        .inc();
     context.ops_count.fetch_add(1, Ordering::Relaxed);
     let active = context.active_permits.fetch_add(1, Ordering::AcqRel) + 1;
     context.peak_used.fetch_max(active, Ordering::Relaxed);
@@ -502,21 +592,25 @@ fn record_release(context: &BigTableClientContext) {
 
 /// Wrap a stream so that `permit` is held until the stream is dropped (either
 /// by full drain, early termination by the consumer, or cancellation
-/// propagating through `Drop`). The returned stream is a thin pass-through —
-/// items and errors flow through unchanged.
+/// propagating through `Drop`). Items and errors pass through unchanged; the
+/// permit records the read as completed when the inner stream ends, failed
+/// when it yields an error, and cancelled if dropped before either.
 fn gate_stream<T>(
-    permit: impl Send + 'static,
+    mut permit: LimitedPermit,
     inner: BoxStream<'static, Result<T, anyhow::Error>>,
 ) -> BoxStream<'static, Result<T, anyhow::Error>>
 where
     T: Send + 'static,
 {
     async_stream::try_stream! {
-        let _permit = permit;
         futures::pin_mut!(inner);
         while let Some(row) = inner.next().await {
+            if row.is_err() {
+                permit.finish(ReadOutcome::Failed);
+            }
             yield row?;
         }
+        permit.finish(ReadOutcome::Completed);
     }
     .boxed()
 }
@@ -534,13 +628,39 @@ mod tests {
 
     use super::*;
 
+    /// A `tx_cp_resolve` permit, plus the registry its metrics are recorded in.
+    async fn test_permit(limiter: &Arc<Semaphore>) -> (LimitedPermit, Registry) {
+        let (metrics, registry) = Metrics::for_testing();
+        let context = test_context(metrics, "list_events");
+        let permit = acquire_limited(limiter.clone(), context, stage::TX_CP_RESOLVE)
+            .await
+            .unwrap();
+        (permit, registry)
+    }
+
+    /// Value of `kv_rpc_bigtable_reads_finished_total` for one outcome.
+    fn reads_finished(registry: &Registry, outcome: &str) -> u64 {
+        let families = registry.gather();
+        family(&families, "kv_rpc_bigtable_reads_finished_total")
+            .get_metric()
+            .iter()
+            .filter(|m| {
+                m.get_label()
+                    .iter()
+                    .any(|label| label.name() == "outcome" && label.value() == outcome)
+            })
+            .map(|m| m.get_counter().value() as u64)
+            .sum()
+    }
+
     /// `gate_stream` should hold the permit until the wrapped stream is
     /// dropped. With a capacity-1 semaphore, the wrapped stream's existence
-    /// blocks any other acquire, even between yields.
+    /// blocks any other acquire, even between yields. Reading the inner
+    /// stream to its end records the read as completed.
     #[tokio::test(start_paused = true)]
     async fn gate_stream_holds_permit_for_full_drain() {
         let limiter = Arc::new(Semaphore::new(1));
-        let permit = limiter.clone().acquire_owned().await.unwrap();
+        let (permit, registry) = test_permit(&limiter).await;
         assert_eq!(limiter.available_permits(), 0);
 
         let inner: BoxStream<'static, Result<u64, anyhow::Error>> =
@@ -560,14 +680,17 @@ mod tests {
         // Dropping the stream releases the permit.
         drop(wrapped);
         assert_eq!(limiter.available_permits(), 1);
+        assert_eq!(reads_finished(&registry, "completed"), 1);
+        assert_eq!(reads_finished(&registry, "cancelled"), 0);
     }
 
     /// Dropping the wrapped stream early — before the inner stream is
-    /// drained — should release the permit immediately.
+    /// drained — should release the permit immediately and record the read
+    /// as cancelled.
     #[tokio::test(start_paused = true)]
     async fn gate_stream_releases_permit_on_early_drop() {
         let limiter = Arc::new(Semaphore::new(1));
-        let permit = limiter.clone().acquire_owned().await.unwrap();
+        let (permit, registry) = test_permit(&limiter).await;
         assert_eq!(limiter.available_permits(), 0);
 
         // Wrap an infinite stream so we can drop in the middle.
@@ -591,14 +714,17 @@ mod tests {
         // the release.)
         tokio::time::sleep(Duration::from_millis(0)).await;
         assert_eq!(limiter.available_permits(), 1);
+        assert_eq!(reads_finished(&registry, "cancelled"), 1);
+        assert_eq!(reads_finished(&registry, "completed"), 0);
     }
 
     /// Inner errors should propagate through unchanged; the permit should
-    /// still release on the resulting stream-end.
+    /// still release on the resulting stream-end, and the read is recorded
+    /// as failed rather than cancelled.
     #[tokio::test(start_paused = true)]
     async fn gate_stream_propagates_inner_error() {
         let limiter = Arc::new(Semaphore::new(1));
-        let permit = limiter.clone().acquire_owned().await.unwrap();
+        let (permit, registry) = test_permit(&limiter).await;
 
         let inner: BoxStream<'static, Result<u64, anyhow::Error>> =
             stream::iter(vec![Ok::<u64, anyhow::Error>(1u64), Err(anyhow!("boom"))]).boxed();
@@ -611,6 +737,49 @@ mod tests {
         drop(wrapped);
         tokio::time::sleep(Duration::from_millis(0)).await;
         assert_eq!(limiter.available_permits(), 1);
+        assert_eq!(reads_finished(&registry, "failed"), 1);
+        assert_eq!(reads_finished(&registry, "cancelled"), 0);
+    }
+
+    /// A read that returns its whole result records completed when it
+    /// returns, and cancelled when its future is dropped with the read in
+    /// flight.
+    #[tokio::test]
+    async fn whole_result_read_records_completed_and_cancelled() {
+        let (ctx, registry, mock, server) =
+            crate::v2::test_utils::query_context_with_mock_and_registry("list_events", 1).await;
+        let checkpoint = sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .finish_transaction()
+            .build_checkpoint();
+        sui_kvstore::testing::insert_checkpoint_rows(&mock, &checkpoint).await;
+        let client = ctx.client();
+
+        assert_eq!(
+            client.resolve_tx_checkpoints(&[0]).await.unwrap(),
+            vec![(0, 0)]
+        );
+        assert_eq!(reads_finished(&registry, "completed"), 1);
+
+        // The mock holds its response far longer than the timeout, so the
+        // read is still in flight when the timeout drops it.
+        mock.set_read_rows_latency(Duration::from_secs(60)).await;
+        let in_flight = tokio::time::timeout(
+            Duration::from_millis(50),
+            client.resolve_tx_checkpoints(&[0]),
+        )
+        .await;
+        assert!(in_flight.is_err(), "the read should still be in flight");
+        assert_eq!(reads_finished(&registry, "cancelled"), 1);
+
+        let families = registry.gather();
+        let started: f64 = family(&families, "kv_rpc_bigtable_reads_started_total")
+            .get_metric()
+            .iter()
+            .map(|m| m.get_counter().value())
+            .sum();
+        assert_eq!(started, 2.0);
+        server.abort();
     }
 
     /// Find the metric family with the given name in a gathered registry
