@@ -420,7 +420,7 @@ impl Transaction {
             return Ok(Connection::new(false, false).into());
         };
 
-        let result = Self::scan_grpc(reader, cp_bounds, &page, &filter).await?;
+        let result = Self::scan_grpc(reader, cp_bounds, &page, &filter, None).await?;
 
         build_grpc_connection(scope, &page, result)
     }
@@ -434,6 +434,7 @@ impl Transaction {
         cp_bounds: impl RangeBounds<u64>,
         page: &Page<CTransaction>,
         filter: &TransactionFilter,
+        consistent_read_checkpoint: Option<u64>,
     ) -> Result<StreamPage<v2::ExecutedTransaction>, RpcError> {
         // Extract the cursor and pass through to grpc.
         let after = page.after().map(|c| CursorToken::from(&**c).encode());
@@ -473,7 +474,7 @@ impl Transaction {
         request.options = Some(options);
 
         Ok(reader
-            .list_transactions(request)
+            .list_transactions(request, consistent_read_checkpoint)
             .await
             .context("Failed to list transactions")?)
     }

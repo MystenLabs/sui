@@ -285,7 +285,7 @@ impl Event {
             return Ok(StreamConnection::empty());
         };
 
-        let result = Self::scan_grpc(reader, cp_bounds, &page, &filter).await?;
+        let result = Self::scan_grpc(reader, cp_bounds, &page, &filter, None).await?;
 
         build_grpc_connection(scope, &page, result)
     }
@@ -299,6 +299,7 @@ impl Event {
         cp_bounds: impl RangeBounds<u64>,
         page: &Page<CEvent>,
         filter: &EventFilter,
+        consistent_read_checkpoint: Option<u64>,
     ) -> Result<StreamPage<v2::Event>, RpcError> {
         // Extract the cursor and pass through to grpc.
         let after = page.after().map(|c| CursorToken::from(&c.token()).encode());
@@ -350,7 +351,7 @@ impl Event {
         request.options = Some(options);
 
         Ok(reader
-            .list_events(request)
+            .list_events(request, consistent_read_checkpoint)
             .await
             .context("Failed to list events")?)
     }

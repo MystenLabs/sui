@@ -47,8 +47,9 @@ impl Subscribable for Event {
         cp_bounds: RangeInclusive<u64>,
         page: &'a Page<CEvent>,
         filter: &'a EventFilter,
+        consistent_read_checkpoint: Option<u64>,
     ) -> impl Future<Output = Result<StreamPage<v2::Event>, RpcError>> + Send + 'a {
-        Event::scan_grpc(reader, cp_bounds, page, filter)
+        Event::scan_grpc(reader, cp_bounds, page, filter, consistent_read_checkpoint)
     }
 
     fn build_node(

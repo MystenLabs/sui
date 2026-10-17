@@ -83,12 +83,16 @@ pub(super) trait Subscribable {
     /// The raw scan payload one page yields before conversion to edges.
     type ScanItem: Send + 'static;
 
-    /// Scan one page of matches over `cp_bounds`, starting after `page`'s cursor.
+    /// Scan one page of matches over `cp_bounds`, starting after `page`'s cursor. `consistent_read_checkpoint`
+    /// is the monotonic-read floor (`x-sui-min-checkpoint`): the resume point already consumed, so a
+    /// load-balanced replica waits until it has indexed that far rather than answering from a view
+    /// behind it.
     fn scan<'a>(
         reader: &'a AlphaLedgerGrpcReader,
         cp_bounds: RangeInclusive<u64>,
         page: &'a Page<Self::Cursor>,
         filter: &'a Self::Filter,
+        consistent_read_checkpoint: Option<u64>,
     ) -> impl Future<Output = Result<StreamPage<Self::ScanItem>, RpcError>> + Send + 'a;
 
     /// Build the GraphQL node from one scanned item's payload, constructing whatever scope the feed
@@ -299,7 +303,6 @@ where
         // Phase 1: scan toward the tip, pinning the live receiver near it. `after` and/or
         // `afterCheckpoint` resume the backfill; neither means live-only.
         if after.is_some() || after_checkpoint.is_some() {
-            let checkpoint_lo = after_checkpoint.map_or(0, |cp| cp.saturating_add(1));
             let scan = backfill::<S>(
                 reader,
                 caches.clone(),
@@ -307,7 +310,7 @@ where
                 watermarks_rx,
                 filter.clone(),
                 after,
-                checkpoint_lo,
+                after_checkpoint,
                 scan_page_size,
             );
             for await scanned in scan {
@@ -372,7 +375,7 @@ fn backfill<S: Subscribable>(
     mut watermarks_rx: watch::Receiver<Arc<Watermarks>>,
     filter: S::Filter,
     mut after: Option<S::Cursor>,
-    checkpoint_lo: u64,
+    after_checkpoint: Option<u64>,
     scan_page_size: usize,
 ) -> impl Stream<Item = Result<Scanned<S::Item>, RpcError>>
 where
@@ -384,12 +387,22 @@ where
             max: scan_page_size as u32,
         };
 
-        // Resume from whichever is later: the `after` cursor or `[checkpoint_lo, ..]`. The upper
-        // bound is `u64::MAX` because backfill is open-ended, chasing the moving tip; `subscribe`
-        // stops it once the handoff is covered.
+        // The scan's lower bound: the first checkpoint to read, one past `afterCheckpoint` (or 0
+        // when resuming by cursor alone). The upper bound is `u64::MAX` because backfill is
+        // open-ended, chasing the moving tip; `subscribe` stops it once the handoff is covered.
+        let checkpoint_lo = after_checkpoint.map_or(0, |cp| cp.saturating_add(1));
         let cp_bounds = checkpoint_lo..=u64::MAX;
 
         loop {
+            // Monotonic-read floor for this page: the later of the cursor the previous page resumed
+            // to and `afterCheckpoint`, the two signals the client's resume point is built from. A
+            // replica must not serve this page from a view behind that, or it could return a
+            // boundary behind what the client already consumed.
+            let consistent_read_checkpoint = after
+                .as_ref()
+                .map(|c| CursorToken::from(c).position.checkpoint())
+                .max(after_checkpoint);
+
             let (items, next_after) = match scan_page::<S>(
                 &reader,
                 &caches,
@@ -398,6 +411,7 @@ where
                 cp_bounds.clone(),
                 after.as_ref(),
                 &filter,
+                consistent_read_checkpoint,
                 &mut watermarks_rx,
             )
             .await
@@ -558,6 +572,7 @@ async fn scan_page<S: Subscribable>(
     cp_bounds: RangeInclusive<u64>,
     after: Option<&S::Cursor>,
     filter: &S::Filter,
+    consistent_read_checkpoint: Option<u64>,
     watermarks_rx: &mut watch::Receiver<Arc<Watermarks>>,
 ) -> Result<(Vec<Scanned<S::Item>>, S::Cursor), RpcError>
 where
@@ -565,7 +580,15 @@ where
 {
     let mut poll = LedgerPoll::new();
     loop {
-        let result = scan_with_retry::<S>(reader, limits, cp_bounds.clone(), after, filter).await?;
+        let result = scan_with_retry::<S>(
+            reader,
+            limits,
+            cp_bounds.clone(),
+            after,
+            filter,
+            consistent_read_checkpoint,
+        )
+        .await?;
 
         // No end cursor means nothing past the indexer tip is indexed yet; wait, then re-request. A
         // range that was scanned but matched nothing still returns a boundary cursor, not `None`.
@@ -621,6 +644,7 @@ async fn scan_with_retry<S: Subscribable>(
     cp_bounds: RangeInclusive<u64>,
     after: Option<&S::Cursor>,
     filter: &S::Filter,
+    consistent_read_checkpoint: Option<u64>,
 ) -> Result<StreamPage<S::ScanItem>, RpcError> {
     let page = Page::from_params(
         limits,
@@ -632,12 +656,18 @@ async fn scan_with_retry<S: Subscribable>(
     .map_err(anyhow::Error::from)?;
 
     backoff::future::retry(scan_backoff(), || async {
-        S::scan(reader, cp_bounds.clone(), &page, filter)
-            .await
-            .map_err(|e| {
-                warn!(error = ?e, "scan failed, retrying");
-                backoff::Error::transient(e)
-            })
+        S::scan(
+            reader,
+            cp_bounds.clone(),
+            &page,
+            filter,
+            consistent_read_checkpoint,
+        )
+        .await
+        .map_err(|e| {
+            warn!(error = ?e, "scan failed, retrying");
+            backoff::Error::transient(e)
+        })
     })
     .await
 }
