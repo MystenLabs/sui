@@ -27,8 +27,8 @@ use backoff::ExponentialBackoff;
 use futures::Stream;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
-use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use tokio::sync::broadcast;
 use tokio::sync::watch;
 use tracing::warn;
@@ -54,8 +54,15 @@ use super::Error;
 use crate::task::watermark::Watermarks;
 
 /// How long to wait before re-requesting when the scan has drained the indexer's current tip but not
-/// yet reached the handoff.
+/// yet reached the handoff. The wait doubles while the ledger makes no progress, up to
+/// `BACKFILL_POLL_MAX_INTERVAL`.
 const BACKFILL_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const BACKFILL_POLL_MAX_INTERVAL: Duration = Duration::from_secs(2);
+
+/// How long the backfill waits for the ledger to make progress before asking the client to
+/// reconnect, so a stalled ledger does not hold subscription slots indefinitely. Generous enough
+/// for the chain to reach a resume point up to `max_start_checkpoints_ahead_of_tip` ahead.
+const BACKFILL_POLL_DEADLINE: Duration = Duration::from_secs(180);
 
 /// A feed that can be streamed with the scan-then-live driver. One implementation per subscribable
 /// GraphQL type (transactions, events) supplies its cursor, filter, and matching, and the free
@@ -116,12 +123,113 @@ enum Scanned<I: OutputType> {
     },
 }
 
+/// Where the backfill scan hands off to the live broadcast. The scan delivers every match at or
+/// below the pinned handoff; live delivers everything above it.
+struct Handoff {
+    /// Pin once the scan frontier is within this many checkpoints of the streamed tip.
+    threshold: u64,
+    /// The checkpoint the client resumed after (from `after` and/or `afterCheckpoint`).
+    resume_from: Option<u64>,
+    /// The `after` cursor's checkpoint is a placeholder (see [`has_placeholder_checkpoint`]), so
+    /// `resume_from` is raised to the first scan output, which the ledger only returns once it is
+    /// past the cursor.
+    resume_unknown: bool,
+    pinned: Option<u64>,
+}
+
+/// What the backfill does with one scan output, as decided by [`Handoff::step`].
+enum ScanStep<I: OutputType> {
+    /// Deliver this match.
+    Deliver(Edge<String, I, EmptyFields>),
+    /// Keep scanning.
+    Continue,
+    /// The scan has covered the handoff; live takes over.
+    Done,
+}
+
 impl<I: OutputType> Scanned<I> {
     /// The checkpoint this output sits at (the match's, or the covered frontier).
     fn checkpoint(&self) -> u64 {
         match self {
             Scanned::Match { checkpoint, .. } | Scanned::Covered { checkpoint } => *checkpoint,
         }
+    }
+}
+
+impl Handoff {
+    fn new(threshold: u64, resume_from: Option<u64>) -> Self {
+        Self {
+            threshold,
+            resume_from,
+            resume_unknown: false,
+            pinned: None,
+        }
+    }
+
+    /// Take the resume point from the first scan output, for an `after` cursor whose checkpoint is
+    /// a placeholder.
+    fn resume_from_first_output(mut self) -> Self {
+        self.resume_unknown = true;
+        self
+    }
+
+    /// Decide what to do with one scan output, given this replica's streamed `tip`.
+    ///
+    /// Pins first if the scan frontier is within the threshold of `tip`. `resubscribe` must
+    /// subscribe the live receiver and then return the streamed tip, so live sees every checkpoint
+    /// above the pin. A match past the handoff belongs to live, so the scan stops there.
+    fn step<I: OutputType>(
+        &mut self,
+        scanned: Scanned<I>,
+        tip: u64,
+        resubscribe: impl FnOnce() -> u64,
+    ) -> ScanStep<I> {
+        if std::mem::take(&mut self.resume_unknown) {
+            // The first output is past the cursor: a match sits in the cursor's checkpoint or a
+            // later one with no match in between, and a coverage marker's page ends in the
+            // checkpoint after the one it covers. Either way the scan stays responsible for it.
+            let floor = match &scanned {
+                Scanned::Match { checkpoint, .. } => *checkpoint,
+                Scanned::Covered { checkpoint } => checkpoint.saturating_add(1),
+            };
+            self.resume_from = Some(self.resume_from.map_or(floor, |from| from.max(floor)));
+        }
+
+        if self.pinned.is_none() && tip.saturating_sub(scanned.checkpoint()) <= self.threshold {
+            self.pin(resubscribe());
+        }
+
+        match scanned {
+            Scanned::Match { checkpoint, edge } => {
+                if self.pinned.is_none_or(|h| checkpoint <= h) {
+                    ScanStep::Deliver(edge)
+                } else {
+                    ScanStep::Done
+                }
+            }
+            Scanned::Covered { checkpoint } => {
+                if self.pinned.is_some_and(|h| checkpoint >= h) {
+                    ScanStep::Done
+                } else {
+                    ScanStep::Continue
+                }
+            }
+        }
+    }
+
+    /// Pin the handoff at the streamed `tip` (read after resubscribing), floored at the resume
+    /// point, which can be ahead of this replica's tip behind a load balancer. Flooring here keeps
+    /// the scan responsible for the matches after an `after` cursor in its own checkpoint.
+    fn pin(&mut self, tip: u64) {
+        self.pinned = Some(match self.resume_from {
+            Some(from) => tip.max(from),
+            None => tip,
+        });
+    }
+
+    /// The last checkpoint the scan was responsible for; live delivers from the next one.
+    fn pinned(&self) -> Option<u64> {
+        self.pinned
     }
 }
 
@@ -182,7 +290,10 @@ where
 
     Ok(stream! {
         let mut pending_receiver = None;
-        let mut handoff: Option<u64> = None;
+        let mut handoff = Handoff::new(handoff_threshold, start_from);
+        if after.as_ref().is_some_and(|c| has_placeholder_checkpoint(&CursorToken::from(c))) {
+            handoff = handoff.resume_from_first_output();
+        }
         let mut last_checkpoint: Option<u64> = None;
 
         // Phase 1: scan toward the tip, pinning the live receiver near it. `after` and/or
@@ -209,37 +320,20 @@ where
                     }
                 };
 
-                // Resubscribe-first and pin once the scan frontier is within threshold of the tip.
-                if pending_receiver.is_none()
-                    && broadcast.network_tip().saturating_sub(scanned.checkpoint()) <= handoff_threshold
-                {
+                let step = handoff.step(scanned, broadcast.network_tip(), || {
                     pending_receiver = Some(broadcast.broadcaster().resubscribe());
-                    handoff = Some(broadcast.network_tip());
-                }
-
-                match scanned {
-                    // A match: deliver it, unless it is past the handoff (then it is live's).
-                    Scanned::Match { checkpoint, edge } => {
-                        if handoff.is_some_and(|h| checkpoint > h) {
-                            break;
-                        }
+                    broadcast.network_tip()
+                });
+                match step {
+                    ScanStep::Deliver(edge) => {
                         yield Ok(edge);
                         guard.record_backfill_delivered();
                     }
-                    // A coverage marker (its `checkpoint` is the fully-scanned frontier): stop once
-                    // it has covered the handoff.
-                    Scanned::Covered { checkpoint } => {
-                        if handoff.is_some_and(|h| checkpoint >= h) {
-                            break;
-                        }
-                    }
+                    ScanStep::Continue => {}
+                    ScanStep::Done => break,
                 }
             }
-            // Floor the live delivery boundary at the resume point. The handoff pins at this
-            // replica's streamed tip, which can sit below the resume point (a client resuming from a
-            // cursor minted by a more caught-up replica behind a load balancer), and delivering at or
-            // below the resume point would replay checkpoints the client asked to skip.
-            last_checkpoint = handoff.max(start_from);
+            last_checkpoint = handoff.pinned();
         }
 
         // Phase 2: follow live from `handoff + 1` (a fresh receiver if there was no backfill).
@@ -280,7 +374,10 @@ fn backfill<S: Subscribable>(
     mut after: Option<S::Cursor>,
     checkpoint_lo: u64,
     scan_page_size: usize,
-) -> impl Stream<Item = Result<Scanned<S::Item>, RpcError>> {
+) -> impl Stream<Item = Result<Scanned<S::Item>, RpcError>>
+where
+    for<'a> CursorToken: From<&'a S::Cursor>,
+{
     stream! {
         let limits = PageLimits {
             default: scan_page_size as u32,
@@ -319,14 +416,32 @@ fn backfill<S: Subscribable>(
     }
 }
 
-/// The highest checkpoint fully scanned as of `token`: its own checkpoint for a `Boundary`, one less
-/// for an `Item` (whose checkpoint may still hold later matches).
-fn covered_checkpoint(token: &CursorToken) -> u64 {
-    let checkpoint = token.position.checkpoint();
-    match token.kind {
-        CursorKind::Boundary => checkpoint,
-        CursorKind::Item => checkpoint.saturating_sub(1),
+/// The highest checkpoint fully scanned as of `token`, or `None` if no whole checkpoint is covered.
+///
+/// Only checkpoints below the cursor's are covered: an `Item` cursor's checkpoint may hold later
+/// matches, and a list call that drains ledger tip `T` ends with a `Boundary` cursor at `T + 1`.
+fn covered_checkpoint(token: &CursorToken) -> Option<u64> {
+    token.position.checkpoint().checked_sub(1)
+}
+
+/// Whether `token` is a transaction or event cursor minted by the Postgres path, which records
+/// checkpoint 0 in place of the item's real checkpoint.
+fn has_placeholder_checkpoint(token: &CursorToken) -> bool {
+    match token.position {
+        Position::Checkpoints { .. } => false,
+        Position::Transactions { checkpoint, tx_seq } => checkpoint == 0 && tx_seq != 0,
+        Position::Events {
+            checkpoint, tx_seq, ..
+        } => checkpoint == 0 && tx_seq != 0,
     }
+}
+
+/// Whether a page ending at `end` moved the scan past `after`. A page that drains the ledger's tip
+/// ends where it started, echoing `after`, so the scan waits before asking again. The ledger
+/// rejects an `after` ahead of its indexed tip as out of range rather than answering from its own
+/// tip (#28308), so a page never ends behind `after`.
+fn made_progress(end: &CursorToken, after: Option<&CursorToken>) -> bool {
+    after != Some(end)
 }
 
 /// Follow the live broadcast from `last_checkpoint + 1`, delivering matching items. Drops the
@@ -406,6 +521,33 @@ fn scan_backoff() -> ExponentialBackoff {
     }
 }
 
+/// Paces re-requests while the ledger has nothing past the scan's position: waits double from
+/// `BACKFILL_POLL_INTERVAL` up to `BACKFILL_POLL_MAX_INTERVAL`, and once `BACKFILL_POLL_DEADLINE`
+/// has passed without progress the client is asked to reconnect.
+struct LedgerPoll {
+    interval: Duration,
+    deadline: tokio::time::Instant,
+}
+
+impl LedgerPoll {
+    fn new() -> Self {
+        Self {
+            interval: BACKFILL_POLL_INTERVAL,
+            deadline: tokio::time::Instant::now() + BACKFILL_POLL_DEADLINE,
+        }
+    }
+
+    async fn wait(&mut self) -> Result<(), RpcError> {
+        if tokio::time::Instant::now() >= self.deadline {
+            warn!("Ledger made no progress within the backfill deadline; disconnecting");
+            return Err(reconnect_error());
+        }
+        tokio::time::sleep(self.interval).await;
+        self.interval = (self.interval * 2).min(BACKFILL_POLL_MAX_INTERVAL);
+        Ok(())
+    }
+}
+
 /// Scan the next page of matches, waiting at the indexer tip if nothing is ready yet. Returns the
 /// matches, a trailing coverage marker, and the cursor to resume from.
 async fn scan_page<S: Subscribable>(
@@ -417,17 +559,28 @@ async fn scan_page<S: Subscribable>(
     after: Option<&S::Cursor>,
     filter: &S::Filter,
     watermarks_rx: &mut watch::Receiver<Arc<Watermarks>>,
-) -> Result<(Vec<Scanned<S::Item>>, S::Cursor), RpcError> {
+) -> Result<(Vec<Scanned<S::Item>>, S::Cursor), RpcError>
+where
+    for<'a> CursorToken: From<&'a S::Cursor>,
+{
+    let mut poll = LedgerPoll::new();
     loop {
         let result = scan_with_retry::<S>(reader, limits, cp_bounds.clone(), after, filter).await?;
 
         // No end cursor means nothing past the indexer tip is indexed yet; wait, then re-request. A
         // range that was scanned but matched nothing still returns a boundary cursor, not `None`.
         let Some(end_cursor) = result.last_cursor() else {
-            tokio::time::sleep(BACKFILL_POLL_INTERVAL).await;
+            poll.wait().await?;
             continue;
         };
         let end_cursor = CursorToken::decode(end_cursor).context("Failed to decode scan cursor")?;
+
+        // A page that drained the ledger's tip without moving: wait for the ledger to index more
+        // before asking again, rather than re-polling at full speed.
+        if !made_progress(&end_cursor, after.map(CursorToken::from).as_ref()) {
+            poll.wait().await?;
+            continue;
+        }
 
         // Hold the page until all pipelines have indexed through its end.
         wait_for_pipelines_catching_up_at(end_cursor.position.checkpoint(), watermarks_rx).await?;
@@ -451,9 +604,9 @@ async fn scan_page<S: Subscribable>(
             });
         }
         // Coverage marker at the fully-scanned end: advances the handoff even on a match-less page.
-        items.push(Scanned::Covered {
-            checkpoint: covered_checkpoint(&end_cursor),
-        });
+        if let Some(checkpoint) = covered_checkpoint(&end_cursor) {
+            items.push(Scanned::Covered { checkpoint });
+        }
 
         let next_after =
             S::Cursor::try_from(end_cursor).context("Unexpected position in scan end cursor")?;
@@ -487,4 +640,261 @@ async fn scan_with_retry<S: Subscribable>(
             })
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_rpc_cursor::CursorKind;
+
+    use super::*;
+
+    /// One scan output, reduced to what the handoff decisions look at.
+    #[derive(Clone, Debug)]
+    enum Out {
+        Match(u64),
+        /// A page's end cursor; its coverage goes through `covered_checkpoint`, as in `scan_page`.
+        End(CursorToken),
+    }
+
+    fn boundary(checkpoint: u64) -> Out {
+        Out::End(CursorToken::boundary(Position::Checkpoints { checkpoint }))
+    }
+
+    fn tx_boundary(checkpoint: u64, tx_seq: u64) -> Out {
+        Out::End(CursorToken::boundary(Position::Transactions {
+            checkpoint,
+            tx_seq,
+        }))
+    }
+
+    fn tx_item(checkpoint: u64, tx_seq: u64) -> Out {
+        Out::End(CursorToken::item(Position::Transactions {
+            checkpoint,
+            tx_seq,
+        }))
+    }
+
+    /// Runs scan outputs through [`Handoff::step`] against a fixed streamed `tip`, as the backfill
+    /// loop in `subscribe` does. Returns the delivered match checkpoints and the checkpoint live
+    /// starts after (`None` if still scanning).
+    fn drive(
+        threshold: u64,
+        resume_from: Option<u64>,
+        tip: u64,
+        outputs: &[Out],
+    ) -> (Vec<u64>, Option<u64>) {
+        drive_handoff(Handoff::new(threshold, resume_from), tip, outputs)
+    }
+
+    /// [`drive`] with a prepared `handoff`.
+    fn drive_handoff(mut handoff: Handoff, tip: u64, outputs: &[Out]) -> (Vec<u64>, Option<u64>) {
+        let mut delivered = vec![];
+        for out in outputs {
+            // Matches carry their checkpoint as the node, so delivery order is observable.
+            let scanned = match out {
+                Out::Match(checkpoint) => Scanned::Match {
+                    checkpoint: *checkpoint,
+                    edge: Edge::new(String::new(), *checkpoint),
+                },
+                Out::End(token) => match covered_checkpoint(token) {
+                    Some(checkpoint) => Scanned::Covered { checkpoint },
+                    None => continue,
+                },
+            };
+            match handoff.step(scanned, tip, || tip) {
+                ScanStep::Deliver(edge) => delivered.push(edge.node),
+                ScanStep::Continue => {}
+                ScanStep::Done => return (delivered, handoff.pinned()),
+            }
+        }
+        (delivered, None)
+    }
+
+    #[test]
+    fn covered_checkpoint_excludes_the_cursor_checkpoint() {
+        // A list call that drains ledger tip 10 ends with a boundary cursor at 11.
+        let terminal = CursorToken::boundary(Position::Checkpoints { checkpoint: 11 });
+        assert_eq!(covered_checkpoint(&terminal), Some(10));
+
+        let item = CursorToken::item(Position::Transactions {
+            checkpoint: 11,
+            tx_seq: 3,
+        });
+        assert_eq!(covered_checkpoint(&item), Some(10));
+
+        let genesis = CursorToken::boundary(Position::Checkpoints { checkpoint: 0 });
+        assert_eq!(covered_checkpoint(&genesis), None);
+    }
+
+    /// The streamed tip (11) is one checkpoint ahead of the index (10) when the handoff pins. The
+    /// first page ends at the ledger tip with a boundary cursor at 11, which covers only 10, so the
+    /// scan must keep going until the index has 11 and deliver it; live starts after 11.
+    #[test]
+    fn handoff_waits_for_the_index_to_reach_the_streamed_tip() {
+        let outputs = [
+            Out::Match(10),
+            boundary(11),
+            // Next page, once the index reaches 11.
+            Out::Match(11),
+            boundary(12),
+        ];
+        let (delivered, live_after) = drive(5, Some(9), 11, &outputs);
+        assert_eq!(delivered, vec![10, 11]);
+        assert_eq!(live_after, Some(11));
+    }
+
+    /// With nothing left to scan, a terminal page covers only up to the index tip, so a streamed tip
+    /// ahead of it keeps the backfill open rather than skipping the checkpoints in between.
+    #[test]
+    fn empty_terminal_page_does_not_cover_the_streamed_tip() {
+        let (delivered, live_after) = drive(5, Some(10), 11, &[boundary(11)]);
+        assert!(delivered.is_empty());
+        assert_eq!(live_after, None, "checkpoint 11 is not covered yet");
+    }
+
+    /// The client resumes after transaction (10, 5), but this replica has only streamed up to 9.
+    /// The rest of checkpoint 10 belongs to the scan: live skips 10 as already seen.
+    #[test]
+    fn resume_ahead_of_streamed_tip_delivers_rest_of_cursor_checkpoint() {
+        let outputs = [
+            Out::Match(10),
+            Out::Match(10),
+            Out::Match(11),
+            tx_item(11, 0),
+        ];
+        let (delivered, live_after) = drive(5, Some(10), 9, &outputs);
+        assert_eq!(delivered, vec![10, 10]);
+        assert_eq!(live_after, Some(10));
+    }
+
+    /// A Postgres-minted cursor for transaction (10, 5) records checkpoint 0, so the resume point
+    /// is unknown up front. It is taken from the first scan output instead, which keeps the rest of
+    /// checkpoint 10 with the scan when this replica has only streamed up to 9.
+    #[test]
+    fn placeholder_cursor_resumes_from_first_scan_output() {
+        let placeholder = CursorToken::item(Position::Transactions {
+            checkpoint: 0,
+            tx_seq: 5,
+        });
+        assert!(has_placeholder_checkpoint(&placeholder));
+
+        // Without the placeholder handling, the pin sits at the streamed tip and live would
+        // re-deliver all of checkpoint 10.
+        let outputs = [Out::Match(10), Out::Match(10), Out::Match(11)];
+        let (delivered, live_after) = drive(5, Some(0), 9, &outputs);
+        assert_eq!((delivered, live_after), (vec![], Some(9)));
+
+        let handoff = Handoff::new(5, Some(0)).resume_from_first_output();
+        let (delivered, live_after) = drive_handoff(handoff, 9, &outputs);
+        assert_eq!(delivered, vec![10, 10]);
+        assert_eq!(live_after, Some(10));
+
+        // A first page with no match ends at a boundary in the cursor's checkpoint; the scan stays
+        // responsible for that checkpoint too.
+        let outputs = [tx_boundary(10, 6), Out::Match(10), Out::Match(11)];
+        let handoff = Handoff::new(5, Some(0)).resume_from_first_output();
+        let (delivered, live_after) = drive_handoff(handoff, 9, &outputs);
+        assert_eq!(delivered, vec![10]);
+        assert_eq!(live_after, Some(10));
+    }
+
+    /// Polls back off to the cap, and the client is asked to reconnect once the ledger has made no
+    /// progress for the whole deadline.
+    #[tokio::test(start_paused = true)]
+    async fn ledger_poll_backs_off_then_gives_up() {
+        let start = tokio::time::Instant::now();
+        let mut poll = LedgerPoll::new();
+        let mut waits = vec![];
+        loop {
+            let before = tokio::time::Instant::now();
+            if poll.wait().await.is_err() {
+                break;
+            }
+            waits.push(before.elapsed().as_millis());
+        }
+
+        assert_eq!(waits[..6], [100, 200, 400, 800, 1600, 2000]);
+        assert!(waits[6..].iter().all(|w| *w == 2000));
+        let elapsed = start.elapsed();
+        assert!(elapsed >= BACKFILL_POLL_DEADLINE, "{elapsed:?}");
+        assert!(
+            elapsed < BACKFILL_POLL_DEADLINE + BACKFILL_POLL_MAX_INTERVAL,
+            "{elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn placeholder_checkpoint_needs_a_transaction() {
+        let tx =
+            |checkpoint, tx_seq| CursorToken::item(Position::Transactions { checkpoint, tx_seq });
+        assert!(!has_placeholder_checkpoint(&tx(0, 0)));
+        assert!(!has_placeholder_checkpoint(&tx(3, 5)));
+        assert!(!has_placeholder_checkpoint(&CursorToken::item(
+            Position::Checkpoints { checkpoint: 0 }
+        )));
+    }
+
+    /// The caught-up case is unchanged: pin at the streamed tip once the frontier is within the
+    /// threshold, deliver matches up to it, and hand off after it.
+    #[test]
+    fn caught_up_resume_hands_off_at_streamed_tip() {
+        let outputs = [
+            Out::Match(12),
+            boundary(15),
+            Out::Match(16),
+            Out::Match(20),
+            Out::Match(21),
+        ];
+        let (delivered, live_after) = drive(5, Some(10), 20, &outputs);
+        assert_eq!(delivered, vec![12, 16, 20]);
+        assert_eq!(live_after, Some(20));
+    }
+
+    fn cp(kind: CursorKind, checkpoint: u64) -> CursorToken {
+        CursorToken {
+            kind,
+            position: Position::Checkpoints { checkpoint },
+        }
+    }
+
+    fn tx(kind: CursorKind, checkpoint: u64, tx_seq: u64) -> CursorToken {
+        CursorToken {
+            kind,
+            position: Position::Transactions { checkpoint, tx_seq },
+        }
+    }
+
+    fn ev(kind: CursorKind, checkpoint: u64, tx_seq: u64, event_index: u32) -> CursorToken {
+        CursorToken {
+            kind,
+            position: Position::Events {
+                checkpoint,
+                tx_seq,
+                event_index,
+            },
+        }
+    }
+
+    use CursorKind::Boundary as B;
+    use CursorKind::Item as I;
+
+    /// An empty page that drains the tip echoes the `after` it was given; that is not progress, so
+    /// the scan waits rather than re-requesting immediately.
+    #[test]
+    fn echoed_cursor_is_not_progress() {
+        for token in [
+            cp(B, 16),
+            cp(I, 16),
+            tx(B, 16, 3),
+            tx(I, 16, 3),
+            ev(I, 16, 3, 1),
+        ] {
+            assert!(!made_progress(&token, Some(&token)), "{token:?}");
+        }
+        // Any other end is progress: the next page starts from it.
+        assert!(made_progress(&cp(B, 17), Some(&cp(B, 16))));
+        assert!(made_progress(&tx(B, 17, 4), Some(&tx(I, 16, 3))));
+        // With no `after`, the first page always counts.
+        assert!(made_progress(&cp(B, 16), None));
+    }
 }
