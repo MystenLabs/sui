@@ -423,6 +423,7 @@ const MAINNET_USDB: &str =
 //              and reverse) and their gas costs.
 //              Shuffle the block order within each round of a consensus commit on devnet.
 //              Disable the ID leak verifier.
+//              Add the staggered-submission duplication signal thresholds.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1242,6 +1243,17 @@ struct FeatureFlags {
     // restrict which validators may propose it in consensus.
     #[serde(skip_serializing_if = "is_false")]
     allowed_proposers: bool,
+
+    // If true, validators derive the staggered-submission activation signal from commit
+    // output: unpaid duplication of transactions without allowed proposers arms staggered
+    // consensus submission in lockstep across honest validators. Requires
+    // `allowed_proposers` (accessed through the hand-written getter that asserts it).
+    // Staggering is node-local policy, not consensus-critical, so each validator can
+    // additionally veto it via `NodeConfig::enable_staggered_submission_signal`
+    // (default enabled); it engages only when both are enabled.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    staggered_submission_signal: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     randomize_checkpoint_tx_limit_in_tests: bool,
@@ -2247,6 +2259,21 @@ pub struct ProtocolConfig {
     /// This is the threshold for activating consensus amplification.
     sip_45_consensus_amplification_threshold: Option<u64>,
 
+    /// Staggered-submission duplication signal: window, in commits, over which excess
+    /// copies of transactions without allowed proposers are measured against unique
+    /// user transactions.
+    staggered_submission_signal_window_commits: Option<u64>,
+    /// Floor for leaving band 0: excess copies per window commit on average.
+    staggered_submission_signal_min_excess_copies_per_commit: Option<u64>,
+    /// Consecutive commits below the active band's exit ratio before de-escalating.
+    staggered_submission_signal_exit_dwell_commits: Option<u64>,
+    /// Band enter and exit ratios, in basis points of the window's unique user
+    /// transactions (band 1: 1.6s hold cap, band 2: 4.8s).
+    staggered_submission_signal_band1_enter_ratio_bps: Option<u64>,
+    staggered_submission_signal_band1_exit_ratio_bps: Option<u64>,
+    staggered_submission_signal_band2_enter_ratio_bps: Option<u64>,
+    staggered_submission_signal_band2_exit_ratio_bps: Option<u64>,
+
     /// DEPRECATED: this was an ephemeral feature flag only used in per-epoch tables, which has now
     /// been deployed everywhere.
     use_object_per_epoch_marker_table_v2: Option<bool>,
@@ -2399,6 +2426,16 @@ impl ProtocolConfig {
         if ret {
             // jwk updates required end-of-epoch transactions
             assert!(self.feature_flags.end_of_epoch_transaction_supported);
+        }
+        ret
+    }
+
+    pub fn staggered_submission_signal(&self) -> bool {
+        let ret = self.feature_flags.staggered_submission_signal;
+        if ret {
+            // The signal arms staggering of transactions without allowed proposers,
+            // which only exist when the allowed_proposers feature is enabled.
+            assert!(self.feature_flags.allowed_proposers);
         }
         ret
     }
@@ -3153,6 +3190,13 @@ impl ProtocolConfig {
             gas_budget_based_txn_cost_absolute_cap_commit_count: None,
 
             sip_45_consensus_amplification_threshold: None,
+            staggered_submission_signal_window_commits: None,
+            staggered_submission_signal_min_excess_copies_per_commit: None,
+            staggered_submission_signal_exit_dwell_commits: None,
+            staggered_submission_signal_band1_enter_ratio_bps: None,
+            staggered_submission_signal_band1_exit_ratio_bps: None,
+            staggered_submission_signal_band2_enter_ratio_bps: None,
+            staggered_submission_signal_band2_exit_ratio_bps: None,
 
             use_object_per_epoch_marker_table_v2: None,
 
@@ -4880,6 +4924,16 @@ impl ProtocolConfig {
                     cfg.obj_access_cost_read_per_package_kb = Some(154);
                 }
                 140 => {
+                    // Staggered-submission duplication signal thresholds (measured on
+                    // every chain; applied only where `staggered_submission_signal` is on).
+                    cfg.staggered_submission_signal_window_commits = Some(300);
+                    cfg.staggered_submission_signal_min_excess_copies_per_commit = Some(2);
+                    cfg.staggered_submission_signal_exit_dwell_commits = Some(6000);
+                    cfg.staggered_submission_signal_band1_enter_ratio_bps = Some(1000);
+                    cfg.staggered_submission_signal_band1_exit_ratio_bps = Some(500);
+                    cfg.staggered_submission_signal_band2_enter_ratio_bps = Some(5000);
+                    cfg.staggered_submission_signal_band2_exit_ratio_bps = Some(2500);
+
                     cfg.vector_reverse_base_cost = Some(52);
                     cfg.vector_reverse_per_elem_cost = Some(8);
                     cfg.vector_keep_range_base_cost = Some(52);

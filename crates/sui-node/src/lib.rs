@@ -651,6 +651,7 @@ impl SuiNode {
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
+            &config,
             (chain_id, chain),
             highest_executed_checkpoint,
             previous_epoch_last_checkpoint,

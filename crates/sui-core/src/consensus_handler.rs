@@ -735,8 +735,11 @@ pub struct ConsensusHandler<C> {
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
-    /// Lru cache to quickly discard transactions processed by consensus
-    processed_cache: LruCache<SequencedConsensusTransactionKey, ()>,
+    /// LRU cache to discard processed messages, with cumulative occurrence counts for
+    /// the local staggering signal. Deduplication depends only on membership. Counts
+    /// are lost on eviction or restart, granting the allowance again rather than
+    /// charging potentially legitimate copies as excess when their history is unknown.
+    processed_cache: LruCache<SequencedConsensusTransactionKey, u64>,
     /// Using the throughput calculator to record the current consensus throughput
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
 
@@ -934,14 +937,42 @@ struct CommitHandlerInput {
     transaction_deny_config_updates: Vec<(AuthorityName, SharedTransactionDenyConfig)>,
 }
 
+/// One commit's inputs to the staggered-submission duplication signal, counted before
+/// deduplication so copies discarded in later commits still count.
+#[derive(Default)]
+struct StaggeringCommitCounts {
+    /// Copies of transactions without allowed proposers beyond their paid allowance:
+    /// the signal's numerator.
+    excess_copies: u64,
+    /// First occurrences of user transactions: the signal's denominator.
+    unique_user_txns: u64,
+    /// Duplicate copies the signal does not count, within the paid allowance...
+    paid_duplicate_copies: u64,
+    /// ...or of transactions that restrict their proposers.
+    restricted_duplicate_copies: u64,
+}
+
+impl StaggeringCommitCounts {
+    /// The counts with their `staggered_submission_commit_copies` metric labels.
+    fn by_kind(&self) -> [(&'static str, u64); 4] {
+        [
+            ("unique", self.unique_user_txns),
+            ("excess", self.excess_copies),
+            ("paid_duplicate", self.paid_duplicate_copies),
+            ("restricted_duplicate", self.restricted_duplicate_copies),
+        ]
+    }
+}
+
 struct CommitHandlerState {
     dkg_failed: bool,
     randomness_round: Option<RandomnessRound>,
     output: ConsensusCommitOutput,
     indirect_state_observer: Option<IndirectStateObserver>,
     initial_reconfig_state: ReconfigState,
-    // Occurrence counts for user transactions, used for unpaid amplification detection.
+    // Intra-commit occurrence counts used by the consensus-critical amplification deferral.
     occurrence_counts: HashMap<TransactionDigest, u32>,
+    staggering_counts: StaggeringCommitCounts,
     // Transactions involved in same commit owned object lock contention (double-spend),
     // mapped to conflict info (gas vs non-gas breakdown).
     contested_transaction_digests: HashMap<TransactionDigest, ConflictInfo>,
@@ -956,6 +987,7 @@ impl CommitHandlerState {
             indirect_state_observer: Some(IndirectStateObserver::new()),
             initial_reconfig_state: epoch_store.get_reconfig_state_read_lock_guard().clone(),
             occurrence_counts: HashMap::new(),
+            staggering_counts: StaggeringCommitCounts::default(),
             contested_transaction_digests: HashMap::new(),
         }
     }
@@ -1429,6 +1461,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut deferred_txns = BTreeMap::new();
         let mut cancelled_txns = BTreeMap::new();
 
+        self.record_duplication_signal(state);
+
         for transaction in ordered_txns {
             self.handle_deferral_and_cancellation(
                 state,
@@ -1827,6 +1861,63 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         Some(VerifiedExecutableTransactionWithAliases::no_aliases(
             transaction,
         ))
+    }
+
+    /// Feeds the staggered-submission activation signal with this commit's duplication
+    /// among transactions that do not restrict their proposers: the duplicate copies
+    /// beyond what each transaction may legitimately reach — the free stagger slots or
+    /// its paid SIP-45 amplification, whichever is larger. Summing copies rather than
+    /// counting offending transactions makes the signal track wasted bandwidth, so a
+    /// few massively-amplified transactions weigh as much as many lightly-amplified
+    /// ones. Copies are charged as they arrive, consuming one allowance across commits
+    /// while the transaction remains in the processed cache. Counting before dedup also
+    /// keeps deferred transactions from entering the unique denominator more than once.
+    ///
+    /// The signal is measured and its transitions are tracked unconditionally; whether
+    /// a transition actually flips staggering is decided by [`StaggeredSubmission`]'s
+    /// enablement (the `staggered_submission_signal` protocol flag together with the
+    /// node-local `NodeConfig::enable_staggered_submission_signal` kill switch), so the
+    /// signal can be observed in dry run before enablement (or after a local opt-out).
+    fn record_duplication_signal(&self, state: &CommitHandlerState) {
+        self.metrics
+            .staggered_submission_excess_copies
+            .observe(state.staggering_counts.excess_copies as f64);
+        // Counters of the signal's inputs, so the ratio can be recomputed over any window.
+        for (kind, copies) in state.staggering_counts.by_kind() {
+            self.metrics
+                .staggered_submission_commit_copies
+                .with_label_values(&[kind])
+                .inc_by(copies);
+        }
+        let staggered = self.epoch_store.staggered_submission();
+        let outcome = staggered.record_commit(
+            state.staggering_counts.excess_copies,
+            state.staggering_counts.unique_user_txns,
+        );
+        let transition = outcome.transition;
+        self.metrics
+            .staggered_submission_duplication_ratio
+            .set(outcome.duplication_ratio);
+        // Set every commit rather than on transitions so both gauges pick up the fresh
+        // per-epoch state after reconfiguration.
+        self.metrics
+            .staggered_submission_signal_band
+            .set(staggered.signal_band() as i64);
+        self.metrics
+            .staggered_submission_active
+            .set(staggered.is_active() as i64);
+        if let Some(band) = transition {
+            self.metrics
+                .staggered_submission_signal_transitions
+                .with_label_values(&[crate::staggered_submission::signal_band_label(band)])
+                .inc();
+            self.metrics
+                .staggered_submission_band_duration_commits
+                .with_label_values(&[crate::staggered_submission::signal_band_label(
+                    outcome.previous_band,
+                )])
+                .observe(outcome.commits_in_previous_band as f64);
+        }
     }
 
     fn handle_deferral_and_cancellation(
@@ -3018,6 +3109,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
     ) -> Vec<VerifiedSequencedConsensusTransaction> {
         let _scope = monitored_scope("ConsensusCommitHandler::deduplicate_consensus_txns");
+        let epoch = self.epoch_store.epoch();
+        let rgp = self.epoch_store.reference_gas_price().max(1);
         let mut all_transactions = Vec::new();
 
         // Track occurrence counts for each transaction key within this commit.
@@ -3071,7 +3164,38 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             *count += 1;
             let in_commit = *count > 1;
 
-            let in_cache = self.processed_cache.put(key.clone(), ()).is_some();
+            let (total_occurrences, in_cache) = match self.processed_cache.get_mut(&key) {
+                Some(total) => {
+                    *total = total.saturating_add(1);
+                    (*total, true)
+                }
+                None => {
+                    // Even if this key was evicted within the commit, its local count
+                    // is still known. Only history from earlier commits is lost.
+                    let total = u64::from(*count);
+                    self.processed_cache.put(key.clone(), total);
+                    (total, false)
+                }
+            };
+            let user_transaction = match &verified_transaction.0.transaction {
+                SequencedConsensusTransactionKind::External(transaction) => {
+                    transaction.kind.as_user_transaction()
+                }
+                SequencedConsensusTransactionKind::System(_) => None,
+            };
+            if let Some(transaction) = user_transaction {
+                let tx_data = transaction.data().transaction_data();
+                if !tx_data.expiration().restricts_proposers(epoch) {
+                    let allowance = paid_proposer_count(tx_data.gas_price(), rgp);
+                    if total_occurrences > allowance {
+                        state.staggering_counts.excess_copies += 1;
+                    } else if total_occurrences > 1 {
+                        state.staggering_counts.paid_duplicate_copies += 1;
+                    }
+                } else if total_occurrences > 1 {
+                    state.staggering_counts.restricted_duplicate_copies += 1;
+                }
+            }
             if in_commit || in_cache {
                 self.metrics.skipped_consensus_txns_cache_hit.inc();
                 continue;
@@ -3085,6 +3209,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 continue;
             }
 
+            state.staggering_counts.unique_user_txns += u64::from(user_transaction.is_some());
             first_commit_keys.insert(key.clone());
 
             state.output.record_consensus_message_processed(key);
@@ -3707,6 +3832,10 @@ impl CommitIntervalObserver {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "unit_tests/staggered_submission_signal_tests.rs"]
+mod staggering_signal_tests;
 
 #[cfg(test)]
 mod tests {
