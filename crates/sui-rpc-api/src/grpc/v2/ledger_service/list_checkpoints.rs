@@ -286,7 +286,7 @@ fn next_checkpoint_chunk(
                 checkpoint_hi_exclusive(&service)?,
                 &options,
             )?;
-            let mut cp_range = resolve_cp_range(checkpoint_range, &options);
+            let mut cp_range = resolve_cp_range(checkpoint_range, &options)?;
             if cancel.is_cancelled() {
                 return Err(cancelled());
             }
@@ -914,7 +914,7 @@ fn apply_serving_floor_to_filtered_window(
 fn resolve_cp_range(
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> ResolvedScan<u64> {
+) -> Result<ResolvedScan<u64>, RpcError> {
     let range = cp_range.range.clone();
     ResolvedScan::<u64>::resolve(cp_range, range, options)
 }

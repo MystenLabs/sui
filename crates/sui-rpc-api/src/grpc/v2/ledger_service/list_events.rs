@@ -748,7 +748,7 @@ fn resolve_event_range(
         cp_range,
         IntraTxCoordinate::tx_window(tx_range),
         options,
-    );
+    )?;
     if !resolved.is_empty() {
         let start_tx = match resolved.bounds.lo {
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,

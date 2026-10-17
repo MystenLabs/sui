@@ -851,11 +851,11 @@ async fn resolve_event_range(
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    Ok(ResolvedScan::<IntraTxCoordinate>::resolve(
+    ResolvedScan::<IntraTxCoordinate>::resolve(
         cp_range,
         IntraTxCoordinate::tx_window(tx_range),
         options,
-    ))
+    )
 }
 
 #[cfg(test)]

@@ -641,7 +641,7 @@ async fn resolve_tx_range(
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    Ok(ResolvedScan::<u64>::resolve(cp_range, tx_range, options))
+    ResolvedScan::<u64>::resolve(cp_range, tx_range, options)
 }
 
 fn transaction_item_response(
