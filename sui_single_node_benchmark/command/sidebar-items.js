@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Component","WorkloadKind"],"struct":["Command","ComponentIter"]};
