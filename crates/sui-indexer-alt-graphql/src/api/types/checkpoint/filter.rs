@@ -134,6 +134,10 @@ pub(crate) fn checkpoint_bounds(
 ///
 /// pg_lo: The maximum of the cursor and the start of the checkpoint bound.
 /// pg_hi_inclusive: The minimum of the cursor and the end of the checkpoint bound.
+///
+/// A cursor outside the checkpoint bound on the side the page is drawn from (`after` below it going
+/// forward, `before` above it going backward) is kept as the page's edge element, so
+/// `paginate_results` trims it as redundant instead of treating the page as out of bounds.
 pub(super) fn cp_unfiltered(cp_bounds: &RangeInclusive<u64>, page: &Page<CCheckpoint>) -> Vec<u64> {
     let cp_lo = *cp_bounds.start();
     let cp_hi = *cp_bounds.end();
@@ -147,14 +151,25 @@ pub(super) fn cp_unfiltered(cp_bounds: &RangeInclusive<u64>, page: &Page<CCheckp
         .map_or(cp_hi, |cursor| cursor.sequence_number().min(cp_hi));
 
     if page.is_from_front() {
-        (pg_lo..=pg_hi_inclusive)
+        let redundant_after = page
+            .after()
+            .map(|cursor| cursor.sequence_number())
+            .filter(|after| *after < cp_lo);
+        redundant_after
+            .into_iter()
+            .chain(pg_lo..=pg_hi_inclusive)
             .take(page.limit_with_overhead())
             .collect()
     } else {
+        let redundant_before = page
+            .before()
+            .map(|cursor| cursor.sequence_number())
+            .filter(|before| *before > cp_hi);
         // Graphql last syntax expects results to be in ascending order. If we are paginating backwards,
         // we reverse the results after applying limits.
-        let mut results: Vec<_> = (pg_lo..=pg_hi_inclusive)
-            .rev()
+        let mut results: Vec<_> = redundant_before
+            .into_iter()
+            .chain((pg_lo..=pg_hi_inclusive).rev())
             .take(page.limit_with_overhead())
             .collect();
         results.reverse();
@@ -220,7 +235,86 @@ fn min_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::Infallible;
+
+    use crate::api::types::checkpoint::CheckpointToken;
+    use crate::pagination::PageLimits;
+
     use super::*;
+
+    fn page(
+        first: Option<u64>,
+        after: Option<u64>,
+        last: Option<u64>,
+        before: Option<u64>,
+    ) -> Page<CCheckpoint> {
+        let limits = PageLimits {
+            default: 3,
+            max: 10,
+        };
+        Page::from_params(
+            &limits,
+            first,
+            after.map(CheckpointToken::cursor),
+            last,
+            before.map(CheckpointToken::cursor),
+        )
+        .unwrap()
+    }
+
+    /// Paginate `cp_unfiltered`'s output the way `Checkpoint::paginate` does, returning the
+    /// checkpoints on the page.
+    fn paginate(cp_bounds: RangeInclusive<u64>, page: &Page<CCheckpoint>) -> Vec<u64> {
+        let conn = page
+            .paginate_results(
+                cp_unfiltered(&cp_bounds, page),
+                |c| CheckpointToken::cursor(*c),
+                Ok::<_, Infallible>,
+            )
+            .unwrap();
+        conn.edges.into_iter().map(|e| e.node).collect()
+    }
+
+    #[test]
+    fn test_cp_unfiltered_after_cursor_at_after_checkpoint() {
+        // `after: cursor(10)` with `afterCheckpoint: 10`: the cursor is redundant with the bound.
+        let page = page(Some(3), Some(10), None, None);
+        assert_eq!(paginate(11..=100, &page), vec![11, 12, 13]);
+    }
+
+    #[test]
+    fn test_cp_unfiltered_after_cursor_below_after_checkpoint() {
+        let page = page(Some(3), Some(4), None, None);
+        assert_eq!(paginate(11..=100, &page), vec![11, 12, 13]);
+    }
+
+    /// Backward pages never required the `after` cursor to be the first element.
+    #[test]
+    fn test_cp_unfiltered_after_cursor_below_bound_from_back() {
+        let page = page(None, Some(10), Some(3), None);
+        assert_eq!(paginate(11..=12, &page), vec![11, 12]);
+        assert_eq!(paginate(11..=100, &page), vec![98, 99, 100]);
+    }
+
+    #[test]
+    fn test_cp_unfiltered_after_cursor_within_bound_unchanged() {
+        let page = page(Some(3), Some(20), None, None);
+        assert_eq!(paginate(11..=100, &page), vec![21, 22, 23]);
+    }
+
+    #[test]
+    fn test_cp_unfiltered_before_cursor_at_before_checkpoint() {
+        // `before: cursor(20)` with `beforeCheckpoint: 20`: the cursor is redundant with the bound.
+        let page = page(None, None, Some(3), Some(20));
+        assert_eq!(paginate(0..=19, &page), vec![17, 18, 19]);
+    }
+
+    #[test]
+    fn test_cp_unfiltered_before_cursor_above_bound_from_front() {
+        let page = page(Some(3), None, None, Some(20));
+        assert_eq!(paginate(10..=11, &page), vec![10, 11]);
+        assert_eq!(paginate(0..=19, &page), vec![0, 1, 2]);
+    }
 
     #[test]
     fn test_checkpoint_bounds_no_filters() {

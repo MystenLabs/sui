@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 23 tasks
+processed 24 tasks
 
 init:
 A: object(0,0)
@@ -507,6 +507,69 @@ Response: {
         "hasNextPage": false
       },
       "edges": []
+    }
+  }
+}
+
+task 23, lines 274-296:
+//# run-graphql --cursors 2 5
+Response: {
+  "data": {
+    "checkpointsAfterCp2AfterCheckpoint2": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 3
+        },
+        {
+          "sequenceNumber": 4
+        }
+      ]
+    },
+    "checkpointsAfterCp2AfterCheckpoint3": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 4
+        },
+        {
+          "sequenceNumber": 5
+        }
+      ]
+    },
+    "checkpointsBeforeCp5BeforeCheckpoint5": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 3
+        },
+        {
+          "sequenceNumber": 4
+        }
+      ]
+    },
+    "checkpointsBeforeCp5BeforeCheckpoint4": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "nodes": [
+        {
+          "sequenceNumber": 2
+        },
+        {
+          "sequenceNumber": 3
+        }
+      ]
     }
   }
 }
