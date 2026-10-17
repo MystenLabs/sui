@@ -127,7 +127,7 @@ impl QueryContext {
     pub(crate) fn watermark_pacing(&self, exhaustion: RangeExhaustion) -> WatermarkPacing {
         WatermarkPacing {
             min_buckets: self.ledger_history.watermark_beacon_buckets().get(),
-            emit_held_at_end: matches!(exhaustion, RangeExhaustion::CursorBound { .. }),
+            emit_held_at_end: matches!(exhaustion, RangeExhaustion::CursorBound),
         }
     }
 

@@ -4465,15 +4465,12 @@ async fn test_list_transactions_sparse_filter_emits_watermarks() {
         next_resp.transactions.is_empty(),
         "resuming past the trailing cursor must not replay items"
     );
-    // CursorBound (resume cursor at/past tip) or LedgerTip (range strictly
-    // exceeds tip) are both legitimate empty-resume terminations.
-    let reason = next_resp.end_reason.expect("resume response must end");
-    assert!(
-        matches!(
-            reason,
-            QueryEndReason::CursorBound | QueryEndReason::LedgerTip
-        ),
-        "unexpected resume end_reason: {reason:?}"
+    // An open-ended resume from the tip has nothing left to scan and ends at the ledger tip, not
+    // at its own cursor.
+    assert_eq!(
+        next_resp.end_reason,
+        Some(QueryEndReason::LedgerTip),
+        "resuming from the tip must end at the ledger tip"
     );
 }
 
@@ -4549,13 +4546,11 @@ async fn test_list_events_sparse_filter_emits_watermarks() {
         next_resp.events.is_empty(),
         "resuming past the trailing cursor must not replay events"
     );
-    let reason = next_resp.end_reason.expect("resume response must end");
-    assert!(
-        matches!(
-            reason,
-            QueryEndReason::CursorBound | QueryEndReason::LedgerTip
-        ),
-        "unexpected resume end_reason: {reason:?}"
+    // As for transactions: an open-ended resume from the tip ends at the ledger tip.
+    assert_eq!(
+        next_resp.end_reason,
+        Some(QueryEndReason::LedgerTip),
+        "resuming from the tip must end at the ledger tip"
     );
 }
 
