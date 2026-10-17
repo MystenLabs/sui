@@ -18,6 +18,8 @@ pub(crate) mod execution_result;
 pub(crate) mod gas;
 pub(crate) mod gas_effects;
 pub(crate) mod gas_input;
+#[cfg(test)]
+pub(crate) mod ledger_mock;
 mod linkage;
 pub(crate) mod lookups;
 pub(crate) mod move_datatype;

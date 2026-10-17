@@ -42,6 +42,8 @@ pub(crate) enum SubscriptionTerminationReason {
     Error,
     Shutdown,
     BackfillError,
+    /// The client resumed below the history the ledger retains.
+    OutOfRange,
     /// A defensive disconnect for an invariant that should never fire; a nonzero count is a bug.
     UnexpectedGap,
 }
@@ -54,6 +56,7 @@ impl SubscriptionTerminationReason {
             Self::Error => "error",
             Self::Shutdown => "shutdown",
             Self::BackfillError => "backfill_error",
+            Self::OutOfRange => "out_of_range",
             Self::UnexpectedGap => "unexpected_gap",
         }
     }

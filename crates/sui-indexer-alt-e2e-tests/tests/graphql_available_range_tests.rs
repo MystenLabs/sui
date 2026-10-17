@@ -79,6 +79,17 @@ const CHECKPOINT_QUERY: &str = r#"
     }
 "#;
 
+const CHECKPOINTS_AFTER_QUERY: &str = r#"
+    query($after: String, $filter: CheckpointFilter) {
+        checkpoints(first: 3, after: $after, filter: $filter) {
+            edges {
+                cursor
+                node { sequenceNumber }
+            }
+        }
+    }
+"#;
+
 /// Test available range queries with retention configurations
 #[tokio::test]
 async fn test_available_range_with_pipelines() {
@@ -410,6 +421,84 @@ async fn test_checkpoint_pagination_pruning() {
     );
 }
 
+/// A `checkpoints` cursor saved before pruning must not quietly resume at the retention floor,
+/// skipping the pruned checkpoints after it. Resuming at or above the floor still works.
+#[tokio::test]
+async fn test_checkpoint_after_cursor_below_retention() {
+    let mut cluster = cluster_with_pipelines(PipelineLayer {
+        cp_sequence_numbers: Some(concurrent_pipeline(5)),
+        ..Default::default()
+    })
+    .await;
+
+    // Save the cursors for checkpoints 0 to 3 while they are still retained.
+    for _ in 1..=3 {
+        cluster.create_checkpoint().await;
+    }
+    let cursors = checkpoint_cursors(&cluster, None, None).await;
+    assert_eq!(
+        cursors.iter().map(|(_, cp)| *cp).collect::<Vec<_>>(),
+        [0, 1, 2]
+    );
+
+    // Checkpoints 0 to 4 are pruned once 9 exists: 5 is the lowest available.
+    for _ in 4..=9 {
+        cluster.create_checkpoint().await;
+    }
+    cluster
+        .wait_for_pruner("cp_sequence_numbers", 4, Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    // Resuming after checkpoint 2 would skip 3 and 4.
+    let response = execute_graphql_query(
+        &cluster,
+        CHECKPOINTS_AFTER_QUERY,
+        Some(json!({ "after": cursors[2].0 })),
+    )
+    .await;
+    assert_eq!(
+        response["errors"][0]["extensions"]["code"], "OUT_OF_RANGE",
+        "{response}"
+    );
+    assert_eq!(
+        response["errors"][0]["message"],
+        "Requested range is not available: `after` cursor resumes below the lowest available \
+         checkpoint 5"
+    );
+
+    // A filter at the floor excludes the pruned checkpoints, so the stale cursor is harmless.
+    let resumed = checkpoint_cursors(
+        &cluster,
+        Some(cursors[2].0.clone()),
+        Some(json!({ "afterCheckpoint": 4 })),
+    )
+    .await;
+    assert_eq!(
+        resumed.iter().map(|(_, cp)| *cp).collect::<Vec<_>>(),
+        [5, 6, 7]
+    );
+
+    // `atCheckpoint` below the floor leaves nothing to page through: an empty page, with or
+    // without the stale cursor.
+    for after in [None, Some(cursors[2].0.clone())] {
+        let page = checkpoint_cursors(&cluster, after, Some(json!({ "atCheckpoint": 3 }))).await;
+        assert!(page.is_empty(), "{page:?}");
+    }
+
+    // Resuming from a cursor at or above the floor is unaffected.
+    let page = checkpoint_cursors(&cluster, None, None).await;
+    assert_eq!(
+        page.iter().map(|(_, cp)| *cp).collect::<Vec<_>>(),
+        [5, 6, 7]
+    );
+    let resumed = checkpoint_cursors(&cluster, Some(page[0].0.clone()), None).await;
+    assert_eq!(
+        resumed.iter().map(|(_, cp)| *cp).collect::<Vec<_>>(),
+        [6, 7, 8]
+    );
+}
+
 /// Set-up a cluster with a custom configuration for pipelines.
 async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
     FullCluster::new_with_configs(
@@ -583,6 +672,32 @@ async fn execute_graphql_query(
         .json()
         .await
         .expect("Failed to parse response")
+}
+
+/// One page of `checkpoints` after `after`, as (cursor, sequence number) pairs.
+async fn checkpoint_cursors(
+    cluster: &FullCluster,
+    after: Option<String>,
+    filter: Option<Value>,
+) -> Vec<(String, u64)> {
+    let response = execute_graphql_query(
+        cluster,
+        CHECKPOINTS_AFTER_QUERY,
+        Some(json!({ "after": after, "filter": filter })),
+    )
+    .await;
+    let edges = response["data"]["checkpoints"]["edges"]
+        .as_array()
+        .unwrap_or_else(|| panic!("expected checkpoint edges in {response}"));
+    edges
+        .iter()
+        .map(|edge| {
+            (
+                edge["cursor"].as_str().unwrap().to_owned(),
+                edge["node"]["sequenceNumber"].as_u64().unwrap(),
+            )
+        })
+        .collect()
 }
 
 async fn query_available_range(

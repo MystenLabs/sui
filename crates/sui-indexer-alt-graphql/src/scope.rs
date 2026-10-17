@@ -265,6 +265,15 @@ impl Scope {
         }
     }
 
+    /// A test scope viewing data as of `checkpoint_viewed_at`.
+    #[cfg(test)]
+    pub(crate) fn for_tests_at(checkpoint_viewed_at: u64) -> Self {
+        Self {
+            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            ..Self::for_tests()
+        }
+    }
+
     /// Create a nested scope pinned to a checkpoint. Returns `None` if the checkpoint is in
     /// the future, or if the current scope is in execution context (no checkpoint is set).
     pub(crate) fn with_checkpoint_viewed_at(

@@ -40,6 +40,7 @@ use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address::Address;
 use crate::api::types::available_range::AvailableRangeKey;
 use crate::api::types::checkpoint::filter::checkpoint_bounds;
+use crate::api::types::checkpoint::filter::ledger_scan_bounds;
 use crate::api::types::event::filter::EventFilter;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::api::types::lookups::TxBoundsCursor;
@@ -49,6 +50,8 @@ use crate::api::types::move_type::MoveType;
 use crate::api::types::move_value::MoveValue;
 use crate::api::types::transaction::Transaction;
 use crate::error::RpcError;
+use crate::error::ledger_error;
+use crate::error::resolve_ledger_out_of_range;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::pagination::StreamConnection;
@@ -195,7 +198,12 @@ impl Event {
         query_limits::rich::debit(ctx)?;
 
         if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
-            return Self::paginate_grpc(reader, scope, page, filter).await;
+            let ledger_floor = ctx
+                .data_opt::<Arc<Watermarks>>()
+                .map_or(0, |w| w.ledger_floor());
+            return Self::paginate_grpc(reader, scope, page, filter)
+                .await
+                .map_err(|e| resolve_ledger_out_of_range(e, ledger_floor));
         }
 
         let pg_reader: &PgReader = ctx.data()?;
@@ -285,7 +293,12 @@ impl Event {
             return Ok(StreamConnection::empty());
         };
 
-        let result = Self::scan_grpc(reader, cp_bounds, &page, &filter).await?;
+        let scan_bounds = ledger_scan_bounds(
+            &cp_bounds,
+            filter.after_checkpoint().map(u64::from),
+            filter.at_checkpoint().map(u64::from),
+        );
+        let result = Self::scan_grpc(reader, scan_bounds, &page, &filter).await?;
 
         build_grpc_connection(scope, &page, result)
     }
@@ -301,7 +314,8 @@ impl Event {
         filter: &EventFilter,
     ) -> Result<StreamPage<v2::Event>, RpcError> {
         // Extract the cursor and pass through to grpc.
-        let after = page.after().map(|c| CursorToken::from(&c.token()).encode());
+        let after_token = page.after().map(|c| CursorToken::from(&c.token()));
+        let after = after_token.as_ref().map(CursorToken::encode);
         // Pg-minted cursors set checkpoint as 0 (as do legacy JSON cursors, which carry no
         // checkpoint at all). Substitute the checkpoint with u64::max on the `before` bound to
         // avoid collapsing the checkpoint window.
@@ -336,11 +350,12 @@ impl Event {
             "event_index",
             "checkpoint",
         ]));
-        request.start_checkpoint = match cp_bounds.start_bound() {
+        let start_checkpoint = match cp_bounds.start_bound() {
             Bound::Included(&s) => Some(s),
             Bound::Excluded(&s) => Some(s.saturating_add(1)),
             Bound::Unbounded => None,
         };
+        request.start_checkpoint = start_checkpoint;
         request.end_checkpoint = match cp_bounds.end_bound() {
             Bound::Included(&e) => Some(e.saturating_add(1)),
             Bound::Excluded(&e) => Some(e),
@@ -349,10 +364,11 @@ impl Event {
         request.filter = filter.to_grpc_filter()?;
         request.options = Some(options);
 
-        Ok(reader
+        reader
             .list_events(request)
             .await
-            .context("Failed to list events")?)
+            .context("Failed to list events")
+            .map_err(|e| ledger_error(e, start_checkpoint, after_token.as_ref()))
     }
 }
 
@@ -516,6 +532,8 @@ fn build_grpc_connection(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::types::ledger_mock::FailingLedger;
+    use crate::error::code;
 
     use async_graphql::connection::CursorType;
     use fastcrypto::encoding::Base58;
@@ -890,6 +908,71 @@ mod tests {
         assert!(
             !conn.page_info.has_previous_page,
             "CheckpointBound → no hasPreviousPage"
+        );
+    }
+
+    /// The ledger answers `OUT_OF_RANGE` both below its retention floor and for a cursor ahead of
+    /// its tip. Only a request that reached below the floor (42 here) is reported as
+    /// `OUT_OF_RANGE`; one at or above it, or with no lower bound, was ahead of the tip and is not.
+    /// Only a lower bound the request set is sent as `start_checkpoint`: the floor GraphQL fills in
+    /// for an open start is left out, so the fullnode clamps it instead of rejecting it.
+    #[tokio::test]
+    async fn paginate_grpc_out_of_range_by_direction() {
+        let (ledger, reader) = FailingLedger::start(tonic::Status::out_of_range(
+            "requested data below earliest available; lowest available checkpoint is 42",
+        ))
+        .await;
+        let limits = PageLimits {
+            default: 10,
+            max: 10,
+        };
+
+        let cases = [
+            (EventFilter::default(), code::INTERNAL_SERVER_ERROR),
+            (
+                EventFilter {
+                    after_checkpoint: Some(5u64.into()),
+                    ..Default::default()
+                },
+                code::OUT_OF_RANGE,
+            ),
+            (
+                EventFilter {
+                    at_checkpoint: Some(9u64.into()),
+                    ..Default::default()
+                },
+                code::OUT_OF_RANGE,
+            ),
+            (
+                EventFilter {
+                    after_checkpoint: Some(50u64.into()),
+                    ..Default::default()
+                },
+                code::INTERNAL_SERVER_ERROR,
+            ),
+        ];
+        for (filter, expected) in cases {
+            let page = Page::from_params(&limits, Some(10), None, None, None).unwrap();
+            let err = Event::paginate_grpc(&reader, Scope::for_tests_at(100), page, filter)
+                .await
+                .err()
+                .expect("an out-of-range scan should fail");
+
+            let err = async_graphql::Error::from(resolve_ledger_out_of_range(err, 42));
+            let ext = err.extensions.as_ref().expect("No extensions");
+            assert_eq!(ext.get("code"), Some(&expected.into()), "{}", err.message);
+            if expected == code::OUT_OF_RANGE {
+                assert_eq!(
+                    err.message,
+                    "Requested range is not available: requested data below earliest available; \
+                     lowest available checkpoint is 42"
+                );
+            }
+        }
+
+        assert_eq!(
+            ledger.start_checkpoints(),
+            [None, Some(6), Some(9), Some(51)]
         );
     }
 }
