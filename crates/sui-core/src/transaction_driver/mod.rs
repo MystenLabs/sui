@@ -365,6 +365,18 @@ where
         let tx_type = request.tx_type();
         let tx_digest = request.tx_digest();
         let ping_type = request.ping_type;
+        // Staggering holds only ever delay unrestricted transactions. While validators
+        // stagger, this transaction's end-to-end latency is skipped from the ranking so
+        // holds cannot inflate it: the ranking routes restricted transactions and
+        // chooses proposer sets, both of which should reflect the validators' own speed.
+        // Restricted transactions and pings keep every validator's window fresh. The
+        // window is 40 samples, not time-based, so samples taken in the interval before
+        // this node learns of an activation can linger in the ranking for minutes.
+        let skip_latency = request.transaction.as_ref().is_some_and(|tx| {
+            !tx.transaction_data()
+                .expiration()
+                .restricts_proposers(auth_agg.committee.epoch())
+        }) && self.client_monitor.staggering_active();
 
         let (name, submit_txn_result) = self
             .submitter
@@ -400,7 +412,7 @@ where
             )
             .await;
 
-        if result.is_ok() {
+        if result.is_ok() && !skip_latency {
             self.client_monitor
                 .record_interaction_result(OperationFeedback {
                     authority_name: name,

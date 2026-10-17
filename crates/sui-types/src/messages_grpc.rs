@@ -623,6 +623,10 @@ pub struct ValidatorHealthResponse {
     pub last_committed_leader_round: u32,
     /// Last locally built checkpoint sequence number
     pub last_locally_built_checkpoint: u64,
+    /// Whether the validator is currently staggering consensus submission of
+    /// transactions without allowed proposers; `None` from validators predating the
+    /// field.
+    pub staggering_active: Option<bool>,
 }
 
 /// Raw protobuf request for validator health information (evolvable)
@@ -644,6 +648,10 @@ pub struct RawValidatorHealthResponse {
     /// Current checkpoint sequence number
     #[prost(uint64, optional, tag = "4")]
     pub checkpoint_sequence: Option<u64>,
+    /// Whether the validator is currently staggering submissions; see
+    /// [`ValidatorHealthResponse::staggering_active`].
+    #[prost(bool, optional, tag = "5")]
+    pub staggering_active: Option<bool>,
 }
 
 // =========== Parse helpers ===========
@@ -1066,6 +1074,7 @@ impl TryFrom<ValidatorHealthResponse> for RawValidatorHealthResponse {
             inflight_consensus_messages: Some(value.num_inflight_consensus_transactions),
             consensus_round: Some(value.last_committed_leader_round as u64),
             checkpoint_sequence: Some(value.last_locally_built_checkpoint),
+            staggering_active: value.staggering_active,
         })
     }
 }
@@ -1079,6 +1088,7 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
             num_inflight_execution_transactions: value.pending_certificates.unwrap_or(0),
             last_locally_built_checkpoint: value.checkpoint_sequence.unwrap_or(0),
             last_committed_leader_round: value.consensus_round.unwrap_or(0) as u32,
+            staggering_active: value.staggering_active,
         })
     }
 }
