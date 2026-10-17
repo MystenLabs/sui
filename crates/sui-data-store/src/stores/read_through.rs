@@ -53,6 +53,23 @@ where
                 }),
         }
     }
+
+    fn checkpoint_transaction_digests(
+        &self,
+        checkpoint: u64,
+    ) -> Result<Option<Vec<String>>, Error> {
+        match self.primary.checkpoint_transaction_digests(checkpoint)? {
+            Some(digests) => Ok(Some(digests)),
+            None => self
+                .secondary
+                .checkpoint_transaction_digests(checkpoint)?
+                .map_or(Ok(None), |digests| {
+                    self.primary
+                        .write_checkpoint_transaction_digests(checkpoint, digests.clone())?;
+                    Ok(Some(digests))
+                }),
+        }
+    }
 }
 
 impl<P, S> EpochStore for ReadThroughStore<P, S>
@@ -147,5 +164,32 @@ where
             self.primary.setup(Some(chain_id.clone()))?;
         }
         Ok(chain_id.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Node, TransactionStoreWriter, stores::InMemoryStore};
+
+    #[test]
+    fn checkpoint_transaction_digests_are_cached_in_the_primary() {
+        let primary = InMemoryStore::new(Node::Mainnet);
+        let secondary = InMemoryStore::new(Node::Mainnet);
+        let digests = vec!["a".to_string(), "b".to_string()];
+        secondary
+            .write_checkpoint_transaction_digests(3, digests.clone())
+            .unwrap();
+        let store = ReadThroughStore::new(primary, secondary);
+
+        assert_eq!(
+            store.checkpoint_transaction_digests(3).unwrap(),
+            Some(digests.clone())
+        );
+        assert_eq!(
+            store.primary.checkpoint_transaction_digests(3).unwrap(),
+            Some(digests)
+        );
+        assert_eq!(store.checkpoint_transaction_digests(4).unwrap(), None);
     }
 }

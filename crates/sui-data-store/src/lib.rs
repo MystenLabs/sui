@@ -66,6 +66,12 @@ pub trait TransactionStore {
         &self,
         tx_digest: &str,
     ) -> Result<Option<TransactionInfo>, Error>;
+
+    /// Given a checkpoint sequence number, return the digests of its transactions in
+    /// execution order.
+    /// Returns `None` if the checkpoint is not found.
+    fn checkpoint_transaction_digests(&self, checkpoint: u64)
+    -> Result<Option<Vec<String>>, Error>;
 }
 
 /// Epoch data.
@@ -159,6 +165,13 @@ pub trait TransactionStoreWriter: TransactionStore {
         &self,
         tx_digest: &str,
         transaction_info: TransactionInfo,
+    ) -> Result<(), Error>;
+
+    /// Store the digests of a checkpoint's transactions, in execution order.
+    fn write_checkpoint_transaction_digests(
+        &self,
+        checkpoint: u64,
+        digests: Vec<String>,
     ) -> Result<(), Error>;
 }
 

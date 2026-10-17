@@ -34,11 +34,14 @@ const DEFAULT_EPOCH_CAP: usize = 10_000;
 const DEFAULT_OBJECT_CAP: usize = 50_000;
 const DEFAULT_ROOT_MAP_CAP: usize = 50_000;
 const DEFAULT_CHECKPOINT_MAP_CAP: usize = 50_000;
+const DEFAULT_CHECKPOINT_TXNS_CAP: usize = 1_000;
 
 /// LRU-backed store implementing the data store interfaces.
 struct LruMemoryStoreInner {
     node: Node,
     transaction_cache: LruCache<String, TransactionInfo>,
+    /// Transaction digests of a checkpoint, in execution order
+    checkpoint_transactions_cache: LruCache<u64, Vec<String>>,
     epoch_data_cache: LruCache<u64, EpochData>,
     /// Objects are cached by (ObjectID, actual_version)
     object_cache: LruCache<(ObjectID, u64), Object>,
@@ -109,6 +112,7 @@ impl LruMemoryStore {
         Self(RwLock::new(LruMemoryStoreInner {
             node,
             transaction_cache: LruCache::new(nz(txn_cap)),
+            checkpoint_transactions_cache: LruCache::new(nz(DEFAULT_CHECKPOINT_TXNS_CAP)),
             epoch_data_cache: LruCache::new(nz(epoch_cap)),
             object_cache: LruCache::new(nz(object_cap)),
             root_version_cache: LruCache::new(nz(root_map_cap)),
@@ -139,6 +143,19 @@ impl TransactionStore for LruMemoryStore {
             inner.metrics.txn_miss.fetch_add(1, Ordering::Relaxed);
         }
         Ok(cached)
+    }
+
+    fn checkpoint_transaction_digests(
+        &self,
+        checkpoint: u64,
+    ) -> Result<Option<Vec<String>>, Error> {
+        Ok(self
+            .0
+            .write()
+            .unwrap()
+            .checkpoint_transactions_cache
+            .get(&checkpoint)
+            .cloned())
     }
 }
 
@@ -256,6 +273,19 @@ impl TransactionStoreWriter for LruMemoryStore {
             .unwrap()
             .transaction_cache
             .put(tx_digest.to_string(), transaction_info);
+        Ok(())
+    }
+
+    fn write_checkpoint_transaction_digests(
+        &self,
+        checkpoint: u64,
+        digests: Vec<String>,
+    ) -> Result<(), Error> {
+        self.0
+            .write()
+            .unwrap()
+            .checkpoint_transactions_cache
+            .put(checkpoint, digests);
         Ok(())
     }
 }
