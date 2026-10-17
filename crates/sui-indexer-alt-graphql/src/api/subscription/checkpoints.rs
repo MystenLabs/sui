@@ -48,8 +48,9 @@ impl Subscribable for Checkpoint {
         cp_bounds: RangeInclusive<u64>,
         page: &'a Page<CCheckpoint>,
         _filter: &'a (),
+        consistent_read_checkpoint: Option<u64>,
     ) -> impl Future<Output = Result<StreamPage<v2::Checkpoint>, RpcError>> + Send + 'a {
-        list_checkpoints_page(reader, cp_bounds, page)
+        list_checkpoints_page(reader, cp_bounds, page, consistent_read_checkpoint)
     }
 
     /// Fully process the scanned checkpoint and carry it on the node, resolving against it in memory.
@@ -102,6 +103,7 @@ async fn list_checkpoints_page(
     reader: &AlphaLedgerGrpcReader,
     cp_bounds: RangeInclusive<u64>,
     page: &Page<CCheckpoint>,
+    consistent_read_checkpoint: Option<u64>,
 ) -> Result<StreamPage<v2::Checkpoint>, RpcError> {
     let after = page.after().map(|c| CursorToken::from(&c.token()).encode());
     let before = page
@@ -126,7 +128,7 @@ async fn list_checkpoints_page(
     request.options = Some(options);
 
     Ok(reader
-        .list_checkpoints(request)
+        .list_checkpoints(request, consistent_read_checkpoint)
         .await
         .context("Failed to list checkpoints")?)
 }
