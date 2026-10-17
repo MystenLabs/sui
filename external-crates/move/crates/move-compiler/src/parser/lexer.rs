@@ -926,17 +926,14 @@ fn get_hex_number(text: &str) -> (Tok, usize) {
 // Given the text for a number literal and the length for the characters that match to the number
 // portion, checks for a typed suffix.
 fn get_number_maybe_with_suffix(text: &str, num_text_len: usize) -> (Tok, usize) {
+    use crate::shared::{SIGNED_INT_SUFFIXES, UNSIGNED_INT_SUFFIXES};
     let rest = &text[num_text_len..];
-    if rest.starts_with("u8") {
-        (Tok::NumTypedValue, num_text_len + 2)
-    } else if rest.starts_with("u64") || rest.starts_with("u16") || rest.starts_with("u32") {
-        (Tok::NumTypedValue, num_text_len + 3)
-    } else if rest.starts_with("u128") || rest.starts_with("u256") {
-        (Tok::NumTypedValue, num_text_len + 4)
-    } else {
-        // No typed suffix
-        (Tok::NumValue, num_text_len)
-    }
+    UNSIGNED_INT_SUFFIXES
+        .iter()
+        .chain(SIGNED_INT_SUFFIXES.iter())
+        .find(|suffix| rest.starts_with(*suffix))
+        .map(|suffix| (Tok::NumTypedValue, num_text_len + suffix.len()))
+        .unwrap_or((Tok::NumValue, num_text_len))
 }
 
 // Return the length of the quoted string, or None if there is no closing quote.

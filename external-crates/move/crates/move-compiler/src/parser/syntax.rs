@@ -1539,6 +1539,10 @@ fn maybe_parse_value(context: &mut Context) -> Result<Option<Value>, Box<Diagnos
         }
         Tok::NumTypedValue => {
             let num = context.tokens.content().into();
+            if has_signed_suffix(context.tokens.content()) {
+                let loc = current_token_loc(context.tokens);
+                context.check_feature(FeatureGate::SignedIntegers, loc);
+            }
             context.tokens.advance()?;
             Value_::Num(num)
         }
@@ -1773,7 +1777,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
 //          | "match" "(" <Exp> ")" "{" (<MatchArm> ",")+ "}"
 #[growing_stack]
 fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
-    const VECTOR_IDENT: &str = "vector";
+    const VECTOR_IDENT: &str = crate::shared::builtin_types::VECTOR;
 
     let start_loc = context.tokens.start_loc();
     let term = match context.tokens.peek() {
@@ -2228,7 +2232,7 @@ fn parse_call_args(context: &mut Context) -> Spanned<Vec<Exp>> {
 // Parses a series of match arms, such as for a match block body "{" (<MatchArm>,)+ "}"
 fn parse_match_arms(context: &mut Context) -> Result<Spanned<Vec<MatchArm>>, Box<Diagnostic>> {
     let mut match_arms_start_set = VALUE_START_SET.clone();
-    match_arms_start_set.add_all(&[Tok::LParen, Tok::Mut, Tok::Identifier]);
+    match_arms_start_set.add_all(&[Tok::LParen, Tok::Mut, Tok::Identifier, Tok::Minus]);
     ok_with_loc!(
         context,
         parse_comma_list(
@@ -2295,6 +2299,7 @@ fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
 //   <MatchPat> = <OptAtPat> ("|" <MatchPat>)?
 //   <OptAtPat> = (<Identifier> "@")? <CtorPat>
 //   <CtorPat>  = "(" <MatchPat> ")"
+//              | "-" (<Number> | <NumberTyped>)
 //              | <NameAccessChain> <OptionalTypeArgs> "{" Comma<PatField> "}"
 //              | <NameAccessChain> <OptionalTypeArgs> "(" Comma<MatchPat> ")"
 //              | <NameAccessChain> <OptionalTypeArgs>
@@ -2345,6 +2350,7 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                                 Tok::LParen,
                                 Tok::Mut,
                                 Tok::Identifier,
+                                Tok::Minus,
                             ]);
                             let (loc, patterns) = with_loc!(
                                 context,
@@ -2378,6 +2384,43 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                         _ => MP::Name(mut_, name_access_chain),
                     }
                 })
+            }
+            Tok::Minus => {
+                let start_loc = context.tokens.start_loc();
+                let minus_loc = current_token_loc(context.tokens);
+                context.tokens.advance()?;
+                match context.tokens.peek() {
+                    Tok::NumValue | Tok::NumTypedValue
+                        if context.tokens.lookahead() != Tok::ColonColon =>
+                    {
+                        // maybe_parse_value gates signed-suffixed literals, so gate the bare '-'
+                        // here only for unsuffixed numbers.
+                        if !has_signed_suffix(context.tokens.content()) {
+                            context.check_feature(FeatureGate::SignedIntegers, minus_loc);
+                        }
+                        let sp!(_, value_) = parse_value(context)?;
+                        let Value_::Num(num) = value_ else {
+                            unreachable!("ICE numeric tokens always parse to Value_::Num")
+                        };
+                        let end_loc = context.tokens.previous_end_loc();
+                        // Fold the '-' into the literal so MIN literals (e.g. '-128i8') stay expressible.
+                        let value = spanned(
+                            context.tokens.file_hash(),
+                            start_loc,
+                            end_loc,
+                            Value_::Num(format!("-{}", num).into()),
+                        );
+                        Ok(sp(value.loc, MP::Literal(value)))
+                    }
+                    _ => Err(Box::new(diag!(
+                        Syntax::UnexpectedToken,
+                        (minus_loc, INVALID_PAT_ERROR_MSG),
+                        (
+                            context.tokens.current_token_loc(),
+                            "Expected a numeric literal after '-' in a pattern"
+                        )
+                    ))),
+                }
             }
             _ => {
                 if let Some(value) = maybe_parse_value(context)? {
@@ -2719,6 +2762,7 @@ fn parse_binop_exp(context: &mut Context, lhs: Exp, min_prec: u32) -> Result<Exp
 // Parse a unary expression:
 //      UnaryExp =
 //          "!" <UnaryExp>
+//          | "-" <UnaryExp>
 //          | "&mut" <UnaryExp>
 //          | "&" "mut" <UnaryExp>
 //          | "&" <UnaryExp>
@@ -2737,6 +2781,20 @@ fn parse_unary_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
                 start_loc,
                 op_end_loc,
                 UnaryOp_::Not,
+            );
+            let e = parse_unary_exp(context)?;
+            Exp_::UnaryExp(op, Box::new(e))
+        }
+        Tok::Minus => {
+            let loc = current_token_loc(context.tokens);
+            context.check_feature(FeatureGate::SignedIntegers, loc);
+            context.tokens.advance()?;
+            let op_end_loc = context.tokens.previous_end_loc();
+            let op = spanned(
+                context.tokens.file_hash(),
+                start_loc,
+                op_end_loc,
+                UnaryOp_::Neg,
             );
             let e = parse_unary_exp(context)?;
             Exp_::UnaryExp(op, Box::new(e))

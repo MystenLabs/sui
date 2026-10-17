@@ -51,7 +51,6 @@ use crate::{
     },
 };
 use move_core_types::account_address::AccountAddress;
-use move_core_types::parsing::parser::{parse_u16, parse_u32, parse_u256};
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
@@ -651,6 +650,20 @@ pub(super) enum ValueError {
     InvalidHexString {
         error: hex_string::HexstringError,
     },
+    // A '-'-prefixed literal (from a match pattern) with an unsigned type suffix, e.g. '-1u8'.
+    NegativeUnsigned {
+        loc: Loc,
+    },
+    // A '-'-prefixed literal (from a match pattern) with no type suffix. The target type cannot
+    // be inferred at expansion time.
+    NegativeUntyped {
+        loc: Loc,
+    },
+    // An internal invariant was broken.
+    Ice {
+        loc: Loc,
+        msg: &'static str,
+    },
 }
 
 impl ValueError {
@@ -664,12 +677,30 @@ impl ValueError {
                 (
                     loc,
                     format!(
-                        "Invalid number literal. The given literal is too large to fit into {type_description}",
+                        "Invalid number literal. This literal does not fit into the type {type_description}",
                     )
                 ),
             ),
             ValueError::InvalidByteString { error } => error.into_diagnostic(),
             ValueError::InvalidHexString { error } => error.into_diagnostic(),
+            ValueError::NegativeUnsigned { loc } => diag!(
+                TypeSafety::BuiltinOperation,
+                (loc, "Invalid argument to '-'"),
+                (
+                    loc,
+                    "Negation is only valid for signed integer types: 'i8', 'i16', 'i32', \
+                     'i64', 'i128', 'i256'"
+                ),
+            ),
+            ValueError::NegativeUntyped { loc } => diag!(
+                Syntax::InvalidNumber,
+                (
+                    loc,
+                    "Invalid number literal. Negative literals in match patterns require an \
+                     explicit signed integer type suffix, e.g. '-1i8'"
+                ),
+            ),
+            ValueError::Ice { loc, msg } => ice!((loc, msg)),
         }
     }
 }
@@ -3146,7 +3177,9 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 pe => return exp(context, Box::new(pe)),
             }
         }
-        PE::Value(pv) => unwrap_or_error_exp!(value(&mut context.defn_context, pv).map(EE::Value)),
+        PE::Value(pv) => {
+            unwrap_or_error_exp!(value(&mut context.defn_context, pv).map(EE::Value))
+        }
         PE::Name(pn) if pn.value.has_tyargs() => {
             let msg = "Expected name to be followed by a brace-enclosed list of field expressions \
                 or a parenthesized list of arguments for a function call";
@@ -3265,6 +3298,46 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         }
         PE::Continue(name) => EE::Continue(name),
         PE::Dereference(pe) => EE::Dereference(exp(context, pe)),
+        PE::UnaryExp(op, pe) if op.value == P::UnaryOp_::Neg => match *pe {
+            sp!(vloc, PE::Value(sp!(_, P::Value_::Num(s)))) if has_signed_suffix(&s) => {
+                match signed_num(vloc, &s, /* negated */ true) {
+                    Ok(v_) => EE::Value(sp(vloc, v_)),
+                    Err(err) => {
+                        context.defn_context.add_diag(err.into_diagnostic());
+                        EE::UnresolvedError
+                    }
+                }
+            }
+            sp!(vloc, PE::Value(sp!(_, v_ @ P::Value_::Num(_)))) => EE::UnaryExp(
+                op,
+                exp(context, Box::new(sp(vloc, PE::Value(sp(vloc, v_))))),
+            ),
+            // Catch the error here for a better message, even though the type checker would
+            // also reject it later.
+            sp!(vloc, PE::Value(sp!(_, v_))) => {
+                let error_kind: &str = match &v_ {
+                    P::Value_::Bool(_) => "'bool'",
+                    P::Value_::Address(_) => "'address'",
+                    P::Value_::HexString(_) => "a hex string",
+                    P::Value_::ByteString(_) => "a byte string",
+                    P::Value_::String(_) => "a string",
+                    P::Value_::Num(_) => {
+                        context.add_diag(ice!((
+                            vloc,
+                            "ICE: unexpected numeric literal without a signed suffix in negation"
+                        )));
+                        "a number"
+                    }
+                };
+                let msg =
+                    format!("Negation '-' is only valid for numeric types, but found {error_kind}");
+                context
+                    .defn_context
+                    .add_diag(diag!(TypeSafety::BuiltinOperation, (loc, msg)));
+                EE::UnresolvedError
+            }
+            pe => EE::UnaryExp(op, exp(context, Box::new(pe))),
+        },
         PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, pe)),
         e_ @ PE::BinopExp(..) => {
             process_binops!(
@@ -3793,12 +3866,84 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
 }
 
 //**************************************************************************************************
+// Numeric literal helpers
+//**************************************************************************************************
+
+fn signed_num(loc: Loc, s: &str, negated: bool) -> Result<E::Value_, ValueError> {
+    use E::Value_ as EV;
+    macro_rules! parse_signed {
+        ($num_str:expr, $parse_fn:ident, $ctor:ident, $ty:expr) => {{
+            $parse_fn($num_str, negated)
+                .map(|(v, _)| EV::$ctor(v))
+                .map_err(|_| ValueError::NumTooBig {
+                    loc,
+                    type_description: $ty,
+                })
+        }};
+    }
+    use crate::shared::builtin_types as BT;
+    if let Some(num) = s.strip_suffix(BT::I256) {
+        parse_signed!(num, parse_i256, I256, "'i256'")
+    } else if let Some(num) = s.strip_suffix(BT::I128) {
+        parse_signed!(num, parse_i128, I128, "'i128'")
+    } else if let Some(num) = s.strip_suffix(BT::I64) {
+        parse_signed!(num, parse_i64, I64, "'i64'")
+    } else if let Some(num) = s.strip_suffix(BT::I32) {
+        parse_signed!(num, parse_i32, I32, "'i32'")
+    } else if let Some(num) = s.strip_suffix(BT::I16) {
+        parse_signed!(num, parse_i16, I16, "'i16'")
+    } else if let Some(num) = s.strip_suffix(BT::I8) {
+        parse_signed!(num, parse_i8, I8, "'i8'")
+    } else {
+        // Callers guard with `has_signed_suffix`.
+        Err(ValueError::Ice {
+            loc,
+            msg: "expected a signed integer suffix on the literal",
+        })
+    }
+}
+
+fn unsigned_num(loc: Loc, s: &str) -> Result<E::Value_, ValueError> {
+    use E::Value_ as EV;
+    macro_rules! parse_unsigned {
+        ($num_str:expr, $parse_fn:ident, $ctor:ident, $ty:expr) => {{
+            $parse_fn($num_str)
+                .map(|(v, _)| EV::$ctor(v))
+                .map_err(|_| ValueError::NumTooBig {
+                    loc,
+                    type_description: $ty,
+                })
+        }};
+    }
+    use crate::shared::builtin_types as BT;
+    if let Some(num) = s.strip_suffix(BT::U256) {
+        parse_unsigned!(num, parse_u256, U256, "'u256'")
+    } else if let Some(num) = s.strip_suffix(BT::U128) {
+        parse_unsigned!(num, parse_u128, U128, "'u128'")
+    } else if let Some(num) = s.strip_suffix(BT::U64) {
+        parse_unsigned!(num, parse_u64, U64, "'u64'")
+    } else if let Some(num) = s.strip_suffix(BT::U32) {
+        parse_unsigned!(num, parse_u32, U32, "'u32'")
+    } else if let Some(num) = s.strip_suffix(BT::U16) {
+        parse_unsigned!(num, parse_u16, U16, "'u16'")
+    } else if let Some(num) = s.strip_suffix(BT::U8) {
+        parse_unsigned!(num, parse_u8, U8, "'u8'")
+    } else {
+        // Callers guard with `has_unsigned_suffix`.
+        Err(ValueError::Ice {
+            loc,
+            msg: "expected an unsigned integer suffix on the literal",
+        })
+    }
+}
+
+//**************************************************************************************************
 // Values
 //**************************************************************************************************
 
-pub(super) fn value(context: &mut DefnContext, value: P::Value) -> Option<E::Value> {
-    match value_result(context, value) {
-        Ok(value) => Some(value),
+pub(super) fn value(context: &mut DefnContext, pvalue: P::Value) -> Option<E::Value> {
+    match value_result(context, pvalue) {
+        Ok(v) => Some(v),
         Err(errs) => {
             for err in errs {
                 context.add_diag(err.into_diagnostic());
@@ -3846,26 +3991,27 @@ pub(super) fn value_result(
                 context, /* suggest_declaration */ true, addr,
             )))
         }
-        PV::Num(s) if s.ends_with("u8") => parse_num!(parse_u8(&s[..s.len() - 2]), EV::U8, "'u8'"),
-        PV::Num(s) if s.ends_with("u16") => {
-            parse_num!(parse_u16(&s[..s.len() - 3]), EV::U16, "'u16'")
+        PV::Num(ref s) if s.starts_with('-') => {
+            // A leading '-' only reaches expansion from match patterns, where the parser folds
+            // the '-' into the literal token. Expression negation is folded in `exp` (see the
+            // `PE::UnaryExp` case).
+            let num = &s[1..];
+            if has_signed_suffix(num) {
+                signed_num(loc, num, /* negated */ true).map_err(|e| vec![e])
+            } else if has_unsigned_suffix(num) {
+                Err(vec![ValueError::NegativeUnsigned { loc }])
+            } else {
+                Err(vec![ValueError::NegativeUntyped { loc }])
+            }
         }
-        PV::Num(s) if s.ends_with("u32") => {
-            parse_num!(parse_u32(&s[..s.len() - 3]), EV::U32, "'u32'")
-        }
-        PV::Num(s) if s.ends_with("u64") => {
-            parse_num!(parse_u64(&s[..s.len() - 3]), EV::U64, "'u64'")
-        }
-        PV::Num(s) if s.ends_with("u128") => {
-            parse_num!(parse_u128(&s[..s.len() - 4]), EV::U128, "'u128'")
-        }
-        PV::Num(s) if s.ends_with("u256") => {
-            parse_num!(parse_u256(&s[..s.len() - 4]), EV::U256, "'u256'")
+        PV::Num(ref s) if has_unsigned_suffix(s) => unsigned_num(loc, s).map_err(|e| vec![e]),
+        PV::Num(ref s) if has_signed_suffix(s) => {
+            signed_num(loc, s, /* negated */ false).map_err(|e| vec![e])
         }
         PV::Num(s) => parse_num!(
             parse_u256(&s),
             EV::InferredNum,
-            "the largest possible integer type, 'u256'"
+            "'u256' (the largest possible integer type)"
         ),
         PV::Bool(b) => Ok(EV::Bool(b)),
         PV::HexString(s) => hex_string::decode(loc, &s)

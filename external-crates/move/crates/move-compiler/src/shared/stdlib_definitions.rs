@@ -176,6 +176,12 @@ pub fn is_ascii_string(value: &E::Value_) -> Result<(), String> {
         | V::U64(_)
         | V::U128(_)
         | V::U256(_)
+        | V::I8(_)
+        | V::I16(_)
+        | V::I32(_)
+        | V::I64(_)
+        | V::I128(_)
+        | V::I256(_)
         | V::Bool(_)
         | V::Bytearray(_) => Err("value is not a string".to_owned()),
         V::InferredString(data) => ensure_ascii(data),
@@ -268,6 +274,12 @@ pub fn is_utf8_string(value: &E::Value_) -> Result<(), String> {
         | V::U64(_)
         | V::U128(_)
         | V::U256(_)
+        | V::I8(_)
+        | V::I16(_)
+        | V::I32(_)
+        | V::I64(_)
+        | V::I128(_)
+        | V::I256(_)
         | V::Bool(_)
         | V::Bytearray(_) => Err("value is not a string".to_owned()),
         V::InferredString(data) => ensure_unicode(data),
