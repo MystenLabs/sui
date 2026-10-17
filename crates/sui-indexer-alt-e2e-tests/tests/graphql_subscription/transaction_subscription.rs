@@ -10,6 +10,8 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 use async_graphql::connection::CursorType;
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
 use serde_json::Value;
 use serde_json::json;
 use sui_indexer_alt_graphql::CTransaction;
@@ -533,6 +535,65 @@ async fn test_transaction_subscription_resume_with_after_cursor() {
         !got.contains(&first_digest.as_str()),
         "resume-by-cursor re-delivered the tx at the cursor",
     );
+}
+
+/// Resume with an `after` cursor whose checkpoint is ahead of the ledger's indexed tip, as a
+/// client's cursor from a live edge can be. The ledger ends its empty page at its own tip, behind
+/// the cursor, and the backfill must not resume from there: a transaction that lands between the
+/// ledger's tip and the cursor's checkpoint is before the cursor and must not be delivered.
+#[tokio::test]
+async fn test_transaction_subscription_resume_with_after_cursor_ahead_of_ledger() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+
+    // The ledger can't have indexed past the validator's tip, so it is behind this cursor.
+    let resume_seq = cluster.validator_checkpoint_tip() + 40;
+    let cursor = Base64::encode(
+        CursorToken::item(Position::Transactions {
+            checkpoint: resume_seq,
+            tx_seq: 0,
+        })
+        .encode(),
+    );
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions(after: "{cursor}", filter: {{ sentAddress: $sender }}) {{
+                cursor
+                node {{ digest }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_variables(&query, sender_var(sender))
+        .await;
+
+    // Lands after the ledger's tip but before the cursor's checkpoint.
+    let before_cursor = transfer_coins(&mut cluster.validator, &[100]).await;
+    assert!(cluster.validator_checkpoint_tip() < resume_seq);
+
+    while cluster.validator_checkpoint_tip() <= resume_seq {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let after_cursor: BTreeSet<String> = transfer_coins(&mut cluster.validator, &[200])
+        .await
+        .into_iter()
+        .collect();
+
+    let first = stream.next().await.unwrap();
+    let edge = &first["data"]["transactions"];
+    let digest = edge["node"]["digest"].as_str().unwrap().to_string();
+    assert!(
+        !before_cursor.contains(&digest),
+        "delivered a transaction before the cursor: {edge}",
+    );
+    let (checkpoint, _) = decode_tx_cursor(edge);
+    assert!(
+        checkpoint > resume_seq,
+        "delivered at or before the cursor: {edge}"
+    );
+    if !after_cursor.contains(&digest) {
+        collect_matches(&mut stream, &after_cursor).await;
+    }
 }
 
 #[tokio::test]

@@ -10,8 +10,12 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::time::Duration;
 
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
 use serde_json::Value;
 use serde_json::json;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use sui_types::base_types::ObjectID;
 use tokio_stream::StreamExt;
 
@@ -645,6 +649,51 @@ async fn test_event_subscription_resume_with_after_cursor() {
         event_value(&item),
         Some(first_value.as_str()),
         "resume-by-cursor re-delivered the event at the cursor",
+    );
+}
+
+/// Resume with an `after` cursor whose checkpoint is ahead of the ledger's indexed tip, as a
+/// client's cursor from a live edge can be. The ledger ends its empty page at its own tip, behind
+/// the cursor, and the backfill must not resume from there: an event emitted between the ledger's
+/// tip and the cursor's checkpoint is before the cursor and must not be delivered.
+#[tokio::test]
+async fn test_event_subscription_resume_with_after_cursor_ahead_of_ledger() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+    // The ledger can't have indexed past the validator's tip, so it is behind this cursor.
+    let resume_seq = cluster.validator_checkpoint_tip() + 40;
+    let cursor = Base64::encode(
+        CursorToken::item(Position::Events {
+            checkpoint: resume_seq,
+            tx_seq: 0,
+            event_index: 0,
+        })
+        .encode(),
+    );
+    let query = r#"subscription($after: String!, $filter: EventFilter!) {
+        events(after: $after, filter: $filter) {
+            node { contents { json } }
+        }
+    }"#;
+    let mut vars = type_filter_var(&package_id, None).unwrap();
+    vars["after"] = json!(cursor);
+    let mut stream = cluster.subscribe_with_variables(query, Some(vars)).await;
+
+    // Emitted after the ledger's tip but before the cursor's checkpoint.
+    emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 1000).await;
+    assert!(cluster.validator_checkpoint_tip() < resume_seq);
+
+    while cluster.validator_checkpoint_tip() <= resume_seq {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 2000).await;
+
+    let first = stream.next().await.unwrap();
+    assert_eq!(
+        event_value(&first),
+        Some("2000"),
+        "delivered an event before the cursor: {first}",
     );
 }
 
