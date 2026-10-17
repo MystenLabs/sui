@@ -133,7 +133,7 @@ pub(crate) async fn list_checkpoints(
     let ordering = options.ordering;
     let direction = options.scan_direction();
 
-    let cp_range = async { Ok::<_, RpcError>(resolve_cp_range(checkpoint_range, &options)) }
+    let cp_range = async { resolve_cp_range(checkpoint_range, &options) }
         .instrument(debug_span!("resolve_cp_range"))
         .await?;
     let exhaustion = cp_range.exhaustion;
@@ -674,7 +674,7 @@ fn range_end_response(
 fn resolve_cp_range(
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> ResolvedScan<u64> {
+) -> Result<ResolvedScan<u64>, RpcError> {
     let range = cp_range.range.clone();
     ResolvedScan::<u64>::resolve(cp_range, range, options)
 }
