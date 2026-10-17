@@ -70,6 +70,9 @@ pub struct ResolvedCheckpointRange {
     pub range: Range<u64>,
     /// Why the interval is exhausted once the scan drains it.
     pub exhaustion: RangeExhaustion,
+    /// Whether `range.end` is this server's indexed tip rather than a bound the request set, so
+    /// that a position at or past it is one this server has not indexed.
+    pub reaches_ledger_tip: bool,
 }
 
 /// Semantic scan bounds over explicit scan positions (cursor trims need
@@ -235,10 +238,15 @@ impl QueryOptions {
 }
 
 impl ResolvedCheckpointRange {
-    pub fn empty_at(checkpoint: u64, exhaustion: RangeExhaustion) -> Self {
+    pub fn empty_at(
+        checkpoint: u64,
+        exhaustion: RangeExhaustion,
+        reaches_ledger_tip: bool,
+    ) -> Self {
         Self {
             range: checkpoint..checkpoint,
             exhaustion,
+            reaches_ledger_tip,
         }
     }
 
@@ -350,6 +358,12 @@ where
         range: Range<P>,
         options: &QueryOptions,
     ) -> Self {
+        if cp_range.reaches_ledger_tip
+            && let Some(cursor) = starting_cursor_past_tip(options, range.end)
+        {
+            return Self::empty_at_cursor(cursor);
+        }
+
         let entry_checkpoint = if cp_range.is_empty() {
             // No checkpoint entered, pin entry to terminal boundary
             cp_range.range.end
@@ -370,6 +384,20 @@ where
             exhaustion: cp_range.exhaustion,
         }
         .apply_cursor_bounds(options)
+    }
+
+    /// An empty scan whose terminal is `cursor` itself, keeping its kind, so the response hands the
+    /// client's own position back.
+    fn empty_at_cursor(cursor: &CursorToken) -> Self {
+        let position = cursor.coordinate();
+        let checkpoint = cursor.position.checkpoint();
+        Self {
+            bounds: ScanBounds::empty_at(position),
+            entry_checkpoint: checkpoint,
+            end_checkpoint: checkpoint,
+            end_position: position,
+            exhaustion: RangeExhaustion::CursorBound { kind: cursor.kind },
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -558,6 +586,9 @@ impl ResolvedCheckpointRange {
             } else {
                 RangeExhaustion::CheckpointBound
             };
+        // Decided before the cursors tighten `end`: whether the request leaves its window's high
+        // end to this server's tip.
+        let window_reaches_tip = matches!(high_exhaustion, RangeExhaustion::LedgerTip);
         let mut start = start;
         let mut end = requested_end.min(checkpoint_hi_exclusive);
         let mut low_exhaustion = RangeExhaustion::CheckpointBound;
@@ -595,6 +626,7 @@ impl ResolvedCheckpointRange {
             return Ok(Self::empty_at(
                 checkpoint_hi_exclusive,
                 RangeExhaustion::LedgerTip,
+                window_reaches_tip,
             ));
         }
 
@@ -613,7 +645,11 @@ impl ResolvedCheckpointRange {
                 Ordering::Ascending => end,
                 Ordering::Descending => start,
             };
-            return Ok(Self::empty_at(checkpoint, exhaustion));
+            return Ok(Self::empty_at(
+                checkpoint,
+                exhaustion,
+                window_reaches_tip && checkpoint == checkpoint_hi_exclusive,
+            ));
         }
 
         let exhaustion = match options.ordering {
@@ -623,8 +659,35 @@ impl ResolvedCheckpointRange {
         Ok(Self {
             range: start..end,
             exhaustion,
+            reaches_ledger_tip: window_reaches_tip && end == checkpoint_hi_exclusive,
         })
     }
+}
+
+/// The request's starting cursor (`after` for an ascending scan, `before` for a descending one), if
+/// it names a position at or past `tip`, the first position this server has not indexed.
+///
+/// Such a cursor comes from a newer view of the ledger than this server's: another replica's, or
+/// one derived from a newer tip. Resolving the request against this view would end the response at
+/// the tip, behind the cursor, so a client resuming from it would replay items it already has, and
+/// a descending scan would start below the cursor and skip items the client has not seen. The scan
+/// answers with nothing and hands the cursor back instead, so the client resumes where it was.
+fn starting_cursor_past_tip<P: Ord>(options: &QueryOptions, tip: P) -> Option<&CursorToken>
+where
+    CursorToken: ScanCursor<P>,
+{
+    let cursor = match options.ordering {
+        Ordering::Ascending => options.after.as_ref(),
+        Ordering::Descending => options.before.as_ref(),
+    }?;
+    let position = cursor.coordinate();
+    // A boundary exactly at the tip is where a caught-up scan resumes; an item there, or any
+    // position beyond it, has not been indexed here.
+    let past_tip = match cursor.kind {
+        sui_rpc_cursor::CursorKind::Item => position >= tip,
+        sui_rpc_cursor::CursorKind::Boundary => position > tip,
+    };
+    past_tip.then_some(cursor)
 }
 
 impl ScanCursor<u64> for CursorToken {
@@ -1257,7 +1320,7 @@ mod tests {
 
         assert_eq!(
             ResolvedCheckpointRange::from_request(Some(30), None, 20, &options).unwrap(),
-            ResolvedCheckpointRange::empty_at(20, RangeExhaustion::LedgerTip)
+            ResolvedCheckpointRange::empty_at(20, RangeExhaustion::LedgerTip, true)
         );
     }
 
@@ -2247,5 +2310,140 @@ mod tests {
             resolved_range(10..20).apply_cursor_bounds(&options).range(),
             10..11
         );
+    }
+
+    /// Tip for the cursor-past-tip tests: checkpoints below 20 are indexed, and checkpoint `c`
+    /// starts at transaction `5 * c`, so the first unindexed transaction is 100.
+    const TIP: u64 = 20;
+
+    fn first_tx(checkpoint: u64) -> u64 {
+        5 * checkpoint
+    }
+
+    fn resolve_checkpoints(
+        end_checkpoint: Option<u64>,
+        options: &QueryOptions,
+    ) -> ResolvedScan<u64> {
+        let cp_range =
+            ResolvedCheckpointRange::from_request(None, end_checkpoint, TIP, options).unwrap();
+        let range = cp_range.range.clone();
+        ResolvedScan::<u64>::resolve(cp_range, range, options)
+    }
+
+    fn resolve_transactions(options: &QueryOptions) -> ResolvedScan<u64> {
+        let cp_range = ResolvedCheckpointRange::from_request(None, None, TIP, options).unwrap();
+        let tx_range = first_tx(cp_range.range.start)..first_tx(cp_range.range.end);
+        ResolvedScan::<u64>::resolve(cp_range, tx_range, options)
+    }
+
+    fn resolve_events(options: &QueryOptions) -> ResolvedScan<IntraTxCoordinate> {
+        let cp_range = ResolvedCheckpointRange::from_request(None, None, TIP, options).unwrap();
+        let tx_range = first_tx(cp_range.range.start)..first_tx(cp_range.range.end);
+        ResolvedScan::<IntraTxCoordinate>::resolve(
+            cp_range,
+            IntraTxCoordinate::tx_window(tx_range),
+            options,
+        )
+    }
+
+    /// Asserts that `resolved` scans nothing and ends at `cursor` itself, with the cursor's kind.
+    fn assert_hands_back<P: Copy + Ord + std::fmt::Debug>(
+        resolved: ResolvedScan<P>,
+        cursor: &CursorToken,
+    ) where
+        CursorToken: ScanCursor<P>,
+    {
+        assert!(resolved.is_empty(), "{resolved:?}");
+        assert_eq!(resolved.end_position, cursor.coordinate(), "{resolved:?}");
+        assert_eq!(
+            resolved.end_checkpoint,
+            cursor.position.checkpoint(),
+            "{resolved:?}"
+        );
+        assert_eq!(
+            resolved.exhaustion,
+            RangeExhaustion::CursorBound { kind: cursor.kind },
+            "{resolved:?}"
+        );
+    }
+
+    fn cp_boundary(checkpoint: u64) -> CursorToken {
+        CursorToken::boundary(Position::Checkpoints { checkpoint })
+    }
+
+    #[test]
+    fn ascending_after_cursor_past_the_tip_is_handed_back() {
+        let ascending = |cursor| after_options(Ordering::Ascending, cursor);
+
+        // Positions this server has not indexed end the response at the cursor, not at the tip.
+        for cursor in [cp_item(TIP), cp_boundary(TIP + 1), cp_item(TIP + 5)] {
+            assert_hands_back(
+                resolve_checkpoints(None, &ascending(cursor.clone())),
+                &cursor,
+            );
+        }
+        // An end the request sets above the tip still leaves the window to the tip.
+        let cursor = cp_item(TIP + 5);
+        assert_hands_back(
+            resolve_checkpoints(Some(TIP + 1), &ascending(cursor.clone())),
+            &cursor,
+        );
+
+        // A caught-up scan resumes from the boundary at the tip and still ends at the tip.
+        let caught_up = resolve_checkpoints(None, &ascending(cp_boundary(TIP)));
+        assert!(caught_up.is_empty());
+        assert_eq!(caught_up.end_position, TIP);
+        assert_eq!(caught_up.exhaustion, RangeExhaustion::LedgerTip);
+
+        // A window the request ends at the tip is exhausted there, whatever the cursor.
+        let past_window = resolve_checkpoints(Some(TIP), &ascending(cp_item(TIP + 5)));
+        assert!(past_window.is_empty());
+        assert_eq!(past_window.end_position, TIP);
+    }
+
+    #[test]
+    fn descending_before_cursor_past_the_tip_is_handed_back() {
+        let descending = |cursor| before_options(Ordering::Descending, cursor);
+
+        let cursor = cp_item(TIP);
+        assert_hands_back(
+            resolve_checkpoints(None, &descending(cursor.clone())),
+            &cursor,
+        );
+
+        // Below the tip the scan runs as usual, down from the cursor.
+        let below = resolve_checkpoints(None, &descending(cp_boundary(TIP)));
+        assert_eq!(below.range(), 0..TIP);
+
+        // In a descending scan `after` is the far end; past the tip it only empties the range.
+        let far_end =
+            resolve_checkpoints(None, &after_options(Ordering::Descending, cp_item(TIP + 5)));
+        assert!(far_end.is_empty());
+        assert_eq!(far_end.end_position, TIP);
+    }
+
+    /// A transaction or event cursor inside the first unindexed checkpoint is past the tip even
+    /// though its checkpoint equals the tip; only the start of that checkpoint is caught up.
+    #[test]
+    fn cursor_inside_the_first_unindexed_checkpoint_is_handed_back() {
+        let ascending = |cursor| after_options(Ordering::Ascending, cursor);
+        let tip_tx = first_tx(TIP);
+
+        for cursor in [tx_boundary(TIP, tip_tx + 2), tx_item(TIP, tip_tx)] {
+            assert_hands_back(resolve_transactions(&ascending(cursor.clone())), &cursor);
+        }
+        let caught_up = resolve_transactions(&ascending(tx_boundary(TIP, tip_tx)));
+        assert_eq!(caught_up.end_position, tip_tx);
+        assert_eq!(caught_up.exhaustion, RangeExhaustion::LedgerTip);
+
+        for cursor in [ev_item(TIP, tip_tx, 0), ev_boundary(TIP, tip_tx, 1)] {
+            assert_hands_back(resolve_events(&ascending(cursor.clone())), &cursor);
+        }
+        let caught_up = resolve_events(&ascending(ev_boundary(TIP, tip_tx, 0)));
+        assert_eq!(
+            caught_up.end_position,
+            IntraTxCoordinate::start_of_tx(tip_tx)
+        );
+        assert_eq!(caught_up.exhaustion, RangeExhaustion::LedgerTip);
     }
 }
