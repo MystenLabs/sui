@@ -26,6 +26,8 @@ mod list_checkpoints;
 mod list_events;
 mod list_transactions;
 mod move_package_service;
+#[cfg(test)]
+mod resume_tests;
 
 #[tonic::async_trait]
 impl LedgerService for KvRpcServer {
@@ -86,6 +88,7 @@ impl LedgerService for KvRpcServer {
         get_transaction::get_transaction(
             self.limited_client("GetTransaction"),
             &self.stages,
+            self.served_height()?,
             request.into_inner(),
             &self.package_resolver,
         )
@@ -101,6 +104,7 @@ impl LedgerService for KvRpcServer {
         get_transaction::batch_get_transactions(
             self.limited_client("BatchGetTransactions"),
             &self.stages,
+            self.served_height()?,
             request.into_inner(),
             &self.package_resolver,
         )
@@ -117,7 +121,7 @@ impl LedgerService for KvRpcServer {
             self.client.clone(),
             self.limited_client("GetCheckpoint"),
             &self.stages,
-            &self.service_info_watermark_pipelines,
+            self.served_height()?,
             request.into_inner(),
         )
         .await
@@ -131,6 +135,7 @@ impl LedgerService for KvRpcServer {
     ) -> Result<tonic::Response<GetEpochResponse>, tonic::Status> {
         get_epoch::get_epoch(
             self.client.clone(),
+            self.served_height()?,
             request.into_inner(),
             self.chain_id.chain(),
         )
@@ -242,6 +247,14 @@ pub(crate) mod test_utils {
     use crate::bigtable_client::BigTableClient;
     use crate::operation::QueryContext;
     use crate::package_store::BigTablePackageStore;
+    use crate::served_height::ServedHeight;
+
+    /// A served height above every checkpoint and epoch, for tests of what a handler serves
+    /// rather than of where the served height cuts it off.
+    pub(crate) const UNBOUNDED_SERVED_HEIGHT: ServedHeight = ServedHeight {
+        checkpoint: u64::MAX,
+        epoch: u64::MAX,
+    };
 
     pub(crate) fn two_transaction_object_checkpoint() -> Checkpoint {
         TestCheckpointBuilder::new(0)
@@ -430,7 +443,7 @@ pub(crate) mod test_utils {
         (ctx, registry, server)
     }
 
-    pub(super) async fn query_context_with_mock_and_registry(
+    pub(crate) async fn query_context_with_mock_and_registry(
         method: &'static str,
         checkpoint_hi_exclusive: u64,
     ) -> (
@@ -465,14 +478,24 @@ pub(crate) mod test_utils {
             bitmap_bucket_budget_tx: Some(10),
             bitmap_bucket_budget_event: Some(10),
             bitmap_drain_probe_rows: None,
+            watermark_beacon_buckets: None,
             max_bitmap_filter_literals: Some(1),
         };
         let stage = StageConfig {
-            chunk_size: Some(2),
+            max_seeks_per_read: Some(2),
             concurrency: Some(1),
+            ..Default::default()
+        };
+        // Stages whose seeks are buckets also cap their reads at 2 keys, so
+        // every stage reads 2 keys at a time whichever buckets the test data
+        // uses.
+        let bucket_stage = StageConfig {
+            max_keys_per_read: Some(2),
+            ..stage.clone()
         };
         let stages = StagesConfig {
-            tx_seq_digest: Some(stage.clone()),
+            tx_seq_digest: Some(bucket_stage.clone()),
+            tx_cp_resolve: Some(bucket_stage),
             transactions: Some(stage.clone()),
             objects: Some(stage.clone()),
             checkpoints: Some(stage),

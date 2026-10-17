@@ -16,6 +16,7 @@ use sui_types::base_types::TransactionDigest;
 use crate::bigtable_client::BigTableClient;
 use crate::config::{PipelineStage, StagesConfig};
 use crate::render::transaction_to_response;
+use crate::served_height::ServedHeight;
 use crate::{PackageResolver, resolve};
 
 pub const MAX_BATCH_REQUESTS: usize = 200;
@@ -33,9 +34,13 @@ pub(crate) fn validate_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMa
     Ok(FieldMaskTree::from(read_mask))
 }
 
+/// Serve a transaction whose checkpoint is at or below `served_height`. One above it is `NotFound`,
+/// as if not yet written: its `transactions` row can already exist while the `objects` rows a read
+/// mask with objects joins are still being written.
 pub async fn get_transaction(
     client: BigTableClient,
     stages: &StagesConfig,
+    served_height: ServedHeight,
     request: GetTransactionRequest,
     resolver: &PackageResolver,
 ) -> Result<GetTransactionResponse, RpcError> {
@@ -60,6 +65,7 @@ pub async fn get_transaction(
     let mut resolved = resolve::resolve_transactions(
         client,
         vec![transaction_digest],
+        served_height.checkpoint,
         &read_mask,
         transactions_stage,
         objects_stage,
@@ -73,9 +79,11 @@ pub async fn get_transaction(
     ))
 }
 
+/// [`get_transaction`] for each digest, answering per digest.
 pub async fn batch_get_transactions(
     client: BigTableClient,
     stages: &StagesConfig,
+    served_height: ServedHeight,
     BatchGetTransactionsRequest {
         digests, read_mask, ..
     }: BatchGetTransactionsRequest,
@@ -99,6 +107,7 @@ pub async fn batch_get_transactions(
     let resolved = resolve::resolve_transactions(
         client,
         digests.clone(),
+        served_height.checkpoint,
         &read_mask,
         transactions_stage,
         objects_stage,
@@ -133,9 +142,9 @@ mod tests {
 
     use super::*;
     use crate::v2::test_utils::{
-        assert_identity_only_object_mask, canonical_transaction_object_keys,
-        query_context_with_mock_and_registry, response_object_keys,
-        two_transaction_object_checkpoint,
+        UNBOUNDED_SERVED_HEIGHT, assert_identity_only_object_mask,
+        canonical_transaction_object_keys, query_context_with_mock_and_registry,
+        response_object_keys, two_transaction_object_checkpoint,
     };
 
     fn request(
@@ -201,6 +210,7 @@ mod tests {
         let transaction = get_transaction(
             ctx.client().clone(),
             &stages,
+            UNBOUNDED_SERVED_HEIGHT,
             request(digest, ["digest"]),
             ctx.package_resolver(),
         )
@@ -229,6 +239,7 @@ mod tests {
                 let transaction = get_transaction(
                     ctx.client().clone(),
                     &stages,
+                    UNBOUNDED_SERVED_HEIGHT,
                     request(digest, paths.iter().copied()),
                     ctx.package_resolver(),
                 )
@@ -257,6 +268,154 @@ mod tests {
 
         server.abort();
     }
+
+    #[tokio::test]
+    async fn transaction_above_served_height_is_not_found() {
+        let (ctx, _registry, mock, server) =
+            query_context_with_mock_and_registry("get_transaction", 2).await;
+        let checkpoint = TestCheckpointBuilder::new(1)
+            .start_transaction(0)
+            .create_owned_object(10)
+            .finish_transaction()
+            .build_checkpoint();
+        insert_checkpoint_rows(&mock, &checkpoint).await;
+        let stages = StagesConfig::default();
+        let digest = checkpoint.transactions[0].transaction.digest();
+
+        for (served_checkpoint, served) in [(0, false), (1, true)] {
+            let served_height = ServedHeight {
+                checkpoint: served_checkpoint,
+                epoch: 0,
+            };
+            let single = get_transaction(
+                ctx.client().clone(),
+                &stages,
+                served_height,
+                request(digest, ["digest", "objects"]),
+                ctx.package_resolver(),
+            )
+            .await
+            .map_err(tonic::Status::from);
+
+            let mut batch_request = BatchGetTransactionsRequest::default();
+            batch_request.digests = vec![digest.to_string()];
+            batch_request.read_mask = Some(FieldMask::from_paths(["digest", "objects"]));
+            let batch = batch_get_transactions(
+                ctx.client().clone(),
+                &stages,
+                served_height,
+                batch_request,
+                ctx.package_resolver(),
+            )
+            .await
+            .expect("BatchGetTransactions succeeds")
+            .transactions
+            .pop()
+            .expect("one result per digest")
+            .to_result();
+
+            if served {
+                let single = single.expect("served transaction is found");
+                assert_eq!(
+                    single.transaction.and_then(|tx| tx.digest),
+                    Some(digest.to_string())
+                );
+                let batch = batch.expect("served transaction is found");
+                assert_eq!(batch.digest, Some(digest.to_string()));
+            } else {
+                let status = single.expect_err("transaction above the served height");
+                assert_eq!(status.code(), tonic::Code::NotFound);
+                let status = batch.expect_err("transaction above the served height");
+                assert_eq!(status.code, tonic::Code::NotFound as i32);
+            }
+        }
+
+        server.abort();
+    }
+
+    /// At the chain tip a transaction's row can be written before the object rows it references.
+    /// Above the served height that transaction is `NotFound`, without reading its objects, and a
+    /// batch still serves its other transactions.
+    #[tokio::test]
+    async fn transaction_above_served_height_skips_unwritten_objects() {
+        use sui_kvstore::tables::transactions;
+        use sui_types::balance_change::derive_balance_changes_2;
+
+        let (ctx, _registry, mock, server) =
+            query_context_with_mock_and_registry("get_transaction", 2).await;
+        let served = TestCheckpointBuilder::new(1)
+            .start_transaction(0)
+            .create_owned_object(10)
+            .finish_transaction()
+            .build_checkpoint();
+        insert_checkpoint_rows(&mock, &served).await;
+        let tip = TestCheckpointBuilder::new(2)
+            .start_transaction(1)
+            .create_owned_object(11)
+            .finish_transaction()
+            .build_checkpoint();
+        let tip_transaction = &tip.transactions[0];
+        let row = transactions::encode(
+            &tip_transaction.transaction,
+            &tip_transaction.signatures,
+            &tip_transaction.effects,
+            &tip_transaction.events,
+            tip.summary.sequence_number,
+            tip.summary.timestamp_ms,
+            &derive_balance_changes_2(&tip_transaction.effects, &tip.object_set),
+            &tip_transaction.unchanged_loaded_runtime_objects,
+        )
+        .expect("encode transaction");
+        let tip_digest = tip_transaction.transaction.digest();
+        mock.insert_row(
+            transactions::NAME,
+            transactions::encode_key(&tip_digest),
+            row,
+        )
+        .await;
+
+        let stages = StagesConfig::default();
+        let served_height = ServedHeight {
+            checkpoint: served.summary.sequence_number,
+            epoch: 0,
+        };
+        let status: tonic::Status = get_transaction(
+            ctx.client().clone(),
+            &stages,
+            served_height,
+            request(tip_digest, ["digest", "objects"]),
+            ctx.package_resolver(),
+        )
+        .await
+        .expect_err("transaction above the served height")
+        .into();
+        assert_eq!(status.code(), tonic::Code::NotFound);
+
+        let served_digest = served.transactions[0].transaction.digest();
+        let mut batch_request = BatchGetTransactionsRequest::default();
+        batch_request.digests = vec![served_digest.to_string(), tip_digest.to_string()];
+        batch_request.read_mask = Some(FieldMask::from_paths(["digest", "objects"]));
+        let results = batch_get_transactions(
+            ctx.client().clone(),
+            &stages,
+            served_height,
+            batch_request,
+            ctx.package_resolver(),
+        )
+        .await
+        .expect("BatchGetTransactions succeeds")
+        .transactions;
+        let [served_result, tip_result] = <[_; 2]>::try_from(results).expect("one per digest");
+        let served_transaction = served_result.to_result().expect("served transaction");
+        assert_eq!(served_transaction.digest, Some(served_digest.to_string()));
+        let status = tip_result
+            .to_result()
+            .expect_err("transaction above the served height");
+        assert_eq!(status.code, tonic::Code::NotFound as i32);
+
+        server.abort();
+    }
+
     #[tokio::test]
     async fn batch_get_transaction_objects_preserve_order_and_deduplicate_reads() {
         let (ctx, _registry, mock, server) =
@@ -279,6 +438,7 @@ mod tests {
         let parent_response = batch_get_transactions(
             ctx.client().clone(),
             &stages,
+            UNBOUNDED_SERVED_HEIGHT,
             parent_request,
             ctx.package_resolver(),
         )
@@ -296,6 +456,7 @@ mod tests {
         let nested_response = batch_get_transactions(
             ctx.client().clone(),
             &stages,
+            UNBOUNDED_SERVED_HEIGHT,
             nested_request,
             ctx.package_resolver(),
         )

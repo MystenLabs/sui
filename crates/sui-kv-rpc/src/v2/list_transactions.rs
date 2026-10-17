@@ -15,6 +15,7 @@ use sui_inverted_index::ScanStop;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
+use sui_kvstore::tables::tx_seq_digest;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
@@ -47,6 +48,7 @@ use crate::pipeline::InputOrderEmitter;
 use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
+use crate::pipeline::SeekUnit;
 use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
 use crate::pipeline::render_ahead;
@@ -168,13 +170,22 @@ pub(crate) async fn list_transactions(
                 options.scan_direction(),
                 scan_budget,
                 ctx.bitmap_skip_policy(),
+                ctx.watermark_pacing(exhaustion),
                 ctx.bitmap_scan_observer(),
             );
             let seq_stream = take_items(seq_stream, limit_items);
             pipelined_chunks(
                 seq_stream,
-                tx_seq_digest_stage.chunk_size,
+                tx_seq_digest_stage.max_seeks_per_read,
                 tx_seq_digest_stage.concurrency,
+                tx_seq_digest_stage.min_seeks_per_split_read,
+                SeekUnit::BucketRun {
+                    group: |seq: &u64| tx_seq_digest::forward_bucket_id(*seq),
+                    key: |seq: &u64| *seq,
+                    max_keys_per_read: tx_seq_digest_stage
+                        .max_keys_per_read
+                        .expect("tx-seq-digest reads have a key cap"),
+                },
                 {
                     let client = client.clone();
                     move |seqs| {
@@ -200,8 +211,10 @@ pub(crate) async fn list_transactions(
             // Watermarked<(tx_seq, TransactionData)>.
             let tx_stream = pipelined_chunks(
                 digest_stream,
-                transactions_stage.chunk_size,
+                transactions_stage.max_seeks_per_read,
                 transactions_stage.concurrency,
+                transactions_stage.min_seeks_per_split_read,
+                SeekUnit::Item,
                 {
                     let client = client.clone();
                     let columns = columns.clone();
@@ -628,7 +641,7 @@ async fn resolve_tx_range(
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    Ok(ResolvedScan::<u64>::resolve(cp_range, tx_range, options))
+    ResolvedScan::<u64>::resolve(cp_range, tx_range, options)
 }
 
 fn transaction_item_response(
@@ -865,6 +878,7 @@ mod tests {
                 let get_transaction = get_transaction(
                     ctx.client().clone(),
                     &stages,
+                    crate::v2::test_utils::UNBOUNDED_SERVED_HEIGHT,
                     get_request,
                     ctx.package_resolver(),
                 )

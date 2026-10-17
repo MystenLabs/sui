@@ -16,6 +16,7 @@ use bytes::Bytes;
 use futures::TryStreamExt;
 use roaring::RoaringBitmap;
 use sui_inverted_index::IndexDimension;
+use sui_inverted_index::WatermarkPacing;
 use sui_inverted_index::Watermarked;
 use sui_inverted_index::encode_dimension_key;
 use sui_inverted_index::eval_bitmap_query_stream;
@@ -52,6 +53,12 @@ async fn setup_emulator() -> Result<(BigTableClient, BigTableEmulator)> {
     Ok((client, emulator))
 }
 
+/// These tests read only items, so they ask for as few watermarks as possible.
+const ITEMS_ONLY_PACING: WatermarkPacing = WatermarkPacing {
+    min_buckets: u64::MAX,
+    emit_held_at_end: false,
+};
+
 fn bitmap_query_stream(
     client: &BigTableClient,
     query: BitmapQuery,
@@ -68,6 +75,7 @@ fn bitmap_query_stream(
         direction,
         u64::MAX,
         sui_inverted_index::SkipPolicy::DRAIN_ONLY,
+        ITEMS_ONLY_PACING,
         |_| {},
     );
     use futures::TryStreamExt;
@@ -374,6 +382,7 @@ async fn filters_seek_past_skewed_gap_against_emulator() -> Result<()> {
         sui_inverted_index::SkipPolicy {
             drain_probe_rows: std::num::NonZeroU32::new(2),
         },
+        ITEMS_ONLY_PACING,
         move |metrics| metrics_tx.send(metrics).unwrap(),
     )
     .map_err(anyhow::Error::new)

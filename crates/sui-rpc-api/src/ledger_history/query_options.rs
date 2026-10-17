@@ -70,6 +70,9 @@ pub struct ResolvedCheckpointRange {
     pub range: Range<u64>,
     /// Why the interval is exhausted once the scan drains it.
     pub exhaustion: RangeExhaustion,
+    /// Whether `range.end` is this server's indexed tip rather than a bound the request set, so
+    /// that a position at or past it is one this server has not indexed.
+    pub reaches_ledger_tip: bool,
 }
 
 /// Semantic scan bounds over explicit scan positions (cursor trims need
@@ -235,10 +238,15 @@ impl QueryOptions {
 }
 
 impl ResolvedCheckpointRange {
-    pub fn empty_at(checkpoint: u64, exhaustion: RangeExhaustion) -> Self {
+    pub fn empty_at(
+        checkpoint: u64,
+        exhaustion: RangeExhaustion,
+        reaches_ledger_tip: bool,
+    ) -> Self {
         Self {
             range: checkpoint..checkpoint,
             exhaustion,
+            reaches_ledger_tip,
         }
     }
 
@@ -349,7 +357,11 @@ where
         cp_range: ResolvedCheckpointRange,
         range: Range<P>,
         options: &QueryOptions,
-    ) -> Self {
+    ) -> Result<Self, RpcError> {
+        if cp_range.reaches_ledger_tip {
+            reject_starting_cursor_past_tip(options, range.end, cp_range.range.end)?;
+        }
+
         let entry_checkpoint = if cp_range.is_empty() {
             // No checkpoint entered, pin entry to terminal boundary
             cp_range.range.end
@@ -359,7 +371,7 @@ where
             cp_range.range.end.saturating_sub(1)
         };
 
-        Self {
+        Ok(Self {
             bounds: ScanBounds::from_range(range.start..range.end),
             entry_checkpoint,
             end_checkpoint: cp_range.terminal_checkpoint(options.ordering),
@@ -369,7 +381,7 @@ where
             },
             exhaustion: cp_range.exhaustion,
         }
-        .apply_cursor_bounds(options)
+        .apply_cursor_bounds(options))
     }
 
     pub fn is_empty(&self) -> bool {
@@ -558,6 +570,9 @@ impl ResolvedCheckpointRange {
             } else {
                 RangeExhaustion::CheckpointBound
             };
+        // Decided before the cursors tighten `end`: whether the request leaves its window's high
+        // end to this server's tip.
+        let window_reaches_tip = matches!(high_exhaustion, RangeExhaustion::LedgerTip);
         let mut start = start;
         let mut end = requested_end.min(checkpoint_hi_exclusive);
         let mut low_exhaustion = RangeExhaustion::CheckpointBound;
@@ -595,6 +610,7 @@ impl ResolvedCheckpointRange {
             return Ok(Self::empty_at(
                 checkpoint_hi_exclusive,
                 RangeExhaustion::LedgerTip,
+                window_reaches_tip,
             ));
         }
 
@@ -613,7 +629,11 @@ impl ResolvedCheckpointRange {
                 Ordering::Ascending => end,
                 Ordering::Descending => start,
             };
-            return Ok(Self::empty_at(checkpoint, exhaustion));
+            return Ok(Self::empty_at(
+                checkpoint,
+                exhaustion,
+                window_reaches_tip && checkpoint == checkpoint_hi_exclusive,
+            ));
         }
 
         let exhaustion = match options.ordering {
@@ -623,8 +643,52 @@ impl ResolvedCheckpointRange {
         Ok(Self {
             range: start..end,
             exhaustion,
+            reaches_ledger_tip: window_reaches_tip && end == checkpoint_hi_exclusive,
         })
     }
+}
+
+/// Rejects a request whose starting cursor (`after` for an ascending scan, `before` for a
+/// descending one) names a position at or past `tip`, the first position this server has not
+/// indexed. Such a cursor comes from a newer view of the ledger than this server's, from another
+/// replica or derived from a newer tip. Answering from this view would resume an ascending scan
+/// behind the cursor, replaying items the client already has, or start a descending scan below it,
+/// skipping items the client has not seen. `OutOfRange` marks the request as reading past the data
+/// this server has, the mirror of a cursor below the pruned floor; unlike that one, it becomes
+/// servable once this server catches up, so clients may retry it.
+fn reject_starting_cursor_past_tip<P: Ord>(
+    options: &QueryOptions,
+    tip: P,
+    checkpoint_hi_exclusive: u64,
+) -> Result<(), RpcError>
+where
+    CursorToken: ScanCursor<P>,
+{
+    let cursor = match options.ordering {
+        Ordering::Ascending => options.after.as_ref(),
+        Ordering::Descending => options.before.as_ref(),
+    };
+    let Some(cursor) = cursor else {
+        return Ok(());
+    };
+    let position = cursor.coordinate();
+    // A boundary exactly at the tip is where a caught-up scan resumes; an item there, or any
+    // position beyond it, has not been indexed here.
+    let past_tip = match cursor.kind {
+        sui_rpc_cursor::CursorKind::Item => position >= tip,
+        sui_rpc_cursor::CursorKind::Boundary => position > tip,
+    };
+    if past_tip {
+        return Err(RpcError::new(
+            tonic::Code::OutOfRange,
+            format!(
+                "requested data above latest available; cursor is at checkpoint {}, and only \
+                 checkpoints below {checkpoint_hi_exclusive} are available",
+                cursor.position.checkpoint(),
+            ),
+        ));
+    }
+    Ok(())
 }
 
 impl ScanCursor<u64> for CursorToken {
@@ -1257,7 +1321,7 @@ mod tests {
 
         assert_eq!(
             ResolvedCheckpointRange::from_request(Some(30), None, 20, &options).unwrap(),
-            ResolvedCheckpointRange::empty_at(20, RangeExhaustion::LedgerTip)
+            ResolvedCheckpointRange::empty_at(20, RangeExhaustion::LedgerTip, true)
         );
     }
 
@@ -1292,7 +1356,8 @@ mod tests {
                     cp_range,
                     IntraTxCoordinate::tx_window(100..100),
                     &options
-                ),
+                )
+                .unwrap(),
                 ResolvedScan {
                     // Bounds are based on the requested checkpoint range and
                     // checkpoint_hi_exclusive or end_checkpoint
@@ -1325,7 +1390,8 @@ mod tests {
                     cp_range,
                     IntraTxCoordinate::tx_window(100..100),
                     &options
-                ),
+                )
+                .unwrap(),
                 ResolvedScan {
                     bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(100)),
                     entry_checkpoint: 10,
@@ -1358,7 +1424,8 @@ mod tests {
                 cp_range,
                 IntraTxCoordinate::tx_window(100..100),
                 &options,
-            );
+            )
+            .unwrap();
             assert_eq!(resolved.clone().apply_cursor_bounds(&options), resolved);
         }
     }
@@ -1375,7 +1442,8 @@ mod tests {
             cp_range.clone(),
             IntraTxCoordinate::tx_window(100..200),
             &options,
-        );
+        )
+        .unwrap();
         assert_eq!(
             resolved.bounds,
             IntraTxScanBounds::from_range(
@@ -1391,7 +1459,8 @@ mod tests {
             cp_range,
             IntraTxCoordinate::tx_window(100..200),
             &options,
-        );
+        )
+        .unwrap();
         assert_eq!(resolved.entry_checkpoint, 9);
         assert_eq!(resolved.end_checkpoint, 3);
         assert_eq!(resolved.end_position, IntraTxCoordinate::start_of_tx(100));
@@ -2247,5 +2316,131 @@ mod tests {
             resolved_range(10..20).apply_cursor_bounds(&options).range(),
             10..11
         );
+    }
+
+    /// Tip for the cursor-past-tip tests: checkpoints below 20 are indexed, and checkpoint `c`
+    /// starts at transaction `5 * c`, so the first unindexed transaction is 100.
+    const TIP: u64 = 20;
+
+    fn first_tx(checkpoint: u64) -> u64 {
+        5 * checkpoint
+    }
+
+    fn resolve_checkpoints(
+        end_checkpoint: Option<u64>,
+        options: &QueryOptions,
+    ) -> Result<ResolvedScan<u64>, RpcError> {
+        let cp_range = ResolvedCheckpointRange::from_request(None, end_checkpoint, TIP, options)?;
+        let range = cp_range.range.clone();
+        ResolvedScan::<u64>::resolve(cp_range, range, options)
+    }
+
+    fn resolve_transactions(options: &QueryOptions) -> Result<ResolvedScan<u64>, RpcError> {
+        let cp_range = ResolvedCheckpointRange::from_request(None, None, TIP, options)?;
+        let tx_range = first_tx(cp_range.range.start)..first_tx(cp_range.range.end);
+        ResolvedScan::<u64>::resolve(cp_range, tx_range, options)
+    }
+
+    fn resolve_events(options: &QueryOptions) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
+        let cp_range = ResolvedCheckpointRange::from_request(None, None, TIP, options)?;
+        let tx_range = first_tx(cp_range.range.start)..first_tx(cp_range.range.end);
+        ResolvedScan::<IntraTxCoordinate>::resolve(
+            cp_range,
+            IntraTxCoordinate::tx_window(tx_range),
+            options,
+        )
+    }
+
+    fn is_out_of_range<P>(resolved: Result<ResolvedScan<P>, RpcError>) -> bool {
+        resolved.is_err_and(|e| e.into_status_proto().code == tonic::Code::OutOfRange as i32)
+    }
+
+    #[test]
+    fn ascending_after_cursor_past_the_tip_is_out_of_range() {
+        let ascending = |cursor| after_options(Ordering::Ascending, cursor);
+
+        // The last indexed checkpoint, and the boundary a caught-up scan resumes from.
+        assert!(resolve_checkpoints(None, &ascending(cp_item(TIP - 1))).is_ok());
+        let caught_up = resolve_checkpoints(
+            None,
+            &ascending(CursorToken::boundary(Position::Checkpoints {
+                checkpoint: TIP,
+            })),
+        )
+        .unwrap();
+        assert!(caught_up.is_empty());
+        assert_eq!(caught_up.end_position, TIP);
+
+        // Positions this server has not indexed.
+        assert!(is_out_of_range(resolve_checkpoints(
+            None,
+            &ascending(cp_item(TIP))
+        )));
+        assert!(is_out_of_range(resolve_checkpoints(
+            None,
+            &ascending(CursorToken::boundary(Position::Checkpoints {
+                checkpoint: TIP + 1,
+            })),
+        )));
+
+        // A window the request ends at or below the tip is exhausted, not rejected; one that
+        // ends above it is bounded by the tip.
+        let past_window = resolve_checkpoints(Some(TIP), &ascending(cp_item(TIP + 5))).unwrap();
+        assert!(past_window.is_empty());
+        assert!(is_out_of_range(resolve_checkpoints(
+            Some(TIP + 1),
+            &ascending(cp_item(TIP + 5)),
+        )));
+    }
+
+    #[test]
+    fn descending_before_cursor_past_the_tip_is_out_of_range() {
+        let descending = |cursor| before_options(Ordering::Descending, cursor);
+
+        assert!(resolve_checkpoints(None, &descending(cp_item(TIP - 1))).is_ok());
+        assert!(
+            resolve_checkpoints(
+                None,
+                &descending(CursorToken::boundary(Position::Checkpoints {
+                    checkpoint: TIP
+                })),
+            )
+            .is_ok()
+        );
+        assert!(is_out_of_range(resolve_checkpoints(
+            None,
+            &descending(cp_item(TIP))
+        )));
+
+        // In a descending scan `after` is the far end, so past the tip it only empties the range.
+        let far_end =
+            resolve_checkpoints(None, &after_options(Ordering::Descending, cp_item(TIP + 5)))
+                .unwrap();
+        assert!(far_end.is_empty());
+    }
+
+    /// A transaction or event cursor inside the first unindexed checkpoint is past the tip even
+    /// though its checkpoint equals the tip; only the start of that checkpoint is caught up.
+    #[test]
+    fn cursor_inside_the_first_unindexed_checkpoint_is_out_of_range() {
+        let ascending = |cursor| after_options(Ordering::Ascending, cursor);
+        let tip_tx = first_tx(TIP);
+
+        assert!(resolve_transactions(&ascending(tx_item(TIP - 1, tip_tx - 1))).is_ok());
+        assert!(resolve_transactions(&ascending(tx_boundary(TIP, tip_tx))).is_ok());
+        assert!(is_out_of_range(resolve_transactions(&ascending(
+            tx_boundary(TIP, tip_tx + 2,)
+        ))));
+        assert!(is_out_of_range(resolve_transactions(&ascending(tx_item(
+            TIP, tip_tx
+        )))));
+
+        assert!(resolve_events(&ascending(ev_boundary(TIP, tip_tx, 0))).is_ok());
+        assert!(is_out_of_range(resolve_events(&ascending(ev_item(
+            TIP, tip_tx, 0
+        )))));
+        assert!(is_out_of_range(resolve_events(&ascending(ev_boundary(
+            TIP, tip_tx, 1
+        )))));
     }
 }

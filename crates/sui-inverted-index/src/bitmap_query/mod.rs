@@ -29,6 +29,9 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use anyhow::Result;
 use anyhow::bail;
@@ -41,13 +44,10 @@ mod iter;
 mod stream;
 
 pub use iter::eval_bitmap_query_bucket_iter;
-pub use stream::BitmapScanMetrics;
 pub use stream::eval_bitmap_query_stream;
 pub use stream::flatten_watermarked_buckets;
 
 // Cross-checked against the iterative evaluator in iter.rs tests.
-#[cfg(test)]
-pub(crate) use stream::BitmapScanBudget;
 #[cfg(test)]
 pub(crate) use stream::eval_bitmap_query_bucket_stream;
 
@@ -211,11 +211,272 @@ impl SkipPolicy {
     pub const DRAIN_ONLY: Self = Self {
         drain_probe_rows: None,
     };
+
+    /// What a gap catch-up step that reopens a leaf scan costs, in bucket
+    /// rows: the dead rows this policy drains before it judges a reopen
+    /// cheaper. 0 when it never reopens.
+    pub(crate) fn reopen_cost_rows(self) -> u64 {
+        self.drain_probe_rows
+            .map_or(0, |probe| u64::from(probe.get()))
+    }
 }
 
 impl ScanDirection {
     pub fn is_ascending(self) -> bool {
         matches!(self, Self::Ascending)
+    }
+}
+
+/// How often an evaluator emits the progress watermarks it computes.
+///
+/// A watermark is emitted once `min_buckets` of scan work have been done since
+/// the last emission; until then it is held, replacing any older held one.
+/// The scan's first output is never held. Items and stops pass through
+/// unchanged.
+///
+/// Scan work is counted in bucket rows: the rows charged to the budget
+/// ([`BitmapScanMetrics::buckets_evaluated`]), plus, for every gap catch-up
+/// step that reopened at least one leaf scan, the evaluation's
+/// [`SkipPolicy::drain_probe_rows`]. A reopen is a new backend read, and the
+/// skip policy reopens exactly when it judges that cheaper than draining that
+/// many dead rows, so it is priced at them. Leaves reopened in the same step
+/// count once, because the stream evaluator reopens them concurrently.
+///
+/// An emission is an emitted watermark or an item with a match inside the
+/// scan range; such an item also discards the held watermark. Items are whole
+/// buckets, so when the range starts or ends mid-bucket (e.g. a page resuming
+/// from a cursor) an edge item can hold only matches outside it. That item
+/// sends the client nothing and is not an emission.
+///
+/// The held watermark is discarded at every stop: a [`ScanStop::ScanLimit`]
+/// carries a frontier further along, and after a [`ScanStop::Fault`] or
+/// [`ScanStop::Cancelled`] the consumer is left with the last emitted
+/// watermark. At a clean end it is emitted only with `emit_held_at_end`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct WatermarkPacing {
+    /// Scan work, in bucket rows, between emissions. With 0 nothing is held.
+    pub min_buckets: u64,
+    /// Emit the held watermark at a clean end instead of discarding it.
+    pub emit_held_at_end: bool,
+}
+
+/// Bucket-scan accounting for one evaluation, passed once to `on_metrics`
+/// when the evaluator's stream or iterator is dropped. Nothing is reported
+/// when the stream evaluator rejects a misconfigured budget up front.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BitmapScanMetrics {
+    /// Bucket rows charged against the budget, including dead rows drained
+    /// during gap catch-up.
+    pub buckets_evaluated: u64,
+    /// Charged dead bucket rows discarded while catching up lagging leaves.
+    pub buckets_discarded: u64,
+    /// Physical leaf scans abandoned and reopened at a later bucket.
+    pub leaf_seeks: u64,
+}
+
+/// Bucket budget shared by all leaf scans of one evaluation; each leaf charges
+/// a bucket as it pulls it (`stream::budgeted_bucket_stream`,
+/// `iter::BudgetedBucketIter`).
+#[derive(Clone)]
+pub(crate) struct BitmapScanBudget {
+    initial: u64,
+    remaining: Arc<AtomicU64>,
+    discarded: Arc<AtomicU64>,
+    seeks: Arc<AtomicU64>,
+    reopen_steps: Arc<AtomicU64>,
+}
+
+impl BitmapScanBudget {
+    pub(crate) fn new(initial: u64) -> Self {
+        Self {
+            initial,
+            remaining: Arc::new(AtomicU64::new(initial)),
+            discarded: Arc::new(AtomicU64::new(0)),
+            seeks: Arc::new(AtomicU64::new(0)),
+            reopen_steps: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    /// Charge one bucket. Returns false on underflow.
+    fn try_take(&self) -> bool {
+        self.remaining
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |b| {
+                if b == 0 { None } else { Some(b - 1) }
+            })
+            .is_ok()
+    }
+
+    /// Charge a leaf's first bucket; always succeeds. Without this
+    /// reservation a sparse term could drain the shared pool before a sibling
+    /// leaf reaches its first bucket, and that leaf could never report a
+    /// position (a cursorless `SCAN_LIMIT`). The pool is still decremented
+    /// when not empty, so `buckets_evaluated` undercounts only first buckets
+    /// taken after it ran out.
+    fn take_first(&self) {
+        let _ = self
+            .remaining
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |b| {
+                Some(b.saturating_sub(1))
+            });
+    }
+
+    /// Bucket rows charged so far ([`BitmapScanMetrics::buckets_evaluated`]);
+    /// [`WatermarkPacer`] counts these.
+    fn buckets_evaluated(&self) -> u64 {
+        self.initial
+            .saturating_sub(self.remaining.load(Ordering::SeqCst))
+    }
+
+    fn note_discarded(&self) {
+        self.discarded.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn note_seek(&self) {
+        self.seeks.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Count one gap catch-up step that reopened at least one leaf scan.
+    fn note_reopen_step(&self) {
+        self.reopen_steps.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn discarded(&self) -> u64 {
+        self.discarded.load(Ordering::Relaxed)
+    }
+
+    fn seeks(&self) -> u64 {
+        self.seeks.load(Ordering::Relaxed)
+    }
+
+    /// Gap catch-up steps that reopened a leaf scan so far;
+    /// [`WatermarkPacer`] counts these.
+    fn reopen_steps(&self) -> u64 {
+        self.reopen_steps.load(Ordering::Relaxed)
+    }
+}
+
+/// Calls `on_metrics` once, on drop, with the final [`BitmapScanMetrics`].
+/// Evaluators keep it inside the stream or iterator they return.
+pub(crate) struct ObserveOnDrop<F: FnOnce(BitmapScanMetrics)> {
+    budget: BitmapScanBudget,
+    callback: Option<F>,
+}
+
+impl<F: FnOnce(BitmapScanMetrics)> Drop for ObserveOnDrop<F> {
+    fn drop(&mut self) {
+        if let Some(cb) = self.callback.take() {
+            cb(BitmapScanMetrics {
+                buckets_evaluated: self.budget.buckets_evaluated(),
+                buckets_discarded: self.budget.discarded(),
+                leaf_seeks: self.budget.seeks(),
+            });
+        }
+    }
+}
+
+/// Applies a [`WatermarkPacing`] to one evaluation's bucket-level output,
+/// reading the scan work done from the evaluation's shared budget.
+///
+/// The stream evaluator outputs a round before that round's gap catch-up and
+/// the iterator evaluator after it, so when catch-up drains rows or reopens
+/// leaves the two can pace the same scan differently.
+pub(crate) struct WatermarkPacer {
+    pacing: WatermarkPacing,
+    budget: BitmapScanBudget,
+    /// [`SkipPolicy::reopen_cost_rows`] of the evaluation's skip policy.
+    reopen_cost_rows: u64,
+    /// Scan range; the member-level output drops matches outside it.
+    range: Range<u64>,
+    bucket_size: u64,
+    /// Newest watermark not yet emitted; always newer than every emitted one.
+    held: Option<u64>,
+    /// Scan work done at the last emission; `None` before the first.
+    work_at_last_emission: Option<u64>,
+}
+
+impl WatermarkPacer {
+    pub(crate) fn new(
+        pacing: WatermarkPacing,
+        policy: SkipPolicy,
+        budget: BitmapScanBudget,
+        range: Range<u64>,
+        bucket_size: u64,
+    ) -> Self {
+        Self {
+            pacing,
+            budget,
+            reopen_cost_rows: policy.reopen_cost_rows(),
+            range,
+            bucket_size,
+            held: None,
+            work_at_last_emission: None,
+        }
+    }
+
+    /// The output to emit for one unpaced output: the output itself, or
+    /// nothing while a watermark is held.
+    pub(crate) fn pace(&mut self, output: WatermarkedBucket) -> Option<WatermarkedBucket> {
+        match output {
+            Ok(Watermarked::Item((bucket, bitmap))) => {
+                if self.has_member_in_range(bucket, &bitmap) {
+                    self.record_emission(self.scan_work());
+                }
+                Some(Ok(Watermarked::Item((bucket, bitmap))))
+            }
+            Ok(Watermarked::Watermark(position)) => {
+                let work = self.scan_work();
+                let due = self
+                    .work_at_last_emission
+                    .is_none_or(|last| work.saturating_sub(last) >= self.pacing.min_buckets);
+                if due {
+                    self.record_emission(work);
+                    Some(Ok(Watermarked::Watermark(position)))
+                } else {
+                    self.held = Some(position);
+                    None
+                }
+            }
+            Err(stop) => {
+                self.held = None;
+                Some(Err(stop))
+            }
+        }
+    }
+
+    /// Scan work done so far, in bucket rows (see [`WatermarkPacing`]).
+    fn scan_work(&self) -> u64 {
+        self.budget.buckets_evaluated().saturating_add(
+            self.reopen_cost_rows
+                .saturating_mul(self.budget.reopen_steps()),
+        )
+    }
+
+    fn record_emission(&mut self, work: u64) {
+        self.held = None;
+        self.work_at_last_emission = Some(work);
+    }
+
+    /// Whether `bitmap` (offsets within `bucket`) has a member inside the scan
+    /// range.
+    fn has_member_in_range(&self, bucket: u64, bitmap: &RoaringBitmap) -> bool {
+        let bucket_start = bucket.saturating_mul(self.bucket_size);
+        let low = self
+            .range
+            .start
+            .saturating_sub(bucket_start)
+            .min(self.bucket_size);
+        let high = self
+            .range
+            .end
+            .saturating_sub(bucket_start)
+            .min(self.bucket_size);
+        low < high && bitmap.range(low as u32..high as u32).next().is_some()
+    }
+
+    /// The watermark to emit when the unpaced output ends without a stop.
+    pub(crate) fn finish(&mut self) -> Option<u64> {
+        let held = self.held.take();
+        held.filter(|_| self.pacing.emit_held_at_end)
     }
 }
 
@@ -295,8 +556,8 @@ pub trait BitmapBucketSource: Clone + Send + 'static {
 /// Synchronous bucket iterator that can reposition within its scan bounds.
 pub trait SeekableBucketIterator: Iterator<Item = BucketItem> {
     /// Reposition so the next bucket is the first at or past `bucket` in scan
-    /// direction. Implementations preserve budget and first-row reservation
-    /// state across seeks.
+    /// direction. Only the backend scan moves: the evaluator's adapter around
+    /// each leaf keeps the budget and the first-bucket reservation.
     fn seek_bucket(&mut self, bucket: u64);
 }
 
@@ -984,13 +1245,318 @@ pub(crate) mod test_utils {
     pub(crate) fn exclude(value: &[u8]) -> BitmapLiteral {
         BitmapLiteral::exclude(test_key(value)).unwrap()
     }
+
+    /// A [`TestBucketSource`] whose `stop_key` leaf yields `stop()` after its
+    /// first `rows_before_stop` bucket rows in scan order, in place of the
+    /// rest of its rows.
+    #[derive(Clone)]
+    pub(crate) struct StoppingBucketSource {
+        pub(crate) inner: TestBucketSource,
+        pub(crate) stop_key: Vec<u8>,
+        pub(crate) rows_before_stop: usize,
+        pub(crate) stop: fn() -> LeafStop,
+    }
+
+    impl StoppingBucketSource {
+        fn bucket_items(
+            &self,
+            dimension_key: &[u8],
+            range: Range<u64>,
+            direction: ScanDirection,
+        ) -> Vec<BucketItem> {
+            let mut items = self.inner.bucket_items(dimension_key, range, direction);
+            if dimension_key == self.stop_key {
+                items.truncate(self.rows_before_stop);
+                items.push(Err((self.stop)()));
+            }
+            items
+        }
+    }
+
+    impl BitmapBucketSource for StoppingBucketSource {
+        fn scan_bucket_stream(
+            &self,
+            dimension_key: Vec<u8>,
+            range: Range<u64>,
+            direction: ScanDirection,
+        ) -> BucketStream {
+            stream::iter(self.bucket_items(&dimension_key, range, direction)).boxed()
+        }
+    }
+
+    impl<'a> BitmapBucketIteratorSource<'a> for StoppingBucketSource {
+        type Iter = VecBucketIter;
+
+        fn scan_bucket_iter(
+            &self,
+            dimension_key: Vec<u8>,
+            range: Range<u64>,
+            direction: ScanDirection,
+        ) -> Self::Iter {
+            VecBucketIter {
+                items: self
+                    .bucket_items(&dimension_key, range, direction)
+                    .into_iter(),
+                direction,
+                recorder: None,
+            }
+        }
+    }
+
+    /// Leaves `a` (member 1) and `b` (member 2) with a row in every bucket of
+    /// `0..bucket_count`; `b` also holds member 1 in `matching_buckets`, the
+    /// only buckets [`parallel_leaves_query`] matches. Neither leaf lags, so
+    /// each bucket charges exactly two rows.
+    pub(crate) fn parallel_leaves_source(
+        bucket_count: u64,
+        matching_buckets: &[u64],
+    ) -> TestBucketSource {
+        const MATCHED_MEMBERS: &[u32] = &[1];
+        let matches: Vec<(u64, &[u32])> = matching_buckets
+            .iter()
+            .map(|&bucket| (bucket, MATCHED_MEMBERS))
+            .collect();
+        parallel_leaves_source_with_matches(bucket_count, &matches)
+    }
+
+    /// [`parallel_leaves_source`] where [`parallel_leaves_query`] matches
+    /// exactly the listed members (relative to the bucket start) of each
+    /// listed bucket: both leaves hold them in addition to their own member.
+    pub(crate) fn parallel_leaves_source_with_matches(
+        bucket_count: u64,
+        matches: &[(u64, &[u32])],
+    ) -> TestBucketSource {
+        let leaf_rows = |own_member: u32| -> Vec<(u64, Vec<u32>)> {
+            (0..bucket_count)
+                .map(|bucket| {
+                    let mut members = vec![own_member];
+                    for (_, matched) in matches.iter().filter(|(b, _)| *b == bucket) {
+                        members.extend_from_slice(matched);
+                    }
+                    (bucket, members)
+                })
+                .collect()
+        };
+        TestBucketSource {
+            buckets: Arc::new(BTreeMap::from([
+                (test_key(b"a"), leaf_rows(1)),
+                (test_key(b"b"), leaf_rows(2)),
+            ])),
+        }
+    }
+
+    /// A [`TestBucketSource`] that counts the scan work its scans do: the
+    /// rows they yield (until the budget runs out this equals
+    /// [`BitmapScanMetrics::buckets_evaluated`]) and the leaf scans reopened
+    /// ([`BitmapScanMetrics::leaf_seeks`]). A stream scan opened again for a
+    /// key it has already opened, or a seek of an iterator scan, is a reopen.
+    #[derive(Clone)]
+    pub(crate) struct ScanWorkCountingSource {
+        inner: TestBucketSource,
+        rows_yielded: Arc<AtomicU64>,
+        reopens: Arc<AtomicU64>,
+        opened_keys: Arc<Mutex<HashSet<Vec<u8>>>>,
+    }
+
+    impl ScanWorkCountingSource {
+        pub(crate) fn new(inner: TestBucketSource) -> Self {
+            Self {
+                inner,
+                rows_yielded: Arc::new(AtomicU64::new(0)),
+                reopens: Arc::new(AtomicU64::new(0)),
+                opened_keys: Arc::new(Mutex::new(HashSet::new())),
+            }
+        }
+
+        pub(crate) fn rows_yielded(&self) -> u64 {
+            self.rows_yielded.load(Ordering::SeqCst)
+        }
+
+        pub(crate) fn reopens(&self) -> u64 {
+            self.reopens.load(Ordering::SeqCst)
+        }
+    }
+
+    impl BitmapBucketSource for ScanWorkCountingSource {
+        fn scan_bucket_stream(
+            &self,
+            dimension_key: Vec<u8>,
+            range: Range<u64>,
+            direction: ScanDirection,
+        ) -> BucketStream {
+            let first_open = self
+                .opened_keys
+                .lock()
+                .unwrap()
+                .insert(dimension_key.clone());
+            if !first_open {
+                self.reopens.fetch_add(1, Ordering::SeqCst);
+            }
+            let rows_yielded = self.rows_yielded.clone();
+            self.inner
+                .scan_bucket_stream(dimension_key, range, direction)
+                .inspect(move |row| {
+                    if row.is_ok() {
+                        rows_yielded.fetch_add(1, Ordering::SeqCst);
+                    }
+                })
+                .boxed()
+        }
+    }
+
+    impl<'a> BitmapBucketIteratorSource<'a> for ScanWorkCountingSource {
+        type Iter = ScanWorkCountingIter;
+
+        fn scan_bucket_iter(
+            &self,
+            dimension_key: Vec<u8>,
+            range: Range<u64>,
+            direction: ScanDirection,
+        ) -> Self::Iter {
+            ScanWorkCountingIter {
+                inner: self.inner.scan_bucket_iter(dimension_key, range, direction),
+                rows_yielded: self.rows_yielded.clone(),
+                reopens: self.reopens.clone(),
+            }
+        }
+    }
+
+    pub(crate) struct ScanWorkCountingIter {
+        inner: VecBucketIter,
+        rows_yielded: Arc<AtomicU64>,
+        reopens: Arc<AtomicU64>,
+    }
+
+    impl Iterator for ScanWorkCountingIter {
+        type Item = BucketItem;
+
+        fn next(&mut self) -> Option<BucketItem> {
+            let row = self.inner.next();
+            if matches!(row, Some(Ok(_))) {
+                self.rows_yielded.fetch_add(1, Ordering::SeqCst);
+            }
+            row
+        }
+    }
+
+    impl SeekableBucketIterator for ScanWorkCountingIter {
+        fn seek_bucket(&mut self, target: u64) {
+            self.reopens.fetch_add(1, Ordering::SeqCst);
+            self.inner.seek_bucket(target);
+        }
+    }
+
+    /// `a AND b` over [`parallel_leaves_source`].
+    pub(crate) fn parallel_leaves_query() -> BitmapQuery {
+        BitmapQuery::new(vec![
+            BitmapTerm::new(vec![include(b"a"), include(b"b")]).unwrap(),
+        ])
+        .unwrap()
+    }
+
+    /// Pacing that holds no watermark: the evaluation's own output.
+    pub(crate) const EVERY_WATERMARK: WatermarkPacing = WatermarkPacing {
+        min_buckets: 0,
+        emit_held_at_end: false,
+    };
+
+    pub(crate) fn charged_buckets(min_buckets: u64, emit_held_at_end: bool) -> WatermarkPacing {
+        WatermarkPacing {
+            min_buckets,
+            emit_held_at_end,
+        }
+    }
+
+    /// Comparable form of a [`ScanStop`].
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub(crate) enum ObservedStop {
+        ScanLimit(u64),
+        Cancelled,
+        Fault,
+    }
+
+    /// Comparable form of one member-level evaluator output.
+    pub(crate) type ObservedMemberOutput = Result<Watermarked<u64>, ObservedStop>;
+
+    pub(crate) fn observe_member_outputs(
+        outputs: Vec<Result<Watermarked<u64>, ScanStop>>,
+    ) -> Vec<ObservedMemberOutput> {
+        outputs
+            .into_iter()
+            .map(|output| {
+                output.map_err(|stop| match stop {
+                    ScanStop::ScanLimit { scan_frontier } => ObservedStop::ScanLimit(scan_frontier),
+                    ScanStop::Cancelled => ObservedStop::Cancelled,
+                    ScanStop::Fault(_) => ObservedStop::Fault,
+                })
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::test_utils::BUCKET_SIZE;
     use super::test_utils::exclude;
     use super::test_utils::include;
+    use super::test_utils::make_bitmap;
     use super::*;
+
+    fn paced_watermark(position: u64) -> WatermarkedBucket {
+        Ok(Watermarked::Watermark(position))
+    }
+
+    /// An item of bucket 5 with a match inside the pacers' scan range.
+    fn paced_item() -> WatermarkedBucket {
+        Ok(Watermarked::Item((5, make_bitmap(&[1]))))
+    }
+
+    /// Scan work adds rows charged and, per reopen step, the skip policy's
+    /// drain probe rows: here 100 of work is due, and a reopen step costs 50.
+    /// Neither 60 rows nor one reopen step alone is due, but together they
+    /// are. An item with a match in range is an emission too, so it restarts
+    /// the count.
+    #[test]
+    fn scan_work_adds_charged_rows_and_reopen_steps() {
+        let budget = BitmapScanBudget::new(1_000);
+        let pacing = WatermarkPacing {
+            min_buckets: 100,
+            emit_held_at_end: false,
+        };
+        let policy = SkipPolicy {
+            drain_probe_rows: std::num::NonZeroU32::new(50),
+        };
+        let mut pacer = WatermarkPacer::new(
+            pacing,
+            policy,
+            budget.clone(),
+            0..(10 * BUCKET_SIZE),
+            BUCKET_SIZE,
+        );
+        // (rows charged and reopen steps just before the output, the output,
+        // whether it is emitted)
+        let steps = [
+            (0, 0, paced_watermark(1), true),
+            (60, 0, paced_watermark(2), false),
+            (0, 1, paced_watermark(3), true),
+            (0, 1, paced_watermark(4), false),
+            (0, 0, paced_item(), true),
+            // 100 of work since the last watermark, but 50 since the item.
+            (0, 1, paced_watermark(6), false),
+            (49, 0, paced_watermark(7), false),
+            (1, 0, paced_watermark(8), true),
+        ];
+        for (step, (rows, reopen_steps, output, emitted)) in steps.into_iter().enumerate() {
+            for _ in 0..rows {
+                assert!(budget.try_take());
+            }
+            for _ in 0..reopen_steps {
+                budget.note_reopen_step();
+            }
+            let paced = pacer.pace(output);
+            assert_eq!(paced.is_some(), emitted, "step {step}: {paced:?}");
+        }
+    }
 
     #[test]
     fn bitmap_query_validation_rejects_empty_shapes() {

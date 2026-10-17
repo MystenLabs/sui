@@ -20,6 +20,7 @@ pub use bitmap_query::ScanDirection;
 pub use bitmap_query::ScanStop;
 pub use bitmap_query::SeekableBucketIterator;
 pub use bitmap_query::SkipPolicy;
+pub use bitmap_query::WatermarkPacing;
 pub use bitmap_query::Watermarked;
 pub use bitmap_query::WatermarkedBucketStream;
 pub use bitmap_query::dense_universe_buckets;

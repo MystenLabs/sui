@@ -13,12 +13,13 @@
 //! by streaming backends such as BigTable; the synchronous
 //! [`super::eval_bitmap_query_bucket_iter`] mirrors it and shares the per-bucket
 //! evaluation ([`eval_term_at_bucket`]).
+//!
+//! Watermark emission is paced by a [`WatermarkPacing`]:
+//! [`pace_watermarked_buckets`] applies it to the unpaced bucket-level
+//! evaluation before member ids are flattened out of the buckets.
 
 use std::ops::Range;
 use std::pin::Pin;
-use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 
 use futures::Stream;
 use futures::StreamExt;
@@ -29,14 +30,19 @@ use roaring::RoaringBitmap;
 
 use super::BitmapBucketSource;
 use super::BitmapQuery;
+use super::BitmapScanBudget;
+use super::BitmapScanMetrics;
 use super::BucketItem;
 use super::BucketStream;
 use super::DedupedQuery;
 use super::LeafHead;
 use super::LeafStop;
+use super::ObserveOnDrop;
 use super::ScanDirection;
 use super::ScanStop;
 use super::SkipPolicy;
+use super::WatermarkPacer;
+use super::WatermarkPacing;
 use super::Watermarked;
 use super::WatermarkedBucketStream;
 use super::advance_in_direction;
@@ -52,112 +58,6 @@ use super::recompute_unreferenced;
 use super::strictly_before;
 use super::take_snapshot_bitmap;
 
-/// Per-request bucket-scan accounting, delivered via the `on_metrics`
-/// callback passed to `eval_bitmap_query_stream`. Fires once when the
-/// eval pipeline is dropped (natural end, error, or consumer cancel).
-/// The sole exception is the budget-misconfig early-out, which errors
-/// before any scan is set up and emits nothing.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct BitmapScanMetrics {
-    /// Bucket rows charged against the budget, including dead rows drained
-    /// during gap catch-up.
-    pub buckets_evaluated: u64,
-    /// Charged dead bucket rows discarded while catching up lagging leaves.
-    pub buckets_discarded: u64,
-    /// Physical leaf scans abandoned and reopened at a later bucket.
-    pub leaf_seeks: u64,
-}
-
-/// Per-request evaluated-bucket budget shared across all dimension
-/// streams of one eval. Charges are post-poll — see
-/// `budgeted_bucket_stream`.
-#[derive(Clone)]
-pub(crate) struct BitmapScanBudget {
-    initial: u64,
-    remaining: Arc<AtomicU64>,
-    discarded: Arc<AtomicU64>,
-    seeks: Arc<AtomicU64>,
-}
-
-impl BitmapScanBudget {
-    pub(crate) fn new(initial: u64) -> Self {
-        Self {
-            initial,
-            remaining: Arc::new(AtomicU64::new(initial)),
-            discarded: Arc::new(AtomicU64::new(0)),
-            seeks: Arc::new(AtomicU64::new(0)),
-        }
-    }
-
-    /// Charge one bucket. Returns false on underflow.
-    fn try_take(&self) -> bool {
-        self.remaining
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |b| {
-                if b == 0 { None } else { Some(b - 1) }
-            })
-            .is_ok()
-    }
-
-    /// Charge a leaf's mandatory first bucket: decrements the shared pool
-    /// when it can, but ALWAYS succeeds. The runtime guards `budget >=
-    /// unique_leaf_count`, but a *shared* atomic with concurrent leaves
-    /// gives no ordering guarantee — a sparse term can drain the pool
-    /// before a slower sibling leaf charges its first bucket, leaving that
-    /// leaf unable to report its first position (a cursorless `SCAN_LIMIT`).
-    /// Reserving the first bucket per leaf makes the `unique_leaf_count`
-    /// floor's promise — "every leaf reaches its first bucket" — hold.
-    /// Charging-when-possible keeps `buckets_evaluated` accurate in the
-    /// common `budget >> leaves` case; it only undercounts a first bucket
-    /// taken after the pool was already exhausted by other leaves.
-    fn take_first(&self) {
-        let _ = self
-            .remaining
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |b| {
-                Some(b.saturating_sub(1))
-            });
-    }
-
-    fn buckets_evaluated(&self) -> u64 {
-        self.initial
-            .saturating_sub(self.remaining.load(Ordering::SeqCst))
-    }
-    fn note_discarded(&self) {
-        self.discarded.fetch_add(1, Ordering::Relaxed);
-    }
-
-    fn note_seek(&self) {
-        self.seeks.fetch_add(1, Ordering::Relaxed);
-    }
-
-    fn discarded(&self) -> u64 {
-        self.discarded.load(Ordering::Relaxed)
-    }
-
-    fn seeks(&self) -> u64 {
-        self.seeks.load(Ordering::Relaxed)
-    }
-}
-
-/// RAII guard: fires `on_metrics` exactly once on drop with the final
-/// `BitmapScanMetrics`. Held inside the boxed eval stream so the callback
-/// fires on natural end, error, or consumer cancel.
-struct ObserveOnDrop<F: FnOnce(BitmapScanMetrics) + Send + 'static> {
-    budget: BitmapScanBudget,
-    callback: Option<F>,
-}
-
-impl<F: FnOnce(BitmapScanMetrics) + Send + 'static> Drop for ObserveOnDrop<F> {
-    fn drop(&mut self) {
-        if let Some(cb) = self.callback.take() {
-            cb(BitmapScanMetrics {
-                buckets_evaluated: self.budget.buckets_evaluated(),
-                buckets_discarded: self.budget.discarded(),
-                leaf_seeks: self.budget.seeks(),
-            });
-        }
-    }
-}
-
 /// Evaluate a DNF `BitmapQuery` against a backend-provided bitmap source.
 ///
 /// `budget` caps evaluated buckets across all dimension scans (see scan-limit
@@ -167,6 +67,10 @@ impl<F: FnOnce(BitmapScanMetrics) + Send + 'static> Drop for ObserveOnDrop<F> {
 /// Output emits `Watermarked::Item(absolute_member_id)` interleaved with
 /// `Watermarked::Watermark(p)` derived from the slowest leaf — sparse scans
 /// that match nothing still report progress at the rate sources advance.
+///
+/// `pacing` decides which of those watermarks are emitted (see
+/// [`WatermarkPacing`]); the bucket rows it counts are the ones charged
+/// against `budget`.
 pub fn eval_bitmap_query_stream<S, F>(
     source: S,
     query: BitmapQuery,
@@ -175,6 +79,7 @@ pub fn eval_bitmap_query_stream<S, F>(
     direction: ScanDirection,
     budget: u64,
     policy: SkipPolicy,
+    pacing: WatermarkPacing,
     on_metrics: F,
 ) -> BoxStream<'static, Result<Watermarked<u64>, ScanStop>>
 where
@@ -196,7 +101,7 @@ where
         .boxed();
     }
     let budget = BitmapScanBudget::new(budget);
-    let bucket_stream = eval_bitmap_query_bucket_stream(
+    let unpaced = eval_bitmap_query_bucket_stream(
         source,
         query,
         range.clone(),
@@ -205,7 +110,9 @@ where
         budget.clone(),
         policy,
     );
-    let inner = flatten_watermarked_buckets(bucket_stream, range.clone(), bucket_size, direction);
+    let pacer = WatermarkPacer::new(pacing, policy, budget.clone(), range.clone(), bucket_size);
+    let paced = pace_watermarked_buckets(unpaced, pacer);
+    let inner = flatten_watermarked_buckets(paced, range.clone(), bucket_size, direction);
     // Wrapping the guard inside `async_stream::stream!` keeps it alive
     // for the stream's full lifetime; the callback fires when the
     // consumer drops the returned `BoxStream`.
@@ -218,6 +125,29 @@ where
         futures::pin_mut!(inner);
         while let Some(item) = inner.next().await {
             yield item;
+        }
+    }
+    .boxed()
+}
+
+/// Apply `pacer` to an unpaced bucket-level evaluation. The pacer must be
+/// built from the evaluation's shared budget, whose charged bucket rows it
+/// counts, and its scan range and bucket size. When the unpaced stream ends,
+/// the watermark [`WatermarkPacer::finish`] returns, if any, is emitted last.
+fn pace_watermarked_buckets(
+    unpaced: WatermarkedBucketStream,
+    pacer: WatermarkPacer,
+) -> WatermarkedBucketStream {
+    async_stream::stream! {
+        let mut unpaced = unpaced;
+        let mut pacer = pacer;
+        while let Some(output) = unpaced.next().await {
+            if let Some(paced) = pacer.pace(output) {
+                yield paced;
+            }
+        }
+        if let Some(position) = pacer.finish() {
+            yield Ok(Watermarked::Watermark(position));
         }
     }
     .boxed()
@@ -546,7 +476,12 @@ where
                         }
                     })
                 });
+            let seeks_before_catch_up = budget.seeks();
             futures::future::join_all(catch_up).await;
+            // Leaves reopened in this step reopen concurrently: one step.
+            if budget.seeks() > seeks_before_catch_up {
+                budget.note_reopen_step();
+            }
         }
     }
     .boxed()
@@ -649,6 +584,7 @@ mod tests {
     use crate::bitmap_query::BitmapLiteral;
     use crate::bitmap_query::BitmapTerm;
     use crate::bitmap_query::BucketStream;
+    use crate::bitmap_query::test_utils::EVERY_WATERMARK;
 
     const BUCKET_SIZE: u64 = 100_000;
     type TestBuckets = BTreeMap<Vec<u8>, Vec<(u64, Vec<u32>)>>;
@@ -772,6 +708,7 @@ mod tests {
             ScanDirection::Ascending,
             3,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
@@ -855,6 +792,7 @@ mod tests {
             ScanDirection::Ascending,
             3,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
@@ -942,6 +880,7 @@ mod tests {
             ScanDirection::Ascending,
             u64::MAX,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let (items, _watermarks) = drain_marked(stream).await.unwrap();
@@ -983,6 +922,7 @@ mod tests {
             ScanDirection::Ascending,
             u64::MAX,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let (items, _watermarks) = drain_marked(stream).await.unwrap();
@@ -1014,6 +954,7 @@ mod tests {
             ScanDirection::Ascending,
             u64::MAX,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let (items, _watermarks) = drain_marked(stream).await.unwrap();
@@ -1043,6 +984,7 @@ mod tests {
             ScanDirection::Descending,
             u64::MAX,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let (items, _watermarks) = drain_marked(stream).await.unwrap();
@@ -1121,6 +1063,7 @@ mod tests {
             ScanDirection::Ascending,
             0,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             move |m| *metrics_sink.lock().unwrap() = Some(m),
         );
         let err = drain_marked(stream).await.unwrap_err();
@@ -1177,6 +1120,7 @@ mod tests {
             ScanDirection::Ascending,
             4,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             move |m| *metrics_sink.lock().unwrap() = Some(m),
         );
         let err = drain_marked(stream).await.unwrap_err();
@@ -1227,6 +1171,7 @@ mod tests {
             ScanDirection::Ascending,
             2,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let result = drain_marked(stream).await;
@@ -1273,6 +1218,7 @@ mod tests {
             ScanDirection::Ascending,
             4,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
@@ -1328,6 +1274,7 @@ mod tests {
             ScanDirection::Ascending,
             u64::MAX,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let (items, watermarks) = drain_marked(stream).await.unwrap();
@@ -1367,6 +1314,7 @@ mod tests {
             ScanDirection::Descending,
             u64::MAX,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let (items, watermarks) = drain_marked(stream).await.unwrap();
@@ -1417,6 +1365,7 @@ mod tests {
             ScanDirection::Ascending,
             u64::MAX,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let (items, watermarks) = drain_marked(stream).await.unwrap();
@@ -1456,6 +1405,7 @@ mod tests {
             ScanDirection::Ascending,
             u64::MAX,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let all: Vec<Watermarked<u64>> = stream.try_collect().await.unwrap();
@@ -1576,6 +1526,7 @@ mod tests {
             ScanDirection::Ascending,
             1_000,
             gap_probe_policy(),
+            EVERY_WATERMARK,
             move |observed| metrics_tx.send(observed).unwrap(),
         );
         let (items, watermarks) = drain_marked(stream).await.unwrap();
@@ -1610,6 +1561,7 @@ mod tests {
             ScanDirection::Descending,
             1_000,
             gap_probe_policy(),
+            EVERY_WATERMARK,
             move |observed| metrics_tx.send(observed).unwrap(),
         );
         let (items, watermarks) = drain_marked(stream).await.unwrap();
@@ -1640,6 +1592,7 @@ mod tests {
             ScanDirection::Ascending,
             5,
             gap_probe_policy(),
+            EVERY_WATERMARK,
             |_| {},
         )
         .collect()
@@ -1666,6 +1619,7 @@ mod tests {
             ScanDirection::Ascending,
             100,
             gap_probe_policy(),
+            EVERY_WATERMARK,
             |_| {},
         );
         let (resumed_items, _) = drain_marked(resumed).await.unwrap();
@@ -1694,6 +1648,7 @@ mod tests {
             ScanDirection::Ascending,
             100,
             gap_probe_policy(),
+            EVERY_WATERMARK,
             move |observed| metrics_tx.send(observed).unwrap(),
         );
         let (items, _) = drain_marked(stream).await.unwrap();
@@ -1725,6 +1680,7 @@ mod tests {
             ScanDirection::Ascending,
             100,
             gap_probe_policy(),
+            EVERY_WATERMARK,
             move |observed| metrics_tx.send(observed).unwrap(),
         );
         let (items, _) = drain_marked(stream).await.unwrap();
@@ -1859,6 +1815,7 @@ mod tests {
             ScanDirection::Ascending,
             3,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
@@ -1890,6 +1847,7 @@ mod tests {
             ScanDirection::Ascending,
             3,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
@@ -1921,10 +1879,351 @@ mod tests {
             ScanDirection::Ascending,
             3,
             SkipPolicy::DRAIN_ONLY,
+            EVERY_WATERMARK,
             |_| {},
         );
         let all: Vec<Result<Watermarked<u64>, ScanStop>> = stream.collect().await;
 
         assert_eq!(stream_items(&all), vec![1, 2]);
+    }
+}
+
+#[cfg(test)]
+mod pacing_tests {
+    use super::*;
+    use crate::bitmap_query::test_utils::*;
+
+    const BUCKET_COUNT: u64 = 10;
+
+    fn scan_range() -> Range<u64> {
+        0..(BUCKET_COUNT * BUCKET_SIZE)
+    }
+
+    /// Watermarks of the item-less [`parallel_leaves_source`] scan, each
+    /// paired with the bucket rows charged when it arrived. `None` collects
+    /// the unpaced bucket-level evaluation.
+    async fn itemless_watermarks_with_charges(
+        direction: ScanDirection,
+        pacing: Option<WatermarkPacing>,
+    ) -> Vec<(u64, u64)> {
+        let budget = BitmapScanBudget::new(1_000_000);
+        let unpaced = eval_bitmap_query_bucket_stream(
+            parallel_leaves_source(BUCKET_COUNT, &[]),
+            parallel_leaves_query(),
+            scan_range(),
+            BUCKET_SIZE,
+            direction,
+            budget.clone(),
+            SkipPolicy::DRAIN_ONLY,
+        );
+        let mut outputs = match pacing {
+            Some(pacing) => pace_watermarked_buckets(
+                unpaced,
+                WatermarkPacer::new(
+                    pacing,
+                    SkipPolicy::DRAIN_ONLY,
+                    budget.clone(),
+                    scan_range(),
+                    BUCKET_SIZE,
+                ),
+            ),
+            None => unpaced,
+        };
+        let mut watermarks = Vec::new();
+        while let Some(output) = outputs.next().await {
+            match output {
+                Ok(Watermarked::Watermark(position)) => {
+                    watermarks.push((position, budget.buckets_evaluated()))
+                }
+                other => panic!("item-less scan emitted {other:?}"),
+            }
+        }
+        watermarks
+    }
+
+    /// Output of the public stream evaluator for [`parallel_leaves_query`].
+    async fn member_outputs<S: BitmapBucketSource>(
+        source: S,
+        direction: ScanDirection,
+        budget: u64,
+        pacing: WatermarkPacing,
+    ) -> Vec<ObservedMemberOutput> {
+        observe_member_outputs(
+            eval_bitmap_query_stream(
+                source,
+                parallel_leaves_query(),
+                scan_range(),
+                BUCKET_SIZE,
+                direction,
+                budget,
+                SkipPolicy::DRAIN_ONLY,
+                pacing,
+                |_| {},
+            )
+            .collect()
+            .await,
+        )
+    }
+
+    /// On an item-less scan the first watermark is emitted at once, every
+    /// later watermark is emitted exactly when at least `min_buckets` rows
+    /// have been charged since the previous emission, and the emitted
+    /// watermarks are a subsequence of the unpaced run's.
+    #[tokio::test]
+    async fn charged_buckets_emits_after_min_buckets_charged_rows() {
+        for direction in [ScanDirection::Ascending, ScanDirection::Descending] {
+            let unpaced = itemless_watermarks_with_charges(direction, None).await;
+            assert_eq!(unpaced.len() as u64, BUCKET_COUNT, "{direction:?}");
+            for min_buckets in [1, 3, 5] {
+                let context = format!("{direction:?}, min_buckets {min_buckets}");
+                let paced = itemless_watermarks_with_charges(
+                    direction,
+                    Some(charged_buckets(min_buckets, false)),
+                )
+                .await;
+                assert_eq!(
+                    paced.first(),
+                    unpaced.first(),
+                    "first watermark must not be held: {context}"
+                );
+                let mut last_emission = paced[0];
+                let mut later_emissions = paced[1..].iter().copied().peekable();
+                for &(position, charged) in &unpaced[1..] {
+                    let charged_since_emission = charged - last_emission.1;
+                    if later_emissions.peek() == Some(&(position, charged)) {
+                        later_emissions.next();
+                        assert!(
+                            charged_since_emission >= min_buckets,
+                            "watermark {position} emitted after {charged_since_emission} \
+                             charged rows: {context}"
+                        );
+                        last_emission = (position, charged);
+                    } else {
+                        assert!(
+                            charged_since_emission < min_buckets,
+                            "watermark {position} held after {charged_since_emission} \
+                             charged rows: {context}"
+                        );
+                    }
+                }
+                assert_eq!(
+                    later_emissions.next(),
+                    None,
+                    "paced {paced:?} is not a subsequence of unpaced {unpaced:?}: {context}"
+                );
+            }
+        }
+    }
+
+    /// An item is emitted at once, discards the held watermark and restarts
+    /// the count: the next watermark waits for five rows charged after the
+    /// item. Each bucket charges two rows and bucket 6 holds the only match,
+    /// so ascending the item arrives at 14 charged rows and the next watermark
+    /// at 20; a count running from the previous emission (8) would emit the
+    /// watermark that follows the item at once.
+    #[tokio::test]
+    async fn item_discards_held_watermark_and_restarts_count() {
+        let source = parallel_leaves_source(BUCKET_COUNT, &[6]);
+        let item: ObservedMemberOutput = Ok(Watermarked::Item(6 * BUCKET_SIZE + 1));
+        let watermark = |bucket: u64| -> ObservedMemberOutput {
+            Ok(Watermarked::Watermark(bucket * BUCKET_SIZE))
+        };
+        let cases: [(ScanDirection, Vec<ObservedMemberOutput>); 2] = [
+            (
+                ScanDirection::Ascending,
+                vec![watermark(1), watermark(4), item.clone(), watermark(10)],
+            ),
+            (
+                ScanDirection::Descending,
+                vec![watermark(9), item.clone(), watermark(3), watermark(0)],
+            ),
+        ];
+        for (direction, expected) in cases {
+            let paced = member_outputs(
+                source.clone(),
+                direction,
+                1_000_000,
+                charged_buckets(5, false),
+            )
+            .await;
+            assert_eq!(paced, expected, "{direction:?}");
+        }
+    }
+
+    /// A scan-limit stop discards the held watermark: the paced run ends with
+    /// the unpaced run's stop and frontier right after its last emission, even
+    /// with `emit_held_at_end`.
+    #[tokio::test]
+    async fn scan_limit_discards_held_watermark() {
+        let source = parallel_leaves_source(BUCKET_COUNT, &[]);
+        for direction in [ScanDirection::Ascending, ScanDirection::Descending] {
+            // Seven rows cover three buckets (two rows each) before the budget
+            // stops the scan; the second and third watermarks come fewer than
+            // five rows after the first.
+            let unpaced = member_outputs(source.clone(), direction, 7, EVERY_WATERMARK).await;
+            assert_eq!(unpaced.len(), 4, "{direction:?}: {unpaced:?}");
+            assert!(
+                matches!(unpaced[3], Err(ObservedStop::ScanLimit(_))),
+                "{direction:?}: {unpaced:?}"
+            );
+            let paced =
+                member_outputs(source.clone(), direction, 7, charged_buckets(5, true)).await;
+            assert_eq!(
+                paced,
+                vec![unpaced[0].clone(), unpaced[3].clone()],
+                "{direction:?}"
+            );
+        }
+    }
+
+    /// A fault or cancellation discards the held watermark, the newest of the
+    /// unpaced run: the paced run ends with the stop right after its last
+    /// emission.
+    #[tokio::test]
+    async fn fault_and_cancellation_discard_held_watermark() {
+        let stops: [(fn() -> LeafStop, ObservedStop); 2] = [
+            (
+                || LeafStop::Fault(anyhow::anyhow!("leaf storage fault")),
+                ObservedStop::Fault,
+            ),
+            (|| LeafStop::Cancelled, ObservedStop::Cancelled),
+        ];
+        for (stop, observed_stop) in stops {
+            // Leaf `a` stops after five buckets; ten rows are charged by then.
+            let source = StoppingBucketSource {
+                inner: parallel_leaves_source(BUCKET_COUNT, &[]),
+                stop_key: test_key(b"a"),
+                rows_before_stop: 5,
+                stop,
+            };
+            for (direction, emitted_buckets) in [
+                (ScanDirection::Ascending, [1, 4]),
+                (ScanDirection::Descending, [9, 6]),
+            ] {
+                let context = format!("{direction:?}, {observed_stop:?}");
+                let unpaced =
+                    member_outputs(source.clone(), direction, 1_000_000, EVERY_WATERMARK).await;
+                let newest_unpaced_watermark =
+                    unpaced.iter().rev().find_map(|output| match output {
+                        Ok(Watermarked::Watermark(position)) => Some(*position),
+                        _ => None,
+                    });
+                assert_eq!(
+                    newest_unpaced_watermark,
+                    Some(5 * BUCKET_SIZE),
+                    "{context}: {unpaced:?}"
+                );
+                assert_eq!(
+                    unpaced.last(),
+                    Some(&Err(observed_stop.clone())),
+                    "{context}"
+                );
+
+                let paced = member_outputs(
+                    source.clone(),
+                    direction,
+                    1_000_000,
+                    charged_buckets(5, false),
+                )
+                .await;
+                let mut expected: Vec<ObservedMemberOutput> = emitted_buckets
+                    .iter()
+                    .map(|bucket| Ok(Watermarked::Watermark(bucket * BUCKET_SIZE)))
+                    .collect();
+                expected.push(Err(observed_stop.clone()));
+                assert_eq!(paced, expected, "{context}");
+            }
+        }
+    }
+
+    /// At a clean end the held watermark, the newest of the unpaced run, is
+    /// emitted only with `emit_held_at_end`. With four rows between emissions
+    /// the last watermark comes two rows after the previous emission.
+    #[tokio::test]
+    async fn clean_end_emits_held_watermark_only_when_configured() {
+        let source = parallel_leaves_source(BUCKET_COUNT, &[]);
+        for direction in [ScanDirection::Ascending, ScanDirection::Descending] {
+            let unpaced =
+                member_outputs(source.clone(), direction, 1_000_000, EVERY_WATERMARK).await;
+            let newest_unpaced = unpaced.last().cloned().expect("unpaced run emits");
+            assert!(
+                matches!(newest_unpaced, Ok(Watermarked::Watermark(_))),
+                "{direction:?}: {unpaced:?}"
+            );
+
+            let mut emit_held = member_outputs(
+                source.clone(),
+                direction,
+                1_000_000,
+                charged_buckets(4, true),
+            )
+            .await;
+            let discard_held = member_outputs(
+                source.clone(),
+                direction,
+                1_000_000,
+                charged_buckets(4, false),
+            )
+            .await;
+            assert!(
+                !discard_held.contains(&newest_unpaced),
+                "{direction:?}: {discard_held:?}"
+            );
+            assert_eq!(emit_held.pop(), Some(newest_unpaced), "{direction:?}");
+            assert_eq!(emit_held, discard_held, "{direction:?}");
+        }
+    }
+
+    /// With `min_buckets` 0 the pacer holds nothing: the paced run emits
+    /// exactly the unpaced evaluation's items, watermarks and stops, in order.
+    async fn assert_zero_min_buckets_matches_unpaced<S: BitmapBucketSource>(source: S) {
+        for direction in [ScanDirection::Ascending, ScanDirection::Descending] {
+            for budget in [3, 7, 1_000_000] {
+                let unpaced = observe_member_outputs(
+                    flatten_watermarked_buckets(
+                        eval_bitmap_query_bucket_stream(
+                            source.clone(),
+                            parallel_leaves_query(),
+                            scan_range(),
+                            BUCKET_SIZE,
+                            direction,
+                            BitmapScanBudget::new(budget),
+                            SkipPolicy::DRAIN_ONLY,
+                        ),
+                        scan_range(),
+                        BUCKET_SIZE,
+                        direction,
+                    )
+                    .collect()
+                    .await,
+                );
+                for emit_held_at_end in [false, true] {
+                    let paced = member_outputs(
+                        source.clone(),
+                        direction,
+                        budget,
+                        charged_buckets(0, emit_held_at_end),
+                    )
+                    .await;
+                    assert_eq!(
+                        paced, unpaced,
+                        "{direction:?}, budget {budget}, emit_held_at_end {emit_held_at_end}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn zero_min_buckets_matches_unpaced_evaluation() {
+        assert_zero_min_buckets_matches_unpaced(parallel_leaves_source(BUCKET_COUNT, &[3, 6]))
+            .await;
+        assert_zero_min_buckets_matches_unpaced(StoppingBucketSource {
+            inner: parallel_leaves_source(BUCKET_COUNT, &[3]),
+            stop_key: test_key(b"b"),
+            rows_before_stop: 6,
+            stop: || LeafStop::Cancelled,
+        })
+        .await;
     }
 }

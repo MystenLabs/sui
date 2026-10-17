@@ -13,9 +13,11 @@ use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
 use sui_inverted_index::event_seq;
 use sui_kvstore::BitmapIndexSpec;
+use sui_kvstore::RowFilter;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TxSeqDigestData;
 use sui_kvstore::tables::transactions::col;
+use sui_kvstore::tables::tx_seq_digest;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
@@ -50,17 +52,21 @@ use tracing::info;
 use crate::PackageResolver;
 use crate::bigtable_client::BigTableClient;
 use crate::config::PipelineStage;
+use crate::config::ResolvedStageConfig;
 use crate::operation::QueryContext;
 use crate::pipeline::InputOrderEmitter;
 use crate::pipeline::RenderAheadError;
 use crate::pipeline::ResolvedScanStop;
 use crate::pipeline::ResolvedWatermarked;
+use crate::pipeline::SeekUnit;
 use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
+use crate::pipeline::pipelined_keyed_batches;
 use crate::pipeline::render_ahead;
 use crate::pipeline::resolve_scan_watermarks;
 use crate::pipeline::take_items;
 use crate::render::render_json;
+use crate::request_cache::CacheFetcher;
 
 const EVENT_READ_MASK_DEFAULT: &str = sui_rpc_api::read_mask_defaults::EVENT;
 
@@ -163,6 +169,7 @@ pub(crate) async fn list_events(
                 options.scan_direction(),
                 scan_budget,
                 ctx.bitmap_skip_policy(),
+                ctx.watermark_pacing(exhaustion),
                 ctx.bitmap_scan_observer(),
             )
             .map_ok(|m| {
@@ -192,8 +199,18 @@ pub(crate) async fn list_events(
     > = if filtered {
         pipelined_chunks(
             ref_stream,
-            tx_seq_digest_stage.chunk_size,
+            tx_seq_digest_stage.max_seeks_per_read,
             tx_seq_digest_stage.concurrency,
+            tx_seq_digest_stage.min_seeks_per_split_read,
+            // A transaction's events share its `tx_seq_digest` row, so they
+            // count as one key and are never split between reads.
+            SeekUnit::BucketRun {
+                group: |event: &EventRef| tx_seq_digest::forward_bucket_id(event.position.tx_seq),
+                key: |event: &EventRef| event.position.tx_seq,
+                max_keys_per_read: tx_seq_digest_stage
+                    .max_keys_per_read
+                    .expect("tx-seq-digest reads have a key cap"),
+            },
             {
                 let client = client.clone();
                 move |refs| {
@@ -211,28 +228,9 @@ pub(crate) async fn list_events(
         ref_stream
     };
 
-    let columns: Arc<[&'static str]> = Arc::from([col::EVENTS, col::CHECKPOINT_NUMBER]);
-
-    // Stage C: Watermarked<EventRef> -> Watermarked<(EventRef, TransactionData)>.
-    let tx_ref_stream = pipelined_chunks(
-        ref_with_digest_stream,
-        transactions_stage.chunk_size,
-        transactions_stage.concurrency,
-        {
-            let client = client.clone();
-            let columns = columns.clone();
-            move |refs| {
-                let client = client.clone();
-                let columns = columns.clone();
-                async move {
-                    fetch_txs_for_refs(client, columns, refs)
-                        .await
-                        .map(|s| s.map_err(ScanStop::Fault).boxed())
-                        .map_err(ScanStop::Fault)
-                }
-            }
-        },
-    );
+    // Stage C: Watermarked<EventRef> -> Watermarked<(EventRef, Arc<TransactionData>)>.
+    let tx_ref_stream =
+        event_transactions(ref_with_digest_stream, client.clone(), transactions_stage);
 
     let event_stream = resolve_scan_watermarks(
         tx_ref_stream,
@@ -263,7 +261,7 @@ pub(crate) async fn list_events(
             async move {
                 let render_started = Instant::now();
                 let rendered =
-                    render_event(event_ref, tx, &read_mask, &resolver, wants_json).await?;
+                    render_event(event_ref, &tx, &read_mask, &resolver, wants_json).await?;
                 Ok::<_, RpcError>((rendered, render_started.elapsed()))
             }
         }
@@ -461,68 +459,103 @@ async fn attach_tx_seq_digests(
     .boxed())
 }
 
-/// Stage C: fetch transactions for a chunk of refs, emitting
-/// `(EventRef, TransactionData)` in input ref-index order.
-async fn fetch_txs_for_refs(
+/// Stage C's output: each event with its transaction's row.
+type EventTransactions = BoxStream<
+    'static,
+    Result<Watermarked<(EventRef, Arc<TransactionData>), IntraTxCoordinate>, ScanStop>,
+>;
+
+/// Stage C: emit each event, in input order, with the `transactions` row of
+/// its transaction, read with the columns events are rendered from.
+///
+/// The reads are planned in transactions, not events: each event lists its
+/// transaction's digest as its one key of [`pipelined_keyed_batches`], so a
+/// read carries up to `max-seeks-per-read` transactions the request has not
+/// already read or started reading. An event whose transaction an earlier event
+/// already covers adds nothing to a read's size, so a transaction is read once
+/// however many events, reads or bursts its events span. Bursts close at
+/// `concurrency × max-seeks-per-read` events.
+fn event_transactions(
+    events: BoxStream<'static, Result<Watermarked<EventRef, IntraTxCoordinate>, ScanStop>>,
     client: BigTableClient,
-    columns: Arc<[&'static str]>,
-    refs: Vec<EventRef>,
-) -> Result<BoxStream<'static, Result<(EventRef, TransactionData), anyhow::Error>>, anyhow::Error> {
-    if refs.is_empty() {
-        return Ok(futures::stream::empty().boxed());
-    }
-
-    let mut unique_digests: Vec<TransactionDigest> = Vec::new();
-    let mut seen_digests: std::collections::HashSet<TransactionDigest> =
-        std::collections::HashSet::new();
-    let mut indices_by_digest: HashMap<TransactionDigest, Vec<usize>> = HashMap::new();
-    for (i, p) in refs.iter().enumerate() {
-        let row = p.tx_seq_digest.ok_or_else(|| {
-            anyhow::anyhow!(
-                "list_events: selected event {}/{} is missing transaction digest",
-                p.position.tx_seq,
-                p.position.index
-            )
-        })?;
-        if seen_digests.insert(row.digest) {
-            unique_digests.push(row.digest);
-        }
-        indices_by_digest.entry(row.digest).or_default().push(i);
-    }
-
-    let column_filter = BigTableClient::column_filter(&columns);
-    let tx_stream = client
-        .get_transactions_stream(unique_digests, Some(column_filter))
-        .await?;
-    Ok(async_stream::try_stream! {
-        let input_indices: Vec<usize> = (0..refs.len()).collect();
-        let mut emitter: InputOrderEmitter<usize, (EventRef, TransactionData)> =
-            InputOrderEmitter::new(input_indices);
-        futures::pin_mut!(tx_stream);
-        while let Some(row) = tx_stream.next().await {
-            let (digest, tx) = row?;
-            // All refs sharing this digest become ready at once. We clone
-            // `tx` per ref so each event from the same tx has its own
-            // `TransactionData`; downstream consumes by-value when reading
-            // `tx.events.data[event_idx]`.
-            let idxs = indices_by_digest.remove(&digest).ok_or_else(|| {
-                anyhow::anyhow!("list_events: unexpected transaction body row {digest}")
-            })?;
-            for idx in idxs {
-                for v in emitter.push(
-                    idx,
-                    (refs[idx], tx.clone()),
-                    "list_events: transaction body lookup for selected event",
-                )? {
-                    yield v;
+    transactions_stage: ResolvedStageConfig,
+) -> EventTransactions {
+    let keyed_events = events
+        .map(|frame| -> Result<_, ScanStop> {
+            Ok(match frame? {
+                Watermarked::Item(event) => {
+                    let digest = transaction_digest(&event)?;
+                    Watermarked::Item((event, vec![digest]))
                 }
+                Watermarked::Watermark(position) => Watermarked::Watermark(position),
+            })
+        })
+        .boxed();
+    let fetcher: Arc<dyn CacheFetcher<TransactionDigest, Arc<TransactionData>>> =
+        Arc::new(EventTransactionFetcher {
+            client,
+            column_filter: BigTableClient::column_filter(&[col::EVENTS, col::CHECKPOINT_NUMBER]),
+        });
+    pipelined_keyed_batches(
+        keyed_events,
+        transactions_stage.max_seeks_per_read,
+        transactions_stage.concurrency,
+        transactions_stage.min_seeks_per_split_read,
+        fetcher,
+    )
+    .map(|frame| -> Result<_, ScanStop> {
+        Ok(match frame? {
+            Watermarked::Item((event, transactions)) => {
+                // `transactions` holds the row of every key the event listed:
+                // its transaction's.
+                let digest = transaction_digest(&event)?;
+                Watermarked::Item((event, transactions[&digest].clone()))
             }
-        }
-        for v in emitter.finish("list_events: missing selected event transaction body")? {
-            yield v;
-        }
+            Watermarked::Watermark(position) => Watermarked::Watermark(position),
+        })
+    })
+    .boxed()
+}
+
+/// The digest of `event`'s transaction. Every ref reaching stage C carries
+/// its `tx_seq_digest` row: unfiltered discovery reads it, and stage B
+/// attaches it to filtered refs.
+fn transaction_digest(event: &EventRef) -> Result<TransactionDigest, anyhow::Error> {
+    event.tx_seq_digest.map(|row| row.digest).ok_or_else(|| {
+        anyhow::anyhow!(
+            "list_events: selected event {}/{} is missing transaction digest",
+            event.position.tx_seq,
+            event.position.index
+        )
+    })
+}
+
+/// Reads `transactions` rows with the columns events are rendered from.
+struct EventTransactionFetcher {
+    client: BigTableClient,
+    column_filter: RowFilter,
+}
+
+#[async_trait::async_trait]
+impl CacheFetcher<TransactionDigest, Arc<TransactionData>> for EventTransactionFetcher {
+    async fn fetch(
+        &self,
+        digests: Vec<TransactionDigest>,
+    ) -> Result<
+        BoxStream<'static, Result<(TransactionDigest, Arc<TransactionData>), RpcError>>,
+        RpcError,
+    > {
+        let stream = self
+            .client
+            .get_transactions_stream(digests, Some(self.column_filter.clone()))
+            .await?;
+        Ok(stream
+            .map(|row| {
+                row.map(|(digest, tx)| (digest, Arc::new(tx)))
+                    .map_err(RpcError::from)
+            })
+            .boxed())
     }
-    .boxed())
 }
 
 /// Carries the rendered `Event` plus the checkpoint and event position the main
@@ -535,7 +568,7 @@ struct RenderedEvent {
 
 async fn render_event(
     event_ref: EventRef,
-    tx: TransactionData,
+    tx: &TransactionData,
     read_mask: &FieldMaskTree,
     resolver: &PackageResolver,
     wants_json: bool,
@@ -818,11 +851,11 @@ async fn resolve_event_range(
     let tx_range = client
         .checkpoint_to_tx_range(cp_range.range.clone())
         .await?;
-    Ok(ResolvedScan::<IntraTxCoordinate>::resolve(
+    ResolvedScan::<IntraTxCoordinate>::resolve(
         cp_range,
         IntraTxCoordinate::tx_window(tx_range),
         options,
-    ))
+    )
 }
 
 #[cfg(test)]
@@ -972,6 +1005,135 @@ mod tests {
     async fn list_events_metric_coverage_excludes_discarded_render_ahead_items() {
         assert_event_metrics(1).await;
         assert_event_metrics(2).await;
+    }
+
+    /// A checkpoint of three transactions with three events each.
+    fn three_transactions_of_three_events() -> sui_types::full_checkpoint_content::Checkpoint {
+        let event = Event::new(
+            &ObjectID::ZERO,
+            ident_str!("chunks"),
+            TestCheckpointBuilder::derive_address(1),
+            GAS::type_(),
+            vec![],
+        );
+        let mut builder = TestCheckpointBuilder::new(0);
+        for sender in 1..=3 {
+            builder = builder
+                .start_transaction(sender)
+                .with_events(vec![event.clone(); 3])
+                .finish_transaction();
+        }
+        builder.build_checkpoint()
+    }
+
+    #[tokio::test]
+    async fn reads_each_transaction_once_when_its_events_span_bursts() {
+        // The test stages take bursts of at most 2 events (1 slot,
+        // `max-seeks-per-read` 2), so bursts end inside these 3-event
+        // transactions; each transaction's row is still read once.
+        let checkpoint = three_transactions_of_three_events();
+        let (ctx, _registry, mock, server) = metric_context("list_events", 1).await;
+        insert_checkpoint_rows(&mock, &checkpoint).await;
+        let mut request = ListEventsRequest::default();
+        request.read_mask = Some(FieldMask::from_paths(["event_type"]));
+        request.options = Some(ascending_options());
+
+        let responses: Vec<_> = list_events(ctx, request)
+            .await
+            .expect("construct event stream")
+            .try_collect()
+            .await
+            .expect("collect event stream");
+        server.abort();
+
+        assert_eq!(
+            responses.iter().filter(|r| r.event.is_some()).count(),
+            9,
+            "every event is returned"
+        );
+        let mut reads_per_transaction = HashMap::new();
+        for call in mock.read_rows_calls().await {
+            if call.table == sui_kvstore::tables::transactions::NAME {
+                for key in call.row_keys {
+                    *reads_per_transaction.entry(key).or_insert(0usize) += 1;
+                }
+            }
+        }
+        assert_eq!(reads_per_transaction.len(), 3, "{reads_per_transaction:?}");
+        assert!(
+            reads_per_transaction.values().all(|&reads| reads == 1),
+            "a transaction's row was read more than once: {reads_per_transaction:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn reads_count_transactions_not_events() {
+        // Nine events of three transactions, all ready at once. With
+        // `max-seeks-per-read` 2 and 4 slots, the first burst (8 events) needs
+        // the 3 transactions, read as 1 + 2; the ninth event's transaction is
+        // already claimed, so its burst reads nothing.
+        let checkpoint = three_transactions_of_three_events();
+        let (ctx, _registry, mock, server) = metric_context("list_events", 1).await;
+        insert_checkpoint_rows(&mock, &checkpoint).await;
+        let events: Vec<EventRef> = checkpoint
+            .transactions
+            .iter()
+            .enumerate()
+            .flat_map(|(tx_seq, transaction)| {
+                let row = TxSeqDigestData {
+                    tx_sequence_number: tx_seq as u64,
+                    digest: transaction.transaction.digest(),
+                    event_count: 3,
+                    tx_offset: 0,
+                    checkpoint_number: 0,
+                };
+                (0..3).map(move |index| EventRef {
+                    position: IntraTxCoordinate {
+                        tx_seq: row.tx_sequence_number,
+                        index,
+                    },
+                    tx_seq_digest: Some(row),
+                })
+            })
+            .collect();
+        let stage = ResolvedStageConfig {
+            max_seeks_per_read: 2,
+            concurrency: 4,
+            min_seeks_per_split_read: None,
+            max_keys_per_read: None,
+        };
+
+        let upstream = futures::stream::iter(events.clone())
+            .map(|event| Ok(Watermarked::Item(event)))
+            .boxed();
+        let emitted: Vec<(EventRef, TransactionDigest)> =
+            event_transactions(upstream, ctx.client().clone(), stage)
+                .map_ok(|frame| match frame {
+                    Watermarked::Item((event, transaction)) => (event, transaction.digest),
+                    Watermarked::Watermark(_) => panic!("no watermark was sent"),
+                })
+                .try_collect()
+                .await
+                .expect("read event transactions");
+        server.abort();
+
+        let expected: Vec<(EventRef, TransactionDigest)> = events
+            .iter()
+            .map(|event| (*event, event.tx_seq_digest.unwrap().digest))
+            .collect();
+        assert_eq!(
+            emitted, expected,
+            "each event, in order, with its own transaction"
+        );
+        let mut read_sizes: Vec<usize> = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|call| call.table == sui_kvstore::tables::transactions::NAME)
+            .map(|call| call.row_keys.len())
+            .collect();
+        read_sizes.sort();
+        assert_eq!(read_sizes, [1, 2]);
     }
 
     #[tokio::test]

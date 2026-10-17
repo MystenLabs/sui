@@ -286,7 +286,7 @@ fn next_checkpoint_chunk(
                 checkpoint_hi_exclusive(&service)?,
                 &options,
             )?;
-            let mut cp_range = resolve_cp_range(checkpoint_range, &options);
+            let mut cp_range = resolve_cp_range(checkpoint_range, &options)?;
             if cancel.is_cancelled() {
                 return Err(cancelled());
             }
@@ -529,8 +529,7 @@ fn next_filtered_checkpoint_chunk(
     let mut cp_seqs = buffered_cp_seqs
         .drain(..item_limit.min(buffered_cp_seqs.len()))
         .collect::<Vec<_>>();
-    let mut chunk_scan_limit_reached = false;
-    let mut frontier: Option<u64> = None;
+    let mut scan_limit_frontier: Option<u64> = None;
     // Per-chunk bucket cap, bounding this chunk's total scan across all drain
     // iterations so a sparse scan yields incremental scan watermarks instead of
     // one at the per-request limit. Stays <= remaining_scan_budget (both shrink
@@ -582,9 +581,8 @@ fn next_filtered_checkpoint_chunk(
         chunk_scan_budget -= hits.buckets_scanned;
         pending_bucket = hits.pending_bucket;
         tx_range = hits.next_range;
-        if let CheckpointDrainControl::ScanLimit(scan_frontier) = drain_control {
-            chunk_scan_limit_reached = true;
-            frontier = scan_frontier;
+        if let CheckpointDrainControl::ScanLimit(frontier) = drain_control {
+            scan_limit_frontier = Some(frontier);
             break;
         }
         if hits.items.is_empty() {
@@ -605,32 +603,22 @@ fn next_filtered_checkpoint_chunk(
     // A chunk scan-limit only ends the request when the request budget is also
     // exhausted, or when there is no continuation state. Otherwise the next
     // chunk resumes from the frontier carried below.
-    let request_scan_limit_reached = chunk_scan_limit_reached
+    let request_scan_limit_reached = scan_limit_frontier.is_some()
         && (remaining_scan_budget == 0
             || (tx_range.is_none() && pending_bucket.is_none() && buffered_cp_seqs.is_empty()));
-    let frontier = if chunk_scan_limit_reached {
-        Some(frontier.ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                "checkpoint scan limit missing authoritative transaction frontier",
-            )
-        })?)
-    } else {
-        None
-    };
-    let frontier_watermark =
-        if request_scan_limit_reached || (chunk_scan_limit_reached && cp_seqs.is_empty()) {
+    let frontier_watermark = match scan_limit_frontier {
+        Some(frontier) if request_scan_limit_reached || cp_seqs.is_empty() => {
             Some(scan_checkpoint_watermark(
                 &service,
                 &options,
-                frontier.expect("checked for scan-limit chunk"),
+                frontier,
                 covered_checkpoint_bound,
                 entry_checkpoint,
                 ascending,
             )?)
-        } else {
-            None
-        };
+        }
+        _ => None,
+    };
     if let Some(checkpoint) = frontier_watermark
         .as_ref()
         .and_then(|watermark| watermark.checkpoint)
@@ -698,7 +686,7 @@ fn next_filtered_checkpoint_chunk(
 
 enum CheckpointDrainControl {
     Continue,
-    ScanLimit(Option<u64>),
+    ScanLimit(u64),
 }
 
 fn absorb_drained_checkpoint_hits(
@@ -721,12 +709,12 @@ fn absorb_drained_checkpoint_hits(
         );
     }
 
-    if hits.chunk_scan_limit_reached {
+    if let Some(frontier) = hits.scan_limit_frontier {
         // Hits were earned before this authoritative first-unscanned frontier.
         // Keep every mapped checkpoint ahead of the terminal, even when doing
         // so temporarily exceeds the internal chunk target.
         cp_seqs.extend(buffered_cp_seqs.drain(..));
-        Ok(CheckpointDrainControl::ScanLimit(hits.coalesced_frontier))
+        Ok(CheckpointDrainControl::ScanLimit(frontier))
     } else {
         Ok(CheckpointDrainControl::Continue)
     }
@@ -926,7 +914,7 @@ fn apply_serving_floor_to_filtered_window(
 fn resolve_cp_range(
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
-) -> ResolvedScan<u64> {
+) -> Result<ResolvedScan<u64>, RpcError> {
     let range = cp_range.range.clone();
     ResolvedScan::<u64>::resolve(cp_range, range, options)
 }
@@ -1094,8 +1082,7 @@ mod tests {
                     Some(0..frontier)
                 },
                 buckets_scanned: 1,
-                coalesced_frontier: Some(frontier),
-                chunk_scan_limit_reached: true,
+                scan_limit_frontier: Some(frontier),
             };
             let mut emitted = Vec::new();
             let mut buffered = VecDeque::new();
@@ -1116,7 +1103,7 @@ mod tests {
             assert!(
                 matches!(
                     drain_control,
-                    CheckpointDrainControl::ScanLimit(Some(scan_frontier))
+                    CheckpointDrainControl::ScanLimit(scan_frontier)
                         if scan_frontier == frontier
                 ),
                 "{case}",
@@ -1131,7 +1118,7 @@ mod tests {
             let options = options(ascending);
             let terminal_watermark = checkpoint_frontier_watermark(
                 &options,
-                first.coalesced_frontier.unwrap(),
+                first.scan_limit_frontier.unwrap(),
                 Some(if ascending { 6 } else { 5 }),
                 emitted.last().copied(),
                 if ascending { 4 } else { 7 },
@@ -1179,8 +1166,7 @@ mod tests {
                 pending_bucket: None,
                 next_range: None,
                 buckets_scanned: 1,
-                coalesced_frontier: None,
-                chunk_scan_limit_reached: false,
+                scan_limit_frontier: None,
             };
             let mut suffix = Vec::new();
             let resume_control = absorb_drained_checkpoint_hits(

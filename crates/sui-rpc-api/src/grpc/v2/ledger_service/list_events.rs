@@ -461,11 +461,10 @@ fn next_event_chunk(
                 cancel,
             )?;
             remaining_scan_budget -= hits.buckets_scanned;
-            let chunk_scan_limit_reached = hits.chunk_scan_limit_reached;
-            let frontier = hits.frontier;
+            let scan_limit_frontier = hits.scan_limit_frontier;
             // A chunk scan-limit only ends the request when the request budget
             // is also exhausted, or when there is no continuation.
-            let request_scan_limit_reached = chunk_scan_limit_reached
+            let request_scan_limit_reached = scan_limit_frontier.is_some()
                 && (remaining_scan_budget == 0
                     || (hits.next_bounds.is_none() && hits.pending_bucket.is_none()));
             let refs = hits
@@ -491,28 +490,18 @@ fn next_event_chunk(
                     },
                 )
             };
-            let frontier = if chunk_scan_limit_reached {
-                Some(frontier.ok_or_else(|| {
-                    RpcError::new(
-                        tonic::Code::Internal,
-                        "event bitmap scan limit missing authoritative frontier",
-                    )
-                })?)
-            } else {
-                None
-            };
-            let frontier_watermark =
-                if request_scan_limit_reached || (chunk_scan_limit_reached && refs.is_empty()) {
+            let frontier_watermark = match scan_limit_frontier {
+                Some(frontier) if request_scan_limit_reached || refs.is_empty() => {
                     Some(scan_event_watermark(
                         &service,
                         &options,
-                        frontier.expect("checked for scan-limit chunk"),
+                        frontier,
                         entry_checkpoint,
                         ascending,
                     )?)
-                } else {
-                    None
-                };
+                }
+                _ => None,
+            };
             let scan_watermark = if !request_scan_limit_reached && refs.is_empty() {
                 frontier_watermark.clone().map(watermark_response)
             } else {
@@ -759,7 +748,7 @@ fn resolve_event_range(
         cp_range,
         IntraTxCoordinate::tx_window(tx_range),
         options,
-    );
+    )?;
     if !resolved.is_empty() {
         let start_tx = match resolved.bounds.lo {
             Bound::Included(position) | Bound::Excluded(position) => position.tx_seq,
