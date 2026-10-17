@@ -17855,8 +17855,7 @@ dependencies = [
 [[package]]
 name = "tonic"
 version = "0.14.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac2a5518c70fa84342385732db33fb3f44bc4cc748936eb5833d2df34d6445ef"
+source = "git+https://github.com/nickvikeras/grpc-rust?rev=e763d54acbbaadbd3294f53d082567be2da1cf6d#e763d54acbbaadbd3294f53d082567be2da1cf6d"
 dependencies = [
  "async-trait",
  "axum 0.8.3",

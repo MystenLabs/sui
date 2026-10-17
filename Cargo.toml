@@ -764,3 +764,6 @@ sui-execution = { path = "sui-execution" }
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
+# tonic 0.14.6 plus the HTTP/2 reset-stream settings on `Endpoint` proposed upstream; remove once a
+# tonic release has them.
+tonic = { git = "https://github.com/nickvikeras/grpc-rust", rev = "e763d54acbbaadbd3294f53d082567be2da1cf6d" }

@@ -35,6 +35,7 @@ use tonic::Code;
 use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
+use tonic::transport::Endpoint;
 
 use auth_channel::AuthChannel;
 use auth_channel::bigtable_features_header;
@@ -83,6 +84,38 @@ use crate::tables::tx_seq_digest;
 const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
 // TODO: Add per-method timeouts (e.g. separate write vs read) via tonic::Request::set_timeout().
 const DEFAULT_CHANNEL_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// How long a cancelled stream is remembered. Frames for it that arrive within this window, sent
+/// before the server saw the cancellation, are dropped without a reply.
+const RESET_STREAM_DURATION: Duration = Duration::from_secs(5);
+
+/// How many cancelled streams one connection remembers at a time, enough for 20,000 cancellations
+/// per second for `RESET_STREAM_DURATION`. Only streams this client opened are ever remembered
+/// (Bigtable cannot open streams on a client connection), so the client's own reads bound it.
+const MAX_REMEMBERED_RESET_STREAMS: usize = 100_000;
+
+/// Configure every HTTP/2 connection `endpoint` dials for a client that cancels many in-flight
+/// reads at once.
+///
+/// When the client cancels a stream, the server keeps sending the frames it already had on the wire
+/// until it receives the RST_STREAM. h2 ignores those frames only while it still remembers the
+/// cancelled stream. With h2's defaults it remembers a cancelled stream for 1 second, and only if
+/// fewer than 50 are already remembered; any other is forgotten at once. Each frame that arrives
+/// for a forgotten stream makes h2 reset that stream again and count it as a protocol error by the
+/// peer. After 1,024 such errors over the life of a connection, h2 closes the connection itself
+/// with GOAWAY(ENHANCE_YOUR_CALM, "too_many_internal_resets"), which fails every RPC still running
+/// on it. Any burst of dropped `ReadRows` streams can overrun the default memory; for example, an
+/// abandoned request aborts all of its in-flight fetches at once.
+///
+/// The larger memory keeps those frames silent, and the error limit is removed. The limit guards
+/// against a peer that provokes resets on purpose; the only peer here is Bigtable, and the errors
+/// it would count are this client's replies to frames Bigtable sent before it saw a cancellation.
+fn with_reset_stream_settings(endpoint: Endpoint) -> Endpoint {
+    endpoint
+        .http2_max_concurrent_reset_streams(MAX_REMEMBERED_RESET_STREAMS)
+        .http2_reset_stream_duration(RESET_STREAM_DURATION)
+        .http2_max_local_error_reset_streams(None)
+}
 
 /// Max transaction digest row keys to send in a single `ReadRowsRequest`
 /// (see [`BigTableClient::get_transactions_stream`]).
@@ -199,7 +232,7 @@ impl BigTableClient {
         client_name: &str,
         batch_write_flow_control: bool,
     ) -> Result<Self> {
-        let endpoint = Channel::from_shared(format!("http://{host}"))?;
+        let endpoint = with_reset_stream_settings(Channel::from_shared(format!("http://{host}"))?);
         let pool =
             ChannelPool::new_connected(endpoint, PoolConfig::singleton(), None, None).await?;
         let auth_channel = AuthChannel::new(
@@ -276,11 +309,13 @@ impl BigTableClient {
         let tls_config = ClientTlsConfig::new()
             .ca_certificate(Certificate::from_pem(include_bytes!("../proto/google.pem")))
             .domain_name("bigtable.googleapis.com");
-        let mut endpoint = Channel::from_static("https://bigtable.googleapis.com")
-            .http2_keep_alive_interval(Duration::from_secs(30))
-            .keep_alive_timeout(Duration::from_secs(10))
-            .keep_alive_while_idle(true)
-            .tls_config(tls_config)?;
+        let mut endpoint = with_reset_stream_settings(
+            Channel::from_static("https://bigtable.googleapis.com")
+                .http2_keep_alive_interval(Duration::from_secs(30))
+                .keep_alive_timeout(Duration::from_secs(10))
+                .keep_alive_while_idle(true),
+        )
+        .tls_config(tls_config)?;
         endpoint = endpoint.timeout(timeout.unwrap_or(DEFAULT_CHANNEL_TIMEOUT));
         let project_id = match project_id {
             Some(p) => p,
@@ -3209,5 +3244,142 @@ mod tests {
         assert_eq!(pkgs.len(), 2);
         assert_eq!(pkgs[0].original_id[31], 1);
         assert_eq!(pkgs[1].original_id[31], 4);
+    }
+
+    /// Forwards TCP connections to `upstream`, delivering every chunk `one_way_delay` after it was
+    /// read, like a network link with that latency. Without it the mock answers over loopback and
+    /// no response bytes are ever in flight when the client cancels a stream.
+    async fn start_latency_proxy(
+        upstream: std::net::SocketAddr,
+        one_way_delay: Duration,
+    ) -> std::net::SocketAddr {
+        async fn pipe(
+            mut from: tokio::net::tcp::OwnedReadHalf,
+            mut to: tokio::net::tcp::OwnedWriteHalf,
+            delay: Duration,
+        ) {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            // Room for 256 MiB in flight: far more than HTTP/2 flow control lets the server send.
+            let (tx, mut rx) = tokio::sync::mpsc::channel(4096);
+            let writer = tokio::spawn(async move {
+                while let Some((due, chunk)) = rx.recv().await {
+                    tokio::time::sleep_until(due).await;
+                    let chunk: Vec<u8> = chunk;
+                    if to.write_all(&chunk).await.is_err() {
+                        break;
+                    }
+                }
+            });
+            let mut buf = vec![0u8; 64 * 1024];
+            while let Ok(n @ 1..) = from.read(&mut buf).await {
+                if tx
+                    .send((tokio::time::Instant::now() + delay, buf[..n].to_vec()))
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+            drop(tx);
+            let _ = writer.await;
+        }
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((inbound, _)) = listener.accept().await {
+                let Ok(outbound) = tokio::net::TcpStream::connect(upstream).await else {
+                    continue;
+                };
+                let (inbound_read, inbound_write) = inbound.into_split();
+                let (outbound_read, outbound_write) = outbound.into_split();
+                tokio::spawn(pipe(inbound_read, outbound_write, one_way_delay));
+                tokio::spawn(pipe(outbound_read, inbound_write, one_way_delay));
+            }
+        });
+        addr
+    }
+
+    /// A dropped kv-rpc request aborts all of its in-flight `ReadRows` streams at once, while the
+    /// server still has frames en route for them. A client that forgets cancelled streams too soon
+    /// counts each such frame as a server protocol error, and with h2's default limit, 1,024 of
+    /// them close the connection with GOAWAY "too_many_internal_resets", failing every read on it.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn cancelled_read_bursts_do_not_fail_concurrent_reads() {
+        const TABLE: &str = "burst";
+        const ROWS: usize = 64;
+        const VALUE_BYTES: usize = 64 * 1024;
+        const STREAMS_PER_BURST: usize = 200;
+        const BURSTS: usize = 150;
+        const CANCEL_AFTER: Duration = Duration::from_millis(30);
+        const ONE_WAY_DELAY: Duration = Duration::from_millis(5);
+
+        let mock = MockBigtableServer::new();
+        let value = Bytes::from(vec![7u8; VALUE_BYTES]);
+        let keys: Vec<Vec<u8>> = (0..ROWS as u32).map(|i| i.to_be_bytes().to_vec()).collect();
+        for key in &keys {
+            mock.insert_row(TABLE, key.clone(), [("v", value.clone())])
+                .await;
+        }
+        let (addr, _handle) = mock.start().await.unwrap();
+        let link = start_latency_proxy(addr, ONE_WAY_DELAY).await;
+        let client = BigTableClient::new_for_host(link.to_string(), "test".into(), "burst", false)
+            .await
+            .unwrap();
+
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let victims: Vec<_> = (0..4)
+            .map(|_| {
+                let mut client = client.clone();
+                let keys = keys[..4].to_vec();
+                let stop = stop.clone();
+                tokio::spawn(async move {
+                    let mut failures = Vec::new();
+                    while !stop.load(Ordering::Relaxed) {
+                        if let Err(e) = client.multi_get(TABLE, keys.clone(), None).await {
+                            failures.push(format!("{e:#}"));
+                        }
+                    }
+                    failures
+                })
+            })
+            .collect();
+
+        let mut burst_failures = Vec::new();
+        for burst in 0..BURSTS {
+            let readers: Vec<_> = (0..STREAMS_PER_BURST)
+                .map(|i| {
+                    let mut client = client.clone();
+                    let keys = keys[i % 2 * (ROWS / 2)..][..ROWS / 2].to_vec();
+                    tokio::spawn(async move {
+                        let mut rows = client.multi_get_stream(TABLE, keys, None).await?;
+                        while rows.try_next().await?.is_some() {}
+                        anyhow::Ok(())
+                    })
+                })
+                .collect();
+            tokio::time::sleep(CANCEL_AFTER).await;
+            for reader in &readers {
+                reader.abort();
+            }
+            for reader in readers {
+                if let Ok(Err(e)) = reader.await {
+                    burst_failures.push(format!("burst {burst}: {e:#}"));
+                }
+            }
+        }
+
+        stop.store(true, Ordering::Relaxed);
+        let mut victim_failures = Vec::new();
+        for victim in victims {
+            victim_failures.extend(victim.await.unwrap());
+        }
+        assert!(
+            victim_failures.is_empty() && burst_failures.is_empty(),
+            "{} concurrent reads failed, {} cancelled-burst reads failed; first: {:?}",
+            victim_failures.len(),
+            burst_failures.len(),
+            victim_failures.first().or(burst_failures.first()),
+        );
     }
 }

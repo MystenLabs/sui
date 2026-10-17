@@ -375,7 +375,12 @@ impl MockBigtableServer {
 
         let handle = tokio::spawn(async move {
             let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
+            // BigTable keeps serving a connection whose client cancels many streams at once
+            // (a dropped request aborts all of its reads). Lift hyper's server-side guard against
+            // resets of not-yet-accepted streams so the mock does not close the connection where
+            // BigTable would not.
             Server::builder()
+                .http2_max_pending_accept_reset_streams(Some(usize::MAX))
                 .add_service(BigtableServer::new(mock))
                 .serve_with_incoming(incoming)
                 .await
