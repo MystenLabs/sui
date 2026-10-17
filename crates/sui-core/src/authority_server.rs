@@ -781,6 +781,8 @@ impl ValidatorService {
         let mut duplicate_at_admission = false;
         // First gas price seen in this soft bundle.
         let mut expected_soft_bundle_gas_price = None;
+        // First member of this soft bundle, with the proposers it allows.
+        let mut expected_soft_bundle_allowed_proposers = None;
         // Transaction digests seen in this request attempt, used to reject repeated transactions.
         let mut request_digests = HashSet::new();
 
@@ -835,7 +837,10 @@ impl ValidatorService {
                 continue;
             }
 
-            // Soft bundles require all transactions to use the same gas price.
+            // Soft bundles require all transactions to use the same gas price, and to name
+            // the same allowed proposers: the bundle is proposed as one unit, so members
+            // disagreeing on who may propose it cannot all be honoured, and an
+            // unrestricted member would otherwise carry a restricted one past its bound.
             if is_soft_bundle_request {
                 let gas_price = transaction.data().transaction_data().gas_price();
                 if let Some(expected) = expected_soft_bundle_gas_price {
@@ -852,6 +857,29 @@ impl ValidatorService {
                     );
                 } else {
                     expected_soft_bundle_gas_price = Some(gas_price);
+                }
+
+                let allowed_proposers = transaction
+                    .data()
+                    .transaction_data()
+                    .expiration()
+                    .allowed_proposers(epoch_store.epoch())
+                    .cloned();
+                if let Some((first_digest, expected)) = &expected_soft_bundle_allowed_proposers {
+                    fp_ensure!(
+                        allowed_proposers == *expected,
+                        SuiErrorKind::UserInputError {
+                            error: UserInputError::InvalidExpiration {
+                                error: format!(
+                                    "soft bundle members must name the same allowed proposers: \
+                                     transaction {tx_digest} differs from {first_digest}"
+                                ),
+                            }
+                        }
+                        .into()
+                    );
+                } else {
+                    expected_soft_bundle_allowed_proposers = Some((tx_digest, allowed_proposers));
                 }
             }
 
