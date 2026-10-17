@@ -26,6 +26,12 @@ const PREDICT = getConfig(NETWORK);
 const GENERATED = toGeneratedConfig(PREDICT);
 const FEEDS = PREDICT.underlyings[UNDERLYING];
 
+// These wrappers are the immediate path, before the delayed-execution cutover
+// only. From Predict protocol version 4 the mint and live-close wrappers always
+// abort through Predict, and Sessions protocol version 3 adds queued wrappers:
+// see `sessions-queue.ts`. `claimSettledAsSession` keeps working for positions
+// held in the account.
+//
 // Mint a directional position as the session key.
 //
 // Three things differ from the owner-signed `/predict` flow:

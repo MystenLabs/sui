@@ -23,8 +23,19 @@ Each source file wraps its doc chunk in `// docs::#<tag>` / `// docs::/#<tag>`
 markers. The tags map to these pages:
 
 - `config`, `client`, `create-manager`, `markets`, `mint-binary`: DeepBook Predict landing quickstart.
-- `config`, `client`, `create-manager`, `markets`, `mint-binary`, `mint-range`, `redeem`, `supply`, `withdraw`: Testnet workflow tutorial.
-- `sessions-authorize`, `sessions-list`, `sessions-trade`, `sessions-revoke`: Sessions contract reference.
+- `config`, `client`, `create-manager`, `markets`, `queue-mint`, `queue-sell`, `supply`, `withdraw`: Testnet workflow tutorial.
+- `queue-mint`, `queue-sell`: Delayed Execution contract reference and the Positions SDK page.
+- `mint-binary`, `mint-range`, `redeem`: the immediate trade path, on the Predict contract reference.
+- `sessions-authorize`, `sessions-list`, `sessions-trade`, `sessions-queue`, `sessions-revoke`: Sessions contract reference.
+
+From Predict protocol version 4, a network's trades are queued orders: an
+order is placed now and filled or refunded shortly after, at Pyth's signed
+price for a fixed instant. `queue-mint.ts`, `queue-sell.ts` and
+`sessions-queue.ts` use that path. `mint.ts`, `mint-range.ts`, `redeem.ts` and
+the trade wrappers in `sessions-trade.ts` are the immediate path, which a
+network runs only before its delayed-execution cutover. Testnet passed the
+cutover on 2026-10-09. `client.predict.read.executionMode()` reports which path
+a network is on.
 
 The `sessions-*` files import from `@mysten/deepbook-v3/sessions`, a separate
 subpath from `/predict`. They build owner-signed grant transactions and
