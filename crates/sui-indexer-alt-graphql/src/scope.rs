@@ -447,8 +447,8 @@ impl Scope {
         object_id: ObjectID,
     ) -> Option<&NativeObject> {
         self.execution_objects_in_view()?
-            .range(..=(object_id, SequenceNumber::MAX))
-            .last()
+            .range((object_id, SequenceNumber::MIN)..=(object_id, SequenceNumber::MAX))
+            .next_back()
             .and_then(|(_, opt)| opt.as_ref())
     }
 
@@ -571,5 +571,42 @@ impl PackageStore for Scope {
 
         // Package not found in execution context, fall back to the underlying store
         self.package_store.fetch(id).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_types::base_types::SuiAddress;
+
+    use super::*;
+
+    fn executed_scope(objects: impl IntoIterator<Item = NativeObject>) -> Scope {
+        let execution_objects: ExecutionObjectMap = Arc::new(
+            objects
+                .into_iter()
+                .map(|o| ((o.id(), o.version()), Some(o)))
+                .collect(),
+        );
+        Scope {
+            data_source: DataSource::Executed { execution_objects },
+            ..Scope::for_tests()
+        }
+    }
+
+    #[test]
+    fn latest_execution_object_ignores_other_ids() {
+        let lower = ObjectID::from_single_byte(0x10);
+        let target = ObjectID::from_single_byte(0x20);
+        let scope = executed_scope([NativeObject::with_id_owner_for_testing(
+            lower,
+            SuiAddress::ZERO,
+        )]);
+
+        // Must not fall back to the object with the next lower ID.
+        assert!(scope.execution_output_object_latest(target).is_none());
+        assert_eq!(
+            scope.execution_output_object_latest(lower).map(|o| o.id()),
+            Some(lower)
+        );
     }
 }
