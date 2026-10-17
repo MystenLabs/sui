@@ -472,6 +472,48 @@ async fn test_mnemonics_secp256r1() -> Result<(), anyhow::Error> {
 }
 
 #[test]
+async fn test_mnemonics_mldsa65() -> Result<(), anyhow::Error> {
+    // Test case matches with ts-sdks packages/sui/test/unit/cryptography/mldsa65-keypair.test.ts
+    const TEST_CASES: [[&str; 3]; 3] = [
+        [
+            "act wing dilemma glory episode region allow mad tourist humble muffin oblige",
+            "suiprivkey1qamkapjn935cx32r206gvzh9u0cscydaf09we9z4uxc9crs5j3c82q5m0tk",
+            "0xd0f33625a23608ac4f3fd938a461ab15ed688af783eb4c54c19ab68e37a420dd",
+        ],
+        [
+            "flag rebel cabbage captain minimum purpose long already valley horn enrich salt",
+            "suiprivkey1ql7gkea080ddh5f3gae0lnfw6t7vhcylupgucp7rcpwnnyhdegax6hx9cww",
+            "0xd6de2b6e6d68114bbb6c4bbe3af4f174dcf51b27e5393b7606203cda8c933a93",
+        ],
+        [
+            "area renew bar language pudding trial small host remind supreme cabbage era",
+            "suiprivkey1q7xkhwyu7a60pjrevj9gatlk3ju3x8svkx5gcgy6zdznafwvxp54swwyjt4",
+            "0x48e9fcc44df5766d6be8e824c2781c40dd196f6a6b2e7244b78b02ab05249d66",
+        ],
+    ];
+
+    for [mnemonics, sk, address] in TEST_CASES {
+        let keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        let mut context = WalletContext::new_for_tests(keystore, None, None);
+        KeyToolCommand::Import {
+            alias: None,
+            input_string: mnemonics.to_string(),
+            key_scheme: SignatureScheme::MLDSA65,
+            derivation_path: None,
+        }
+        .execute(&mut context)
+        .await?;
+
+        let kp = SuiKeyPair::decode(sk).unwrap();
+        let addr = SuiAddress::from_str(address).unwrap();
+        assert_eq!(SuiAddress::from(&kp.public()), addr);
+        assert!(context.config.keystore.addresses().contains(&addr));
+    }
+
+    Ok(())
+}
+
+#[test]
 async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     let keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     let mut context = WalletContext::new_for_tests(keystore, None, None);
@@ -534,6 +576,21 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
         .await
         .is_err()
     );
+
+    // ML-DSA-65 takes purpose 94 and is hardened at every level.
+    for path in ["m/44'/784'/0'/0'/0'", "m/94'/784'/0'/0/0"] {
+        assert!(
+            KeyToolCommand::Import {
+                alias: None,
+                input_string: TEST_MNEMONIC.to_string(),
+                key_scheme: SignatureScheme::MLDSA65,
+                derivation_path: Some(path.parse().unwrap()),
+            }
+            .execute(&mut context)
+            .await
+            .is_err()
+        );
+    }
 
     Ok(())
 }
@@ -602,6 +659,22 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
         .await
         .is_ok()
     );
+    Ok(())
+}
+
+#[test]
+async fn test_keytool_generate_mldsa65() -> Result<(), anyhow::Error> {
+    let keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+    let mut context = WalletContext::new_for_tests(keystore, None, None);
+    for derivation_path in [None, Some("m/94'/784'/1'/0'/0'".parse().unwrap())] {
+        KeyToolCommand::Generate {
+            key_scheme: SignatureScheme::MLDSA65,
+            derivation_path,
+            word_length: None,
+        }
+        .execute(&mut context)
+        .await?;
+    }
     Ok(())
 }
 

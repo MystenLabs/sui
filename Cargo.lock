@@ -15176,6 +15176,7 @@ dependencies = [
  "bip32",
  "colored",
  "fastcrypto",
+ "fastcrypto-pq",
  "jsonrpc",
  "mockall",
  "mysten-common",
