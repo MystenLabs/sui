@@ -273,6 +273,34 @@ impl SubscriptionTestCluster {
             .expect("Failed to read validator checkpoint tip")
     }
 
+    /// The validator's latest checkpoint and its `network_total_transactions`.
+    pub fn validator_tip_and_total_transactions(&self) -> (u64, u64) {
+        let checkpoint = self
+            .validator
+            .fullnode_handle
+            .sui_node
+            .state()
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint()
+            .expect("Failed to read validator checkpoint tip")
+            .expect("no checkpoint executed");
+        (
+            *checkpoint.sequence_number(),
+            checkpoint.network_total_transactions,
+        )
+    }
+
+    /// Wait until the validator has executed more than `total` transactions, for at most `limit`.
+    pub async fn wait_for_total_transactions_past(&self, total: u64, limit: Duration) {
+        tokio::time::timeout(limit, async {
+            while self.validator_tip_and_total_transactions().1 <= total {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("the chain did not pass transaction {total} within {limit:?}"));
+    }
+
     /// Subscribe and return a stream of GraphQL payloads.
     /// Use `tokio_stream::StreamExt` methods (`next`, `take`, `collect`, etc.) to consume.
     pub async fn subscribe(

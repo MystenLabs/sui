@@ -10,6 +10,8 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 use async_graphql::connection::CursorType;
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
 use serde_json::Value;
 use serde_json::json;
 use sui_indexer_alt_graphql::CTransaction;
@@ -534,6 +536,76 @@ async fn test_transaction_subscription_resume_with_after_cursor() {
         "resume-by-cursor re-delivered the tx at the cursor",
     );
 }
+
+/// Resume with an `after` cursor ahead of the ledger's indexed tip in both checkpoint and
+/// transaction sequence number, as a client's cursor from a live edge can be. The ledger rejects it
+/// as out of range until it catches up, and the backfill retries rather than resuming from the
+/// ledger's tip: a transaction that lands before the cursor must not be delivered.
+#[tokio::test]
+async fn test_transaction_subscription_resume_with_after_cursor_ahead_of_ledger() {
+    tokio::time::timeout(Duration::from_secs(180), async {
+        let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+        let sender = cluster.validator.wallet.active_address().unwrap();
+
+        // The ledger can't have indexed past the validator's tip, so it is behind this cursor.
+        let (tip, total) = cluster.validator_tip_and_total_transactions();
+        let resume_seq = tip + 1;
+        let resume_tx = total + RESUME_TX_MARGIN;
+        let cursor = Base64::encode(
+            CursorToken::item(Position::Transactions {
+                checkpoint: resume_seq,
+                tx_seq: resume_tx,
+            })
+            .encode(),
+        );
+        let query = format!(
+            r#"subscription($sender: SuiAddress!) {{
+            transactions(after: "{cursor}", filter: {{ sentAddress: $sender }}) {{
+                cursor
+                node {{ digest }}
+            }}
+        }}"#,
+        );
+        let mut stream = cluster
+            .subscribe_with_variables(&query, sender_var(sender))
+            .await;
+
+        // Lands after the ledger's tip but before the cursor's transaction.
+        let before_cursor = transfer_coins(&mut cluster.validator, &[100]).await;
+        assert!(cluster.validator_tip_and_total_transactions().1 <= resume_tx);
+
+        // Every checkpoint carries at least one transaction, so the chain passes the cursor.
+        cluster
+            .wait_for_total_transactions_past(resume_tx, Duration::from_secs(120))
+            .await;
+        let after_cursor: BTreeSet<String> = transfer_coins(&mut cluster.validator, &[200])
+            .await
+            .into_iter()
+            .collect();
+
+        let first = stream.next().await.unwrap();
+        let edge = &first["data"]["transactions"];
+        let digest = edge["node"]["digest"].as_str().unwrap().to_string();
+        assert!(
+            !before_cursor.contains(&digest),
+            "delivered a transaction before the cursor: {edge}",
+        );
+        let (_, tx_seq) = decode_tx_cursor(edge);
+        assert!(
+            tx_seq > resume_tx,
+            "delivered at or before the cursor: {edge}"
+        );
+        if !after_cursor.contains(&digest) {
+            collect_matches(&mut stream, &after_cursor).await;
+        }
+    })
+    .await
+    .expect("test timed out");
+}
+
+/// How far past the validator's network total the ahead-of-ledger tests put their cursor's
+/// transaction sequence number: enough room for the transactions they submit before the cursor.
+const RESUME_TX_MARGIN: u64 = 100;
 
 #[tokio::test]
 async fn test_transaction_subscription_live_backfill_parity() {
