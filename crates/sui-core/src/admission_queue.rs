@@ -24,6 +24,7 @@ use sui_types::messages_consensus::{
     ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey,
 };
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
 /// A transaction (or soft bundle) waiting in the admission queue for consensus submission.
@@ -496,6 +497,7 @@ pub struct AdmissionQueueHandle {
     last_drain: Arc<Mutex<Instant>>,
     queue_depth: Arc<AtomicUsize>,
     failover_timeout: Duration,
+    shutdown: CancellationToken,
 }
 
 impl AdmissionQueueHandle {
@@ -538,19 +540,20 @@ impl AdmissionQueueHandle {
         self.sender
             .send(cmd)
             .await
-            .map_err(|_| SuiError::from(SuiErrorKind::TooManyTransactionsPendingConsensus))?;
+            .map_err(|_| SuiError::from(SuiErrorKind::ValidatorHaltedAtEpochEnd))?;
 
         let newly_inserted = resp_rx
             .await
-            .map_err(|_| SuiError::from(SuiErrorKind::TooManyTransactionsPendingConsensus))??;
+            .map_err(|_| SuiError::from(SuiErrorKind::ValidatorHaltedAtEpochEnd))??;
 
         Ok((position_rx, newly_inserted))
     }
 }
 
 /// Manages the lifecycle of per-epoch admission queue actors.
-/// Holds immutable config and shared metrics; call `spawn()` each epoch
-/// with the new epoch store to create a fresh actor and handle.
+/// Holds immutable config and shared metrics; call spawn each epoch
+/// with the new epoch store to create a fresh actor and handle. Each actor can
+/// be cancelled when its handle is replaced, including while RPCs retain it.
 pub struct AdmissionQueueManager {
     capacity: usize,
     failover_timeout: Duration,
@@ -607,6 +610,7 @@ impl AdmissionQueueManager {
 
         let (sender, receiver) = mpsc::channel(self.capacity.max(1024));
 
+        let shutdown = CancellationToken::new();
         let event_loop = AdmissionQueueEventLoop {
             receiver,
             queue: PriorityAdmissionQueue::new(self.capacity, self.metrics.clone()),
@@ -617,13 +621,20 @@ impl AdmissionQueueManager {
             queue_depth: queue_depth.clone(),
             last_published_depth: 0,
         };
-        spawn_monitored_task!(event_loop.run());
+        let shutdown_for_task = shutdown.clone();
+        spawn_monitored_task!(async move {
+            tokio::select! {
+                _ = shutdown_for_task.cancelled() => {}
+                _ = event_loop.run() => {}
+            }
+        });
 
         AdmissionQueueHandle {
             sender,
             last_drain,
             queue_depth,
             failover_timeout: self.failover_timeout,
+            shutdown,
         }
     }
 }
@@ -650,9 +661,10 @@ impl AdmissionQueueContext {
     }
 
     /// Spawns a new per-epoch actor and atomically replaces the current handle.
-    /// The old actor shuts down when its handle is dropped.
+    /// The old actor is then cancelled even if an RPC still holds its handle.
     pub fn rotate_for_epoch(&self, epoch_store: Arc<AuthorityPerEpochStore>) {
-        self.swap.store(Arc::new(self.manager.spawn(epoch_store)));
+        let old_handle = self.swap.swap(Arc::new(self.manager.spawn(epoch_store)));
+        old_handle.shutdown.cancel();
     }
 
     pub(crate) fn load(&self) -> arc_swap::Guard<Arc<AdmissionQueueHandle>> {

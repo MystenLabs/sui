@@ -1397,9 +1397,7 @@ impl ValidatorService {
                 future::join_all(receivers.into_iter().map(|rx| async move {
                     match rx.await {
                         Ok(result) => result.map_err(SuiError::from),
-                        Err(_) => Err(SuiError::from(
-                            SuiErrorKind::TooManyTransactionsPendingConsensus,
-                        )),
+                        Err(_) => Err(SuiError::from(SuiErrorKind::ValidatorHaltedAtEpochEnd)),
                     }
                 }))
                 .await
