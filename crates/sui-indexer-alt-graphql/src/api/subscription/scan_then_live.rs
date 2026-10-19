@@ -27,7 +27,6 @@ use backoff::ExponentialBackoff;
 use futures::Stream;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
-use sui_rpc_cursor::CursorKind;
 use sui_rpc_cursor::CursorToken;
 use tokio::sync::broadcast;
 use tokio::sync::watch;
@@ -332,14 +331,12 @@ fn backfill<S: Subscribable>(
     }
 }
 
-/// The highest checkpoint fully scanned as of `token`: its own checkpoint for a `Boundary`, one less
-/// for an `Item` (whose checkpoint may still hold later matches).
+/// The highest checkpoint fully scanned as of `token`: the one before its checkpoint. A `Boundary`
+/// is the position the next ascending scan resumes at, so its own checkpoint has not been scanned
+/// (a range's terminal boundary is its exclusive end), and an `Item`'s checkpoint may still hold
+/// later matches.
 fn covered_checkpoint(token: &CursorToken) -> u64 {
-    let checkpoint = token.position.checkpoint();
-    match token.kind {
-        CursorKind::Boundary => checkpoint,
-        CursorKind::Item => checkpoint.saturating_sub(1),
-    }
+    token.position.checkpoint().saturating_sub(1)
 }
 
 /// Follow the live broadcast from `last_checkpoint + 1`, delivering matching items. Drops the
