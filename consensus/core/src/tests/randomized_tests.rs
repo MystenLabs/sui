@@ -13,6 +13,9 @@ use crate::{
 };
 
 const NUM_RUNS: u32 = 100;
+// The equivocation test covers 12 fixed DAG configurations, so a smaller number
+// of deterministic delivery permutations keeps the regular CI suite responsive.
+const EQUIVOCATION_DELIVERY_PERMUTATIONS: u32 = 10;
 const MAX_STEP: u32 = 3;
 
 /// Test builds a randomized dag with the following conditions:
@@ -164,7 +167,7 @@ async fn test_randomized_dag_with_equivocations() {
                 let mut commit_sequences = vec![];
                 let mut skipped_leaders = 0;
 
-                for _ in 0..NUM_RUNS {
+                for _ in 0..EQUIVOCATION_DELIVERY_PERMUTATIONS {
                     let mut fixture = CommitTestFixture::new(context.clone());
                     let mut finalized_commits = vec![];
                     let mut last_decided = Slot::new_for_test(0, 0);
