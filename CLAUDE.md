@@ -109,6 +109,8 @@ Use `#[cfg(test)]` for test-only code used within the same crate. Use `#[cfg(fea
 
 Use `#[tokio::test]` for async tests, not `#[test]`.
 
+When a test builds a `ConfigBuilder` (`sui_swarm_config::network_config_builder`) only for configs or genesis and never starts nodes on them, call `.with_placeholder_ports()`. Otherwise each validator reserves 9 real ports that stay unusable for ~60s, which can run CI out of ports. Don't use it when the test binds the configured addresses. `TestAuthorityBuilder` already does this internally.
+
 ### Protocol Config Changes:
 
 When modifying `crates/sui-protocol-config/src/lib.rs`, always invoke `/protocol-config` to verify changes are safe. Incorrect changes can break network consensus.
