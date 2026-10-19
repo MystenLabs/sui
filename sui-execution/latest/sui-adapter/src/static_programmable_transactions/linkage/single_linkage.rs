@@ -54,6 +54,7 @@ pub fn refine_to_single_linkage<E: ExecutionErrorTrait>(
     let mut base_linkage = linkage_analysis
         .config()
         .resolution_table_with_native_packages::<E, _>(package_store)?;
+    let mut seen_fixed_inputs = BTreeSet::new();
 
     for (i, command) in txn.commands.iter().enumerate() {
         analyze_command::<E>(command, &mut base_linkage, package_store, protocol_config)
@@ -62,6 +63,7 @@ pub fn refine_to_single_linkage<E: ExecutionErrorTrait>(
             command.arguments(),
             &txn.inputs,
             &mut base_linkage,
+            &mut seen_fixed_inputs,
             package_store,
             protocol_config,
         )
@@ -130,6 +132,7 @@ fn add_used_input_linkage<'a, E: ExecutionErrorTrait>(
     arguments: impl IntoIterator<Item = &'a Argument>,
     inputs: &Inputs,
     resolution_table: &mut ResolutionTable,
+    seen_fixed_inputs: &mut BTreeSet<u16>,
     store: &VerifiedPackageStore<'_>,
     protocol_config: &ProtocolConfig,
 ) -> Result<(), E> {
@@ -140,6 +143,7 @@ fn add_used_input_linkage<'a, E: ExecutionErrorTrait>(
     for argument in arguments {
         if let Argument::Input(i) = argument
             && let Some((_, InputType::Fixed(ty))) = inputs.get(*i as usize)
+            && seen_fixed_inputs.insert(*i)
         {
             add_type_packages::<E>(resolution_table, std::iter::once(ty), store)?;
         }
@@ -489,16 +493,13 @@ fn add_type_packages<'a, E: ExecutionErrorTrait>(
     types: impl IntoIterator<Item = &'a Type>,
     store: &VerifiedPackageStore<'_>,
 ) -> Result<(), E> {
-    for type_defining_id in types.into_iter().flat_map(|ty| ty.all_addresses()) {
-        add_package::<E>(
-            &ObjectID::from(type_defining_id),
-            store,
-            resolution_table,
-            VersionConstraint::at_least,
-            VersionConstraint::at_least,
-        )?;
-    }
-    Ok(())
+    resolution_table.add_type_linkages_to_table(
+        types
+            .into_iter()
+            .flat_map(|ty| ty.all_addresses())
+            .map(ObjectID::from),
+        store,
+    )
 }
 
 /// Add a package and its transitive dependencies to the resolution table. The package itself
