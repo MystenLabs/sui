@@ -6261,9 +6261,8 @@ checksum = "92620684d99f750bae383ecb3be3748142d6095760afd5cbcf2261e9a279d780"
 
 [[package]]
 name = "h2"
-version = "0.4.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef8e5e5a340588f4452631496976cf8636d4a7ecf600239fdc27615d2530bc16"
+version = "0.4.20"
+source = "git+https://github.com/nickvikeras/h2?rev=44260b15da7d6cf15c241295a2d27917c157f4c8#44260b15da7d6cf15c241295a2d27917c157f4c8"
 dependencies = [
  "atomic-waker",
  "bytes",
