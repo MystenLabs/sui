@@ -12,10 +12,12 @@ use sui_name_service::NameRecord as NativeNameRecord;
 use sui_name_service::NameServiceConfig;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::dynamic_field::Field;
+use sui_types::dynamic_field::visitor as DFV;
 
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address;
 use crate::api::types::address::Address;
+use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_type::MoveType;
 use crate::api::types::move_value::MoveValue;
 use crate::api::types::object;
@@ -190,19 +192,29 @@ async fn name_record(
         return Ok(None);
     };
 
-    let Some(contents) = object.contents(ctx).await.map_err(upcast)? else {
+    let Some(value) = MoveObject::from_super(object)
+        .contents(ctx)
+        .await?
+        .transpose()
+        .map_err(upcast)?
+    else {
         return Ok(None);
     };
 
-    let Some(move_object) = contents.data.try_as_move() else {
-        return Ok(None);
-    };
+    let layout = value
+        .type_
+        .layout_impl()
+        .await
+        .map_err(upcast)?
+        .context("Failed to resolve name record field layout")?;
 
-    let bytes = move_object.contents().to_owned();
-    let field: Field<NativeDomain, NativeNameRecord> =
-        bcs::from_bytes(&bytes).context("Failed to deserialize name record")?;
+    let field = DFV::FieldVisitor::deserialize(&value.native, &layout)
+        .context("Failed to deserialize name record field")?;
 
-    Ok(Some((bytes, field.name, field.value)))
+    let domain = bcs::from_bytes(field.name_bytes).context("Failed to deserialize domain")?;
+    let record = bcs::from_bytes(field.value_bytes).context("Failed to deserialize name record")?;
+
+    Ok(Some((field.value_bytes.to_owned(), domain, record)))
 }
 
 /// Fetch the latest version of the reverse record for the given `address`.

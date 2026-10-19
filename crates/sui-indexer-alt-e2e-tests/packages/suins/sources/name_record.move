@@ -5,7 +5,7 @@
 ///
 /// It provides enough structure to query SuiNS's on-chain state, but it
 /// doesn't maintain the same invariants.
-module suins::suins;
+module suins::name_record;
 
 use std::string::String;
 use sui::table::{Self, Table};
@@ -40,11 +40,14 @@ public fun add_domain(
 ) {
     let domain = domain::new(labels);
 
+    let mut data = vec_map::empty();
+    data.insert(b"avatar".to_string(), b"https://example.com/avatar.png".to_string());
+
     let name_record = NameRecord {
         nft_id,
         expiration_timestamp_ms,
         target_address,
-        data: vec_map::empty(),
+        data,
     };
 
     forward_registry.add(domain, name_record);
