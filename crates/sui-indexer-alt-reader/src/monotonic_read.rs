@@ -5,10 +5,10 @@
 //!
 //! Replicas behind a load balancer each index the ledger at their own pace, so consecutive
 //! requests can be answered from views at different checkpoints. A caller that has already
-//! observed a checkpoint raises a [`CheckpointFloor`], and [`MonotonicReadLayer`] stamps it on
-//! every request as [`X_SUI_MIN_CHECKPOINT`]. A replica that has not reached the floor holds the
-//! request briefly and then answers `Unavailable`; the layer resends it so a load balancer that
-//! spreads requests across replicas can route the next attempt to one that has.
+//! observed a checkpoint raises a [`CheckpointFloor`], and the ledger readers built with it stamp
+//! it on every request as [`X_SUI_MIN_CHECKPOINT`]. A replica that has not reached the floor holds
+//! the request briefly and then answers `Unavailable`; the readers resend it so a load balancer
+//! that spreads requests across replicas can route the next attempt to one that has.
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
