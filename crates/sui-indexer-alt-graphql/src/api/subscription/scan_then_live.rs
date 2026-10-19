@@ -60,8 +60,7 @@ const BACKFILL_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const BACKFILL_POLL_MAX_INTERVAL: Duration = Duration::from_secs(2);
 
 /// How long the backfill waits for the ledger to make progress before asking the client to
-/// reconnect, so a stalled ledger does not hold subscription slots indefinitely. Generous enough
-/// for the chain to reach a resume point up to `max_start_checkpoints_ahead_of_tip` ahead.
+/// reconnect, so a stalled ledger does not hold subscription slots indefinitely.
 const BACKFILL_POLL_DEADLINE: Duration = Duration::from_secs(180);
 
 /// A feed that can be streamed with the scan-then-live driver. One implementation per subscribable
