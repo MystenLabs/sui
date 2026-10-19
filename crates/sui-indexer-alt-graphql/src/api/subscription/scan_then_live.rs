@@ -52,10 +52,6 @@ use crate::task::streaming::wait_for_pipelines_catching_up_at;
 use super::Error;
 use crate::task::watermark::Watermarks;
 
-/// How long to wait before re-requesting when the scan has drained the indexer's current tip but not
-/// yet reached the handoff.
-const BACKFILL_POLL_INTERVAL: Duration = Duration::from_millis(100);
-
 /// A feed that can be streamed with the scan-then-live driver. One implementation per subscribable
 /// GraphQL type (transactions, events) supplies its cursor, filter, and matching, and the free
 /// functions here drive the shared machinery over it.
@@ -124,6 +120,14 @@ impl<I: OutputType> Scanned<I> {
     }
 }
 
+/// One backfill scan: its matches and coverage marker (none if the scan returned no cursor), the
+/// cursor to resume from, and whether the scan reached the end of its window.
+struct BackfillPage<S: Subscribable> {
+    items: Vec<Scanned<S::Item>>,
+    next_after: Option<S::Cursor>,
+    window_exhausted: bool,
+}
+
 /// Subscribe to items matching `filter`: backfill from `resume` toward the tip, then follow live.
 /// The handoff is pinned mid-scan, once the scan frontier comes within `handoff_threshold` of the
 /// tip, so even a deep backfill catches up within one connection instead of lagging the receiver.
@@ -133,7 +137,7 @@ pub(super) fn subscribe<S: Subscribable>(
     broadcast: Arc<SubscriptionBroadcast>,
     caches: Arc<StreamedCaches>,
     resolver_limits: sui_package_resolver::Limits,
-    mut watermarks_rx: watch::Receiver<Arc<Watermarks>>,
+    watermarks_rx: watch::Receiver<Arc<Watermarks>>,
     filter: S::Filter,
     after: Option<S::Cursor>,
     after_checkpoint: Option<u64>,
@@ -186,20 +190,7 @@ where
 
         // Phase 1: scan toward the tip, pinning the live receiver near it. `after` and/or
         // `afterCheckpoint` resume the backfill; neither means live-only.
-        if let Some(resume_checkpoint) = start_from {
-            // The resume point can be ahead of this server's watermarks (a cursor minted from the
-            // live stream, or by a more caught-up server). Waiting for them to reach it raises the
-            // ledger readers' monotonic-read floor past it, so no replica scans from a view behind
-            // the resume point. `scan_page` then waits for each page's end cursor the same way,
-            // keeping the floor at or above every later resume cursor.
-            if let Err(e) =
-                wait_for_pipelines_catching_up_at(resume_checkpoint, &mut watermarks_rx).await
-            {
-                guard.terminate(SubscriptionTerminationReason::BackfillError);
-                yield Err(e.into());
-                return;
-            }
-
+        if after.is_some() || after_checkpoint.is_some() {
             let checkpoint_lo = after_checkpoint.map_or(0, |cp| cp.saturating_add(1));
             let scan = backfill::<S>(
                 reader,
@@ -283,6 +274,13 @@ fn reject_if_start_too_far_ahead(
 
 /// Scan matches from the resume point toward the tip, yielding each match and a per-page coverage
 /// marker. Open-ended: the caller stops it once the handoff is covered.
+///
+/// Each scan stops at the checkpoint every pipeline has indexed (the high watermark), and once a
+/// scan reaches it, the next one waits for the watermarks to move past it. The ledger readers'
+/// monotonic-read floor is raised before those watermarks are published, so any kv-rpc replica
+/// that accepts a scan can serve its whole window, and every match it returns can be resolved by
+/// nested queries. A resume cursor ahead of the watermarks (minted from the live stream, or by a
+/// more caught-up server) waits the same way before its first scan.
 fn backfill<S: Subscribable>(
     reader: AlphaLedgerGrpcReader,
     caches: Arc<StreamedCaches>,
@@ -292,28 +290,40 @@ fn backfill<S: Subscribable>(
     mut after: Option<S::Cursor>,
     checkpoint_lo: u64,
     scan_page_size: usize,
-) -> impl Stream<Item = Result<Scanned<S::Item>, RpcError>> {
+) -> impl Stream<Item = Result<Scanned<S::Item>, RpcError>>
+where
+    for<'a> CursorToken: From<&'a S::Cursor>,
+{
     stream! {
         let limits = PageLimits {
             default: scan_page_size as u32,
             max: scan_page_size as u32,
         };
 
-        // Resume from whichever is later: the `after` cursor or `[checkpoint_lo, ..]`. The upper
-        // bound is `u64::MAX` because backfill is open-ended, chasing the moving tip; `subscribe`
-        // stops it once the handoff is covered.
-        let cp_bounds = checkpoint_lo..=u64::MAX;
+        // The upper bound of the last window a scan exhausted.
+        let mut exhausted_through = None;
 
         loop {
-            let (items, next_after) = match scan_page::<S>(
+            let needed = first_checkpoint_needed(
+                checkpoint_lo,
+                after.as_ref().map(CursorToken::from).as_ref(),
+                exhausted_through,
+            );
+
+            if let Err(e) = wait_for_pipelines_catching_up_at(needed, &mut watermarks_rx).await {
+                yield Err(e.into());
+                return;
+            }
+
+            let checkpoint_hi = watermarks_rx.borrow().high_watermark().checkpoint();
+            let page = match scan_page::<S>(
                 &reader,
                 &caches,
                 &resolver_limits,
                 &limits,
-                cp_bounds.clone(),
+                checkpoint_lo..=checkpoint_hi,
                 after.as_ref(),
                 &filter,
-                &mut watermarks_rx,
             )
             .await
             {
@@ -323,12 +333,34 @@ fn backfill<S: Subscribable>(
                     return;
                 }
             };
-            for item in items {
+
+            for item in page.items {
                 yield Ok(item);
             }
-            after = Some(next_after);
+
+            if let Some(next_after) = page.next_after {
+                after = Some(next_after);
+            }
+
+            exhausted_through = page.window_exhausted.then_some(checkpoint_hi);
         }
     }
+}
+
+/// The first checkpoint the next backfill scan needs indexed: the start of the range, the resume
+/// cursor's checkpoint (the rest of which may still be unscanned), or one past the last window a
+/// scan exhausted, whichever is latest.
+fn first_checkpoint_needed(
+    checkpoint_lo: u64,
+    after: Option<&CursorToken>,
+    exhausted_through: Option<u64>,
+) -> u64 {
+    let after = after.map(|token| token.position.checkpoint());
+    let past_exhausted = exhausted_through.map(|hi| hi.saturating_add(1));
+    [after, past_exhausted]
+        .into_iter()
+        .flatten()
+        .fold(checkpoint_lo, u64::max)
 }
 
 /// The highest checkpoint fully scanned as of `token`: the one before its checkpoint. A `Boundary`
@@ -416,8 +448,7 @@ fn scan_backoff() -> ExponentialBackoff {
     }
 }
 
-/// Scan the next page of matches, waiting at the indexer tip if nothing is ready yet. Returns the
-/// matches, a trailing coverage marker, and the cursor to resume from.
+/// Scan the next page of matches within `cp_bounds`.
 async fn scan_page<S: Subscribable>(
     reader: &AlphaLedgerGrpcReader,
     caches: &Arc<StreamedCaches>,
@@ -426,49 +457,55 @@ async fn scan_page<S: Subscribable>(
     cp_bounds: RangeInclusive<u64>,
     after: Option<&S::Cursor>,
     filter: &S::Filter,
-    watermarks_rx: &mut watch::Receiver<Arc<Watermarks>>,
-) -> Result<(Vec<Scanned<S::Item>>, S::Cursor), RpcError> {
-    loop {
-        let result = scan_with_retry::<S>(reader, limits, cp_bounds.clone(), after, filter).await?;
+) -> Result<BackfillPage<S>, RpcError> {
+    let result = scan_with_retry::<S>(reader, limits, cp_bounds, after, filter).await?;
 
-        // No end cursor means nothing past the indexer tip is indexed yet; wait, then re-request. A
-        // range that was scanned but matched nothing still returns a boundary cursor, not `None`.
-        let Some(end_cursor) = result.last_cursor() else {
-            tokio::time::sleep(BACKFILL_POLL_INTERVAL).await;
-            continue;
-        };
-        let end_cursor = CursorToken::decode(end_cursor).context("Failed to decode scan cursor")?;
+    // A scan that returns no cursor made no progress; treat its window as exhausted so the next
+    // scan waits for the watermarks to advance rather than re-requesting immediately.
+    let window_exhausted = !result.has_more() || result.last_cursor().is_none();
 
-        // Hold the page until all pipelines have indexed through its end.
-        wait_for_pipelines_catching_up_at(end_cursor.position.checkpoint(), watermarks_rx).await?;
-
-        // A forward page keeps `items` in ascending order, one delivered edge each. The decoded
-        // token yields both the checkpoint and the edge cursor, so it is only decoded once.
-        let mut items = Vec::with_capacity(result.items.len() + 1);
-        for item in &result.items {
-            let token =
-                CursorToken::decode(&item.cursor).context("Failed to decode scan item cursor")?;
-            let checkpoint = token.position.checkpoint();
-            let cursor = S::Cursor::try_from(token)
-                .context("Unexpected position in scan item cursor")?
-                .encode_cursor();
-            items.push(Scanned::Match {
-                checkpoint,
-                edge: Edge::new(
-                    cursor,
-                    S::build_node(caches, resolver_limits, &item.payload)?,
-                ),
-            });
-        }
-        // Coverage marker at the fully-scanned end: advances the handoff even on a match-less page.
-        items.push(Scanned::Covered {
-            checkpoint: covered_checkpoint(&end_cursor),
+    // A range that was scanned but matched nothing still returns a boundary cursor, so no cursor
+    // also means no matches.
+    let Some(end_cursor) = result.last_cursor() else {
+        return Ok(BackfillPage {
+            items: vec![],
+            next_after: None,
+            window_exhausted,
         });
+    };
+    let end_cursor = CursorToken::decode(end_cursor).context("Failed to decode scan cursor")?;
 
-        let next_after =
-            S::Cursor::try_from(end_cursor).context("Unexpected position in scan end cursor")?;
-        return Ok((items, next_after));
+    // A forward page keeps `items` in ascending order, one delivered edge each. The decoded
+    // token yields both the checkpoint and the edge cursor, so it is only decoded once.
+    let mut items = Vec::with_capacity(result.items.len() + 1);
+    for item in &result.items {
+        let token =
+            CursorToken::decode(&item.cursor).context("Failed to decode scan item cursor")?;
+        let checkpoint = token.position.checkpoint();
+        let cursor = S::Cursor::try_from(token)
+            .context("Unexpected position in scan item cursor")?
+            .encode_cursor();
+        items.push(Scanned::Match {
+            checkpoint,
+            edge: Edge::new(
+                cursor,
+                S::build_node(caches, resolver_limits, &item.payload)?,
+            ),
+        });
     }
+    // Coverage marker at the fully-scanned end: advances the handoff even on a match-less page.
+    items.push(Scanned::Covered {
+        checkpoint: covered_checkpoint(&end_cursor),
+    });
+
+    let next_after =
+        S::Cursor::try_from(end_cursor).context("Unexpected position in scan end cursor")?;
+
+    Ok(BackfillPage {
+        items,
+        next_after: Some(next_after),
+        window_exhausted,
+    })
 }
 
 /// Scan one page over `cp_bounds`, retrying transient failures under a bounded budget.
@@ -497,4 +534,46 @@ async fn scan_with_retry<S: Subscribable>(
             })
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_rpc_cursor::Position;
+
+    use super::*;
+
+    fn cursor_at(checkpoint: u64) -> CursorToken {
+        CursorToken::item(Position::Transactions {
+            checkpoint,
+            tx_seq: 0,
+        })
+    }
+
+    #[test]
+    fn resume_point_ahead_of_the_watermark_is_waited_for() {
+        // `afterCheckpoint` alone: the range starts one past it.
+        assert_eq!(first_checkpoint_needed(11, None, None), 11);
+
+        // A cursor from the live stream, ahead of the range start: its checkpoint must be indexed
+        // before the first scan, since the rest of it may still be unscanned.
+        assert_eq!(
+            first_checkpoint_needed(0, Some(&cursor_at(5_000)), None),
+            5_000
+        );
+    }
+
+    #[test]
+    fn exhausted_window_waits_for_the_watermark_to_move_past_it() {
+        // The last scan reached the end of its window at 5,000, so the next one needs 5,001.
+        assert_eq!(
+            first_checkpoint_needed(0, Some(&cursor_at(5_000)), Some(5_000)),
+            5_001,
+        );
+
+        // A page that filled up mid-window carries on from its cursor without waiting.
+        assert_eq!(
+            first_checkpoint_needed(0, Some(&cursor_at(4_200)), None),
+            4_200
+        );
+    }
 }
