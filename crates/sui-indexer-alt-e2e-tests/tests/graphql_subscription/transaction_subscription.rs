@@ -198,6 +198,35 @@ async fn collect_matches(
     nodes
 }
 
+/// Read payloads until a progress edge (a `null` node with no `errors`) and return its cursor.
+/// Match payloads before it are skipped. Panics if none arrives within a generous window.
+async fn next_progress_cursor(
+    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
+) -> String {
+    loop {
+        let item = tokio::time::timeout(Duration::from_secs(60), stream.next())
+            .await
+            .expect("timed out waiting for a progress edge")
+            .expect("stream ended before a progress edge");
+        let edge = &item["data"]["transactions"];
+        if edge["node"].is_null() && item["errors"].is_null() {
+            return edge["cursor"]
+                .as_str()
+                .expect("progress edge missing cursor")
+                .to_string();
+        }
+    }
+}
+
+/// The checkpoint a transaction cursor string sits at.
+fn cursor_checkpoint(cursor: &str) -> u64 {
+    let ct = CTransaction::decode_cursor(cursor).expect("cursor is not a valid CTransaction");
+    match CursorToken::from(&*ct).position {
+        Position::Transactions { checkpoint, .. } => checkpoint,
+        position => panic!("expected a transactions cursor, got {position:?}"),
+    }
+}
+
 #[tokio::test]
 async fn test_transaction_subscription() {
     let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
@@ -535,6 +564,89 @@ async fn test_transaction_subscription_resume_with_after_cursor() {
         !got.contains(&first_digest.as_str()),
         "resume-by-cursor re-delivered the tx at the cursor",
     );
+}
+
+/// A filtered backfill over a match-less range delivers progress: a cursor with a `null` node that
+/// advances the client's resume point past the scanned gap, so a reconnect does not re-scan it.
+#[tokio::test]
+async fn test_transaction_subscription_backfill_delivers_progress() {
+    let mut cluster = SubscriptionTestCluster::new_with_ledger_history().await;
+    // A sender that never transacts, so the whole backfill range matches nothing.
+    let absent = SuiAddress::random_for_testing_only();
+
+    // Produce several checkpoints of non-matching activity for the backfill to scan over.
+    execute_n_transfers(&mut cluster.validator, 4).await;
+    let tip = cluster.validator_checkpoint_tip();
+
+    // Backfill from genesis: every checkpoint up to the tip is match-less.
+    let query = r#"subscription($sender: SuiAddress!) {
+        transactions(filter: { afterCheckpoint: 0, sentAddress: $sender }, progress: true) {
+            cursor
+            node { digest }
+        }
+    }"#;
+    let mut stream = cluster
+        .subscribe_with_variables(query, sender_var(absent))
+        .await;
+
+    // Each progress cursor advances the resume point without a match, never moving backward, and
+    // the backfill carries it past the pre-subscription tip as it scans there. The ledger can trail
+    // the validator when the subscription starts, so an early progress cursor may still sit at or
+    // below the tip; reading until one passes keeps the assertion off that timing race.
+    let mut last = 0;
+    loop {
+        let checkpoint = cursor_checkpoint(&next_progress_cursor(&mut stream).await);
+        assert!(
+            checkpoint >= last,
+            "progress cursor moved backward from {last} to {checkpoint}",
+        );
+        last = checkpoint;
+        if checkpoint > tip {
+            break;
+        }
+    }
+}
+
+/// Live delivers progress during a quiet stretch, and resuming `after` that cursor neither skips
+/// nor re-delivers: a matching transaction produced afterward still arrives. This exercises the
+/// live-minted boundary cursor as a resume point across the live/backfill seam.
+#[tokio::test]
+async fn test_transaction_subscription_live_progress_then_resume() {
+    let mut cluster =
+        SubscriptionTestCluster::new_with_ledger_history_and_progress_threshold(2).await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+    // A sender that never transacts, so every live checkpoint is quiet for this filter.
+    let absent = SuiAddress::random_for_testing_only();
+
+    // Live-only subscription (no resume) on a filter that never matches.
+    let query = r#"subscription($sender: SuiAddress!) {
+        transactions(filter: { sentAddress: $sender }, progress: true) {
+            cursor
+            node { digest }
+        }
+    }"#;
+    let mut stream = cluster
+        .subscribe_with_variables(query, sender_var(absent))
+        .await;
+
+    // Advance the chain so live checkpoints (none matching `absent`) accumulate into a quiet run.
+    execute_n_transfers(&mut cluster.validator, 4).await;
+    let progress = next_progress_cursor(&mut stream).await;
+    drop(stream);
+
+    // Resume from the live progress cursor with a matching filter; a tx produced now must arrive.
+    let live = transfer_coins(&mut cluster.validator, &[1000]).await;
+    let query = format!(
+        r#"subscription($sender: SuiAddress!) {{
+            transactions(after: "{progress}", filter: {{ sentAddress: $sender }}) {{
+                node {{ digest }}
+            }}
+        }}"#,
+    );
+    let mut stream = cluster
+        .subscribe_with_variables(&query, sender_var(sender))
+        .await;
+    wait_for_matching_item(&mut stream, &live, transaction_digest).await;
 }
 
 /// Resume with an `after` cursor ahead of the ledger's indexed tip in both checkpoint and

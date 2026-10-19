@@ -1,5 +1,6 @@
 ---
 source: crates/sui-indexer-alt-graphql/src/lib.rs
+assertion_line: 830
 expression: sdl
 ---
 """
@@ -1597,6 +1598,24 @@ input EventFilter {
 	Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
 	"""
 	type: String
+}
+
+"""
+One payload of the `events` subscription: a matching event, or progress.
+"""
+type EventSubscriptionEdge {
+	"""
+	Pass as `after` to resume the subscription after this payload.
+	"""
+	cursor: String!
+	"""
+	The matching event, or `null` for progress.
+	
+	A payload whose `node` is `null` and that has no `errors` is progress: every match before its cursor has been delivered, so save the cursor and resume `after` it to skip the range already scanned.
+	
+	A payload whose `node` is `null` and that has `errors` is a match that failed to resolve. Do not save its cursor: treat the payload as an error and resume from the previous cursor.
+	"""
+	node: Event
 }
 
 """
@@ -4396,9 +4415,11 @@ type Subscription {
 	
 	Each matching event is yielded individually as an edge, ordered by checkpoint, then by transaction position within the checkpoint, then by position within the transaction. Each edge carries a cursor for resumption.
 	
+	Set `progress` to true to also receive progress payloads (a `null` node carrying only a cursor) during stretches that match nothing, so the resume cursor advances without waiting for a match. It defaults to false, where only matching events are delivered. Live progress is paced by the server and can be turned off there, so a live-only subscription may receive none.
+	
 	This subscription is not yet available for use.
 	"""
-	events(filter: EventFilter, after: String): EventEdge!
+	events(filter: EventFilter, after: String, progress: Boolean! = false): EventSubscriptionEdge!
 	"""
 	Subscribe to transactions as they are finalized, with optional filtering.
 	
@@ -4406,9 +4427,11 @@ type Subscription {
 	
 	Each matching transaction is yielded individually as an edge, ordered by checkpoint and then by position within the checkpoint. Each edge carries a cursor for resumption.
 	
+	Set `progress` to true to also receive progress payloads (a `null` node carrying only a cursor) during stretches that match nothing, so the resume cursor advances without waiting for a match. It defaults to false, where only matching transactions are delivered. Live progress is paced by the server and can be turned off there, so a live-only subscription may receive none.
+	
 	This subscription is not yet available for use.
 	"""
-	transactions(filter: TransactionFilter, after: String): TransactionEdge!
+	transactions(filter: TransactionFilter, after: String, progress: Boolean! = false): TransactionSubscriptionEdge!
 }
 
 """
@@ -4692,6 +4715,24 @@ enum TransactionKindInput {
 An object as it appears in a specific transaction. The variant discriminates whether the object was changed by the transaction or read as an unchanged consensus (shared) input.
 """
 union TransactionObject = ObjectChange | ConsensusObjectRead
+
+"""
+One payload of the `transactions` subscription: a matching transaction, or progress.
+"""
+type TransactionSubscriptionEdge {
+	"""
+	Pass as `after` to resume the subscription after this payload.
+	"""
+	cursor: String!
+	"""
+	The matching transaction, or `null` for progress.
+	
+	A payload whose `node` is `null` and that has no `errors` is progress: every match before its cursor has been delivered, so save the cursor and resume `after` it to skip the range already scanned.
+	
+	A payload whose `node` is `null` and that has `errors` is a match that failed to resolve. Do not save its cursor: treat the payload as an error and resume from the previous cursor.
+	"""
+	node: Transaction
+}
 
 """
 Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public transfer) and must not be previously immutable or shared.

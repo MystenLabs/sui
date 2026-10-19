@@ -106,6 +106,16 @@ impl SubscriptionTestCluster {
         cluster
     }
 
+    /// Same as `new_with_ledger_history()`, but lowers the server's live-progress threshold to
+    /// `unmatched` checkpoints, so a subscription that opts in with `progress: true` observes live
+    /// progress without waiting out the default run.
+    pub async fn new_with_ledger_history_and_progress_threshold(unmatched: u64) -> Self {
+        let mut config = GraphQlConfig::default();
+        config.subscription.unmatched_checkpoints_before_progress = unmatched;
+        let (cluster, _controller) = Self::new_inner(false, true, config).await;
+        cluster
+    }
+
     /// Same as `new()`, but caps per-subscriber delivery at `budget` output nodes per second so tests
     /// can observe the reactive throttle pacing payloads.
     pub async fn new_with_throttle_budget(budget: u32) -> Self {
@@ -307,7 +317,7 @@ impl SubscriptionTestCluster {
         &self,
         query: &str,
     ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>> {
-        self.post_subscription(query, None).await
+        self.subscribe_with_variables(query, None).await
     }
 
     /// Like `subscribe`, but binds GraphQL variables (e.g. `json!({"sender": "0x..."})`).

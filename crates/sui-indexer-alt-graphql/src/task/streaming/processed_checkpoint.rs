@@ -29,3 +29,41 @@ pub(crate) struct ProcessedTransaction {
     /// copy of the per-tx contents instead of each cloning the whole `TransactionContents`.
     pub(crate) contents: Arc<TransactionContents>,
 }
+
+#[cfg(test)]
+impl ProcessedCheckpoint {
+    /// A checkpoint for tests where only `sequence_number` and `network_total_transactions` carry
+    /// meaning; the remaining fields are empty or default.
+    pub(crate) fn for_test(sequence_number: u64, network_total_transactions: u64) -> Self {
+        use std::collections::BTreeMap;
+
+        use sui_types::crypto::AggregateAuthoritySignature;
+        use sui_types::gas::GasCostSummary;
+
+        let contents = CheckpointContents::new_with_digests_only_for_tests(vec![]);
+        let summary = CheckpointSummary {
+            epoch: 0,
+            sequence_number,
+            network_total_transactions,
+            content_digest: *contents.digest(),
+            previous_digest: None,
+            epoch_rolling_gas_cost_summary: GasCostSummary::default(),
+            timestamp_ms: 0,
+            checkpoint_commitments: vec![],
+            end_of_epoch_data: None,
+            version_specific_data: vec![],
+        };
+        let signature = AuthorityStrongQuorumSignInfo {
+            epoch: 0,
+            signature: AggregateAuthoritySignature::default(),
+            signers_map: Default::default(),
+        };
+        Self {
+            summary,
+            contents,
+            signature,
+            transactions: vec![],
+            execution_objects: Arc::new(BTreeMap::new()),
+        }
+    }
+}
