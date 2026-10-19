@@ -397,6 +397,13 @@ impl BigTableIndexer {
     ) -> Result<Self> {
         let ingestion_config: FrameworkIngestionConfig = ingestion_config.into();
         let ingestion_metrics = IngestionMetrics::new(Some("kvstore_alt_indexer"), registry);
+        let gap_fill_client = client_args
+            .streaming
+            .gap_fill_client(
+                ingestion_config.streaming_connection_timeout(),
+                ingestion_metrics.clone(),
+            )
+            .await?;
         let ingestion_client = IngestionClient::new(client_args.ingestion, ingestion_metrics)?;
         let streaming_client = client_args.streaming.streaming_url.map(|uri| {
             Arc::new(GrpcStreamingClient::new(
@@ -412,6 +419,7 @@ impl BigTableIndexer {
             indexer_args,
             ingestion_client,
             streaming_client,
+            gap_fill_client,
             ingestion_config,
             Some("kvstore_alt_indexer"),
             registry,

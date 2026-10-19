@@ -238,7 +238,9 @@ impl Indexer {
     /// construct an [`Indexer`] backed by it.
     ///
     /// `ingestion_client` is the pull-side checkpoint source; the
-    /// optional `streaming_client` is the live-tail source. Callers
+    /// optional `streaming_client` is the live-tail source, and the
+    /// optional `gap_fill_client` fetches the checkpoints in front of
+    /// a newly connected stream instead of `ingestion_client`. Callers
     /// (standalone binary, embedded fullnode) build the
     /// [`IngestionClient`] via [`IngestionClient::new`] (driven by
     /// `ClientArgs`) or [`IngestionClient::from_trait`] (wrapping
@@ -256,6 +258,7 @@ impl Indexer {
         indexer_args: IndexerArgs,
         ingestion_client: IngestionClient,
         streaming_client: Option<ArcStreamingClient>,
+        gap_fill_client: Option<IngestionClient>,
         consistency_config: crate::config::ConsistencyConfig,
         pruner_config: Option<PrunerConfig>,
         ingestion_config: IngestionConfig,
@@ -270,6 +273,7 @@ impl Indexer {
             indexer_args,
             ingestion_client,
             streaming_client,
+            gap_fill_client,
             consistency_config,
             pruner_config,
             ingestion_config,
@@ -290,6 +294,7 @@ impl Indexer {
         indexer_args: IndexerArgs,
         ingestion_client: IngestionClient,
         streaming_client: Option<ArcStreamingClient>,
+        gap_fill_client: Option<IngestionClient>,
         consistency_config: crate::config::ConsistencyConfig,
         pruner_config: Option<PrunerConfig>,
         ingestion_config: IngestionConfig,
@@ -308,6 +313,7 @@ impl Indexer {
             indexer_args,
             ingestion_client,
             streaming_client,
+            gap_fill_client,
             ingestion_config,
             metrics_prefix,
             registry,
@@ -620,6 +626,7 @@ mod tests {
             IndexerArgs::default(),
             ingestion_client,
             None,
+            None,
             crate::config::ConsistencyConfig::default(),
             None,
             IngestionConfig::default(),
@@ -724,6 +731,7 @@ mod tests {
             store,
             IndexerArgs::default(),
             ingestion_client,
+            None,
             None,
             crate::config::ConsistencyConfig::default(),
             None,

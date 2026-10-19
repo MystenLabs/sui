@@ -241,7 +241,7 @@ impl<S: Store> Indexer<S> {
         registry: &Registry,
     ) -> anyhow::Result<Self> {
         let ingestion_factory =
-            IngestionFactory::new(client_args, ingestion_config, metrics_prefix, registry)?;
+            IngestionFactory::new(client_args, ingestion_config, metrics_prefix, registry).await?;
         Self::with_ingestion_factory(
             store,
             indexer_args,
@@ -259,7 +259,9 @@ impl<S: Store> Indexer<S> {
     /// them in here, and the indexer creates its ingestion services from them.
     ///
     /// All the indexer's ingestion services clone `ingestion_client` and report to its metrics
-    /// handle, and each gets its own clone of the streaming client (if any).
+    /// handle, and each gets its own clone of the streaming client (if any). If
+    /// `gap_fill_client` is provided, it fetches the checkpoints between each service's position
+    /// and the start of a newly connected stream, instead of `ingestion_client`.
     ///
     /// [`IngestionClientTrait`]: crate::ingestion::ingestion_client::IngestionClientTrait
     /// [`CheckpointStreamingClient`]: crate::ingestion::streaming_client::CheckpointStreamingClient
@@ -268,12 +270,17 @@ impl<S: Store> Indexer<S> {
         indexer_args: IndexerArgs,
         ingestion_client: IngestionClient,
         streaming_client: Option<ArcStreamingClient>,
+        gap_fill_client: Option<IngestionClient>,
         ingestion_config: IngestionConfig,
         metrics_prefix: Option<&str>,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
-        let ingestion_factory =
-            IngestionFactory::with_clients(ingestion_client, streaming_client, ingestion_config);
+        let ingestion_factory = IngestionFactory::with_clients(
+            ingestion_client,
+            streaming_client,
+            gap_fill_client,
+            ingestion_config,
+        );
         Self::with_ingestion_factory(
             store,
             indexer_args,
@@ -1898,6 +1905,7 @@ mod tests {
                 ..Default::default()
             },
             ingestion_client,
+            None,
             None,
             IngestionConfig::default(),
             None,
