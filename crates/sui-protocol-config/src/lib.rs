@@ -426,6 +426,7 @@ const MAINNET_USDB: &str =
 //              Enable check_object_funds_withdraw_in_execution on mainnet.
 //              Disable effects transaction dependencies on mainnet.
 //              Add the staggered-submission duplication signal thresholds.
+//              Enable sponsor withdrawals (`WithdrawFrom::Sponsor`) on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1352,6 +1353,12 @@ struct FeatureFlags {
     // id.
     #[serde(skip_serializing_if = "is_false")]
     disable_id_leak_verifier: bool,
+
+    // Enable sponsor-sourced funds withdrawals (`WithdrawFrom::Sponsor`).
+    // Requires `enable_accumulators`.
+    #[serde(skip_serializing_if = "is_false")]
+    #[skip_protocol_config_accessor]
+    enable_sponsor_withdrawals: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2465,6 +2472,10 @@ impl ProtocolConfig {
 
     pub fn enable_allowances(&self) -> bool {
         self.feature_flags.enable_allowances && self.enable_accumulators()
+    }
+
+    pub fn enable_sponsor_withdrawals(&self) -> bool {
+        self.feature_flags.enable_sponsor_withdrawals && self.enable_accumulators()
     }
 
     pub fn enable_coin_reservation_obj_refs(&self) -> bool {
@@ -4933,6 +4944,7 @@ impl ProtocolConfig {
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.shuffle_consensus_commit_blocks = true;
+                        cfg.feature_flags.enable_sponsor_withdrawals = true;
                     }
 
                     cfg.feature_flags.allow_references_in_ptbs = true;
