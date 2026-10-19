@@ -34,8 +34,11 @@ price for a fixed instant. `queue-mint.ts`, `queue-sell.ts` and
 `sessions-queue.ts` use that path. `mint.ts`, `mint-range.ts`, `redeem.ts` and
 the trade wrappers in `sessions-trade.ts` are the immediate path, which a
 network runs only before its delayed-execution cutover. Testnet passed the
-cutover on 2026-10-09. `client.predict.read.executionMode()` reports which path
-a network is on.
+cutover on 2026-10-09 and Mainnet on 2026-10-20, so on both networks those
+files now abort. `client.predict.read.executionMode()` reports which path a
+network is on. Mainnet needs `@mysten/deepbook-v3` 2.8.0 or later, the floor in
+`package.json`, because earlier releases call Predict and Sessions versions that
+the Mainnet cutover retired.
 
 The `sessions-*` files import from `@mysten/deepbook-v3/sessions`, a separate
 subpath from `/predict`. They build owner-signed grant transactions and
