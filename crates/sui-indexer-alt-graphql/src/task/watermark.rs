@@ -23,6 +23,7 @@ use sui_indexer_alt_reader::consistent_reader::proto::AvailableRangeResponse;
 use sui_indexer_alt_reader::consistent_reader::proto::CHECKPOINT_HEIGHT_METADATA;
 use sui_indexer_alt_reader::consistent_reader::proto::LOWEST_AVAILABLE_CHECKPOINT_METADATA;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
+use sui_indexer_alt_reader::monotonic_read::CheckpointFloor;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_sql_macro::query;
 use tokio::sync::RwLock;
@@ -69,6 +70,12 @@ pub(crate) struct WatermarkTask {
 
     /// Pipelines that we want to check the watermark for.
     pg_pipelines: Vec<String>,
+
+    /// Raised to the `ledger_grpc` high watermark on every update, before it is published. The
+    /// ledger gRPC readers stamp it on their requests, so a load-balanced replica never answers
+    /// from a view older than one this task has already published. That includes this task's own
+    /// poll, so the `ledger_grpc` watermark never moves backwards either.
+    ledger_grpc_floor: CheckpointFloor,
 
     /// Access to metrics to report watermark updates.
     metrics: Arc<RpcMetrics>,
@@ -139,6 +146,7 @@ impl WatermarkTask {
         pg_reader: PgReader,
         ledger_grpc_reader: Option<LedgerGrpcReader>,
         consistent_reader: ConsistentReader,
+        ledger_grpc_floor: CheckpointFloor,
         metrics: Arc<RpcMetrics>,
     ) -> Self {
         let WatermarkConfig {
@@ -154,6 +162,7 @@ impl WatermarkTask {
             consistent_reader,
             interval: watermark_polling_interval,
             pg_pipelines,
+            ledger_grpc_floor,
             metrics,
         }
     }
@@ -180,6 +189,7 @@ impl WatermarkTask {
                 consistent_reader,
                 interval,
                 pg_pipelines,
+                ledger_grpc_floor,
                 metrics,
             } = self;
 
@@ -237,6 +247,13 @@ impl WatermarkTask {
                     timestamp = ?DateTime::from_timestamp_millis(w.timestamp_ms_hi_inclusive).unwrap_or_default(),
                     "Watermark updated"
                 );
+
+                // Raise the floor before publishing, so anything that acts on these watermarks
+                // (request scopes, streamed cache eviction, subscription waits) sends ledger
+                // requests that ask for at least this view.
+                if let Some(ledger_grpc) = w.per_pipeline.get(LEDGER_GRPC_PIPELINE) {
+                    ledger_grpc_floor.raise(ledger_grpc.hi.checkpoint());
+                }
 
                 let w = Arc::new(w);
                 // TODO: `WatermarksLock` is effectively a broadcast channel here — redundant

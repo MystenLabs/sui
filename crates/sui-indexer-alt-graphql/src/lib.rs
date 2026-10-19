@@ -47,6 +47,7 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::monotonic_read::CheckpointFloor;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_indexer_alt_reader::pg_reader::PgReader;
@@ -350,6 +351,11 @@ pub async fn start_rpc(
     let consistent_reader =
         ConsistentReader::new(Some("graphql_consistent"), consistent_reader_args, registry).await?;
 
+    // The highest ledger checkpoint the watermark task has published. Both ledger readers stamp it
+    // on their requests, so a load-balanced kv-rpc replica never answers from an older view than
+    // the one the rest of GraphQL is working from.
+    let ledger_grpc_floor = CheckpointFloor::default();
+
     let ledger_grpc_reader = kv_args
         .ledger_grpc_reader(
             Some("graphql_ledger_grpc"),
@@ -357,6 +363,7 @@ pub async fn start_rpc(
             Some(config.limits.max_batch_get_transactions as usize),
             Some(config.limits.max_batch_get_objects as usize),
             config.limits.ledger_grpc_num_connections,
+            Some(ledger_grpc_floor.clone()),
         )
         .await?;
 
@@ -365,6 +372,7 @@ pub async fn start_rpc(
             Some("graphql_alpha_ledger_grpc"),
             registry,
             config.limits.ledger_grpc_num_connections,
+            Some(ledger_grpc_floor.clone()),
         )
         .await?;
 
@@ -399,6 +407,7 @@ pub async fn start_rpc(
         pg_reader.clone(),
         ledger_grpc_reader.clone(),
         consistent_reader.clone(),
+        ledger_grpc_floor,
         metrics.clone(),
     );
 

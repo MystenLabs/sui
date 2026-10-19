@@ -134,7 +134,7 @@ pub(super) fn subscribe<S: Subscribable>(
     broadcast: Arc<SubscriptionBroadcast>,
     caches: Arc<StreamedCaches>,
     resolver_limits: sui_package_resolver::Limits,
-    watermarks_rx: watch::Receiver<Arc<Watermarks>>,
+    mut watermarks_rx: watch::Receiver<Arc<Watermarks>>,
     filter: S::Filter,
     after: Option<S::Cursor>,
     after_checkpoint: Option<u64>,
@@ -187,7 +187,20 @@ where
 
         // Phase 1: scan toward the tip, pinning the live receiver near it. `after` and/or
         // `afterCheckpoint` resume the backfill; neither means live-only.
-        if after.is_some() || after_checkpoint.is_some() {
+        if let Some(resume_checkpoint) = start_from {
+            // The resume point can be ahead of this server's watermarks (a cursor minted from the
+            // live stream, or by a more caught-up server). Waiting for them to reach it raises the
+            // ledger readers' monotonic-read floor past it, so no replica scans from a view behind
+            // the resume point. `scan_page` then waits for each page's end cursor the same way,
+            // keeping the floor at or above every later resume cursor.
+            if let Err(e) =
+                wait_for_pipelines_catching_up_at(resume_checkpoint, &mut watermarks_rx).await
+            {
+                guard.terminate(SubscriptionTerminationReason::BackfillError);
+                yield Err(e.into());
+                return;
+            }
+
             let checkpoint_lo = after_checkpoint.map_or(0, |cp| cp.saturating_add(1));
             let scan = backfill::<S>(
                 reader,
