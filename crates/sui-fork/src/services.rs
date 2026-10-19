@@ -243,6 +243,7 @@ impl ServiceManager {
             },
             ingestion_client,
             None,
+            None,
             sui_rpc_store::ConsistencyConfig::default(),
             None,
             IngestionConfig::default(),

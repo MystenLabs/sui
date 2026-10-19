@@ -44,6 +44,11 @@ const STREAMING_CATCHUP_THRESHOLD: u64 = 1_000;
 /// finish (failure or range completion), the overall watermark is updated and the loop runs
 /// again if the requested range is not yet complete.
 ///
+/// When a stream starts within catch-up range, the ingested part of the range is the gap in
+/// front of the stream: it is fetched with `gap_fill_client` if one is provided, and with
+/// `client` otherwise. All other ingestion (catching up from far behind, or while streaming is
+/// unavailable) uses `client`.
+///
 /// Backpressure is **per-subscriber, channel-fill based**: each subscriber's bounded mpsc
 /// channel acts as both transport and the backpressure signal. When any subscriber's channel
 /// fills, [`TrySpawnStreamExt::try_for_each_broadcast_spawned`]'s adaptive controller cuts
@@ -53,6 +58,7 @@ pub(super) fn broadcaster<R>(
     streaming_client: Option<ArcStreamingClient>,
     config: IngestionConfig,
     client: IngestionClient,
+    gap_fill_client: Option<IngestionClient>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
 ) -> Service
 where
@@ -92,7 +98,7 @@ where
 
         while checkpoint_hi < end_cp {
             // Set up the streaming task for the current range [checkpoint_hi, end_cp). This function
-            // will return a handle to the streaming task and the end cp of the ingestion task, calculated
+            // will return a handle to the streaming task (if started) and the end cp of the ingestion task, calculated
             // based on 1) if streaming is used, 2) streaming connection success status, and 3) the network
             // latest checkpoint we get from a success streaming connection.
             // The ingestion task fill up the gap from checkpoint_hi to ingestion_end (exclusive) while the streaming
@@ -108,6 +114,16 @@ where
             )
             .await;
 
+            // A stream started at `ingestion_end` means ingestion is filling the gap in front of
+            // it: recent checkpoints that the streaming endpoint has, but an object store
+            // ingestion client may not have uploaded yet.
+            let range_client = match (&gap_fill_client, &stream_guard) {
+                (Some(gap_fill_client), Some(_)) => gap_fill_client,
+                _ => &client,
+            };
+
+            let stream_guard = stream_guard.unwrap_or_else(|| noop_streaming_task(ingestion_end));
+
             // Spawn a broadcaster task for this range.
             // It will exit when the range is complete or if it is cancelled.
             let ingest_guard = ingest_and_broadcast_range(
@@ -115,7 +131,7 @@ where
                 ingestion_end,
                 config.retry_interval(),
                 config.ingest_concurrency.clone(),
-                client.clone(),
+                range_client.clone(),
                 subscribers.clone(),
                 cohort_metrics.clone(),
             );
@@ -194,9 +210,9 @@ fn ingest_and_broadcast_range(
     }))
 }
 
-/// Sets up either a noop or real streaming task based on network state and proximity to
-/// the current checkpoint_hi, and returns a streaming task handle and the `ingestion_end`
-/// telling the main task that ingestion should be used up to this point.
+/// Sets up a streaming task based on network state and proximity to the current checkpoint_hi,
+/// and returns its handle (`None` if no stream was started) and the `ingestion_end` telling the
+/// main task that ingestion should be used up to this point.
 async fn setup_streaming_task(
     streaming_client: &Option<ArcStreamingClient>,
     checkpoint_hi: u64,
@@ -205,10 +221,10 @@ async fn setup_streaming_task(
     config: &IngestionConfig,
     subscribers: &[mpsc::Sender<Arc<CheckpointEnvelope>>],
     cohort_metrics: &Arc<CohortMetrics>,
-) -> (TaskGuard<u64>, u64) {
+) -> (Option<TaskGuard<u64>>, u64) {
     // No streaming client configured so we ingest all the way to end_cp.
     let Some(streaming_client) = streaming_client else {
-        return (noop_streaming_task(end_cp), end_cp);
+        return (None, end_cp);
     };
 
     let backoff_batch_size = *streaming_backoff_batch_size;
@@ -225,7 +241,7 @@ async fn setup_streaming_task(
         connection_failures.inc();
         *streaming_backoff_batch_size =
             (backoff_batch_size * 2).min(config.streaming_backoff_max_batch_size as u64);
-        (noop_streaming_task(ingestion_end), ingestion_end)
+        (None, ingestion_end)
     };
 
     let CheckpointStream {
@@ -263,7 +279,7 @@ async fn setup_streaming_task(
             threshold = STREAMING_CATCHUP_THRESHOLD,
             "Network is far ahead, delaying streaming start to let ingestion catch up"
         );
-        return (noop_streaming_task(ingestion_end), ingestion_end);
+        return (None, ingestion_end);
     }
 
     info!(
@@ -283,7 +299,7 @@ async fn setup_streaming_task(
         cohort_metrics.clone(),
     )));
 
-    (stream_guard, ingestion_end)
+    (Some(stream_guard), ingestion_end)
 }
 
 /// Streams and broadcasts checkpoints from a range [start, end) to subscribers. Each
@@ -500,6 +516,7 @@ mod tests {
             None,
             test_config(),
             mock_client_with_range(0..5, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -521,6 +538,7 @@ mod tests {
             None,
             test_config(),
             mock_client_with_range(0..20, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -543,6 +561,7 @@ mod tests {
             None,
             test_config(),
             mock_client_with_range(0..20, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -568,6 +587,7 @@ mod tests {
             None,
             test_config(),
             mock_client_with_range(0..20, metrics.clone()),
+            None,
             subscribers,
         );
 
@@ -605,6 +625,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..5, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -651,6 +672,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..60, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -703,6 +725,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..30, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -745,6 +768,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(30..100, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -812,6 +836,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..20, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -876,6 +901,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..10, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -938,6 +964,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..15, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -995,6 +1022,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..20, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -1052,6 +1080,7 @@ mod tests {
                 ..test_config()
             },
             mock_client_with_range(0..20, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -1103,6 +1132,7 @@ mod tests {
                 ..test_config()
             },
             mock_client_with_range(0..20, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -1151,6 +1181,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..50, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -1204,6 +1235,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..50, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -1279,6 +1311,7 @@ mod tests {
             Some(Arc::new(streaming_service)),
             config,
             mock_client_with_range(0..20, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -1339,6 +1372,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             config,
             mock_client_with_range(0..20, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -1388,6 +1422,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             test_config(),
             mock_client_with_range(0..15, metrics.clone()),
+            None,
             subscriber_dest,
         );
 
@@ -1459,6 +1494,7 @@ mod tests {
             Some(Arc::new(streaming_client)),
             test_config(),
             ingestion_client,
+            None,
             subscriber_dest,
         );
 
@@ -1474,5 +1510,141 @@ mod tests {
             .await
             .expect("broadcaster should stop promptly, not wait for the unrelated streaming task")
             .unwrap();
+    }
+
+    // =============== Part 6: Gap filling ==================
+
+    #[tokio::test]
+    async fn streaming_gap_fetched_from_gap_fill_client() {
+        let (subscriber_dest, mut subscriber_rx) = single_subscriber(20);
+
+        // The stream drops after checkpoint 4 and reconnects at 10, leaving a gap at [5, 10).
+        let mut streaming_client = MockStreamingClient::new(0..5, None);
+        streaming_client.insert_error();
+        streaming_client.insert_checkpoint_range(10..15);
+
+        let metrics = test_ingestion_metrics();
+        let gap_fill_metrics = test_ingestion_metrics();
+        let mut svc = broadcaster(
+            0..15,
+            Some(Arc::new(streaming_client)),
+            test_config(),
+            mock_client_with_range(0..15, metrics.clone()),
+            Some(mock_client_with_range(0..15, gap_fill_metrics.clone())),
+            subscriber_dest,
+        );
+
+        assert_eq!(recv_vec(&mut subscriber_rx, 5).await, Vec::from_iter(0..5));
+        assert_eq!(
+            recv_set(&mut subscriber_rx, 10).await,
+            BTreeSet::from_iter(5..15)
+        );
+
+        assert_eq!(
+            gap_fill_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            5
+        );
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+
+        svc.join().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn far_behind_range_fetched_from_ingestion_client() {
+        let (subscriber_dest, mut subscriber_rx) = single_subscriber(10);
+
+        // The network tip is beyond the catch-up threshold, so the range is ingested without
+        // streaming.
+        let streaming_client = MockStreamingClient::new([STREAMING_CATCHUP_THRESHOLD + 10], None);
+
+        let metrics = test_ingestion_metrics();
+        let gap_fill_metrics = test_ingestion_metrics();
+        let mut svc = broadcaster(
+            0..10,
+            Some(Arc::new(streaming_client)),
+            test_config(),
+            mock_client_with_range(0..10, metrics.clone()),
+            Some(mock_client_with_range(0..10, gap_fill_metrics.clone())),
+            subscriber_dest,
+        );
+
+        assert_eq!(
+            recv_set(&mut subscriber_rx, 10).await,
+            BTreeSet::from_iter(0..10)
+        );
+
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            10
+        );
+        assert_eq!(
+            gap_fill_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+
+        svc.join().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn streaming_connection_failure_backoff_fetched_from_ingestion_client() {
+        let (subscriber_dest, mut subscriber_rx) = single_subscriber(20);
+
+        // The first connection fails, so the first backoff batch is ingested without streaming.
+        let streaming_client = MockStreamingClient::new(0..20, None).fail_connection_times(1);
+
+        let metrics = test_ingestion_metrics();
+        let gap_fill_metrics = test_ingestion_metrics();
+        let mut svc = broadcaster(
+            0..20,
+            Some(Arc::new(streaming_client)),
+            IngestionConfig {
+                streaming_backoff_initial_batch_size: non_zero(5),
+                ..test_config()
+            },
+            mock_client_with_range(0..20, metrics.clone()),
+            Some(mock_client_with_range(0..20, gap_fill_metrics.clone())),
+            subscriber_dest,
+        );
+
+        assert_eq!(
+            recv_set(&mut subscriber_rx, 5).await,
+            BTreeSet::from_iter(0..5)
+        );
+        assert_eq!(
+            recv_vec(&mut subscriber_rx, 15).await,
+            Vec::from_iter(5..20)
+        );
+
+        assert_eq!(
+            metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            5
+        );
+        assert_eq!(
+            gap_fill_metrics
+                .total_ingested_checkpoints
+                .with_label_values(&["0"])
+                .get(),
+            0
+        );
+
+        svc.join().await.unwrap();
     }
 }

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -14,13 +15,18 @@ use sui_rpc::proto::sui::rpc::v2::subscription_service_client::SubscriptionServi
 use sui_types::digests::ChainIdentifier;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use tokio_stream::adapters::Peekable;
+use tonic::Code;
 use tonic::Status;
 use tonic::transport::Endpoint;
 use tonic::transport::Uri;
+use tracing::warn;
+use url::Url;
 
 use crate::ingestion::MAX_GRPC_MESSAGE_SIZE_BYTES;
 use crate::ingestion::error::Error;
 use crate::ingestion::error::Result;
+use crate::ingestion::ingestion_client::IngestionClient;
+use crate::metrics::IngestionMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
 
 pub struct CheckpointStream {
@@ -48,7 +54,9 @@ pub trait CheckpointStreamingClient {
 
 #[derive(clap::Args, Clone, Debug, Default)]
 pub struct StreamingClientArgs {
-    /// gRPC endpoint for streaming checkpoints
+    /// gRPC endpoint for streaming checkpoints. If it also serves `LedgerService`, the checkpoints
+    /// between the indexer and the start of a newly connected stream are fetched from it, rather
+    /// than from the ingestion source.
     #[clap(long, env)]
     pub streaming_url: Option<Uri>,
 }
@@ -59,6 +67,43 @@ pub struct GrpcStreamingClient {
     uri: Uri,
     connection_timeout: Duration,
     statement_timeout: Duration,
+}
+
+impl StreamingClientArgs {
+    /// The client that fills the gap in front of a newly connected stream, fetching checkpoints
+    /// from the streaming endpoint's `LedgerService` and reporting to `metrics`.
+    ///
+    /// `None` if there is no streaming endpoint, or if it refuses a ledger request (because it
+    /// does not serve `LedgerService`, or requires credentials), in which case stream gaps are
+    /// filled from the ingestion source. An endpoint that does not answer within
+    /// `connection_timeout` keeps its client, because the client is only used right after a
+    /// stream to that endpoint connects.
+    pub async fn gap_fill_client(
+        &self,
+        connection_timeout: Duration,
+        metrics: Arc<IngestionMetrics>,
+    ) -> Result<Option<IngestionClient>> {
+        let Some(uri) = &self.streaming_url else {
+            return Ok(None);
+        };
+
+        let url = Url::parse(&uri.to_string())
+            .with_context(|| format!("Invalid streaming URL for gap filling: {uri}"))
+            .map_err(Error::StreamingError)?;
+
+        let client = IngestionClient::with_grpc(url, None, None, metrics)?;
+        match tokio::time::timeout(connection_timeout, client.latest_checkpoint_number()).await {
+            Ok(Err(error)) if refuses_ledger_requests(&error) => {
+                warn!(
+                    %uri,
+                    "Streaming endpoint refused a ledger request, filling stream gaps from the \
+                     ingestion source instead: {error}"
+                );
+                Ok(None)
+            }
+            _ => Ok(Some(client)),
+        }
+    }
 }
 
 impl GrpcStreamingClient {
@@ -148,6 +193,17 @@ fn wrap_stream(
     tokio_stream::StreamExt::peekable(stream)
 }
 
+/// Whether `error` (from a ledger request) means the endpoint will never serve ledger requests to
+/// this client, as opposed to failing transiently.
+fn refuses_ledger_requests(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<Status>().is_some_and(|status| {
+        matches!(
+            status.code(),
+            Code::Unimplemented | Code::PermissionDenied | Code::Unauthenticated
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::SocketAddr;
@@ -158,6 +214,8 @@ mod tests {
     use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionService;
     use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceServer;
     use tonic::transport::Server;
+
+    use crate::metrics::tests::test_ingestion_metrics;
 
     use super::*;
 
@@ -207,6 +265,55 @@ mod tests {
             elapsed < Duration::from_secs(5),
             "connect() took {elapsed:?}, should have timed out in ~200ms"
         );
+    }
+
+    /// A streaming endpoint without `LedgerService` yields no gap-fill client, so stream gaps
+    /// are filled from the ingestion source.
+    #[tokio::test]
+    async fn no_gap_fill_client_without_ledger_service() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr: SocketAddr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
+            Server::builder()
+                .add_service(SubscriptionServiceServer::new(HangingSubscriptionService))
+                .serve_with_incoming(incoming)
+                .await
+                .unwrap();
+        });
+
+        let args = StreamingClientArgs {
+            streaming_url: Some(format!("http://{addr}").parse().unwrap()),
+        };
+        let client = args
+            .gap_fill_client(Duration::from_secs(5), test_ingestion_metrics())
+            .await
+            .unwrap();
+
+        assert!(client.is_none());
+    }
+
+    /// An unreachable streaming endpoint keeps its gap-fill client, because it is only used
+    /// right after a stream to that endpoint connects.
+    #[tokio::test]
+    async fn gap_fill_client_kept_when_endpoint_unreachable() {
+        // Bind and immediately release a port, so connections to it are refused.
+        let addr = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .unwrap()
+            .local_addr()
+            .unwrap();
+
+        let args = StreamingClientArgs {
+            streaming_url: Some(format!("http://{addr}").parse().unwrap()),
+        };
+        let client = args
+            .gap_fill_client(Duration::from_secs(5), test_ingestion_metrics())
+            .await
+            .unwrap();
+
+        assert!(client.is_some());
     }
 }
 

@@ -649,6 +649,7 @@ async fn build_indexer(
         IndexerArgs::default(),
         ingestion_client,
         streaming_client,
+        None,
         ConsistencyConfig::default(),
         // Pruning is driven by the validator's `AuthorityStorePruner`
         // (history cohort only), not the rpc-store's own pruner.
