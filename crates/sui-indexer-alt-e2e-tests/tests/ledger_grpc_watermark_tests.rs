@@ -11,12 +11,14 @@ use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcArgs;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_indexer_alt_reader::ledger_grpc_reader::MAX_BATCH_GET_OBJECTS;
 use sui_indexer_alt_reader::ledger_grpc_reader::MAX_BATCH_GET_TRANSACTIONS;
+use sui_indexer_alt_reader::monotonic_read::CheckpointFloor;
 use sui_kv_rpc::KvRpcConfig;
 use sui_kv_rpc::X_SUI_MIN_CHECKPOINT;
 use sui_kvstore::ALL_PIPELINE_NAMES;
 use sui_kvstore::ConcurrentLayer;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::SequentialLayer;
+use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest;
 use sui_rpc::proto::sui::rpc::v2::ListTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
@@ -145,6 +147,7 @@ async fn checkpoint_watermark_tracks_list_api_lag() {
         &Registry::new(),
         MAX_BATCH_GET_TRANSACTIONS,
         MAX_BATCH_GET_OBJECTS,
+        None,
     )
     .await
     .expect("construct LedgerGrpcReader");
@@ -296,4 +299,41 @@ async fn monotonic_read_waits_for_the_watermark_to_catch_up() {
         .expect("served once the watermark advanced")
         .into_inner();
     assert!(info.checkpoint_height.unwrap() >= next);
+}
+
+/// A reader built with a checkpoint floor stamps it on every request: kv-rpc serves the request once
+/// it has reached the floor, and refuses a floor it has not reached rather than answering from an
+/// older view, even after the reader's retries.
+#[tokio::test]
+async fn ledger_grpc_reader_requests_honor_the_floor() {
+    let (cluster, _, tip) = cluster_at_tip(None).await;
+    let floor = CheckpointFloor::default();
+    let reader = LedgerGrpcReader::new(
+        cluster.kv_rpc_url().to_string().parse().unwrap(),
+        LedgerGrpcArgs::default(),
+        None,
+        &Registry::new(),
+        MAX_BATCH_GET_TRANSACTIONS,
+        MAX_BATCH_GET_OBJECTS,
+        Some(floor.clone()),
+    )
+    .await
+    .expect("construct LedgerGrpcReader");
+
+    floor.raise(tip);
+    let latest = reader
+        .get_checkpoint(GetCheckpointRequest::default())
+        .await
+        .expect("replica has reached the floor")
+        .checkpoint
+        .and_then(|checkpoint| checkpoint.sequence_number)
+        .expect("latest checkpoint has a sequence number");
+    assert!(latest >= tip);
+
+    floor.raise(tip + 1_000);
+    let err = reader
+        .get_checkpoint(GetCheckpointRequest::default())
+        .await
+        .expect_err("replica cannot reach the floor");
+    assert_eq!(err.code(), tonic::Code::Unavailable);
 }

@@ -21,8 +21,11 @@ use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Uri;
+use tower::ServiceBuilder;
 
 use crate::metrics::GrpcMetricsLayer;
+use crate::monotonic_read::CheckpointFloor;
+use crate::monotonic_read::MonotonicReadLayer;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct LedgerGrpcArgs {
@@ -161,6 +164,8 @@ impl CheckpointedTransaction {
 }
 
 impl LedgerGrpcReader {
+    /// With a `min_checkpoint` floor, every request asks the ledger service for a view at least as
+    /// new as the floor (see [`crate::monotonic_read`]).
     pub async fn new(
         uri: Uri,
         args: LedgerGrpcArgs,
@@ -168,15 +173,20 @@ impl LedgerGrpcReader {
         registry: &Registry,
         max_batch_get_transactions: usize,
         max_batch_get_objects: usize,
+        min_checkpoint: Option<CheckpointFloor>,
     ) -> anyhow::Result<Self> {
         let timeout = args.statement_timeout();
         let mut client = Client::new(uri)?
             .with_num_connections(args.ledger_grpc_num_connections)
             .with_max_decoding_message_size(args.ledger_grpc_max_decoding_message_size)
-            .request_layer(GrpcMetricsLayer::new(
-                prefix.unwrap_or("ledger_grpc"),
-                registry,
-            ));
+            .request_layer(
+                ServiceBuilder::new()
+                    .layer(GrpcMetricsLayer::new(
+                        prefix.unwrap_or("ledger_grpc"),
+                        registry,
+                    ))
+                    .option_layer(min_checkpoint.map(MonotonicReadLayer::new)),
+            );
 
         if let Some(timeout) = timeout {
             client = client.with_response_headers_timeout(timeout);
@@ -382,6 +392,7 @@ pub(crate) mod test_support {
             &Registry::new(),
             MAX_BATCH_GET_TRANSACTIONS,
             MAX_BATCH_GET_OBJECTS,
+            None,
         )
         .await
         .expect("construct LedgerGrpcReader");
