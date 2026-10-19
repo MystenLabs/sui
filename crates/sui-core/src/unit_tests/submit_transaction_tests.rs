@@ -121,6 +121,7 @@ impl TestContext {
         // Hold the config alive for as long as the builder borrows it.
         let network_config = committee_size.map(|size| {
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .committee_size(size)
                 .with_objects(vec![gas_object.clone()])
                 .build()

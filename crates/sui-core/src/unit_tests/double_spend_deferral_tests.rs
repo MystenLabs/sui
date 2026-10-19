@@ -56,6 +56,7 @@ impl DoubleSpendTestSetup {
         genesis_objects.push(contested_object.clone());
 
         let network_config = ConfigBuilder::new_with_temp_dir()
+            .with_placeholder_ports()
             .committee_size(NonZeroUsize::new(committee_size).unwrap())
             .with_reference_gas_price(1000)
             .with_protocol_version(protocol_config.version)

@@ -42,6 +42,7 @@ const GAS_OBJECT_COUNT: usize = 15;
 async fn setup_test(deny_config: TransactionDenyConfig) -> (NetworkConfig, Arc<AuthorityState>) {
     let network_config =
         sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+            .with_placeholder_ports()
             .with_accounts(vec![
                 AccountConfig {
                     address: None,

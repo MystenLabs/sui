@@ -614,6 +614,7 @@ mod tests {
 
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .with_objects(objects.clone())
                 .build();
 
@@ -715,6 +716,7 @@ mod tests {
 
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .committee_size(NonZeroUsize::new(1).unwrap())
                 .with_objects(objects.clone())
                 .build();
@@ -811,7 +813,9 @@ mod tests {
     #[sim_test]
     async fn accept_checkpoint_signature_v2() {
         let network_config =
-            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
+                .build();
 
         let state = TestAuthorityBuilder::new()
             .with_network_config(&network_config, 0)
@@ -886,6 +890,7 @@ mod tests {
 
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .committee_size(NonZeroUsize::new(1).unwrap())
                 .with_objects(all_objects)
                 .build();
@@ -1082,6 +1087,7 @@ mod tests {
 
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .committee_size(NonZeroUsize::new(1).unwrap())
                 .with_objects(vec![gas_object.clone(), owned_object.clone()])
                 .build();
@@ -1146,6 +1152,7 @@ mod tests {
 
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .committee_size(NonZeroUsize::new(1).unwrap())
                 .with_objects(vec![gas_object.clone(), owned_object.clone()])
                 .build();
@@ -1205,6 +1212,7 @@ mod tests {
 
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .committee_size(NonZeroUsize::new(4).unwrap())
                 .with_objects(vec![gas_object.clone(), owned_object.clone()])
                 .build();
@@ -1286,6 +1294,7 @@ mod tests {
         // BlockRef::MIN) maps to `state.name`.
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .committee_size(NonZeroUsize::new(1).unwrap())
                 .build();
         let state = TestAuthorityBuilder::new()

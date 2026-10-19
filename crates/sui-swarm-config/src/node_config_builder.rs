@@ -56,6 +56,8 @@ pub struct ValidatorConfigBuilder {
     observer_config: Option<ObserverParameters>,
     peer_deny_sync_config: Option<PeerDenySyncConfig>,
     consensus_transaction_pool_config: Option<ConsensusTransactionPoolConfig>,
+    admin_interface_port: Option<u16>,
+    json_rpc_address: Option<SocketAddr>,
 }
 
 impl ValidatorConfigBuilder {
@@ -166,6 +168,18 @@ impl ValidatorConfigBuilder {
         self
     }
 
+    /// Use this port for the admin interface instead of reserving a free one.
+    pub fn with_admin_interface_port(mut self, port: u16) -> Self {
+        self.admin_interface_port = Some(port);
+        self
+    }
+
+    /// Use this address for JSON-RPC instead of reserving a free localhost port.
+    pub fn with_json_rpc_address(mut self, address: SocketAddr) -> Self {
+        self.json_rpc_address = Some(address);
+        self
+    }
+
     pub fn build(
         self,
         validator: ValidatorGenesisConfig,
@@ -249,10 +263,14 @@ impl ValidatorConfigBuilder {
             db_path,
             network_address,
             metrics_address: validator.metrics_address,
-            admin_interface_port: local_ip_utils::get_available_port(&localhost),
-            json_rpc_address: local_ip_utils::new_tcp_address_for_testing(&localhost)
-                .to_socket_addr()
-                .unwrap(),
+            admin_interface_port: self
+                .admin_interface_port
+                .unwrap_or_else(|| local_ip_utils::get_available_port(&localhost)),
+            json_rpc_address: self.json_rpc_address.unwrap_or_else(|| {
+                local_ip_utils::new_tcp_address_for_testing(&localhost)
+                    .to_socket_addr()
+                    .unwrap()
+            }),
             consensus_config: Some(consensus_config),
             fullnode_sync_mode: None,
             genesis: sui_config::node::Genesis::new(genesis),

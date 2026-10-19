@@ -207,8 +207,10 @@ impl<'a> TestAuthorityBuilder<'a> {
         let local_network_config: &NetworkConfig = if let Some(config) = self.network_config {
             config
         } else {
+            // The authority built here never binds any of its configured addresses.
             let mut local_network_config_builder =
                 sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                    .with_placeholder_ports()
                     .with_accounts(self.accounts)
                     .with_reference_gas_price(self.reference_gas_price.unwrap_or(500));
             if let Some(protocol_config) = &self.protocol_config {

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
@@ -10,6 +11,7 @@ use mysten_common::in_test_configuration;
 use rand::rngs::OsRng;
 use sui_config::ExecutionCacheConfig;
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
+use sui_config::local_ip_utils;
 #[cfg(msim)]
 use sui_config::node::ExecutionTimeObserverConfig;
 use sui_config::node::FundsWithdrawSchedulerType;
@@ -127,6 +129,7 @@ pub struct ConfigBuilder<R = OsRng> {
     #[cfg(msim)]
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
     validator_observer_config: Option<ValidatorObserverConfigCallback>,
+    placeholder_ports: bool,
 }
 
 impl ConfigBuilder {
@@ -174,6 +177,7 @@ impl ConfigBuilder {
             #[cfg(msim)]
             execution_time_observer_config: None,
             validator_observer_config: None,
+            placeholder_ports: false,
         }
     }
 
@@ -385,6 +389,16 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    /// Give generated validators fixed placeholder ports from
+    /// [`local_ip_utils::placeholder_port_block_for_testing`] instead of reserving free ports from
+    /// the OS. Use this only when no node is started from the built configs (for example genesis or
+    /// in-memory test authorities): placeholder ports are not reserved, so binding them can collide
+    /// with other tests.
+    pub fn with_placeholder_ports(mut self) -> Self {
+        self.placeholder_ports = true;
+        self
+    }
+
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
@@ -410,6 +424,7 @@ impl<R> ConfigBuilder<R> {
             #[cfg(msim)]
             execution_time_observer_config: self.execution_time_observer_config,
             validator_observer_config: self.validator_observer_config,
+            placeholder_ports: self.placeholder_ports,
         }
     }
 
@@ -453,9 +468,15 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 let (_, keys) = Committee::new_simple_test_committee_of_size(size.into());
 
                 keys.into_iter()
-                    .map(|authority_key| {
+                    .enumerate()
+                    .map(|(index, authority_key)| {
                         let mut builder = ValidatorGenesisConfigBuilder::new()
                             .with_protocol_key_pair(authority_key);
+                        if self.placeholder_ports {
+                            builder = builder.with_deterministic_ports(
+                                local_ip_utils::placeholder_port_block_for_testing(index),
+                            );
+                        }
                         if let Some(rgp) = self.reference_gas_price {
                             builder = builder.with_gas_price(rgp);
                         }
@@ -471,10 +492,16 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 let (_, protocol_keys) = Committee::new_simple_test_committee_of_size(keys.len());
                 keys.into_iter()
                     .zip_debug_eq(protocol_keys)
-                    .map(|(account_key, protocol_key)| {
+                    .enumerate()
+                    .map(|(index, (account_key, protocol_key))| {
                         let mut builder = ValidatorGenesisConfigBuilder::new()
                             .with_protocol_key_pair(protocol_key)
                             .with_account_key_pair(account_key);
+                        if self.placeholder_ports {
+                            builder = builder.with_deterministic_ports(
+                                local_ip_utils::placeholder_port_block_for_testing(index),
+                            );
+                        }
                         if let Some(rgp) = self.reference_gas_price {
                             builder = builder.with_gas_price(rgp);
                         }
@@ -583,6 +610,18 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
 
                 if let Some(chain) = self.chain_override {
                     builder = builder.with_chain_override(chain);
+                }
+
+                if self.placeholder_ports {
+                    // `with_deterministic_ports` uses the first 7 ports of the block for the
+                    // genesis addresses.
+                    let port_block = local_ip_utils::placeholder_port_block_for_testing(idx);
+                    builder = builder
+                        .with_admin_interface_port(port_block + 7)
+                        .with_json_rpc_address(SocketAddr::from((
+                            Ipv4Addr::LOCALHOST,
+                            port_block + 8,
+                        )));
                 }
 
                 if let Some(jwk_fetch_interval) = self.jwk_fetch_interval {

@@ -1241,6 +1241,7 @@ mod tests {
         ) -> Self {
             let network_config =
                 sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                    .with_placeholder_ports()
                     .committee_size(NonZeroUsize::new(4).unwrap())
                     .with_reference_gas_price(500)
                     .build();
@@ -1808,6 +1809,7 @@ mod tests {
     fn test_dkg_role_try_new_party() {
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .committee_size(NonZeroUsize::new(4).unwrap())
                 .with_reference_gas_price(500)
                 .build();
@@ -1832,6 +1834,7 @@ mod tests {
 
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .committee_size(NonZeroUsize::new(4).unwrap())
                 .with_reference_gas_price(500)
                 .build();
@@ -1949,6 +1952,7 @@ mod tests {
     fn test_dkg_role_try_new_observer() {
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .committee_size(NonZeroUsize::new(4).unwrap())
                 .with_reference_gas_price(500)
                 .build();

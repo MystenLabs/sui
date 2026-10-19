@@ -4051,6 +4051,7 @@ mod tests {
 
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .with_objects(all_objects.clone())
                 .build();
 
@@ -4575,7 +4576,9 @@ mod tests {
         telemetry_subscribers::init_for_testing();
 
         let network_config =
-            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
+                .build();
         let state = TestAuthorityBuilder::new()
             .with_network_config(&network_config, 0)
             .build()
@@ -4690,7 +4693,9 @@ mod tests {
         telemetry_subscribers::init_for_testing();
 
         let network_config =
-            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
+                .build();
         let state = TestAuthorityBuilder::new()
             .with_network_config(&network_config, 0)
             .build()
@@ -4854,6 +4859,7 @@ mod tests {
         // A single-validator committee, so block author index 0 maps to `state.name`.
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_placeholder_ports()
                 .committee_size(std::num::NonZeroUsize::new(1).unwrap())
                 .build();
         let state = TestAuthorityBuilder::new()

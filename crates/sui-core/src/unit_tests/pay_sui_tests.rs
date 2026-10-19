@@ -412,6 +412,7 @@ async fn execute_pay_all_sui(
 ) -> PaySuiTransactionBlockExecutionResult {
     let dir = tempfile::TempDir::new().unwrap();
     let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
+        .with_placeholder_ports()
         .with_reference_gas_price(700)
         .with_objects(
             input_coin_objects

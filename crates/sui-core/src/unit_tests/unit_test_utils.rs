@@ -59,6 +59,9 @@ async fn init_genesis(
         let worker_name = worker_key_pair.public().clone();
         let account_key_pair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
         let network_key_pair: NetworkKeyPair = get_key_pair().1;
+        // These authorities talk through `LocalAuthorityClient`, so their addresses are never bound.
+        let localhost = local_ip_utils::localhost_for_testing();
+        let port_block = local_ip_utils::placeholder_port_block_for_testing(i);
         let validator_info = ValidatorInfo {
             name: format!("validator-{i}"),
             protocol_key: authority_name,
@@ -67,10 +70,21 @@ async fn init_genesis(
             network_key: network_key_pair.public().clone(),
             gas_price: 1,
             commission_rate: 0,
-            network_address: local_ip_utils::new_local_tcp_address_for_testing(),
-            p2p_address: local_ip_utils::new_local_udp_address_for_testing(),
-            narwhal_primary_address: local_ip_utils::new_local_udp_address_for_testing(),
-            narwhal_worker_address: local_ip_utils::new_local_udp_address_for_testing(),
+            network_address: local_ip_utils::new_deterministic_tcp_address_for_testing(
+                &localhost, port_block,
+            ),
+            p2p_address: local_ip_utils::new_deterministic_udp_address_for_testing(
+                &localhost,
+                port_block + 1,
+            ),
+            narwhal_primary_address: local_ip_utils::new_deterministic_udp_address_for_testing(
+                &localhost,
+                port_block + 2,
+            ),
+            narwhal_worker_address: local_ip_utils::new_deterministic_udp_address_for_testing(
+                &localhost,
+                port_block + 3,
+            ),
             description: String::new(),
             image_url: String::new(),
             project_url: String::new(),

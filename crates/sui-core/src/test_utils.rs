@@ -39,6 +39,7 @@ where
 {
     let dir = nondeterministic!(tempfile::TempDir::new().unwrap());
     let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
+        .with_placeholder_ports()
         .rng(rng)
         .build();
     let genesis = network_config.genesis;

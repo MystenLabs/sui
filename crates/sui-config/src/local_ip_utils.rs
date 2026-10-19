@@ -75,21 +75,35 @@ pub fn get_available_port(_host: &str) -> u16 {
 /// Return an ephemeral, available port. On unix systems, the port returned will be in the
 /// TIME_WAIT state ensuring that the OS won't hand out this port for some grace period.
 /// Callers should be able to bind to this port given they use SO_REUSEADDR.
+///
+/// Because every call holds a port in TIME_WAIT for about 60 seconds (fixed on Linux), many tests
+/// running in parallel can exhaust the ephemeral port range. Retrying immediately cannot succeed
+/// then, so failed attempts back off and keep retrying until earlier reservations expire.
 #[cfg(not(msim))]
 pub fn get_available_port(host: &str) -> u16 {
-    const MAX_PORT_RETRIES: u32 = 1000;
+    use std::time::{Duration, Instant};
 
-    for _ in 0..MAX_PORT_RETRIES {
-        if let Ok(port) = get_ephemeral_port(host) {
-            return port;
+    // Longer than TIME_WAIT, so every reservation that existed when the range ran out has expired
+    // before this gives up.
+    const RETRY_DEADLINE: Duration = Duration::from_secs(90);
+    const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(10);
+    const MAX_RETRY_DELAY: Duration = Duration::from_secs(1);
+
+    let start = Instant::now();
+    let mut retry_delay = INITIAL_RETRY_DELAY;
+    loop {
+        match get_ephemeral_port(host) {
+            Ok(port) => return port,
+            Err(error) if start.elapsed() >= RETRY_DEADLINE => panic!(
+                "Error: could not find an available port on {host} after {:?}: {error:?}",
+                start.elapsed()
+            ),
+            Err(_) => {
+                std::thread::sleep(retry_delay);
+                retry_delay = (retry_delay * 2).min(MAX_RETRY_DELAY);
+            }
         }
     }
-
-    panic!(
-        "Error: could not find an available port on {}: {:?}",
-        host,
-        get_ephemeral_port(host)
-    );
 }
 
 #[cfg(not(msim))]
@@ -154,4 +168,23 @@ pub fn new_deterministic_tcp_address_for_testing(host: &str, port: u16) -> Multi
 
 pub fn new_deterministic_udp_address_for_testing(host: &str, port: u16) -> Multiaddr {
     format!("/ip4/{host}/udp/{port}/https").parse().unwrap()
+}
+
+/// Number of consecutive ports in each block returned by [`placeholder_port_block_for_testing`].
+pub const PLACEHOLDER_PORT_BLOCK_SIZE: u16 = 10;
+
+/// Returns the first port of a block of [`PLACEHOLDER_PORT_BLOCK_SIZE`] consecutive ports for the
+/// validator at `validator_index`. Blocks for different indices never overlap, so validators in one
+/// genesis get distinct addresses, but nothing checks or reserves these ports. Use them only for
+/// addresses that are never bound, such as the configs of in-memory test authorities: a test that
+/// binds one can collide with every other test using the same block.
+pub fn placeholder_port_block_for_testing(validator_index: usize) -> u16 {
+    const FIRST_PLACEHOLDER_PORT: usize = 20_000;
+    let block_size = usize::from(PLACEHOLDER_PORT_BLOCK_SIZE);
+    let block_start = FIRST_PLACEHOLDER_PORT + validator_index * block_size;
+    assert!(
+        block_start + block_size - 1 <= usize::from(u16::MAX),
+        "validator index {validator_index} is too large for a placeholder port block"
+    );
+    block_start as u16
 }
