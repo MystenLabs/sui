@@ -10,11 +10,13 @@ use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_metrics::MetricsArgs;
+use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::default_committer_config;
 use sui_kvstore::set_write_legacy_data;
+use sui_kvstore::validate_pipeline_name;
 use sui_protocol_config::Chain;
 use telemetry_subscribers::TelemetryConfig;
 use tracing::info;
@@ -51,10 +53,15 @@ struct Args {
     #[arg(long)]
     write_legacy_data: bool,
 
-    /// Deprecated and ignored: the pipelines this used to gate are now always
-    /// registered. Still accepted so existing deployments keep starting.
-    #[arg(long = "enable-alpha-pipeline", value_name = "PIPELINE_NAME")]
-    enable_alpha_pipelines: Vec<String>,
+    /// Register an alpha pipeline, which is otherwise never registered (not even when selected
+    /// with `--pipeline`). Repeatable. Names of pipelines that are always registered are
+    /// accepted and ignored.
+    #[arg(
+        long = "enable-alpha-pipeline",
+        value_name = "PIPELINE_NAME",
+        value_parser = validate_pipeline_name
+    )]
+    enable_alpha_pipelines: Vec<&'static str>,
 
     #[command(flatten)]
     metrics_args: MetricsArgs,
@@ -92,12 +99,17 @@ async fn main() -> Result<()> {
     info!("Starting sui-kvstore-alt indexer");
     info!(instance_id = %args.instance_id);
     info!("Config: {:#?}", config);
-    if !args.enable_alpha_pipelines.is_empty() {
+    let (alpha_pipelines, always_registered_pipelines): (Vec<_>, Vec<_>) = args
+        .enable_alpha_pipelines
+        .into_iter()
+        .partition(|name| ALPHA_PIPELINE_NAMES.contains(name));
+    if !always_registered_pipelines.is_empty() {
         warn!(
-            pipelines = ?args.enable_alpha_pipelines,
-            "--enable-alpha-pipeline is deprecated and ignored; these pipelines are always registered",
+            pipelines = ?always_registered_pipelines,
+            "--enable-alpha-pipeline ignored for pipelines that are always registered",
         );
     }
+    info!(?alpha_pipelines, "Enabled alpha pipelines");
 
     let channel_timeout = config
         .bigtable_channel_timeout_ms
@@ -136,6 +148,7 @@ async fn main() -> Result<()> {
         committer,
         indexer_config,
         config.pipeline,
+        &alpha_pipelines,
         args.chain,
         &registry,
     )
