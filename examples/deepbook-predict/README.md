@@ -33,10 +33,10 @@ order is placed now and filled or refunded shortly after, at Pyth's signed
 price for a fixed instant. `queue-mint.ts`, `queue-sell.ts` and
 `sessions-queue.ts` use that path. `mint.ts`, `mint-range.ts`, `redeem.ts` and
 the trade wrappers in `sessions-trade.ts` are the immediate path, which a
-network runs only before its delayed-execution cutover. Testnet passed the
-cutover on 2026-10-09 and Mainnet on 2026-10-20, so on both networks those
-files now abort. `client.predict.read.executionMode()` reports which path a
-network is on. Mainnet needs `@mysten/deepbook-v3` 2.8.0 or later, the floor in
+network runs only before its delayed-execution cutover. Both networks have
+passed it, so those files now abort on both, and only Predict protocol version
+4 and Sessions protocol version 3 accept calls.
+`client.predict.read.executionMode()` reports which path a network is on. Mainnet needs `@mysten/deepbook-v3` 2.8.0 or later, the floor in
 `package.json`, because earlier releases call Predict and Sessions versions that
 the Mainnet cutover retired.
 
