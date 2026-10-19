@@ -98,12 +98,12 @@ where
 
         while checkpoint_hi < end_cp {
             // Set up the streaming task for the current range [checkpoint_hi, end_cp). This function
-            // will return a handle to the streaming task and the end cp of the ingestion task, calculated
+            // will return a handle to the streaming task (if started) and the end cp of the ingestion task, calculated
             // based on 1) if streaming is used, 2) streaming connection success status, and 3) the network
             // latest checkpoint we get from a success streaming connection.
             // The ingestion task fill up the gap from checkpoint_hi to ingestion_end (exclusive) while the streaming
             // task covers from ingestion_end to end_cp.
-            let (stream_guard, ingestion_end, stream_started) = setup_streaming_task(
+            let (stream_guard, ingestion_end) = setup_streaming_task(
                 &streaming_client,
                 checkpoint_hi,
                 end_cp,
@@ -117,10 +117,12 @@ where
             // A stream started at `ingestion_end` means ingestion is filling the gap in front of
             // it: recent checkpoints that the streaming endpoint has, but an object store
             // ingestion client may not have uploaded yet.
-            let range_client = match &gap_fill_client {
-                Some(gap_fill_client) if stream_started => gap_fill_client,
+            let range_client = match (&gap_fill_client, &stream_guard) {
+                (Some(gap_fill_client), Some(_)) => gap_fill_client,
                 _ => &client,
             };
+
+            let stream_guard = stream_guard.unwrap_or_else(|| noop_streaming_task(ingestion_end));
 
             // Spawn a broadcaster task for this range.
             // It will exit when the range is complete or if it is cancelled.
@@ -208,10 +210,9 @@ fn ingest_and_broadcast_range(
     }))
 }
 
-/// Sets up either a noop or real streaming task based on network state and proximity to
-/// the current checkpoint_hi, and returns a streaming task handle, the `ingestion_end`
-/// telling the main task that ingestion should be used up to this point, and whether a real
-/// stream was started at `ingestion_end`.
+/// Sets up a streaming task based on network state and proximity to the current checkpoint_hi,
+/// and returns its handle (`None` if no stream was started) and the `ingestion_end` telling the
+/// main task that ingestion should be used up to this point.
 async fn setup_streaming_task(
     streaming_client: &Option<ArcStreamingClient>,
     checkpoint_hi: u64,
@@ -220,10 +221,10 @@ async fn setup_streaming_task(
     config: &IngestionConfig,
     subscribers: &[mpsc::Sender<Arc<CheckpointEnvelope>>],
     cohort_metrics: &Arc<CohortMetrics>,
-) -> (TaskGuard<u64>, u64, bool) {
+) -> (Option<TaskGuard<u64>>, u64) {
     // No streaming client configured so we ingest all the way to end_cp.
     let Some(streaming_client) = streaming_client else {
-        return (noop_streaming_task(end_cp), end_cp, false);
+        return (None, end_cp);
     };
 
     let backoff_batch_size = *streaming_backoff_batch_size;
@@ -240,7 +241,7 @@ async fn setup_streaming_task(
         connection_failures.inc();
         *streaming_backoff_batch_size =
             (backoff_batch_size * 2).min(config.streaming_backoff_max_batch_size as u64);
-        (noop_streaming_task(ingestion_end), ingestion_end, false)
+        (None, ingestion_end)
     };
 
     let CheckpointStream {
@@ -278,7 +279,7 @@ async fn setup_streaming_task(
             threshold = STREAMING_CATCHUP_THRESHOLD,
             "Network is far ahead, delaying streaming start to let ingestion catch up"
         );
-        return (noop_streaming_task(ingestion_end), ingestion_end, false);
+        return (None, ingestion_end);
     }
 
     info!(
@@ -298,7 +299,7 @@ async fn setup_streaming_task(
         cohort_metrics.clone(),
     )));
 
-    (stream_guard, ingestion_end, true)
+    (Some(stream_guard), ingestion_end)
 }
 
 /// Streams and broadcasts checkpoints from a range [start, end) to subscribers. Each
