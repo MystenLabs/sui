@@ -160,13 +160,27 @@ impl CommitTestFixture {
         &mut self,
         last_decided: crate::block::Slot,
     ) -> (Vec<CommittedSubDag>, crate::block::Slot) {
+        let (finalized, last_decided, _) = self.try_commit_with_skip_count(last_decided).await;
+        (finalized, last_decided)
+    }
+
+    /// Tries to decide leaders and returns the number of skipped leaders alongside
+    /// finalized commits. This is useful for asserting Byzantine test scenarios.
+    pub(crate) async fn try_commit_with_skip_count(
+        &mut self,
+        last_decided: crate::block::Slot,
+    ) -> (Vec<CommittedSubDag>, crate::block::Slot, usize) {
         let sequence = self.committer.try_decide(last_decided);
         let new_last_decided = sequence
             .last()
             .map(|leader| leader.slot())
             .unwrap_or(last_decided);
+        let skipped = sequence
+            .iter()
+            .filter(|leader| matches!(leader, DecidedLeader::Skip(_)))
+            .count();
         let finalized = self.process_commits(sequence).await;
-        (finalized, new_last_decided)
+        (finalized, new_last_decided, skipped)
     }
 
     /// Process decided leaders through linearizer and commit finalizer,
@@ -593,6 +607,9 @@ fn build_block_for_instance(
 struct RoundState {
     // Total stake of visited blocks in this round.
     visited_stake: Stake,
+    // Authors with a block visited in this round. Equivocations only count once
+    // toward the quorum stake that controls the delivery window.
+    visited_authors: BTreeSet<AuthorityIndex>,
     // Indices of unvisited blocks in this round.
     unvisited: Vec<usize>,
 }
@@ -696,8 +713,10 @@ impl Iterator for RandomDagIterator<'_> {
         let block = self.dag.blocks[block_idx].clone();
 
         // Update visited stake for this round.
-        let stake = self.dag.context.committee.stake(block.author());
-        self.round_states[selected_round].visited_stake += stake;
+        let round_state = &mut self.round_states[selected_round];
+        if round_state.visited_authors.insert(block.author()) {
+            round_state.visited_stake += self.dag.context.committee.stake(block.author());
+        }
         self.num_remaining -= 1;
 
         // Advance completed_round while next round has all blocks visited.
