@@ -773,3 +773,7 @@ sui-execution = { path = "sui-execution" }
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
+# h2 master plus hyperium/h2#983 (clients ignore frames on streams they reset and forgot), kept on
+# a fork branch so the commit stays fetchable while the PR is in review; remove once an h2 release
+# includes it.
+h2 = { git = "https://github.com/nickvikeras/h2", rev = "44260b15da7d6cf15c241295a2d27917c157f4c8" }
