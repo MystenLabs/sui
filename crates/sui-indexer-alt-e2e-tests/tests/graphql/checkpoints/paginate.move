@@ -271,3 +271,26 @@ fragment PageInfoFields on PageInfo {
     }
   }
 }
+//# run-graphql --cursors 2 5
+{
+  # An `after` cursor at `afterCheckpoint` is redundant with the bound.
+  checkpointsAfterCp2AfterCheckpoint2: checkpoints(first: 2, after: "@{cursor_0}", filter: {afterCheckpoint: 2}) {
+    pageInfo { hasPreviousPage hasNextPage }
+    nodes { sequenceNumber }
+  }
+  # An `after` cursor below `afterCheckpoint`.
+  checkpointsAfterCp2AfterCheckpoint3: checkpoints(first: 2, after: "@{cursor_0}", filter: {afterCheckpoint: 3}) {
+    pageInfo { hasPreviousPage hasNextPage }
+    nodes { sequenceNumber }
+  }
+  # A `before` cursor at `beforeCheckpoint`.
+  checkpointsBeforeCp5BeforeCheckpoint5: checkpoints(last: 2, before: "@{cursor_1}", filter: {beforeCheckpoint: 5}) {
+    pageInfo { hasPreviousPage hasNextPage }
+    nodes { sequenceNumber }
+  }
+  # A `before` cursor above `beforeCheckpoint`.
+  checkpointsBeforeCp5BeforeCheckpoint4: checkpoints(last: 2, before: "@{cursor_1}", filter: {beforeCheckpoint: 4}) {
+    pageInfo { hasPreviousPage hasNextPage }
+    nodes { sequenceNumber }
+  }
+}
