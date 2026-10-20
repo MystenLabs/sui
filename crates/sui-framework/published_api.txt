@@ -3286,16 +3286,16 @@ version
 upgrade_policy
 	public fun
 	0x2::package
-minversion_available
+minversion_enrollment_available
 	public fun
 	0x2::package
-minversion_enabled
+minversion_permanently_enabled
 	public fun
 	0x2::package
 minversion_permanently_disabled
 	public fun
 	0x2::package
-enable_minversion
+enable_minversion_permanently
 	public fun
 	0x2::package
 enable_minversion_impl
@@ -3400,7 +3400,7 @@ record_minversion_enrollment
 record_minversion_upgrade
 	public fun
 	0x2::package_config
-record_minversion_upgrade_and_forbid_previous
+record_minversion_upgrade_and_forbid_previous_versions
 	public fun
 	0x2::package_config
 create
@@ -3419,6 +3419,9 @@ assert_historical_version
 	fun
 	0x2::package_config
 forbid_version_impl
+	fun
+	0x2::package_config
+forbid_version_range_impl
 	fun
 	0x2::package_config
 Party

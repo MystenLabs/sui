@@ -48,11 +48,11 @@ fun test_minversion_can_be_permanently_disabled() {
     let mut scenario = test_scenario::begin(@0x1);
     let mut cap = package::test_publish(@0x42.to_id(), scenario.ctx());
 
-    assert!(cap.minversion_available());
+    assert!(cap.minversion_enrollment_available());
     cap.disable_minversion_permanently();
-    assert!(!cap.minversion_available());
+    assert!(!cap.minversion_enrollment_available());
     assert!(cap.minversion_permanently_disabled());
-    assert!(!cap.minversion_enabled());
+    assert!(!cap.minversion_permanently_enabled());
     cap.only_additive_upgrades();
     assert!(cap.minversion_permanently_disabled());
     cap.only_dep_upgrades();
@@ -78,13 +78,13 @@ fun test_restrict_upgrade_policy() {
     let mut cap = package::test_publish(@0x42.to_id(), scenario.ctx());
 
     assert_eq!(cap.upgrade_policy(), package::compatible_policy());
-    assert!(cap.minversion_available());
+    assert!(cap.minversion_enrollment_available());
     cap.only_additive_upgrades();
     assert_eq!(cap.upgrade_policy(), package::additive_policy());
-    assert!(cap.minversion_available());
+    assert!(cap.minversion_enrollment_available());
     cap.only_dep_upgrades();
     assert_eq!(cap.upgrade_policy(), package::dep_only_policy());
-    assert!(cap.minversion_available());
+    assert!(cap.minversion_enrollment_available());
     cap.make_immutable();
 
     scenario.end();
