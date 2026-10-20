@@ -23,13 +23,25 @@ use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_graphql::config::ZkLoginConfig;
 use sui_indexer_alt_graphql::config::ZkLoginEnv;
+use sui_keys::keystore::AccountKeystore;
 use sui_swarm_config::genesis_config::AccountConfig;
+use sui_types::SUI_ADDRESS_ALIAS_STATE_OBJECT_ID;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+use sui_types::address_alias::get_address_alias_state_obj_initial_shared_version;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::Signature;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::multisig::MultiSig;
 use sui_types::multisig::MultiSigPublicKey;
+use sui_types::object::Owner;
 use sui_types::signature::GenericSignature;
+use sui_types::transaction::CallArg;
+use sui_types::transaction::ObjectArg;
+use sui_types::transaction::SharedObjectMutability;
 use sui_types::utils::load_test_vectors;
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use tempfile::TempDir;
@@ -41,15 +53,26 @@ const SCOPE_PERSONAL_MESSAGE: &str = "PERSONAL_MESSAGE";
 const SCOPE_TRANSACTION_DATA: &str = "TRANSACTION_DATA";
 
 const QUERY: &str = r#"
-query ($message: Base64!, $signature: Base64!, $scope: IntentScope!, $author: SuiAddress!) {
-    verifySignature(message: $message, signature: $signature, intentScope: $scope, author: $author) {
+query (
+    $message: Base64!,
+    $signature: Base64!,
+    $scope: IntentScope!,
+    $author: SuiAddress!,
+    $checkAddressAliases: Boolean,
+) {
+    verifySignature(
+        message: $message,
+        signature: $signature,
+        intentScope: $scope,
+        author: $author,
+        checkAddressAliases: $checkAddressAliases,
+    ) {
         success
     }
 }
 "#;
 
 struct FullCluster {
-    #[allow(unused)]
     onchain: TestCluster,
     offchain: OffchainCluster,
     #[allow(unused)]
@@ -126,6 +149,18 @@ impl FullCluster {
         scope: &str,
         author: SuiAddress,
     ) -> anyhow::Result<serde_json::Value> {
+        self.verify_with_aliases(message, signature, scope, author, None)
+            .await
+    }
+
+    async fn verify_with_aliases(
+        &self,
+        message: Vec<u8>,
+        signature: Vec<u8>,
+        scope: &str,
+        author: SuiAddress,
+        check_address_aliases: Option<bool>,
+    ) -> anyhow::Result<serde_json::Value> {
         let client = reqwest::Client::new();
         let url = self.offchain.graphql_url();
 
@@ -134,6 +169,7 @@ impl FullCluster {
             "signature": Base64::encode(signature),
             "scope": scope,
             "author": author.to_string(),
+            "checkAddressAliases": check_address_aliases,
         });
 
         let response: serde_json::Value = client
@@ -159,6 +195,59 @@ impl FullCluster {
             .pointer("/data/verifySignature")
             .cloned()
             .with_context(|| format!("missing data.verifySignature in {response:#?}"))
+    }
+}
+
+impl FullCluster {
+    async fn call_address_alias(
+        &self,
+        sender: SuiAddress,
+        function: &'static str,
+        object: (ObjectID, SequenceNumber),
+        args: Vec<CallArg>,
+    ) -> TransactionEffects {
+        let mut call_args = vec![CallArg::Object(ObjectArg::SharedObject {
+            id: object.0,
+            initial_shared_version: object.1,
+            mutability: SharedObjectMutability::Mutable,
+        })];
+        call_args.extend(args);
+
+        let tx_data = self
+            .onchain
+            .test_transaction_builder_with_sender(sender)
+            .await
+            .move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                "address_alias",
+                function,
+                call_args,
+            )
+            .build();
+        let effects = self
+            .onchain
+            .sign_and_execute_transaction(&tx_data)
+            .await
+            .effects;
+        assert!(effects.status().is_ok(), "{:?}", effects.status());
+
+        // After settlement, the latest checkpoint includes the transaction.
+        self.onchain
+            .wait_for_tx_settlement(&[*effects.transaction_digest()])
+            .await;
+        let checkpoint = self
+            .onchain
+            .fullnode_handle
+            .sui_node
+            .state()
+            .get_latest_checkpoint_sequence_number()
+            .unwrap();
+        self.offchain
+            .wait_for_graphql(checkpoint, Duration::from_secs(30))
+            .await
+            .unwrap();
+
+        effects
     }
 }
 
@@ -607,4 +696,96 @@ async fn test_wrong_intent_scope() {
         .unwrap_err();
 
     assert_debug_snapshot!(result, @r###""[\"Failed to deserialize TransactionData from bytes\"]""###);
+}
+
+#[tokio::test]
+async fn test_address_aliases_personal_message() {
+    let cluster = FullCluster::new().await.unwrap();
+
+    let addresses = cluster.onchain.get_addresses();
+    let (owner, delegate) = (addresses[0], addresses[1]);
+    let keystore = &cluster.onchain.wallet.config.keystore;
+    let (message, owner_sig, _) =
+        sign_personal_message(keystore.export(&owner).unwrap(), b"Hello, World!");
+    let (_, delegate_sig, _) =
+        sign_personal_message(keystore.export(&delegate).unwrap(), b"Hello, World!");
+
+    let verify = |signature: &Vec<u8>, check_address_aliases: Option<bool>| {
+        cluster.verify_with_aliases(
+            message.clone(),
+            signature.clone(),
+            SCOPE_PERSONAL_MESSAGE,
+            owner,
+            check_address_aliases,
+        )
+    };
+
+    verify(&owner_sig, Some(true)).await.unwrap();
+    let error = verify(&delegate_sig, Some(true)).await.unwrap_err();
+    assert!(error.to_string().contains("is not an alias of"), "{error}");
+
+    let alias_state_version = cluster.onchain.fullnode_handle.sui_node.with(|node| {
+        get_address_alias_state_obj_initial_shared_version(node.state().get_object_store().as_ref())
+            .unwrap()
+            .expect("address alias state object should exist")
+    });
+    let effects = cluster
+        .call_address_alias(
+            owner,
+            "enable",
+            (SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, alias_state_version),
+            vec![],
+        )
+        .await;
+    let aliases = effects
+        .created()
+        .into_iter()
+        .find(|(_, owner)| matches!(owner, Owner::ConsensusAddressOwner { .. }))
+        .expect("AddressAliases object should be created")
+        .0;
+    let aliases = (aliases.0, aliases.1);
+    cluster
+        .call_address_alias(
+            owner,
+            "add",
+            aliases,
+            vec![CallArg::Pure(bcs::to_bytes(&delegate).unwrap())],
+        )
+        .await;
+
+    verify(&delegate_sig, Some(true)).await.unwrap();
+    verify(&owner_sig, Some(true)).await.unwrap();
+
+    for check_address_aliases in [None, Some(false)] {
+        let error = verify(&delegate_sig, check_address_aliases)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("Incorrect signer"), "{error}");
+    }
+
+    let error = cluster
+        .verify_with_aliases(
+            b"Goodbye".to_vec(),
+            delegate_sig.clone(),
+            SCOPE_PERSONAL_MESSAGE,
+            owner,
+            Some(true),
+        )
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("Verification failed"), "{error}");
+
+    cluster
+        .call_address_alias(
+            owner,
+            "remove",
+            aliases,
+            vec![CallArg::Pure(bcs::to_bytes(&owner).unwrap())],
+        )
+        .await;
+
+    let error = verify(&owner_sig, Some(true)).await.unwrap_err();
+    assert!(error.to_string().contains("is not an alias of"), "{error}");
+    verify(&owner_sig, None).await.unwrap();
+    verify(&delegate_sig, Some(true)).await.unwrap();
 }
