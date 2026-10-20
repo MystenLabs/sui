@@ -7,6 +7,8 @@ use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::Enum;
 use async_graphql::SimpleObject;
+use futures::future::OptionFuture;
+use futures::join;
 use imbl::hashmap::Entry;
 use imbl::hashmap::HashMap;
 use shared_crypto::intent::Intent;
@@ -14,8 +16,11 @@ use shared_crypto::intent::IntentMessage;
 use shared_crypto::intent::PersonalMessage;
 use sui_types::SUI_AUTHENTICATOR_STATE_ADDRESS;
 use sui_types::TypeTag;
+use sui_types::address_alias::AddressAliases;
+use sui_types::address_alias::address_aliases_object_id;
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::authenticator_state::AuthenticatorStateInner;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::crypto::ToFromBytes;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::signature::GenericSignature;
@@ -29,6 +34,7 @@ use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeInput;
 use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::epoch::Epoch;
+use crate::api::types::object::Object;
 use crate::config::ZkLoginConfig;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
@@ -61,6 +67,12 @@ pub(crate) enum Error {
 
     #[error("Verification failed: {0}")]
     VerificationFailed(String),
+
+    #[error("Verification failed: signature from {signer} is not an alias of {author}")]
+    NotAnAlias {
+        signer: NativeSuiAddress,
+        author: NativeSuiAddress,
+    },
 }
 
 /// Fetch active JWKs from the on-chain authenticator state. This reads from the indexed store
@@ -138,6 +150,7 @@ pub(crate) async fn verify_signature(
     Base64(signature): Base64,
     intent_scope: IntentScope,
     author: SuiAddress,
+    check_address_aliases: bool,
 ) -> Result<SignatureVerifyResult, RpcError<Error>> {
     let config: &ZkLoginConfig = ctx.data()?;
 
@@ -149,7 +162,28 @@ pub(crate) async fn verify_signature(
         .map_err(upcast)?
         .context("Failed to fetch current Epoch")?;
 
-    let jwks = fetch_jwks(ctx, scope).await.map_err(upcast)?;
+    let aliases: OptionFuture<_> = check_address_aliases
+        .then(|| address_aliases(ctx, scope.clone(), author))
+        .into();
+    let (jwks, aliases) = join!(fetch_jwks(ctx, scope), aliases);
+    let jwks = jwks.map_err(upcast)?;
+
+    let signer = match aliases.transpose().map_err(upcast)? {
+        Some(aliases) => {
+            let derived =
+                derived_addresses(&sig).map_err(|_| bad_user_input(Error::BadSignature))?;
+            *derived
+                .iter()
+                .find(|address| aliases.contains(address))
+                .ok_or_else(|| {
+                    bad_user_input(Error::NotAnAlias {
+                        signer: derived[0],
+                        author: author.into(),
+                    })
+                })?
+        }
+        None => author.into(),
+    };
 
     let params = verification_params(config, jwks);
 
@@ -160,14 +194,14 @@ pub(crate) async fn verify_signature(
                 bcs::from_bytes::<TransactionData>(&message)
                     .map_err(|_| bad_user_input(Error::NotTransactionData))?,
             ),
-            author.into(),
+            signer,
             epoch.epoch_id,
             &params,
             Arc::new(VerifiedDigestCache::new_empty()),
         ),
         IntentScope::PersonalMessage => sig.verify_authenticator(
             &IntentMessage::new(Intent::personal_message(), PersonalMessage { message }),
-            author.into(),
+            signer,
             epoch.epoch_id,
             &params,
             Arc::new(VerifiedDigestCache::new_empty()),
@@ -178,4 +212,42 @@ pub(crate) async fn verify_signature(
     Ok(SignatureVerifyResult {
         success: Some(true),
     })
+}
+
+/// A configured alias set replaces `address`; without one, `address` is its own sole alias.
+async fn address_aliases(
+    ctx: &Context<'_>,
+    scope: Scope,
+    address: SuiAddress,
+) -> Result<Vec<NativeSuiAddress>, RpcError> {
+    let aliases_id = address_aliases_object_id(address.into())
+        .context("Failed to derive address aliases object ID")?;
+
+    let Some(object) = Object::latest(ctx, scope.without_root_bound(), aliases_id.into()).await?
+    else {
+        return Ok(vec![address.into()]);
+    };
+
+    let contents = object
+        .contents(ctx)
+        .await?
+        .context("Failed to fetch address aliases object contents")?
+        .data
+        .try_as_move()
+        .context("Address aliases object is not a Move object")?;
+
+    let aliases: AddressAliases = bcs::from_bytes(contents.contents())
+        .context("Failed to deserialize address aliases object")?;
+
+    Ok(aliases.aliases.contents)
+}
+
+/// The addresses `signature` can sign for. zkLogin signatures cover both the unpadded and padded
+/// address derivations.
+fn derived_addresses(signature: &GenericSignature) -> anyhow::Result<Vec<NativeSuiAddress>> {
+    let mut addresses = vec![NativeSuiAddress::try_from(signature)?];
+    if let GenericSignature::ZkLoginAuthenticator(zklogin) = signature {
+        addresses.push(NativeSuiAddress::try_from_padded(&zklogin.inputs)?);
+    }
+    Ok(addresses)
 }
