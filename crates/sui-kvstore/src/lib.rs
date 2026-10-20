@@ -336,6 +336,9 @@ pub trait KeyValueStoreReader {
     /// The live objects among `objects`. Keys with no object at that version, including keys at
     /// which the object was deleted or wrapped, are left out.
     async fn get_objects(&mut self, objects: &[ObjectKey]) -> Result<Vec<Object>>;
+    /// The keys in `objects` that have a row in the objects table, read without the objects'
+    /// contents.
+    async fn get_existing_object_keys(&mut self, objects: &[ObjectKey]) -> Result<Vec<ObjectKey>>;
     async fn get_transactions(
         &mut self,
         transactions: &[TransactionDigest],
@@ -360,6 +363,11 @@ pub trait KeyValueStoreReader {
     /// [`OBJECT_TOMBSTONES_PIPELINE`] has run; elsewhere a removed object resolves to its last
     /// live version.
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
+    /// The version [`Self::get_latest_object`] would return, read without the object's contents.
+    async fn get_latest_object_version(
+        &mut self,
+        object_id: &ObjectID,
+    ) -> Result<Option<SequenceNumber>>;
     /// The object's newest version at or below `version`, like the fullnode's
     /// `find_object_lt_or_eq_version`. `None` if the object has no version at or below `version`,
     /// or if it was deleted or wrapped at the newest one. Deletions and wraps are only recorded
