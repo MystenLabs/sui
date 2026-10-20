@@ -16,7 +16,7 @@
 //! from transaction-validation guards like `TemporaryStore::check_accumulator_amounts_representable`
 //! that can legitimately reject a well-formed transaction.
 //!
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -59,6 +59,87 @@ pub(crate) struct InvariantChecker {
     /// Cleared on `drop_writes` since the underlying events are also cleared. A `Vec` is
     /// sufficient because real transactions run the PTB at most a handful of times.
     ptb_emitted_accumulator_event_ranges: Vec<Range<usize>>,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum AuthenticationKind {
+    Account(AccountKind),
+    Object(ObjectKind),
+}
+
+impl AuthenticationKind {
+    fn is_object(self) -> bool {
+        match self {
+            Self::Account(AccountKind::Sender | AccountKind::Sponsor) => false,
+            Self::Object(ObjectKind::Input | ObjectKind::Dynamic) => true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum AccountKind {
+    Sender,
+    Sponsor,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ObjectKind {
+    Input,
+    Dynamic,
+}
+
+#[derive(Debug)]
+struct MutationAuthorization {
+    entries: HashMap<SuiAddress, AuthenticationKind>,
+}
+
+impl MutationAuthorization {
+    fn new(sender: SuiAddress, sponsor: Option<SuiAddress>) -> Self {
+        let mut entries = HashMap::new();
+        entries.insert(sender, AuthenticationKind::Account(AccountKind::Sender));
+        if let Some(sponsor) = sponsor {
+            entries.insert(sponsor, AuthenticationKind::Account(AccountKind::Sponsor));
+        }
+        Self { entries }
+    }
+
+    fn insert_authenticated_object(&mut self, id: ObjectID, kind: ObjectKind) -> SuiResult {
+        let address = id.into();
+        match self.entries.get(&address) {
+            Some(AuthenticationKind::Account(account_kind)) => {
+                Err(ExecutionError::invariant_violation(format!(
+                    "Object ID {id} collides with the authenticated {account_kind:?} address"
+                ))
+                .into())
+            }
+            Some(AuthenticationKind::Object(existing_kind)) if *existing_kind == kind => Ok(()),
+            Some(AuthenticationKind::Object(existing_kind)) => {
+                Err(ExecutionError::invariant_violation(format!(
+                    "Object ID {id} is authenticated as {existing_kind:?}, \
+                     but is being authenticated as {kind:?}"
+                ))
+                .into())
+            }
+            None => {
+                self.entries
+                    .insert(address, AuthenticationKind::Object(kind));
+                Ok(())
+            }
+        }
+    }
+
+    /// Returns whether the ID is transitively authenticated for mutation including sender or sponsor.
+    fn is_authenticated(&self, id: ObjectID) -> bool {
+        self.entries.contains_key(&id.into())
+    }
+
+    /// Returns whether the address is authenticated and is an object.
+    fn is_authenticated_as_object(&self, address: SuiAddress) -> bool {
+        self.entries
+            .get(&address)
+            .copied()
+            .is_some_and(AuthenticationKind::is_object)
+    }
 }
 
 impl InvariantChecker {
@@ -564,8 +645,10 @@ impl InvariantChecker {
         let gas_objs: HashSet<&ObjectID> = gas_charger.used_coins().map(|g| &g.0).collect();
         let gas_owner = sponsor.as_ref().unwrap_or(sender);
 
-        // mark input objects as authenticated
-        let objects_authenticated_for_mutation: HashSet<SuiAddress> = store
+        let mut authenticated_for_mutation = MutationAuthorization::new(*sender, *sponsor);
+
+        // Mark input objects as authenticated.
+        let objects_authenticated_for_mutation = store
             .input_objects
             .iter()
             .filter_map(|(id, obj)| {
@@ -619,42 +702,41 @@ impl InvariantChecker {
                 store.mutable_input_refs.contains_key(id)
                     || store.non_exclusive_input_original_versions.contains_key(id)
             })
-            .copied()
+            .map(|id| (*id, ObjectKind::Input))
             // Add any object IDs generated in the object runtime during execution to the
             // authenticated set (i.e., new (non-package) objects, and possibly ephemeral UIDs).
-            .chain(self.generated_runtime_ids.iter().copied())
-            .map(SuiAddress::from)
-            .collect();
-
-        // Add sender and sponsor (if present) to authenticated set
-        let mut authenticated_for_mutation = {
-            assert!(
-                !objects_authenticated_for_mutation.contains(sender),
-                "Sender cannot be an object"
+            .chain(
+                self.generated_runtime_ids
+                    .iter()
+                    .map(|id| (*id, ObjectKind::Dynamic)),
             );
-            assert!(
-                sponsor
-                    .is_none_or(|sponsor| !objects_authenticated_for_mutation.contains(&sponsor)),
-                "Sponsor cannot be an object"
-            );
-            let mut s = objects_authenticated_for_mutation.clone();
-            s.insert(*sender);
-            if let Some(sponsor) = sponsor {
-                s.insert(*sponsor);
-            }
-            s
-        };
 
-        // check all modified objects are authenticated
-        let mut objects_to_authenticate = store
+        for (id, kind) in objects_authenticated_for_mutation {
+            authenticated_for_mutation.insert_authenticated_object(id, kind)?;
+        }
+
+        let object_funds_split_sources = store
+            .execution_results
+            .accumulator_events
+            .iter()
+            .filter_map(|event| {
+                (matches!(&event.write.operation, AccumulatorOperation::Split)
+                    && matches!(&event.write.value, AccumulatorValue::Integer(_)))
+                .then_some(ObjectID::from(event.write.address.address))
+            })
+            .collect::<BTreeSet<_>>();
+
+        // Check that all modified objects and object-funds split sources are authenticated.
+        let mut writes_to_authenticate = store
             .execution_results
             .modified_objects
             .iter()
+            .chain(object_funds_split_sources.iter())
             .copied()
             .collect::<Vec<_>>();
 
-        while let Some(to_authenticate) = objects_to_authenticate.pop() {
-            if authenticated_for_mutation.contains(&to_authenticate.into()) {
+        while let Some(to_authenticate) = writes_to_authenticate.pop() {
+            if authenticated_for_mutation.is_authenticated(to_authenticate) {
                 // object has already been authenticated
                 continue;
             }
@@ -668,6 +750,12 @@ impl InvariantChecker {
                 // It's non-wrapped, so check the owner -- we can load the object from the
                 // store.
                 let Some(old_obj) = store.store.get_object(&to_authenticate) else {
+                    // A split source is an untyped address and can represent an ordinary
+                    // address-balance withdrawal, which has no corresponding object. Leave it
+                    // unauthenticated for the reservation/gas checks below.
+                    if object_funds_split_sources.contains(&to_authenticate) {
+                        continue;
+                    }
                     panic!(
                         "Failed to load object {to_authenticate:?}.\n \
                          If it cannot be loaded, we would expect it to be in the wrapped object map: {:#?}",
@@ -717,9 +805,11 @@ impl InvariantChecker {
                 }
             };
 
-            // we now assume the object is authenticated and check the parent
-            authenticated_for_mutation.insert(to_authenticate.into());
-            objects_to_authenticate.push(parent);
+            // Inputs were authenticated before the ownership walk, so any remaining object was
+            // discovered dynamically through an ownership chain.
+            authenticated_for_mutation
+                .insert_authenticated_object(to_authenticate, ObjectKind::Dynamic)?;
+            writes_to_authenticate.push(parent);
         }
 
         // Check that all funds accumulator splits are authorized
@@ -778,7 +868,7 @@ impl InvariantChecker {
                             || address == *gas_owner
                             || is_allowance_backed(&key));
                     is_authorized_input_reservation
-                        || objects_authenticated_for_mutation.contains(&address)
+                        || authenticated_for_mutation.is_authenticated_as_object(address)
                         || (*type_tag == sui_balance_type
                             && gas_payment_address_balance
                                 .is_some_and(|gas_addr| gas_addr == address))
@@ -798,7 +888,7 @@ impl InvariantChecker {
         // zero) since it occurs only in the case where the gas coin is transferred via send_funds
         for (key, change) in funds_net_changes {
             // skip if deposit or for an object
-            if change >= 0 || objects_authenticated_for_mutation.contains(&key.0) {
+            if change >= 0 || authenticated_for_mutation.is_authenticated_as_object(key.0) {
                 continue;
             }
             let reservation = input_reservations.get(&key).copied().unwrap_or(0) as u128;
