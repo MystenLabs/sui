@@ -77,6 +77,7 @@ use serde_with::serde_as;
 use shared_crypto::intent::HashingIntentScope;
 use std::borrow::Cow;
 use std::cmp::max;
+use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
@@ -236,16 +237,14 @@ pub struct ConsensusObjectVersion {
 /// Versions of the implicitly read system objects pinned for one transaction, keyed by object
 /// ID. Only members of `IMPLICITLY_READ_SYSTEM_OBJECTS` may appear.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SystemObjectVersions(std::collections::BTreeMap<ObjectID, ConsensusObjectVersion>);
+pub struct SystemObjectVersions(BTreeMap<ObjectID, ConsensusObjectVersion>);
 
 impl SystemObjectVersions {
     pub fn empty() -> Self {
         Self::default()
     }
 
-    pub fn from_map(
-        versions: std::collections::BTreeMap<ObjectID, ConsensusObjectVersion>,
-    ) -> Self {
+    pub fn from_map(versions: BTreeMap<ObjectID, ConsensusObjectVersion>) -> Self {
         for object_id in versions.keys() {
             Self::assert_implicitly_read(object_id);
         }

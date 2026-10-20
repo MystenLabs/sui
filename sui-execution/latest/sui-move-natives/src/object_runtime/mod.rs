@@ -140,7 +140,8 @@ pub struct ObjectRuntime<'a> {
     child_object_store: ChildObjectStore<'a>,
     system_object_resolver: &'a dyn ImplicitSystemObjectResolver,
     /// The Clock pinned for this transaction, loaded on first borrow. References handed out by
-    /// `borrow_clock` point into it, so it lives as long as the runtime.
+    /// `borrow_clock` point into it, so it lives as long as the runtime; it is kept outside
+    /// `ObjectRuntimeState`, which test scenarios reset at the end of every transaction.
     clock: Option<GlobalValue>,
     // inventories for test scenario
     pub(crate) test_inventories: TestInventories,
@@ -274,8 +275,11 @@ impl<'a> ObjectRuntime<'a> {
         }
         self.clock
             .as_ref()
-            .expect("clock is set above")
-            .borrow_global()
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("The Clock was not loaded".to_string())
+            })
+            .and_then(|clock| clock.borrow_global())
     }
 
     /// Drops the loaded Clock so the next borrow reads the test store again. Live references
