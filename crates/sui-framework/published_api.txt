@@ -3556,6 +3556,12 @@ BorrowMarkerKey
 permit
 	public fun
 	0x2::scratch
+add_internal
+	public(package) fun
+	0x2::scratch
+remove_internal
+	public(package) fun
+	0x2::scratch
 add
 	public fun
 	0x2::scratch
