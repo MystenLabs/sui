@@ -17,6 +17,7 @@ use async_graphql::connection::PageInfo;
 use async_graphql::registry::MetaField;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_pg_db::query::Query;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc_cursor::CursorToken;
 use sui_sql_macro::query;
 
@@ -361,10 +362,9 @@ where
     /// applied page bounds, and the request to have asked for [`Page::limit_with_lookahead`] items.
     ///
     /// If the lookahead item came back, it is dropped and the page reports more data in the
-    /// direction of pagination, with that boundary on the last kept item. Otherwise the stream's
-    /// end reason decides. A stream that returned at most `limit` items only ends at `ItemLimit`
-    /// when the server capped the requested limit at its own maximum, so more data may still
-    /// exist.
+    /// direction of pagination. Otherwise the stream's end reason decides. A stream that returned
+    /// at most `limit` items only ends at `ItemLimit` when the server capped the requested limit at
+    /// its own maximum, so more data may still exist.
     ///
     /// `node` converts one stream payload into the connection's node type; cursors are minted
     /// here, from the server's per-item tokens. Edges are returned in ascending order (the stream
@@ -374,19 +374,24 @@ where
         mut result: StreamPage<T>,
         node: impl Fn(&T) -> Result<N, RpcError>,
     ) -> Result<StreamConnection<N>, RpcError> {
-        let (more, start, end) = if result.items.len() > self.limit() {
-            result.items.truncate(self.limit());
-            // Neither the dropped item's cursor nor a watermark after it can bound the page: the
-            // next page would resume past the dropped item and skip it.
-            let end = result.items.last().map(|item| item.cursor.clone());
-            (true, result.first_cursor().cloned(), end)
-        } else {
-            (
-                result.has_more(),
-                result.first_cursor().cloned(),
-                result.last_cursor().cloned(),
-            )
+        let lookahead_returned = result.items.len() > self.limit();
+        result.items.truncate(self.limit());
+
+        // The page ends on its last item when the stream ran past it, because no cursor after
+        // that item can bound the page:
+        // - The lookahead item's cursor, or a watermark after it, would resume past the dropped
+        //   item and skip it.
+        // - A stream that stopped at the request's opposite cursor closes with a watermark at
+        //   that cursor's position. Paging backwards, the closing watermark of `after: X` is a
+        //   boundary at X, which a `before` cursor excludes, so resuming from it would skip X.
+        let ends_on_last_item =
+            lookahead_returned || result.end_reason == Some(QueryEndReason::CursorBound);
+        let end = match result.items.last() {
+            Some(item) if ends_on_last_item => Some(item.cursor.clone()),
+            _ => result.last_cursor().cloned(),
         };
+        let more = lookahead_returned || result.has_more();
+        let start = result.first_cursor().cloned();
         let mut items = result.items;
 
         let (has_previous_page, has_next_page, start, end) = if self.is_from_front() {

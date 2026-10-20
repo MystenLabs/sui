@@ -1396,6 +1396,35 @@ mod tests {
         assert_eq!(conn.page_info.end_cursor, Some(graphql_cursor(item(3))));
     }
 
+    /// A descending scan bounded by `after: X` closes with a boundary watermark at X, which a
+    /// `before` cursor excludes. The page starts on its lowest item instead, so paging backwards
+    /// from `startCursor` returns X.
+    #[test]
+    fn build_grpc_connection_backward_cursor_bound_starts_on_last_item() {
+        let scope = Scope::for_tests();
+        let page = page_params_for_testing(None, Some(primary_cursor(1, 1)), Some(2), None);
+        let position = |tx_seq| Position::Transactions {
+            checkpoint: 1,
+            tx_seq,
+        };
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![
+                tx_item(CursorToken::item(position(3))),
+                tx_item(CursorToken::item(position(2))),
+            ],
+            None,
+            Some(CursorToken::boundary(position(1)).encode()),
+            Some(v2::QueryEndReason::CursorBound),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert_eq!(edge_positions(&conn), vec![2, 3]);
+        assert_eq!(
+            conn.page_info.start_cursor,
+            Some(graphql_cursor(CursorToken::item(position(2))))
+        );
+    }
+
     /// If watermark cursors and non-empty, expect watermark cursors on the connection.
     #[test]
     fn build_grpc_connection_non_empty_page_and_wm() {

@@ -476,7 +476,7 @@ async fn opaque_cursor_round_trips_across_pages() {
 /// A page that exactly fits the remaining transactions reports no further page in its direction:
 /// filling the requested page size alone does not prove that more data exists. Smaller pages
 /// report a further page only while one exists, and their boundary cursors resume without
-/// skipping a transaction.
+/// skipping a transaction, including pages that end at the client's own opposite cursor.
 #[tokio::test]
 async fn exact_fit_page_reports_no_further_page() {
     let (cluster, temp_dir) = alpha_cluster().await;
@@ -535,6 +535,44 @@ async fn exact_fit_page_reports_no_further_page() {
         info["hasPreviousPage"],
         json!(false),
         "last: 2 before 2 of 3: {info}"
+    );
+
+    // `last: 2, after: tx1` holds exactly tx2 and tx3, so its scan runs down to the `after`
+    // cursor. Paging backwards from its start must still return tx1.
+    let (_, info) = checkpoint_transactions_page(&cluster, Some(1), None, None, None).await;
+    let tx1 = info["endCursor"].as_str().map(String::from);
+    let (page, info) = checkpoint_transactions_page(&cluster, None, tx1, Some(2), None).await;
+    assert_eq!(page, expected[1..]);
+    let before = info["startCursor"].as_str().map(String::from);
+    let (page, info) = checkpoint_transactions_page(&cluster, None, None, Some(2), before).await;
+    assert_eq!(
+        page,
+        expected[..1],
+        "last: 2 before start of (tx1, ..): {info}"
+    );
+    assert_eq!(
+        info["hasPreviousPage"],
+        json!(false),
+        "last: 2 before start of (tx1, ..): {info}"
+    );
+
+    // `first: 2, before: tx3` holds exactly tx1 and tx2, so its scan runs up to the `before`
+    // cursor. Paging forwards from its end must still return tx3.
+    let (_, info) = checkpoint_transactions_page(&cluster, None, None, Some(1), None).await;
+    let tx3 = info["startCursor"].as_str().map(String::from);
+    let (page, info) = checkpoint_transactions_page(&cluster, Some(2), None, None, tx3).await;
+    assert_eq!(page, expected[..2]);
+    let after = info["endCursor"].as_str().map(String::from);
+    let (page, info) = checkpoint_transactions_page(&cluster, Some(2), after, None, None).await;
+    assert_eq!(
+        page,
+        expected[2..],
+        "first: 2 after end of (.., tx3): {info}"
+    );
+    assert_eq!(
+        info["hasNextPage"],
+        json!(false),
+        "first: 2 after end of (.., tx3): {info}"
     );
 }
 
@@ -1172,7 +1210,8 @@ async fn events_cursor_round_trips_across_pages() {
     // cp 1 has three transactions: Alice emits 3 events in tx 0 and 2 events in tx 2; Bob emits 1
     // event in tx 1. Filtering by sender = Alice must recover exactly Alice's five events in
     // (tx, event index) order, paginating forwards and backwards with page size 2 — exercising
-    // resume from a mid-transaction cursor (the event-index coordinate) in both directions.
+    // resume from a mid-transaction cursor (the event-index coordinate) in both directions. A page
+    // of exactly five must report no further page in either direction.
     let (cluster, temp_dir) = alpha_cluster().await;
     let alice = TestCheckpointBuilder::derive_address(1);
     let bob = TestCheckpointBuilder::derive_address(2);
@@ -1246,6 +1285,22 @@ async fn events_cursor_round_trips_across_pages() {
     }
     let backward: Vec<(String, u64)> = pages.into_iter().rev().flatten().collect();
     assert_eq!(backward, expected);
+
+    // ----- Exact fit -----
+    let (page, page_info) = events_page(&cluster, &filter, Some(5), None, None, None).await;
+    assert_eq!(page.len(), 5);
+    assert_eq!(
+        page_info["hasNextPage"],
+        json!(false),
+        "first: 5 of 5: {page_info}"
+    );
+    let (page, page_info) = events_page(&cluster, &filter, None, None, Some(5), None).await;
+    assert_eq!(page.len(), 5);
+    assert_eq!(
+        page_info["hasPreviousPage"],
+        json!(false),
+        "last: 5 of 5: {page_info}"
+    );
 }
 
 /// Three single-event transactions emitting from 0x42::m, 0x42::n, and 0x43::m: the package-level
