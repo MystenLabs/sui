@@ -14,10 +14,13 @@ use sui_rpc::Client;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use tonic::transport::Uri;
+use tower::ServiceBuilder;
 use tracing::warn;
 
 use crate::ledger_grpc_reader::LedgerGrpcArgs;
 use crate::metrics::GrpcMetricsLayer;
+use crate::monotonic_read::CheckpointFloor;
+use crate::monotonic_read::MonotonicReadLayer;
 
 /// A reader backed by the gRPC LedgerService's streaming list APIs.
 #[derive(Clone)]
@@ -55,20 +58,27 @@ enum FrameKind<T> {
 }
 
 impl AlphaLedgerGrpcReader {
+    /// With a `min_checkpoint` floor, every request asks the ledger service for a view at least as
+    /// new as the floor (see [`crate::monotonic_read`]).
     pub async fn new(
         uri: Uri,
         args: LedgerGrpcArgs,
         prefix: Option<&str>,
         registry: &Registry,
+        min_checkpoint: Option<CheckpointFloor>,
     ) -> anyhow::Result<Self> {
         let timeout = args.statement_timeout();
         let mut client = Client::new(uri)?
             .with_num_connections(args.ledger_grpc_num_connections)
             .with_max_decoding_message_size(args.ledger_grpc_max_decoding_message_size)
-            .request_layer(GrpcMetricsLayer::new(
-                prefix.unwrap_or("ledger_grpc"),
-                registry,
-            ));
+            .request_layer(
+                ServiceBuilder::new()
+                    .layer(GrpcMetricsLayer::new(
+                        prefix.unwrap_or("ledger_grpc"),
+                        registry,
+                    ))
+                    .option_layer(min_checkpoint.map(MonotonicReadLayer::new)),
+            );
 
         if let Some(timeout) = timeout {
             client = client.with_response_headers_timeout(timeout);
