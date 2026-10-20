@@ -57,28 +57,20 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<GetObjectRequest>,
     ) -> Result<tonic::Response<GetObjectResponse>, tonic::Status> {
-        get_object::get_object(
-            self.client.clone(),
-            request.into_inner(),
-            &self.package_resolver,
-        )
-        .await
-        .map(tonic::Response::new)
-        .map_err(Into::into)
+        get_object::get_object(self, request.into_inner())
+            .await
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 
     async fn batch_get_objects(
         &self,
         request: tonic::Request<BatchGetObjectsRequest>,
     ) -> Result<tonic::Response<BatchGetObjectsResponse>, tonic::Status> {
-        get_object::batch_get_objects(
-            self.client.clone(),
-            request.into_inner(),
-            &self.package_resolver,
-        )
-        .await
-        .map(tonic::Response::new)
-        .map_err(Into::into)
+        get_object::batch_get_objects(self, request.into_inner())
+            .await
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 
     async fn get_transaction(

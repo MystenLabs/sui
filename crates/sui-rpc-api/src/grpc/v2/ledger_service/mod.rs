@@ -41,6 +41,7 @@ mod object_set;
 mod query_end;
 mod stream;
 pub use get_epoch::protocol_config_to_proto;
+pub use get_object::ObjectSelector;
 pub use get_object::validate_get_object_requests;
 
 use stream::serve_list_stream;

@@ -60,8 +60,8 @@ struct App {
     #[clap(long = "app-profile-id")]
     app_profile_id: Option<String>,
     /// (deprecated, ignored) Pipeline watermark to include in GetServiceInfo
-    /// checkpoint height. The set is now derived from the `enable-list-apis`
-    /// config field.
+    /// checkpoint height. The set is derived from the `enable-list-apis` and
+    /// `enable-object-at-checkpoint` config fields.
     #[clap(
         long = "watermark-pipeline",
         value_name = "PIPELINE",
@@ -162,7 +162,8 @@ fn apply_deprecated_overrides(app: App, config: &mut KvRpcConfig) {
         tracing::warn!(
             pipelines = ?ignored_pipelines,
             "`watermark-pipeline` is deprecated and ignored; the GetServiceInfo \
-             watermark set is derived from `enable-list-apis`"
+             watermark set is derived from `enable-list-apis` and \
+             `enable-object-at-checkpoint`"
         );
     }
 }
@@ -223,6 +224,7 @@ async fn main() -> Result<()> {
         config.monotonic_read_wait_timeout(),
         config.stages(),
         config.enable_list_apis(),
+        config.enable_object_at_checkpoint(),
     )
     .await?;
 
