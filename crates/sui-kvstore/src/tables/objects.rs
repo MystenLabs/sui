@@ -17,6 +17,7 @@
 
 use anyhow::{Context, Result, bail, ensure};
 use bytes::Bytes;
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 
@@ -54,6 +55,22 @@ pub fn encode_key(object_key: &ObjectKey) -> Vec<u8> {
     let mut raw_key = object_key.0.to_vec();
     raw_key.extend(object_key.1.value().to_be_bytes());
     raw_key
+}
+
+/// The `ObjectKey` of a row key built by [`encode_key`]: the object id followed by the version,
+/// big-endian.
+pub fn decode_key(row_key: &[u8]) -> Result<ObjectKey> {
+    let (id, version) = row_key
+        .split_at_checked(ObjectID::LENGTH)
+        .context("objects row key is shorter than an object id")?;
+    let id = ObjectID::from_bytes(id).context("objects row key has an invalid object id")?;
+    let version: [u8; 8] = version
+        .try_into()
+        .context("objects row key version is not 8 bytes")?;
+    Ok(ObjectKey(
+        id,
+        SequenceNumber::from_u64(u64::from_be_bytes(version)),
+    ))
 }
 
 pub fn encode_key_upper_bound(object_key: &ObjectKey) -> Vec<u8> {
