@@ -6,7 +6,7 @@ use crate::{
     object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_binary_format::safe_unwrap;
+use move_binary_format::{safe_assert, safe_unwrap};
 use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag, vm_status::StatusCode};
 use move_vm_runtime::{
     execution::{Type, values::Value},
@@ -32,8 +32,8 @@ pub fn borrow(
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.is_empty());
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.is_empty());
 
     let clock_borrow_cost_base = safe_unwrap!(
         get_extension!(context, NativesCostTable)?
@@ -64,8 +64,8 @@ pub fn set_timestamp_ms_for_testing(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    safe_assert!(ty_args.is_empty());
+    safe_assert!(args.len() == 1);
 
     let timestamp_ms = pop_arg!(args, u64);
     let store: &&InMemoryTestStore = get_extension!(context)?;
