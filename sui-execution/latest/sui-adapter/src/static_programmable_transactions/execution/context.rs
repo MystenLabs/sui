@@ -41,16 +41,12 @@ use move_vm_runtime::{
         vm::MoveVM,
     },
     natives::extensions::NativeExtensions,
-    shared::{
-        gas::{GasMeter as _, SimpleInstruction},
-        linkage_context::LinkageHash,
-    },
+    shared::gas::{GasMeter as _, SimpleInstruction},
     validation::verification::ast::Package as VerifiedPackage,
 };
 use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::debug_fatal;
 use nonempty::nonempty;
-use quick_cache::unsync::Cache as QCache;
 use serde::{Deserialize, de::DeserializeSeed};
 use std::{
     cell::RefCell,
@@ -157,29 +153,33 @@ macro_rules! charge_gas {
     ($context:ident, $case:ident, $value_view:expr) => {{ charge_gas_!($context.gas_charger, $context.env, $case, $value_view) }};
 }
 
-// Helper macro to manage Move VM cache for different linkage contexts. If the given linkage is
-// found the VM is reused, otherwise a new VM is created and inserted into the cache.
+// Temporarily removes the transaction-wide VM from the context so callers can use other mutable
+// context methods while executing a Move call, then restores it for the next call.
 macro_rules! with_vm {
-    ($self:ident, $linkage:expr, $error:ty, $body:expr) => {{
-        let link_context = $linkage.linkage_context::<$error>()?;
-        let linkage_hash = link_context.to_linkage_hash();
-        let mut vm = if let Some((_, vm)) = $self.executable_vm_cache.remove(&linkage_hash) {
+    ($context:ident, $error:ty, $body:expr) => {{
+        let mut vm = if let Some(vm) = $context.executable_vm.take() {
             vm
         } else {
-            let data_store = &$self.env.linkable_store.package_store;
-            $self
+            let linkage = &$context.unified_linkage;
+            let link_context = linkage.linkage_context::<$error>()?;
+            let data_store = &$context.env.linkable_store.package_store;
+            $context
                 .env
                 .vm
                 .make_vm_with_native_extensions(
                     data_store,
-                    link_context.clone(),
-                    $self.native_extensions.clone(),
+                    link_context,
+                    $context.native_extensions.clone(),
                 )
-                .map_err(|e| $self.env.convert_linked_vm_error(e, $linkage))?
+                .map_err(|e| $context.env.convert_linked_vm_error(e, linkage))?
         };
-        let result = $body(&mut vm)?;
-        $self.executable_vm_cache.insert(linkage_hash, vm);
-        Ok(result)
+        let result = $body(&mut vm);
+        assert_invariant!(
+            $context.executable_vm.is_none(),
+            "unified-linkage VM cache was not empty"
+        );
+        $context.executable_vm = Some(vm);
+        result
     }};
 }
 
@@ -262,6 +262,8 @@ where
     /// Metrics for reporting exceeded limits
     pub metrics: Arc<ExecutionMetrics>,
     pub native_extensions: NativeExtensions<'env>,
+    unified_linkage: ExecutableLinkage,
+    executable_vm: Option<MoveVM<'env>>,
     /// A shared transaction context, contains transaction digest information and manages the
     /// creation of new object IDs
     pub tx_context: Rc<RefCell<TxContext>>,
@@ -273,8 +275,6 @@ where
     locations: Locations,
     /// Tracks where the gas coin was sent, if it was moved by value
     gas_coin_transfer: Option<GasCoinTransfer>,
-    // cache of Move VMs created this transaction for different linkage contexts so that we can reuse them.
-    executable_vm_cache: QCache<LinkageHash, MoveVM<'env>>,
 }
 
 impl Locations {
@@ -339,6 +339,7 @@ where
         input_withdrawal_metadata: Vec<T::WithdrawalInput>,
         pure_input_metadata: Vec<T::PureInput>,
         receiving_input_metadata: Vec<T::ReceivingInput>,
+        unified_linkage: ExecutableLinkage,
     ) -> Result<Self, Mode::Error>
     where
         'pc: 'state,
@@ -436,6 +437,8 @@ where
             env,
             metrics,
             native_extensions,
+            unified_linkage,
+            executable_vm: None,
             tx_context,
             gas_charger,
             user_events: vec![],
@@ -454,7 +457,6 @@ where
                 results: vec![],
             },
             gas_coin_transfer: None,
-            executable_vm_cache: QCache::new(1024),
         })
     }
 
@@ -951,9 +953,7 @@ where
         args: Vec<CtxValue>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, Mode::Error> {
-        with_vm!(self, &function.linkage, Mode::Error, |vm: &mut MoveVM<
-            'env,
-        >| {
+        with_vm!(self, Mode::Error, |vm: &mut MoveVM<'env>| {
             let ty_args = function
                 .type_arguments
                 .iter()
