@@ -694,7 +694,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_verify_and_vote_batch() {
         // 1 account keypair
         let (sender, keypair) = deterministic_random_account_key();
@@ -1137,7 +1137,7 @@ mod tests {
         assert!(rejected_transactions.is_empty());
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_reject_invalid_alias_signature_index() {
         let (sender, keypair) = deterministic_random_account_key();
 
@@ -1192,7 +1192,7 @@ mod tests {
 
     /// Proposing a transaction that restricts its proposers is byzantine behavior for any
     /// validator outside that set, and invalidates the whole block.
-    #[tokio::test]
+    #[sim_test]
     async fn test_reject_disallowed_proposer() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
             c.set_allowed_proposers_for_testing(true);
@@ -1275,7 +1275,7 @@ mod tests {
     /// a valid update from the block author lands in the manager, while spoofed
     /// (author mismatch) and far-future-generation updates pass validation but are
     /// not applied.
-    #[tokio::test]
+    #[sim_test]
     async fn deny_config_updates_applied_at_verification() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut c| {
             c.set_share_transaction_deny_config_in_consensus_for_testing(true);

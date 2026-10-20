@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{sync::Arc, time::Duration};
+use sui_macros::sim_test;
 
 use fastcrypto::traits::KeyPair;
 use futures::FutureExt;
@@ -51,7 +52,7 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
     checkpoint_service
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_consensus_manager() {
     // GIVEN
     let configs = ConfigBuilder::new_with_temp_dir()
@@ -278,7 +279,7 @@ fn active_source_code(registry: &Registry, peer_id: &str) -> Option<i64> {
     })
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_consensus_active_address_source_metric() {
     use fastcrypto::encoding::{Encoding, Hex};
 

@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
+use sui_macros::sim_test;
 
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX, TransactionIndex};
 use fastcrypto::traits::KeyPair;
@@ -87,7 +88,7 @@ impl TestContext {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_wait_for_effects_position_mismatch() {
     // Even if the consensus position in the request differs from the position
     // where the transaction was finalized, the effects are still returned
@@ -144,7 +145,7 @@ async fn test_wait_for_effects_position_mismatch() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_wait_for_effects_ping_rejected() {
     // Tests the path where a ping request gets a Rejected status from consensus.
     let test_context = TestContext::new().await;
@@ -183,7 +184,7 @@ async fn test_wait_for_effects_ping_rejected() {
     }
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_wait_for_effects_epoch_mismatch() {
     // This test exercises the path where the epoch of the request does not match the epoch
     // of the authority.
@@ -208,7 +209,7 @@ async fn test_wait_for_effects_epoch_mismatch() {
     assert!(response.is_err());
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_wait_for_effects_timeout() {
     // This test exercises the path where the transaction is never executed.
     // The request will timeout.
@@ -233,7 +234,7 @@ async fn test_wait_for_effects_timeout() {
     assert!(response.is_err());
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_wait_for_effects_ping_rejected_with_reason() {
     // Tests the path where a ping request gets a Rejected status with a rejection reason.
     let test_context = TestContext::new().await;
@@ -288,7 +289,7 @@ async fn test_wait_for_effects_ping_rejected_with_reason() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_wait_for_effects_finalized() {
     telemetry_subscribers::init_for_testing();
     // This test exercises the path where after the transaction has been executed,
@@ -372,7 +373,7 @@ async fn test_wait_for_effects_finalized() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_wait_for_effects_expired() {
     // Test that a ping request with an expired consensus position returns Expired.
     let test_context = TestContext::new().await;
@@ -418,7 +419,7 @@ async fn test_wait_for_effects_expired() {
     assert!(matches!(response, WaitForEffectsResponse::Expired { .. }));
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_wait_for_effects_ping() {
     let test_context = TestContext::new().await;
 
@@ -555,7 +556,7 @@ async fn test_wait_for_effects_ping() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_wait_for_effects_refuses_contradicting_previously_signed() {
     // If the validator has signed effects for a transaction, WaitForEffects must never
     // acknowledge a different effects digest for it, even though the acknowledgment is
@@ -603,7 +604,7 @@ async fn test_wait_for_effects_refuses_contradicting_previously_signed() {
     ));
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_wait_for_effects_allows_matching_previously_signed() {
     // A previously signed digest that matches the executed effects does not block
     // WaitForEffects.

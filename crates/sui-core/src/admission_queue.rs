@@ -799,6 +799,7 @@ async fn submit_queue_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sui_macros::sim_test;
 
     fn make_test_entry(
         gas_price: u64,
@@ -1111,7 +1112,7 @@ mod tests {
         assert!(q.insert(entry3).unwrap());
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_actor_shuts_down_when_handle_dropped() {
         use crate::authority::test_authority_builder::TestAuthorityBuilder;
         use crate::checkpoints::CheckpointStore;
@@ -1205,7 +1206,7 @@ mod tests {
         assert!(!handle.failover_tripped());
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_idle_actor_does_not_trip_failover() {
         // A healthy actor with an empty queue must never trip failover, even
         // after long idle periods while blocked on `receiver.recv()`.
@@ -1230,7 +1231,7 @@ mod tests {
     /// `has_consensus_capacity` check and the read inside `drain_batch`), no
     /// entries are popped and `last_drain` must NOT advance — otherwise a
     /// truly stuck drainer would be hidden from the failover check.
-    #[tokio::test]
+    #[sim_test]
     async fn test_drain_batch_does_not_bump_last_drain_when_no_slots() {
         let (adapter, epoch_store, notify) = build_consensus_adapter(0).await;
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());

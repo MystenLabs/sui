@@ -1208,6 +1208,7 @@ mod tests {
     use fastcrypto::serde_helpers::ToFromByteArray;
     use fastcrypto_tbls::{mocked_dkg, nodes};
     use std::num::NonZeroUsize;
+    use sui_macros::sim_test;
     use sui_protocol_config::ProtocolConfig;
     use sui_protocol_config::{Chain, ProtocolVersion};
     use sui_types::{base_types::AuthorityName, messages_consensus::ConsensusTransactionKind};
@@ -1526,7 +1527,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_dkg_expiration() {
         telemetry_subscribers::init_for_testing();
 
@@ -1657,7 +1658,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_dkg_status_for_commit_round() {
         telemetry_subscribers::init_for_testing();
 
@@ -1826,7 +1827,7 @@ mod tests {
         assert!(role.unwrap().is_party());
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_randomness_manager_crash_recovery_v1() {
         telemetry_subscribers::init_for_testing();
 

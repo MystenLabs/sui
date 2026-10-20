@@ -411,7 +411,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     pub async fn test_check_authority_overload() {
         telemetry_subscribers::init_for_testing();
 
@@ -623,7 +623,7 @@ mod tests {
     }
 
     // Tests that when request generation rate is slower than execution rate, no requests should be dropped.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     pub async fn test_workload_consistent_no_overload() {
         telemetry_subscribers::init_for_testing();
         run_consistent_workload_test(900.0, 1000.0, 0.0, 0.0).await;
@@ -631,7 +631,7 @@ mod tests {
 
     // Tests that when request generation rate is slightly above execution rate, a small portion of
     // requests should be dropped.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     pub async fn test_workload_consistent_slightly_overload() {
         telemetry_subscribers::init_for_testing();
         // Dropping rate should be around 15%.
@@ -640,7 +640,7 @@ mod tests {
 
     // Tests that when request generation rate is much higher than execution rate, a large portion of
     // requests should be dropped.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     pub async fn test_workload_consistent_overload() {
         telemetry_subscribers::init_for_testing();
         // Dropping rate should be around 70%.
@@ -648,7 +648,7 @@ mod tests {
     }
 
     // Tests that when there is a very short single spike, no request should be dropped.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     pub async fn test_workload_single_spike() {
         telemetry_subscribers::init_for_testing();
         let (state, monitor_handle) = start_overload_monitor().await;

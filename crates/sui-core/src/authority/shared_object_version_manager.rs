@@ -689,6 +689,7 @@ fn get_or_init_versions<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sui_macros::sim_test;
 
     use crate::authority::AuthorityState;
     use crate::authority::shared_object_version_manager::{
@@ -1339,7 +1340,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_assign_versions_from_effects() {
         let shared_object = Object::shared_for_testing();
         let id = shared_object.id();
@@ -1571,7 +1572,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_assign_versions_from_consensus_with_withdraws_simple() {
         // Note that we don't need a shared object to trigger withdraw version assignment.
         // In fact it is important that this works without a shared object.
@@ -1612,7 +1613,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_assign_versions_from_consensus_with_multiple_withdraws_and_settlements() {
         // Test with multiple withdrawals and multiple settlements, with settlement as the last transaction
         let mut ctx = WithdrawTestContext::new().await;
@@ -1695,7 +1696,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_assign_versions_from_consensus_with_withdraw_and_shared_object() {
         // Test that a transaction can have both a withdrawal and use a shared object
         let mut ctx = WithdrawTestContext::new().await;

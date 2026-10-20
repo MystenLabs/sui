@@ -362,6 +362,7 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use consensus_core::RandomnessSignatureHandler;
     use fastcrypto::groups::{GroupElement, HashToGroupElement, bls12381};
+    use sui_macros::sim_test;
 
     fn generate_keypair() -> (bls12381::Scalar, bls12381::G2Element) {
         let sk = bls12381::Scalar::generator();
@@ -386,7 +387,7 @@ mod tests {
         bytes::Bytes::from(bcs::to_bytes(&msg).unwrap())
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_invalid_signature_not_broadcast() {
         let (_sk, pk) = generate_keypair();
         let state = TestAuthorityBuilder::new().build().await;
@@ -409,7 +410,7 @@ mod tests {
         assert!(result.is_err(), "should have timed out (no broadcast)");
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_malformed_data_not_broadcast() {
         let (_sk, pk) = generate_keypair();
         let state = TestAuthorityBuilder::new().build().await;
@@ -428,7 +429,7 @@ mod tests {
         assert!(result.is_err(), "should have timed out (no broadcast)");
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_signatures_buffer_until_dkg_completes() {
         let (sk, pk) = generate_keypair();
         let state = TestAuthorityBuilder::new().build().await;
@@ -460,7 +461,7 @@ mod tests {
         assert_eq!(decoded.round, round);
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_executed_consensus_signature_not_rebroadcast() {
         let (sk, pk) = generate_keypair();
         let state = TestAuthorityBuilder::new().build().await;
@@ -490,7 +491,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_clear_public_key_pauses_processing() {
         let (sk, pk) = generate_keypair();
         let state = TestAuthorityBuilder::new().build().await;

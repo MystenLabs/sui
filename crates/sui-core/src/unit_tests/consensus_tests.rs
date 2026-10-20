@@ -178,7 +178,7 @@ pub async fn test_user_transaction(
         .unwrap()
 }
 
-#[tokio::test]
+#[sim_test]
 async fn submit_transaction_to_consensus_adapter() {
     telemetry_subscribers::init_for_testing();
 
@@ -224,7 +224,7 @@ async fn submit_transaction_to_consensus_adapter() {
     waiter.await.unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn submit_multiple_transactions_to_consensus_adapter() {
     telemetry_subscribers::init_for_testing();
 
@@ -421,7 +421,7 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
     t2.await.unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn submit_empty_array_of_transactions_to_consensus_adapter() {
     telemetry_subscribers::init_for_testing();
 
@@ -461,7 +461,7 @@ async fn submit_empty_array_of_transactions_to_consensus_adapter() {
 // processed via consensus output, the adapter must NOT resubmit it. Instead it reports that
 // the transaction is already processing, so the caller can return a retriable error to the
 // client rather than a (now meaningless) consensus position.
-#[tokio::test]
+#[sim_test]
 async fn submit_already_processed_transaction_returns_processing_error() {
     telemetry_subscribers::init_for_testing();
 
@@ -591,7 +591,7 @@ async fn wait_for_condition(mut condition: impl FnMut() -> bool) {
 // recorded as consensus-processed. The adapter must settle the submission via the
 // per-position Rejected status instead of holding its inflight slot and submit
 // semaphore permit until end of epoch.
-#[tokio::test]
+#[sim_test]
 async fn adapter_settles_submission_on_rejected_position_status() {
     telemetry_subscribers::init_for_testing();
 
@@ -638,7 +638,7 @@ async fn adapter_settles_submission_on_rejected_position_status() {
 
 // A soft bundle settles once every position has a terminal status, even when the
 // outcomes are mixed and some transactions are never recorded as processed.
-#[tokio::test]
+#[sim_test]
 async fn adapter_settles_soft_bundle_on_mixed_position_statuses() {
     telemetry_subscribers::init_for_testing();
 
@@ -692,7 +692,7 @@ async fn adapter_settles_soft_bundle_on_mixed_position_statuses() {
 // resubmitting: the block was committed and its commit processed long ago, so a
 // terminal outcome existed and was merely missed. A finalized transaction needs
 // nothing further from this task, and transaction-level retries belong to the client.
-#[tokio::test]
+#[sim_test]
 async fn adapter_settles_without_retry_on_expired_position_status() {
     telemetry_subscribers::init_for_testing();
 
