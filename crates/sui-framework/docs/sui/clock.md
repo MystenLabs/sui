@@ -9,6 +9,8 @@ shared object that is created at 0x6 during genesis.
 -  [Struct `Clock`](#sui_clock_Clock)
 -  [Constants](#@Constants_0)
 -  [Function `timestamp_ms`](#sui_clock_timestamp_ms)
+-  [Function `borrow`](#sui_clock_borrow)
+-  [Function `native_borrow`](#sui_clock_native_borrow)
 -  [Function `create`](#sui_clock_create)
 -  [Function `consensus_commit_prologue`](#sui_clock_consensus_commit_prologue)
 
@@ -107,6 +109,60 @@ milliseconds since an arbitrary point in the past.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>(<a href="../sui/clock.md#sui_clock">clock</a>: &<a href="../sui/clock.md#sui_clock_Clock">Clock</a>): u64 {
     <a href="../sui/clock.md#sui_clock">clock</a>.<a href="../sui/clock.md#sui_clock_timestamp_ms">timestamp_ms</a>
 }
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_clock_borrow"></a>
+
+## Function `borrow`
+
+A reference to the <code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code> without it being a transaction input.
+It is the same <code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code>, at the same timestamp, as one passed into
+the transaction.
+
+New code should read the time this way rather than take a <code><a href="../sui/clock.md#sui_clock_Clock">Clock</a></code>
+parameter, so that callers do not change when a function starts to
+need the time. Existing functions with <code>&<a href="../sui/clock.md#sui_clock_Clock">Clock</a></code> arguments can be
+supplied one from anywhere via <code><a href="../sui/borrow.md#sui_borrow">borrow</a>()</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>(): &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/borrow.md#sui_borrow">borrow</a>(): &<a href="../sui/clock.md#sui_clock_Clock">Clock</a> {
+    <a href="../sui/clock.md#sui_clock_native_borrow">native_borrow</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_clock_native_borrow"></a>
+
+## Function `native_borrow`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/clock.md#sui_clock_native_borrow">native_borrow</a>(): &<a href="../sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/clock.md#sui_clock_native_borrow">native_borrow</a>(): &<a href="../sui/clock.md#sui_clock_Clock">Clock</a>;
 </code></pre>
 
 

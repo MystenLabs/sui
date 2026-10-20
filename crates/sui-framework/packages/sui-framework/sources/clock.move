@@ -31,6 +31,19 @@ public fun timestamp_ms(clock: &Clock): u64 {
     clock.timestamp_ms
 }
 
+/// A reference to the `Clock` without it being a transaction input.
+/// It is the same `Clock`, at the same timestamp, as one passed into
+/// the transaction.
+///
+/// New code should read the time this way rather than take a `Clock`
+/// parameter, so that callers do not change when a function starts to
+/// need the time. Existing functions with `&Clock` arguments can be
+/// supplied one from anywhere via `borrow()`.
+public fun borrow(): &Clock {
+    native_borrow()
+}
+native fun native_borrow(): &Clock;
+
 #[allow(unused_function)]
 /// Create and share the singleton Clock -- this function is
 /// called exactly once, during genesis.
@@ -58,6 +71,7 @@ fun consensus_commit_prologue(clock: &mut Clock, timestamp_ms: u64, ctx: &TxCont
 /// Expose the functionality of `create()` (usually only done during
 /// genesis) for tests that want to create a Clock.
 public fun create_for_testing(ctx: &mut TxContext): Clock {
+    native_set_timestamp_ms_for_testing(0);
     Clock {
         id: object::new(ctx),
         timestamp_ms: 0,
@@ -73,12 +87,14 @@ public fun share_for_testing(clock: Clock) {
 #[test_only]
 public fun increment_for_testing(clock: &mut Clock, tick: u64) {
     clock.timestamp_ms = clock.timestamp_ms + tick;
+    native_set_timestamp_ms_for_testing(clock.timestamp_ms);
 }
 
 #[test_only]
 public fun set_for_testing(clock: &mut Clock, timestamp_ms: u64) {
     assert!(timestamp_ms >= clock.timestamp_ms);
     clock.timestamp_ms = timestamp_ms;
+    native_set_timestamp_ms_for_testing(clock.timestamp_ms);
 }
 
 #[test_only]
@@ -86,3 +102,10 @@ public fun destroy_for_testing(clock: Clock) {
     let Clock { id, timestamp_ms: _ } = clock;
     id.delete();
 }
+
+#[test_only]
+/// Keeps the `Clock` returned by `borrow` in step with the `Clock` a
+/// test creates or mutates, since tests have no consensus commits to
+/// set it. With several test Clocks, the most recently created or
+/// mutated one wins.
+native fun native_set_timestamp_ms_for_testing(timestamp_ms: u64);
