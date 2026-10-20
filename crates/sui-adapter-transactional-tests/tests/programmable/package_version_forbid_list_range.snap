@@ -72,5 +72,5 @@ Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: 
 task 11, lines 44-45:
 // The current version is not historical, so it cannot be forbidden.
 //# run sui::package_config::forbid_version_range --args object(0xcf6) object(1,1) 1 4 --sender A
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::assert_historical_version (function index 10) at offset 15, Abort Code: 1
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 10, instruction: 15, function_name: Some("assert_historical_version") }, 1) at command Some(0)
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package_config::assert_historical_version (function index 11) at offset 15, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package_config") }, function: 11, instruction: 15, function_name: Some("assert_historical_version") }, 1) at command Some(0)

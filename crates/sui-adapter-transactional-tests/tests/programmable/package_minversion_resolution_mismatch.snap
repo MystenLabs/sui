@@ -25,8 +25,8 @@ gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 
 task 3, lines 17-21:
 // An enrolled cap rejects an ordinary upgrade emitted without --minversion.
 //# upgrade --package EnrolledV1 --upgrade-capability 1,1 --sender A
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::commit_upgrade (function index 30) at offset 9, Abort Code: 8
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 30, instruction: 9, function_name: Some("commit_upgrade") }, 8), source: Some(VMError { major_status: ABORTED, sub_status: Some(8), message: Some("sui::package::commit_upgrade at offset 9"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(30), 9)] }), command: Some(2) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::commit_upgrade (function index 31) at offset 35, Abort Code: 8
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 31, instruction: 35, function_name: Some("commit_upgrade") }, 8), source: Some(VMError { major_status: ABORTED, sub_status: Some(8), message: Some("sui::package::commit_upgrade at offset 35"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("package") }), indices: [], offsets: [(FunctionDefinitionIndex(31), 35)] }), command: Some(2) } }
 
 task 4, lines 23-24:
 // The failed upgrade is atomic: the historical v1 call still emits version 1.
@@ -45,8 +45,8 @@ gas summary: computation_cost: 1000000, storage_cost: 6262400,  storage_rebate: 
 task 6, lines 31-35:
 // An unenrolled cap rejects a minversion upgrade emitted by --minversion.
 //# upgrade --package OrdinaryV1 --upgrade-capability 5,1 --sender A --minversion
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::prepare_minversion_upgrade (function index 31) at offset 7, Abort Code: 7
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 31, instruction: 7, function_name: Some("prepare_minversion_upgrade") }, 7) at command Some(0)
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::record_minversion_upgrade_info (function index 32) at offset 9, Abort Code: 7
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 32, instruction: 9, function_name: Some("record_minversion_upgrade_info") }, 7) at command Some(2)
 
 task 7, lines 37-42:
 // Both failed upgrades are atomic. The enrolled cap can still upgrade through the minversion

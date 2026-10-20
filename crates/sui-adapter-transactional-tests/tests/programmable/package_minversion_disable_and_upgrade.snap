@@ -1,0 +1,37 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+// Permanent disable and an ordinary upgrade can occur in one PTB. The cap remains outside
+// minversion, so the normal authorize/Upgrade/commit sequence needs no PackageConfig input.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-11:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5137600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 18-22:
+//# programmable --sender A --inputs object(1,1) 0u8 digest(BaseV2)
+//> 0: sui::package::disable_minversion_permanently(Input(0));
+//> 1: sui::package::authorize_upgrade(Input(0), Input(1), Input(2));
+//> 2: Upgrade(BaseV2, [sui,std], BaseV1, Result(1));
+//> sui::package::commit_upgrade(Input(0), Result(2));
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6163600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 4, lines 24-25:
+// The cap now identifies the upgraded package and its second version.
+//# run sui::package::upgrade_package --args object(1,1) --sender A
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 2622000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+
+task 5, line 27:
+//# run sui::package::version --args object(1,1) --sender A
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 2622000,  storage_rebate: 2621738, non_refundable_storage_fee: 262
