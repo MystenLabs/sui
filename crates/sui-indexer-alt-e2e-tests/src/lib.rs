@@ -939,6 +939,7 @@ async fn start_archival(
         CommitterConfig::default(),
         BtIndexerConfig::default(),
         bt_pipeline_layer,
+        &[],
         Chain::Unknown,
         registry,
     )

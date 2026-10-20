@@ -28,6 +28,7 @@ use sui_inverted_index::Watermarked;
 use sui_inverted_index::eval_bitmap_query_stream;
 use sui_keys::keystore::AccountKeystore;
 use sui_kvstore::ALL_PIPELINE_NAMES;
+use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableBitmapSource;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
@@ -35,8 +36,10 @@ use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::BitmapQuery;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE;
 use sui_kvstore::PipelineLayer;
 use sui_kvstore::ScanDirection;
+use sui_kvstore::tables::object_versions_by_checkpoint::ObjectStatus;
 use sui_kvstore::tables::{checkpoints, epochs, transactions};
 use sui_kvstore::testing::BigTableEmulator;
 use sui_kvstore::testing::INSTANCE_ID;
@@ -54,13 +57,17 @@ use sui_rpc::proto::sui::rpc::v2::Transaction as GrpcTransaction;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
+use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::storage::ObjectKey;
 use sui_types::transaction::CallArg;
+use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use sui_types::utils::to_sender_signed_transaction;
@@ -168,6 +175,48 @@ fn bitmap_query_stream(
         })
 }
 
+/// Every pipeline the harness's indexer runs: the default set plus all alpha pipelines, so the
+/// tests cover alpha pipelines before they graduate.
+fn harness_pipelines() -> Vec<&'static str> {
+    ALL_PIPELINE_NAMES
+        .iter()
+        .chain(&ALPHA_PIPELINE_NAMES)
+        .copied()
+        .collect()
+}
+
+/// Build an indexer that writes to `client`, ingests from the fullnode at `rpc_url`, and
+/// registers the default pipelines plus `alpha_pipelines`.
+async fn build_indexer(
+    client: &BigTableClient,
+    rpc_url: &str,
+    alpha_pipelines: &[&str],
+) -> Result<BigTableIndexer> {
+    let client_args = ClientArgs {
+        ingestion: IngestionClientArgs {
+            rpc_api_url: Some(Url::parse(rpc_url).expect("Invalid RPC URL")),
+            ..Default::default()
+        },
+        streaming: StreamingClientArgs {
+            streaming_url: Some(rpc_url.parse().expect("Invalid streaming URI")),
+        },
+    };
+    BigTableIndexer::new(
+        client.clone(),
+        IndexerArgs::default(),
+        client_args,
+        IngestionConfig::default().into(),
+        CommitterConfig::default(),
+        IndexerConfig::default(),
+        PipelineLayer::default(),
+        alpha_pipelines,
+        Chain::Unknown,
+        &prometheus::Registry::new(),
+    )
+    .await
+    .context("Failed to create BigTableIndexer")
+}
+
 impl TestHarness {
     async fn new() -> Result<Self> {
         require_bigtable_emulator();
@@ -189,37 +238,11 @@ impl TestHarness {
                 .await
                 .context("Failed to create BigTable client")?;
 
-        let registry = prometheus::Registry::new();
+        let grpc_client =
+            GrpcClient::new(cluster.rpc_url()).context("Failed to create gRPC client")?;
 
-        let indexer_args = IndexerArgs::default();
-        let rpc_url = cluster.rpc_url();
-
-        let grpc_client = GrpcClient::new(rpc_url).context("Failed to create gRPC client")?;
-
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                rpc_api_url: Some(Url::parse(rpc_url).expect("Invalid RPC URL")),
-                ..Default::default()
-            },
-            streaming: StreamingClientArgs {
-                streaming_url: Some(rpc_url.parse().expect("Invalid streaming URI")),
-            },
-        };
-        let ingestion_config = IngestionConfig::default();
-
-        let bigtable_indexer = BigTableIndexer::new(
-            client.clone(),
-            indexer_args,
-            client_args,
-            ingestion_config.into(),
-            CommitterConfig::default(),
-            IndexerConfig::default(),
-            PipelineLayer::default(),
-            Chain::Unknown,
-            &registry,
-        )
-        .await
-        .context("Failed to create BigTableIndexer")?;
+        let bigtable_indexer =
+            build_indexer(&client, cluster.rpc_url(), &ALPHA_PIPELINE_NAMES).await?;
 
         let mut service = bigtable_indexer
             .run()
@@ -273,7 +296,7 @@ impl TestHarness {
                 interval.tick().await;
                 let ok = self
                     .client
-                    .get_watermark_for_pipelines(&ALL_PIPELINE_NAMES)
+                    .get_watermark_for_pipelines(&harness_pipelines())
                     .await
                     .is_ok_and(|wm| {
                         wm.is_some_and(|wm| {
@@ -341,6 +364,71 @@ impl TestHarness {
     fn bigtable_client(&mut self) -> &mut BigTableClient {
         &mut self.client
     }
+
+    /// A transaction builder for address 0, paying with one of its current gas coins.
+    async fn tx_builder(&self) -> Result<TestTransactionBuilder> {
+        let sender = self.cluster.get_address_0();
+        let gas = self
+            .cluster
+            .wallet
+            .get_one_gas_object_owned_by_address(sender)
+            .await?
+            .context("No gas coin for address 0")?;
+        Ok(self
+            .cluster
+            .test_transaction_builder_with_gas_object(sender, gas)
+            .await)
+    }
+
+    /// Sign and execute `tx_data` as address 0, wait for it to be checkpointed, and return its
+    /// effects and checkpoint.
+    async fn execute(&self, tx_data: TransactionData) -> Result<(TransactionEffects, u64)> {
+        let executed = self.cluster.sign_and_execute_transaction(&tx_data).await;
+        let checkpoint = executed
+            .checkpoint
+            .context("Executed transaction has no checkpoint")?;
+        Ok((executed.effects, checkpoint))
+    }
+
+    /// Call `basics::object_basics::<function>` as address 0.
+    async fn call_object_basics(
+        &self,
+        package_id: ObjectID,
+        function: &'static str,
+        args: Vec<CallArg>,
+    ) -> Result<(TransactionEffects, u64)> {
+        let tx_data = self
+            .tx_builder()
+            .await?
+            .move_call(package_id, "object_basics", function, args)
+            .build();
+        self.execute(tx_data).await
+    }
+}
+
+/// The reference `effects` wrote for `object_id`.
+fn output_ref(effects: &TransactionEffects, object_id: ObjectID) -> ObjectRef {
+    effects
+        .all_changed_objects()
+        .into_iter()
+        .map(|(object_ref, _, _)| object_ref)
+        .find(|object_ref| object_ref.0 == object_id)
+        .unwrap_or_else(|| panic!("transaction did not write {object_id}"))
+}
+
+/// The one object `effects` created. Panics unless exactly one object was created.
+fn created_object(effects: &TransactionEffects) -> ObjectID {
+    let created = effects.created();
+    assert_eq!(created.len(), 1, "expected exactly one created object");
+    created[0].0.0
+}
+
+fn owned_arg(object_ref: ObjectRef) -> CallArg {
+    CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))
+}
+
+fn pure_arg<T: serde::Serialize>(value: &T) -> CallArg {
+    CallArg::Pure(bcs::to_bytes(value).unwrap())
 }
 
 #[tokio::test]
@@ -950,6 +1038,133 @@ async fn test_indexer_e2e() -> Result<()> {
         partial.end_checkpoint.is_none(),
         "end_checkpoint should be absent"
     );
+
+    Ok(())
+}
+
+/// Reads pinned to a checkpoint see the state left by the object's latest change at or before
+/// that checkpoint, through creation, mutation, wrapping, unwrapping, and deletion.
+#[tokio::test]
+async fn test_object_versions_by_checkpoint() -> Result<()> {
+    let mut harness = TestHarness::new().await?;
+
+    // Alpha pipelines are opt-in: an indexer that does not name them does not register them.
+    let default_indexer = build_indexer(&harness.client, harness.cluster.rpc_url(), &[]).await?;
+    assert!(
+        !default_indexer
+            .pipeline_names()
+            .contains(&OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE),
+        "alpha pipeline registered by default",
+    );
+    drop(default_indexer);
+
+    let publish_tx = harness
+        .tx_builder()
+        .await?
+        .publish_examples("basics")
+        .await
+        .build();
+    let (publish, _) = harness.execute(publish_tx).await?;
+    let package_id = publish
+        .created()
+        .into_iter()
+        .find(|(_, owner)| *owner == Owner::Immutable)
+        .context("publish created no package")?
+        .0
+        .0;
+
+    // Drive an object through its lifecycle, one transaction per step, recording the state each
+    // step leaves behind as (checkpoint, object, version, status). Wrapping creates a wrapper
+    // object, and unwrapping deletes it.
+    let sender = harness.cluster.get_address_0();
+    let mut changes: Vec<(u64, ObjectID, SequenceNumber, ObjectStatus)> = Vec::new();
+
+    let (create, cp) = harness
+        .call_object_basics(
+            package_id,
+            "create",
+            vec![pure_arg(&7u64), pure_arg(&sender)],
+        )
+        .await?;
+    let object = created_object(&create);
+    changes.push((cp, object, create.lamport_version(), ObjectStatus::Live));
+
+    let (set_value, cp) = harness
+        .call_object_basics(
+            package_id,
+            "set_value",
+            vec![owned_arg(output_ref(&create, object)), pure_arg(&8u64)],
+        )
+        .await?;
+    changes.push((cp, object, set_value.lamport_version(), ObjectStatus::Live));
+
+    let (wrap, cp) = harness
+        .call_object_basics(
+            package_id,
+            "wrap",
+            vec![owned_arg(output_ref(&set_value, object))],
+        )
+        .await?;
+    let wrapper = created_object(&wrap);
+    changes.push((cp, object, wrap.lamport_version(), ObjectStatus::Wrapped));
+    changes.push((cp, wrapper, wrap.lamport_version(), ObjectStatus::Live));
+
+    let (unwrap, cp) = harness
+        .call_object_basics(
+            package_id,
+            "unwrap",
+            vec![owned_arg(output_ref(&wrap, wrapper))],
+        )
+        .await?;
+    changes.push((cp, object, unwrap.lamport_version(), ObjectStatus::Live));
+    changes.push((cp, wrapper, unwrap.lamport_version(), ObjectStatus::Deleted));
+
+    let (delete, cp) = harness
+        .call_object_basics(
+            package_id,
+            "delete",
+            vec![owned_arg(output_ref(&unwrap, object))],
+        )
+        .await?;
+    changes.push((cp, object, delete.lamport_version(), ObjectStatus::Deleted));
+
+    let first_cp = changes.first().unwrap().0;
+    let last_cp = changes.last().unwrap().0;
+    harness.wait_for_watermark(last_cp, 0).await?;
+
+    // Check every checkpoint from just before creation through deletion. Checkpoints between two
+    // changes must resolve to the earlier change.
+    for checkpoint in first_cp - 1..=last_cp {
+        for id in [object, wrapper] {
+            let expected = changes
+                .iter()
+                .rev()
+                .find(|(cp, changed, _, _)| *changed == id && *cp <= checkpoint)
+                .map(|(_, _, version, status)| (*version, *status));
+
+            let version = harness
+                .bigtable_client()
+                .get_object_version_at_checkpoint(id, checkpoint)
+                .await?;
+            assert_eq!(version, expected, "{id} at checkpoint {checkpoint}");
+
+            let contents = harness
+                .bigtable_client()
+                .get_object_at_checkpoint(id, checkpoint)
+                .await?;
+            match expected {
+                Some((version, ObjectStatus::Live)) => {
+                    let contents = contents
+                        .unwrap_or_else(|| panic!("{id} missing at checkpoint {checkpoint}"));
+                    assert_eq!((contents.id(), contents.version()), (id, version));
+                }
+                _ => assert!(
+                    contents.is_none(),
+                    "{id} should not exist at checkpoint {checkpoint}",
+                ),
+            }
+        }
+    }
 
     Ok(())
 }

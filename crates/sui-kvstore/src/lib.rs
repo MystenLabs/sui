@@ -32,9 +32,11 @@ use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 pub use crate::bigtable::client::CheckpointSpan;
 use crate::rate_limiter::CompositeRateLimiter;
 use crate::rate_limiter::RateLimiter;
+use crate::tables::object_versions_by_checkpoint::ObjectStatus;
 use sui_protocol_config::Chain;
 use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::committee::EpochId;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::CheckpointDigest;
@@ -64,6 +66,7 @@ pub use crate::handlers::CheckpointsPipeline;
 pub use crate::handlers::EpochEndPipeline;
 pub use crate::handlers::EpochStartPipeline;
 pub use crate::handlers::EventBitmapProcessor;
+pub use crate::handlers::ObjectVersionsByCheckpointPipeline;
 pub use crate::handlers::ObjectsPipeline;
 pub use crate::handlers::PackagesByCheckpointPipeline;
 pub use crate::handlers::PackagesByIdPipeline;
@@ -116,8 +119,11 @@ pub const TX_SEQ_DIGEST_PIPELINE: &str =
     <BigTableHandler<TxSeqDigestPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const EVENT_BITMAP_INDEX_PIPELINE: &str =
     <BitmapIndexHandler<EventBitmapProcessor> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE: &str = <BigTableHandler<
+    ObjectVersionsByCheckpointPipeline,
+> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 
-/// All pipeline names known to the indexer.
+/// Pipelines the indexer always registers. Excludes [`ALPHA_PIPELINE_NAMES`].
 pub const ALL_PIPELINE_NAMES: [&str; 14] = [
     CHECKPOINTS_PIPELINE,
     CHECKPOINTS_BY_DIGEST_PIPELINE,
@@ -135,15 +141,24 @@ pub const ALL_PIPELINE_NAMES: [&str; 14] = [
     EVENT_BITMAP_INDEX_PIPELINE,
 ];
 
+/// Pipelines the indexer registers only when they are named in the `alpha_pipelines` argument of
+/// [`BigTableIndexer::new`], so deployments do not start writing their tables by default.
+pub const ALPHA_PIPELINE_NAMES: [&str; 1] = [OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE];
+
+/// Accepts the name of any pipeline the indexer knows, including alpha pipelines.
 pub fn validate_pipeline_name(value: &str) -> Result<&'static str, String> {
-    ALL_PIPELINE_NAMES
-        .iter()
-        .copied()
+    let known_pipelines = || {
+        ALL_PIPELINE_NAMES
+            .iter()
+            .chain(&ALPHA_PIPELINE_NAMES)
+            .copied()
+    };
+    known_pipelines()
         .find(|name| *name == value)
         .ok_or_else(|| {
             format!(
                 "unknown pipeline `{value}`; expected one of: {}",
-                ALL_PIPELINE_NAMES.join(", ")
+                known_pipelines().collect::<Vec<_>>().join(", ")
             )
         })
 }
@@ -318,6 +333,23 @@ pub trait KeyValueStoreReader {
         pipelines: &[&str],
     ) -> Result<Option<WatermarkV1>>;
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
+    /// The version and status `object_id` had at the end of `checkpoint`, written by the latest
+    /// checkpoint at or before `checkpoint` that changed the object. `None` if no such checkpoint
+    /// exists. Served by the alpha [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`].
+    async fn get_object_version_at_checkpoint(
+        &mut self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<(SequenceNumber, ObjectStatus)>>;
+    /// The contents of `object_id` at the end of `checkpoint`. `None` if the object did not exist
+    /// yet, was deleted or wrapped, or its contents are not yet in the `objects` table. Callers
+    /// should bound `checkpoint` by the watermarks of both the alpha
+    /// [`OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE`] and [`OBJECTS_PIPELINE`].
+    async fn get_object_at_checkpoint(
+        &mut self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<Object>>;
     async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochData>>;
     async fn get_latest_epoch(&mut self) -> Result<Option<EpochData>>;
     async fn get_protocol_configs(
@@ -384,6 +416,8 @@ pub trait KeyValueStoreReader {
 }
 
 impl BigTableIndexer {
+    /// Registers every pipeline in [`ALL_PIPELINE_NAMES`], plus the alpha pipelines named in
+    /// `alpha_pipelines`, which must all be in [`ALPHA_PIPELINE_NAMES`].
     pub async fn new(
         client: BigTableClient,
         indexer_args: IndexerArgs,
@@ -392,9 +426,20 @@ impl BigTableIndexer {
         committer: CommitterConfig,
         config: IndexerConfig,
         pipeline: PipelineLayer,
+        alpha_pipelines: &[&str],
         chain: Chain,
         registry: &Registry,
     ) -> Result<Self> {
+        if let Some(name) = alpha_pipelines
+            .iter()
+            .find(|name| !ALPHA_PIPELINE_NAMES.contains(name))
+        {
+            anyhow::bail!(
+                "`{name}` is not an alpha pipeline; alpha pipelines: {}",
+                ALPHA_PIPELINE_NAMES.join(", ")
+            );
+        }
+
         let ingestion_config: FrameworkIngestionConfig = ingestion_config.into();
         let ingestion_metrics = IngestionMetrics::new(Some("kvstore_alt_indexer"), registry);
         let gap_fill_client = client_args
@@ -646,6 +691,22 @@ impl BigTableIndexer {
                 pipeline.event_bitmap_index.clone().finish(base.clone()),
             )
             .await?;
+        if alpha_pipelines.contains(&OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE) {
+            indexer
+                .concurrent_pipeline(
+                    BigTableHandler::new(
+                        ObjectVersionsByCheckpointPipeline,
+                        &pipeline.object_versions_by_checkpoint,
+                        build_rate_limiter(
+                            pipeline.object_versions_by_checkpoint.max_rows_per_second,
+                            base_rps,
+                            &global,
+                        ),
+                    ),
+                    pipeline.object_versions_by_checkpoint.finish(base.clone()),
+                )
+                .await?;
+        }
         Ok(Self {
             indexer,
             store_service: store_runtime_builder.into_service(),

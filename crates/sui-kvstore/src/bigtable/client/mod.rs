@@ -26,6 +26,7 @@ use sui_futures::task::TaskGuard;
 use sui_inverted_index::ScanDirection;
 use sui_types::base_types::EpochId;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::TransactionDigest;
 use sui_types::digests::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -78,6 +79,7 @@ use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
 use crate::bigtable::proto::bigtable::v2::row_range::StartKey;
 use crate::bigtable::proto::bigtable::v2::value_range;
 use crate::tables;
+use crate::tables::object_versions_by_checkpoint::ObjectStatus;
 use crate::tables::tx_seq_digest;
 
 const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
@@ -1943,6 +1945,52 @@ impl KeyValueStoreReader for BigTableClient {
 
         tracing::debug!(?object_id, "get_latest_object: object not found in range");
         Ok(None)
+    }
+
+    async fn get_object_version_at_checkpoint(
+        &mut self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<(SequenceNumber, ObjectStatus)>> {
+        // The newest row in `[(id, 0), (id, checkpoint)]` is the object's state at `checkpoint`.
+        let start_key = Bytes::from(tables::object_versions_by_checkpoint::encode_key(
+            &object_id, 0,
+        ));
+        let end_key = Bytes::from(tables::object_versions_by_checkpoint::encode_key(
+            &object_id, checkpoint,
+        ));
+        let Some((_, row)) = self
+            .range_scan(
+                tables::object_versions_by_checkpoint::NAME,
+                Some(start_key),
+                Some(end_key),
+                1,
+                true,
+                None,
+            )
+            .await?
+            .pop()
+        else {
+            return Ok(None);
+        };
+        Ok(Some(tables::object_versions_by_checkpoint::decode(&row)?))
+    }
+
+    async fn get_object_at_checkpoint(
+        &mut self,
+        object_id: ObjectID,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Option<Object>> {
+        let Some((version, ObjectStatus::Live)) = self
+            .get_object_version_at_checkpoint(object_id, checkpoint)
+            .await?
+        else {
+            return Ok(None);
+        };
+        Ok(self
+            .get_objects(&[ObjectKey(object_id, version)])
+            .await?
+            .pop())
     }
 
     async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochData>> {

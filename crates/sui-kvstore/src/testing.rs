@@ -30,6 +30,7 @@ pub const TABLES: &[&str] = &[
     crate::tables::transaction_bitmap_index::NAME,
     crate::tables::event_bitmap_index::NAME,
     crate::tables::objects::NAME,
+    crate::tables::object_versions_by_checkpoint::NAME,
     crate::tables::transactions::NAME,
     crate::tables::checkpoints::NAME,
     crate::tables::checkpoints_by_digest::NAME,
