@@ -19,6 +19,8 @@ All access (mutable and immutable) is controlled through the module that defines
 -  [Struct `BorrowMarkerKey`](#sui_scratch_BorrowMarkerKey)
 -  [Constants](#@Constants_0)
 -  [Function `permit`](#sui_scratch_permit)
+-  [Function `add_internal`](#sui_scratch_add_internal)
+-  [Function `remove_internal`](#sui_scratch_remove_internal)
 -  [Function `add`](#sui_scratch_add)
 -  [Function `read`](#sui_scratch_read)
 -  [Function `remove`](#sui_scratch_remove)
@@ -218,6 +220,62 @@ scratch entries keyed by values of type <code>K</code>.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/scratch.md#sui_scratch_permit">permit</a>&lt;K: <b>copy</b> + drop&gt;(_: internal::Permit&lt;K&gt;): <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>&lt;K&gt; {
     <a href="../sui/scratch.md#sui_scratch_Permit">Permit</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_add_internal"></a>
+
+## Function `add_internal`
+
+Adds an entry without requiring a <code>TxContext</code>. Restricted to framework-internal callers, and
+the permit can only be created by the module that defines <code>K</code>.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/scratch.md#sui_scratch_add_internal">add_internal</a>&lt;K: <b>copy</b>, drop, V: drop&gt;(_: <a href="../std/internal.md#std_internal_Permit">std::internal::Permit</a>&lt;K&gt;, key: K, value: V)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/scratch.md#sui_scratch_add_internal">add_internal</a>&lt;K: <b>copy</b> + drop, V: drop&gt;(
+    _: internal::Permit&lt;K&gt;,
+    key: K,
+    value: V,
+) {
+    <a href="../sui/scratch.md#sui_scratch_add_impl">add_impl</a>(<a href="../sui/scratch.md#sui_scratch_hash_type_and_key">hash_type_and_key</a>(key), value)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_scratch_remove_internal"></a>
+
+## Function `remove_internal`
+
+Removes an entry without requiring a <code>TxContext</code>. Restricted to framework-internal callers,
+and the permit can only be created by the module that defines <code>K</code>.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/scratch.md#sui_scratch_remove_internal">remove_internal</a>&lt;K: <b>copy</b>, drop, V: drop&gt;(_: <a href="../std/internal.md#std_internal_Permit">std::internal::Permit</a>&lt;K&gt;, key: K): V
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/scratch.md#sui_scratch_remove_internal">remove_internal</a>&lt;K: <b>copy</b> + drop, V: drop&gt;(_: internal::Permit&lt;K&gt;, key: K): V {
+    <a href="../sui/scratch.md#sui_scratch_remove_impl">remove_impl</a>(<a href="../sui/scratch.md#sui_scratch_hash_type_and_key">hash_type_and_key</a>(key))
 }
 </code></pre>
 
