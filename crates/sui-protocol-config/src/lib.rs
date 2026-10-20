@@ -428,6 +428,7 @@ const MAINNET_USDB: &str =
 //              Add the staggered-submission duplication signal thresholds.
 // Version 141: Abort with EInvalidVerifyingKey in groth16::verify_groth16_proof when the
 //              prepared verifying key length does not match the number of public inputs.
+//              Enable package-version forbid lists and package minversion.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
