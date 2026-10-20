@@ -3094,6 +3094,9 @@ randomness_state
 sui_deny_list_object_id
 	public(package) fun
 	0x2::object
+sui_package_config_object_id
+	public(package) fun
+	0x2::object
 sui_accumulator_root_object_id
 	public(package) fun
 	0x2::object
@@ -3244,6 +3247,15 @@ UpgradeTicket
 UpgradeReceipt
 	public struct
 	0x2::package
+MinVersionEnrollment
+	public struct
+	0x2::package
+MinVersionUpgradeAuthorization
+	public struct
+	0x2::package
+MinVersionUpgrade
+	public struct
+	0x2::package
 claim
 	public fun
 	0x2::package
@@ -3273,6 +3285,30 @@ version
 	0x2::package
 upgrade_policy
 	public fun
+	0x2::package
+minversion_available
+	public fun
+	0x2::package
+minversion_enabled
+	public fun
+	0x2::package
+minversion_permanently_disabled
+	public fun
+	0x2::package
+enable_minversion
+	public fun
+	0x2::package
+enable_minversion_impl
+	fun
+	0x2::package
+disable_minversion_permanently
+	public fun
+	0x2::package
+minversion_enrollment_info
+	public(package) fun
+	0x2::package
+minversion_upgrade_info
+	public(package) fun
 	0x2::package
 ticket_package
 	public fun
@@ -3313,15 +3349,78 @@ authorize_upgrade
 commit_upgrade
 	public fun
 	0x2::package
+prepare_minversion_upgrade
+	public fun
+	0x2::package
+commit_minversion_upgrade
+	public fun
+	0x2::package
+commit_minversion_upgrade_impl
+	fun
+	0x2::package
+commit_upgrade_impl
+	fun
+	0x2::package
 original_package_id
 	public fun
 	0x2::package
 original_package_id_impl
 	fun
 	0x2::package
+test_publish
+	public fun
+	0x2::package
 restrict
 	fun
 	0x2::package
+PackageConfig
+	public struct
+	0x2::package_config
+VersionForbiddenKey
+	public struct
+	0x2::package_config
+MinVersionKey
+	public struct
+	0x2::package_config
+MinVersion
+	public struct
+	0x2::package_config
+forbid_version
+	public fun
+	0x2::package_config
+forbid_version_range
+	public fun
+	0x2::package_config
+is_version_forbidden
+	public(package) fun
+	0x2::package_config
+record_minversion_enrollment
+	public fun
+	0x2::package_config
+record_minversion_upgrade
+	public fun
+	0x2::package_config
+record_minversion_upgrade_and_forbid_previous
+	public fun
+	0x2::package_config
+create
+	fun
+	0x2::package_config
+is_forbidden_value
+	fun
+	0x2::package_config
+record_minversion_impl
+	fun
+	0x2::package_config
+cap_package_info
+	fun
+	0x2::package_config
+assert_historical_version
+	fun
+	0x2::package_config
+forbid_version_impl
+	fun
+	0x2::package_config
 Party
 	public struct
 	0x2::party
