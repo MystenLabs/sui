@@ -273,13 +273,6 @@ impl Watermarks {
         &self.global_hi
     }
 
-    /// The lowest checkpoint the ledger gRPC service retains, or 0 if it is unknown.
-    pub(crate) fn ledger_floor(&self) -> u64 {
-        self.per_pipeline
-            .get(LEDGER_GRPC_PIPELINE)
-            .map_or(0, |p| p.lo().checkpoint())
-    }
-
     /// Per-pipeline watermarks keyed by pipeline name.
     pub(crate) fn per_pipeline(&self) -> &BTreeMap<String, Pipeline> {
         &self.per_pipeline
@@ -462,18 +455,10 @@ impl Watermarks {
 async fn watermark_from_ledger_grpc(
     ledger_grpc_reader: &LedgerGrpcReader,
 ) -> anyhow::Result<WatermarkRow> {
-    let (summary, floor) = tokio::join!(
-        ledger_grpc_reader.checkpoint_watermark(),
-        ledger_grpc_reader.lowest_available_checkpoint(),
-    );
-    let summary = summary.context("Failed to get checkpoint watermark")?;
-
-    // The floor only tells a pruned-history `OUT_OF_RANGE` apart from one for a cursor ahead of
-    // the tip, so a server that can't report it is treated as retaining everything.
-    let floor = floor.unwrap_or_else(|e| {
-        debug!(error = ?e, "Failed to get the ledger's lowest available checkpoint");
-        None
-    });
+    let summary = ledger_grpc_reader
+        .checkpoint_watermark()
+        .await
+        .context("Failed to get checkpoint watermark")?;
 
     Ok(WatermarkRow {
         pipeline: LEDGER_GRPC_PIPELINE.to_owned(),
@@ -482,7 +467,7 @@ async fn watermark_from_ledger_grpc(
         tx_hi: summary.network_total_transactions as i64,
         timestamp_ms_hi_inclusive: summary.timestamp_ms as i64,
         epoch_lo: 0,
-        checkpoint_lo: floor.unwrap_or(0) as i64,
+        checkpoint_lo: 0,
         tx_lo: 0,
     })
 }

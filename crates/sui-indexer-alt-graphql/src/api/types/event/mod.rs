@@ -51,7 +51,6 @@ use crate::api::types::move_value::MoveValue;
 use crate::api::types::transaction::Transaction;
 use crate::error::RpcError;
 use crate::error::ledger_error;
-use crate::error::resolve_ledger_out_of_range;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::pagination::StreamConnection;
@@ -198,12 +197,7 @@ impl Event {
         query_limits::rich::debit(ctx)?;
 
         if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
-            let ledger_floor = ctx
-                .data_opt::<Arc<Watermarks>>()
-                .map_or(0, |w| w.ledger_floor());
-            return Self::paginate_grpc(reader, scope, page, filter)
-                .await
-                .map_err(|e| resolve_ledger_out_of_range(e, ledger_floor));
+            return Self::paginate_grpc(reader, scope, page, filter).await;
         }
 
         let pg_reader: &PgReader = ctx.data()?;
@@ -314,8 +308,7 @@ impl Event {
         filter: &EventFilter,
     ) -> Result<StreamPage<v2::Event>, RpcError> {
         // Extract the cursor and pass through to grpc.
-        let after_token = page.after().map(|c| CursorToken::from(&c.token()));
-        let after = after_token.as_ref().map(CursorToken::encode);
+        let after = page.after().map(|c| CursorToken::from(&c.token()).encode());
         // Pg-minted cursors set checkpoint as 0 (as do legacy JSON cursors, which carry no
         // checkpoint at all). Substitute the checkpoint with u64::max on the `before` bound to
         // avoid collapsing the checkpoint window.
@@ -350,12 +343,11 @@ impl Event {
             "event_index",
             "checkpoint",
         ]));
-        let start_checkpoint = match cp_bounds.start_bound() {
+        request.start_checkpoint = match cp_bounds.start_bound() {
             Bound::Included(&s) => Some(s),
             Bound::Excluded(&s) => Some(s.saturating_add(1)),
             Bound::Unbounded => None,
         };
-        request.start_checkpoint = start_checkpoint;
         request.end_checkpoint = match cp_bounds.end_bound() {
             Bound::Included(&e) => Some(e.saturating_add(1)),
             Bound::Excluded(&e) => Some(e),
@@ -368,7 +360,7 @@ impl Event {
             .list_events(request)
             .await
             .context("Failed to list events")
-            .map_err(|e| ledger_error(e, start_checkpoint, after_token.as_ref()))
+            .map_err(ledger_error)
     }
 }
 
@@ -918,10 +910,7 @@ mod tests {
     /// for an open start is left out, so the fullnode clamps it instead of rejecting it.
     #[tokio::test]
     async fn paginate_grpc_out_of_range_by_direction() {
-        let (ledger, reader) = FailingLedger::start(tonic::Status::out_of_range(
-            "requested data below earliest available; lowest available checkpoint is 42",
-        ))
-        .await;
+        let (ledger, reader) = FailingLedger::start(42).await;
         let limits = PageLimits {
             default: 10,
             max: 10,
@@ -958,7 +947,7 @@ mod tests {
                 .err()
                 .expect("an out-of-range scan should fail");
 
-            let err = async_graphql::Error::from(resolve_ledger_out_of_range(err, 42));
+            let err = async_graphql::Error::from(err);
             let ext = err.extensions.as_ref().expect("No extensions");
             assert_eq!(ext.get("code"), Some(&expected.into()), "{}", err.message);
             if expected == code::OUT_OF_RANGE {

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! An in-process ledger service for unit tests of the List query paths. It records the
-//! `start_checkpoint` of every `ListTransactions`/`ListEvents` request and fails each one with a
-//! fixed status, delivered on the stream as the fullnode does.
+//! `start_checkpoint` of every `ListTransactions`/`ListEvents` request and fails each one with
+//! `OUT_OF_RANGE`, delivered on the stream as the fullnode does: with the fullnode's below-floor
+//! message for a start below its floor, and its ahead-of-tip message otherwise.
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -26,15 +27,16 @@ type BoxStream<T> = std::pin::Pin<Box<dyn futures::Stream<Item = Result<T, Statu
 
 #[derive(Clone)]
 pub(crate) struct FailingLedger {
-    status: Status,
+    floor: u64,
     start_checkpoints: Arc<Mutex<Vec<Option<u64>>>>,
 }
 
 impl FailingLedger {
-    /// Serve a ledger that fails every List request with `status`, and a reader pointed at it.
-    pub(crate) async fn start(status: Status) -> (Self, AlphaLedgerGrpcReader) {
+    /// Serve a ledger with retention floor `floor` that fails every List request, and a reader
+    /// pointed at it.
+    pub(crate) async fn start(floor: u64) -> (Self, AlphaLedgerGrpcReader) {
         let ledger = Self {
-            status,
+            floor,
             start_checkpoints: Arc::default(),
         };
 
@@ -77,7 +79,17 @@ impl FailingLedger {
             .lock()
             .unwrap()
             .push(start_checkpoint);
-        stream::iter([Err(self.status.clone())]).boxed()
+        let status = match start_checkpoint {
+            Some(start) if start < self.floor => Status::out_of_range(format!(
+                "requested data below earliest available; lowest available checkpoint is {}",
+                self.floor
+            )),
+            _ => Status::out_of_range(
+                "requested data above latest available; cursor is at checkpoint 0, and only \
+                 checkpoints below 0 are available",
+            ),
+        };
+        stream::iter([Err(status)]).boxed()
     }
 }
 

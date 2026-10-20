@@ -257,20 +257,6 @@ impl LedgerGrpcReader {
         }
     }
 
-    /// The lowest checkpoint this ledger serves (its retention floor), from `GetServiceInfo`, or
-    /// `None` if the server does not report one.
-    pub async fn lowest_available_checkpoint(&self) -> anyhow::Result<Option<u64>> {
-        let response = self
-            .client
-            .clone()
-            .ledger_client()
-            .get_service_info(self.request(grpc::GetServiceInfoRequest::default()))
-            .await
-            .context("GetServiceInfo failed")?
-            .into_inner();
-        Ok(response.lowest_available_checkpoint)
-    }
-
     // Public wrapper methods for gRPC calls with metrics instrumentation
 
     pub async fn get_checkpoint(

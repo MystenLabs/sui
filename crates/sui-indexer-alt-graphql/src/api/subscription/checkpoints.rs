@@ -104,8 +104,7 @@ async fn list_checkpoints_page(
     cp_bounds: RangeInclusive<u64>,
     page: &Page<CCheckpoint>,
 ) -> Result<StreamPage<v2::Checkpoint>, RpcError> {
-    let after_token = page.after().map(|c| CursorToken::from(&c.token()));
-    let after = after_token.as_ref().map(CursorToken::encode);
+    let after = page.after().map(|c| CursorToken::from(&c.token()).encode());
     let before = page
         .before()
         .map(|c| CursorToken::from(&c.token()).encode());
@@ -131,5 +130,5 @@ async fn list_checkpoints_page(
         .list_checkpoints(request)
         .await
         .context("Failed to list checkpoints")
-        .map_err(|e| ledger_error(e, Some(*cp_bounds.start()), after_token.as_ref()))
+        .map_err(ledger_error)
 }

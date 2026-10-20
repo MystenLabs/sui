@@ -28,6 +28,7 @@ use futures::Stream;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::AlphaLedgerGrpcReader;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use tokio::sync::broadcast;
 use tokio::sync::watch;
 use tracing::debug;
@@ -36,9 +37,7 @@ use tracing::warn;
 use crate::config::SubscriptionConfig;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
-use crate::error::has_placeholder_checkpoint;
 use crate::error::out_of_range;
-use crate::error::resolve_ledger_out_of_range;
 use crate::error::upcast;
 use crate::pagination::Page;
 use crate::pagination::PageLimits;
@@ -463,6 +462,18 @@ fn covered_checkpoint(token: &CursorToken) -> Option<u64> {
     token.position.checkpoint().checked_sub(1)
 }
 
+/// Whether `token` is a transaction or event cursor minted by the Postgres path, which records
+/// checkpoint 0 in place of the item's real checkpoint.
+fn has_placeholder_checkpoint(token: &CursorToken) -> bool {
+    match token.position {
+        Position::Checkpoints { .. } => false,
+        Position::Transactions { checkpoint, tx_seq } => checkpoint == 0 && tx_seq != 0,
+        Position::Events {
+            checkpoint, tx_seq, ..
+        } => checkpoint == 0 && tx_seq != 0,
+    }
+}
+
 /// Whether a page ending at `end` moved the scan past `after`. A page that drains the ledger's tip
 /// ends where it started, echoing `after`, so the scan waits before asking again. The ledger
 /// rejects an `after` ahead of its indexed tip as out of range rather than answering from its own
@@ -592,16 +603,7 @@ where
 {
     let mut poll = LedgerPoll::new();
     loop {
-        let ledger_floor = watermarks_rx.borrow().ledger_floor();
-        let result = scan_with_retry::<S>(
-            reader,
-            limits,
-            cp_bounds.clone(),
-            after,
-            filter,
-            ledger_floor,
-        )
-        .await?;
+        let result = scan_with_retry::<S>(reader, limits, cp_bounds.clone(), after, filter).await?;
 
         // No end cursor means nothing past the indexer tip is indexed yet; wait, then re-request. A
         // range that was scanned but matched nothing still returns a boundary cursor, not `None`.
@@ -652,21 +654,20 @@ where
 
 /// Scan one page over `cp_bounds`, retrying transient failures under a bounded budget.
 ///
-/// The ledger answers `OUT_OF_RANGE` in two directions, told apart against its retention floor
-/// (`ledger_floor`, 0 if unknown) by [`classify_scan_error`]. A start below the floor asked for
-/// pruned history and fails at once. Behind a load balancer, fullnodes can have different floors,
-/// so another replica might still serve the range; it is not retried anyway, because the budget is
-/// tuned for brief outages and spending it on a pruned range would delay a client that has to
-/// recover from a newer cursor. Anything else (a cursor ahead of the ledger's indexed tip) is the
-/// ledger catching up, retried like other transient failures; if the budget runs out first, the
-/// client is asked to reconnect rather than told its history is gone.
+/// The ledger answers `OUT_OF_RANGE` in two directions, told apart from the server's message by
+/// [`crate::error::ledger_error`]. A start below its retention floor asked for pruned history and
+/// fails at once. Behind a load balancer, fullnodes can have different floors, so another replica
+/// might still serve the range; it is not retried anyway, because the budget is tuned for brief
+/// outages and spending it on a pruned range would delay a client that has to recover from a newer
+/// cursor. Anything else (a cursor ahead of the ledger's indexed tip) is the ledger catching up,
+/// retried like other transient failures; if the budget runs out first, the client is asked to
+/// reconnect rather than told its history is gone.
 async fn scan_with_retry<S: Subscribable>(
     reader: &AlphaLedgerGrpcReader,
     limits: &PageLimits,
     cp_bounds: RangeInclusive<u64>,
     after: Option<&S::Cursor>,
     filter: &S::Filter,
-    ledger_floor: u64,
 ) -> Result<StreamPage<S::ScanItem>, RpcError> {
     let page = Page::from_params(
         limits,
@@ -680,11 +681,11 @@ async fn scan_with_retry<S: Subscribable>(
     backoff::future::retry(scan_backoff(), || async {
         S::scan(reader, cp_bounds.clone(), &page, filter)
             .await
-            .map_err(|e| classify_scan_error(e, ledger_floor))
+            .map_err(classify_scan_error)
     })
     .await
     .map_err(|e| match e {
-        RpcError::LedgerOutOfRange { .. } => {
+        RpcError::LedgerBehind(_) => {
             warn!(error = ?e, "ledger did not catch up with the resume point; disconnecting");
             reconnect_error()
         }
@@ -694,10 +695,10 @@ async fn scan_with_retry<S: Subscribable>(
 
 /// Whether a failed scan is worth retrying: everything is, except a request below the ledger's
 /// retention floor.
-fn classify_scan_error(err: RpcError, ledger_floor: u64) -> backoff::Error<RpcError> {
-    match resolve_ledger_out_of_range(err, ledger_floor) {
+fn classify_scan_error(err: RpcError) -> backoff::Error<RpcError> {
+    match err {
         e @ RpcError::OutOfRange(_) => backoff::Error::permanent(e),
-        e @ RpcError::LedgerOutOfRange { .. } => {
+        e @ RpcError::LedgerBehind(_) => {
             debug!(error = ?e, "ledger is behind the scan's resume point, retrying");
             backoff::Error::transient(e)
         }
@@ -815,7 +816,7 @@ mod tests {
         };
         let reader = unused_reader().await;
         let result =
-            scan_with_retry::<Scripted>(&reader, &limits, 0..=u64::MAX, None, &script, 42).await;
+            scan_with_retry::<Scripted>(&reader, &limits, 0..=u64::MAX, None, &script).await;
         let unused = script.lock().unwrap().len();
         (result, unused)
     }
@@ -1011,41 +1012,19 @@ mod tests {
         assert_eq!(terminations(&metrics, "out_of_range"), 1);
     }
 
-    fn ledger_out_of_range(requested_lo: Option<u64>) -> RpcError {
-        RpcError::LedgerOutOfRange {
-            detail: "requested data above latest available".into(),
-            requested_lo,
-        }
-    }
-
-    /// The ledger rejects a resume point ahead of its tip with `OUT_OF_RANGE` too. At or above its
-    /// floor (42 in `scan_scripted`) that is the ledger catching up, so the scan is retried.
+    /// The ledger rejects a resume point ahead of its tip with `OUT_OF_RANGE` too. That is the ledger
+    /// catching up, so the scan is retried.
     #[tokio::test]
     async fn ahead_of_ledger_scan_is_retried() {
-        for requested_lo in [Some(42), Some(500), None] {
-            let (result, unused) = scan_scripted(vec![
-                Err(ledger_out_of_range(requested_lo)),
-                Ok(StreamPage::default()),
-            ])
-            .await;
-            assert!(result.is_ok(), "{requested_lo:?}");
-            assert_eq!(unused, 0);
-        }
-    }
-
-    /// The same error for a request below the floor is pruned history: not retried, and reported
-    /// as `OUT_OF_RANGE`.
-    #[tokio::test]
-    async fn below_floor_ledger_scan_fails_without_retrying() {
         let (result, unused) = scan_scripted(vec![
-            Err(ledger_out_of_range(Some(41))),
+            Err(RpcError::LedgerBehind(
+                "requested data above latest available".into(),
+            )),
             Ok(StreamPage::default()),
         ])
         .await;
-        assert_eq!(unused, 1, "a below-floor scan must not be retried");
-        let err = async_graphql::Error::from(result.unwrap_err());
-        let ext = err.extensions.as_ref().expect("No extensions");
-        assert_eq!(ext.get("code"), Some(&code::OUT_OF_RANGE.into()));
+        assert!(result.is_ok());
+        assert_eq!(unused, 0);
     }
 
     /// Other scan failures are still treated as transient and retried.

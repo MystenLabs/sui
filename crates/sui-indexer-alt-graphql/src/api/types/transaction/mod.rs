@@ -57,7 +57,6 @@ use crate::api::types::transaction_kind::TransactionKind;
 use crate::api::types::user_signature::UserSignature;
 use crate::error::RpcError;
 use crate::error::ledger_error;
-use crate::error::resolve_ledger_out_of_range;
 use crate::error::upcast;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
@@ -341,12 +340,7 @@ impl Transaction {
     ) -> Result<StreamConnection<Transaction>, RpcError> {
         if let Some(reader) = ctx.data_opt::<AlphaLedgerGrpcReader>() {
             query_limits::rich::debit(ctx)?;
-            let ledger_floor = ctx
-                .data_opt::<Arc<Watermarks>>()
-                .map_or(0, |w| w.ledger_floor());
-            return Self::paginate_grpc(reader, scope, page, filter)
-                .await
-                .map_err(|e| resolve_ledger_out_of_range(e, ledger_floor));
+            return Self::paginate_grpc(reader, scope, page, filter).await;
         }
 
         let watermarks: &Arc<Watermarks> = ctx.data()?;
@@ -449,8 +443,7 @@ impl Transaction {
         filter: &TransactionFilter,
     ) -> Result<StreamPage<v2::ExecutedTransaction>, RpcError> {
         // Extract the cursor and pass through to grpc.
-        let after_token = page.after().map(|c| CursorToken::from(&**c));
-        let after = after_token.as_ref().map(CursorToken::encode);
+        let after = page.after().map(|c| CursorToken::from(&**c).encode());
         // Pg-minted cursors set checkpoint as 0. Substitute the checkpoint with u64::max on the
         // `before` bound to avoid collapsing the checkpoint window.
         let before = page.before().map(|c| {
@@ -473,12 +466,11 @@ impl Transaction {
 
         let mut request = v2::ListTransactionsRequest::default();
         request.read_mask = Some(CheckpointedTransaction::read_mask());
-        let start_checkpoint = match cp_bounds.start_bound() {
+        request.start_checkpoint = match cp_bounds.start_bound() {
             Bound::Included(&s) => Some(s),
             Bound::Excluded(&s) => Some(s.saturating_add(1)),
             Bound::Unbounded => None,
         };
-        request.start_checkpoint = start_checkpoint;
         request.end_checkpoint = match cp_bounds.end_bound() {
             Bound::Included(&e) => Some(e.saturating_add(1)),
             Bound::Excluded(&e) => Some(e),
@@ -491,7 +483,7 @@ impl Transaction {
             .list_transactions(request)
             .await
             .context("Failed to list transactions")
-            .map_err(|e| ledger_error(e, start_checkpoint, after_token.as_ref()))
+            .map_err(ledger_error)
     }
 }
 
@@ -1538,10 +1530,7 @@ mod tests {
     /// for an open start is left out, so the fullnode clamps it instead of rejecting it.
     #[tokio::test]
     async fn paginate_grpc_out_of_range_by_direction() {
-        let (ledger, reader) = FailingLedger::start(tonic::Status::out_of_range(
-            "requested data below earliest available; lowest available checkpoint is 42",
-        ))
-        .await;
+        let (ledger, reader) = FailingLedger::start(42).await;
         let limits = PageLimits {
             default: 10,
             max: 10,
@@ -1578,7 +1567,7 @@ mod tests {
                 .err()
                 .expect("an out-of-range scan should fail");
 
-            let err = async_graphql::Error::from(resolve_ledger_out_of_range(err, 42));
+            let err = async_graphql::Error::from(err);
             let ext = err.extensions.as_ref().expect("No extensions");
             assert_eq!(ext.get("code"), Some(&expected.into()), "{}", err.message);
             if expected == code::OUT_OF_RANGE {
