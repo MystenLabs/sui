@@ -77,7 +77,7 @@ fn verify_signature(
         }
     };
 
-    if let Some(address) = request
+    let address = request
         .address
         .map(|address| address.parse::<sui_sdk_types::Address>())
         .transpose()
@@ -85,65 +85,45 @@ fn verify_signature(
             FieldViolation::new("address")
                 .with_description(format!("invalid address: {e}"))
                 .with_reason(ErrorReason::FieldInvalid)
-        })?
-    {
-        //TODO add function in sui_sdk_types crate to do this
-        let derived_addresses = match &signature {
-            sui_sdk_types::UserSignature::Simple(simple_signature) => match simple_signature {
-                sui_sdk_types::SimpleSignature::Ed25519 { public_key, .. } => {
-                    [Some(public_key.derive_address()), None]
-                }
-                sui_sdk_types::SimpleSignature::Secp256k1 { public_key, .. } => {
-                    [Some(public_key.derive_address()), None]
-                }
-                sui_sdk_types::SimpleSignature::Secp256r1 { public_key, .. } => {
-                    [Some(public_key.derive_address()), None]
-                }
-                sui_sdk_types::SimpleSignature::MlDsa65 { public_key, .. } => {
-                    [Some(public_key.derive_address()), None]
-                }
-                _ => {
-                    return Err(RpcError::new(
-                        tonic::Code::Internal,
-                        "unknown signature scheme",
-                    ));
-                }
-            },
-            sui_sdk_types::UserSignature::Multisig(multisig) => {
-                [Some(multisig.committee().derive_address()), None]
-            }
-            sui_sdk_types::UserSignature::ZkLogin(z) => {
-                let id = z.inputs.public_identifier();
-                [
-                    Some(id.derive_address_padded()),
-                    Some(id.derive_address_unpadded()),
-                ]
-            }
-            sui_sdk_types::UserSignature::Passkey(p) => {
-                [Some(p.public_key().derive_address()), None]
-            }
-            _ => {
-                return Err(RpcError::new(
-                    tonic::Code::Internal,
-                    "unknown signature scheme",
-                ));
-            }
-        };
+        })?;
 
+    let check_address_aliases = request.check_address_aliases.unwrap_or(false);
+    if check_address_aliases && address.is_none() {
+        return Err(FieldViolation::new("address")
+            .with_description("address is required when check_address_aliases is true")
+            .with_reason(ErrorReason::FieldMissing)
+            .into());
+    }
+
+    let mut message = VerifySignatureResponse::default();
+    // Lets clients detect older servers that ignore `check_address_aliases`.
+    if check_address_aliases {
+        message.address_aliases_checked = Some(true);
+    }
+
+    if let Some(address) = address {
+        let derived_addresses = derived_addresses(&signature)?;
         let first_derived_address = derived_addresses[0].unwrap();
 
-        // If none of the possible derived addresses match we need to return that this is invalid
+        let authorized_addresses = if check_address_aliases {
+            current_address_aliases(service, address)?
+        } else {
+            vec![address]
+        };
+
         if !derived_addresses
             .into_iter()
             .flatten()
-            .any(|derived_address| derived_address == address)
+            .any(|derived_address| authorized_addresses.contains(&derived_address))
         {
-            let mut message = VerifySignatureResponse::default();
             message.is_valid = Some(false);
-            message.reason = Some(format!(
-                "provided address `{}` does not match derived address `{}`",
-                address, first_derived_address
-            ));
+            message.reason = Some(if check_address_aliases {
+                format!("derived address `{first_derived_address}` is not an alias of `{address}`")
+            } else {
+                format!(
+                    "provided address `{address}` does not match derived address `{first_derived_address}`"
+                )
+            });
             return Ok(message);
         }
     }
@@ -154,7 +134,6 @@ fn verify_signature(
         verifier.with_zklogin_verifier(build_zklogin_verifier(service, &request.jwks)?);
     }
 
-    let mut message = VerifySignatureResponse::default();
     match verifier.verify(&signing_digest, &signature) {
         Ok(()) => message.is_valid = Some(true),
         Err(error) => {
@@ -164,6 +143,88 @@ fn verify_signature(
     }
 
     Ok(message)
+}
+
+fn derived_addresses(
+    signature: &sui_sdk_types::UserSignature,
+) -> Result<[Option<sui_sdk_types::Address>; 2]> {
+    //TODO add function in sui_sdk_types crate to do this
+    let derived_addresses = match signature {
+        sui_sdk_types::UserSignature::Simple(simple_signature) => match simple_signature {
+            sui_sdk_types::SimpleSignature::Ed25519 { public_key, .. } => {
+                [Some(public_key.derive_address()), None]
+            }
+            sui_sdk_types::SimpleSignature::Secp256k1 { public_key, .. } => {
+                [Some(public_key.derive_address()), None]
+            }
+            sui_sdk_types::SimpleSignature::Secp256r1 { public_key, .. } => {
+                [Some(public_key.derive_address()), None]
+            }
+            sui_sdk_types::SimpleSignature::MlDsa65 { public_key, .. } => {
+                [Some(public_key.derive_address()), None]
+            }
+            _ => {
+                return Err(RpcError::new(
+                    tonic::Code::Internal,
+                    "unknown signature scheme",
+                ));
+            }
+        },
+        sui_sdk_types::UserSignature::Multisig(multisig) => {
+            [Some(multisig.committee().derive_address()), None]
+        }
+        sui_sdk_types::UserSignature::ZkLogin(z) => {
+            let id = z.inputs.public_identifier();
+            [
+                Some(id.derive_address_padded()),
+                Some(id.derive_address_unpadded()),
+            ]
+        }
+        sui_sdk_types::UserSignature::Passkey(p) => [Some(p.public_key().derive_address()), None],
+        _ => {
+            return Err(RpcError::new(
+                tonic::Code::Internal,
+                "unknown signature scheme",
+            ));
+        }
+    };
+    Ok(derived_addresses)
+}
+
+/// A configured alias set replaces `address`; without one, `address` is its own sole alias.
+fn current_address_aliases(
+    service: &RpcService,
+    address: sui_sdk_types::Address,
+) -> Result<Vec<sui_sdk_types::Address>> {
+    if !current_protocol_config(service)?.address_aliases() {
+        return Ok(vec![address]);
+    }
+
+    let Some(aliases) = service.reader.get_address_aliases(address.into())? else {
+        return Ok(vec![address]);
+    };
+
+    Ok(aliases
+        .aliases
+        .contents
+        .into_iter()
+        .map(sui_sdk_types::Address::from)
+        .collect())
+}
+
+fn current_protocol_config(service: &RpcService) -> Result<ProtocolConfig> {
+    let chain = service.chain_id().chain();
+    let system_state = service.reader.get_system_state_summary()?;
+    ProtocolConfig::get_for_version_if_supported(system_state.protocol_version.into(), chain)
+        .ok_or_else(|| {
+            RpcError::new(
+                tonic::Code::Internal,
+                format!(
+                    "protocol version {} is not supported",
+                    system_state.protocol_version
+                ),
+            )
+        })
 }
 
 fn signature_may_contain_zklogin(signature: &sui_sdk_types::UserSignature) -> bool {
@@ -223,31 +284,19 @@ fn build_zklogin_verifier(
         sui_protocol_config::Chain::Unknown => sui_crypto::zklogin::ZkloginVerifier::new_dev(),
     };
 
-    // Get circuit mode from protocol config and set to verifier.
-    let system_state = service.reader.get_system_state_summary()?;
-    let circuit_mode =
-        ProtocolConfig::get_for_version_if_supported(system_state.protocol_version.into(), chain)
-            .map(|config| config.zklogin_circuit_mode());
-    zklogin_verifier.set_circuit_mode(match circuit_mode {
-        Some(0) => ZkLoginCircuitMode::V1Only,
-        Some(1) => ZkLoginCircuitMode::Both,
-        Some(2) => ZkLoginCircuitMode::V2Only,
-        None => {
-            return Err(RpcError::new(
-                tonic::Code::Internal,
-                format!(
-                    "protocol version {} is not supported",
-                    system_state.protocol_version
-                ),
-            ));
-        }
-        Some(mode) => {
-            return Err(RpcError::new(
-                tonic::Code::Internal,
-                format!("invalid zklogin circuit mode in protocol config: {mode}"),
-            ));
-        }
-    });
+    zklogin_verifier.set_circuit_mode(
+        match current_protocol_config(service)?.zklogin_circuit_mode() {
+            0 => ZkLoginCircuitMode::V1Only,
+            1 => ZkLoginCircuitMode::Both,
+            2 => ZkLoginCircuitMode::V2Only,
+            mode => {
+                return Err(RpcError::new(
+                    tonic::Code::Internal,
+                    format!("invalid zklogin circuit mode in protocol config: {mode}"),
+                ));
+            }
+        },
+    );
     *zklogin_verifier.jwks_mut() = jwks;
     Ok(zklogin_verifier)
 }
