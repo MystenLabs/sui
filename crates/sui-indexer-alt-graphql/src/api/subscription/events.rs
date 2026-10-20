@@ -48,7 +48,7 @@ impl Subscribable for Event {
         page: &'a Page<CEvent>,
         filter: &'a EventFilter,
     ) -> impl Future<Output = Result<StreamPage<v2::Event>, RpcError>> + Send + 'a {
-        Event::scan_grpc(reader, cp_bounds, page, filter)
+        Event::scan_grpc(reader, cp_bounds, page, page.limit(), filter)
     }
 
     fn build_node(

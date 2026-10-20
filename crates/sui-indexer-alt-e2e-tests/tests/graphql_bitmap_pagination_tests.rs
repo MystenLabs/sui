@@ -290,6 +290,51 @@ async fn transactions_page(
         .collect()
 }
 
+/// One page of `checkpoint(sequenceNumber: 1) { transactions }`: the edges' digests in emission
+/// order, and the page info.
+async fn checkpoint_transactions_page(
+    cluster: &OffchainCluster,
+    first: Option<usize>,
+    after: Option<String>,
+    last: Option<usize>,
+    before: Option<String>,
+) -> (Vec<String>, Value) {
+    let query = r#"query($first: Int, $after: String, $last: Int, $before: String) {
+        checkpoint(sequenceNumber: 1) {
+            transactions(first: $first, after: $after, last: $last, before: $before) {
+                edges { node { digest } }
+                pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
+            }
+        }
+    }"#;
+
+    let resp = graphql(
+        cluster,
+        query,
+        json!({ "first": first, "after": after, "last": last, "before": before }),
+    )
+    .await;
+
+    let digests = resp
+        .pointer("/checkpoint/transactions/edges")
+        .and_then(Value::as_array)
+        .unwrap_or_else(|| panic!("expected edges array in {resp}"))
+        .iter()
+        .map(|e| {
+            e["node"]["digest"]
+                .as_str()
+                .expect("edge node digest")
+                .to_string()
+        })
+        .collect();
+    let page_info = resp
+        .pointer("/checkpoint/transactions/pageInfo")
+        .cloned()
+        .unwrap_or_else(|| panic!("expected pageInfo in {resp}"));
+
+    (digests, page_info)
+}
+
 /// Re-encode a transactions cursor with its checkpoint hint replaced,
 /// mimicking position-only cursor sources (e.g. graphql's pg path) that
 /// synthesize a hint instead of carrying a real one.
@@ -426,6 +471,71 @@ async fn opaque_cursor_round_trips_across_pages() {
 
     assert_eq!(forward, expected);
     assert_eq!(backward, expected);
+}
+
+/// A page that exactly fits the remaining transactions reports no further page in its direction:
+/// filling the requested page size alone does not prove that more data exists. Smaller pages
+/// report a further page only while one exists, and their boundary cursors resume without
+/// skipping a transaction.
+#[tokio::test]
+async fn exact_fit_page_reports_no_further_page() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let mut builder = TestCheckpointBuilder::new(1).with_network_total_transactions(1);
+    for i in 0..3u64 {
+        builder = builder
+            .start_transaction(1)
+            .create_owned_object(i)
+            .finish_transaction();
+    }
+    let checkpoint = builder.build_checkpoint();
+    let expected: Vec<String> = checkpoint
+        .transactions
+        .iter()
+        .map(|tx| Base58::encode(tx.transaction.digest()))
+        .collect();
+    assert_eq!(expected.len(), 3);
+    write_checkpoint(temp_dir.path(), checkpoint).await.unwrap();
+
+    cluster
+        .wait_for_graphql(1, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 1");
+
+    let (page, info) = checkpoint_transactions_page(&cluster, Some(3), None, None, None).await;
+    assert_eq!(page, expected);
+    assert_eq!(info["hasNextPage"], json!(false), "first: 3 of 3: {info}");
+
+    let (page, info) = checkpoint_transactions_page(&cluster, None, None, Some(3), None).await;
+    assert_eq!(page, expected);
+    assert_eq!(
+        info["hasPreviousPage"],
+        json!(false),
+        "last: 3 of 3: {info}"
+    );
+
+    let (page, info) = checkpoint_transactions_page(&cluster, Some(2), None, None, None).await;
+    assert_eq!(page, expected[..2]);
+    assert_eq!(info["hasNextPage"], json!(true), "first: 2 of 3: {info}");
+    let after = info["endCursor"].as_str().map(String::from);
+    let (page, info) = checkpoint_transactions_page(&cluster, Some(2), after, None, None).await;
+    assert_eq!(page, expected[2..]);
+    assert_eq!(
+        info["hasNextPage"],
+        json!(false),
+        "first: 2 after 2 of 3: {info}"
+    );
+
+    let (page, info) = checkpoint_transactions_page(&cluster, None, None, Some(2), None).await;
+    assert_eq!(page, expected[1..]);
+    assert_eq!(info["hasPreviousPage"], json!(true), "last: 2 of 3: {info}");
+    let before = info["startCursor"].as_str().map(String::from);
+    let (page, info) = checkpoint_transactions_page(&cluster, None, None, Some(2), before).await;
+    assert_eq!(page, expected[..1]);
+    assert_eq!(
+        info["hasPreviousPage"],
+        json!(false),
+        "last: 2 before 2 of 3: {info}"
+    );
 }
 
 /// A transactions cursor's checkpoint is a hint: the grpc scan window is driven by the tx_seq

@@ -420,19 +420,27 @@ impl Transaction {
             return Ok(Connection::new(false, false).into());
         };
 
-        let result = Self::scan_grpc(reader, cp_bounds, &page, &filter).await?;
+        let result = Self::scan_grpc(
+            reader,
+            cp_bounds,
+            &page,
+            page.limit_with_lookahead(),
+            &filter,
+        )
+        .await?;
 
         build_grpc_connection(scope, &page, result)
     }
 
-    /// Scan a page of transactions over the checkpoint range `cp_bounds` via the streaming gRPC
-    /// List API. Computing checkpoint bounds is the caller's responsibility; an unbounded end
-    /// scans forward to whatever is indexed. Items are returned in scan order (descending when
-    /// paginating from the back).
+    /// Scan up to `limit` transactions from `page`'s cursors over the checkpoint range `cp_bounds`
+    /// via the streaming gRPC List API. Computing checkpoint bounds is the caller's responsibility;
+    /// an unbounded end scans forward to whatever is indexed. Items are returned in scan order
+    /// (descending when paginating from the back).
     pub(crate) async fn scan_grpc(
         reader: &AlphaLedgerGrpcReader,
         cp_bounds: impl RangeBounds<u64>,
         page: &Page<CTransaction>,
+        limit: usize,
         filter: &TransactionFilter,
     ) -> Result<StreamPage<v2::ExecutedTransaction>, RpcError> {
         // Extract the cursor and pass through to grpc.
@@ -448,7 +456,7 @@ impl Transaction {
         });
 
         let mut options = v2::QueryOptions::default();
-        options.limit = Some(page.limit() as u32);
+        options.limit = Some(limit as u32);
         options.after = after;
         options.before = before;
         options.ordering = Some(if page.is_from_front() {
@@ -1300,8 +1308,10 @@ mod tests {
         );
     }
 
+    /// A server that capped the requested limit at its own maximum ends a full page at
+    /// `ItemLimit` without returning the lookahead item, so more data may still exist.
     #[test]
-    fn build_grpc_connection_full_page_at_item_limit_signals_more() {
+    fn build_grpc_connection_capped_item_limit_signals_more() {
         let scope = Scope::for_tests();
         let page = forward_page(3);
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
@@ -1328,8 +1338,62 @@ mod tests {
         assert_eq!(conn.edges.len(), 3);
         assert!(
             conn.page_info.has_next_page,
-            "full page + ItemLimit must report hasNextPage: true (has_more() is true)"
+            "full page + ItemLimit without the lookahead item must report hasNextPage: true"
         );
+    }
+
+    /// The lookahead item proves that a further page exists. It is dropped, and the page ends on
+    /// the last kept item so that resuming from `endCursor` returns the dropped item next.
+    #[test]
+    fn build_grpc_connection_forward_lookahead_item_dropped() {
+        let scope = Scope::for_tests();
+        let page = forward_page(2);
+        let item = |tx_seq| {
+            CursorToken::item(Position::Transactions {
+                checkpoint: 1,
+                tx_seq,
+            })
+        };
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(item(1)), tx_item(item(2)), tx_item(item(3))],
+            None,
+            None,
+            Some(v2::QueryEndReason::ItemLimit),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert_eq!(edge_positions(&conn), vec![1, 2]);
+        assert!(!conn.page_info.has_previous_page);
+        assert!(conn.page_info.has_next_page);
+        assert_eq!(conn.page_info.start_cursor, Some(graphql_cursor(item(1))));
+        assert_eq!(conn.page_info.end_cursor, Some(graphql_cursor(item(2))));
+    }
+
+    /// Paginating from the back, the lookahead item is the lowest position (the last one the
+    /// descending stream emitted), and the page starts on the lowest kept item.
+    #[test]
+    fn build_grpc_connection_backward_lookahead_item_dropped() {
+        let scope = Scope::for_tests();
+        let page = backward_page(2);
+        let item = |tx_seq| {
+            CursorToken::item(Position::Transactions {
+                checkpoint: 1,
+                tx_seq,
+            })
+        };
+        let result = StreamPage::<v2::ExecutedTransaction>::for_test(
+            vec![tx_item(item(3)), tx_item(item(2)), tx_item(item(1))],
+            None,
+            None,
+            Some(v2::QueryEndReason::ItemLimit),
+        );
+
+        let conn = build_grpc_connection(scope, &page, result).expect("connection built");
+        assert_eq!(edge_positions(&conn), vec![2, 3]);
+        assert!(conn.page_info.has_previous_page);
+        assert!(!conn.page_info.has_next_page);
+        assert_eq!(conn.page_info.start_cursor, Some(graphql_cursor(item(2))));
+        assert_eq!(conn.page_info.end_cursor, Some(graphql_cursor(item(3))));
     }
 
     /// If watermark cursors and non-empty, expect watermark cursors on the connection.

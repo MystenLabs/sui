@@ -180,6 +180,13 @@ impl<C> Page<C> {
         self.limit() + 2
     }
 
+    /// Returns the limit + 1 to request from a gRPC List stream, so that
+    /// [`Page::paginate_stream_results`] can tell a full page that exhausted its range from one with
+    /// more items behind it.
+    pub(crate) fn limit_with_lookahead(&self) -> usize {
+        self.limit() + 1
+    }
+
     pub(crate) fn is_from_front(&self) -> bool {
         matches!(self.end, End::Front)
     }
@@ -351,19 +358,35 @@ where
     C: CursorType + TryFrom<CursorToken, Error = anyhow::Error>,
 {
     /// Translate a `StreamPage` into a `StreamConnection`. The server is expected to have already
-    /// applied page bounds and limit.
+    /// applied page bounds, and the request to have asked for [`Page::limit_with_lookahead`] items.
+    ///
+    /// If the lookahead item came back, it is dropped and the page reports more data in the
+    /// direction of pagination, with that boundary on the last kept item. Otherwise the stream's
+    /// end reason decides. A stream that returned at most `limit` items only ends at `ItemLimit`
+    /// when the server capped the requested limit at its own maximum, so more data may still
+    /// exist.
     ///
     /// `node` converts one stream payload into the connection's node type; cursors are minted
     /// here, from the server's per-item tokens. Edges are returned in ascending order (the stream
     /// emits descending order when paginating from the back).
     pub(crate) fn paginate_stream_results<T, N: OutputType>(
         &self,
-        result: StreamPage<T>,
+        mut result: StreamPage<T>,
         node: impl Fn(&T) -> Result<N, RpcError>,
     ) -> Result<StreamConnection<N>, RpcError> {
-        let more = result.has_more();
-        let start = result.first_cursor().cloned();
-        let end = result.last_cursor().cloned();
+        let (more, start, end) = if result.items.len() > self.limit() {
+            result.items.truncate(self.limit());
+            // Neither the dropped item's cursor nor a watermark after it can bound the page: the
+            // next page would resume past the dropped item and skip it.
+            let end = result.items.last().map(|item| item.cursor.clone());
+            (true, result.first_cursor().cloned(), end)
+        } else {
+            (
+                result.has_more(),
+                result.first_cursor().cloned(),
+                result.last_cursor().cloned(),
+            )
+        };
         let mut items = result.items;
 
         let (has_previous_page, has_next_page, start, end) = if self.is_from_front() {
