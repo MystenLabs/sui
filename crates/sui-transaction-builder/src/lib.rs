@@ -577,16 +577,8 @@ impl TransactionBuilder {
                 .pure(upgrade_cap_policy.base_policy() as u8)
                 .unwrap();
             let digest_arg = builder.pure(digest).unwrap();
-            let minversion_authorization =
-                (upgrade_cap_policy.minversion_state() == MinVersionState::Enabled).then(|| {
-                    builder.programmable_move_call(
-                        SUI_FRAMEWORK_PACKAGE_ID,
-                        ident_str!("package").to_owned(),
-                        ident_str!("prepare_minversion_upgrade").to_owned(),
-                        vec![],
-                        vec![capability_arg],
-                    )
-                });
+            let minversion_enabled =
+                upgrade_cap_policy.minversion_state() == MinVersionState::Enabled;
             let upgrade_ticket = builder.programmable_move_call(
                 SUI_FRAMEWORK_PACKAGE_ID,
                 ident_str!("package").to_owned(),
@@ -596,10 +588,7 @@ impl TransactionBuilder {
             );
             let upgrade_receipt = builder.upgrade(package_id, upgrade_ticket, dep_ids, modules);
 
-            // Enrolled caps cannot use `commit_upgrade`: their upgrade must produce a
-            // minversion token and record the new selection in the shared package config.
-            // Available and permanently-disabled caps retain the ordinary commit path below.
-            if let Some(minversion_authorization) = minversion_authorization {
+            if minversion_enabled {
                 let package_config = self.0.get_object(SUI_PACKAGE_CONFIG_OBJECT_ID).await?;
                 let package_config_arg = match package_config.owner() {
                     Owner::Shared {
@@ -612,29 +601,21 @@ impl TransactionBuilder {
                     _ => bail!("Package config object is not shared"),
                 };
                 let package_config_arg = builder.obj(package_config_arg).unwrap();
-                let minversion_upgrade = builder.programmable_move_call(
-                    SUI_FRAMEWORK_PACKAGE_ID,
-                    ident_str!("package").to_owned(),
-                    ident_str!("commit_minversion_upgrade").to_owned(),
-                    vec![],
-                    vec![capability_arg, upgrade_receipt, minversion_authorization],
-                );
                 builder.programmable_move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
                     ident_str!("package_config").to_owned(),
                     ident_str!("record_minversion_upgrade").to_owned(),
                     vec![],
-                    vec![package_config_arg, minversion_upgrade],
-                );
-            } else {
-                builder.programmable_move_call(
-                    SUI_FRAMEWORK_PACKAGE_ID,
-                    ident_str!("package").to_owned(),
-                    ident_str!("commit_upgrade").to_owned(),
-                    vec![],
-                    vec![capability_arg, upgrade_receipt],
+                    vec![package_config_arg, capability_arg, upgrade_receipt],
                 );
             }
+            builder.programmable_move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                ident_str!("package").to_owned(),
+                ident_str!("commit_upgrade").to_owned(),
+                vec![],
+                vec![capability_arg, upgrade_receipt],
+            );
 
             builder.finish()
         };

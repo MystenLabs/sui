@@ -1796,15 +1796,6 @@ impl SuiTestAdapter {
         )
         .into();
         let digest_arg = builder.pure(digest).unwrap();
-        let minversion_authorization = minversion.then(|| {
-            builder.programmable_move_call(
-                SUI_FRAMEWORK_PACKAGE_ID,
-                ident_str!("package").to_owned(),
-                ident_str!("prepare_minversion_upgrade").to_owned(),
-                vec![],
-                vec![upgrade_capability],
-            )
-        });
 
         let upgrade_ticket = builder.programmable_move_call(
             SUI_FRAMEWORK_PACKAGE_ID,
@@ -1818,39 +1809,27 @@ impl SuiTestAdapter {
         let upgrade_receipt =
             builder.upgrade(package_id, upgrade_ticket, dependencies, modules_bytes);
 
-        if let Some(minversion_authorization) = minversion_authorization {
+        if minversion {
             let package_config = SuiValue::Object(
                 FakeID::Known(SUI_PACKAGE_CONFIG_OBJECT_ID),
                 None,
             )
             .into_argument(&mut builder, self, sender_address)?;
-            let minversion_upgrade = builder.programmable_move_call(
-                SUI_FRAMEWORK_PACKAGE_ID,
-                ident_str!("package").to_owned(),
-                ident_str!("commit_minversion_upgrade").to_owned(),
-                vec![],
-                vec![
-                    upgrade_capability,
-                    upgrade_receipt,
-                    minversion_authorization,
-                ],
-            );
             builder.programmable_move_call(
                 SUI_FRAMEWORK_PACKAGE_ID,
                 ident_str!("package_config").to_owned(),
                 ident_str!("record_minversion_upgrade").to_owned(),
                 vec![],
-                vec![package_config, minversion_upgrade],
-            );
-        } else {
-            builder.programmable_move_call(
-                SUI_FRAMEWORK_PACKAGE_ID,
-                ident_str!("package").to_owned(),
-                ident_str!("commit_upgrade").to_owned(),
-                vec![],
-                vec![upgrade_capability, upgrade_receipt],
+                vec![package_config, upgrade_capability, upgrade_receipt],
             );
         }
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            ident_str!("package").to_owned(),
+            ident_str!("commit_upgrade").to_owned(),
+            vec![],
+            vec![upgrade_capability, upgrade_receipt],
+        );
 
         let pt = builder.finish();
         let expiration = if address_balance_gas {
