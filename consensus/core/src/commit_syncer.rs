@@ -983,7 +983,7 @@ mod tests {
             unimplemented!("Unimplemented")
         }
 
-        #[cfg(test)]
+        #[cfg(all(test, not(msim)))]
         async fn send_block(
             &self,
             _peer: AuthorityIndex,

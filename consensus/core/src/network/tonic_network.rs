@@ -379,7 +379,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         Ok((response.highest_received, response.highest_accepted))
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, not(msim)))]
     async fn send_block(
         &self,
         peer: AuthorityIndex,
