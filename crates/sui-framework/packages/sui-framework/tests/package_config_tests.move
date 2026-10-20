@@ -31,7 +31,7 @@ fun test_minversion_enrollment_records_current_package() {
     let enrollment = cap.enable_minversion_for_testing(PACKAGE_A.to_id());
     config.record_minversion_enrollment(enrollment, scenario.ctx());
 
-    assert!(cap.minversion_enabled());
+    assert!(cap.minversion_permanently_enabled());
     assert!(config
         .minversion_version_for_testing(PACKAGE_A.to_id())
         .destroy_some() == 1);
@@ -52,9 +52,9 @@ fun test_restrict_preserves_enabled_minversion() {
     let enrollment = cap.enable_minversion_for_testing(PACKAGE_A.to_id());
     config.record_minversion_enrollment(enrollment, scenario.ctx());
     cap.only_additive_upgrades();
-    assert!(cap.minversion_enabled());
+    assert!(cap.minversion_permanently_enabled());
     cap.only_dep_upgrades();
-    assert!(cap.minversion_enabled());
+    assert!(cap.minversion_permanently_enabled());
 
     cap.make_immutable();
     end(config, scenario);
@@ -82,7 +82,7 @@ fun test_minversion_upgrade_preserves_original_identity_across_authorization() {
 }
 
 #[test]
-fun test_minversion_upgrade_can_forbid_previous_version() {
+fun test_minversion_upgrade_can_forbid_previous_versions() {
     let mut scenario = ts::begin(SENDER);
     let mut config = new_config(&mut scenario);
     let mut cap = package::test_publish(PACKAGE_A.to_id(), scenario.ctx());
@@ -93,12 +93,18 @@ fun test_minversion_upgrade_can_forbid_previous_version() {
     let ticket = cap.authorize_upgrade(package::compatible_policy(), b"digest");
     let receipt = ticket.test_upgrade();
     let upgrade = cap.commit_minversion_upgrade_for_testing(receipt, PACKAGE_A.to_id());
-    config.record_minversion_upgrade_and_forbid_previous(upgrade, scenario.ctx());
+    config.record_minversion_upgrade_and_forbid_previous_versions(upgrade, scenario.ctx());
+
+    let ticket = cap.authorize_upgrade(package::compatible_policy(), b"digest");
+    let receipt = ticket.test_upgrade();
+    let upgrade = cap.commit_minversion_upgrade_for_testing(receipt, PACKAGE_A.to_id());
+    config.record_minversion_upgrade_and_forbid_previous_versions(upgrade, scenario.ctx());
 
     assert!(config
         .minversion_version_for_testing(PACKAGE_A.to_id())
-        .destroy_some() == 2);
+        .destroy_some() == 3);
     assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 1));
+    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 2));
 
     cap.make_immutable();
     end(config, scenario);
