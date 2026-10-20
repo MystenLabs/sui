@@ -1,0 +1,48 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+// Enrollment and a minversion upgrade can occur in one PTB. The recorded enrollment establishes
+// the v1 selection before the normal authorize/Upgrade/record/commit sequence advances it to v2.
+
+init:
+A: object(0,0)
+
+task 1, lines 9-11:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5137600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 18-25:
+// Enrollment cannot begin after authorization has cleared the cap's package ID. The failed PTB
+// rolls back authorization, so the following PTB can enroll and upgrade successfully.
+//# programmable --sender A --inputs object(1,1) object(0xcf6) 0u8 digest(BaseV2)
+//> 0: sui::package::authorize_upgrade(Input(0), Input(2), Input(3));
+//> 1: Upgrade(BaseV2, [sui,std], BaseV1, Result(0));
+//> 2: sui::package::enable_minversion_permanently(Input(0));
+//> 3: sui::package_config::record_minversion_enrollment(Input(1), Result(2));
+//> sui::package::commit_upgrade(Input(0), Result(1));
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::package::original_package_id (function index 34) at offset 12, Abort Code: 5
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("package") }, function: 34, instruction: 12, function_name: Some("original_package_id") }, 5) at command Some(2)
+
+task 4, lines 27-33:
+//# programmable --sender A --inputs object(1,1) object(0xcf6) 0u8 digest(BaseV2)
+//> 0: sui::package::enable_minversion_permanently(Input(0));
+//> 1: sui::package_config::record_minversion_enrollment(Input(1), Result(0));
+//> 2: sui::package::authorize_upgrade(Input(0), Input(2), Input(3));
+//> 3: Upgrade(BaseV2, [sui,std], BaseV1, Result(2));
+//> 4: sui::package_config::record_minversion_upgrade(Input(1), Input(0), Result(3));
+//> sui::package::commit_upgrade(Input(0), Result(3));
+created: object(4,0), object(4,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 10374000,  storage_rebate: 4019998, non_refundable_storage_fee: 402
+
+task 5, lines 35-36:
+// The historical v1 reference selects v2 after the PTB commits.
+//# run BaseV1::base::ping --sender A
+events: Event { package_id: fake(4,0), transaction_module: Identifier("base"), sender: A, type_: StructTag { address: fake(4,0), module: Identifier("base"), name: Identifier("Ping"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000cf6
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 987901, non_refundable_storage_fee: 99
