@@ -68,11 +68,14 @@ fun test_minversion_upgrade_preserves_original_identity_across_authorization() {
 
     let enrollment = cap.enable_minversion_for_testing(PACKAGE_A.to_id());
     config.record_minversion_enrollment(enrollment, scenario.ctx());
-    let authorization = cap.prepare_minversion_upgrade();
-    let ticket = cap.authorize_upgrade(package::compatible_policy(), b"digest");
+    let ticket = cap.authorize_upgrade_for_testing(
+        PACKAGE_A.to_id(),
+        package::compatible_policy(),
+        b"digest",
+    );
     let receipt = ticket.test_upgrade();
-    let upgrade = cap.commit_minversion_upgrade(receipt, authorization);
-    config.record_minversion_upgrade(upgrade, scenario.ctx());
+    config.record_minversion_upgrade(&cap, &receipt, scenario.ctx());
+    cap.commit_upgrade(receipt);
 
     assert!(config
         .minversion_version_for_testing(PACKAGE_A.to_id())
@@ -90,15 +93,31 @@ fun test_minversion_upgrade_can_forbid_previous_versions() {
     let enrollment = cap.enable_minversion_for_testing(PACKAGE_A.to_id());
     config.record_minversion_enrollment(enrollment, scenario.ctx());
 
-    let ticket = cap.authorize_upgrade(package::compatible_policy(), b"digest");
+    let ticket = cap.authorize_upgrade_for_testing(
+        PACKAGE_A.to_id(),
+        package::compatible_policy(),
+        b"digest",
+    );
     let receipt = ticket.test_upgrade();
-    let upgrade = cap.commit_minversion_upgrade_for_testing(receipt, PACKAGE_A.to_id());
-    config.record_minversion_upgrade_and_forbid_previous_versions(upgrade, scenario.ctx());
+    config.record_minversion_upgrade_and_forbid_previous_versions(
+        &cap,
+        &receipt,
+        scenario.ctx(),
+    );
+    cap.commit_upgrade(receipt);
 
-    let ticket = cap.authorize_upgrade(package::compatible_policy(), b"digest");
+    let ticket = cap.authorize_upgrade_for_testing(
+        PACKAGE_A.to_id(),
+        package::compatible_policy(),
+        b"digest",
+    );
     let receipt = ticket.test_upgrade();
-    let upgrade = cap.commit_minversion_upgrade_for_testing(receipt, PACKAGE_A.to_id());
-    config.record_minversion_upgrade_and_forbid_previous_versions(upgrade, scenario.ctx());
+    config.record_minversion_upgrade_and_forbid_previous_versions(
+        &cap,
+        &receipt,
+        scenario.ctx(),
+    );
+    cap.commit_upgrade(receipt);
 
     assert!(config
         .minversion_version_for_testing(PACKAGE_A.to_id())
@@ -110,8 +129,8 @@ fun test_minversion_upgrade_can_forbid_previous_versions() {
     end(config, scenario);
 }
 
-#[test, expected_failure(abort_code = sui::package::EMinVersionEnabled)]
-fun test_minversion_cap_rejects_ordinary_upgrade_commit() {
+#[test, expected_failure(abort_code = sui::package::EMinVersionUpgradeNotRecorded)]
+fun test_minversion_cap_rejects_unrecorded_upgrade_commit() {
     let mut scenario = ts::begin(SENDER);
     let mut config = new_config(&mut scenario);
     let mut cap = package::test_publish(PACKAGE_A.to_id(), scenario.ctx());
@@ -119,20 +138,127 @@ fun test_minversion_cap_rejects_ordinary_upgrade_commit() {
     let enrollment = cap.enable_minversion_for_testing(PACKAGE_A.to_id());
     config.record_minversion_enrollment(enrollment, scenario.ctx());
 
-    let ticket = cap.authorize_upgrade(package::compatible_policy(), b"digest");
+    let ticket = cap.authorize_upgrade_for_testing(
+        PACKAGE_A.to_id(),
+        package::compatible_policy(),
+        b"digest",
+    );
     let receipt = ticket.test_upgrade();
     cap.commit_upgrade(receipt);
     abort
 }
 
-#[test, expected_failure(abort_code = sui::package::EMinVersionUnavailable)]
-fun test_ordinary_cap_rejects_minversion_upgrade_commit() {
+#[test, expected_failure(abort_code = sui::package::EMinVersionUpgradeAlreadyRecorded)]
+fun test_minversion_upgrade_rejects_duplicate_recording() {
     let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    let mut cap = package::test_publish(PACKAGE_A.to_id(), scenario.ctx());
+
+    let enrollment = cap.enable_minversion_for_testing(PACKAGE_A.to_id());
+    config.record_minversion_enrollment(enrollment, scenario.ctx());
+    let ticket = cap.authorize_upgrade_for_testing(
+        PACKAGE_A.to_id(),
+        package::compatible_policy(),
+        b"digest",
+    );
+    let receipt = ticket.test_upgrade();
+    config.record_minversion_upgrade(&cap, &receipt, scenario.ctx());
+    config.record_minversion_upgrade(&cap, &receipt, scenario.ctx());
+    abort
+}
+
+#[test, expected_failure(abort_code = sui::package::EWrongUpgradeCap)]
+fun test_minversion_upgrade_rejects_wrong_cap() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    let mut cap_a = package::test_publish(PACKAGE_A.to_id(), scenario.ctx());
+    let mut cap_b = package::test_publish(PACKAGE_B.to_id(), scenario.ctx());
+
+    let enrollment = cap_a.enable_minversion_for_testing(PACKAGE_A.to_id());
+    config.record_minversion_enrollment(enrollment, scenario.ctx());
+    let enrollment = cap_b.enable_minversion_for_testing(PACKAGE_B.to_id());
+    config.record_minversion_enrollment(enrollment, scenario.ctx());
+    let ticket = cap_b.authorize_upgrade_for_testing(
+        PACKAGE_B.to_id(),
+        package::compatible_policy(),
+        b"digest",
+    );
+    let receipt = ticket.test_upgrade();
+    config.record_minversion_upgrade(&cap_a, &receipt, scenario.ctx());
+    abort
+}
+
+#[test, expected_failure(abort_code = sui::package_config::EInvalidMinVersionState)]
+fun test_minversion_upgrade_rejects_stale_package_config() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    let mut cap = package::test_publish(PACKAGE_A.to_id(), scenario.ctx());
+
+    let enrollment = cap.enable_minversion_for_testing(PACKAGE_A.to_id());
+    config.record_minversion_enrollment(enrollment, scenario.ctx());
+    config.set_minversion_for_testing(PACKAGE_A.to_id(), 2, PACKAGE_B.to_id());
+    let ticket = cap.authorize_upgrade_for_testing(
+        PACKAGE_A.to_id(),
+        package::compatible_policy(),
+        b"digest",
+    );
+    let receipt = ticket.test_upgrade();
+    config.record_minversion_upgrade(&cap, &receipt, scenario.ctx());
+    abort
+}
+
+#[test]
+fun test_two_minversion_upgrades_in_one_transaction() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    let mut cap_a = package::test_publish(PACKAGE_A.to_id(), scenario.ctx());
+    let mut cap_b = package::test_publish(PACKAGE_B.to_id(), scenario.ctx());
+
+    let enrollment = cap_a.enable_minversion_for_testing(PACKAGE_A.to_id());
+    config.record_minversion_enrollment(enrollment, scenario.ctx());
+    let enrollment = cap_b.enable_minversion_for_testing(PACKAGE_B.to_id());
+    config.record_minversion_enrollment(enrollment, scenario.ctx());
+
+    let receipt_a = cap_a
+        .authorize_upgrade_for_testing(
+            PACKAGE_A.to_id(),
+            package::compatible_policy(),
+            b"digest a",
+        )
+        .test_upgrade();
+    let receipt_b = cap_b
+        .authorize_upgrade_for_testing(
+            PACKAGE_B.to_id(),
+            package::compatible_policy(),
+            b"digest b",
+        )
+        .test_upgrade();
+    config.record_minversion_upgrade(&cap_a, &receipt_a, scenario.ctx());
+    config.record_minversion_upgrade(&cap_b, &receipt_b, scenario.ctx());
+    cap_a.commit_upgrade(receipt_a);
+    cap_b.commit_upgrade(receipt_b);
+
+    assert!(config
+        .minversion_version_for_testing(PACKAGE_A.to_id())
+        .destroy_some() == 2);
+    assert!(config
+        .minversion_version_for_testing(PACKAGE_B.to_id())
+        .destroy_some() == 2);
+
+    cap_a.make_immutable();
+    cap_b.make_immutable();
+    end(config, scenario);
+}
+
+#[test, expected_failure(abort_code = sui::package::EMinVersionUnavailable)]
+fun test_ordinary_cap_rejects_minversion_upgrade_recording() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
     let mut cap = package::test_publish(PACKAGE_A.to_id(), scenario.ctx());
 
     let ticket = cap.authorize_upgrade(package::compatible_policy(), b"digest");
     let receipt = ticket.test_upgrade();
-    let _upgrade = cap.commit_minversion_upgrade_for_testing(receipt, PACKAGE_A.to_id());
+    config.record_minversion_upgrade(&cap, &receipt, scenario.ctx());
     abort
 }
 

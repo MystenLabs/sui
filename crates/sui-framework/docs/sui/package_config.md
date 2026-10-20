@@ -26,7 +26,8 @@ PackageConfig
 -  [Function `record_minversion_upgrade_and_forbid_previous_versions`](#sui_package_config_record_minversion_upgrade_and_forbid_previous_versions)
 -  [Function `create`](#sui_package_config_create)
 -  [Function `is_forbidden_value`](#sui_package_config_is_forbidden_value)
--  [Function `record_minversion_impl`](#sui_package_config_record_minversion_impl)
+-  [Function `record_minversion_upgrade_impl`](#sui_package_config_record_minversion_upgrade_impl)
+-  [Function `replace_minversion`](#sui_package_config_replace_minversion)
 -  [Function `cap_package_info`](#sui_package_config_cap_package_info)
 -  [Function `assert_historical_version`](#sui_package_config_assert_historical_version)
 -  [Function `forbid_version_impl`](#sui_package_config_forbid_version_impl)
@@ -36,6 +37,7 @@ PackageConfig
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
 <b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
 <b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/internal.md#std_internal">std::internal</a>;
 <b>use</b> <a href="../std/option.md#std_option">std::option</a>;
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
@@ -46,6 +48,7 @@ PackageConfig
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/package.md#sui_package">sui::package</a>;
 <b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
+<b>use</b> <a href="../sui/scratch.md#sui_scratch">sui::scratch</a>;
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
 <b>use</b> <a href="../sui/types.md#sui_types">sui::types</a>;
@@ -204,6 +207,15 @@ The package version selected by minversion.
 
 
 
+<a name="sui_package_config_EInvalidMinVersionState"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/package_config.md#sui_package_config_EInvalidMinVersionState">EInvalidMinVersionState</a>: u64 = 3;
+</code></pre>
+
+
+
 <a name="sui_package_config_VERSION_FORBIDDEN"></a>
 
 
@@ -331,7 +343,9 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
     _ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> (original_id, version, package_id) = <a href="../sui/package.md#sui_package_minversion_enrollment_info">package::minversion_enrollment_info</a>(enrollment);
-    <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_record_minversion_impl">record_minversion_impl</a>(original_id, version, package_id);
+    <b>let</b> old = <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_replace_minversion">replace_minversion</a>(original_id, version, package_id);
+    <b>assert</b>!(old.is_none(), <a href="../sui/package_config.md#sui_package_config_EInvalidMinVersionState">EInvalidMinVersionState</a>);
+    old.destroy_none();
 }
 </code></pre>
 
@@ -345,7 +359,7 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade">record_minversion_upgrade</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, upgrade: <a href="../sui/package.md#sui_package_MinVersionUpgrade">sui::package::MinVersionUpgrade</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade">record_minversion_upgrade</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, receipt: &<a href="../sui/package.md#sui_package_UpgradeReceipt">sui::package::UpgradeReceipt</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -356,12 +370,18 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade">record_minversion_upgrade</a>(
     <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
-    upgrade: MinVersionUpgrade,
+    cap: &UpgradeCap,
+    receipt: &UpgradeReceipt,
     _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> (original_id, _previous_version, version, package_id) =
-        <a href="../sui/package.md#sui_package_minversion_upgrade_info">package::minversion_upgrade_info</a>(upgrade);
-    <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_record_minversion_impl">record_minversion_impl</a>(original_id, version, package_id);
+    <b>let</b> (original_id, previous_version, previous_package_id, package_id) =
+        <a href="../sui/package.md#sui_package_record_minversion_upgrade_info">package::record_minversion_upgrade_info</a>(cap, receipt);
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade_impl">record_minversion_upgrade_impl</a>(
+        original_id,
+        previous_version,
+        previous_package_id,
+        package_id,
+    );
 }
 </code></pre>
 
@@ -375,7 +395,7 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade_and_forbid_previous_versions">record_minversion_upgrade_and_forbid_previous_versions</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, upgrade: <a href="../sui/package.md#sui_package_MinVersionUpgrade">sui::package::MinVersionUpgrade</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade_and_forbid_previous_versions">record_minversion_upgrade_and_forbid_previous_versions</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, cap: &<a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>, receipt: &<a href="../sui/package.md#sui_package_UpgradeReceipt">sui::package::UpgradeReceipt</a>, _ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -386,12 +406,18 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade_and_forbid_previous_versions">record_minversion_upgrade_and_forbid_previous_versions</a>(
     <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
-    upgrade: MinVersionUpgrade,
+    cap: &UpgradeCap,
+    receipt: &UpgradeReceipt,
     _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> (original_id, previous_version, version, package_id) =
-        <a href="../sui/package.md#sui_package_minversion_upgrade_info">package::minversion_upgrade_info</a>(upgrade);
-    <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_record_minversion_impl">record_minversion_impl</a>(original_id, version, package_id);
+    <b>let</b> (original_id, previous_version, previous_package_id, package_id) =
+        <a href="../sui/package.md#sui_package_record_minversion_upgrade_info">package::record_minversion_upgrade_info</a>(cap, receipt);
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade_impl">record_minversion_upgrade_impl</a>(
+        original_id,
+        previous_version,
+        previous_package_id,
+        package_id,
+    );
     <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_forbid_version_range_impl">forbid_version_range_impl</a>(original_id, 1, previous_version);
 }
 </code></pre>
@@ -451,13 +477,13 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 
 </details>
 
-<a name="sui_package_config_record_minversion_impl"></a>
+<a name="sui_package_config_record_minversion_upgrade_impl"></a>
 
-## Function `record_minversion_impl`
+## Function `record_minversion_upgrade_impl`
 
 
 
-<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_impl">record_minversion_impl</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, version: u64, package_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>)
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade_impl">record_minversion_upgrade_impl</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, previous_version: u64, previous_package_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, package_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>)
 </code></pre>
 
 
@@ -466,15 +492,51 @@ Forbid all historical versions in the inclusive range <code>[start, end]</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_impl">record_minversion_impl</a>(
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_record_minversion_upgrade_impl">record_minversion_upgrade_impl</a>(
+    <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
+    original_id: ID,
+    previous_version: u64,
+    previous_package_id: ID,
+    package_id: ID,
+) {
+    <b>let</b> old = <a href="../sui/package_config.md#sui_package_config">package_config</a>.<a href="../sui/package_config.md#sui_package_config_replace_minversion">replace_minversion</a>(original_id, previous_version + 1, package_id);
+    <b>assert</b>!(old.is_some(), <a href="../sui/package_config.md#sui_package_config_EInvalidMinVersionState">EInvalidMinVersionState</a>);
+    <b>let</b> <a href="../sui/package_config.md#sui_package_config_MinVersion">MinVersion</a> { version, package_id } = old.destroy_some();
+    <b>assert</b>!(
+        version == previous_version && package_id == previous_package_id,
+        <a href="../sui/package_config.md#sui_package_config_EInvalidMinVersionState">EInvalidMinVersionState</a>,
+    );
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_package_config_replace_minversion"></a>
+
+## Function `replace_minversion`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_replace_minversion">replace_minversion</a>(<a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">sui::package_config::PackageConfig</a>, original_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, version: u64, package_id: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../sui/package_config.md#sui_package_config_MinVersion">sui::package_config::MinVersion</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/package_config.md#sui_package_config_replace_minversion">replace_minversion</a>(
     <a href="../sui/package_config.md#sui_package_config">package_config</a>: &<b>mut</b> <a href="../sui/package_config.md#sui_package_config_PackageConfig">PackageConfig</a>,
     original_id: ID,
     version: u64,
     package_id: ID,
-) {
+): Option&lt;<a href="../sui/package_config.md#sui_package_config_MinVersion">MinVersion</a>&gt; {
     <b>let</b> key = <a href="../sui/package_config.md#sui_package_config_MinVersionKey">MinVersionKey</a> { original_id };
     <b>let</b> value = <a href="../sui/package_config.md#sui_package_config_MinVersion">MinVersion</a> { version, package_id };
-    <b>let</b> _ = field::replace&lt;<a href="../sui/package_config.md#sui_package_config_MinVersionKey">MinVersionKey</a>, <a href="../sui/package_config.md#sui_package_config_MinVersion">MinVersion</a>, <a href="../sui/package_config.md#sui_package_config_MinVersion">MinVersion</a>&gt;(&<b>mut</b> <a href="../sui/package_config.md#sui_package_config">package_config</a>.id, key, value);
+    field::replace&lt;<a href="../sui/package_config.md#sui_package_config_MinVersionKey">MinVersionKey</a>, <a href="../sui/package_config.md#sui_package_config_MinVersion">MinVersion</a>, <a href="../sui/package_config.md#sui_package_config_MinVersion">MinVersion</a>&gt;(&<b>mut</b> <a href="../sui/package_config.md#sui_package_config">package_config</a>.id, key, value)
 }
 </code></pre>
 

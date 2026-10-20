@@ -13,7 +13,7 @@
 module sui::package_config;
 
 use sui::dynamic_field as field;
-use sui::package::{Self, MinVersionEnrollment, MinVersionUpgrade, UpgradeCap};
+use sui::package::{Self, MinVersionEnrollment, UpgradeCap, UpgradeReceipt};
 
 /// A shared singleton that stores package policy dynamic fields.
 public struct PackageConfig has key {
@@ -40,6 +40,7 @@ public struct MinVersion has copy, drop, store {
 const ENotSystemAddress: u64 = 0;
 const EInvalidVersion: u64 = 1;
 const EInvalidVersionRange: u64 = 2;
+const EInvalidMinVersionState: u64 = 3;
 const VERSION_FORBIDDEN: u64 = 1;
 
 /// Forbid a historical version of the package controlled by `cap`.
@@ -85,27 +86,41 @@ public fun record_minversion_enrollment(
     _ctx: &mut TxContext,
 ) {
     let (original_id, version, package_id) = package::minversion_enrollment_info(enrollment);
-    package_config.record_minversion_impl(original_id, version, package_id);
+    let old = package_config.replace_minversion(original_id, version, package_id);
+    assert!(old.is_none(), EInvalidMinVersionState);
+    old.destroy_none();
 }
 
 public fun record_minversion_upgrade(
     package_config: &mut PackageConfig,
-    upgrade: MinVersionUpgrade,
+    cap: &UpgradeCap,
+    receipt: &UpgradeReceipt,
     _ctx: &mut TxContext,
 ) {
-    let (original_id, _previous_version, version, package_id) =
-        package::minversion_upgrade_info(upgrade);
-    package_config.record_minversion_impl(original_id, version, package_id);
+    let (original_id, previous_version, previous_package_id, package_id) =
+        package::record_minversion_upgrade_info(cap, receipt);
+    package_config.record_minversion_upgrade_impl(
+        original_id,
+        previous_version,
+        previous_package_id,
+        package_id,
+    );
 }
 
 public fun record_minversion_upgrade_and_forbid_previous_versions(
     package_config: &mut PackageConfig,
-    upgrade: MinVersionUpgrade,
+    cap: &UpgradeCap,
+    receipt: &UpgradeReceipt,
     _ctx: &mut TxContext,
 ) {
-    let (original_id, previous_version, version, package_id) =
-        package::minversion_upgrade_info(upgrade);
-    package_config.record_minversion_impl(original_id, version, package_id);
+    let (original_id, previous_version, previous_package_id, package_id) =
+        package::record_minversion_upgrade_info(cap, receipt);
+    package_config.record_minversion_upgrade_impl(
+        original_id,
+        previous_version,
+        previous_package_id,
+        package_id,
+    );
     package_config.forbid_version_range_impl(original_id, 1, previous_version);
 }
 
@@ -121,15 +136,31 @@ fun is_forbidden_value(value: u64): bool {
     value == VERSION_FORBIDDEN
 }
 
-fun record_minversion_impl(
+fun record_minversion_upgrade_impl(
+    package_config: &mut PackageConfig,
+    original_id: ID,
+    previous_version: u64,
+    previous_package_id: ID,
+    package_id: ID,
+) {
+    let old = package_config.replace_minversion(original_id, previous_version + 1, package_id);
+    assert!(old.is_some(), EInvalidMinVersionState);
+    let MinVersion { version, package_id } = old.destroy_some();
+    assert!(
+        version == previous_version && package_id == previous_package_id,
+        EInvalidMinVersionState,
+    );
+}
+
+fun replace_minversion(
     package_config: &mut PackageConfig,
     original_id: ID,
     version: u64,
     package_id: ID,
-) {
+): Option<MinVersion> {
     let key = MinVersionKey { original_id };
     let value = MinVersion { version, package_id };
-    let _ = field::replace<MinVersionKey, MinVersion, MinVersion>(&mut package_config.id, key, value);
+    field::replace<MinVersionKey, MinVersion, MinVersion>(&mut package_config.id, key, value)
 }
 
 fun cap_package_info(cap: &UpgradeCap): (ID, u64) {
@@ -237,4 +268,14 @@ public(package) fun allow_version_for_testing(
     if (field::exists_with_type<_, u64>(&package_config.id, key)) {
         *field::borrow_mut(&mut package_config.id, key) = 0;
     }
+}
+
+#[mode(test)]
+public(package) fun set_minversion_for_testing(
+    package_config: &mut PackageConfig,
+    original_id: ID,
+    version: u64,
+    package_id: ID,
+) {
+    let _ = package_config.replace_minversion(original_id, version, package_id);
 }
