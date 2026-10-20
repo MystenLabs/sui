@@ -104,6 +104,7 @@ implement custom authorization scheme for <code><a href="../sui/kiosk_extension.
 <b>use</b> <a href="../sui/package.md#sui_package">sui::package</a>;
 <b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/protocol_config.md#sui_protocol_config">sui::protocol_config</a>;
+<b>use</b> <a href="../sui/scratch.md#sui_scratch">sui::scratch</a>;
 <b>use</b> <a href="../sui/sui.md#sui_sui">sui::sui</a>;
 <b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
