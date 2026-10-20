@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
+use sui_macros::sim_test;
 
 use super::*;
 use futures::FutureExt;
@@ -31,7 +32,7 @@ async fn create_writeback_cache() -> Arc<WritebackCache> {
     Arc::new(WritebackCache::new_for_tests(store))
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_immediate_return_canceled_shared() {
     let cache = create_writeback_cache().await;
 
@@ -69,7 +70,7 @@ async fn test_immediate_return_canceled_shared() {
         .unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_immediate_return_cached_object() {
     let cache = create_writeback_cache().await;
 
@@ -93,7 +94,7 @@ async fn test_immediate_return_cached_object() {
         .unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_immediate_return_cached_package() {
     let cache = create_writeback_cache().await;
 
@@ -110,7 +111,7 @@ async fn test_immediate_return_cached_package() {
         .unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_immediate_return_consensus_stream_ended() {
     let cache = create_writeback_cache().await;
 
@@ -138,7 +139,7 @@ async fn test_immediate_return_consensus_stream_ended() {
         .unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_wait_for_object() {
     let cache = create_writeback_cache().await;
 
@@ -242,7 +243,7 @@ async fn test_wait_for_package() {
     timeout(Duration::from_secs(1), notification).await.unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_wait_for_consensus_stream_end() {
     let cache = create_writeback_cache().await;
 
@@ -276,7 +277,7 @@ async fn test_wait_for_consensus_stream_end() {
     timeout(Duration::from_secs(1), notification).await.unwrap();
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_receiving_object_higher_version() {
     let cache = create_writeback_cache().await;
 
@@ -370,7 +371,7 @@ async fn test_load_implicitly_read_system_object() {
 /// A dry-run pins the latest version before execution, and that version can be pruned
 /// before it is read. When a newer version already exists, the load must return None
 /// immediately instead of waiting for a version that will never be written again.
-#[tokio::test]
+#[sim_test]
 async fn test_load_implicitly_read_system_object_superseded_version() {
     let cache = create_writeback_cache().await;
 

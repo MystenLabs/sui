@@ -3714,6 +3714,7 @@ mod tests {
     };
     use futures::pin_mut;
     use prometheus::Registry;
+    use sui_macros::sim_test;
     use sui_protocol_config::{ConsensusTransactionOrdering, ProtocolConfig};
     use sui_types::{
         base_types::ExecutionDigests,
@@ -3794,7 +3795,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_epoch_close_deadline_preserves_pre_deadline_blocking() {
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(epoch_close_deadline_config(Some(100)))
@@ -3837,7 +3838,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_epoch_close_deadline_none_preserves_indefinite_blocking() {
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(epoch_close_deadline_config(None))
@@ -3865,7 +3866,7 @@ mod tests {
         assert!(!reconfig_state.is_reject_all_tx());
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_epoch_close_deadline_is_inert_without_deferred_transactions() {
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(epoch_close_deadline_config(Some(100)))
@@ -3901,7 +3902,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_epoch_close_deadline_counts_abandoned_transactions_and_closes_first() {
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(epoch_close_deadline_config(Some(100)))
@@ -3932,7 +3933,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_epoch_close_deadline_does_not_report_transactions_drained_in_commit() {
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(epoch_close_deadline_config(Some(100)))
@@ -4026,7 +4027,7 @@ mod tests {
             .await;
     }
 
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[sim_test]
     async fn test_consensus_commit_handler() {
         telemetry_subscribers::init_for_testing();
 
@@ -4217,7 +4218,7 @@ mod tests {
         state.execution_scheduler().check_empty_for_testing().await;
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_dropped_owned_object_lock_conflict_is_marked_processed() {
         telemetry_subscribers::init_for_testing();
 
@@ -4339,7 +4340,7 @@ mod tests {
         .expect("processed notification for dropped transaction should resolve");
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_rejected_transaction_sets_status_and_is_not_marked_processed() {
         telemetry_subscribers::init_for_testing();
 
@@ -4391,7 +4392,7 @@ mod tests {
         assert!(!epoch_store.is_consensus_message_processed(&key).unwrap());
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_user_transaction_ignored_at_epoch_close_sets_dropped_status() {
         telemetry_subscribers::init_for_testing();
 
@@ -4460,7 +4461,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_user_transaction_after_end_of_publish_sets_dropped_status() {
         telemetry_subscribers::init_for_testing();
 
@@ -4570,7 +4571,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_checkpoint_signature_dedup() {
         telemetry_subscribers::init_for_testing();
 
@@ -4685,7 +4686,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_verify_consensus_transaction_filters_mismatched_authorities() {
         telemetry_subscribers::init_for_testing();
 
@@ -4842,7 +4843,7 @@ mod tests {
     /// catching up can process commits without verifying every block. Updates are
     /// attributed to the consensus block author, so spoofed authority claims are
     /// still dropped.
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_deny_config_updates_applied_at_commit() {
         telemetry_subscribers::init_for_testing();
 
@@ -4998,7 +4999,7 @@ mod tests {
 
     /// With merge_colliding_deferrals enabled (current protocol version), the round 2
     /// re-deferral merges into Randomness{1} instead of displacing its transactions.
-    #[tokio::test(flavor = "current_thread")]
+    #[sim_test]
     async fn test_deferral_key_collision_merges_entries() {
         let state = TestAuthorityBuilder::new().build().await;
         let epoch_store = state.epoch_store_for_testing();

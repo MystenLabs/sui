@@ -1385,6 +1385,7 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use consensus_config::AuthorityIndex;
     use consensus_types::block::BlockDigest;
+    use sui_macros::sim_test;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{AuthorityName, random_object_ref};
     use sui_types::crypto::{AccountKeyPair, get_key_pair};
@@ -1501,7 +1502,7 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn locked_user_recheck_defuses_ack_after_pool_close() {
         let (_state, pool) = test_state_and_pool(1).await;
         pool.close();
@@ -1515,7 +1516,7 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn take_respects_priority_budgets_and_acknowledges_positions() {
         let (_state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
@@ -1567,7 +1568,7 @@ mod tests {
         assert_eq!(low_receiver.await.unwrap().unwrap()[0].index, 0);
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn bundles_are_atomic() {
         let (_state, pool) = test_state_and_pool(10).await;
         let (_receiver, _) = pool
@@ -1590,7 +1591,7 @@ mod tests {
         pool.close();
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn dropped_ack_preserves_front_order() {
         let (_state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
@@ -1606,7 +1607,7 @@ mod tests {
         pool.close();
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn ping_capacity_and_reserved_index() {
         let (_state, pool) = test_state_and_pool(1).await;
         let epoch = pool.epoch();
@@ -1630,7 +1631,7 @@ mod tests {
         assert_eq!(status.await.unwrap(), BlockStatus::Sequenced(block_ref));
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn system_lane_is_not_bounded_by_user_capacity() {
         let (_state, pool) = test_state_and_pool(1).await;
         let receivers = (0..3)
@@ -1645,7 +1646,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn take_skips_abandoned_system_entries_and_pings() {
         let (_state, pool) = test_state_and_pool(1).await;
         let epoch = pool.epoch();
@@ -1671,7 +1672,7 @@ mod tests {
         assert_eq!(live_ping.await.unwrap().1, vec![PING_TRANSACTION_INDEX]);
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn eviction_rejection_and_duplicate_detection_match_admission_queue() {
         let (_state, pool) = test_state_and_pool(2).await;
         let epoch = pool.epoch();
@@ -1695,7 +1696,7 @@ mod tests {
         pool.close();
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn close_resolves_pending_and_taken_user_entries() {
         let (_state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
@@ -1731,7 +1732,7 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn dropped_ack_after_close_does_not_requeue() {
         let (_state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
@@ -1748,7 +1749,7 @@ mod tests {
         assert_eq!(pool.queue_depth("user"), 0);
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn take_closes_user_lane_when_epoch_stops_accepting_user_certs() {
         let (state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
@@ -1779,7 +1780,7 @@ mod tests {
         assert_eq!(system_receiver.await.unwrap().0, block_ref);
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn dropped_ack_after_user_lane_close_resolves_taken_entries() {
         let (state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
@@ -1806,7 +1807,7 @@ mod tests {
         assert_eq!(pool.queue_depth("user"), 0);
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn notify_committed_sequences_commits_before_garbage_collection() {
         let (_state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
@@ -1833,7 +1834,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn notify_committed_reports_proposed_user_outcomes() {
         let (_state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
@@ -1918,7 +1919,7 @@ mod tests {
         let _ = pool.submit(pool.epoch(), &[transaction()]);
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn take_skips_already_processed_entries_without_shrinking_the_block() {
         let (state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
@@ -1971,7 +1972,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn bundles_are_skipped_only_when_every_transaction_is_already_processed() {
         let (state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
@@ -2008,7 +2009,7 @@ mod tests {
         drop(ack);
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn insert_rejects_already_processed_transactions() {
         let (state, pool) = test_state_and_pool(10).await;
         let epoch = pool.epoch();
@@ -2050,7 +2051,7 @@ mod tests {
         drop(ack);
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn departing_entries_deregister_their_processed_watches() {
         let (state, pool) = test_state_and_pool(1).await;
         let epoch = pool.epoch();
@@ -2106,7 +2107,7 @@ mod tests {
         assert_eq!(epoch_store.num_pending_processed_notifications(), baseline);
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn zero_user_capacity_is_rejected_at_startup() {
         let state = TestAuthorityBuilder::new().build().await;
         let epoch_store = state.epoch_store_for_testing().clone();
@@ -2120,7 +2121,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn context_observes_installed_pool_and_waits_for_matching_epoch() {
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let context = Arc::new(TransactionPoolContext::new_for_tests(metrics));
@@ -2171,7 +2172,7 @@ mod tests {
         assert_eq!(waiter.await.unwrap().unwrap().epoch(), next_epoch);
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn context_fails_promptly_when_active_pool_is_dropped() {
         let context =
             TransactionPoolContext::new_for_tests(Arc::new(AdmissionQueueMetrics::new_for_tests()));
@@ -2193,7 +2194,7 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[sim_test]
     async fn context_fails_stale_and_unavailable_epochs_promptly() {
         let context =
             TransactionPoolContext::new_for_tests(Arc::new(AdmissionQueueMetrics::new_for_tests()));

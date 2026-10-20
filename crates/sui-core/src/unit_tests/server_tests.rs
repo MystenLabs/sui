@@ -6,13 +6,14 @@ use crate::{
     authority::authority_tests::init_state_with_object_id,
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
 };
+use sui_macros::sim_test;
 use sui_types::{
     base_types::{dbg_addr, dbg_object_id},
     messages_grpc::LayoutGenerationOption,
 };
 
 //This is the most basic example of how to test the server logic
-#[tokio::test]
+#[sim_test]
 async fn test_simple_request() {
     let sender = dbg_addr(1);
     let object_id = dbg_object_id(1);

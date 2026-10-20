@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_macros::sim_test;
 
 use move_core_types::language_storage::TypeTag;
 use sui_protocol_config::ProtocolConfig;
@@ -208,7 +209,7 @@ impl TestEnv {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_withdraw_schedule_e2e() {
     telemetry_subscribers::init_for_testing();
     let mut test_env = create_test_env(BTreeMap::from([(GAS::type_tag(), 1000)])).await;
