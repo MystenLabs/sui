@@ -1625,8 +1625,12 @@ async fn test_address_balance_gas_charged_on_move_abort() {
 }
 
 #[sim_test]
-async fn test_explicit_sponsor_withdrawal_banned() {
+async fn test_explicit_sponsor_withdrawal_requires_feature_flag() {
     let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.set_enable_sponsor_withdrawals_for_testing(false);
+            cfg
+        }))
         .with_test_cluster_builder_cb(Box::new(|builder| {
             builder
                 .with_protocol_version(ProtocolConfig::get_for_max_version_UNSAFE().version)
@@ -1670,6 +1674,85 @@ async fn test_explicit_sponsor_withdrawal_banned() {
         "Error should mention that sponsor withdrawals are not supported, got: {}",
         err_str
     );
+}
+
+#[sim_test]
+async fn test_explicit_sponsor_withdrawal() {
+    let mut test_env = TestEnvBuilder::new().build().await;
+
+    let sender = test_env.get_sender(0);
+    let sponsor = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+
+    let sponsor_initial_balance = 100_000_000u64;
+    let withdrawal_amount = 1_000_000u64;
+    test_env
+        .fund_one_address_balance(sponsor, sponsor_initial_balance)
+        .await;
+    assert_eq!(test_env.get_sui_balance_ab(sender), 0);
+
+    // Withdraw from the sponsor's address balance and send it to the recipient.
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let withdrawal = FundsWithdrawalArg::balance_from_sponsor(withdrawal_amount, GAS::type_tag());
+    let withdrawal = builder.funds_withdrawal(withdrawal).unwrap();
+    let balance = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("redeem_funds").unwrap(),
+        vec![GAS::type_tag()],
+        vec![withdrawal],
+    );
+    let recipient_arg = builder.pure(recipient).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec![GAS::type_tag()],
+        vec![balance, recipient_arg],
+    );
+
+    let tx = create_address_balance_transaction_with_sponsor(
+        TransactionKind::ProgrammableTransaction(builder.finish()),
+        sender,
+        Some(sponsor),
+        10_000_000,
+        test_env.rgp,
+        test_env.chain_id,
+    );
+
+    let keystore = &test_env.cluster.wallet.config.keystore;
+    let sender_sig = keystore
+        .sign_secure(&sender, &tx, Intent::sui_transaction())
+        .await
+        .unwrap();
+    let sponsor_sig = keystore
+        .sign_secure(&sponsor, &tx, Intent::sui_transaction())
+        .await
+        .unwrap();
+    let signed_tx = Transaction::from_data(tx, vec![sender_sig, sponsor_sig]);
+
+    let (digest, effects) = test_env
+        .cluster
+        .execute_transaction_directly(&signed_tx)
+        .await
+        .unwrap();
+    assert!(
+        effects.status().is_ok(),
+        "Sponsor withdrawal should succeed: {:?}",
+        effects.status()
+    );
+    test_env.cluster.wait_for_tx_settlement(&[digest]).await;
+
+    // The sponsor pays for both the withdrawal and the gas; the sender is untouched.
+    let gas_used = effects.gas_cost_summary().net_gas_usage() as u64;
+    assert_eq!(
+        test_env.get_sui_balance_ab(sponsor),
+        sponsor_initial_balance - withdrawal_amount - gas_used
+    );
+    assert_eq!(test_env.get_sui_balance_ab(recipient), withdrawal_amount);
+    assert_eq!(test_env.get_sui_balance_ab(sender), 0);
+
+    test_env.trigger_reconfiguration().await;
 }
 
 #[sim_test]
