@@ -301,6 +301,34 @@ pub struct ConsensusTransactionPoolConfig {
     /// matching the existing admission queue. Defaults to the consensus
     /// `max_pending_transactions` setting.
     pub max_pending_transactions: Option<usize>,
+
+    /// User transaction admission starts being paced by this validator's execution
+    /// progress once the oldest transaction waiting for execution has waited longer
+    /// than this. Pacing ends when the pool's user lane drains.
+    #[serde(default = "default_execution_backlog_engage_above")]
+    pub execution_backlog_engage_above: Duration,
+
+    /// While paced, admission equals the executed rate when that wait sits at this
+    /// target, runs above it while the wait is shorter, and falls linearly below it as
+    /// the wait grows.
+    #[serde(default = "default_execution_backlog_target")]
+    pub execution_backlog_target: Duration,
+
+    /// While paced, admission reaches zero when the wait grows to this value.
+    #[serde(default = "default_execution_backlog_admission_zero_at")]
+    pub execution_backlog_admission_zero_at: Duration,
+}
+
+fn default_execution_backlog_target() -> Duration {
+    Duration::from_millis(500)
+}
+
+fn default_execution_backlog_engage_above() -> Duration {
+    Duration::from_secs(1)
+}
+
+fn default_execution_backlog_admission_zero_at() -> Duration {
+    Duration::from_secs(4)
 }
 
 impl Default for ConsensusTransactionPoolConfig {
@@ -308,6 +336,9 @@ impl Default for ConsensusTransactionPoolConfig {
         Self {
             enabled: true,
             max_pending_transactions: None,
+            execution_backlog_engage_above: default_execution_backlog_engage_above(),
+            execution_backlog_target: default_execution_backlog_target(),
+            execution_backlog_admission_zero_at: default_execution_backlog_admission_zero_at(),
         }
     }
 }
@@ -1441,37 +1472,6 @@ pub struct AuthorityOverloadConfig {
     #[serde(default = "default_max_txn_age_in_queue")]
     pub max_txn_age_in_queue: Duration,
 
-    // The interval of checking overload signal.
-    #[serde(default = "default_overload_monitor_interval")]
-    pub overload_monitor_interval: Duration,
-
-    // The execution queueing latency when entering load shedding mode.
-    #[serde(default = "default_execution_queue_latency_soft_limit")]
-    pub execution_queue_latency_soft_limit: Duration,
-
-    // The execution queueing latency when entering aggressive load shedding mode.
-    #[serde(default = "default_execution_queue_latency_hard_limit")]
-    pub execution_queue_latency_hard_limit: Duration,
-
-    // The maximum percentage of transactions to shed in load shedding mode.
-    #[serde(default = "default_max_load_shedding_percentage")]
-    pub max_load_shedding_percentage: u32,
-
-    // When in aggressive load shedding mode, the minimum percentage of
-    // transactions to shed.
-    #[serde(default = "default_min_load_shedding_percentage_above_hard_limit")]
-    pub min_load_shedding_percentage_above_hard_limit: u32,
-
-    // If transaction ready rate is below this rate, we consider the validator
-    // is well under used, and will not enter load shedding mode.
-    #[serde(default = "default_safe_transaction_ready_rate")]
-    pub safe_transaction_ready_rate: u32,
-
-    // When set to true, transaction signing may be rejected when the validator
-    // is overloaded.
-    #[serde(default = "default_check_system_overload_at_signing")]
-    pub check_system_overload_at_signing: bool,
-
     // Reject a transaction if transaction manager queue length is above this threshold.
     // 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
     #[serde(default = "default_max_transaction_manager_queue_length")]
@@ -1507,34 +1507,6 @@ fn default_max_txn_age_in_queue() -> Duration {
     Duration::from_millis(1000)
 }
 
-fn default_overload_monitor_interval() -> Duration {
-    Duration::from_secs(10)
-}
-
-fn default_execution_queue_latency_soft_limit() -> Duration {
-    Duration::from_secs(1)
-}
-
-fn default_execution_queue_latency_hard_limit() -> Duration {
-    Duration::from_secs(10)
-}
-
-fn default_max_load_shedding_percentage() -> u32 {
-    95
-}
-
-fn default_min_load_shedding_percentage_above_hard_limit() -> u32 {
-    50
-}
-
-fn default_safe_transaction_ready_rate() -> u32 {
-    100
-}
-
-fn default_check_system_overload_at_signing() -> bool {
-    true
-}
-
 fn default_max_transaction_manager_queue_length() -> usize {
     100_000
 }
@@ -1559,14 +1531,6 @@ impl Default for AuthorityOverloadConfig {
     fn default() -> Self {
         Self {
             max_txn_age_in_queue: default_max_txn_age_in_queue(),
-            overload_monitor_interval: default_overload_monitor_interval(),
-            execution_queue_latency_soft_limit: default_execution_queue_latency_soft_limit(),
-            execution_queue_latency_hard_limit: default_execution_queue_latency_hard_limit(),
-            max_load_shedding_percentage: default_max_load_shedding_percentage(),
-            min_load_shedding_percentage_above_hard_limit:
-                default_min_load_shedding_percentage_above_hard_limit(),
-            safe_transaction_ready_rate: default_safe_transaction_ready_rate(),
-            check_system_overload_at_signing: true,
             max_transaction_manager_queue_length: default_max_transaction_manager_queue_length(),
             max_transaction_manager_per_object_queue_length:
                 default_max_transaction_manager_per_object_queue_length(),

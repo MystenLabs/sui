@@ -308,10 +308,8 @@ impl SuiTxValidator {
         // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
         inner_tx.validity_check(&epoch_store.tx_validity_check_context())?;
 
-        self.authority_state.check_system_overload(
-            inner_tx.data(),
-            self.authority_state.check_system_overload_at_signing(),
-        )?;
+        self.authority_state
+            .check_system_overload(inner_tx.data())?;
 
         #[allow(unused_mut)]
         let mut fail_point_always_report_aliases_changed = false;
