@@ -314,7 +314,14 @@ impl UserByteBudget {
     }
 
     fn consume(&mut self, bytes: usize) {
-        self.tokens = (self.tokens - bytes as f64).max(0.0);
+        let bytes = bytes as f64;
+        if bytes > self.tokens {
+            debug_fatal!(
+                "user byte budget overdrawn: consuming {bytes} with {} tokens available",
+                self.tokens
+            );
+        }
+        self.tokens = (self.tokens - bytes).max(0.0);
     }
 
     fn refund(&mut self, bytes: usize) {
@@ -1072,7 +1079,7 @@ impl TransactionPool for ConsensusTransactionPool {
 
         let mut transactions = Vec::new();
         let mut entries = Vec::new();
-        let mut total_bytes = 0usize;
+        let mut system_tx_total_bytes = 0usize;
         let mut limit_reached = LimitReached::AllTransactionsIncluded;
 
         let mut abandoned = Vec::new();
@@ -1085,14 +1092,18 @@ impl TransactionPool for ConsensusTransactionPool {
                 abandoned.push(entry);
                 continue;
             }
-            if let Some(limit) =
-                entry_limit(entry, transactions.len(), total_bytes, max_count, max_bytes)
-            {
+            if let Some(limit) = entry_limit(
+                entry,
+                transactions.len(),
+                system_tx_total_bytes,
+                max_count,
+                max_bytes,
+            ) {
                 limit_reached = limit;
                 break;
             }
             let entry = pool.system.pop_front().expect("front entry must exist");
-            total_bytes += entry.total_bytes;
+            system_tx_total_bytes += entry.total_bytes;
             transactions.extend(entry.transactions.iter().cloned());
             self.decrement_lane_metrics("system", &entry);
             entries.push(TakenEntry::new(TakenLane::System, entry));
@@ -1104,10 +1115,12 @@ impl TransactionPool for ConsensusTransactionPool {
             && let UserLane::Open(user) = &mut pool.user
         {
             let mut pending_count = transactions.len();
-            let mut pending_bytes = total_bytes;
+            let mut pending_bytes = system_tx_total_bytes;
             let now = Instant::now();
             let user_max_bytes = match &mut pool.user_byte_budget {
-                Some(budget) => max_bytes.min(total_bytes.saturating_add(budget.available(now))),
+                Some(budget) => {
+                    max_bytes.min(system_tx_total_bytes.saturating_add(budget.available(now)))
+                }
                 None => max_bytes,
             };
             let popped;
@@ -1149,7 +1162,7 @@ impl TransactionPool for ConsensusTransactionPool {
                 }
             });
             if let Some(budget) = &mut pool.user_byte_budget {
-                budget.consume(pending_bytes.saturating_sub(total_bytes));
+                budget.consume(pending_bytes.saturating_sub(system_tx_total_bytes));
                 self.metrics
                     .pool_byte_budget_bytes
                     .set(budget.tokens as i64);
