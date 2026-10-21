@@ -35,7 +35,7 @@ use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{ExecutionError, SuiErrorKind, SuiResult},
     execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
-    gas::SuiGasStatus,
+    gas::GasUsageReport,
     inner_temporary_store::InnerTemporaryStore,
     metrics::ExecutionMetrics,
     object::Object,
@@ -63,7 +63,7 @@ pub struct TxnContextAndEffects {
     pub txn_data: TransactionData,             // original transaction data
     pub execution_effects: TransactionEffects, // effects of the replay execution
     pub expected_effects: TransactionEffects,  // expected effects as found in the transaction data
-    pub gas_status: SuiGasStatus,              // gas status of the replay execution
+    pub gas_report: GasUsageReport,            // gas usage of the replay execution
     pub object_cache: BTreeMap<ObjectID, BTreeMap<u64, Object>>, // object cache
     pub inner_store: InnerTemporaryStore,      // temporary store used during execution
     pub checkpoint: u64,                       // checkpoint where the transaction was included
@@ -109,17 +109,6 @@ pub fn execute_transaction_to_effects(
         .epoch_info(epoch)?
         .ok_or_else(|| anyhow!(format!("Epoch {} not found", epoch)))?;
     let epoch_start_timestamp = epoch_data.start_timestamp;
-    let gas_status = if txn_data.kind().is_system_tx() {
-        SuiGasStatus::new_unmetered(protocol_config)
-    } else {
-        SuiGasStatus::new(
-            txn_data.gas_data().budget,
-            txn_data.gas_data().price,
-            epoch_data.rgp,
-            protocol_config,
-        )
-        .expect("Failed to create gas status")
-    };
     let store: ReplayStore<'_> = ReplayStore {
         checkpoint,
         store: object_store,
@@ -156,7 +145,7 @@ pub fn execute_transaction_to_effects(
         None => ExecutionOrEarlyError::ok(None),
         Some(errors) => ExecutionOrEarlyError::failed(errors, None),
     };
-    let (inner_store, gas_status, effects, _execution_timing, result) = executor
+    let (inner_store, gas_report, effects, _execution_timing, result) = executor
         .executor
         .execute_transaction_to_effects_and_execution_error(
             &store,
@@ -175,7 +164,7 @@ pub fn execute_transaction_to_effects(
             // accumulator version, then pass that here instead of the empty reader.
             &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
             txn_data.gas_data().clone(),
-            gas_status,
+            epoch_data.rgp,
             kind,
             rewritten_inputs,
             txn_data.sender(),
@@ -214,7 +203,7 @@ pub fn execute_transaction_to_effects(
             txn_data,
             execution_effects: effects,
             expected_effects,
-            gas_status,
+            gas_report,
             object_cache,
             inner_store,
             checkpoint,
