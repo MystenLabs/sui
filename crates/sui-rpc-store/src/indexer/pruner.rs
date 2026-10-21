@@ -258,9 +258,9 @@ impl RetractionCursors {
 /// fallback-safe delete shape.
 /// Coalescing keeps only the greatest checkpoint per object: its rows below that
 /// checkpoint are the union of every narrower retraction's rows, so one widest
-/// retraction subsumes them all. On an equal checkpoint, the `removed` flags are
-/// ORed: if any same-checkpoint retraction removed the object, the row at that
-/// checkpoint must be dropped.
+/// retraction subsumes them all. On an equal checkpoint, `removed` tracks whether
+/// the object is removed at the end of that checkpoint, so effects must be
+/// recorded in transaction order: a removal sets it and a later write clears it.
 #[derive(Default)]
 struct Retractions(HashMap<ObjectID, (u64, bool)>);
 
@@ -277,6 +277,15 @@ impl Retractions {
                 }
             })
             .or_insert((cp, removed));
+    }
+
+    /// Records that `id` was written in `cp`, undoing an earlier removal in `cp`.
+    fn record_written(&mut self, id: ObjectID, cp: u64) {
+        if let Some((recorded_cp, recorded_removed)) = self.0.get_mut(&id)
+            && *recorded_cp == cp
+        {
+            *recorded_removed = false;
+        }
     }
 
     fn stage(
@@ -510,6 +519,9 @@ fn prune_chunk(
                 retractions.record(id, seq, true);
                 objects_deleted += 1;
             }
+            for (oref, _, _) in effects.all_changed_objects() {
+                retractions.record_written(oref.0, seq);
+            }
             batch.delete(
                 &schema.tx_seq_by_digest,
                 &tx_seq_by_digest::Key(*effects.transaction_digest()),
@@ -659,8 +671,9 @@ fn retract_object_version_by_checkpoint(
 ///   checkpoint it was pruned from, and repeated retractions for one object
 ///   are coalesced to the greatest checkpoint, so a superseded object keeps
 ///   only its supersession-checkpoint row — the anchor a point-in-time read at
-///   the floor resolves to — and a removed object drops its rows (a later
-///   wrap/unwrap re-creation at or above the floor survives).
+///   the floor resolves to — and a removed object drops its rows (a
+///   re-creation later in the same checkpoint, or at or above the floor,
+///   survives). `effects` must be in transaction order within a checkpoint.
 /// - `transaction_bitmap` / `event_bitmap` — evicted by advancing the
 ///   database-local `tx_seq` floor so their compaction filters drop
 ///   fully-pruned buckets during periodic compaction.
@@ -724,13 +737,17 @@ pub fn prune_history_cohort(
     // pruned from, and repeated retractions for one object are coalesced to the
     // greatest checkpoint, so the retraction keeps each object's anchor at its
     // true latest supersession checkpoint and drops the older ones; a removed
-    // object drops its tombstone too.
+    // object drops its tombstone too, unless a later transaction in the same
+    // checkpoint writes it again.
     for (checkpoint, effects) in effects {
         for (id, _version) in effects.modified_at_versions() {
             retractions.record(id, *checkpoint, false);
         }
         for (id, _version) in effects.all_tombstones() {
             retractions.record(id, *checkpoint, true);
+        }
+        for (oref, _, _) in effects.all_changed_objects() {
+            retractions.record_written(oref.0, *checkpoint);
         }
     }
     retractions.stage(&mut batch, schema, retraction_cursors)?;
@@ -995,6 +1012,67 @@ mod tests {
         batch.commit().unwrap();
     }
 
+    /// Stage the `Change` rows the `object_version_by_checkpoint` pipeline
+    /// produces for `checkpoint`.
+    async fn seed_object_version_by_checkpoint(
+        db: &Db,
+        schema: &RpcStoreSchema,
+        checkpoint: &Arc<sui_types::full_checkpoint_content::Checkpoint>,
+    ) {
+        use crate::indexer::object_version_by_checkpoint::ObjectVersionByCheckpoint;
+        use crate::indexer::object_version_by_checkpoint::Row;
+
+        let mut batch = db.batch();
+        for row in ObjectVersionByCheckpoint::default()
+            .process(checkpoint)
+            .await
+            .unwrap()
+        {
+            let Row::Change {
+                id,
+                checkpoint,
+                version,
+            } = row
+            else {
+                continue;
+            };
+            let (k, v) = object_version_by_checkpoint::store(id, checkpoint, version);
+            batch
+                .put(&schema.object_version_by_checkpoint, &k, &v)
+                .unwrap();
+        }
+        batch.commit().unwrap();
+    }
+
+    /// cp0 creates obj0 and obj1. In cp1, separate transactions delete then
+    /// re-create obj0, and wrap then unwrap obj1, so both are live at its end.
+    fn removed_and_recreated_checkpoints() -> (
+        Arc<sui_types::full_checkpoint_content::Checkpoint>,
+        Arc<sui_types::full_checkpoint_content::Checkpoint>,
+    ) {
+        let mut builder = TestCheckpointBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .create_owned_object(1)
+            .finish_transaction();
+        let cp0 = Arc::new(builder.build_checkpoint());
+        builder = builder
+            .start_transaction(0)
+            .delete_object(0)
+            .finish_transaction()
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction()
+            .start_transaction(0)
+            .wrap_object(1)
+            .finish_transaction()
+            .start_transaction(0)
+            .unwrap_object(1)
+            .finish_transaction();
+        let cp1 = Arc::new(builder.build_checkpoint());
+        (cp0, cp1)
+    }
+
     fn seed_checkpoint_versions(
         db: &Db,
         schema: &RpcStoreSchema,
@@ -1061,6 +1139,54 @@ mod tests {
             schema.get_object_version_at_checkpoint(obj, 2).unwrap(),
             None,
             "same-checkpoint removals must drop the checkpoint row",
+        );
+    }
+
+    #[test]
+    fn retractions_write_after_removal_keeps_checkpoint_row() {
+        let (_dir, db, schema) = fresh_db();
+        let obj = TestCheckpointBuilder::derive_object_id(0);
+        seed_checkpoint_versions(&db, &schema, obj, &[(0, 1), (2, 3)]);
+
+        let mut retractions = Retractions::default();
+        retractions.record(obj, 2, false);
+        retractions.record(obj, 2, true);
+        retractions.record_written(obj, 2);
+        let mut batch = db.batch();
+        retractions
+            .stage(&mut batch, &schema, &RetractionCursors::default())
+            .unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj, 0).unwrap(),
+            None,
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj, 2).unwrap(),
+            Some(sui_types::base_types::SequenceNumber::from_u64(3)),
+            "a write after a same-checkpoint removal must keep the checkpoint row",
+        );
+    }
+
+    #[test]
+    fn retractions_write_at_other_checkpoint_does_not_clear_removal() {
+        let (_dir, db, schema) = fresh_db();
+        let obj = TestCheckpointBuilder::derive_object_id(0);
+        seed_checkpoint_versions(&db, &schema, obj, &[(0, 1), (2, 3)]);
+
+        let mut retractions = Retractions::default();
+        retractions.record(obj, 2, true);
+        retractions.record_written(obj, 1);
+        let mut batch = db.batch();
+        retractions
+            .stage(&mut batch, &schema, &RetractionCursors::default())
+            .unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj, 2).unwrap(),
+            None,
         );
     }
 
@@ -1664,8 +1790,6 @@ mod tests {
     /// retracts it while preserving the cp1-pinned floor entry.
     #[tokio::test]
     async fn prune_chunk_retracts_object_version_by_checkpoint() {
-        use crate::indexer::object_version_by_checkpoint::ObjectVersionByCheckpoint;
-
         let (_dir, db, schema) = fresh_db();
 
         let mut builder = TestCheckpointBuilder::new(0)
@@ -1688,30 +1812,11 @@ mod tests {
         // `checkpoint_summary`, from which the pruner derives each
         // transaction's checkpoint) plus the checkpoint-pinned index
         // under test.
+        // Seed only the change rows; the floor candidates are exercised in
+        // the pipeline's own tests.
         for cp in [&cp0, &cp1] {
             seed(&db, &schema, cp).await;
-            let mut batch = db.batch();
-            for row in ObjectVersionByCheckpoint::default()
-                .process(cp)
-                .await
-                .unwrap()
-            {
-                // Seed only the change rows; the floor candidates are
-                // exercised in the pipeline's own tests.
-                let crate::indexer::object_version_by_checkpoint::Row::Change {
-                    id,
-                    checkpoint,
-                    version,
-                } = row
-                else {
-                    continue;
-                };
-                let (k, v) = object_version_by_checkpoint::store(id, checkpoint, version);
-                batch
-                    .put(&schema.object_version_by_checkpoint, &k, &v)
-                    .unwrap();
-            }
-            batch.commit().unwrap();
+            seed_object_version_by_checkpoint(&db, &schema, cp).await;
         }
 
         // Precondition: obj0 resolves at both checkpoints.
@@ -1756,6 +1861,99 @@ mod tests {
             schema.get_object_version_at_checkpoint(obj0, 1).unwrap(),
             Some(v_b),
             "cp1-pinned floor entry must be preserved",
+        );
+    }
+
+    /// An object removed and then re-created by separate transactions of one
+    /// checkpoint is live at its end, so pruning that checkpoint keeps the row
+    /// a read at the floor resolves to.
+    #[tokio::test]
+    async fn prune_chunk_keeps_object_removed_and_recreated_in_one_checkpoint() {
+        let (_dir, db, schema) = fresh_db();
+        let (cp0, cp1) = removed_and_recreated_checkpoints();
+        let obj0 = TestCheckpointBuilder::derive_object_id(0);
+        let obj1 = TestCheckpointBuilder::derive_object_id(1);
+        let v0 = cp1.transactions[1].effects.lamport_version();
+        let v1 = cp1.transactions[3].effects.lamport_version();
+
+        for cp in [&cp0, &cp1] {
+            seed(&db, &schema, cp).await;
+            seed_object_version_by_checkpoint(&db, &schema, cp).await;
+        }
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 1).unwrap(),
+            Some(v0),
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj1, 1).unwrap(),
+            Some(v1),
+        );
+
+        let metrics = PrunerMetrics::new(None, &Registry::new());
+        prune_chunk(
+            &db,
+            &schema,
+            &mut RetractionCursors::default(),
+            Watermarks::default(),
+            2,
+            &metrics,
+        )
+        .unwrap();
+
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 1).unwrap(),
+            Some(v0),
+            "a deleted then re-created object must keep its live row",
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj1, 1).unwrap(),
+            Some(v1),
+            "a wrapped then unwrapped object must keep its live row",
+        );
+        assert!(schema.get_object_by_key(obj0, v0).unwrap().is_some());
+        assert!(schema.get_object_by_key(obj1, v1).unwrap().is_some());
+    }
+
+    /// `prune_history_cohort` keeps the live row of an object removed and then
+    /// re-created by separate transactions of one pruned checkpoint.
+    #[tokio::test]
+    async fn prune_history_cohort_keeps_object_removed_and_recreated_in_one_checkpoint() {
+        let (_dir, db, schema) = fresh_db();
+        let (cp0, cp1) = removed_and_recreated_checkpoints();
+        let obj0 = TestCheckpointBuilder::derive_object_id(0);
+        let obj1 = TestCheckpointBuilder::derive_object_id(1);
+        let v0 = cp1.transactions[1].effects.lamport_version();
+        let v1 = cp1.transactions[3].effects.lamport_version();
+
+        for cp in [&cp0, &cp1] {
+            seed_object_version_by_checkpoint(&db, &schema, cp).await;
+        }
+
+        let effects: Vec<(u64, TransactionEffects)> = cp0
+            .transactions
+            .iter()
+            .map(|tx| (0u64, tx.effects.clone()))
+            .chain(cp1.transactions.iter().map(|tx| (1u64, tx.effects.clone())))
+            .collect();
+        prune_history_cohort(
+            &db,
+            &schema,
+            &mut RetractionCursors::default(),
+            1,
+            0,
+            &effects,
+        )
+        .unwrap();
+
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj0, 2).unwrap(),
+            Some(v0),
+            "a deleted then re-created object must keep its live row",
+        );
+        assert_eq!(
+            schema.get_object_version_at_checkpoint(obj1, 2).unwrap(),
+            Some(v1),
+            "a wrapped then unwrapped object must keep its live row",
         );
     }
 
