@@ -47,7 +47,7 @@ impl Subscribable for Transaction {
         filter: &'a TransactionFilter,
     ) -> impl Future<Output = Result<StreamPage<v2::ExecutedTransaction>, RpcError>> + Send + 'a
     {
-        Transaction::scan_grpc(reader, cp_bounds, page, filter)
+        Transaction::scan_grpc(reader, cp_bounds, page, page.limit(), filter)
     }
 
     fn build_node(

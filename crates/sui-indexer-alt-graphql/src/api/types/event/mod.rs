@@ -285,19 +285,27 @@ impl Event {
             return Ok(StreamConnection::empty());
         };
 
-        let result = Self::scan_grpc(reader, cp_bounds, &page, &filter).await?;
+        let result = Self::scan_grpc(
+            reader,
+            cp_bounds,
+            &page,
+            page.limit_with_lookahead(),
+            &filter,
+        )
+        .await?;
 
         build_grpc_connection(scope, &page, result)
     }
 
-    /// Scan a page of events over the checkpoint range `cp_bounds` via the streaming gRPC List API.
-    /// Computing checkpoint bounds is the caller's responsibility; an unbounded end scans forward to
-    /// whatever is indexed. Items are returned in scan order (descending when paginating from the
-    /// back).
+    /// Scan up to `limit` events from `page`'s cursors over the checkpoint range `cp_bounds` via the
+    /// streaming gRPC List API. Computing checkpoint bounds is the caller's responsibility; an
+    /// unbounded end scans forward to whatever is indexed. Items are returned in scan order
+    /// (descending when paginating from the back).
     pub(crate) async fn scan_grpc(
         reader: &AlphaLedgerGrpcReader,
         cp_bounds: impl RangeBounds<u64>,
         page: &Page<CEvent>,
+        limit: usize,
         filter: &EventFilter,
     ) -> Result<StreamPage<v2::Event>, RpcError> {
         // Extract the cursor and pass through to grpc.
@@ -314,7 +322,7 @@ impl Event {
         });
 
         let mut options = v2::QueryOptions::default();
-        options.limit = Some(page.limit() as u32);
+        options.limit = Some(limit as u32);
         options.after = after;
         options.before = before;
         options.ordering = Some(if page.is_from_front() {
@@ -780,8 +788,10 @@ mod tests {
         );
     }
 
+    /// A server that capped the requested limit at its own maximum ends a full page at
+    /// `ItemLimit` without returning the lookahead item, so more data may still exist.
     #[test]
-    fn full_page_at_item_limit_signals_more() {
+    fn capped_item_limit_signals_more() {
         let scope = Scope::for_tests();
         let page = forward_page(2);
         let result = StreamPage::<v2::Event>::for_test(
@@ -798,7 +808,7 @@ mod tests {
         assert_eq!(conn.edges.len(), 2);
         assert!(
             conn.page_info.has_next_page,
-            "full page + ItemLimit must report hasNextPage: true (has_more() is true)"
+            "full page + ItemLimit without the lookahead item must report hasNextPage: true"
         );
     }
 
