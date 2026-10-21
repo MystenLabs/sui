@@ -125,8 +125,8 @@ struct CheckpointsResult {
 fn request_ordering(options: Option<&QueryOptions>) -> Ordering {
     options.map(|o| o.ordering()).unwrap_or(Ordering::Ascending)
 }
-/// A cluster whose kv-rpc server serves the List APIs. They are off by default,
-/// matching production, so every test in this file opts in.
+/// A cluster whose kv-rpc server serves the List APIs and `at_checkpoint` object reads. Both are
+/// off by default, matching production, so every test in this file opts in.
 async fn list_api_cluster() -> FullCluster {
     list_api_cluster_with_config(KvRpcConfig::default()).await
 }
@@ -134,6 +134,7 @@ async fn list_api_cluster() -> FullCluster {
 /// [`list_api_cluster`] for tests that also need to tune the kv-rpc config.
 async fn list_api_cluster_with_config(mut kv_rpc_config: KvRpcConfig) -> FullCluster {
     kv_rpc_config.enable_list_apis = Some(true);
+    kv_rpc_config.enable_object_at_checkpoint = Some(true);
     FullCluster::new_with_configs(
         Simulacrum::new(),
         OffchainClusterConfig {
@@ -1340,25 +1341,6 @@ async fn test_batch_get_objects() {
     }
 }
 
-/// A cluster whose kv-rpc server serves `at_checkpoint` object reads, with the BigTable indexer
-/// running the alpha pipeline that backs them.
-async fn object_at_checkpoint_cluster() -> FullCluster {
-    FullCluster::new_with_configs(
-        Simulacrum::new(),
-        OffchainClusterConfig {
-            kv_rpc_config: KvRpcConfig {
-                enable_object_at_checkpoint: Some(true),
-                ..Default::default()
-            },
-            bt_alpha_pipelines: vec![sui_kvstore::OBJECT_VERSIONS_BY_CHECKPOINT_PIPELINE],
-            ..Default::default()
-        },
-        &prometheus::Registry::new(),
-    )
-    .await
-    .expect("Failed to create cluster")
-}
-
 fn basics_pkg_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/move/basics")
 }
@@ -1415,7 +1397,8 @@ fn pure_arg<T: serde::Serialize>(value: &T) -> CallArg {
 }
 
 /// One `basics::object_basics::Object` driven through create, set_value, wrap, unwrap, and delete,
-/// one step per checkpoint. Wrapping creates `wrapper`, and unwrapping deletes it.
+/// one step per checkpoint, with an empty checkpoint between create and set_value. Wrapping
+/// creates `wrapper`, and unwrapping deletes it.
 struct ObjectLifecycle {
     object: ObjectID,
     wrapper: ObjectID,
@@ -1424,10 +1407,7 @@ struct ObjectLifecycle {
     changes: Vec<(u64, ObjectID, u64, bool)>,
     /// The checkpoint sealed after publishing, just before the object is created.
     publish_checkpoint: u64,
-    create_checkpoint: u64,
     set_value_checkpoint: u64,
-    wrap_checkpoint: u64,
-    unwrap_checkpoint: u64,
     delete_checkpoint: u64,
     /// The sender's gas after the last step.
     gas: ObjectRef,
@@ -1461,6 +1441,8 @@ impl ObjectLifecycle {
             create.lamport_version().value(),
             true,
         ));
+        // Seal an empty checkpoint, in which the object is live but unchanged.
+        cluster.create_checkpoint().await;
 
         let (set_value, set_value_checkpoint, gas) = call_object_basics(
             cluster,
@@ -1530,10 +1512,7 @@ impl ObjectLifecycle {
             wrapper,
             changes,
             publish_checkpoint,
-            create_checkpoint,
             set_value_checkpoint,
-            wrap_checkpoint,
-            unwrap_checkpoint,
             delete_checkpoint,
             gas,
         }
@@ -1675,11 +1654,12 @@ fn bad_request_fields(status: &tonic::Status) -> Vec<String> {
 }
 
 /// `at_checkpoint` reads resolve an object to its state at the end of the checkpoint, through
-/// creation, mutation, wrapping, unwrapping, and deletion; `GetObject` and `BatchGetObjects` agree
-/// item by item, including in batches that mix them with exact-version and latest reads.
+/// creation, mutation, wrapping, unwrapping, and deletion, and at a checkpoint in which the live
+/// object did not change; `GetObject` and `BatchGetObjects` agree item by item, including in
+/// batches that mix them with exact-version and latest reads.
 #[tokio::test]
 async fn test_get_object_at_checkpoint() {
-    let mut cluster = object_at_checkpoint_cluster().await;
+    let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let lifecycle = ObjectLifecycle::run(&mut cluster, sender, &kp, gas).await;
     let ObjectLifecycle {
@@ -1733,12 +1713,6 @@ async fn test_get_object_at_checkpoint() {
     let set_value_version = lifecycle
         .live_version_at(object, lifecycle.set_value_checkpoint)
         .unwrap();
-    let wrap_version = lifecycle
-        .live_version_at(wrapper, lifecycle.wrap_checkpoint)
-        .unwrap();
-    let unwrap_version = lifecycle
-        .live_version_at(object, lifecycle.unwrap_checkpoint)
-        .unwrap();
     let gas = lifecycle.gas;
     let not_yet_indexed = served_height + 1;
     let batch = batch_get_object_reads(
@@ -1747,13 +1721,9 @@ async fn test_get_object_at_checkpoint() {
             object_request(object, Some(set_value_version), None),
             object_request(gas.0, None, None),
             object_request(object, None, Some(lifecycle.delete_checkpoint)),
-            object_request(object, None, Some(lifecycle.wrap_checkpoint)),
-            object_request(object, None, Some(lifecycle.unwrap_checkpoint)),
-            object_request(wrapper, None, Some(lifecycle.wrap_checkpoint)),
             object_request(object, None, Some(lifecycle.set_value_checkpoint)),
             object_request(object, None, Some(lifecycle.set_value_checkpoint)),
             object_request(object, None, Some(lifecycle.delete_checkpoint)),
-            object_request(object, None, Some(lifecycle.create_checkpoint - 1)),
             object_request(object, None, Some(not_yet_indexed)),
         ],
     )
@@ -1766,34 +1736,20 @@ async fn test_get_object_at_checkpoint() {
         lifecycle.delete_checkpoint,
         "deleted object",
     );
-    assert_not_live_at_checkpoint(
-        &batch[3],
-        object,
-        lifecycle.wrap_checkpoint,
-        "wrapped object",
-    );
-    assert_object_found(&batch[4], object, unwrap_version, "unwrapped object");
-    assert_object_found(&batch[5], wrapper, wrap_version, "live wrapper");
-    assert_object_found(&batch[6], object, set_value_version, "mutated object");
+    assert_object_found(&batch[3], object, set_value_version, "mutated object");
     assert_object_found(
-        &batch[7],
+        &batch[4],
         object,
         set_value_version,
         "duplicate mutated object",
     );
     assert_not_live_at_checkpoint(
-        &batch[8],
+        &batch[5],
         object,
         lifecycle.delete_checkpoint,
         "duplicate deleted object",
     );
-    assert_not_live_at_checkpoint(
-        &batch[9],
-        object,
-        lifecycle.create_checkpoint - 1,
-        "object before creation",
-    );
-    assert_not_yet_indexed(&batch[10], "batch item above the served height");
+    assert_not_yet_indexed(&batch[6], "batch item above the served height");
 
     // 3. A checkpoint above the served height fails a single read with `NotFound`.
     for checkpoint in [not_yet_indexed, u64::MAX] {
@@ -1884,7 +1840,7 @@ async fn test_get_object_at_checkpoint() {
 }
 
 /// `at_checkpoint` reads are off by default: kv-rpc rejects them with `Unimplemented`, failing a
-/// whole batch that contains one, while latest and exact-version reads still work.
+/// whole batch that contains one.
 #[tokio::test]
 async fn test_get_object_at_checkpoint_disabled_by_default() {
     let mut cluster = FullCluster::new().await.unwrap();
@@ -1920,25 +1876,6 @@ async fn test_get_object_at_checkpoint_disabled_by_default() {
         .await
         .unwrap_err();
     assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err:?}");
-
-    let latest = get_object_read(&mut client, object_request(gas.0, None, None)).await;
-    assert_object_found(&latest, gas.0, gas.1.value(), "latest");
-    let exact = get_object_read(
-        &mut client,
-        object_request(gas.0, Some(gas.1.value()), None),
-    )
-    .await;
-    assert_object_found(&exact, gas.0, gas.1.value(), "exact version");
-    let batch = batch_get_object_reads(
-        &mut client,
-        vec![
-            object_request(gas.0, None, None),
-            object_request(gas.0, Some(gas.1.value()), None),
-        ],
-    )
-    .await;
-    assert_object_found(&batch[0], gas.0, gas.1.value(), "batch latest");
-    assert_object_found(&batch[1], gas.0, gas.1.value(), "batch exact version");
 }
 
 #[tokio::test]
