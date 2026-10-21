@@ -47,6 +47,7 @@ use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_kv_rpc::KvRpcConfig;
 use sui_kv_rpc::KvRpcServer;
 use sui_kvstore::ALL_PIPELINE_NAMES;
+use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::CHECKPOINTS_PIPELINE;
@@ -131,8 +132,8 @@ pub struct OffchainCluster {
     /// The pipelines that the indexer is populating.
     pipelines: Vec<&'static str>,
 
-    /// The BigTable archival indexer's pipelines: [`ALL_PIPELINE_NAMES`] plus the configured
-    /// alpha pipelines.
+    /// The BigTable archival indexer's pipelines: [`ALL_PIPELINE_NAMES`] and
+    /// [`ALPHA_PIPELINE_NAMES`].
     bigtable_pipelines: Vec<&'static str>,
 
     /// Handles to all running services. Held on to so the services are not dropped (and therefore
@@ -165,9 +166,6 @@ pub struct OffchainClusterConfig {
     pub kv_rpc_config: KvRpcConfig,
     /// Per-pipeline overrides (e.g. rate limits) for the BigTable archival indexer.
     pub bt_pipeline_layer: PipelineLayer,
-    /// Alpha pipelines (from [`sui_kvstore::ALPHA_PIPELINE_NAMES`]) the BigTable archival indexer
-    /// also runs. [`FullCluster::create_checkpoint`] waits for them too.
-    pub bt_alpha_pipelines: Vec<&'static str>,
     /// When set, kv-rpc also binds a second, unencrypted listener
     /// (`sui_kv_rpc::ServerConfig::plaintext_address`), reachable via
     /// `kv_rpc_plaintext_url`, for tests that exercise it directly.
@@ -403,7 +401,6 @@ impl OffchainCluster {
             bootstrap_genesis,
             kv_rpc_config,
             bt_pipeline_layer,
-            bt_alpha_pipelines,
             kv_rpc_plaintext_listener,
         }: OffchainClusterConfig,
         registry: &prometheus::Registry,
@@ -488,7 +485,6 @@ impl OffchainCluster {
             kv_rpc_plaintext_address,
             kv_rpc_config,
             bt_pipeline_layer,
-            &bt_alpha_pipelines,
             registry,
         )
         .await?;
@@ -535,7 +531,7 @@ impl OffchainCluster {
             pipelines,
             bigtable_pipelines: ALL_PIPELINE_NAMES
                 .iter()
-                .chain(&bt_alpha_pipelines)
+                .chain(&ALPHA_PIPELINE_NAMES)
                 .copied()
                 .collect(),
             services,
@@ -852,7 +848,6 @@ impl Default for OffchainClusterConfig {
             bootstrap_genesis: None,
             kv_rpc_config: KvRpcConfig::default(),
             bt_pipeline_layer: PipelineLayer::default(),
-            bt_alpha_pipelines: vec![],
             kv_rpc_plaintext_listener: false,
         }
     }
@@ -926,7 +921,6 @@ async fn start_archival(
     kv_rpc_plaintext_address: Option<SocketAddr>,
     kv_rpc_config: KvRpcConfig,
     bt_pipeline_layer: PipelineLayer,
-    bt_alpha_pipelines: &[&'static str],
     registry: &prometheus::Registry,
 ) -> anyhow::Result<(BigTableClient, BigTableEmulator, Service)> {
     let emulator = tokio::task::spawn_blocking(BigTableEmulator::start)
@@ -955,7 +949,8 @@ async fn start_archival(
         CommitterConfig::default(),
         BtIndexerConfig::default(),
         bt_pipeline_layer,
-        bt_alpha_pipelines,
+        // Run the alpha pipelines too, so tests can enable the reads they back.
+        &ALPHA_PIPELINE_NAMES,
         Chain::Unknown,
         registry,
     )
