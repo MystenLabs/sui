@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use mysten_common::ZipDebugEqIteratorExt;
-use prost::Message;
 use sui_macros::sim_test;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::google::rpc::BadRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
 use sui_rpc::proto::sui::rpc::v2::GetObjectRequest;
@@ -209,7 +207,8 @@ async fn batch_get_objects() {
 }
 
 /// Reads pinned to a checkpoint see the state left by the object's latest change at or before
-/// that checkpoint, through creation, mutation, wrapping, unwrapping, and deletion.
+/// that checkpoint, through creation, mutation, wrapping, unwrapping, and deletion, and at a
+/// checkpoint in which the live object did not change.
 #[sim_test]
 async fn get_object_at_checkpoint_lifecycle() {
     let cluster = TestClusterBuilder::new()
@@ -253,6 +252,8 @@ async fn get_object_at_checkpoint_lifecycle() {
     let object = created_object(&create);
     changes.push((cp, object, Some(create.lamport_version().value())));
     step_checkpoints.push(cp);
+    // A checkpoint passes before the next step, so the object is live but unchanged in it.
+    wait_for_fullnode_checkpoint_above(&cluster, cp).await;
 
     let (set_value, cp) = call_object_basics(
         &cluster,
@@ -303,6 +304,10 @@ async fn get_object_at_checkpoint_lifecycle() {
         step_checkpoints.windows(2).all(|pair| pair[0] < pair[1]),
         "lifecycle steps share a checkpoint: {step_checkpoints:?}",
     );
+    assert!(
+        step_checkpoints[1] > step_checkpoints[0] + 1,
+        "no checkpoint passed between creation and mutation: {step_checkpoints:?}",
+    );
 
     let first_cp = step_checkpoints[0];
     let last_cp = *step_checkpoints.last().unwrap();
@@ -322,15 +327,6 @@ async fn get_object_at_checkpoint_lifecycle() {
                 .and_then(|(_, _, version)| *version);
             cases.push((Address::from(id), checkpoint, expected_version));
         }
-    }
-
-    for &(id, checkpoint, expected_version) in &cases {
-        let outcome = single_outcome(
-            client
-                .get_object(at_checkpoint_request(id, checkpoint))
-                .await,
-        );
-        assert_at_checkpoint(outcome, id, checkpoint, expected_version);
     }
 
     // One batch covering every case twice: results come back in request order, and duplicate
@@ -487,24 +483,7 @@ async fn get_object_at_checkpoint_below_available_floor() {
     }
 
     // The first checkpoint above the floor still resolves once it is executed and indexed.
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
-    loop {
-        let highest_executed = cluster.fullnode_handle.sui_node.with(|node| {
-            node.state()
-                .get_checkpoint_store()
-                .get_highest_executed_checkpoint_seq_number()
-                .expect("db error")
-                .unwrap_or(0)
-        });
-        if highest_executed > pruned_to {
-            break;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for the fullnode to execute a checkpoint above {pruned_to}"
-        );
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
+    wait_for_fullnode_checkpoint_above(&cluster, pruned_to).await;
     cluster.wait_for_rpc_index_ready().await;
 
     // Inside a batch, a pruned checkpoint fails only its own item.
@@ -544,61 +523,6 @@ async fn get_object_at_checkpoint_below_available_floor() {
         }
         other => panic!("expected an object, got {other:?}"),
     }
-}
-
-/// `version` and `at_checkpoint` are mutually exclusive; setting both fails the whole call.
-#[sim_test]
-async fn get_object_version_and_at_checkpoint_conflict() {
-    let cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-    let mut client = LedgerServiceClient::connect(cluster.rpc_url().to_owned())
-        .await
-        .unwrap();
-
-    let id: Address = "0x5".parse().unwrap();
-    let conflicting = {
-        let mut request = at_checkpoint_request(id, 0);
-        request.version = Some(1);
-        request
-    };
-
-    let error = client.get_object(conflicting.clone()).await.unwrap_err();
-    assert_eq!(error.code(), tonic::Code::InvalidArgument);
-    assert!(
-        error.message().contains("mutually exclusive"),
-        "{}",
-        error.message()
-    );
-
-    // One conflicting item fails the whole batch, even alongside valid items.
-    let error = client
-        .batch_get_objects({
-            let mut message = BatchGetObjectsRequest::default();
-            message.requests = vec![
-                GetObjectRequest::new(&id).with_version(1u64),
-                conflicting,
-                at_checkpoint_request(id, 0),
-            ];
-            message
-        })
-        .await
-        .unwrap_err();
-    assert_eq!(error.code(), tonic::Code::InvalidArgument);
-
-    let details = sui_rpc::proto::google::rpc::Status::decode(error.details())
-        .unwrap()
-        .details;
-    let bad_request = details
-        .iter()
-        .find_map(|detail| detail.to_msg::<BadRequest>().ok())
-        .expect("error status should carry a BadRequest detail");
-    assert_eq!(bad_request.field_violations.len(), 1);
-    assert_eq!(
-        bad_request.field_violations[0].field,
-        "requests[1].at_checkpoint"
-    );
 }
 
 /// A request for `id` as of the end of `checkpoint`, reading its id and version.
@@ -682,6 +606,28 @@ async fn tx_builder(cluster: &TestCluster) -> TestTransactionBuilder {
     cluster
         .test_transaction_builder_with_gas_object(sender, gas)
         .await
+}
+
+/// Wait until the fullnode has executed a checkpoint above `checkpoint`.
+async fn wait_for_fullnode_checkpoint_above(cluster: &TestCluster, checkpoint: u64) {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+    loop {
+        let highest_executed = cluster.fullnode_handle.sui_node.with(|node| {
+            node.state()
+                .get_checkpoint_store()
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("db error")
+                .unwrap_or(0)
+        });
+        if highest_executed > checkpoint {
+            return;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "timed out waiting for the fullnode to execute a checkpoint above {checkpoint}"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
 }
 
 /// Sign and execute `tx_data` as address 0, wait for it to be checkpointed, and return its

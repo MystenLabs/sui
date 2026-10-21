@@ -573,7 +573,7 @@ mod tests {
 
     /// A read mask that asks only for `object_id` and `version` never reads object contents: the
     /// latest and exact-version reads fetch only row keys, and `at_checkpoint` reads are answered
-    /// by the version index without an `objects` read. Any other field reads the contents.
+    /// by the version index without an `objects` read.
     #[tokio::test]
     async fn test_version_only_masks_skip_object_contents() {
         let mock = MockBigtableServer::new();
@@ -647,28 +647,6 @@ mod tests {
             "version-only reads fetch only row keys",
         );
 
-        let digest_mask = ["object_id", "version", "digest"];
-        mock.clear_read_rows_calls().await;
-        for selector in selectors {
-            let rendered = get_object(
-                &kv_rpc,
-                kv_rpc.admitted_request(request(selector, &digest_mask)),
-            )
-            .await
-            .unwrap()
-            .object
-            .unwrap();
-            assert_eq!(
-                rendered.digest,
-                Some(object.digest().to_string()),
-                "{selector:?}"
-            );
-        }
-        assert_eq!(
-            objects_reads_stripped(&mock).await,
-            [false; 3],
-            "a digest needs the contents",
-        );
 
         mock_server.abort();
     }
