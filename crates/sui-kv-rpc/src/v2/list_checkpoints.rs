@@ -138,11 +138,8 @@ pub(crate) async fn list_checkpoints(
         .await?;
     let exhaustion = cp_range.exhaustion;
     let range_end_position = cp_range.end_position;
-    let entry_checkpoint = if direction.is_ascending() {
-        cp_range.range().start
-    } else {
-        cp_range.range().end.saturating_sub(1)
-    };
+    let entry_checkpoint = cp_range.entry_checkpoint;
+    let natural_end_claim = cp_range.natural_end_claim(&options);
     let cp_range = cp_range.range();
 
     if cp_range.is_empty() {
@@ -154,17 +151,17 @@ pub(crate) async fn list_checkpoints(
             elapsed_ms = started.elapsed().as_millis(),
             "list_checkpoints: empty range"
         );
-        // Empty resolved ranges still surface their terminal cursor, but
-        // natural completion claims no checkpoint coverage.
+        // An empty scan still surfaces its terminal cursor. Its natural end claims the window's
+        // edge, which the cursor that left nothing to scan vouches for, unless the window itself
+        // is empty.
         let response = range_end_response(
-            &options,
             exhaustion,
             Position::Checkpoints {
                 checkpoint: range_end_position,
             },
             None,
-            true,
-        )
+            natural_end_claim,
+        )?
         .0;
         return Ok(async_stream::try_stream! {
             ctx.inc_stream_watermark_frames();
@@ -319,6 +316,7 @@ pub(crate) async fn list_checkpoints(
         options,
         exhaustion,
         range_end_position,
+        natural_end_claim,
         entry_checkpoint,
         direction,
         filtered,
@@ -333,6 +331,7 @@ fn drive_rendered_checkpoints(
     options: QueryOptions,
     exhaustion: RangeExhaustion,
     range_end_position: u64,
+    natural_end_claim: Option<u64>,
     entry_checkpoint: u64,
     direction: ScanDirection,
     filtered: bool,
@@ -347,14 +346,13 @@ fn drive_rendered_checkpoints(
         let terminal_reason = loop {
             let Some(item) = ctx.next_response_item(resolution, &mut rendered_stream).await else {
                 let (response, reason) = range_end_response(
-                    &options,
                     exhaustion,
                     Position::Checkpoints {
                         checkpoint: range_end_position,
                     },
                     covered_checkpoint_bound,
-                    false,
-                );
+                    natural_end_claim,
+                )?;
                 ctx.inc_stream_watermark_frames();
                 if !first_frame_emitted {
                     ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
@@ -456,9 +454,8 @@ fn drive_rendered_checkpoints(
 
 /// Convert the checkpoint containing a transaction-space scan frontier into a
 /// safe checkpoint-space resume cursor. The containing checkpoint is not fully
-/// covered. A coverage candidate before the interval's entry checkpoint proves
-/// nothing and is suppressed, so the wire checkpoint stays unset until the
-/// scan's first checkpoint is fully covered.
+/// covered. A coverage candidate before the window's entry checkpoint lies
+/// outside the window and is suppressed.
 fn checkpoint_frontier_watermark(
     checkpoint_at_frontier: u64,
     entry_checkpoint: u64,
@@ -518,9 +515,9 @@ fn terminal_response_from_scan_stop(
             covered_checkpoint_bound,
         ),
     };
-    let reason = terminal.reason();
+    let reason = terminal.reason()?;
     Ok(end_response(
-        terminal.into_watermark(options, *covered_checkpoint_bound),
+        terminal.into_watermark(*covered_checkpoint_bound),
         reason,
     ))
 }
@@ -646,24 +643,22 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListCheckpoints
 }
 
 /// Trailing terminal frame for range exhaustion. Reason and watermark derive
-/// from one `ScanTerminal`, so they cannot disagree; natural completion of an
-/// empty interval retains its cursor but claims no checkpoint coverage.
+/// from one `ScanTerminal`, so they cannot disagree. Natural completion claims
+/// `natural_end_claim`, which is `None` when the window has no checkpoint; the
+/// cursor is retained either way. Fails only for a terminal that ends with no
+/// `QueryEnd` (a serving floor), which this backend never resolves.
 fn range_end_response(
-    options: &QueryOptions,
     exhaustion: RangeExhaustion,
     position: Position,
     covered_checkpoint_bound: Option<u64>,
-    interval_empty: bool,
-) -> (ListCheckpointsResponse, QueryEndReason) {
-    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, interval_empty);
-    let reason = terminal.reason();
-    (
-        end_response(
-            terminal.into_watermark(options, covered_checkpoint_bound),
-            reason,
-        ),
+    natural_end_claim: Option<u64>,
+) -> Result<(ListCheckpointsResponse, QueryEndReason), RpcError> {
+    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, natural_end_claim);
+    let reason = terminal.reason()?;
+    Ok((
+        end_response(terminal.into_watermark(covered_checkpoint_bound), reason),
         reason,
-    )
+    ))
 }
 
 /// Determine the checkpoint_sequence_number scan window from the logical
@@ -769,6 +764,7 @@ mod tests {
             options,
             RangeExhaustion::CheckpointBound,
             10,
+            Some(9),
             7,
             ScanDirection::Ascending,
             false,

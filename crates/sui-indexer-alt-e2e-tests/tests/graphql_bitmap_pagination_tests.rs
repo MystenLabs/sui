@@ -626,10 +626,9 @@ async fn cursor_checkpoint_hint_is_redundant() {
     .await;
     assert_eq!(digests(&real), expected);
 
-    // Pg-minted cursors carry the `checkpoint: 0` placeholder. As a raw `before` hint it would
-    // clamp the checkpoint window empty, so graphql's grpc edge rewrites it to the neutral upper
-    // sentinel before forwarding: a client round-tripping a pg-minted cursor as `before` must see
-    // the same page.
+    // Pg-minted cursors carry the `checkpoint: 0` placeholder, which graphql's grpc edge rewrites
+    // to the neutral upper sentinel before forwarding: a client round-tripping a pg-minted cursor
+    // as `before` must see the same page.
     let pg_minted = transactions_page(
         &cluster,
         &alice,
@@ -653,9 +652,8 @@ async fn cursor_checkpoint_hint_is_redundant() {
     .await;
     assert_eq!(digests(&neutral_desc), expected);
 
-    // Only the `0` placeholder is repaired: a genuinely wrong (nonzero) hint still narrows at the
-    // backend. `1` as the `before` hint clamps the checkpoint window to cp 1, dropping the cp 2
-    // transaction the position bounds otherwise admit.
+    // A genuinely wrong (nonzero) hint is redundant too: the backend bounds the scan by cursor
+    // positions, so `1` as the `before` hint still admits the cp 2 transaction.
     let wrong = transactions_page(
         &cluster,
         &alice,
@@ -664,7 +662,7 @@ async fn cursor_checkpoint_hint_is_redundant() {
         Some(restamp_cursor_checkpoint(&before_real, 1)),
     )
     .await;
-    assert_eq!(digests(&wrong), digests(&all[1..3]));
+    assert_eq!(digests(&wrong), expected);
 }
 
 #[tokio::test]
@@ -1509,5 +1507,72 @@ async fn test_events_module_and_type_rejected() {
     assert!(
         err.to_string().contains("not supported"),
         "unexpected error: {err:#}"
+    );
+}
+
+/// `last: 2, after: tx3` is empty because nothing follows tx3. Paging backwards from it must
+/// either stop at once (the `(tx3, ..)` window is exhausted, as the Postgres path reports it), or
+/// return every transaction up to and including tx3 and then stop. It must not skip tx3 or repeat
+/// a page.
+#[tokio::test]
+async fn paging_back_from_empty_last_after_page_skips_nothing() {
+    let (cluster, temp_dir) = alpha_cluster().await;
+    let mut builder = TestCheckpointBuilder::new(1).with_network_total_transactions(1);
+    for i in 0..3u64 {
+        builder = builder
+            .start_transaction(1)
+            .create_owned_object(i)
+            .finish_transaction();
+    }
+    let checkpoint = builder.build_checkpoint();
+    let expected: Vec<String> = checkpoint
+        .transactions
+        .iter()
+        .map(|tx| Base58::encode(tx.transaction.digest()))
+        .collect();
+    write_checkpoint(temp_dir.path(), checkpoint).await.unwrap();
+    cluster
+        .wait_for_graphql(1, Duration::from_secs(30))
+        .await
+        .expect("graphql did not reach checkpoint 1");
+
+    let (page, info) = checkpoint_transactions_page(&cluster, None, None, Some(1), None).await;
+    assert_eq!(page, expected[2..]);
+    let tx3 = info["startCursor"].as_str().map(String::from);
+
+    let (page, mut info) = checkpoint_transactions_page(&cluster, None, tx3, Some(2), None).await;
+    assert!(page.is_empty(), "last: 2 after tx3: {info}");
+
+    // At most one page per transaction, so a page that repeats itself fails the assertions below
+    // instead of looping.
+    let mut pages = Vec::new();
+    for _ in 0..expected.len() {
+        if info["hasPreviousPage"] != json!(true) {
+            break;
+        }
+        let before = info["startCursor"].as_str().map(String::from);
+        assert!(
+            before.is_some(),
+            "hasPreviousPage implies startCursor: {info}"
+        );
+        let (page, next) =
+            checkpoint_transactions_page(&cluster, None, None, Some(2), before).await;
+        pages.push(page);
+        info = next;
+    }
+
+    assert_eq!(
+        info["hasPreviousPage"],
+        json!(false),
+        "paging back did not stop, pages: {pages:?}"
+    );
+    let page_count = pages.len();
+    let collected: Vec<String> = pages.into_iter().rev().flatten().collect();
+    // No back page: the empty page reported no previous page (GraphQL matching the Postgres
+    // path). Every transaction: the server's closing cursor resumes just above tx3.
+    assert!(
+        page_count == 0 || collected == expected,
+        "paging back skipped a transaction: got {collected:?} over {page_count} pages, expected \
+         {expected:?} or no previous page"
     );
 }

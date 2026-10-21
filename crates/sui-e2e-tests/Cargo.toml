@@ -65,6 +65,7 @@ sui-keys.workspace = true
 sui-light-client.workspace = true
 sui-rpc-api.workspace = true
 sui-rpc.workspace = true
+sui-rpc-cursor.workspace = true
 consensus-config.workspace = true
 shared-crypto.workspace = true
 sui-sdk-types.workspace = true

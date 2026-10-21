@@ -52,6 +52,7 @@ use super::ledger_read::checkpoint_hi_exclusive;
 use super::ledger_read::checkpoint_to_tx_range;
 use super::ledger_read::clamp_to_serving_floor;
 use super::ledger_read::get_tx_seq_digest_multi;
+use super::ledger_read::reject_window_below_serving_floor;
 use crate::ledger_history::watermark::ScanTerminal;
 use crate::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use crate::ledger_history::watermark::boundary_watermark;
@@ -115,7 +116,6 @@ pub(crate) async fn list_events(
         filter_query,
     };
 
-    let terminal_options = options.clone();
     let chunk_metrics = request_metrics.chunk_metrics();
     Ok(async_stream::try_stream! {
         let unfiltered_row_scan_budget = endpoint.max_limit_items as usize;
@@ -171,14 +171,27 @@ pub(crate) async fn list_events(
         let produced = scan.produced();
         let bitmap_buckets_evaluated = filtered.then(|| scan.bitmap_buckets_evaluated());
         let chunk_terminal = scan.into_terminal().expect("query emits terminal state");
-        let terminal_reason = super::query_end::effective_terminal_reason(
+        let terminal_reason = match super::query_end::effective_terminal_reason(
             produced,
             limit_items,
             chunk_terminal.reason(),
-        );
+        ) {
+            Ok(terminal_reason) => terminal_reason,
+            Err(error) => {
+                // Below its item limit, the scan reached this server's serving floor: hand back
+                // the watermark at the floor, then fail, since everything below it is pruned.
+                let response =
+                    watermark_response(chunk_terminal.into_watermark(covered_checkpoint_bound));
+                request_metrics.observe_frame(&response, false);
+                let yield_started = request_metrics.yield_clock();
+                yield response;
+                request_metrics.observe_yield_wait(yield_started);
+                Err::<(), _>(error)?;
+                return;
+            }
+        };
         if terminal_reason != QueryEndReason::ItemLimit {
-            let terminal_watermark =
-                chunk_terminal.into_watermark(&terminal_options, covered_checkpoint_bound);
+            let terminal_watermark = chunk_terminal.into_watermark(covered_checkpoint_bound);
             let response = end_response(terminal_watermark, terminal_reason);
             request_metrics.observe_frame(&response, false);
             request_metrics.finish_success(terminal_reason, bitmap_buckets_evaluated);
@@ -238,7 +251,7 @@ enum EventScanState {
     },
     Unfiltered {
         bounds: IntraTxScanBounds,
-        /// Checkpoint containing the effective interval's first event.
+        /// The window's first checkpoint in scan direction; no coverage claim passes it.
         entry_checkpoint: u64,
         // Remaining tx rows this scan may read before stopping with `ScanLimit`.
         // Bounds an unfiltered scan that walks event-less history (each scanned
@@ -248,16 +261,18 @@ enum EventScanState {
         exhaustion: RangeExhaustion,
         end_checkpoint: u64,
         end_position: IntraTxCoordinate,
+        natural_end_claim: Option<u64>,
     },
     Filtered {
         query: BitmapQuery,
         bounds: Option<IntraTxScanBounds>,
-        /// Checkpoint containing the effective interval's first event.
+        /// The window's first checkpoint in scan direction; no coverage claim passes it.
         entry_checkpoint: u64,
         pending_bucket: Option<PendingBitmapBucket>,
         exhaustion: RangeExhaustion,
         end_checkpoint: u64,
         end_position: IntraTxCoordinate,
+        natural_end_claim: Option<u64>,
     },
 }
 
@@ -300,10 +315,11 @@ fn next_event_chunk(
                 tx_seq: event_range.end_position.tx_seq,
                 event_index: event_range.end_position.index,
             };
+            let natural_end_claim = event_range.natural_end_claim(&options);
             let terminal = ScanTerminal::from_range_exhaustion(
                 event_range.exhaustion,
                 terminal_position,
-                event_range.is_empty(),
+                natural_end_claim,
             );
             let bounds = event_range.bounds;
             if event_range.is_empty() {
@@ -324,6 +340,7 @@ fn next_event_chunk(
                     exhaustion: event_range.exhaustion,
                     end_checkpoint: event_range.end_checkpoint,
                     end_position: event_range.end_position,
+                    natural_end_claim,
                 },
                 None => EventScanState::Unfiltered {
                     bounds,
@@ -332,6 +349,7 @@ fn next_event_chunk(
                     exhaustion: event_range.exhaustion,
                     end_checkpoint: event_range.end_checkpoint,
                     end_position: event_range.end_position,
+                    natural_end_claim,
                 },
             };
             return next_event_chunk(
@@ -355,6 +373,7 @@ fn next_event_chunk(
             exhaustion,
             end_checkpoint,
             end_position,
+            natural_end_claim,
         } => {
             if cancel.is_cancelled() {
                 return Err(cancelled());
@@ -384,6 +403,7 @@ fn next_event_chunk(
                     exhaustion,
                     end_checkpoint,
                     end_position,
+                    natural_end_claim,
                 })
             };
             let frontier = if scan.row_limit_reached {
@@ -422,6 +442,7 @@ fn next_event_chunk(
                 request_scan_limit_reached,
                 exhaustion,
                 terminal_position,
+                natural_end_claim,
                 || {
                     frontier_watermark.ok_or_else(|| {
                         RpcError::new(
@@ -447,6 +468,7 @@ fn next_event_chunk(
             exhaustion,
             end_checkpoint,
             end_position,
+            natural_end_claim,
         } => {
             let hit_limit = chunk_item_limit.min(remaining_request_item_limit);
             let chunk_scan_budget = remaining_scan_budget.min(chunk_scan_budget);
@@ -487,6 +509,7 @@ fn next_event_chunk(
                         exhaustion,
                         end_checkpoint,
                         end_position,
+                        natural_end_claim,
                     },
                 )
             };
@@ -516,6 +539,7 @@ fn next_event_chunk(
                 request_scan_limit_reached,
                 exhaustion,
                 terminal_position,
+                natural_end_claim,
                 || {
                     frontier_watermark.ok_or_else(|| {
                         RpcError::new(
@@ -737,12 +761,16 @@ fn tx_seq_digest_rows_for_event_refs(
         .collect()
 }
 
+/// Resolve the request's scan, raising its low end to the serving floor. A request with no lower
+/// bound of its own whose window lies wholly below the floor, or whose remaining scan lies wholly
+/// below the floor, is `OutOfRange`.
 fn resolve_event_range(
     service: &RpcService,
     start_checkpoint: Option<u64>,
     cp_range: ResolvedCheckpointRange,
     options: &QueryOptions,
 ) -> Result<ResolvedScan<IntraTxCoordinate>, RpcError> {
+    reject_window_below_serving_floor(service, &cp_range.range, start_checkpoint, options)?;
     let tx_range = checkpoint_to_tx_range(service, cp_range.range.clone())?;
     let mut resolved = ResolvedScan::<IntraTxCoordinate>::resolve(
         cp_range,
@@ -759,7 +787,7 @@ fn resolve_event_range(
                 IntraTxCoordinate::start_of_tx(floor.tx_seq),
                 floor.checkpoint,
                 options,
-            );
+            )?;
         }
     }
     Ok(resolved)
@@ -909,7 +937,7 @@ mod tests {
             assert_eq!(watermark.checkpoint, expected_proof);
             let terminal = ScanTerminal::ScanLimit { watermark };
             let response = end_response(
-                terminal.into_watermark(&options, Some(123)),
+                terminal.into_watermark(Some(123)),
                 QueryEndReason::ScanLimit,
             );
             assert!(response.event.is_none());

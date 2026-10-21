@@ -168,6 +168,9 @@ impl From<Position> for grpc::cursor_token::Position {
     }
 }
 
+/// A transaction or event cursor without a checkpoint decodes with checkpoint 0, the value cursors
+/// minted without a known checkpoint already carry. Their checkpoint only labels the cursor: ledger
+/// servers never let it decide which positions a scan returns.
 impl TryFrom<grpc::cursor_token::Position> for Position {
     type Error = anyhow::Error;
 
@@ -177,11 +180,11 @@ impl TryFrom<grpc::cursor_token::Position> for Position {
                 checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
             }),
             grpc::cursor_token::Position::Transactions(position) => Ok(Position::Transactions {
-                checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
+                checkpoint: position.checkpoint.unwrap_or(0),
                 tx_seq: position.tx_seq.context("cursor missing tx_seq")?,
             }),
             grpc::cursor_token::Position::Events(position) => Ok(Position::Events {
-                checkpoint: position.checkpoint.context("cursor missing checkpoint")?,
+                checkpoint: position.checkpoint.unwrap_or(0),
                 tx_seq: position.tx_seq.context("cursor missing tx_seq")?,
                 event_index: position.event_index.context("cursor missing event_index")?,
             }),
@@ -300,6 +303,52 @@ mod tests {
         .encode_to_vec();
 
         assert!(CursorToken::decode(&bytes).is_err());
+    }
+
+    /// Transaction and event cursors minted without a checkpoint decode with checkpoint 0. A
+    /// checkpoint cursor's checkpoint is its position, so it stays required.
+    #[test]
+    fn decodes_cursors_without_a_checkpoint() {
+        let token = |position| {
+            grpc::CursorToken {
+                kind: grpc::CursorKind::Boundary as i32,
+                position: Some(position),
+            }
+            .encode_to_vec()
+        };
+
+        let transactions = token(grpc::cursor_token::Position::Transactions(
+            grpc::TransactionsPosition {
+                checkpoint: None,
+                tx_seq: Some(10),
+            },
+        ));
+        assert_eq!(
+            CursorToken::decode(&transactions).unwrap(),
+            CursorToken::boundary(Position::Transactions {
+                checkpoint: 0,
+                tx_seq: 10,
+            })
+        );
+
+        let events = token(grpc::cursor_token::Position::Events(grpc::EventsPosition {
+            checkpoint: None,
+            tx_seq: Some(10),
+            event_index: Some(3),
+        }));
+        assert_eq!(
+            CursorToken::decode(&events).unwrap(),
+            CursorToken::boundary(Position::Events {
+                checkpoint: 0,
+                tx_seq: 10,
+                event_index: 3,
+            })
+        );
+
+        let checkpoints = token(grpc::cursor_token::Position::Checkpoints(
+            grpc::CheckpointsPosition { checkpoint: None },
+        ));
+        assert!(CursorToken::decode(&checkpoints).is_err());
     }
 
     #[test]
