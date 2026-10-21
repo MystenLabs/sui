@@ -27,7 +27,9 @@ use self::{
         DynamicFieldHashTypeAndKeyCostParams, DynamicFieldRemoveChildObjectCostParams,
     },
     event::EventEmitCostParams,
-    object::{BorrowUidCostParams, DeleteImplCostParams, RecordNewIdCostParams},
+    object::{
+        BorrowUidCostParams, DeleteImplCostParams, IsSharedInputCostParams, RecordNewIdCostParams,
+    },
     package::PackageVersioningOriginalPackageIdImplCostParams,
     scratch::{
         ScratchAddCostParams, ScratchExistsCostParams, ScratchExistsWithTypeCostParams,
@@ -146,6 +148,7 @@ pub struct NativesCostTable {
     pub borrow_uid_cost_params: BorrowUidCostParams,
     pub delete_impl_cost_params: DeleteImplCostParams,
     pub record_new_id_cost_params: RecordNewIdCostParams,
+    pub is_shared_input_cost_params: IsSharedInputCostParams,
 
     // Transfer
     pub transfer_transfer_internal_cost_params: TransferInternalCostParams,
@@ -402,6 +405,11 @@ impl NativesCostTable {
                     .into(),
                 object_record_new_uid_from_hash_cost_base: protocol_config
                     .object_record_new_uid_from_hash_cost_base_as_option()
+                    .map(Into::into),
+            },
+            is_shared_input_cost_params: IsSharedInputCostParams {
+                object_is_shared_input_cost_base: protocol_config
+                    .object_is_shared_input_cost_base_as_option()
                     .map(Into::into),
             },
 
@@ -1242,6 +1250,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "object",
             "record_new_uid_from_hash",
             make_native!(object::record_new_uid_from_hash),
+        ),
+        (
+            "object",
+            "is_shared_input_impl",
+            make_native!(object::is_shared_input_impl),
         ),
         (
             "test_scenario",

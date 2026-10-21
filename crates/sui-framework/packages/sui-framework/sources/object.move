@@ -283,6 +283,11 @@ public(package) fun new_uid_from_hash(parent: address, bytes: address): UID {
     UID { id: ID { bytes } }
 }
 
+/// Returns true if `id` belongs to a shared object that is an input to this transaction.
+public(package) fun is_shared_input(id: &UID): bool {
+    is_shared_input_impl(id.id.bytes)
+}
+
 // === internal functions ===
 
 // helper for delete
@@ -291,6 +296,9 @@ native fun delete_impl(id: address);
 // marks newly created UIDs from hash, tracking the root version of `parent` so that the new UID
 // `bytes` inherits the parent's root version.
 native fun record_new_uid_from_hash(parent: address, bytes: address);
+
+// helper for is_shared_input
+native fun is_shared_input_impl(id: address): bool;
 
 #[test_only]
 /// Return the most recent created object ID.

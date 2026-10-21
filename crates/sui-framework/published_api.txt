@@ -3157,10 +3157,16 @@ borrow_uid
 new_uid_from_hash
 	public(package) fun
 	0x2::object
+is_shared_input
+	public(package) fun
+	0x2::object
 delete_impl
 	fun
 	0x2::object
 record_new_uid_from_hash
+	fun
+	0x2::object
+is_shared_input_impl
 	fun
 	0x2::object
 ObjectBag
