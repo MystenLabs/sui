@@ -316,8 +316,8 @@ async fn test_mldsa65_personal_message() {
     "###);
 }
 
-/// A hybrid committee is only accepted when the chain enables ML-DSA-65
-/// multisig members, which the test cluster's protocol version does.
+/// Local verification accepts supported hybrid committees independently of the chain's
+/// protocol activation rules.
 #[tokio::test]
 async fn test_multisig_with_mldsa65_member_personal_message() {
     let cluster = FullCluster::new().await.unwrap();

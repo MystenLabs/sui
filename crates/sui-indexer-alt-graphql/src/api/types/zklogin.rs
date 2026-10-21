@@ -20,8 +20,8 @@ use sui_types::transaction::TransactionData;
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::types::epoch::Epoch;
-use crate::api::types::signature_verify::chain_zklogin_circuit_mode;
 use crate::api::types::signature_verify::fetch_jwks;
+use crate::api::types::signature_verify::verification_params;
 use crate::config::ZkLoginConfig;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
@@ -86,22 +86,7 @@ pub(crate) async fn verify_signature(
 
     let jwks = fetch_jwks(ctx, scope).await.map_err(upcast)?;
 
-    let zklogin_circuit_mode = chain_zklogin_circuit_mode(ctx, &epoch)
-        .await
-        .map_err(upcast)?;
-
-    let params = VerifyParams::new(
-        jwks,
-        vec![],
-        config.env,
-        zklogin_circuit_mode,
-        true,
-        true,
-        true,
-        config.max_epoch_upper_bound_delta,
-        true,
-        true,
-    );
+    let params = verification_params(config, jwks);
 
     match intent_scope {
         ZkLoginIntentScope::TransactionData => verify(
