@@ -13,7 +13,8 @@ Key features:
 
 The derived UIDs, once created, are independent and do not require sequencing on the parent
 object. They can be used without affecting the parent. The parent only maintains a record of
-which derived addresses have been claimed to prevent duplicates.
+which derived addresses have been claimed to prevent duplicates. Releasing a derived UID removes
+its record, so the same address can be claimed again.
 
 
 -  [Struct `Claimed`](#sui_derived_object_Claimed)
@@ -21,6 +22,7 @@ which derived addresses have been claimed to prevent duplicates.
 -  [Enum `ClaimedStatus`](#sui_derived_object_ClaimedStatus)
 -  [Constants](#@Constants_0)
 -  [Function `claim`](#sui_derived_object_claim)
+-  [Function `release`](#sui_derived_object_release)
 -  [Function `exists`](#sui_derived_object_exists)
 -  [Function `derive_address`](#sui_derived_object_derive_address)
 
@@ -138,6 +140,28 @@ Tries to create an object twice with the same parent-key combination.
 
 
 
+<a name="sui_derived_object_EObjectNotClaimed"></a>
+
+Tries to release a UID that is not claimed under the given parent.
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/derived_object.md#sui_derived_object_EObjectNotClaimed">EObjectNotClaimed</a>: vector&lt;u8&gt; = b"Derived <a href="../sui/object.md#sui_object">object</a> is not claimed by this parent.";
+</code></pre>
+
+
+
+<a name="sui_derived_object_ESharedObjectRelease"></a>
+
+Tries to release the UID of a shared object.
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/derived_object.md#sui_derived_object_ESharedObjectRelease">ESharedObjectRelease</a>: vector&lt;u8&gt; = b"Shared objects cannot be released.";
+</code></pre>
+
+
+
 <a name="sui_derived_object_claim"></a>
 
 ## Function `claim`
@@ -167,12 +191,47 @@ Claim a deterministic UID, using the parent's UID & any key.
 
 </details>
 
+<a name="sui_derived_object_release"></a>
+
+## Function `release`
+
+Deletes <code>id</code>, claimed under <code>parent</code>, so that its address can be claimed again.
+Dynamic fields of <code>id</code>, objects sent to its address, and its address balances persist and are
+reachable again once it is re-claimed.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/derived_object.md#sui_derived_object_release">release</a>(parent: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, id: <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/derived_object.md#sui_derived_object_release">release</a>(parent: &<b>mut</b> UID, id: UID) {
+    <b>assert</b>!(!id.is_shared_input(), <a href="../sui/derived_object.md#sui_derived_object_ESharedObjectRelease">ESharedObjectRelease</a>);
+    <b>let</b> claimed = <a href="../sui/derived_object.md#sui_derived_object_Claimed">Claimed</a>(id.to_inner());
+    <b>assert</b>!(df::exists(parent, claimed), <a href="../sui/derived_object.md#sui_derived_object_EObjectNotClaimed">EObjectNotClaimed</a>);
+    <b>let</b> status: <a href="../sui/derived_object.md#sui_derived_object_ClaimedStatus">ClaimedStatus</a> = df::remove(parent, claimed);
+    match (status) {
+        ClaimedStatus::Reserved =&gt; (),
+    };
+    id.delete()
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_derived_object_exists"></a>
 
 ## Function `exists`
 
 Checks if a provided <code>key</code> has been claimed for the given parent.
-Note: If the UID has been deleted through <code><a href="../sui/object.md#sui_object_delete">object::delete</a></code>, this will always return true.
+Note: If the UID has been deleted through <code><a href="../sui/object.md#sui_object_delete">object::delete</a></code> rather than <code><a href="../sui/derived_object.md#sui_derived_object_release">release</a></code>, this will
+always return true.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/derived_object.md#sui_derived_object_exists">exists</a>&lt;K: <b>copy</b>, drop, store&gt;(parent: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, key: K): bool
