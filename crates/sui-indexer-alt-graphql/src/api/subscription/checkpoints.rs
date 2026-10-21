@@ -52,12 +52,19 @@ impl Subscribable for Checkpoint {
         list_checkpoints_page(reader, cp_bounds, page)
     }
 
+    fn checkpoint(payload: &v2::Checkpoint) -> Result<u64, RpcError> {
+        Ok(payload
+            .sequence_number
+            .context("ListCheckpoints item missing sequence_number")?)
+    }
+
     /// Fully process the scanned checkpoint and carry it on the node, resolving against it in memory.
     /// The scan supplied the data cheaply as one sequential read; processing it here is the same work
     /// the live path does off the broadcast, so a backfilled node resolves identically to a live one.
     fn build_node(
         caches: &Arc<StreamedCaches>,
         resolver_limits: &sui_package_resolver::Limits,
+        _checkpoint: u64,
         payload: &v2::Checkpoint,
     ) -> Result<Self, RpcError> {
         let processed = Arc::new(process_checkpoint(payload.clone())?);
