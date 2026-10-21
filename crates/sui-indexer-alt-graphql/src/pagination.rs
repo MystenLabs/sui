@@ -377,13 +377,14 @@ where
         let lookahead_returned = result.items.len() > self.limit();
         result.items.truncate(self.limit());
 
-        // The page ends on its last item when the stream ran past it, because no cursor after
-        // that item can bound the page:
+        // The page ends on its last item when the lookahead item came back, or when the stream
+        // stopped at the request's opposite cursor:
         // - The lookahead item's cursor, or a watermark after it, would resume past the dropped
         //   item and skip it.
-        // - A stream that stopped at the request's opposite cursor closes with a watermark at
-        //   that cursor's position. Paging backwards, the closing watermark of `after: X` is a
-        //   boundary at X, which a `before` cursor excludes, so resuming from it would skip X.
+        // - A stream that stopped at the request's opposite cursor closes with a boundary at the
+        //   edge of that cursor's bound: at a `before` cursor's position, or at the first position
+        //   an `after` cursor admits. The last item's cursor resumes at or before that boundary in
+        //   scan order, so resuming from it skips nothing.
         let ends_on_last_item =
             lookahead_returned || result.end_reason == Some(QueryEndReason::CursorBound);
         let end = match result.items.last() {

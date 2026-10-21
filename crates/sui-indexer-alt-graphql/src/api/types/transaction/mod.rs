@@ -1396,9 +1396,8 @@ mod tests {
         assert_eq!(conn.page_info.end_cursor, Some(graphql_cursor(item(3))));
     }
 
-    /// A descending scan bounded by `after: X` closes with a boundary watermark at X, which a
-    /// `before` cursor excludes. The page starts on its lowest item instead, so paging backwards
-    /// from `startCursor` returns X.
+    /// A descending scan bounded by `after: X` closes with a boundary at the position after X.
+    /// The page starts on its lowest item, so paging backwards from `startCursor` returns X.
     #[test]
     fn build_grpc_connection_backward_cursor_bound_starts_on_last_item() {
         let scope = Scope::for_tests();
@@ -1413,7 +1412,7 @@ mod tests {
                 tx_item(CursorToken::item(position(2))),
             ],
             None,
-            Some(CursorToken::boundary(position(1)).encode()),
+            Some(CursorToken::boundary(position(2)).encode()),
             Some(v2::QueryEndReason::CursorBound),
         );
 

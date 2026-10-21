@@ -50,6 +50,9 @@ use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_rpc::proto::sui::rpc::v2::get_object_result;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_rpc::proto::sui::rpc::v2::transaction_literal;
+use sui_rpc_cursor::CursorKind;
+use sui_rpc_cursor::CursorToken;
+use sui_rpc_cursor::Position;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
@@ -3430,6 +3433,29 @@ async fn test_list_filter_edge_cases() {
     assert_eq!(resp.end_reason, Some(QueryEndReason::LedgerTip));
     assert_event_cursors(&resp);
 
+    // A descending window reaching past the tip is out of range: the scan would start below
+    // checkpoints this server has not indexed.
+    let mut req = ListTransactionsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["digest"]));
+    req.start_checkpoint = Some(9999);
+    req.options = Some(query_options_descending(10));
+    let status = client.list_transactions(req).await.expect_err("OutOfRange");
+    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+
+    let mut req = ListEventsRequest::default();
+    req.read_mask = Some(event_type_and_position_mask());
+    req.end_checkpoint = Some(9999);
+    req.options = Some(query_options_descending(10));
+    let status = client.list_events(req).await.expect_err("OutOfRange");
+    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+
+    let mut req = ListCheckpointsRequest::default();
+    req.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+    req.end_checkpoint = Some(9999);
+    req.options = Some(query_options_descending(10));
+    let status = client.list_checkpoints(req).await.expect_err("OutOfRange");
+    assert_eq!(status.code(), tonic::Code::OutOfRange, "{status:?}");
+
     // Filter that matches nothing returns an empty stream.
     let never_sender: SuiAddress =
         "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
@@ -3889,8 +3915,9 @@ async fn test_list_checkpoints_query_options() {
         .last()
         .expect("empty-window terminal watermark");
     assert_eq!(
-        terminal_watermark.checkpoint, None,
-        "empty-window terminal watermark must not claim checkpoint coverage"
+        terminal_watermark.checkpoint,
+        Some(checkpoint_end - 1),
+        "a cursor at the window's end vouches for the window's last checkpoint"
     );
 
     let mut reverse_req = ListCheckpointsRequest::default();
@@ -4041,8 +4068,9 @@ async fn test_list_checkpoints_query_options() {
         .last()
         .expect("empty-window terminal watermark");
     assert_eq!(
-        terminal_watermark.checkpoint, None,
-        "empty-window terminal watermark must not claim checkpoint coverage"
+        terminal_watermark.checkpoint,
+        Some(checkpoint_end - 1),
+        "a cursor at the window's end vouches for the window's last checkpoint"
     );
 }
 
@@ -4851,5 +4879,505 @@ async fn test_list_checkpoints_dense_bucket_matches_transactions() {
             ),
             "ListCheckpoints terminal reason (ascending={ascending}): {reason:?}"
         );
+    }
+}
+
+// --- Cursors sent back in the opposite direction ---
+
+/// The first transaction of the event bitmap's second bucket. A filtered event scan whose
+/// budget covers one bucket stops on a frontier here.
+const SECOND_EVENT_BUCKET_TX: u64 = 4_096;
+
+/// A query whose cursors are sent back in either direction.
+#[derive(Clone, Debug)]
+enum CursorQuery {
+    Transactions(TransactionFilter),
+    Events(Option<EventFilter>),
+}
+
+/// One page of a [`CursorQuery`]: the scan-order key and cursor of each item, every frame's
+/// cursor, and how the page ended.
+struct CursorPage {
+    items: Vec<(u64, u32)>,
+    item_cursors: Vec<prost::bytes::Bytes>,
+    cursors: Vec<prost::bytes::Bytes>,
+    end_cursor: prost::bytes::Bytes,
+    end_reason: QueryEndReason,
+}
+
+/// A cursor's kind and the scan-order key of its position.
+fn cursor_key(cursor: &[u8]) -> (CursorKind, (u64, u32)) {
+    let token = CursorToken::decode(cursor).expect("cursor decodes");
+    let key = match token.position {
+        Position::Transactions { tx_seq, .. } => (tx_seq, 0),
+        Position::Events {
+            tx_seq,
+            event_index,
+            ..
+        } => (tx_seq, event_index),
+        Position::Checkpoints { checkpoint } => (checkpoint, 0),
+    };
+    (token.kind, key)
+}
+
+async fn cursor_page(
+    client: &mut LedgerServiceClient<Channel>,
+    query: &CursorQuery,
+    window: (Option<u64>, Option<u64>),
+    ascending: bool,
+    resume: Option<prost::bytes::Bytes>,
+    far_bound: Option<prost::bytes::Bytes>,
+) -> CursorPage {
+    let mut options = QueryOptions::default();
+    options.limit = Some(3);
+    if ascending {
+        options.after = resume;
+        options.before = far_bound;
+    } else {
+        options.ordering = Some(Ordering::Descending as i32);
+        options.before = resume;
+        options.after = far_bound;
+    }
+    let (frames, end_cursor, end_reason) = match query {
+        CursorQuery::Transactions(filter) => {
+            let mut request = ListTransactionsRequest::default();
+            request.start_checkpoint = window.0;
+            request.end_checkpoint = window.1;
+            request.filter = Some(filter.clone());
+            request.read_mask = Some(FieldMask::from_paths(["digest"]));
+            request.options = Some(options);
+            let result = list_transactions_result(client, request).await;
+            (result.frames, result.end_cursor, result.end_reason)
+        }
+        CursorQuery::Events(filter) => {
+            let mut request = ListEventsRequest::default();
+            request.start_checkpoint = window.0;
+            request.end_checkpoint = window.1;
+            request.filter = filter.clone();
+            request.read_mask = Some(event_type_and_position_mask());
+            request.options = Some(options);
+            let result = list_events_result(client, request).await;
+            (result.frames, result.end_cursor, result.end_reason)
+        }
+    };
+    let cursor = |watermark: &Watermark| {
+        watermark
+            .cursor
+            .clone()
+            .expect("every frame carries a cursor")
+    };
+    let item_cursors: Vec<_> = frames
+        .iter()
+        .filter(|(kind, _)| *kind == WmFrame::Item)
+        .map(|(_, watermark)| cursor(watermark))
+        .collect();
+    CursorPage {
+        items: item_cursors.iter().map(|item| cursor_key(item).1).collect(),
+        item_cursors,
+        cursors: frames
+            .iter()
+            .map(|(_, watermark)| cursor(watermark))
+            .collect(),
+        end_cursor: end_cursor.expect("every page carries a resume cursor"),
+        end_reason: end_reason.expect("every page ends with a reason"),
+    }
+}
+
+/// Everything paging a [`CursorQuery`] to its end returned.
+#[derive(Default)]
+struct Walk {
+    items: Vec<(u64, u32)>,
+    item_cursors: Vec<prost::bytes::Bytes>,
+    cursors: Vec<prost::bytes::Bytes>,
+    end_reasons: Vec<QueryEndReason>,
+}
+
+async fn walk(
+    client: &mut LedgerServiceClient<Channel>,
+    query: &CursorQuery,
+    window: (Option<u64>, Option<u64>),
+    ascending: bool,
+    mut resume: Option<prost::bytes::Bytes>,
+    far_bound: Option<prost::bytes::Bytes>,
+) -> Walk {
+    let mut walk = Walk::default();
+    for _ in 0..1_000 {
+        let page = cursor_page(client, query, window, ascending, resume, far_bound.clone()).await;
+        walk.items.extend(page.items);
+        walk.item_cursors.extend(page.item_cursors);
+        walk.cursors.extend(page.cursors);
+        walk.end_reasons.push(page.end_reason);
+        if !is_resumable(page.end_reason) {
+            return walk;
+        }
+        resume = Some(page.end_cursor);
+    }
+    panic!("paging did not reach the end: {query:?}");
+}
+
+/// What [`assert_cursors_resume_in_the_opposite_direction`] exercised.
+struct OppositeDirectionCoverage {
+    /// Every page's end reason.
+    end_reasons: Vec<QueryEndReason>,
+    /// Boundary cursors from ascending and from descending pages whose checkpoint field, read as
+    /// written in the opposite direction, would exclude an item their position admits.
+    misread_fields: (usize, usize),
+}
+
+/// Every cursor paging `query` returns in either ordering, with and without a far cursor bound,
+/// sent back with the opposite ordering, returns exactly the items its position and kind admit.
+/// A bounded paging's closing cursor, sent back in its own ordering without the far bound (an
+/// item), resumes with exactly the items the bound excluded.
+async fn assert_cursors_resume_in_the_opposite_direction(
+    client: &mut LedgerServiceClient<Channel>,
+    query: &CursorQuery,
+    window: (Option<u64>, Option<u64>),
+) -> OppositeDirectionCoverage {
+    let all = walk(client, query, window, true, None, None).await;
+    assert!(all.items.len() >= 4, "too few items to page: {query:?}");
+    let item_checkpoints: std::collections::HashMap<(u64, u32), u64> = all
+        .item_cursors
+        .iter()
+        .map(|cursor| (cursor_key(cursor).1, cursor_checkpoint(cursor)))
+        .collect();
+    // Far bounds at every third item: the bounded pages end on a restatement of the bound.
+    let far_bounds: Vec<_> = all.item_cursors.iter().step_by(3).cloned().collect();
+
+    let mut coverage = OppositeDirectionCoverage {
+        end_reasons: Vec::new(),
+        misread_fields: (0, 0),
+    };
+    for ascending in [true, false] {
+        let mut cursors = Vec::new();
+        for far_bound in std::iter::once(None).chain(far_bounds.iter().cloned().map(Some)) {
+            let paged = walk(client, query, window, ascending, None, far_bound.clone()).await;
+            let far_key = far_bound
+                .as_deref()
+                .map(|far_bound| cursor_key(far_bound).1);
+            let within_far_bound = |item: &(u64, u32)| match far_key {
+                None => true,
+                Some(far_key) if ascending => *item < far_key,
+                Some(far_key) => *item > far_key,
+            };
+            let in_bounds: Vec<_> = if ascending {
+                all.items.iter().copied().filter(within_far_bound).collect()
+            } else {
+                all.items
+                    .iter()
+                    .rev()
+                    .copied()
+                    .filter(within_far_bound)
+                    .collect()
+            };
+            assert_eq!(
+                paged.items, in_bounds,
+                "ascending={ascending} paging bounded at {far_key:?}: {query:?}"
+            );
+            cursors.extend(paged.cursors.iter().cloned());
+            coverage.end_reasons.extend(paged.end_reasons);
+            let Some(far_key) = far_key else {
+                continue;
+            };
+            let excluded: Vec<_> = if ascending {
+                all.items
+                    .iter()
+                    .copied()
+                    .filter(|&item| item >= far_key)
+                    .collect()
+            } else {
+                all.items
+                    .iter()
+                    .rev()
+                    .copied()
+                    .filter(|&item| item <= far_key)
+                    .collect()
+            };
+            let closing = paged
+                .cursors
+                .last()
+                .cloned()
+                .expect("a page carries a cursor");
+            let resumed = walk(client, query, window, ascending, Some(closing), None).await;
+            assert_eq!(
+                resumed.items, excluded,
+                "closing cursor of an ascending={ascending} page bounded at {far_key:?}: \
+                 {query:?}"
+            );
+        }
+        for cursor in cursors {
+            let (kind, key) = cursor_key(&cursor);
+            let expected: Vec<_> = if ascending {
+                all.items
+                    .iter()
+                    .rev()
+                    .copied()
+                    .filter(|&item| item < key)
+                    .collect()
+            } else {
+                all.items
+                    .iter()
+                    .copied()
+                    .filter(|&item| match kind {
+                        CursorKind::Item => item > key,
+                        CursorKind::Boundary => item >= key,
+                    })
+                    .collect()
+            };
+            // As written, a `before` field is an exclusive upper checkpoint bound and an `after`
+            // field an inclusive lower one.
+            let field = cursor_checkpoint(&cursor);
+            let field_excludes_an_item = expected.iter().any(|item| {
+                let checkpoint = item_checkpoints[item];
+                if ascending {
+                    checkpoint >= field
+                } else {
+                    checkpoint < field
+                }
+            });
+            if kind == CursorKind::Boundary && field_excludes_an_item {
+                if ascending {
+                    coverage.misread_fields.0 += 1;
+                } else {
+                    coverage.misread_fields.1 += 1;
+                }
+            }
+            let opposite = walk(client, query, window, !ascending, Some(cursor), None).await;
+            assert_eq!(
+                opposite.items, expected,
+                "{kind:?} cursor at {key:?} from an ascending={ascending} page, sent back: \
+                 {query:?}"
+            );
+        }
+    }
+    coverage
+}
+
+/// The checkpoint field of a cursor's position.
+fn cursor_checkpoint(cursor: &[u8]) -> u64 {
+    CursorToken::decode(cursor)
+        .expect("cursor decodes")
+        .position
+        .checkpoint()
+}
+
+/// Asserts that `coverage` sent back boundary cursors from both orderings whose checkpoint field,
+/// read as written, excludes an item.
+fn assert_misread_fields_exercised(coverage: &OppositeDirectionCoverage, query: &str) {
+    let (from_ascending, from_descending) = coverage.misread_fields;
+    assert!(
+        from_ascending > 0 && from_descending > 0,
+        "{query}: frontiers must include ones whose field, read as written, excludes an item: \
+         {from_ascending} from ascending pages, {from_descending} from descending pages"
+    );
+}
+
+/// Cursors are opaque: a client may send any cursor it received back as either `after` or
+/// `before`, in either ordering. Scan frontiers inside a checkpoint (from the event bitmap's
+/// bucket edge and the unfiltered event scan's transaction cap) and cursor bounds restated by a
+/// page's end must each return every item their position admits.
+#[tokio::test]
+async fn test_list_cursors_resume_in_the_opposite_direction() {
+    let kv_rpc_config = KvRpcConfig {
+        ledger_history: Some(LedgerHistoryConfig {
+            list_events: Some(LedgerHistoryMethodConfig {
+                max_limit_items: Some(2),
+                default_limit_items: Some(2),
+                ..Default::default()
+            }),
+            // One bucket per request, which a filter of a single literal allows.
+            bitmap_bucket_budget_tx: Some(1),
+            bitmap_bucket_budget_event: Some(1),
+            max_bitmap_filter_literals: Some(1),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut cluster = list_api_cluster_with_config(kv_rpc_config).await;
+    let (bulk, bulk_kp, mut bulk_gas) = cluster.funded_account(100 * DEFAULT_GAS_BUDGET).unwrap();
+    let (emitter, emitter_kp, emitter_gas) =
+        cluster.funded_account(100 * DEFAULT_GAS_BUDGET).unwrap();
+    let (pkg, mut emitter_gas) = publish_package(
+        &mut cluster,
+        emitter,
+        &emitter_kp,
+        emitter_gas,
+        emit_test_event_pkg_path(),
+    )
+    .await;
+    let mut checkpoint = cluster.create_checkpoint().await;
+
+    // Checkpoints mixing event-emitting transactions with event-less ones.
+    let mixed_start = checkpoint.sequence_number + 1;
+    for _ in 0..3 {
+        for emits in [true, false, true, true] {
+            if emits {
+                emitter_gas = call_move(
+                    &mut cluster,
+                    emitter,
+                    &emitter_kp,
+                    emitter_gas,
+                    pkg,
+                    "emit_test_event",
+                    "emit_test_event",
+                )
+                .await
+                .1;
+            } else {
+                bulk_gas = transfer_self(&mut cluster, bulk, &bulk_kp, bulk_gas)
+                    .await
+                    .1;
+            }
+        }
+        checkpoint = cluster.create_checkpoint().await;
+    }
+    let mixed_end = checkpoint.sequence_number + 1;
+
+    // Event-less transactions up to just below the event bitmap's second bucket, then one
+    // checkpoint whose event-emitting transactions straddle the bucket edge.
+    let mut next_tx = checkpoint.network_total_transactions;
+    while next_tx + 1_000 < SECOND_EVENT_BUCKET_TX - 3 {
+        for _ in 0..1_000 {
+            bulk_gas = transfer_self(&mut cluster, bulk, &bulk_kp, bulk_gas)
+                .await
+                .1;
+        }
+        next_tx = cluster
+            .create_checkpoint_before_list_apis_sync()
+            .await
+            .network_total_transactions;
+    }
+    assert!(
+        next_tx <= SECOND_EVENT_BUCKET_TX - 3,
+        "the edge checkpoint must start below the bucket edge, at {next_tx}"
+    );
+    for _ in next_tx..SECOND_EVENT_BUCKET_TX - 3 {
+        bulk_gas = transfer_self(&mut cluster, bulk, &bulk_kp, bulk_gas)
+            .await
+            .1;
+    }
+    for _ in 0..6 {
+        emitter_gas = call_move(
+            &mut cluster,
+            emitter,
+            &emitter_kp,
+            emitter_gas,
+            pkg,
+            "emit_test_event",
+            "emit_test_event",
+        )
+        .await
+        .1;
+    }
+    cluster.create_checkpoint().await;
+    for _ in 0..2 {
+        emitter_gas = call_move(
+            &mut cluster,
+            emitter,
+            &emitter_kp,
+            emitter_gas,
+            pkg,
+            "emit_test_event",
+            "emit_test_event",
+        )
+        .await
+        .1;
+        bulk_gas = transfer_self(&mut cluster, bulk, &bulk_kp, bulk_gas)
+            .await
+            .1;
+        cluster.create_checkpoint().await;
+    }
+
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    // Filtered events: a one-bucket budget stops each scan at the bucket edge, inside the edge
+    // checkpoint.
+    let coverage = assert_cursors_resume_in_the_opposite_direction(
+        &mut client,
+        &CursorQuery::Events(Some(ev_sender(emitter))),
+        (None, None),
+    )
+    .await;
+    assert!(coverage.end_reasons.contains(&QueryEndReason::ScanLimit));
+    assert_misread_fields_exercised(&coverage, "filtered events");
+
+    // Unfiltered events in the mixed checkpoints: the transaction cap stops each scan between
+    // transactions of one checkpoint.
+    let coverage = assert_cursors_resume_in_the_opposite_direction(
+        &mut client,
+        &CursorQuery::Events(None),
+        (Some(mixed_start), Some(mixed_end)),
+    )
+    .await;
+    assert!(coverage.end_reasons.contains(&QueryEndReason::ScanLimit));
+    assert_misread_fields_exercised(&coverage, "unfiltered events");
+
+    // Filtered transactions: pages end on items and on restated cursor bounds inside
+    // checkpoints.
+    assert_cursors_resume_in_the_opposite_direction(
+        &mut client,
+        &CursorQuery::Transactions(tx_sender(emitter)),
+        (None, None),
+    )
+    .await;
+}
+
+/// A descending page bounded by `after: <item X>` excludes X. Its closing cursor, sent back as
+/// `before` without the `after` bound, must resume with X: at the last item of the window, whose
+/// bounded page is empty, and at an item with items above it.
+#[tokio::test]
+async fn test_list_descending_after_item_closing_cursor_resumes_with_the_item() {
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
+    let (pkg, mut gas) =
+        publish_package(&mut cluster, sender, &kp, gas, emit_test_event_pkg_path()).await;
+    cluster.create_checkpoint().await;
+    // One checkpoint of three event-emitting transactions.
+    for _ in 0..3 {
+        gas = call_move(
+            &mut cluster,
+            sender,
+            &kp,
+            gas,
+            pkg,
+            "emit_test_event",
+            "emit_test_event",
+        )
+        .await
+        .1;
+    }
+    let checkpoint = cluster.create_checkpoint().await.sequence_number;
+    let window = (Some(checkpoint), Some(checkpoint + 1));
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    for query in [
+        CursorQuery::Transactions(tx_sender(sender)),
+        CursorQuery::Events(Some(ev_sender(sender))),
+    ] {
+        let all = walk(&mut client, &query, window, true, None, None).await;
+        assert_eq!(all.items.len(), 3, "{query:?}");
+        // The last item, then one with an item above it.
+        for index in [2, 1] {
+            let item = all.item_cursors[index].clone();
+            let bounded = walk(&mut client, &query, window, false, None, Some(item)).await;
+            let above: Vec<_> = all.items[index + 1..].iter().rev().copied().collect();
+            assert_eq!(bounded.items, above, "after item {index}: {query:?}");
+            assert_eq!(
+                bounded.end_reasons.last(),
+                Some(&QueryEndReason::CursorBound),
+                "after item {index}: {query:?}"
+            );
+
+            let closing = bounded.cursors.last().cloned().expect("a closing cursor");
+            let resumed = walk(&mut client, &query, window, false, Some(closing), None).await;
+            let from_item: Vec<_> = all.items[..=index].iter().rev().copied().collect();
+            assert_eq!(
+                resumed.items, from_item,
+                "closing cursor after item {index}, sent back as `before`: {query:?}"
+            );
+        }
     }
 }

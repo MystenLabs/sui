@@ -116,6 +116,7 @@ pub(crate) async fn list_events(
     let entry_checkpoint = event_range.entry_checkpoint;
     let range_end_checkpoint = event_range.end_checkpoint;
     let range_end_position = event_range.end_position;
+    let natural_end_claim = event_range.natural_end_claim(&options);
     let event_bounds = event_range.bounds;
 
     if event_range.is_empty() {
@@ -128,14 +129,15 @@ pub(crate) async fn list_events(
             elapsed_ms = started.elapsed().as_millis(),
             "list_events: empty range"
         );
-        // Empty resolved ranges still surface their terminal cursor, but
-        // natural completion claims no checkpoint.
+        // An empty scan still surfaces its terminal cursor. Its natural end claims the window's
+        // edge, which the cursor that left nothing to scan vouches for, unless the window itself
+        // is empty.
         let terminal_position = Position::Events {
             checkpoint: range_end_checkpoint,
             tx_seq: range_end_position.tx_seq,
             event_index: range_end_position.index,
         };
-        let response = range_end_response(&options, exhaustion, terminal_position, None, true).0;
+        let response = range_end_response(exhaustion, terminal_position, None, natural_end_claim).0;
         return Ok(async_stream::try_stream! {
             ctx.inc_stream_watermark_frames();
             ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
@@ -279,11 +281,10 @@ pub(crate) async fn list_events(
                     event_index: range_end_position.index,
                 };
                 let (response, reason) = range_end_response(
-                    &options,
                     exhaustion,
                     terminal_position,
                     covered_checkpoint_bound,
-                    false,
+                    natural_end_claim,
                 );
                 ctx.inc_stream_watermark_frames();
                 if !first_frame_emitted {
@@ -637,22 +638,18 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListEventsRespo
 }
 
 /// Trailing terminal frame for range exhaustion. Reason and watermark derive
-/// from one `ScanTerminal`, so they cannot disagree. Natural completion of an
-/// empty interval retains its cursor but claims no checkpoint.
+/// from one `ScanTerminal`, so they cannot disagree. Natural completion claims
+/// `natural_end_claim`, which is `None` when the window has no checkpoint.
 fn range_end_response(
-    options: &QueryOptions,
     exhaustion: RangeExhaustion,
     position: Position,
     covered_checkpoint_bound: Option<u64>,
-    interval_empty: bool,
+    natural_end_claim: Option<u64>,
 ) -> (ListEventsResponse, QueryEndReason) {
-    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, interval_empty);
+    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, natural_end_claim);
     let reason = terminal.reason();
     (
-        end_response(
-            terminal.into_watermark(options, covered_checkpoint_bound),
-            reason,
-        ),
+        end_response(terminal.into_watermark(covered_checkpoint_bound), reason),
         reason,
     )
 }
@@ -715,7 +712,7 @@ fn terminal_response_from_scan_stop(
     };
     let reason = terminal.reason();
     Ok(end_response(
-        terminal.into_watermark(options, *covered_checkpoint_bound),
+        terminal.into_watermark(*covered_checkpoint_bound),
         reason,
     ))
 }
