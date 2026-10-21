@@ -1213,9 +1213,25 @@ mod tests {
     use sui_protocol_config::{Chain, ProtocolVersion};
     use sui_types::{base_types::AuthorityName, messages_consensus::ConsensusTransactionKind};
     use tokio::sync::mpsc;
+    use tokio::sync::mpsc::error::TrySendError;
     use typed_store::Map;
 
     use arc_swap::Guard;
+
+    /// Forwards a mock consensus submission to the test channel.
+    ///
+    /// The consensus adapter submits from a spawned task. Under the simulator that task can run
+    /// after the test body has returned and dropped the `DkgTestSetup` that owns the receiver.
+    /// The test has nothing left to assert at that point, so a closed channel is not a failure.
+    fn forward_submission(
+        tx_consensus: &mpsc::Sender<Vec<ConsensusTransaction>>,
+        transactions: &[ConsensusTransaction],
+    ) {
+        match tx_consensus.try_send(transactions.to_vec()) {
+            Ok(()) | Err(TrySendError::Closed(_)) => {}
+            Err(TrySendError::Full(_)) => panic!("test consensus channel is full"),
+        }
+    }
 
     /// Test harness that sets up validators (and optionally an observer) with mock consensus,
     /// ready for DKG message exchange.
@@ -1257,7 +1273,7 @@ mod tests {
                 mock_consensus_client
                     .expect_submit()
                     .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
-                        tx_consensus.try_send(transactions.to_vec()).unwrap();
+                        forward_submission(&tx_consensus, transactions);
                         true
                     })
                     .returning(|_, _| {
@@ -1344,7 +1360,7 @@ mod tests {
             mock_consensus_client
                 .expect_submit()
                 .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
-                    tx_consensus.try_send(transactions.to_vec()).unwrap();
+                    forward_submission(&tx_consensus, transactions);
                     true
                 })
                 .returning(|_, _| {
