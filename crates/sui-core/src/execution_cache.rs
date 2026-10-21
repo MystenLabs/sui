@@ -280,14 +280,25 @@ pub trait ObjectCacheRead: Send + Sync {
                 InputKey::Package { id } => Either::Right((idx, id)),
             });
 
-        for ((idx, (id, version)), has_key) in move_object_keys.iter().zip_debug_eq(
-            self.multi_object_exists_by_key(
-                &move_object_keys
-                    .iter()
-                    .map(|(_, k)| ObjectKey(k.0.id(), *k.1))
-                    .collect::<Vec<_>>(),
-            ),
+        let (consensus_keys, fastpath_keys): (Vec<_>, Vec<_>) = (0..move_object_keys.len())
+            .partition(|i| matches!(move_object_keys[*i].1.0, FullObjectID::Consensus(_)));
+        let object_key = |i: &usize| {
+            let (id, version) = move_object_keys[*i].1;
+            ObjectKey(id.id(), *version)
+        };
+        let mut has_keys = vec![false; move_object_keys.len()];
+        for (i, object) in consensus_keys.iter().zip_debug_eq(
+            self.multi_get_objects_by_key(&consensus_keys.iter().map(object_key).collect_vec()),
         ) {
+            has_keys[*i] = object.is_some_and(|o| o.full_id() == *move_object_keys[*i].1.0);
+        }
+        for (i, exists) in fastpath_keys.iter().zip_debug_eq(
+            self.multi_object_exists_by_key(&fastpath_keys.iter().map(object_key).collect_vec()),
+        ) {
+            has_keys[*i] = exists;
+        }
+
+        for ((idx, (id, version)), has_key) in move_object_keys.iter().zip_debug_eq(has_keys) {
             // If the key exists at the specified version, then the object is available.
             if has_key {
                 results[*idx] = true;
