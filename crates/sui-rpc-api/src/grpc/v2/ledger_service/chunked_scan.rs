@@ -263,10 +263,7 @@ mod tests {
                     next_state: (state < 2).then_some(state + 1),
                     terminal: ScanTerminal::from_range_exhaustion(
                         RangeExhaustion::CheckpointBound,
-                        Position::Transactions {
-                            checkpoint: 0,
-                            tx_seq: 0,
-                        },
+                        Position::Transactions { tx_seq: 0 },
                         None,
                     ),
                     remaining_scan_budget: scan_budget - 1,
@@ -284,10 +281,7 @@ mod tests {
             scan.into_terminal(),
             Some(ScanTerminal::NaturalRange {
                 end: NaturalRangeEnd::CheckpointBound,
-                position: Position::Transactions {
-                    checkpoint: 0,
-                    tx_seq: 0,
-                },
+                position: Position::Transactions { tx_seq: 0 },
                 claimed_checkpoint: None,
             })
         );
@@ -310,10 +304,7 @@ mod tests {
                     next_state: None,
                     terminal: ScanTerminal::from_range_exhaustion(
                         RangeExhaustion::CheckpointBound,
-                        Position::Transactions {
-                            checkpoint: 0,
-                            tx_seq: 0,
-                        },
+                        Position::Transactions { tx_seq: 0 },
                         None,
                     ),
                     remaining_scan_budget: args.scan_budget,
@@ -446,10 +437,7 @@ mod tests {
                     next_state: (state == 0).then_some(1),
                     terminal: ScanTerminal::from_range_exhaustion(
                         RangeExhaustion::CheckpointBound,
-                        Position::Transactions {
-                            checkpoint: 0,
-                            tx_seq: 0,
-                        },
+                        Position::Transactions { tx_seq: 0 },
                         None,
                     ),
                     remaining_scan_budget: args.scan_budget - buckets_evaluated,

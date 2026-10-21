@@ -9,7 +9,6 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use prost::Message;
-use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
 use sui_inverted_index::event_seq;
 use sui_kvstore::BitmapIndexSpec;
@@ -41,7 +40,6 @@ use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
-use sui_rpc_api::ledger_history::watermark::scan_frontier_cursor_cp;
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
@@ -114,7 +112,6 @@ pub(crate) async fn list_events(
         .await?;
     let exhaustion = event_range.exhaustion;
     let entry_checkpoint = event_range.entry_checkpoint;
-    let range_end_checkpoint = event_range.end_checkpoint;
     let range_end_position = event_range.end_position;
     let natural_end_claim = event_range.natural_end_claim(&options);
     let event_bounds = event_range.bounds;
@@ -133,7 +130,6 @@ pub(crate) async fn list_events(
         // edge, which the cursor that left nothing to scan vouches for, unless the window itself
         // is empty.
         let terminal_position = Position::Events {
-            checkpoint: range_end_checkpoint,
             tx_seq: range_end_position.tx_seq,
             event_index: range_end_position.index,
         };
@@ -276,7 +272,6 @@ pub(crate) async fn list_events(
         let terminal_reason = loop {
             let Some(item) = ctx.next_response_item(resolution, &mut rendered_stream).await else {
                 let terminal_position = Position::Events {
-                    checkpoint: range_end_checkpoint,
                     tx_seq: range_end_position.tx_seq,
                     event_index: range_end_position.index,
                 };
@@ -306,7 +301,6 @@ pub(crate) async fn list_events(
                     );
                     let watermark = item_watermark(
                         Position::Events {
-                            checkpoint: item_checkpoint,
                             tx_seq: rendered.position.tx_seq,
                             event_index: rendered.position.index,
                         },
@@ -339,12 +333,11 @@ pub(crate) async fn list_events(
                 }) => {
                     let watermark = event_frontier_watermark(
                         &options,
-                        direction,
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                         position,
                         Some(checkpoint_at_frontier),
-                    )?;
+                    );
                     let response = watermark_response(watermark);
                     ctx.inc_stream_watermark_frames();
                     if !first_frame_emitted {
@@ -359,7 +352,6 @@ pub(crate) async fn list_events(
                     let response = terminal_response_from_scan_stop(
                         stop,
                         &options,
-                        direction,
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
@@ -656,12 +648,11 @@ fn range_end_response(
 
 fn event_frontier_watermark(
     options: &QueryOptions,
-    direction: ScanDirection,
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
     position: IntraTxCoordinate,
     checkpoint_at_frontier: Option<u64>,
-) -> Result<Watermark, RpcError> {
+) -> Watermark {
     if let Some(checkpoint) = checkpoint_at_frontier {
         *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
             *covered_checkpoint_bound,
@@ -670,32 +661,18 @@ fn event_frontier_watermark(
             options,
         );
     }
-    let cursor_checkpoint =
-        scan_frontier_cursor_cp(checkpoint_at_frontier, position.tx_seq, direction).ok_or_else(
-            || {
-                RpcError::new(
-                    tonic::Code::Internal,
-                    format!(
-                        "event scan frontier {}/{} has no checkpoint mapping",
-                        position.tx_seq, position.index
-                    ),
-                )
-            },
-        )?;
-    Ok(boundary_watermark(
+    boundary_watermark(
         Position::Events {
-            checkpoint: cursor_checkpoint,
             tx_seq: position.tx_seq,
             event_index: position.index,
         },
         *covered_checkpoint_bound,
-    ))
+    )
 }
 
 fn terminal_response_from_scan_stop(
     stop: ResolvedScanStop<IntraTxCoordinate>,
     options: &QueryOptions,
-    direction: ScanDirection,
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListEventsResponse, RpcError> {
@@ -703,12 +680,11 @@ fn terminal_response_from_scan_stop(
     let terminal = ScanTerminal::ScanLimit {
         watermark: event_frontier_watermark(
             options,
-            direction,
             entry_checkpoint,
             covered_checkpoint_bound,
             position,
             checkpoint,
-        )?,
+        ),
     };
     let reason = terminal.reason();
     Ok(end_response(
@@ -1160,7 +1136,6 @@ mod tests {
             .as_ref()
             .expect("ledger exhaustion proves a terminal boundary");
         let expected_cursor = CursorToken::boundary(Position::Events {
-            checkpoint: 0,
             tx_seq: 0,
             event_index: 0,
         })

@@ -260,7 +260,6 @@ impl CheckpointContents {
             if let Some(streamed) = &self.streamed_data {
                 return Ok(Some(Transaction::paginate_preloaded_transactions(
                     self.scope.clone(),
-                    summary.sequence_number,
                     &streamed.transactions,
                     &page,
                     filter,
@@ -543,10 +542,7 @@ mod tests {
     /// A token scoped to another endpoint must not decode as a checkpoint cursor.
     #[test]
     fn rejects_wrong_variant_cursor() {
-        let token = CursorToken::item(Position::Transactions {
-            checkpoint: 1,
-            tx_seq: 2,
-        });
+        let token = CursorToken::item(Position::Transactions { tx_seq: 2 });
         let encoded = B64::encode(token.encode());
         assert!(CCheckpoint::decode_cursor(&encoded).is_err());
     }

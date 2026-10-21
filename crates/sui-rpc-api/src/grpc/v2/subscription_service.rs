@@ -169,10 +169,7 @@ impl SubscriptionService for RpcService {
                                 &read_mask,
                             ));
                             response.watermark = Some(item_watermark(
-                                Position::Transactions {
-                                    checkpoint: cp,
-                                    tx_seq,
-                                },
+                                Position::Transactions { tx_seq },
                                 boundary,
                             ));
                             stream_metrics.observe_frame(
@@ -193,10 +190,7 @@ impl SubscriptionService for RpcService {
                         );
                         let mut response = SubscribeTransactionsResponse::default();
                         response.watermark = Some(boundary_watermark(
-                            Position::Transactions {
-                                checkpoint: cp + 1,
-                                tx_seq: tx_hi,
-                            },
+                            Position::Transactions { tx_seq: tx_hi },
                             boundary,
                         ));
                         stream_metrics.observe_frame(
@@ -285,7 +279,6 @@ impl SubscriptionService for RpcService {
                             response.event = Some(proto_event);
                             response.watermark = Some(item_watermark(
                                 Position::Events {
-                                    checkpoint: cp,
                                     tx_seq,
                                     event_index: ev,
                                 },
@@ -310,7 +303,6 @@ impl SubscriptionService for RpcService {
                         let mut response = SubscribeEventsResponse::default();
                         response.watermark = Some(boundary_watermark(
                             Position::Events {
-                                checkpoint: cp + 1,
                                 tx_seq: tx_hi,
                                 event_index: 0,
                             },
@@ -531,10 +523,7 @@ mod tests {
             &options,
         );
         let watermark = boundary_watermark(
-            Position::Transactions {
-                checkpoint: 42,
-                tx_seq: 100,
-            },
+            Position::Transactions { tx_seq: 100 },
             covered_checkpoint_bound,
         );
 

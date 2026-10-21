@@ -154,15 +154,8 @@ pub(crate) async fn list_checkpoints(
         // An empty scan still surfaces its terminal cursor. Its natural end claims the window's
         // edge, which the cursor that left nothing to scan vouches for, unless the window itself
         // is empty.
-        let response = range_end_response(
-            exhaustion,
-            Position::Checkpoints {
-                checkpoint: range_end_position,
-            },
-            None,
-            natural_end_claim,
-        )
-        .0;
+        let response =
+            range_end_response(exhaustion, range_end_position, None, natural_end_claim).0;
         return Ok(async_stream::try_stream! {
             ctx.inc_stream_watermark_frames();
             ctx.observe_stream_first_frame_latency(resolution, started.elapsed());
@@ -347,9 +340,7 @@ fn drive_rendered_checkpoints(
             let Some(item) = ctx.next_response_item(resolution, &mut rendered_stream).await else {
                 let (response, reason) = range_end_response(
                     exhaustion,
-                    Position::Checkpoints {
-                        checkpoint: range_end_position,
-                    },
+                    range_end_position,
                     covered_checkpoint_bound,
                     natural_end_claim,
                 );
@@ -642,17 +633,23 @@ fn end_response(watermark: Watermark, reason: QueryEndReason) -> ListCheckpoints
     response
 }
 
-/// Trailing terminal frame for range exhaustion. Reason and watermark derive
-/// from one `ScanTerminal`, so they cannot disagree. Natural completion claims
-/// `natural_end_claim`, which is `None` when the window has no checkpoint; the
-/// cursor is retained either way.
+/// Trailing terminal frame for range exhaustion at checkpoint `end_position`. Reason and
+/// watermark derive from one `ScanTerminal`, so they cannot disagree. Natural completion claims
+/// `natural_end_claim`, which is `None` when the window has no checkpoint; the cursor is
+/// retained either way.
 fn range_end_response(
     exhaustion: RangeExhaustion,
-    position: Position,
+    end_position: u64,
     covered_checkpoint_bound: Option<u64>,
     natural_end_claim: Option<u64>,
 ) -> (ListCheckpointsResponse, QueryEndReason) {
-    let terminal = ScanTerminal::from_range_exhaustion(exhaustion, position, natural_end_claim);
+    let terminal = ScanTerminal::from_range_exhaustion(
+        exhaustion,
+        Position::Checkpoints {
+            checkpoint: end_position,
+        },
+        natural_end_claim,
+    );
     let reason = terminal.reason();
     (
         end_response(terminal.into_watermark(covered_checkpoint_bound), reason),

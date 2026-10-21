@@ -73,7 +73,6 @@ pub struct EventCursor {
 pub struct EventToken {
     /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
     kind: CursorKind,
-    checkpoint: u64,
     tx_seq: u64,
     event_index: u32,
 }
@@ -249,7 +248,7 @@ impl Event {
 
         page.paginate_results(
             events,
-            |(c, _)| EventToken::cursor(0, c.tx_sequence_number, c.ev_sequence_number),
+            |(c, _)| EventToken::cursor(c.tx_sequence_number, c.ev_sequence_number),
             |(_, e)| Ok(e),
         )
         .map(Into::into)
@@ -308,18 +307,11 @@ impl Event {
         limit: usize,
         filter: &EventFilter,
     ) -> Result<StreamPage<v2::Event>, RpcError> {
-        // Extract the cursor and pass through to grpc.
+        // Extract the cursors and pass them through to grpc.
         let after = page.after().map(|c| CursorToken::from(&c.token()).encode());
-        // Pg-minted cursors set checkpoint as 0 (as do legacy JSON cursors, which carry no
-        // checkpoint at all). Substitute the checkpoint with u64::max on the `before` bound to
-        // avoid collapsing the checkpoint window.
-        let before = page.before().map(|c| {
-            let mut token = c.token();
-            if token.checkpoint == 0 && (token.tx_seq != 0 || token.event_index != 0) {
-                token.checkpoint = u64::MAX;
-            }
-            CursorToken::from(&token).encode()
-        });
+        let before = page
+            .before()
+            .map(|c| CursorToken::from(&c.token()).encode());
 
         let mut options = v2::QueryOptions::default();
         options.limit = Some(limit as u32);
@@ -366,10 +358,9 @@ impl Event {
 
 impl EventToken {
     /// Mint the edge cursor for the event at the given coordinates.
-    pub(crate) fn cursor(checkpoint: u64, tx_seq: u64, event_index: u32) -> CEvent {
+    pub(crate) fn cursor(tx_seq: u64, event_index: u32) -> CEvent {
         CEvent::new(OpaqueCursor::new(Self {
             kind: CursorKind::Item,
-            checkpoint,
             tx_seq,
             event_index,
         }))
@@ -384,14 +375,12 @@ impl CEvent {
         }
     }
 
-    /// View the cursor as validated event coordinates, regardless of wire format. Legacy JSON
-    /// cursors carry no checkpoint, so their hint defaults to 0 (unknown).
+    /// View the cursor as validated event coordinates, regardless of wire format.
     fn token(&self) -> EventToken {
         match self {
             CEvent::Primary(c) => (**c).clone(),
             CEvent::Secondary(c) => EventToken {
                 kind: CursorKind::Item,
-                checkpoint: 0,
                 tx_seq: c.tx_sequence_number,
                 event_index: c.ev_sequence_number,
             },
@@ -420,7 +409,6 @@ impl From<&EventToken> for CursorToken {
         CursorToken {
             kind: token.kind,
             position: Position::Events {
-                checkpoint: token.checkpoint,
                 tx_seq: token.tx_seq,
                 event_index: token.event_index,
             },
@@ -433,7 +421,6 @@ impl TryFrom<CursorToken> for EventToken {
 
     fn try_from(token: CursorToken) -> anyhow::Result<Self> {
         let Position::Events {
-            checkpoint,
             tx_seq,
             event_index,
         } = token.position
@@ -442,7 +429,6 @@ impl TryFrom<CursorToken> for EventToken {
         };
         Ok(Self {
             kind: token.kind,
-            checkpoint,
             tx_seq,
             event_index,
         })
@@ -459,8 +445,8 @@ impl TryFrom<CursorToken> for CEvent {
 
 impl Eq for CEvent {}
 
-/// Cursors minted by different paths disagree on the checkpoint hint (and kind), so pagination
-/// only compares the event coordinates.
+/// Cursors minted by different paths disagree on wire format and kind, so pagination only compares
+/// the event coordinates.
 impl PartialEq for CEvent {
     fn eq(&self, other: &Self) -> bool {
         (self.tx_sequence_number(), self.ev_sequence_number())
@@ -543,9 +529,8 @@ mod tests {
         }))
     }
 
-    fn ev_position(checkpoint: u64, tx_seq: u64, event_index: u32) -> Position {
+    fn ev_position(tx_seq: u64, event_index: u32) -> Position {
         Position::Events {
-            checkpoint,
             tx_seq,
             event_index,
         }
@@ -611,21 +596,23 @@ mod tests {
 
     #[test]
     fn primary_cursor_roundtrips() {
-        let cursor = EventToken::cursor(1, 2, 3);
+        let cursor = EventToken::cursor(2, 3);
         let decoded = CEvent::decode_cursor(&cursor.encode_cursor()).expect("valid cursor");
         assert_eq!(decoded.tx_sequence_number(), 2);
         assert_eq!(decoded.ev_sequence_number(), 3);
         assert_eq!(decoded, cursor);
     }
 
-    /// Pagination equality keys off the event coordinates only: legacy cursors and grpc cursors
-    /// minted with different checkpoint hints all compare equal at the same position.
+    /// Pagination equality keys off the event coordinates only: legacy cursors, item cursors, and
+    /// boundary cursors all compare equal at the same position.
     #[test]
-    fn equality_ignores_checkpoint_hint() {
-        assert_eq!(legacy_cursor(2, 3), EventToken::cursor(0, 2, 3));
-        assert_eq!(EventToken::cursor(7, 2, 3), EventToken::cursor(0, 2, 3));
-        assert_eq!(legacy_cursor(2, 3), EventToken::cursor(100, 2, 3));
-        assert_ne!(legacy_cursor(2, 4), EventToken::cursor(0, 2, 3));
+    fn equality_ignores_wire_format_and_kind() {
+        let boundary = CEvent::try_from(CursorToken::boundary(ev_position(2, 3)))
+            .expect("events boundary cursor");
+        assert_eq!(legacy_cursor(2, 3), EventToken::cursor(2, 3));
+        assert_eq!(boundary, EventToken::cursor(2, 3));
+        assert_eq!(legacy_cursor(2, 3), boundary);
+        assert_ne!(legacy_cursor(2, 4), EventToken::cursor(2, 3));
     }
 
     /// Legacy cursors carrying an event index beyond `u32` were never minted by a server (indices
@@ -640,20 +627,16 @@ mod tests {
     /// A token scoped to another endpoint must not decode as an event cursor.
     #[test]
     fn rejects_wrong_variant_cursor() {
-        let token = CursorToken::item(Position::Transactions {
-            checkpoint: 1,
-            tx_seq: 2,
-        });
+        let token = CursorToken::item(Position::Transactions { tx_seq: 2 });
         let encoded = B64::encode(token.encode());
         assert!(CEvent::decode_cursor(&encoded).is_err());
     }
 
-    /// Legacy JSON cursors carry no checkpoint; the coordinate view defaults the hint to 0.
+    /// Legacy JSON cursors view as item cursors at their coordinates.
     #[test]
-    fn legacy_cursor_token_defaults_checkpoint_zero() {
+    fn legacy_cursor_token_is_item() {
         let token = legacy_cursor(2, 3).token();
         assert_eq!(token.kind, CursorKind::Item);
-        assert_eq!(token.checkpoint, 0);
         assert_eq!(token.tx_seq, 2);
         assert_eq!(token.event_index, 3);
     }
@@ -665,8 +648,8 @@ mod tests {
         let page = forward_page(10);
         let result = StreamPage::<v2::Event>::for_test(
             Vec::new(),
-            Some(CursorToken::boundary(ev_position(1, 10, 0)).encode()),
-            Some(CursorToken::boundary(ev_position(2, 20, 0)).encode()),
+            Some(CursorToken::boundary(ev_position(10, 0)).encode()),
+            Some(CursorToken::boundary(ev_position(20, 0)).encode()),
             None,
         );
 
@@ -688,8 +671,8 @@ mod tests {
         // Descending stream: the first watermark the stream reports is the high end.
         let result = StreamPage::<v2::Event>::for_test(
             Vec::new(),
-            Some(CursorToken::boundary(ev_position(2, 20, 0)).encode()),
-            Some(CursorToken::boundary(ev_position(1, 10, 0)).encode()),
+            Some(CursorToken::boundary(ev_position(20, 0)).encode()),
+            Some(CursorToken::boundary(ev_position(10, 0)).encode()),
             None,
         );
 
@@ -702,11 +685,11 @@ mod tests {
         let end = conn.page_info.end_cursor.expect("end cursor set");
         assert_eq!(
             start,
-            graphql_cursor(CursorToken::boundary(ev_position(1, 10, 0)))
+            graphql_cursor(CursorToken::boundary(ev_position(10, 0)))
         );
         assert_eq!(
             end,
-            graphql_cursor(CursorToken::boundary(ev_position(2, 20, 0)))
+            graphql_cursor(CursorToken::boundary(ev_position(20, 0)))
         );
     }
 
@@ -716,9 +699,9 @@ mod tests {
         let page = forward_page(10);
         let result = StreamPage::<v2::Event>::for_test(
             vec![
-                ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
-                ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
-                ev_item(2, CursorToken::item(ev_position(1, 1, 2))),
+                ev_item(0, CursorToken::item(ev_position(1, 0))),
+                ev_item(1, CursorToken::item(ev_position(1, 1))),
+                ev_item(2, CursorToken::item(ev_position(1, 2))),
             ],
             None,
             None,
@@ -761,7 +744,7 @@ mod tests {
         let scope = Scope::for_tests();
         let page = forward_page(10);
 
-        let mut item = ev_item(0, CursorToken::item(ev_position(1, 1, 0)));
+        let mut item = ev_item(0, CursorToken::item(ev_position(1, 0)));
         item.payload.contents = None;
         let result = StreamPage::<v2::Event>::for_test(
             vec![item],
@@ -774,7 +757,7 @@ mod tests {
             "missing event contents should error"
         );
 
-        let mut item = ev_item(0, CursorToken::item(ev_position(1, 1, 0)));
+        let mut item = ev_item(0, CursorToken::item(ev_position(1, 0)));
         item.payload.sender = None;
         let result = StreamPage::<v2::Event>::for_test(
             vec![item],
@@ -796,8 +779,8 @@ mod tests {
         let page = forward_page(2);
         let result = StreamPage::<v2::Event>::for_test(
             vec![
-                ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
-                ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
+                ev_item(0, CursorToken::item(ev_position(1, 0))),
+                ev_item(1, CursorToken::item(ev_position(1, 1))),
             ],
             None,
             None,
@@ -819,9 +802,9 @@ mod tests {
         // Descending stream order: event indices 2, 1, 0 (highest position first).
         let result = StreamPage::<v2::Event>::for_test(
             vec![
-                ev_item(2, CursorToken::item(ev_position(1, 1, 2))),
-                ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
-                ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
+                ev_item(2, CursorToken::item(ev_position(1, 2))),
+                ev_item(1, CursorToken::item(ev_position(1, 1))),
+                ev_item(0, CursorToken::item(ev_position(1, 0))),
             ],
             None,
             None,
@@ -835,12 +818,9 @@ mod tests {
         let start = conn.page_info.start_cursor.expect("start set");
         let end = conn.page_info.end_cursor.expect("end set");
         assert_eq!(start, conn.edges[0].cursor);
-        assert_eq!(
-            start,
-            graphql_cursor(CursorToken::item(ev_position(1, 1, 0)))
-        );
+        assert_eq!(start, graphql_cursor(CursorToken::item(ev_position(1, 0))));
         assert_eq!(end, conn.edges[2].cursor);
-        assert_eq!(end, graphql_cursor(CursorToken::item(ev_position(1, 1, 2))));
+        assert_eq!(end, graphql_cursor(CursorToken::item(ev_position(1, 2))));
         assert_eq!(
             conn.edges
                 .iter()
@@ -856,9 +836,9 @@ mod tests {
     #[test]
     fn forward_after_signals_previous_page() {
         let scope = Scope::for_tests();
-        let page = forward_page_after(10, EventToken::cursor(1, 1, 0));
+        let page = forward_page_after(10, EventToken::cursor(1, 0));
         let result = StreamPage::<v2::Event>::for_test(
-            vec![ev_item(1, CursorToken::item(ev_position(1, 1, 1)))],
+            vec![ev_item(1, CursorToken::item(ev_position(1, 1)))],
             None,
             None,
             Some(v2::QueryEndReason::CheckpointBound),
@@ -881,11 +861,11 @@ mod tests {
     #[test]
     fn backward_before_signals_next_page() {
         let scope = Scope::for_tests();
-        let page = backward_page_before(10, EventToken::cursor(1, 1, 2));
+        let page = backward_page_before(10, EventToken::cursor(1, 2));
         let result = StreamPage::<v2::Event>::for_test(
             vec![
-                ev_item(1, CursorToken::item(ev_position(1, 1, 1))),
-                ev_item(0, CursorToken::item(ev_position(1, 1, 0))),
+                ev_item(1, CursorToken::item(ev_position(1, 1))),
+                ev_item(0, CursorToken::item(ev_position(1, 0))),
             ],
             None,
             None,

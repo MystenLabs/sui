@@ -57,6 +57,8 @@
 //! fires again.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -172,19 +174,32 @@ pub(crate) struct SubscriptionBroadcast {
     /// channel. Distinct from any `resume_from` arg passed by subscribers (those refer to the
     /// kv-rpc resume fallback, not the live broadcast).
     first_live_checkpoint: u64,
+    /// `network_total_transactions` of the most recently broadcast checkpoint, recorded by
+    /// [`CheckpointSender`] on every send.
+    tip_network_total_transactions: Arc<AtomicU64>,
     /// Per-subscriber metrics, shared with every stream this broadcast spawns.
     metrics: Arc<SubscriptionMetrics>,
+}
+
+/// Sending half of the checkpoint broadcast. Every send also records the checkpoint's
+/// `network_total_transactions`, so [`SubscriptionBroadcast`] can report the tip's transaction
+/// count alongside its sequence number.
+pub(crate) struct CheckpointSender {
+    sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
+    tip_network_total_transactions: Arc<AtomicU64>,
 }
 
 impl SubscriptionBroadcast {
     pub(crate) fn new(
         broadcaster: CheckpointBroadcaster,
+        tip_network_total_transactions: Arc<AtomicU64>,
         first_live_checkpoint: u64,
         metrics: Arc<SubscriptionMetrics>,
     ) -> Self {
         Self {
             broadcaster,
             first_live_checkpoint,
+            tip_network_total_transactions,
             metrics,
         }
     }
@@ -207,6 +222,40 @@ impl SubscriptionBroadcast {
         self.first_live_checkpoint
             .saturating_add(self.broadcaster.len() as u64)
             .saturating_sub(1)
+    }
+
+    /// The network's total transaction count as of the most recently broadcast checkpoint, i.e. the
+    /// exclusive upper bound of the transaction sequence numbers the live stream has reached. Read
+    /// independently of [`Self::network_tip`], so it may already include the checkpoint after it.
+    ///
+    /// `None` until the first checkpoint is broadcast: readiness can fire between recording the
+    /// first live checkpoint and broadcasting it. Every checkpoint's count includes genesis's
+    /// transaction, so a recorded count is never zero.
+    pub(crate) fn tip_network_total_transactions(&self) -> Option<u64> {
+        Some(self.tip_network_total_transactions.load(Ordering::Relaxed)).filter(|count| *count > 0)
+    }
+}
+
+impl CheckpointSender {
+    pub(crate) fn new(
+        sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
+        tip_network_total_transactions: Arc<AtomicU64>,
+    ) -> Self {
+        Self {
+            sender,
+            tip_network_total_transactions,
+        }
+    }
+
+    /// Broadcast `checkpoint`, recording its transaction count first so the count never trails the
+    /// broadcast tip.
+    pub(crate) fn send(&self, checkpoint: Arc<ProcessedCheckpoint>) {
+        self.tip_network_total_transactions.store(
+            checkpoint.summary.network_total_transactions,
+            Ordering::Relaxed,
+        );
+        // Ignore send errors: no active subscribers is a normal state.
+        let _ = self.sender.send(checkpoint);
     }
 }
 
@@ -241,7 +290,7 @@ pub(crate) fn reconnect_error() -> RpcError {
 /// processes incoming checkpoints, and broadcasts them to subscription resolvers.
 pub(crate) struct CheckpointStreamTask {
     uri: Uri,
-    sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
+    sender: CheckpointSender,
     streaming_packages: Arc<StreamingPackageStore>,
     streaming_transactions: Arc<StreamedTransactionStore>,
     // Populated from the checkpoint's `execution_objects`.
@@ -259,10 +308,10 @@ pub(crate) struct CheckpointStreamTask {
 }
 
 impl CheckpointStreamTask {
-    /// Returns the task and the anchor receiver created with the broadcast channel. The
-    /// receiver must outlive `run()` (which consumes the task), so the caller holds onto it
-    /// and pairs it with the first streamed checkpoint (from `SubscriptionReadiness`) to
-    /// build a `SubscriptionBroadcast` once readiness fires.
+    /// Returns the task, the anchor receiver created with the broadcast channel, and the tip
+    /// transaction count its sends record. The receiver must outlive `run()` (which consumes the
+    /// task), so the caller holds onto it and pairs it with the first streamed checkpoint (from
+    /// `SubscriptionReadiness`) to build a `SubscriptionBroadcast` once readiness fires.
     pub(crate) fn new(
         uri: Uri,
         config: &SubscriptionConfig,
@@ -273,11 +322,12 @@ impl CheckpointStreamTask {
         ledger_grpc_reader: LedgerGrpcReader,
         watermarks_rx: watch::Receiver<Arc<Watermarks>>,
         metrics: Arc<SubscriptionMetrics>,
-    ) -> (Self, CheckpointBroadcaster) {
+    ) -> (Self, CheckpointBroadcaster, Arc<AtomicU64>) {
         let (sender, broadcaster) = broadcast::channel(config.broadcast_buffer);
+        let tip_network_total_transactions = Arc::new(AtomicU64::new(0));
         let task = Self {
             uri,
-            sender,
+            sender: CheckpointSender::new(sender, tip_network_total_transactions.clone()),
             streaming_packages,
             streaming_transactions,
             streaming_objects,
@@ -287,7 +337,7 @@ impl CheckpointStreamTask {
             gap_recovery_chunk_size: config.gap_recovery_chunk_size,
             metrics,
         };
-        (task, broadcaster)
+        (task, broadcaster, tip_network_total_transactions)
     }
 
     /// Connect to the fullnode's gRPC SubscribeCheckpoints endpoint.
@@ -434,8 +484,7 @@ impl CheckpointStreamTask {
             processed.summary.timestamp_ms,
         );
 
-        // Ignore send errors: no active subscribers is a normal state.
-        let _ = self.sender.send(Arc::new(processed));
+        self.sender.send(Arc::new(processed));
         Ok(())
     }
 }

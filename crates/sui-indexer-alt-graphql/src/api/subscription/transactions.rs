@@ -50,14 +50,18 @@ impl Subscribable for Transaction {
         Transaction::scan_grpc(reader, cp_bounds, page, page.limit(), filter)
     }
 
+    fn checkpoint(payload: &v2::ExecutedTransaction) -> Result<u64, RpcError> {
+        Ok(payload
+            .checkpoint
+            .context("ListTransactions item missing checkpoint")?)
+    }
+
     fn build_node(
         caches: &Arc<StreamedCaches>,
         resolver_limits: &sui_package_resolver::Limits,
+        checkpoint: u64,
         payload: &v2::ExecutedTransaction,
     ) -> Result<Self, RpcError> {
-        let checkpoint = payload
-            .checkpoint
-            .context("ListTransactions item missing checkpoint")?;
         let scope = Scope::for_backfill(caches.clone(), resolver_limits.clone(), checkpoint);
         transaction_from_stream_item(scope, payload)
     }
@@ -79,9 +83,7 @@ impl Subscribable for Transaction {
                 continue;
             }
             let transaction = Transaction::with_contents(scope.clone(), tx.contents.clone())?;
-            let cursor =
-                TransactionToken::cursor(checkpoint.summary.sequence_number, tx.tx_sequence_number)
-                    .encode_cursor();
+            let cursor = TransactionToken::cursor(tx.tx_sequence_number).encode_cursor();
             edges.push(Edge::new(cursor, transaction));
         }
         Ok(edges)

@@ -165,10 +165,7 @@ async fn test_transactions_query_cursor_pagination() {
     assert!(page.page_info.has_previous_page);
     assert!(!page.page_info.has_next_page);
 
-    let beyond = CursorToken::item(Position::Transactions {
-        checkpoint: 0,
-        tx_seq: 100,
-    });
+    let beyond = CursorToken::item(Position::Transactions { tx_seq: 100 });
     let beyond_cursor = Base64::encode(beyond.encode());
     let page = transactions(&cluster, Some(2), None, Some(beyond_cursor), None)
         .await
