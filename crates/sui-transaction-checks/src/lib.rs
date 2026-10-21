@@ -14,7 +14,7 @@ mod checked {
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
-    use sui_types::gas::SuiGasStatusAPI;
+    use sui_types::gas::{check_gas_budget_and_balance, check_gas_price};
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::object::ObjectPermission;
     use sui_types::transaction::{
@@ -33,7 +33,6 @@ mod checked {
         coin_reservation::ParsedDigest,
         error::SuiError,
         fp_bail, fp_ensure,
-        gas::SuiGasStatus,
         object::{Object, Owner},
     };
     use tracing::error;
@@ -49,35 +48,6 @@ mod checked {
         }
     }
 
-    // Entry point for all checks related to gas.
-    // Called on both signing and execution.
-    // On success the gas part of the transaction (gas data and gas coins)
-    // is verified and good to go
-    fn get_gas_status(
-        objects: &InputObjects,
-        gas: &[ObjectRef],
-        protocol_config: &ProtocolConfig,
-        reference_gas_price: u64,
-        transaction: &TransactionData,
-        gas_ownership_checks: bool,
-    ) -> SuiResult<SuiGasStatus> {
-        if transaction.kind().is_system_tx() {
-            Ok(SuiGasStatus::new_unmetered(protocol_config))
-        } else {
-            let is_gasless =
-                protocol_config.enable_gasless() && transaction.is_gasless_transaction();
-            check_gas(
-                objects,
-                protocol_config,
-                reference_gas_price,
-                gas,
-                transaction,
-                gas_ownership_checks,
-                is_gasless,
-            )
-        }
-    }
-
     #[instrument(level = "trace", skip_all)]
     pub fn check_transaction_input(
         protocol_config: &ProtocolConfig,
@@ -87,8 +57,8 @@ mod checked {
         receiving_objects: &ReceivingObjects,
         metrics: &Arc<BytecodeVerifierMetrics>,
         verifier_signing_config: &VerifierSigningConfig,
-    ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
-        let gas_status = check_transaction_input_inner(
+    ) -> SuiResult<CheckedInputObjects> {
+        check_transaction_input_inner(
             protocol_config,
             reference_gas_price,
             transaction,
@@ -105,7 +75,7 @@ mod checked {
             verifier_signing_config,
         )?;
 
-        Ok((gas_status, input_objects.into_checked()))
+        Ok(input_objects.into_checked())
     }
 
     // Since the purpose of this function is to audit certified transactions,
@@ -118,9 +88,9 @@ mod checked {
         input_objects: InputObjects,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
-    ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
+    ) -> SuiResult<CheckedInputObjects> {
         let transaction = cert.data().transaction_data();
-        let gas_status = check_transaction_input_inner(
+        check_transaction_input_inner(
             protocol_config,
             reference_gas_price,
             transaction,
@@ -132,7 +102,7 @@ mod checked {
         // NB: allowance withdrawal declarations are only validated at signing; at execution
         // the allowance's own Move checks enforce policy on consensus-sequenced state.
 
-        Ok((gas_status, input_objects.into_checked()))
+        Ok(input_objects.into_checked())
     }
 
     /// WARNING! This should only be used for the dev-inspect transaction. This transaction type
@@ -144,7 +114,7 @@ mod checked {
         // TODO: check ReceivingObjects for dev inspect?
         _receiving_objects: ReceivingObjects,
         reference_gas_price: u64,
-    ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
+    ) -> SuiResult<CheckedInputObjects> {
         let kind = transaction.kind();
         kind.validity_check(config)?;
         if kind.is_system_tx() {
@@ -172,16 +142,15 @@ mod checked {
             }
         }
 
-        let gas_status = get_gas_status(
+        check_gas(
             &input_objects,
-            &transaction.gas_data().payment, //gas,
             config,
             reference_gas_price,
+            &transaction.gas_data().payment,
             transaction,
-            false, // gas_ownership_checks - false means mostly transaction level checks
         )?;
 
-        Ok((gas_status, input_objects.into_checked()))
+        Ok(input_objects.into_checked())
     }
 
     // Common checks performed for transactions and certificates.
@@ -192,20 +161,19 @@ mod checked {
         input_objects: &InputObjects,
         // Overrides the gas objects in the transaction.
         gas_override: &[ObjectRef],
-    ) -> SuiResult<SuiGasStatus> {
+    ) -> SuiResult {
         let gas = if gas_override.is_empty() {
             transaction.gas()
         } else {
             gas_override
         };
 
-        let gas_status = get_gas_status(
+        check_gas(
             input_objects,
-            gas,
             protocol_config,
             reference_gas_price,
+            gas,
             transaction,
-            true, // gas_ownership_checks
         )?;
         check_objects(transaction, input_objects, protocol_config)?;
         check_replay_protection(transaction, input_objects)?;
@@ -214,7 +182,7 @@ mod checked {
             check_gasless_object_inputs(input_objects, protocol_config)?;
         }
 
-        Ok(gas_status)
+        Ok(())
     }
 
     /// All transactions must have replay protection, which can come from:
@@ -359,8 +327,10 @@ mod checked {
         Ok(())
     }
 
-    /// Check transaction gas data/info and gas coins consistency.
-    /// Return the gas status to be used for the lifecycle of the transaction.
+    /// Check the gas data and the gas coins of a user transaction. Called on both signing and
+    /// execution; on success the gas part of the transaction is good to go. System transactions
+    /// are unmetered and gasless ones are metered at the reference price up to the computation
+    /// cap, so neither has anything to check here.
     #[instrument(level = "trace", skip_all)]
     fn check_gas(
         objects: &InputObjects,
@@ -368,21 +338,18 @@ mod checked {
         reference_gas_price: u64,
         gas: &[ObjectRef],
         transaction: &TransactionData,
-        gas_ownership_checks: bool,
-        is_gasless: bool,
-    ) -> SuiResult<SuiGasStatus> {
+    ) -> SuiResult {
+        if transaction.kind().is_system_tx() {
+            return Ok(());
+        }
+        if protocol_config.enable_gasless() && transaction.is_gasless_transaction() {
+            debug_assert_ne!(reference_gas_price, 0);
+            return Ok(());
+        }
         let gas_budget = transaction.gas_budget();
         let gas_price = transaction.gas_price();
         let gas_paid_from_address_balance = transaction.is_gas_paid_from_address_balance();
-
-        let gas_status = if is_gasless {
-            debug_assert_ne!(reference_gas_price, 0);
-            let rgp = reference_gas_price.max(1);
-            let compute_cap = protocol_config.gasless_max_computation_units() * rgp;
-            SuiGasStatus::new(compute_cap, rgp, reference_gas_price, protocol_config)?
-        } else {
-            SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?
-        };
+        check_gas_price(gas_price, reference_gas_price, protocol_config)?;
 
         // check balance and coins consistency
         // load all gas coins (skip coin reservations - they're not loaded as input objects)
@@ -413,17 +380,14 @@ mod checked {
             (gas_objects, available_address_balance_gas)
         };
 
-        if !is_gasless {
-            if gas_ownership_checks {
-                gas_status.check_gas_objects(&gas_objects)?;
-            }
-            gas_status.check_gas_balance(
-                &gas_objects,
-                gas_budget,
-                available_address_balance_gas,
-            )?;
-        }
-        Ok(gas_status)
+        check_gas_budget_and_balance(
+            &gas_objects,
+            gas_budget,
+            gas_price,
+            available_address_balance_gas,
+            protocol_config,
+        )?;
+        Ok(())
     }
 
     /// Check all the objects used in the transaction against the database, and ensure

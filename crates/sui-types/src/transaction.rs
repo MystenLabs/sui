@@ -27,9 +27,9 @@ use crate::digests::{AdditionalConsensusStateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
 use crate::funds_accumulator::{FUNDS_ACCUMULATOR_MODULE_NAME, WITHDRAWAL_SPLIT_FUNC_NAME};
+use crate::gas::minimum_gas_budget;
 use crate::gas_coin::GAS;
 use crate::gas_model::gas_predicates::check_for_gas_price_too_high;
-use crate::gas_model::gas_v2::SuiCostTable;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::{
@@ -3790,13 +3790,11 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
                 .into()
             );
-            let cost_table = SuiCostTable::new(config, self.gas_data.price);
-
             fp_ensure!(
-                self.gas_data.budget <= cost_table.max_gas_budget,
+                self.gas_data.budget <= config.max_tx_gas(),
                 UserInputError::GasBudgetTooHigh {
                     gas_budget: self.gas_data().budget,
-                    max_budget: cost_table.max_gas_budget,
+                    max_budget: config.max_tx_gas(),
                 }
                 .into()
             );
@@ -3810,11 +3808,12 @@ impl TransactionDataAPI for TransactionDataV1 {
                     .into()
                 );
             } else {
+                let min_budget = minimum_gas_budget(config, self.gas_data.price);
                 fp_ensure!(
-                    self.gas_data.budget >= cost_table.min_transaction_cost,
+                    self.gas_data.budget >= min_budget,
                     UserInputError::GasBudgetTooLow {
                         gas_budget: self.gas_data.budget,
-                        min_budget: cost_table.min_transaction_cost,
+                        min_budget,
                     }
                     .into()
                 );
