@@ -86,7 +86,7 @@ pub mod checked {
 
         /// Build the status for execution. Validation lives in `check_gas_price` and
         /// `check_gas_budget_and_balance`.
-        pub fn new(
+        fn new(
             gas_budget: u64,
             gas_price: u64,
             reference_gas_price: u64,
@@ -177,10 +177,10 @@ pub mod checked {
     }
 
     /// The smallest budget a transaction may sign for: the base transaction cost at the signed
-    /// price, a flat amount under the oldest gas models.
+    /// price, or the flat base cost when `txn_base_cost_as_multiplier` is off.
     pub fn minimum_gas_budget(config: &ProtocolConfig, gas_price: u64) -> u64 {
         let base_tx_cost = config.base_tx_cost_fixed();
-        if config.gas_model_version() >= 15 || txn_base_cost_as_multiplier(config) {
+        if txn_base_cost_as_multiplier(config) {
             base_tx_cost
                 .checked_mul(gas_price)
                 .expect("base tx cost cannot overflow: gas_price is bounded by max_gas_price")

@@ -404,9 +404,9 @@ fn collect_struct_types(tt: &TypeTag, out: &mut Vec<TypeTag>) {
     }
 }
 
-/// Decide how to meter, mirroring `sui-transaction-checks::check_gas`: gasless transactions (empty
-/// payment + price 0; gas paid from the address balance) are metered at the epoch RGP with the
-/// gasless compute cap, not their zero price/budget.
+/// Decide whether the backtest can meter the transaction faithfully. The executor meters gasless
+/// transactions (empty payment + price 0) at the epoch RGP up to the gasless compute cap. Any
+/// other transaction with gas price 0 is skipped.
 fn plan_gas(gas_data: &GasData) -> GasPlan {
     let gasless = gas_data.price == 0 && gas_data.payment.is_empty();
     if gas_data.price == 0 && !gasless {

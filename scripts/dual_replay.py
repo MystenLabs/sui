@@ -138,12 +138,8 @@ TPL_FN_NORMAL_BODY = """\
             base.gas_status.gas_usage_report()
         };
         self::latest_dual_replay::compare_dual_replay(
-            (&base.inner_store, base_gas_report.cost_summary.computation_cost, &base.effects),
-            (
-                &tip_store,
-                tip_gas_status.gas_usage_report().cost_summary.computation_cost,
-                &tip_effects,
-            ),
+            (&base.inner_store, base_gas_report.gas_used, &base.effects),
+            (&tip_store, tip_gas_status.gas_usage_report().gas_used, &tip_effects),
             transaction_digest,
             base_ns,
             tip_ns,
@@ -218,12 +214,8 @@ TPL_FN_NORMAL_WITH_ERR_BODY = """\
             base.gas_status.gas_usage_report()
         };
         self::latest_dual_replay::compare_dual_replay(
-            (&base.inner_store, base_gas_report.cost_summary.computation_cost, &base.effects),
-            (
-                &tip_store,
-                tip_gas_status.gas_usage_report().cost_summary.computation_cost,
-                &tip_effects,
-            ),
+            (&base.inner_store, base_gas_report.gas_used, &base.effects),
+            (&tip_store, tip_gas_status.gas_usage_report().gas_used, &tip_effects),
             transaction_digest,
             base_ns,
             tip_ns,
