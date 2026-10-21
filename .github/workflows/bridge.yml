@@ -139,7 +139,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # pin@v1.9.1
         with:
-          version: nightly-fdfaafd629faa2eea3362a8370eef7c1f8074710
+          version: v1.8.6
       - name: Install Foundry Dependencies
         working-directory: bridge/evm
         run: |
@@ -167,7 +167,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # pin@v1.9.1
         with:
-          version: nightly-fdfaafd629faa2eea3362a8370eef7c1f8074710
+          version: v1.8.6
       - name: Install Foundry Dependencies
         working-directory: bridge/evm
         run: |
