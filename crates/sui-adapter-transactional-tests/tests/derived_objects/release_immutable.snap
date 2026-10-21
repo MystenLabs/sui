@@ -1,0 +1,59 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+// A frozen derived object cannot be taken by value, so it cannot be released.
+
+init:
+A: object(0,0)
+
+task 1, lines 8-32:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6999600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 34:
+//# run ex::m::create_parent --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 36-38:
+//# programmable --sender A --inputs object(2,0)
+//> 0: ex::m::claim(Input(0));
+//> ex::m::freeze_obj(Result(0))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2234177, non_refundable_storage_fee: 223
+
+task 4, line 40:
+//# view-object 3,0
+Owner: Immutable
+Version: 3
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 5, lines 42-43:
+//# programmable --sender A --inputs object(2,0) object(3,0)
+//> ex::m::release(Input(0), Input(1))
+Error: Transaction Effects Status: Invalid command argument at 1. Immutable objects cannot be passed by-value.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidObjectByValue }, source: None, command: Some(0) } }
+
+task 6, line 45:
+//# view-object 3,0
+Owner: Immutable
+Version: 3
+Contents: ex::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
