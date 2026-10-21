@@ -67,15 +67,6 @@ enum AuthenticationKind {
     Object(ObjectKind),
 }
 
-impl AuthenticationKind {
-    fn is_object(self) -> bool {
-        match self {
-            Self::Account(AccountKind::Sender | AccountKind::Sponsor) => false,
-            Self::Object(ObjectKind::Input | ObjectKind::Dynamic) => true,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
 enum AccountKind {
     Sender,
@@ -93,6 +84,15 @@ struct MutationAuthorization {
     entries: HashMap<SuiAddress, AuthenticationKind>,
 }
 
+impl AuthenticationKind {
+    fn is_object(self) -> bool {
+        match self {
+            Self::Account(AccountKind::Sender | AccountKind::Sponsor) => false,
+            Self::Object(ObjectKind::Input | ObjectKind::Dynamic) => true,
+        }
+    }
+}
+
 impl MutationAuthorization {
     fn new(sender: SuiAddress, sponsor: Option<SuiAddress>) -> Self {
         let mut entries = HashMap::new();
@@ -104,15 +104,17 @@ impl MutationAuthorization {
     }
 
     fn insert_authenticated_object(&mut self, id: ObjectID, kind: ObjectKind) -> SuiResult {
-        let address = id.into();
-        match self.entries.get(&address) {
+        match self
+            .entries
+            .insert(id.into(), AuthenticationKind::Object(kind))
+        {
             Some(AuthenticationKind::Account(account_kind)) => {
                 Err(ExecutionError::invariant_violation(format!(
                     "Object ID {id} collides with the authenticated {account_kind:?} address"
                 ))
                 .into())
             }
-            Some(AuthenticationKind::Object(existing_kind)) if *existing_kind == kind => Ok(()),
+            Some(AuthenticationKind::Object(existing_kind)) if existing_kind == kind => Ok(()),
             Some(AuthenticationKind::Object(existing_kind)) => {
                 Err(ExecutionError::invariant_violation(format!(
                     "Object ID {id} is authenticated as {existing_kind:?}, \
@@ -120,11 +122,7 @@ impl MutationAuthorization {
                 ))
                 .into())
             }
-            None => {
-                self.entries
-                    .insert(address, AuthenticationKind::Object(kind));
-                Ok(())
-            }
+            None => Ok(()),
         }
     }
 
