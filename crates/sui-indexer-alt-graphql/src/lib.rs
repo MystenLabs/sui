@@ -427,17 +427,18 @@ pub async fn start_rpc(
             let streaming_transactions = Arc::new(StreamedTransactionStore::new());
             let streaming_objects = Arc::new(StreamedObjectStore::new());
             let readiness = SubscriptionReadiness::new(watermark_task.watermarks_rx());
-            let (stream_task, broadcaster) = CheckpointStreamTask::new(
-                uri,
-                &config.subscription,
-                streaming_packages.clone(),
-                streaming_transactions.clone(),
-                streaming_objects.clone(),
-                readiness.clone(),
-                ledger_grpc.clone(),
-                watermark_task.watermarks_rx(),
-                subscription_metrics.clone(),
-            );
+            let (stream_task, broadcaster, tip_network_total_transactions) =
+                CheckpointStreamTask::new(
+                    uri,
+                    &config.subscription,
+                    streaming_packages.clone(),
+                    streaming_transactions.clone(),
+                    streaming_objects.clone(),
+                    readiness.clone(),
+                    ledger_grpc.clone(),
+                    watermark_task.watermarks_rx(),
+                    subscription_metrics.clone(),
+                );
             let caches = Arc::new(StreamedCaches::new(
                 streaming_packages,
                 streaming_transactions,
@@ -449,7 +450,14 @@ pub async fn start_rpc(
                 watermark_task.watermarks(),
                 Duration::from_millis(config.subscription.package_eviction_interval_ms),
             );
-            Some((stream_task, broadcaster, eviction_task, caches, readiness))
+            Some((
+                stream_task,
+                broadcaster,
+                tip_network_total_transactions,
+                eviction_task,
+                caches,
+                readiness,
+            ))
         }
         None => None,
     };
@@ -513,6 +521,7 @@ pub async fn start_rpc(
     let streaming_handles = if let Some((
         stream_task,
         _broadcaster,
+        tip_network_total_transactions,
         eviction_task,
         caches,
         readiness,
@@ -532,6 +541,7 @@ pub async fn start_rpc(
                 .expect("first_live_checkpoint is set before wait_for_ready returns Ok");
             let subscription_broadcast = Arc::new(SubscriptionBroadcast::new(
                 _broadcaster,
+                tip_network_total_transactions,
                 first_live_checkpoint,
                 subscription_metrics.clone(),
             ));

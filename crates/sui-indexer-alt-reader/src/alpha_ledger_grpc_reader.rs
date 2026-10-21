@@ -43,6 +43,8 @@ pub struct StreamPage<T> {
     pub items: Vec<PageItem<T>>,
     first_wm_cursor: Option<Bytes>,
     last_wm_cursor: Option<Bytes>,
+    /// The latest `Watermark.checkpoint` received on this page (see [`Self::covered_checkpoint`]).
+    covered_checkpoint: Option<u64>,
     pub end_reason: Option<proto::QueryEndReason>,
 }
 
@@ -51,6 +53,7 @@ enum FrameKind<T> {
     Frame {
         payload: Option<T>,
         cursor: Option<Bytes>,
+        covered_checkpoint: Option<u64>,
         end_reason: Option<proto::QueryEndReason>,
     },
     /// A frame with none of the known fields set (unknown/future frame kind).
@@ -182,6 +185,15 @@ impl<T> StreamPage<T> {
             .or_else(|| self.items.last().map(|item| &item.cursor))
     }
 
+    /// The server's latest checkpoint coverage claim on this page (`Watermark.checkpoint`), or
+    /// `None` if no frame carried one. In the scan's direction, every match within the request's
+    /// interval at checkpoints up to and including this one (ascending) or down to and including it
+    /// (descending) has been emitted. Claims never regress within a stream but may repeat, so a
+    /// frame without a claim leaves the latest one in place.
+    pub fn covered_checkpoint(&self) -> Option<u64> {
+        self.covered_checkpoint
+    }
+
     /// Construct a page directly for cross-crate tests, bypassing the drain loop. The watermark
     /// fields are private (their invariant is maintained by [`Self::apply`]); this is the only
     /// sanctioned way to set them from outside the crate.
@@ -196,6 +208,7 @@ impl<T> StreamPage<T> {
             items,
             first_wm_cursor,
             last_wm_cursor,
+            covered_checkpoint: None,
             end_reason,
         }
     }
@@ -207,6 +220,7 @@ impl<T> StreamPage<T> {
         let FrameKind::Frame {
             payload,
             cursor,
+            covered_checkpoint,
             end_reason,
         } = frame
         else {
@@ -228,6 +242,9 @@ impl<T> StreamPage<T> {
                 }
             }
         }
+        if covered_checkpoint.is_some() {
+            self.covered_checkpoint = covered_checkpoint;
+        }
         if let Some(reason) = end_reason {
             // `QueryEnd::reason()` folds an absent or unknown reason into
             // `Unknown`, so `None` here remains unambiguous shorthand for
@@ -245,6 +262,7 @@ impl<T> Default for StreamPage<T> {
             items: Vec::new(),
             first_wm_cursor: None,
             last_wm_cursor: None,
+            covered_checkpoint: None,
             end_reason: None,
         }
     }
@@ -281,7 +299,7 @@ fn classify_frame<T>(
     watermark: Option<proto::Watermark>,
     end: Option<proto::QueryEnd>,
 ) -> anyhow::Result<FrameKind<T>> {
-    let cursor = watermark.and_then(|w| w.cursor);
+    let (cursor, covered_checkpoint) = watermark.map_or((None, None), |w| (w.cursor, w.checkpoint));
     let end_reason = end.map(|e| e.reason());
 
     if payload.is_none() && cursor.is_none() && end_reason.is_none() {
@@ -294,6 +312,7 @@ fn classify_frame<T>(
     Ok(FrameKind::Frame {
         payload,
         cursor,
+        covered_checkpoint,
         end_reason,
     })
 }
@@ -390,6 +409,18 @@ mod tests {
         let mut watermark = proto::Watermark::default();
         watermark.cursor = Some(Bytes::copy_from_slice(cursor));
         response.watermark = Some(watermark);
+        response
+    }
+
+    /// `response` with its watermark claiming coverage through `checkpoint`.
+    fn with_covered_checkpoint(
+        mut response: proto::ListTransactionsResponse,
+        checkpoint: u64,
+    ) -> proto::ListTransactionsResponse {
+        response
+            .watermark
+            .get_or_insert_with(proto::Watermark::default)
+            .checkpoint = Some(checkpoint);
         response
     }
 
@@ -512,6 +543,27 @@ mod tests {
             page.first_cursor().map(|c| c.as_ref()),
             Some(b"c1".as_ref())
         );
+    }
+
+    #[test]
+    fn covered_checkpoint_keeps_the_latest_claim() {
+        let mut page: StreamPage<ExecutedTransaction> = StreamPage::default();
+        page.apply(frame(item_response(b"c1")));
+        assert_eq!(page.covered_checkpoint(), None);
+
+        page.apply(frame(with_covered_checkpoint(watermark_response(b"w2"), 4)));
+        assert_eq!(page.covered_checkpoint(), Some(4));
+        page.apply(frame(with_covered_checkpoint(item_response(b"c3"), 6)));
+        assert_eq!(page.covered_checkpoint(), Some(6));
+
+        // Frames without a claim leave the latest one in place.
+        page.apply(frame(item_response(b"c4")));
+        page.apply(frame(end_response_with_cursor(
+            b"w5",
+            proto::QueryEndReason::ScanLimit,
+        )));
+        assert_eq!(page.covered_checkpoint(), Some(6));
+        assert_eq!(page.last_cursor().map(|c| c.as_ref()), Some(b"w5".as_ref()));
     }
 
     #[test]

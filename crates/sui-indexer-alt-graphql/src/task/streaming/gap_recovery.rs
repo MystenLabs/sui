@@ -13,11 +13,11 @@ use prost_types::FieldMask;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
-use tokio::sync::broadcast;
 use tokio::sync::watch;
 use tracing::warn;
 
 use super::ProcessedCheckpoint;
+use super::checkpoint_stream_task::CheckpointSender;
 use super::checkpoint_stream_task::checkpoint_field_mask;
 use super::checkpoint_stream_task::process_checkpoint;
 use crate::metrics::SubscriptionMetrics;
@@ -58,7 +58,7 @@ impl CheckpointFetcher for LedgerGrpcReader {
 pub(crate) async fn recover_gap<F: CheckpointFetcher>(
     fetcher: &F,
     watermarks_rx: &watch::Receiver<Arc<Watermarks>>,
-    sender: &broadcast::Sender<Arc<ProcessedCheckpoint>>,
+    sender: &CheckpointSender,
     metrics: &SubscriptionMetrics,
     lo: u64,
     hi_inclusive: u64,
@@ -85,8 +85,7 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
                 cp.summary.sequence_number,
                 cp.summary.timestamp_ms,
             );
-            // Ignore send errors: no active subscribers is a normal state during recovery.
-            let _ = sender.send(cp);
+            sender.send(cp);
         }
 
         cursor = chunk_hi_inclusive + 1;
@@ -106,6 +105,25 @@ pub(crate) async fn wait_for_pipelines_catching_up_at(
         .wait_for(|w| {
             let pipelines = w.per_pipeline();
             !pipelines.is_empty() && pipelines.values().all(|p| p.hi().checkpoint() >= target)
+        })
+        .await
+        .ok()
+        .context("Watermark task shut down before pipelines caught up")?;
+    Ok(())
+}
+
+/// Block until every indexer pipeline has indexed transaction `tx_seq`, i.e. its exclusive
+/// transaction high watermark is past `tx_seq`. Pipelines advance their watermarks a whole
+/// checkpoint at a time, so this is [`wait_for_pipelines_catching_up_at`] for the checkpoint that
+/// contains `tx_seq`.
+pub(crate) async fn wait_for_pipelines_catching_up_at_transaction(
+    tx_seq: u64,
+    watermarks_rx: &mut watch::Receiver<Arc<Watermarks>>,
+) -> anyhow::Result<()> {
+    watermarks_rx
+        .wait_for(|w| {
+            let pipelines = w.per_pipeline();
+            !pipelines.is_empty() && pipelines.values().all(|p| p.hi().transaction() > tx_seq)
         })
         .await
         .ok()
@@ -185,6 +203,7 @@ pub(super) async fn fetch_one_with_retry<F: CheckpointFetcher>(
 mod tests {
     use std::time::Duration;
 
+    use tokio::sync::broadcast;
     use tokio::time::timeout;
 
     use super::*;
@@ -295,6 +314,7 @@ mod tests {
         let mock = fetcher(&[]);
         let (_tx, rx) = recovery_watermarks(0);
         let (sender, _rx) = broadcast::channel(16);
+        let sender = CheckpointSender::new(sender, Default::default());
         recover_gap(
             &mock,
             &rx,
@@ -322,6 +342,7 @@ mod tests {
         // Initial watermark below the first chunk's hi (3), so recover_gap must wait.
         let (tx, rx) = recovery_watermarks(0);
         let (sender, mut receiver) = broadcast::channel(16);
+        let sender = CheckpointSender::new(sender, Default::default());
 
         let mock_arc = Arc::new(mock);
         let mock_for_task = mock_arc.clone();
@@ -381,6 +402,7 @@ mod tests {
         ]);
         let (tx, rx) = recovery_watermarks(0);
         let (sender, mut receiver) = broadcast::channel(16);
+        let sender = CheckpointSender::new(sender, Default::default());
 
         let mock_arc = Arc::new(mock);
         let mock_for_task = mock_arc.clone();
