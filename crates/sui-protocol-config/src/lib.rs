@@ -4899,7 +4899,10 @@ impl ProtocolConfig {
                     cfg.feature_flags.disable_id_leak_verifier = true;
                     cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                 }
-                141 => {}
+                141 => {
+                    cfg.feature_flags.enable_package_version_forbid_list = true;
+                    cfg.feature_flags.enable_package_minversion = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
