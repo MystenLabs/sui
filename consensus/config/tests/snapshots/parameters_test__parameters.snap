@@ -4,7 +4,7 @@ expression: parameters
 ---
 leader_timeout:
   secs: 0
-  nanos: 200000000
+  nanos: 120000000
 min_round_delay:
   secs: 0
   nanos: 50000000
