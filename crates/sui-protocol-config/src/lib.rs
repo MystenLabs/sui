@@ -4963,6 +4963,8 @@ impl ProtocolConfig {
                 }
                 141 => {
                     cfg.feature_flags.check_groth16_pvk_length = true;
+                    cfg.feature_flags.enable_package_version_forbid_list = true;
+                    cfg.feature_flags.enable_package_minversion = true;
                 }
                 // Use this template when making changes:
                 //
