@@ -1576,16 +1576,13 @@ mod tests {
         ))
     }
 
+    // The budget is installed directly because max_transactions_in_block_bytes() is fixed
+    // under msim and ignores protocol config overrides.
     async fn test_state_and_rate_limited_pool(
         max_block_bytes: u64,
         max_user_bytes_per_second: u64,
     ) -> (Arc<AuthorityState>, Arc<ConsensusTransactionPool>) {
-        let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
-        config.set_consensus_max_transactions_in_block_bytes_for_testing(max_block_bytes);
-        let state = TestAuthorityBuilder::new()
-            .with_protocol_config(config)
-            .build()
-            .await;
+        let state = TestAuthorityBuilder::new().build().await;
         let pool = Arc::new(ConsensusTransactionPool::new(
             state.epoch_store_for_testing().clone(),
             10,
@@ -1593,6 +1590,17 @@ mod tests {
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
             ConsensusAdapterMetrics::new_test(),
         ));
+        {
+            let mut inner = pool.inner.lock();
+            let Inner::Open(open) = &mut *inner else {
+                unreachable!("new pool must be open");
+            };
+            open.user_byte_budget = Some(Box::new(UserByteBudget::new(
+                max_user_bytes_per_second,
+                max_block_bytes,
+                Instant::now(),
+            )));
+        }
         (state, pool)
     }
 
