@@ -13,7 +13,6 @@ use move_vm_runtime::natives::extensions::NativeContextExtensions;
 use std::{
     cell::RefCell,
     collections::BTreeMap,
-    ops::{Deref, DerefMut},
     path::Path,
     rc::Rc,
     sync::{Arc, LazyLock},
@@ -30,8 +29,7 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     base_types::{SuiAddress, TxContext},
     digests::TransactionDigest,
-    gas::{SuiGasStatus, SuiGasStatusAPI},
-    gas_model::{tables::GasStatus, units_types::Gas},
+    gas_model::{gas_predicates::cost_table_for_version, tables::GasStatus, units_types::Gas},
     metrics::ExecutionMetrics,
 };
 
@@ -141,7 +139,6 @@ pub async fn run_move_unit_tests(
 
 pub struct SuiVMTestSetup {
     gas_price: u64,
-    reference_gas_price: u64,
     protocol_config: ProtocolConfig,
     native_function_table: move_vm_runtime::natives::functions::NativeFunctionTable,
 }
@@ -159,7 +156,6 @@ impl SuiVMTestSetup {
             sui_move_natives::all_natives(/* silent */ false, &protocol_config);
         Self {
             gas_price: TEST_GAS_PRICE,
-            reference_gas_price: TEST_GAS_PRICE,
             protocol_config,
             native_function_table,
         }
@@ -178,25 +174,24 @@ pub struct SuiExtensionsBuilder<'a> {
 }
 
 impl VMTestSetup for SuiVMTestSetup {
-    type Meter<'a> = SuiGasMeter<SuiGasStatusTestWrapper>;
+    type Meter<'a> = SuiGasMeter<Box<GasStatus>>;
     type ExtensionsBuilder<'a> = SuiExtensionsBuilder<'a>;
 
     fn new_meter<'a>(&'a self, execution_bound: Option<u64>) -> Self::Meter<'a> {
-        SuiGasMeter(SuiGasStatusTestWrapper(
-            SuiGasStatus::new(
-                execution_bound.unwrap_or(*MAX_UNIT_TEST_INSTRUCTIONS),
-                self.gas_price,
-                self.reference_gas_price,
-                &self.protocol_config,
-            )
-            .unwrap(),
-        ))
+        let config = &self.protocol_config;
+        let budget = execution_bound.unwrap_or(*MAX_UNIT_TEST_INSTRUCTIONS);
+        let computation_budget = budget.min(config.max_gas_computation_bucket() * self.gas_price);
+        SuiGasMeter(Box::new(GasStatus::new(
+            cost_table_for_version(config.gas_model_version()),
+            computation_budget,
+            self.gas_price,
+            config.gas_model_version(),
+        )))
     }
 
     fn used_gas<'a>(&'a self, execution_bound: u64, meter: Self::Meter<'a>) -> u64 {
-        let gas_status = &meter.0;
         Gas::new(execution_bound)
-            .checked_sub(gas_status.remaining_gas())
+            .checked_sub(meter.0.remaining_gas())
             .unwrap()
             .into()
     }
@@ -253,22 +248,5 @@ impl VMTestSetup for SuiVMTestSetup {
         ))));
         ext.add(&builder.store);
         ext
-    }
-}
-
-// Massaging to get traits to line up.
-pub struct SuiGasStatusTestWrapper(SuiGasStatus);
-
-impl Deref for SuiGasStatusTestWrapper {
-    type Target = GasStatus;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.move_gas_status()
-    }
-}
-
-impl DerefMut for SuiGasStatusTestWrapper {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.move_gas_status_mut()
     }
 }

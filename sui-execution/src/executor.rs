@@ -17,7 +17,7 @@ use sui_types::{
     error::ExecutionError,
     execution::{ExecutionResult, TypeLayoutStore},
     execution_status::ExecutionFailure,
-    gas::SuiGasStatus,
+    gas::GasUsageReport,
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
     metrics::ExecutionMetrics,
@@ -44,7 +44,7 @@ pub trait Executor {
         unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         // Gas related
         gas: GasData,
-        gas_status: SuiGasStatus,
+        reference_gas_price: u64,
         // Transaction
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
@@ -53,7 +53,7 @@ pub trait Executor {
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
-        SuiGasStatus,
+        GasUsageReport,
         TransactionEffects,
         Vec<ExecutionTiming>,
         Result<(), ExecutionFailure>,
@@ -74,7 +74,7 @@ pub trait Executor {
         system_object_versions: SystemObjectVersions,
         unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas: GasData,
-        gas_status: SuiGasStatus,
+        reference_gas_price: u64,
         transaction_kind: TransactionKind,
         _rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
@@ -82,7 +82,7 @@ pub trait Executor {
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
-        SuiGasStatus,
+        GasUsageReport,
         TransactionEffects,
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
@@ -104,7 +104,7 @@ pub trait Executor {
         system_object_versions: SystemObjectVersions,
         // Gas related
         gas: GasData,
-        gas_status: SuiGasStatus,
+        reference_gas_price: u64,
         // Transaction
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
@@ -113,7 +113,7 @@ pub trait Executor {
         skip_all_checks: bool,
     ) -> (
         InnerTemporaryStore,
-        SuiGasStatus,
+        GasUsageReport,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     );

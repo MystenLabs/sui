@@ -37,7 +37,6 @@ use sui_types::{
 };
 use sui_types::{
     execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
-    gas::SuiGasStatusAPI,
     transaction::{InputObjectKind, ObjectReadResult, ObjectReadResultKind},
 };
 use tracing::{debug, error, info_span, trace, warn};
@@ -186,7 +185,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
 
     artifact_manager
         .member(Artifact::TransactionGasReport)
-        .serialize_artifact(&context_and_effects.gas_status.gas_usage_report())
+        .serialize_artifact(&context_and_effects.gas_report)
         .transpose()?
         .unwrap();
 

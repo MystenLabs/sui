@@ -31,7 +31,6 @@ use sui_types::digests::ChainIdentifier;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::epoch_data::EpochData;
 use sui_types::execution_params::ExecutionOrEarlyError;
-use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::StakedSui;
 use sui_types::id::UID;
@@ -934,7 +933,7 @@ fn create_genesis_transaction(
                 // unsettled withdrawals for it to account for.
                 &sui_types::accumulator_root::EmptyUnsettledObjectFunds,
                 gas_data,
-                SuiGasStatus::new_unmetered(protocol_config),
+                0, // reference gas price: unused, the genesis transaction is unmetered
                 kind,
                 None, // compat_args
                 signer,

@@ -154,7 +154,7 @@ pub(crate) mod checked {
         system_object_versions: SystemObjectVersions,
         unsettled_object_funds: &dyn UnsettledObjectFundsRead,
         gas_data: GasData,
-        gas_status: SuiGasStatus,
+        reference_gas_price: u64,
         transaction_kind: TransactionKind,
         rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
@@ -168,6 +168,12 @@ pub(crate) mod checked {
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> ExecutionOutput<Mode> {
+        let gas_status = SuiGasStatus::for_execution(
+            &gas_data,
+            &transaction_kind,
+            reference_gas_price,
+            protocol_config,
+        );
         let input_objects = input_objects.into_inner();
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
