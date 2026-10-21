@@ -165,7 +165,12 @@ impl RandomnessRoundReceiver {
 
         loop {
             let vss_pk = *self.vss_pk_rx.borrow_and_update();
+            // A key change takes priority over queued signatures. `vss_pk` was read before this
+            // select, so a signature that is already queued when the key is cleared must wait for
+            // the next iteration instead of being verified against the stale key.
             tokio::select! {
+                biased;
+                Ok(()) = self.vss_pk_rx.changed() => {},
                 maybe_recv = self.randomness_rx.recv() => {
                     if let Some((epoch, round, bytes)) = maybe_recv {
                         self.handle_new_randomness(epoch, round, bytes).await;
@@ -176,8 +181,6 @@ impl RandomnessRoundReceiver {
                 Some(data) = self.consensus_signatures_rx.recv(), if vss_pk.is_some() => {
                     self.handle_consensus_randomness_signature(vss_pk.unwrap(), &data).await;
                 },
-                // Wake up when the key changes so we re-evaluate the select guard.
-                _ = self.vss_pk_rx.changed() => {},
             }
         }
 
