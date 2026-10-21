@@ -451,6 +451,7 @@ impl BridgeTestCluster {
                 &self.eth_rpc_url(),
                 "--private-key",
                 &eth_pk_hex,
+                "--broadcast",
                 "--json",
             ])
             .output()
@@ -649,8 +650,22 @@ pub(crate) async fn deploy_sol_contract(
             .as_path(),
     )
     .unwrap();
+    // forge script locks its recovery state under the cache path and records
+    // broadcasts per chain, so concurrent deploys need their own directories too
+    let forge_cache_path = PathBuf::from(format!("cache-{random_number}"));
+    let _cache_dir = TempDir::new(
+        PathBuf::from(sol_path.clone())
+            .join(forge_cache_path.clone())
+            .as_path(),
+    )
+    .unwrap();
     unsafe {
         std::env::set_var("FOUNDRY_OUT", forge_out_path.to_str().unwrap());
+        std::env::set_var("FOUNDRY_CACHE_PATH", forge_cache_path.to_str().unwrap());
+        std::env::set_var(
+            "FOUNDRY_BROADCAST",
+            forge_cache_path.join("broadcast").to_str().unwrap(),
+        );
     };
 
     info!("Deploying solidity contracts");
