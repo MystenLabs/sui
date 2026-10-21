@@ -92,9 +92,7 @@ pub fn advance_covered_bound_before_checkpoint(
 
 /// Build the embedded `Watermark` for an item: the cursor encodes this
 /// item's position (so the next request's `after`/`before` resumes past it)
-/// plus the current direction-matching checkpoint boundary. `cp` /
-/// `position` are the item's cursor coordinates (`list_checkpoints` passes
-/// its cp_seq for both).
+/// plus the current direction-matching checkpoint boundary.
 pub fn item_watermark(position: Position, boundary: Option<u64>) -> Watermark {
     let mut wm = Watermark::default();
     wm.cursor = Some(CursorToken::item(position).encode());
@@ -102,11 +100,10 @@ pub fn item_watermark(position: Position, boundary: Option<u64>) -> Watermark {
     wm
 }
 
-/// Build a standalone scan-frontier `Watermark`. `cursor_cp` / `position`
-/// are the boundary cursor coordinates the caller has already resolved for
-/// its scan domain (see [`boundary_cursor_cp`] for the per-checkpoint
-/// scanners' direction adjustment); `boundary` is the accumulated
-/// completion boundary.
+/// Build a standalone scan-frontier `Watermark`. `position` is the boundary
+/// cursor position the caller has already resolved for its scan domain (see
+/// [`boundary_cursor_cp`] for the checkpoint scanners' direction adjustment);
+/// `boundary` is the accumulated completion boundary.
 pub fn boundary_watermark(position: Position, boundary: Option<u64>) -> Watermark {
     cursor_watermark(position, boundary, sui_rpc_cursor::CursorKind::Boundary)
 }
@@ -130,17 +127,11 @@ fn cursor_watermark(
     wm
 }
 
-/// Resolve the boundary-cursor checkpoint coordinate for a `list_transactions`
-/// / `list_events` scan frontier. The cursor encoding is asymmetric:
-/// ascending `Boundary` cursors advance the cp-range start, so the frontier
-/// cp is used directly; descending `Boundary` cursors treat the cp
-/// coordinate as an EXCLUSIVE upper bound, so `cp + 1` is needed to keep
-/// `cp` itself included on resume. Sent back in the other direction, either
-/// coordinate can sit a checkpoint away from the one the position needs, so
-/// [`ResolvedScan::resolve`] bounds a scan by cursor positions and reads the
-/// coordinate only to label checkpoints.
-///
-/// [`ResolvedScan::resolve`]: crate::ledger_history::query_options::ResolvedScan::resolve
+/// Resolve the boundary-cursor checkpoint for a `list_checkpoints` scan
+/// frontier that lands partway through checkpoint `cp`, so that `cp` itself
+/// stays included on resume. Ascending `Boundary` cursors resume at their
+/// checkpoint, so `cp` is used directly; descending `Boundary` cursors exclude
+/// their checkpoint, so `cp + 1` is needed.
 pub fn boundary_cursor_cp(cp: u64, direction: ScanDirection) -> u64 {
     if direction.is_ascending() {
         cp
@@ -149,10 +140,10 @@ pub fn boundary_cursor_cp(cp: u64, direction: ScanDirection) -> u64 {
     }
 }
 
-/// Resolve the checkpoint coordinate embedded in a transaction/event/checkpoint
-/// scan-frontier cursor independently from the optional completed-checkpoint
-/// claim. A missing mapping is representable only at the numeric edge where
-/// the frontier itself supplies the sole safe checkpoint coordinate.
+/// Resolve the checkpoint of a `list_checkpoints` scan-frontier cursor
+/// independently from the optional completed-checkpoint claim. A missing
+/// mapping is representable only at the numeric edge where the frontier itself
+/// supplies the sole safe checkpoint.
 pub fn scan_frontier_cursor_cp(
     checkpoint: Option<u64>,
     frontier: u64,
@@ -203,6 +194,8 @@ pub enum ScanTerminal {
 }
 
 impl ScanTerminal {
+    /// Build the terminal for a resolved interval exhausted at `position`. `claimed_checkpoint`
+    /// is the checkpoint natural completion claims; a cursor bound ignores it.
     pub fn from_range_exhaustion(
         exhaustion: RangeExhaustion,
         position: Position,
@@ -377,10 +370,7 @@ mod tests {
     /// ordering.
     #[test]
     fn item_watermark_sets_direction_matching_bound() {
-        let pos = Position::Transactions {
-            checkpoint: 9,
-            tx_seq: 42,
-        };
+        let pos = Position::Transactions { tx_seq: 42 };
         let wm = item_watermark(pos, Some(8));
         assert_eq!(wm.checkpoint, Some(8));
         assert_eq!(wm.cursor.as_ref(), Some(&CursorToken::item(pos).encode()));
@@ -391,10 +381,7 @@ mod tests {
 
     #[test]
     fn scan_terminal_converts_every_range_exhaustion() {
-        let position = Position::Transactions {
-            checkpoint: 9,
-            tx_seq: 4,
-        };
+        let position = Position::Transactions { tx_seq: 4 };
         let cases = [
             (
                 RangeExhaustion::LedgerTip,
@@ -448,10 +435,7 @@ mod tests {
     /// whatever coverage the items accumulated.
     #[test]
     fn scan_terminal_natural_range_claims_its_claimed_checkpoint() {
-        let position = Position::Transactions {
-            checkpoint: 9,
-            tx_seq: 4,
-        };
+        let position = Position::Transactions { tx_seq: 4 };
 
         for claimed_checkpoint in [8, 9] {
             let checkpoint_bound = ScanTerminal::NaturalRange {
@@ -487,10 +471,7 @@ mod tests {
     /// reasons and whatever coverage the items accumulated.
     #[test]
     fn scan_terminal_unclaimed_natural_end_claims_nothing() {
-        let position = Position::Transactions {
-            checkpoint: 9,
-            tx_seq: 4,
-        };
+        let position = Position::Transactions { tx_seq: 4 };
 
         for (end, reason) in [
             (
@@ -522,10 +503,7 @@ mod tests {
 
     #[test]
     fn scan_terminal_cursor_bound_preserves_coverage() {
-        let position = Position::Transactions {
-            checkpoint: 9,
-            tx_seq: 4,
-        };
+        let position = Position::Transactions { tx_seq: 4 };
         let terminal = ScanTerminal::CursorBound {
             position,
             kind: CursorKind::Boundary,
@@ -550,7 +528,6 @@ mod tests {
     #[test]
     fn scan_terminal_event_cursor_bound_preserves_item_kind() {
         let position = Position::Events {
-            checkpoint: 9,
             tx_seq: 4,
             event_index: 2,
         };

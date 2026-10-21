@@ -52,8 +52,8 @@ Response: {
   "data": {
     "allEvents": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAIYAA==",
-        "endCursor": "KAFCBggAEAQYCQ==",
+        "startCursor": "KAFCBBACGAA=",
+        "endCursor": "KAFCBBAEGAk=",
         "hasNextPage": false,
         "hasPreviousPage": false
       },
@@ -153,8 +153,8 @@ Response: {
     },
     "eventsHasNext": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAIYAA==",
-        "endCursor": "KAFCBggAEAMYAA==",
+        "startCursor": "KAFCBBACGAA=",
+        "endCursor": "KAFCBBADGAA=",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
@@ -177,8 +177,8 @@ Response: {
     },
     "eventsHasPrevious": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAQYCA==",
-        "endCursor": "KAFCBggAEAQYCQ==",
+        "startCursor": "KAFCBBAEGAg=",
+        "endCursor": "KAFCBBAEGAk=",
         "hasNextPage": false,
         "hasPreviousPage": true
       },
@@ -266,8 +266,8 @@ Response: {
   "data": {
     "eventsAfterTransaction2AndEvent0": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAMYAA==",
-        "endCursor": "KAFCBggAEAMYAA==",
+        "startCursor": "KAFCBBADGAA=",
+        "endCursor": "KAFCBBADGAA=",
         "hasNextPage": true,
         "hasPreviousPage": true
       },
@@ -290,8 +290,8 @@ Response: {
   "data": {
     "eventsBeforeTransaction3AndEvent0": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAIYAA==",
-        "endCursor": "KAFCBggAEAIYAA==",
+        "startCursor": "KAFCBBACGAA=",
+        "endCursor": "KAFCBBACGAA=",
         "hasNextPage": true,
         "hasPreviousPage": false
       },
@@ -314,8 +314,8 @@ Response: {
   "data": {
     "eventsBeforeTransaction3AndEvent1FromBack": {
       "pageInfo": {
-        "startCursor": "KAFCBggAEAIYAA==",
-        "endCursor": "KAFCBggAEAMYAA==",
+        "startCursor": "KAFCBBACGAA=",
+        "endCursor": "KAFCBBADGAA=",
         "hasNextPage": true,
         "hasPreviousPage": false
       },

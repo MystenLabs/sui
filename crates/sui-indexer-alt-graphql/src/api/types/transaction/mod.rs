@@ -82,7 +82,6 @@ pub(crate) struct TransactionContents {
 pub struct TransactionToken {
     /// Tracks the originating `CursorToken`'s kind, so it can be reproduced on re-encode.
     kind: CursorKind,
-    checkpoint: u64,
     tx_seq: u64,
 }
 
@@ -276,7 +275,6 @@ impl Transaction {
     // TODO(DVX-2068): Add cursor consistency test between subscriptions and query API.
     pub(crate) fn paginate_preloaded_transactions(
         scope: Scope,
-        source_cp_sequence_number: u64,
         transactions: &[ProcessedTransaction],
         page: &Page<CTransaction>,
         filter: TransactionFilter,
@@ -301,7 +299,7 @@ impl Transaction {
 
         page.paginate_results(
             filtered,
-            |tx| TransactionToken::cursor(source_cp_sequence_number, tx.tx_sequence_number),
+            |tx| TransactionToken::cursor(tx.tx_sequence_number),
             |tx| Transaction::with_contents(scope.clone(), tx.contents.clone()),
         )
         .map(Into::into)
@@ -380,7 +378,7 @@ impl Transaction {
 
         page.paginate_results(
             tx_digests(ctx, &tx_sequence_numbers).await?,
-            |(s, _)| TransactionToken::cursor(0, *s),
+            |(s, _)| TransactionToken::cursor(*s),
             |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
         .map(Into::into)
@@ -443,17 +441,9 @@ impl Transaction {
         limit: usize,
         filter: &TransactionFilter,
     ) -> Result<StreamPage<v2::ExecutedTransaction>, RpcError> {
-        // Extract the cursor and pass through to grpc.
+        // Extract the cursors and pass them through to grpc.
         let after = page.after().map(|c| CursorToken::from(&**c).encode());
-        // Pg-minted cursors set checkpoint as 0. Substitute the checkpoint with u64::max on the
-        // `before` bound to avoid collapsing the checkpoint window.
-        let before = page.before().map(|c| {
-            let mut token = **c;
-            if token.checkpoint == 0 && token.tx_seq != 0 {
-                token.checkpoint = u64::MAX;
-            }
-            CursorToken::from(&token).encode()
-        });
+        let before = page.before().map(|c| CursorToken::from(&**c).encode());
 
         let mut options = v2::QueryOptions::default();
         options.limit = Some(limit as u32);
@@ -560,11 +550,10 @@ impl TransactionContents {
 }
 
 impl TransactionToken {
-    /// Mint the edge cursor for the transaction at the given coordinates.
-    pub(crate) fn cursor(checkpoint: u64, tx_seq: u64) -> CTransaction {
+    /// Mint the edge cursor for the transaction at the given sequence number.
+    pub(crate) fn cursor(tx_seq: u64) -> CTransaction {
         OpaqueCursor::new(Self {
             kind: CursorKind::Item,
-            checkpoint,
             tx_seq,
         })
     }
@@ -591,7 +580,6 @@ impl From<&TransactionToken> for CursorToken {
         CursorToken {
             kind: token.kind,
             position: Position::Transactions {
-                checkpoint: token.checkpoint,
                 tx_seq: token.tx_seq,
             },
         }
@@ -608,12 +596,11 @@ impl TryFrom<CursorToken> for TransactionToken {
     type Error = anyhow::Error;
 
     fn try_from(token: CursorToken) -> anyhow::Result<Self> {
-        let Position::Transactions { checkpoint, tx_seq } = token.position else {
+        let Position::Transactions { tx_seq } = token.position else {
             anyhow::bail!("invalid cursor");
         };
         Ok(Self {
             kind: token.kind,
-            checkpoint,
             tx_seq,
         })
     }
@@ -1009,8 +996,7 @@ mod tests {
             .expect("constructing backward Page with before")
     }
 
-    /// The checkpoint the preloaded transactions in these tests were streamed from. Distinct
-    /// from any cursor checkpoint supplied by clients so tests can tell minted cursors apart.
+    /// The checkpoint the preloaded transactions in these tests were streamed from.
     const STREAMED_CP: u64 = 42;
 
     /// Build a `ProcessedTransaction` with just enough content for `TransactionFilter::matches`
@@ -1054,8 +1040,8 @@ mod tests {
         Page::from_params(&limits, first, after, last, before).expect("valid page")
     }
 
-    fn primary_cursor(checkpoint: u64, position: u64) -> CTransaction {
-        TransactionToken::cursor(checkpoint, position)
+    fn primary_cursor(position: u64) -> CTransaction {
+        TransactionToken::cursor(position)
     }
 
     /// Decode an edge cursor back into its `CursorToken`.
@@ -1068,7 +1054,7 @@ mod tests {
         conn.edges
             .iter()
             .map(|e| match edge_token(&e.cursor).position {
-                Position::Transactions { tx_seq, .. } => tx_seq,
+                Position::Transactions { tx_seq } => tx_seq,
                 position => panic!("expected transactions position, got {position:?}"),
             })
             .collect()
@@ -1079,7 +1065,6 @@ mod tests {
         let txs = preloaded_txs(10..15);
         let conn = Transaction::paginate_preloaded_transactions(
             Scope::for_tests(),
-            STREAMED_CP,
             &txs,
             &page_params_for_testing(Some(3), None, None, None),
             TransactionFilter::default(),
@@ -1091,12 +1076,7 @@ mod tests {
         assert!(conn.page_info.has_next_page);
 
         for edge in &conn.edges {
-            let token = edge_token(&edge.cursor);
-            assert_eq!(token.kind, CursorKind::Item);
-            let Position::Transactions { checkpoint, .. } = token.position else {
-                panic!("expected transactions position, got {:?}", token.position);
-            };
-            assert_eq!(checkpoint, STREAMED_CP);
+            assert_eq!(edge_token(&edge.cursor).kind, CursorKind::Item);
         }
 
         assert_eq!(
@@ -1109,16 +1089,15 @@ mod tests {
         );
     }
 
-    /// Resuming from a grpc cursor keys off the position only: the cursor's checkpoint is
-    /// deliberately wrong here, mimicking a cursor minted elsewhere.
+    /// Resuming from an `after` cursor returns the transactions immediately following its
+    /// position.
     #[test]
     fn paginate_preloaded_resumes_after_primary_cursor() {
         let txs = preloaded_txs(10..15);
         let conn = Transaction::paginate_preloaded_transactions(
             Scope::for_tests(),
-            STREAMED_CP,
             &txs,
-            &page_params_for_testing(Some(2), Some(primary_cursor(0, 11)), None, None),
+            &page_params_for_testing(Some(2), Some(primary_cursor(11)), None, None),
             TransactionFilter::default(),
         )
         .expect("paginated");
@@ -1134,7 +1113,6 @@ mod tests {
         let txs = preloaded_txs(10..15);
         let conn = Transaction::paginate_preloaded_transactions(
             Scope::for_tests(),
-            STREAMED_CP,
             &txs,
             &page_params_for_testing(None, None, Some(2), None),
             TransactionFilter::default(),
@@ -1152,9 +1130,8 @@ mod tests {
         let txs = preloaded_txs(10..17);
         let conn = Transaction::paginate_preloaded_transactions(
             Scope::for_tests(),
-            STREAMED_CP,
             &txs,
-            &page_params_for_testing(None, None, Some(2), Some(primary_cursor(STREAMED_CP, 15))),
+            &page_params_for_testing(None, None, Some(2), Some(primary_cursor(15))),
             TransactionFilter::default(),
         )
         .expect("paginated");
@@ -1172,7 +1149,6 @@ mod tests {
         let txs = preloaded_txs(10..12);
         let conn = Transaction::paginate_preloaded_transactions(
             Scope::for_tests(),
-            STREAMED_CP,
             &txs,
             &page_params_for_testing(None, None, Some(3), None),
             TransactionFilter::default(),
@@ -1191,20 +1167,8 @@ mod tests {
         let page = forward_page(10);
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             Vec::new(),
-            Some(
-                CursorToken::boundary(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 10,
-                })
-                .encode(),
-            ),
-            Some(
-                CursorToken::boundary(Position::Transactions {
-                    checkpoint: 2,
-                    tx_seq: 20,
-                })
-                .encode(),
-            ),
+            Some(CursorToken::boundary(Position::Transactions { tx_seq: 10 }).encode()),
+            Some(CursorToken::boundary(Position::Transactions { tx_seq: 20 }).encode()),
             None,
         );
 
@@ -1227,20 +1191,8 @@ mod tests {
         // Descending stream: the first watermark the stream reports is the high end.
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             Vec::new(),
-            Some(
-                CursorToken::boundary(Position::Transactions {
-                    checkpoint: 2,
-                    tx_seq: 20,
-                })
-                .encode(),
-            ),
-            Some(
-                CursorToken::boundary(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 10,
-                })
-                .encode(),
-            ),
+            Some(CursorToken::boundary(Position::Transactions { tx_seq: 20 }).encode()),
+            Some(CursorToken::boundary(Position::Transactions { tx_seq: 10 }).encode()),
             None,
         );
 
@@ -1253,17 +1205,11 @@ mod tests {
         let end = conn.page_info.end_cursor.expect("end cursor set");
         assert_eq!(
             start,
-            graphql_cursor(CursorToken::boundary(Position::Transactions {
-                checkpoint: 1,
-                tx_seq: 10,
-            }))
+            graphql_cursor(CursorToken::boundary(Position::Transactions { tx_seq: 10 }))
         );
         assert_eq!(
             end,
-            graphql_cursor(CursorToken::boundary(Position::Transactions {
-                checkpoint: 2,
-                tx_seq: 20,
-            }))
+            graphql_cursor(CursorToken::boundary(Position::Transactions { tx_seq: 20 }))
         );
     }
 
@@ -1273,18 +1219,9 @@ mod tests {
         let page = forward_page(10);
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             vec![
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 1,
-                })),
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 2,
-                })),
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 3,
-                })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 1 })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 2 })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 3 })),
             ],
             None,
             None,
@@ -1316,18 +1253,9 @@ mod tests {
         let page = forward_page(3);
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             vec![
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 1,
-                })),
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 2,
-                })),
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 3,
-                })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 1 })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 2 })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 3 })),
             ],
             None,
             None,
@@ -1348,12 +1276,7 @@ mod tests {
     fn build_grpc_connection_forward_lookahead_item_dropped() {
         let scope = Scope::for_tests();
         let page = forward_page(2);
-        let item = |tx_seq| {
-            CursorToken::item(Position::Transactions {
-                checkpoint: 1,
-                tx_seq,
-            })
-        };
+        let item = |tx_seq| CursorToken::item(Position::Transactions { tx_seq });
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             vec![tx_item(item(1)), tx_item(item(2)), tx_item(item(3))],
             None,
@@ -1375,12 +1298,7 @@ mod tests {
     fn build_grpc_connection_backward_lookahead_item_dropped() {
         let scope = Scope::for_tests();
         let page = backward_page(2);
-        let item = |tx_seq| {
-            CursorToken::item(Position::Transactions {
-                checkpoint: 1,
-                tx_seq,
-            })
-        };
+        let item = |tx_seq| CursorToken::item(Position::Transactions { tx_seq });
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             vec![tx_item(item(3)), tx_item(item(2)), tx_item(item(1))],
             None,
@@ -1401,11 +1319,8 @@ mod tests {
     #[test]
     fn build_grpc_connection_backward_cursor_bound_starts_on_last_item() {
         let scope = Scope::for_tests();
-        let page = page_params_for_testing(None, Some(primary_cursor(1, 1)), Some(2), None);
-        let position = |tx_seq| Position::Transactions {
-            checkpoint: 1,
-            tx_seq,
-        };
+        let page = page_params_for_testing(None, Some(primary_cursor(1)), Some(2), None);
+        let position = |tx_seq| Position::Transactions { tx_seq };
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             vec![
                 tx_item(CursorToken::item(position(3))),
@@ -1431,33 +1346,12 @@ mod tests {
         let page = forward_page(3);
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             vec![
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 1,
-                })),
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 2,
-                })),
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 3,
-                })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 1 })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 2 })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 3 })),
             ],
-            Some(
-                CursorToken::boundary(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 0,
-                })
-                .encode(),
-            ),
-            Some(
-                CursorToken::boundary(Position::Transactions {
-                    checkpoint: 2,
-                    tx_seq: 4,
-                })
-                .encode(),
-            ),
+            Some(CursorToken::boundary(Position::Transactions { tx_seq: 0 }).encode()),
+            Some(CursorToken::boundary(Position::Transactions { tx_seq: 4 }).encode()),
             None,
         );
 
@@ -1468,17 +1362,11 @@ mod tests {
         let end = conn.page_info.end_cursor.expect("end cursor set");
         assert_eq!(
             start,
-            graphql_cursor(CursorToken::boundary(Position::Transactions {
-                checkpoint: 1,
-                tx_seq: 0,
-            }))
+            graphql_cursor(CursorToken::boundary(Position::Transactions { tx_seq: 0 }))
         );
         assert_eq!(
             end,
-            graphql_cursor(CursorToken::boundary(Position::Transactions {
-                checkpoint: 2,
-                tx_seq: 4,
-            }))
+            graphql_cursor(CursorToken::boundary(Position::Transactions { tx_seq: 4 }))
         );
     }
 
@@ -1489,18 +1377,9 @@ mod tests {
         // Descending stream order: positions 3, 2, 1 (highest position first).
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             vec![
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 3,
-                })),
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 2,
-                })),
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 1,
-                })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 3 })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 2 })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 1 })),
             ],
             None,
             None,
@@ -1519,10 +1398,7 @@ mod tests {
         );
         assert_eq!(
             start,
-            graphql_cursor(CursorToken::item(Position::Transactions {
-                checkpoint: 1,
-                tx_seq: 1,
-            }))
+            graphql_cursor(CursorToken::item(Position::Transactions { tx_seq: 1 }))
         );
         assert_eq!(
             end, conn.edges[2].cursor,
@@ -1530,10 +1406,7 @@ mod tests {
         );
         assert_eq!(
             end,
-            graphql_cursor(CursorToken::item(Position::Transactions {
-                checkpoint: 1,
-                tx_seq: 3,
-            }))
+            graphql_cursor(CursorToken::item(Position::Transactions { tx_seq: 3 }))
         );
     }
 
@@ -1543,17 +1416,11 @@ mod tests {
     #[test]
     fn build_grpc_connection_forward_after_signals_previous_page() {
         let scope = Scope::for_tests();
-        let page = forward_page_after(10, primary_cursor(1, 0));
+        let page = forward_page_after(10, primary_cursor(0));
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             vec![
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 1,
-                })),
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 2,
-                })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 1 })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 2 })),
             ],
             None,
             None,
@@ -1577,17 +1444,11 @@ mod tests {
     #[test]
     fn build_grpc_connection_backward_before_signals_next_page() {
         let scope = Scope::for_tests();
-        let page = backward_page_before(10, primary_cursor(1, 3));
+        let page = backward_page_before(10, primary_cursor(3));
         let result = StreamPage::<v2::ExecutedTransaction>::for_test(
             vec![
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 2,
-                })),
-                tx_item(CursorToken::item(Position::Transactions {
-                    checkpoint: 1,
-                    tx_seq: 1,
-                })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 2 })),
+                tx_item(CursorToken::item(Position::Transactions { tx_seq: 1 })),
             ],
             None,
             None,

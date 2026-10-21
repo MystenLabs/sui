@@ -652,10 +652,10 @@ async fn test_event_subscription_resume_with_after_cursor() {
     );
 }
 
-/// Resume with an `after` cursor ahead of the ledger's indexed tip in both checkpoint and
-/// transaction sequence number, as a client's cursor from a live edge can be. The ledger rejects it
-/// as out of range until it catches up, and the backfill retries rather than resuming from the
-/// ledger's tip: an event emitted before the cursor must not be delivered.
+/// Resume with an `after` cursor ahead of the ledger's indexed tip in transaction sequence number,
+/// as a client's cursor from a live edge can be. The ledger rejects it as out of range until it
+/// catches up, and the backfill retries rather than resuming from the ledger's tip: an event
+/// emitted before the cursor must not be delivered.
 #[tokio::test]
 async fn test_event_subscription_resume_with_after_cursor_ahead_of_ledger() {
     tokio::time::timeout(Duration::from_secs(180), async {
@@ -664,11 +664,10 @@ async fn test_event_subscription_resume_with_after_cursor_ahead_of_ledger() {
 
         // The ledger can't have indexed past the validator's tip, so it is behind this cursor.
         // The margin leaves room for the transaction that emits the event before the cursor.
-        let (tip, total) = cluster.validator_tip_and_total_transactions();
+        let total = cluster.validator_tip_and_total_transactions().1;
         let resume_tx = total + 100;
         let cursor = Base64::encode(
             CursorToken::item(Position::Events {
-                checkpoint: tip + 1,
                 tx_seq: resume_tx,
                 event_index: 0,
             })

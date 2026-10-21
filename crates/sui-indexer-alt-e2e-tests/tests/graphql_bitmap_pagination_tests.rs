@@ -5,7 +5,6 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use fastcrypto::encoding::Base58;
-use fastcrypto::encoding::Base64;
 use fastcrypto::encoding::Encoding;
 use move_core_types::identifier::Identifier;
 use serde_json::Value;
@@ -21,8 +20,6 @@ use sui_indexer_alt_e2e_tests::write_checkpoint;
 use sui_indexer_alt_schema::checkpoints::StoredGenesis;
 use sui_indexer_alt_schema::epochs::StoredEpochStart;
 use sui_kv_rpc::KvRpcConfig;
-use sui_rpc_cursor::CursorToken;
-use sui_rpc_cursor::Position;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::event::Event;
@@ -246,50 +243,6 @@ async fn paginate_backward(
     pages.into_iter().rev().flatten().collect()
 }
 
-/// One page of the sender-filtered transactions connection: each edge's
-/// `(cursor, digest)`, in emission order (edges are ascending for both
-/// `first` and `last` pages).
-async fn transactions_page(
-    cluster: &OffchainCluster,
-    sender: &str,
-    from_back: bool,
-    after: Option<String>,
-    before: Option<String>,
-) -> Vec<(String, String)> {
-    let query = r#"query($sender: SuiAddress, $first: Int, $last: Int, $after: String, $before: String) {
-        transactions(first: $first, last: $last, filter: { sentAddress: $sender }, after: $after, before: $before) {
-            edges { cursor node { digest } }
-        }
-    }"#;
-
-    let (first, last) = if from_back {
-        (None, Some(10))
-    } else {
-        (Some(10), None)
-    };
-    let resp = graphql(
-        cluster,
-        query,
-        json!({ "sender": sender, "first": first, "last": last, "after": after, "before": before }),
-    )
-    .await;
-
-    resp.pointer("/transactions/edges")
-        .and_then(Value::as_array)
-        .unwrap_or_else(|| panic!("expected edges array in {resp}"))
-        .iter()
-        .map(|e| {
-            (
-                e["cursor"].as_str().expect("edge cursor").to_string(),
-                e["node"]["digest"]
-                    .as_str()
-                    .expect("edge node digest")
-                    .to_string(),
-            )
-        })
-        .collect()
-}
-
 /// One page of `checkpoint(sequenceNumber: 1) { transactions }`: the edges' digests in emission
 /// order, and the page info.
 async fn checkpoint_transactions_page(
@@ -333,25 +286,6 @@ async fn checkpoint_transactions_page(
         .unwrap_or_else(|| panic!("expected pageInfo in {resp}"));
 
     (digests, page_info)
-}
-
-/// Re-encode a transactions cursor with its checkpoint hint replaced,
-/// mimicking position-only cursor sources (e.g. graphql's pg path) that
-/// synthesize a hint instead of carrying a real one.
-fn restamp_cursor_checkpoint(cursor: &str, checkpoint: u64) -> String {
-    let bytes = Base64::decode(cursor).expect("cursor should be base64");
-    let token = CursorToken::decode(&bytes).expect("cursor should decode");
-    let position = match token.position {
-        Position::Transactions { tx_seq, .. } => Position::Transactions { checkpoint, tx_seq },
-        position => panic!("expected transactions cursor, got {position:?}"),
-    };
-    Base64::encode(
-        CursorToken {
-            kind: token.kind,
-            position,
-        }
-        .encode(),
-    )
 }
 
 fn test_event(package: ObjectID, module: &str, sender: SuiAddress, type_str: &str) -> Event {
@@ -574,95 +508,6 @@ async fn exact_fit_page_reports_no_further_page() {
         json!(false),
         "first: 2 after end of (.., tx3): {info}"
     );
-}
-
-/// A transactions cursor's checkpoint is a hint: the grpc scan window is driven by the tx_seq
-/// position clamp, so neutralized hints — `0` on `after`, `u64::MAX` on `before`, the values
-/// position-only cursor sources (e.g. graphql's pg path) synthesize — must page identically to the
-/// real checkpoints grpc mints.
-#[tokio::test]
-async fn cursor_checkpoint_hint_is_redundant() {
-    let (cluster, temp_dir) = alpha_cluster().await;
-    let alice = TestCheckpointBuilder::derive_address(1).to_string();
-
-    // Six Alice transactions spread over two checkpoints.
-    let mut total_txs = 1u64;
-    for cp in [1u64, 2] {
-        let mut builder = TestCheckpointBuilder::new(cp).with_network_total_transactions(total_txs);
-        for i in 0..3u64 {
-            builder = builder
-                .start_transaction(1)
-                .create_owned_object(cp * 10 + i)
-                .finish_transaction();
-        }
-        total_txs += 3;
-        write_checkpoint(temp_dir.path(), builder.build_checkpoint())
-            .await
-            .unwrap();
-    }
-    cluster
-        .wait_for_graphql(2, Duration::from_secs(30))
-        .await
-        .expect("graphql did not reach checkpoint 2");
-
-    fn digests(page: &[(String, String)]) -> Vec<String> {
-        page.iter().map(|(_, digest)| digest.clone()).collect()
-    }
-
-    let all = transactions_page(&cluster, &alice, false, None, None).await;
-    assert_eq!(all.len(), 6, "expected all Alice transactions, got {all:?}");
-    let after_real = all[0].0.clone();
-    let before_real = all[4].0.clone();
-    let expected = digests(&all[1..4]);
-
-    // Baseline: the between-page with the real checkpoint hints grpc minted.
-    let real = transactions_page(
-        &cluster,
-        &alice,
-        false,
-        Some(after_real.clone()),
-        Some(before_real.clone()),
-    )
-    .await;
-    assert_eq!(digests(&real), expected);
-
-    // Pg-minted cursors carry the `checkpoint: 0` placeholder, which graphql's grpc edge rewrites
-    // to the neutral upper sentinel before forwarding: a client round-tripping a pg-minted cursor
-    // as `before` must see the same page.
-    let pg_minted = transactions_page(
-        &cluster,
-        &alice,
-        false,
-        Some(after_real.clone()),
-        Some(restamp_cursor_checkpoint(&before_real, 0)),
-    )
-    .await;
-    assert_eq!(digests(&pg_minted), expected);
-
-    // Ordering-invariance: the same neutralized window paged from the back (`last`, a descending
-    // scan). `after`/`before` bound coordinate sides, not scan-order sides, so the neutral values
-    // hold in both orderings.
-    let neutral_desc = transactions_page(
-        &cluster,
-        &alice,
-        true,
-        Some(restamp_cursor_checkpoint(&after_real, 0)),
-        Some(restamp_cursor_checkpoint(&before_real, 0)),
-    )
-    .await;
-    assert_eq!(digests(&neutral_desc), expected);
-
-    // A genuinely wrong (nonzero) hint is redundant too: the backend bounds the scan by cursor
-    // positions, so `1` as the `before` hint still admits the cp 2 transaction.
-    let wrong = transactions_page(
-        &cluster,
-        &alice,
-        false,
-        Some(after_real),
-        Some(restamp_cursor_checkpoint(&before_real, 1)),
-    )
-    .await;
-    assert_eq!(digests(&wrong), expected);
 }
 
 #[tokio::test]

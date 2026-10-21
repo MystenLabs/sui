@@ -83,9 +83,7 @@ impl Subscribable for Transaction {
                 continue;
             }
             let transaction = Transaction::with_contents(scope.clone(), tx.contents.clone())?;
-            let cursor =
-                TransactionToken::cursor(checkpoint.summary.sequence_number, tx.tx_sequence_number)
-                    .encode_cursor();
+            let cursor = TransactionToken::cursor(tx.tx_sequence_number).encode_cursor();
             edges.push(Edge::new(cursor, transaction));
         }
         Ok(edges)

@@ -257,7 +257,7 @@ impl ResumePoint {
         let (cursor_checkpoint, tx_seq) = match after.map(|token| token.position) {
             None => (None, None),
             Some(Position::Checkpoints { checkpoint }) => (Some(checkpoint), None),
-            Some(Position::Transactions { tx_seq, .. } | Position::Events { tx_seq, .. }) => {
+            Some(Position::Transactions { tx_seq } | Position::Events { tx_seq, .. }) => {
                 (None, Some(tx_seq))
             }
         };
@@ -521,28 +521,22 @@ fn made_progress(end: &CursorToken, after: Option<&CursorToken>) -> bool {
 }
 
 /// Whether two cursors sit at the same place in the scan: the same kind at the same position. A
-/// transaction or event position is its transaction (and event index); the checkpoint those
-/// cursors also carry is not compared.
+/// transaction or event position is its transaction (and event index).
 fn same_scan_position(a: &CursorToken, b: &CursorToken) -> bool {
     a.kind == b.kind
         && match (a.position, b.position) {
             (Position::Checkpoints { checkpoint: a }, Position::Checkpoints { checkpoint: b }) => {
                 a == b
             }
-            (
-                Position::Transactions { tx_seq: a, .. },
-                Position::Transactions { tx_seq: b, .. },
-            ) => a == b,
+            (Position::Transactions { tx_seq: a }, Position::Transactions { tx_seq: b }) => a == b,
             (
                 Position::Events {
                     tx_seq: a_tx_seq,
                     event_index: a_event_index,
-                    ..
                 },
                 Position::Events {
                     tx_seq: b_tx_seq,
                     event_index: b_event_index,
-                    ..
                 },
             ) => (a_tx_seq, a_event_index) == (b_tx_seq, b_event_index),
             _ => false,
@@ -559,7 +553,7 @@ async fn wait_for_pipelines_reaching(
         Position::Checkpoints { checkpoint } => {
             wait_for_pipelines_catching_up_at(checkpoint, watermarks_rx).await
         }
-        Position::Transactions { tx_seq, .. } | Position::Events { tx_seq, .. } => {
+        Position::Transactions { tx_seq } | Position::Events { tx_seq, .. } => {
             wait_for_pipelines_catching_up_at_transaction(tx_seq, watermarks_rx).await
         }
     }
@@ -831,18 +825,17 @@ mod tests {
         }
     }
 
-    fn tx(kind: CursorKind, checkpoint: u64, tx_seq: u64) -> CursorToken {
+    fn tx(kind: CursorKind, tx_seq: u64) -> CursorToken {
         CursorToken {
             kind,
-            position: Position::Transactions { checkpoint, tx_seq },
+            position: Position::Transactions { tx_seq },
         }
     }
 
-    fn ev(kind: CursorKind, checkpoint: u64, tx_seq: u64, event_index: u32) -> CursorToken {
+    fn ev(kind: CursorKind, tx_seq: u64, event_index: u32) -> CursorToken {
         CursorToken {
             kind,
             position: Position::Events {
-                checkpoint,
                 tx_seq,
                 event_index,
             },
@@ -980,41 +973,31 @@ mod tests {
     /// the scan waits rather than re-requesting immediately.
     #[test]
     fn echoed_cursor_is_not_progress() {
-        for token in [
-            cp(B, 16),
-            cp(I, 16),
-            tx(B, 16, 3),
-            tx(I, 16, 3),
-            ev(I, 16, 3, 1),
-        ] {
+        for token in [cp(B, 16), cp(I, 16), tx(B, 3), tx(I, 3), ev(I, 3, 1)] {
             assert!(!made_progress(&token, Some(&token)), "{token:?}");
         }
         // Any other end is progress: the next page starts from it.
         assert!(made_progress(&cp(B, 17), Some(&cp(B, 16))));
-        assert!(made_progress(&tx(B, 17, 4), Some(&tx(I, 16, 3))));
+        assert!(made_progress(&tx(B, 4), Some(&tx(I, 3))));
         // With no `after`, the first page always counts.
         assert!(made_progress(&cp(B, 16), None));
     }
 
-    /// Transaction and event cursors are compared by kind and position; the checkpoint they also
-    /// carry can differ between servers for the same position.
+    /// Transaction and event cursors are compared by kind and position.
     #[test]
-    fn made_progress_ignores_the_checkpoint_label() {
-        assert!(!made_progress(&tx(B, 0, 3), Some(&tx(B, 16, 3))));
-        assert!(!made_progress(&ev(I, 16, 3, 1), Some(&ev(I, 0, 3, 1))));
-
-        assert!(made_progress(&tx(I, 16, 3), Some(&tx(B, 16, 3))));
-        assert!(made_progress(&tx(B, 16, 4), Some(&tx(B, 16, 3))));
-        assert!(made_progress(&ev(I, 16, 3, 2), Some(&ev(I, 16, 3, 1))));
-        assert!(made_progress(&ev(I, 16, 4, 1), Some(&ev(I, 16, 3, 1))));
+    fn made_progress_compares_kind_and_position() {
+        assert!(made_progress(&tx(I, 3), Some(&tx(B, 3))));
+        assert!(made_progress(&tx(B, 4), Some(&tx(B, 3))));
+        assert!(made_progress(&ev(I, 3, 2), Some(&ev(I, 3, 1))));
+        assert!(made_progress(&ev(I, 4, 1), Some(&ev(I, 3, 1))));
     }
 
     #[test]
-    fn resume_point_takes_the_transaction_not_the_checkpoint_label() {
+    fn resume_point_takes_the_transaction_or_the_checkpoint() {
         assert_eq!(ResumePoint::new(None, None), ResumePoint::default());
         assert!(!ResumePoint::default().is_set());
 
-        let resume = ResumePoint::new(Some(&tx(I, 0, 5)), None);
+        let resume = ResumePoint::new(Some(&tx(I, 5)), None);
         assert_eq!(
             resume,
             ResumePoint {
@@ -1024,7 +1007,7 @@ mod tests {
         );
         assert!(resume.is_set());
         assert_eq!(
-            ResumePoint::new(Some(&ev(I, 99, 5, 2)), Some(7)),
+            ResumePoint::new(Some(&ev(I, 5, 2)), Some(7)),
             ResumePoint {
                 checkpoint: Some(7),
                 tx_seq: Some(5),
@@ -1053,7 +1036,7 @@ mod tests {
     fn start_too_far_ahead_is_measured_in_transactions_for_transaction_cursors() {
         let too_far =
             |resume: ResumePoint, max_ahead| resume.is_too_far_ahead(99, Some(1000), max_ahead);
-        let at_tx = |tx_seq| ResumePoint::new(Some(&tx(I, 0, tx_seq)), None);
+        let at_tx = |tx_seq| ResumePoint::new(Some(&tx(I, tx_seq)), None);
 
         // With no allowance, only transactions past the tip are too far.
         assert!(!too_far(at_tx(999), 0));
@@ -1063,27 +1046,20 @@ mod tests {
         assert!(!too_far(at_tx(1029), 3));
         assert!(too_far(at_tx(1030), 3));
 
-        // The cursor's checkpoint label plays no part.
-        assert!(!too_far(
-            ResumePoint::new(Some(&tx(I, 1_000_000, 1029)), None),
-            3
-        ));
-        assert!(!too_far(
-            ResumePoint::new(Some(&ev(I, 1_000_000, 1029, 4)), None),
-            3
-        ));
-        assert!(too_far(ResumePoint::new(Some(&ev(I, 0, 1030, 0)), None), 3));
+        // Event cursors are measured by their transaction too.
+        assert!(!too_far(ResumePoint::new(Some(&ev(I, 1029, 4)), None), 3));
+        assert!(too_far(ResumePoint::new(Some(&ev(I, 1030, 0)), None), 3));
 
         // `afterCheckpoint` is still measured in checkpoints.
         assert!(!too_far(ResumePoint::new(None, Some(102)), 3));
         assert!(too_far(ResumePoint::new(None, Some(103)), 3));
-        assert!(too_far(ResumePoint::new(Some(&tx(I, 0, 5)), Some(103)), 3));
+        assert!(too_far(ResumePoint::new(Some(&tx(I, 5)), Some(103)), 3));
 
         // Before the first broadcast the tip's transaction count is unknown: a transaction cursor
         // is admitted, while `afterCheckpoint` is still checked.
-        let resume = ResumePoint::new(Some(&tx(I, 0, 1_000_000)), None);
+        let resume = ResumePoint::new(Some(&tx(I, 1_000_000)), None);
         assert!(!resume.is_too_far_ahead(99, None, 0));
-        let resume = ResumePoint::new(Some(&tx(I, 0, 1_000_000)), Some(103));
+        let resume = ResumePoint::new(Some(&tx(I, 1_000_000)), Some(103));
         assert!(resume.is_too_far_ahead(99, None, 3));
     }
 }

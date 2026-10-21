@@ -90,12 +90,7 @@ impl Subscribable for Event {
                 if !filter.matches(&native) {
                     continue;
                 }
-                let cursor = EventToken::cursor(
-                    checkpoint.summary.sequence_number,
-                    tx.tx_sequence_number,
-                    idx as u32,
-                )
-                .encode_cursor();
+                let cursor = EventToken::cursor(tx.tx_sequence_number, idx as u32).encode_cursor();
                 edges.push(Edge::new(
                     cursor,
                     Event {

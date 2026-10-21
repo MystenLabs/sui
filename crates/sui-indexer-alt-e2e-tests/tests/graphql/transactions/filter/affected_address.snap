@@ -73,14 +73,14 @@ Response: {
   "data": {
     "transactionsA": {
       "pageInfo": {
-        "startCursor": "KAE6BAgAEAA=",
-        "endCursor": "KAE6BAgAEAo=",
+        "startCursor": "KAE6AhAA",
+        "endCursor": "KAE6AhAK",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "KAE6BAgAEAA=",
+          "cursor": "KAE6AhAA",
           "node": {
             "digest": "G7nq5tVG2CuHG9wmeq7JHDCN7q43PLBfC6W2D6eHffjT",
             "effects": {
@@ -92,7 +92,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAI=",
+          "cursor": "KAE6AhAC",
           "node": {
             "digest": "74XecJe2t2baP9fJgfxrBuc7YpX1Nrc7S38wwoYTxdLL",
             "effects": {
@@ -104,7 +104,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAU=",
+          "cursor": "KAE6AhAF",
           "node": {
             "digest": "eWoMLEnM56LdkHTKN2wovLADEPDwdWgs64FNFrZjwTB",
             "effects": {
@@ -116,7 +116,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAg=",
+          "cursor": "KAE6AhAI",
           "node": {
             "digest": "6YXfMwrxN7ywdKKmApgZKQ4CyYHGEcyrvyL1ucoNU5Fr",
             "effects": {
@@ -128,7 +128,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAo=",
+          "cursor": "KAE6AhAK",
           "node": {
             "digest": "2TjbhBBC1GK3DoaGdvw22dwD6z1cyMpwHuPzNMHSw6E4",
             "effects": {
@@ -143,14 +143,14 @@ Response: {
     },
     "transactionsA_sentByC": {
       "pageInfo": {
-        "startCursor": "KAE6BAgAEAg=",
-        "endCursor": "KAE6BAgAEAg=",
+        "startCursor": "KAE6AhAI",
+        "endCursor": "KAE6AhAI",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "KAE6BAgAEAg=",
+          "cursor": "KAE6AhAI",
           "node": {
             "digest": "6YXfMwrxN7ywdKKmApgZKQ4CyYHGEcyrvyL1ucoNU5Fr",
             "effects": {
@@ -165,14 +165,14 @@ Response: {
     },
     "transactionsB": {
       "pageInfo": {
-        "startCursor": "KAE6BAgAEAA=",
-        "endCursor": "KAE6BAgAEAo=",
+        "startCursor": "KAE6AhAA",
+        "endCursor": "KAE6AhAK",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "KAE6BAgAEAA=",
+          "cursor": "KAE6AhAA",
           "node": {
             "digest": "G7nq5tVG2CuHG9wmeq7JHDCN7q43PLBfC6W2D6eHffjT",
             "effects": {
@@ -184,7 +184,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAU=",
+          "cursor": "KAE6AhAF",
           "node": {
             "digest": "eWoMLEnM56LdkHTKN2wovLADEPDwdWgs64FNFrZjwTB",
             "effects": {
@@ -196,7 +196,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAo=",
+          "cursor": "KAE6AhAK",
           "node": {
             "digest": "2TjbhBBC1GK3DoaGdvw22dwD6z1cyMpwHuPzNMHSw6E4",
             "effects": {
@@ -211,14 +211,14 @@ Response: {
     },
     "transactionsC": {
       "pageInfo": {
-        "startCursor": "KAE6BAgAEAA=",
-        "endCursor": "KAE6BAgAEAo=",
+        "startCursor": "KAE6AhAA",
+        "endCursor": "KAE6AhAK",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "KAE6BAgAEAA=",
+          "cursor": "KAE6AhAA",
           "node": {
             "digest": "G7nq5tVG2CuHG9wmeq7JHDCN7q43PLBfC6W2D6eHffjT",
             "effects": {
@@ -230,7 +230,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAg=",
+          "cursor": "KAE6AhAI",
           "node": {
             "digest": "6YXfMwrxN7ywdKKmApgZKQ4CyYHGEcyrvyL1ucoNU5Fr",
             "effects": {
@@ -242,7 +242,7 @@ Response: {
           }
         },
         {
-          "cursor": "KAE6BAgAEAo=",
+          "cursor": "KAE6AhAK",
           "node": {
             "digest": "2TjbhBBC1GK3DoaGdvw22dwD6z1cyMpwHuPzNMHSw6E4",
             "effects": {

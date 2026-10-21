@@ -38,14 +38,14 @@ use super::testing::wait_for_matching_item;
 /// delivered through the backfill scan (never the live path).
 const BACKFILL_SETTLE: Duration = Duration::from_secs(5);
 
-/// Decode a transaction edge's `cursor` field into its `(checkpoint, tx_sequence)` position.
-fn decode_tx_cursor(edge: &serde_json::Value) -> (u64, u64) {
+/// Decode a transaction edge's `cursor` field into its transaction sequence number.
+fn decode_tx_cursor(edge: &serde_json::Value) -> u64 {
     let cursor = edge["cursor"]
         .as_str()
         .expect("transaction edge missing cursor");
     let ct = CTransaction::decode_cursor(cursor).expect("cursor is not a valid CTransaction");
     match CursorToken::from(&*ct).position {
-        Position::Transactions { checkpoint, tx_seq } => (checkpoint, tx_seq),
+        Position::Transactions { tx_seq } => tx_seq,
         position => panic!("expected a transactions cursor, got {position:?}"),
     }
 }
@@ -179,7 +179,7 @@ async fn collect_matches(
 ) -> Vec<Value> {
     let mut seen = BTreeSet::new();
     let mut nodes = Vec::new();
-    let mut prev: Option<(u64, u64)> = None;
+    let mut prev: Option<u64> = None;
     while !expected.is_subset(&seen) {
         let item = stream.next().await.unwrap();
         let edge = &item["data"]["transactions"];
@@ -537,10 +537,10 @@ async fn test_transaction_subscription_resume_with_after_cursor() {
     );
 }
 
-/// Resume with an `after` cursor ahead of the ledger's indexed tip in both checkpoint and
-/// transaction sequence number, as a client's cursor from a live edge can be. The ledger rejects it
-/// as out of range until it catches up, and the backfill retries rather than resuming from the
-/// ledger's tip: a transaction that lands before the cursor must not be delivered.
+/// Resume with an `after` cursor ahead of the ledger's indexed tip in transaction sequence number,
+/// as a client's cursor from a live edge can be. The ledger rejects it as out of range until it
+/// catches up, and the backfill retries rather than resuming from the ledger's tip: a transaction
+/// that lands before the cursor must not be delivered.
 #[tokio::test]
 async fn test_transaction_subscription_resume_with_after_cursor_ahead_of_ledger() {
     tokio::time::timeout(Duration::from_secs(180), async {
@@ -548,15 +548,10 @@ async fn test_transaction_subscription_resume_with_after_cursor_ahead_of_ledger(
         let sender = cluster.validator.wallet.active_address().unwrap();
 
         // The ledger can't have indexed past the validator's tip, so it is behind this cursor.
-        let (tip, total) = cluster.validator_tip_and_total_transactions();
-        let resume_seq = tip + 1;
+        let total = cluster.validator_tip_and_total_transactions().1;
         let resume_tx = total + RESUME_TX_MARGIN;
         let cursor = Base64::encode(
-            CursorToken::item(Position::Transactions {
-                checkpoint: resume_seq,
-                tx_seq: resume_tx,
-            })
-            .encode(),
+            CursorToken::item(Position::Transactions { tx_seq: resume_tx }).encode(),
         );
         let query = format!(
             r#"subscription($sender: SuiAddress!) {{
@@ -590,7 +585,7 @@ async fn test_transaction_subscription_resume_with_after_cursor_ahead_of_ledger(
             !before_cursor.contains(&digest),
             "delivered a transaction before the cursor: {edge}",
         );
-        let (_, tx_seq) = decode_tx_cursor(edge);
+        let tx_seq = decode_tx_cursor(edge);
         assert!(
             tx_seq > resume_tx,
             "delivered at or before the cursor: {edge}"

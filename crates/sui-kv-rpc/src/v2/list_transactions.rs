@@ -10,7 +10,6 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use prost::Message;
-use sui_inverted_index::ScanDirection;
 use sui_inverted_index::ScanStop;
 use sui_kvstore::BitmapIndexSpec;
 use sui_kvstore::TransactionData;
@@ -33,7 +32,6 @@ use sui_rpc_api::ledger_history::watermark::ScanTerminal;
 use sui_rpc_api::ledger_history::watermark::advance_covered_bound_before_checkpoint;
 use sui_rpc_api::ledger_history::watermark::boundary_watermark;
 use sui_rpc_api::ledger_history::watermark::item_watermark;
-use sui_rpc_api::ledger_history::watermark::scan_frontier_cursor_cp;
 use sui_rpc_cursor::Position;
 use sui_types::digests::TransactionDigest;
 use tracing::Instrument;
@@ -119,7 +117,6 @@ pub(crate) async fn list_transactions(
         .instrument(debug_span!("resolve_tx_range"))
         .await?;
     let exhaustion = tx_range.exhaustion;
-    let range_end_checkpoint = tx_range.end_checkpoint;
     let range_end_position = tx_range.end_position;
     let entry_checkpoint = tx_range.entry_checkpoint;
     let natural_end_claim = tx_range.natural_end_claim(&options);
@@ -139,7 +136,6 @@ pub(crate) async fn list_transactions(
         let response = range_end_response(
             exhaustion,
             Position::Transactions {
-                checkpoint: range_end_checkpoint,
                 tx_seq: range_end_position,
             },
             None,
@@ -299,7 +295,6 @@ pub(crate) async fn list_transactions(
                 let (response, reason) = range_end_response(
                     exhaustion,
                     Position::Transactions {
-                        checkpoint: range_end_checkpoint,
                         tx_seq: range_end_position,
                     },
                     covered_checkpoint_bound,
@@ -331,10 +326,7 @@ pub(crate) async fn list_transactions(
                         &options,
                     );
                     let watermark = item_watermark(
-                        Position::Transactions {
-                            checkpoint: item_checkpoint,
-                            tx_seq,
-                        },
+                        Position::Transactions { tx_seq },
                         covered_checkpoint_bound,
                     );
                     let mut response = match item {
@@ -385,12 +377,11 @@ pub(crate) async fn list_transactions(
                 }) => {
                     let watermark = transaction_frontier_watermark(
                         &options,
-                        direction,
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                         position,
                         Some(checkpoint_at_frontier),
-                    )?;
+                    );
                     let response = watermark_response(watermark);
                     ctx.inc_stream_watermark_frames();
                     if !first_frame_emitted {
@@ -405,7 +396,6 @@ pub(crate) async fn list_transactions(
                     let response = terminal_response_from_scan_stop(
                         stop,
                         &options,
-                        direction,
                         entry_checkpoint,
                         &mut covered_checkpoint_bound,
                     )?;
@@ -444,12 +434,11 @@ fn watermark_response(watermark: Watermark) -> ListTransactionsResponse {
 
 fn transaction_frontier_watermark(
     options: &QueryOptions,
-    direction: ScanDirection,
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
     position: u64,
     checkpoint_at_frontier: Option<u64>,
-) -> Result<Watermark, RpcError> {
+) -> Watermark {
     if let Some(checkpoint) = checkpoint_at_frontier {
         *covered_checkpoint_bound = advance_covered_bound_before_checkpoint(
             *covered_checkpoint_bound,
@@ -458,26 +447,15 @@ fn transaction_frontier_watermark(
             options,
         );
     }
-    let cursor_checkpoint = scan_frontier_cursor_cp(checkpoint_at_frontier, position, direction)
-        .ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!("transaction scan frontier {position} has no checkpoint mapping"),
-            )
-        })?;
-    Ok(boundary_watermark(
-        Position::Transactions {
-            checkpoint: cursor_checkpoint,
-            tx_seq: position,
-        },
+    boundary_watermark(
+        Position::Transactions { tx_seq: position },
         *covered_checkpoint_bound,
-    ))
+    )
 }
 
 fn terminal_response_from_scan_stop(
     stop: ResolvedScanStop<u64>,
     options: &QueryOptions,
-    direction: ScanDirection,
     entry_checkpoint: u64,
     covered_checkpoint_bound: &mut Option<u64>,
 ) -> Result<ListTransactionsResponse, RpcError> {
@@ -485,12 +463,11 @@ fn terminal_response_from_scan_stop(
     let terminal = ScanTerminal::ScanLimit {
         watermark: transaction_frontier_watermark(
             options,
-            direction,
             entry_checkpoint,
             covered_checkpoint_bound,
             position,
             checkpoint,
-        )?,
+        ),
     };
     let reason = terminal.reason();
     Ok(end_response(
@@ -934,11 +911,7 @@ mod tests {
             .watermark
             .as_ref()
             .expect("ledger exhaustion proves a terminal boundary");
-        let expected_cursor = CursorToken::boundary(Position::Transactions {
-            checkpoint: 0,
-            tx_seq: 0,
-        })
-        .encode();
+        let expected_cursor = CursorToken::boundary(Position::Transactions { tx_seq: 0 }).encode();
         assert_eq!(watermark.cursor.as_ref(), Some(&expected_cursor));
         assert_eq!(watermark.checkpoint, None);
         let families = registry.gather();
@@ -966,48 +939,16 @@ mod tests {
 
     #[test]
     fn scan_limit_terminal_frames_use_transaction_domain_in_both_directions() {
-        for (
-            direction,
-            position,
-            checkpoint,
-            entry_checkpoint,
-            initial_proof,
-            expected_checkpoint,
-            expected_proof,
-        ) in [
-            (ScanDirection::Ascending, 0, None, 0, None, 0, None),
-            (
-                ScanDirection::Descending,
-                u64::MAX,
-                None,
-                u64::MAX,
-                None,
-                u64::MAX,
-                None,
-            ),
-            (ScanDirection::Ascending, 50, Some(10), 10, None, 10, None),
-            (ScanDirection::Descending, 50, Some(10), 10, None, 11, None),
-            (
-                ScanDirection::Ascending,
-                50,
-                Some(10),
-                10,
-                Some(15),
-                10,
-                Some(15),
-            ),
-            (
-                ScanDirection::Descending,
-                50,
-                Some(10),
-                10,
-                Some(5),
-                11,
-                Some(5),
-            ),
+        for (ascending, position, checkpoint, entry_checkpoint, initial_proof, expected_proof) in [
+            (true, 0, None, 0, None, None),
+            (false, u64::MAX, None, u64::MAX, None, None),
+            (true, 50, Some(10), 10, None, None),
+            (false, 50, Some(10), 10, None, None),
+            (true, 50, Some(10), 10, Some(15), Some(15)),
+            (false, 50, Some(10), 10, Some(5), Some(5)),
         ] {
             let mut proto_options = ascending_options();
-            if !direction.is_ascending() {
+            if !ascending {
                 proto_options.ordering =
                     Some(sui_rpc::proto::sui::rpc::v2::Ordering::Descending as i32);
             }
@@ -1020,7 +961,6 @@ mod tests {
                     checkpoint,
                 },
                 &options,
-                direction,
                 entry_checkpoint,
                 &mut covered,
             )
@@ -1034,10 +974,7 @@ mod tests {
             let watermark = response.watermark.expect("terminal watermark");
             assert_eq!(
                 CursorToken::decode(watermark.cursor.as_deref().expect("cursor")).unwrap(),
-                CursorToken::boundary(Position::Transactions {
-                    checkpoint: expected_checkpoint,
-                    tx_seq: position,
-                })
+                CursorToken::boundary(Position::Transactions { tx_seq: position })
             );
             assert_eq!(
                 watermark.checkpoint, expected_proof,
@@ -1047,41 +984,6 @@ mod tests {
                 covered, expected_proof,
                 "accumulated checkpoint proof must match the emitted watermark"
             );
-        }
-    }
-
-    #[test]
-    fn scan_limit_terminal_rejects_missing_non_edge_checkpoint_mapping() {
-        for (direction, position) in [
-            (ScanDirection::Ascending, 1),
-            (ScanDirection::Descending, u64::MAX - 1),
-        ] {
-            let mut proto_options = ascending_options();
-            if !direction.is_ascending() {
-                proto_options.ordering =
-                    Some(sui_rpc::proto::sui::rpc::v2::Ordering::Descending as i32);
-            }
-            let options =
-                QueryOptions::transactions_from_proto(Some(&proto_options), 10, 100).unwrap();
-            let entry_checkpoint = if direction.is_ascending() {
-                0
-            } else {
-                u64::MAX
-            };
-            let mut covered = None;
-            let error = terminal_response_from_scan_stop(
-                ResolvedScanStop::ScanLimit {
-                    position,
-                    checkpoint: None,
-                },
-                &options,
-                direction,
-                entry_checkpoint,
-                &mut covered,
-            )
-            .expect_err("only numeric-edge frontiers may omit a checkpoint mapping");
-
-            assert_eq!(error.into_status_proto().code, tonic::Code::Internal as i32);
         }
     }
 
@@ -1107,7 +1009,6 @@ mod tests {
         let wm = || {
             item_watermark(
                 Position::Transactions {
-                    checkpoint: row.checkpoint_number,
                     tx_seq: row.tx_sequence_number,
                 },
                 Some(8),
@@ -1123,11 +1024,7 @@ mod tests {
         assert_eq!(
             digest_wm.cursor.as_ref(),
             Some(
-                &sui_rpc_cursor::CursorToken::item(Position::Transactions {
-                    checkpoint: row.checkpoint_number,
-                    tx_seq: 42,
-                })
-                .encode()
+                &sui_rpc_cursor::CursorToken::item(Position::Transactions { tx_seq: 42 }).encode()
             )
         );
         assert_eq!(digest_wm.checkpoint, Some(8));
