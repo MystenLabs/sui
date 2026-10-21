@@ -263,6 +263,19 @@ impl BigTableClient {
             .await
     }
 
+    /// The keys in `object_keys` that have an `objects` row, read without the
+    /// objects' contents. One multi-get, under one permit.
+    pub(crate) async fn get_existing_object_keys(
+        &self,
+        object_keys: Vec<ObjectKey>,
+    ) -> Result<Vec<ObjectKey>, RpcError> {
+        let mut inner = self.inner.clone();
+        self.call_gated(stage::OBJECTS, async move {
+            inner.get_existing_object_keys(&object_keys).await
+        })
+        .await
+    }
+
     pub(crate) async fn resolve_tx_digests_stream(
         &self,
         tx_sequence_numbers: Vec<u64>,

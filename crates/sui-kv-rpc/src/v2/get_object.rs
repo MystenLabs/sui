@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::StreamExt;
+use futures::stream;
+use futures::stream::BoxStream;
 use std::collections::HashMap;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::ObjectStatus;
@@ -19,6 +21,8 @@ use sui_types::storage::ObjectKey;
 use crate::KvRpcServer;
 use crate::PackageResolver;
 use crate::bigtable_client::BigTableClient;
+use crate::config::{PipelineStage, ResolvedStageConfig};
+use crate::pipeline::{SeekUnit, Watermarked, pipelined_chunks};
 use crate::render::needs_only_object_id_and_version;
 use crate::render::object_to_response;
 use crate::render::object_version_to_response;
@@ -49,15 +53,15 @@ pub(crate) async fn get_object(
         ObjectSelector::Latest => read_latest(&mut client, &object_id, version_only)
             .await?
             .ok_or_else(|| ObjectNotFoundError::new(address))?,
-        ObjectSelector::Version(version) => {
-            let key = ObjectKey(object_id, version.into());
-            read_exact(&mut client, &[key], version_only)
-                .await?
-                .remove(&key)
-                .ok_or_else(|| ObjectNotFoundError::new_with_version(address, version))?
-        }
+        ObjectSelector::Version(version) => read_exact_version(
+            &mut client,
+            ObjectKey(object_id, version.into()),
+            version_only,
+        )
+        .await?
+        .ok_or_else(|| ObjectNotFoundError::new_with_version(address, version))?,
         ObjectSelector::AtCheckpoint(checkpoint) => {
-            let reads = server.at_checkpoint_reads("GetObject")?;
+            let reads = server.at_checkpoint_reads(server.limited_client("GetObject"))?;
             if checkpoint > reads.served_height.checkpoint {
                 return Err(not_yet_indexed(checkpoint, reads.served_height));
             }
@@ -71,10 +75,8 @@ pub(crate) async fn get_object(
             if version_only {
                 Found::Version(version)
             } else {
-                let key = ObjectKey(object_id, version);
-                read_exact(&mut client, &[key], false)
+                read_exact_version(&mut client, ObjectKey(object_id, version), false)
                     .await?
-                    .remove(&key)
                     .ok_or_else(not_found)?
             }
         }
@@ -91,7 +93,11 @@ pub(crate) async fn get_object(
 /// 1. One `object_versions_by_checkpoint` scan per distinct `(object_id, at_checkpoint)`, each
 ///    its own gated call, because BigTable cannot return the newest row of several ranges in one
 ///    `ReadRows` (`rows_limit` covers the whole request).
-/// 2. One `objects` multi-get for the exact-version keys and the live versions stage 1 found.
+/// 2. `objects` multi-gets for the exact-version keys and the live versions stage 1 found,
+///    planned by the `objects` stage ([`crate::config::StagesConfig::objects`]): reads of at most
+///    `max-seeks-per-read` keys, at most `concurrency` of them at a time.
+///
+/// Both stages share one request-scoped limiter; the latest-version scans do not use it.
 ///
 /// When the read mask asks for nothing but `object_id` and `version`, stage 1 answers the
 /// `at_checkpoint` items on its own, and the `objects` reads that remain (stage 2 and the latest
@@ -140,10 +146,14 @@ pub(crate) async fn batch_get_objects(
     at_checkpoint_keys.sort();
     at_checkpoint_keys.dedup();
 
+    // Stage 1 and stage 2 read through this client, under one request-wide limiter. It is
+    // created whether or not `at_checkpoint` reads are enabled, because stage 2 always uses it.
+    let limited_client = server.limited_client("BatchGetObjects");
+    let objects_stage = server.stages.stage(PipelineStage::Objects);
     let at_checkpoint_reads = if at_checkpoint_keys.is_empty() {
         None
     } else {
-        Some(server.at_checkpoint_reads("BatchGetObjects")?)
+        Some(server.at_checkpoint_reads(limited_client.clone())?)
     };
     let client = server.client.clone();
 
@@ -171,8 +181,8 @@ pub(crate) async fn batch_get_objects(
             }
         }
 
-        // Stage 2: one multi-get for the exact versions, and for the live versions found above
-        // unless the mask needs only their ids and versions.
+        // Stage 2: the exact versions, and the live versions found above unless the mask needs
+        // only their ids and versions.
         let mut object_keys = exact_object_keys;
         if !version_only {
             object_keys.extend(
@@ -183,8 +193,8 @@ pub(crate) async fn batch_get_objects(
         }
         object_keys.sort();
         object_keys.dedup();
-        let mut client = client.clone();
-        let found_by_key = read_exact(&mut client, &object_keys, version_only).await?;
+        let found_by_key =
+            read_exact_versions(&limited_client, objects_stage, object_keys, version_only).await?;
         Ok::<_, RpcError>((live_versions_at_checkpoint, found_by_key))
     };
 
@@ -315,36 +325,92 @@ async fn read_latest(
     })
 }
 
-/// Read exact versions from the `objects` table: the whole objects, or with `version_only` just
-/// which of `keys` exist. Keys that are not found are absent from the map.
-async fn read_exact(
+/// Read one exact version from the `objects` table: the whole object, or with `version_only`
+/// just whether its row exists.
+async fn read_exact_version(
     client: &mut sui_kvstore::BigTableClient,
-    keys: &[ObjectKey],
+    key: ObjectKey,
+    version_only: bool,
+) -> Result<Option<Found>, RpcError> {
+    Ok(if version_only {
+        client
+            .get_existing_object_keys(&[key])
+            .await?
+            .into_iter()
+            .next()
+            .map(|key| Found::Version(key.1))
+    } else {
+        client
+            .get_objects(&[key])
+            .await?
+            .into_iter()
+            .next()
+            .map(Found::Object)
+    })
+}
+
+/// Read exact versions from the `objects` table through the request's gated `client`, in
+/// multi-gets planned by `objects_stage`, each under one permit: the whole objects, or with
+/// `version_only` just which of `keys` exist. Keys that are not found are absent from the map.
+async fn read_exact_versions(
+    client: &BigTableClient,
+    objects_stage: ResolvedStageConfig,
+    keys: Vec<ObjectKey>,
     version_only: bool,
 ) -> Result<HashMap<ObjectKey, Found>, RpcError> {
     if keys.is_empty() {
         return Ok(HashMap::new());
     }
-    Ok(if version_only {
-        client
-            .get_existing_object_keys(keys)
-            .await?
-            .into_iter()
-            .map(|key| (key, Found::Version(key.1)))
-            .collect()
-    } else {
-        client
-            .get_objects(keys)
-            .await?
-            .into_iter()
-            .map(|object| {
-                (
-                    ObjectKey(object.id(), object.version()),
-                    Found::Object(object),
-                )
-            })
-            .collect()
-    })
+    let mut found_by_key = HashMap::with_capacity(keys.len());
+    let key_stream = stream::iter(
+        keys.into_iter()
+            .map(|key| Ok::<Watermarked<ObjectKey>, RpcError>(Watermarked::Item(key))),
+    )
+    .boxed();
+    let client = client.clone();
+    let mut reads = pipelined_chunks(
+        key_stream,
+        objects_stage.max_seeks_per_read,
+        objects_stage.concurrency,
+        objects_stage.min_seeks_per_split_read,
+        SeekUnit::Item,
+        move |chunk: Vec<ObjectKey>| {
+            let client = client.clone();
+            async move {
+                let rows: BoxStream<'static, Result<(ObjectKey, Found), RpcError>> = if version_only
+                {
+                    let existing = client.get_existing_object_keys(chunk).await?;
+                    stream::iter(
+                        existing
+                            .into_iter()
+                            .map(|key| Ok((key, Found::Version(key.1)))),
+                    )
+                    .boxed()
+                } else {
+                    client
+                        .get_objects_stream(chunk)
+                        .await?
+                        .map(|row| {
+                            row.map(|object| {
+                                (
+                                    ObjectKey(object.id(), object.version()),
+                                    Found::Object(object),
+                                )
+                            })
+                            .map_err(RpcError::from)
+                        })
+                        .boxed()
+                };
+                Ok::<_, RpcError>(rows)
+            }
+        },
+    );
+    while let Some(frame) = reads.next().await {
+        if let Watermarked::Item((key, found)) = frame? {
+            found_by_key.insert(key, found);
+        }
+    }
+    Ok(found_by_key)
 }
 
 /// What a request's `at_checkpoint` reads run with: the request-scoped gated client for their
@@ -356,8 +422,8 @@ struct AtCheckpointReads {
 
 impl KvRpcServer {
     /// `Unimplemented` unless `at_checkpoint` object reads are enabled, and `Unavailable` before
-    /// the served height is known.
-    fn at_checkpoint_reads(&self, method: &'static str) -> Result<AtCheckpointReads, RpcError> {
+    /// the served height is known. The scans read through `client`, the request's gated client.
+    fn at_checkpoint_reads(&self, client: BigTableClient) -> Result<AtCheckpointReads, RpcError> {
         if !self.object_at_checkpoint_enabled {
             return Err(RpcError::new(
                 tonic::Code::Unimplemented,
@@ -366,7 +432,7 @@ impl KvRpcServer {
         }
         Ok(AtCheckpointReads {
             served_height: self.served_height()?,
-            client: self.limited_client(method),
+            client,
         })
     }
 }
@@ -408,6 +474,7 @@ fn not_yet_indexed(checkpoint: u64, served_height: ServedHeight) -> RpcError {
 
 #[cfg(test)]
 mod tests {
+    use std::net::SocketAddr;
     use std::time::Duration;
 
     use sui_kvstore::WatermarkV1;
@@ -421,37 +488,21 @@ mod tests {
     use super::*;
     use crate::KvRpcConfig;
     use crate::LedgerHistoryConfig;
+    use crate::StageConfig;
     use crate::StagesConfig;
     use crate::service_info_watermark_pipelines;
 
-    fn mask(paths: &[&str]) -> prost_types::FieldMask {
-        prost_types::FieldMask {
-            paths: paths.iter().map(|path| path.to_string()).collect(),
-        }
-    }
-
-    /// For each `objects`-table read since the last clear, whether it asked for values to be
-    /// stripped.
-    async fn objects_reads_stripped(mock: &MockBigtableServer) -> Vec<bool> {
-        mock.read_rows_calls()
-            .await
-            .into_iter()
-            .filter(|call| call.table == objects::NAME)
-            .map(|call| call.values_stripped)
-            .collect()
-    }
-
-    /// A read mask that asks only for `object_id` and `version` never reads object contents: the
-    /// latest and exact-version reads fetch only row keys, and `at_checkpoint` reads are answered
-    /// by the version index without an `objects` read. Any other field reads the contents.
-    #[tokio::test]
-    async fn test_version_only_masks_skip_object_contents() {
-        let mock = MockBigtableServer::new();
-        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+    /// A kv-rpc server over the mock BigTable at `addr`, with every watermark it serves at
+    /// checkpoint 10 and its service info loaded.
+    async fn start_kv_rpc(
+        addr: SocketAddr,
+        stages: StagesConfig,
+        enable_object_at_checkpoint: bool,
+    ) -> KvRpcServer {
         let mut client = sui_kvstore::BigTableClient::new_local(addr.to_string(), "test".into())
             .await
             .expect("connect to mock BigTable");
-        for pipeline in service_info_watermark_pipelines(false, true) {
+        for pipeline in service_info_watermark_pipelines(false, enable_object_at_checkpoint) {
             client
                 .create_pipeline_watermark_if_absent(
                     pipeline,
@@ -477,10 +528,10 @@ mod tests {
             LedgerHistoryConfig::default(),
             config.request_bigtable_concurrency(),
             config.monotonic_read_wait_timeout(),
-            StagesConfig::default(),
+            stages,
             false,
             config.watermark_source(),
-            true,
+            enable_object_at_checkpoint,
         )
         .await
         .expect("start kv-rpc server");
@@ -491,6 +542,34 @@ mod tests {
         .await
         .expect("service info never refreshed")
         .expect("service info sender dropped");
+        kv_rpc
+    }
+
+    fn mask(paths: &[&str]) -> prost_types::FieldMask {
+        prost_types::FieldMask {
+            paths: paths.iter().map(|path| path.to_string()).collect(),
+        }
+    }
+
+    /// For each `objects`-table read since the last clear, whether it asked for values to be
+    /// stripped.
+    async fn objects_reads_stripped(mock: &MockBigtableServer) -> Vec<bool> {
+        mock.read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|call| call.table == objects::NAME)
+            .map(|call| call.values_stripped)
+            .collect()
+    }
+
+    /// A read mask that asks only for `object_id` and `version` never reads object contents: the
+    /// latest and exact-version reads fetch only row keys, and `at_checkpoint` reads are answered
+    /// by the version index without an `objects` read. Any other field reads the contents.
+    #[tokio::test]
+    async fn test_version_only_masks_skip_object_contents() {
+        let mock = MockBigtableServer::new();
+        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        let kv_rpc = start_kv_rpc(addr, StagesConfig::default(), true).await;
 
         // One object, live at version 3 from checkpoint 5.
         let id = ObjectID::random();
@@ -571,6 +650,92 @@ mod tests {
             [false; 3],
             "a digest needs the contents",
         );
+
+        mock_server.abort();
+    }
+
+    /// On an instance without `at_checkpoint` reads, a batch of exact versions goes out as
+    /// `objects` multi-gets of at most the stage's `max-seeks-per-read` keys, and every item is
+    /// answered, whether its version is stored or not.
+    #[tokio::test]
+    async fn test_batch_exact_versions_split_into_objects_stage_reads() {
+        let mock = MockBigtableServer::new();
+        let (addr, mock_server) = mock.start().await.expect("start mock BigTable");
+        let stages = StagesConfig {
+            objects: Some(StageConfig {
+                max_seeks_per_read: Some(2),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let kv_rpc = start_kv_rpc(addr, stages, false).await;
+
+        // Versions 1 to 5 are requested; only the odd ones are stored.
+        let id = ObjectID::random();
+        let mut stored = HashMap::new();
+        for version in [1, 3, 5] {
+            let object = Object::with_id_owner_version_for_testing(
+                id,
+                SequenceNumber::from_u64(version),
+                Owner::AddressOwner(SuiAddress::ZERO),
+            );
+            mock.insert_row(
+                objects::NAME,
+                objects::encode_key(&ObjectKey(id, object.version())),
+                objects::encode(&object).unwrap(),
+            )
+            .await;
+            stored.insert(version, object);
+        }
+        let mut batch = BatchGetObjectsRequest::default();
+        batch.requests = (1..=5)
+            .map(|version| {
+                let mut req = GetObjectRequest::default();
+                req.object_id = Some(id.to_canonical_string(true));
+                req.version = Some(version);
+                req
+            })
+            .collect();
+        batch.read_mask = Some(mask(&["version", "digest"]));
+
+        mock.clear_read_rows_calls().await;
+        let response = batch_get_objects(&kv_rpc, batch).await.unwrap();
+
+        assert_eq!(response.objects.len(), 5);
+        for (index, item) in response.objects.iter().enumerate() {
+            let version = index as u64 + 1;
+            match stored.get(&version) {
+                Some(object) => {
+                    assert_eq!(item.object().version, Some(version), "{item:?}");
+                    assert_eq!(
+                        item.object().digest,
+                        Some(object.digest().to_string()),
+                        "{item:?}"
+                    );
+                }
+                None => assert_eq!(item.error().code, tonic::Code::NotFound as i32, "{item:?}"),
+            }
+        }
+
+        let reads: Vec<_> = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|call| call.table == objects::NAME)
+            .map(|call| call.row_keys)
+            .collect();
+        assert_eq!(
+            reads.len(),
+            3,
+            "five keys in reads of at most two: {reads:?}"
+        );
+        assert!(reads.iter().all(|keys| keys.len() <= 2), "{reads:?}");
+        let mut read_keys: Vec<_> = reads.into_iter().flatten().collect();
+        read_keys.sort();
+        let requested_keys: Vec<_> = (1..=5)
+            .map(|version| objects::encode_key(&ObjectKey(id, SequenceNumber::from_u64(version))))
+            .collect();
+        assert_eq!(read_keys, requested_keys, "each key is read exactly once");
 
         mock_server.abort();
     }
