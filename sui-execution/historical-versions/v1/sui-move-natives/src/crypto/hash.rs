@@ -12,7 +12,7 @@ use move_vm_types::{
     values::{Value, VectorRef},
 };
 use smallvec::smallvec;
-use std::{collections::VecDeque, ops::Mul};
+use std::collections::VecDeque;
 
 const BLAKE_2B256_BLOCK_SIZE: u16 = 128;
 const KECCAK_256_BLOCK_SIZE: u16 = 136;
@@ -39,10 +39,10 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
     // Charge the msg dependent costs
     native_charge_gas_early_exit!(
         context,
-        msg_cost_per_byte.mul((msg_ref.len() as u64).into())
+        msg_cost_per_byte.saturating_mul(msg_ref.len() as u64)
             // Round up the blocks
             + msg_cost_per_block
-                .mul((msg_ref.len().div_ceil(block_size) as u64).into())
+                .saturating_mul(msg_ref.len().div_ceil(block_size) as u64)
     );
 
     Ok(NativeResult::ok(

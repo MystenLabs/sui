@@ -504,7 +504,7 @@ pub fn internal_hash_to(
                     .bls12381_g1_hash_to_base_cost
                     .and_then(|base_cost| cost_params
                         .bls12381_g1_hash_to_cost_per_byte
-                        .map(|per_byte| base_cost + per_byte * (m.len() as u64).into()))
+                        .map(|per_byte| base_cost + per_byte.saturating_mul(m.len() as u64)))
             );
             Ok(bls::G1Element::hash_to_group_element(&m)
                 .to_byte_array()
@@ -517,7 +517,7 @@ pub fn internal_hash_to(
                     .bls12381_g2_hash_to_base_cost
                     .and_then(|base_cost| cost_params
                         .bls12381_g2_hash_to_cost_per_byte
-                        .map(|per_byte| base_cost + per_byte * (m.len() as u64).into()))
+                        .map(|per_byte| base_cost + per_byte.saturating_mul(m.len() as u64)))
             );
             Ok(bls::G2Element::hash_to_group_element(&m)
                 .to_byte_array()
@@ -588,7 +588,7 @@ where
 
     native_charge_gas_early_exit_option!(
         context,
-        scalar_decode_cost.map(|cost| cost * ((scalars.len() / SCALAR_SIZE) as u64).into())
+        scalar_decode_cost.map(|cost| cost.saturating_mul((scalars.len() / SCALAR_SIZE) as u64))
     );
     let scalars = scalars
         .chunks(SCALAR_SIZE)
@@ -597,7 +597,7 @@ where
 
     native_charge_gas_early_exit_option!(
         context,
-        point_decode_cost.map(|cost| cost * ((points.len() / POINT_SIZE) as u64).into())
+        point_decode_cost.map(|cost| cost.saturating_mul((points.len() / POINT_SIZE) as u64))
     );
     let points = points
         .chunks(POINT_SIZE)
@@ -610,7 +610,7 @@ where
         native_charge_gas_early_exit_option!(
             context,
             base_cost.and_then(|base| base_cost_per_addition
-                .map(|per_addition| base + per_addition * num_of_additions.into()))
+                .map(|per_addition| base + per_addition.saturating_mul(num_of_additions)))
         );
 
         let r = G::multi_scalar_mul(&scalars, &points)

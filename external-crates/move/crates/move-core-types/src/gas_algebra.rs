@@ -6,7 +6,7 @@ use std::{
     convert::From,
     fmt::{self, Debug, Display},
     marker::PhantomData,
-    ops::{Add, AddAssign, Mul},
+    ops::{Add, AddAssign},
 };
 
 // TODO(Gas): deprecate the concept of abstract memory size
@@ -18,29 +18,15 @@ use std::{
 /// Unit of internal gas.
 pub enum InternalGasUnit {}
 
-/// Unit for counting bytes.
-pub enum Byte {}
-
 /// Unit of abstract memory usage in the Move VM.
 pub enum AbstractMemoryUnit {}
-
-/// Unit for counting arguments.
-pub enum Arg {}
-
-/// A derived unit resulted from the division of two given units.
-/// This is used to permit type-safe multiplications.
-///
-/// A real life example: 3 gas units/byte * 5 bytes = 15 gas units
-pub struct UnitDiv<U1, U2> {
-    phantom: PhantomData<(U1, U2)>,
-}
 
 /***************************************************************************************************
  * Gas Quantities
  *
  **************************************************************************************************/
 /// An opaque representation of a certain quantity, with the unit being encoded in the type.
-/// This type implements checked addition and subtraction, and only permits type-safe multiplication.
+/// This type implements addition, subtraction, and multiplication by a unitless count.
 pub struct GasQuantity<U> {
     val: u64,
     phantom: PhantomData<U>,
@@ -48,23 +34,12 @@ pub struct GasQuantity<U> {
 
 pub type InternalGas = GasQuantity<InternalGasUnit>;
 
-pub type NumBytes = GasQuantity<Byte>;
-
-pub type NumArgs = GasQuantity<Arg>;
-
 /// An abstract measurement of the memory footprint of some Move concept (e.g. value, type etc.)
 /// in the Move VM.
 ///
 /// This is a legacy concept that is not well defined and will be deprecated very soon.
 /// New applications should not be using this.
 pub type AbstractMemorySize = GasQuantity<AbstractMemoryUnit>;
-
-pub type InternalGasPerByte = GasQuantity<UnitDiv<InternalGasUnit, Byte>>;
-
-pub type InternalGasPerAbstractMemoryUnit =
-    GasQuantity<UnitDiv<InternalGasUnit, AbstractMemoryUnit>>;
-
-pub type InternalGasPerArg = GasQuantity<UnitDiv<InternalGasUnit, Arg>>;
 
 /// Abstract size of Rust Box pointer
 /// This might be an over-estimation in many cases
@@ -194,29 +169,10 @@ impl<U> GasQuantity<U> {
     pub fn saturating_sub(self, other: Self) -> Self {
         self.val.saturating_sub(other.val).into()
     }
-}
 
-/***************************************************************************************************
- * Multiplication
- *
- **************************************************************************************************/
-fn mul_impl<U1, U2>(x: GasQuantity<U2>, y: GasQuantity<UnitDiv<U1, U2>>) -> GasQuantity<U1> {
-    GasQuantity::new(x.val.saturating_mul(y.val))
-}
-
-impl<U1, U2> Mul<GasQuantity<UnitDiv<U1, U2>>> for GasQuantity<U2> {
-    type Output = GasQuantity<U1>;
-
-    fn mul(self, rhs: GasQuantity<UnitDiv<U1, U2>>) -> Self::Output {
-        mul_impl(self, rhs)
-    }
-}
-
-impl<U1, U2> Mul<GasQuantity<U2>> for GasQuantity<UnitDiv<U1, U2>> {
-    type Output = GasQuantity<U1>;
-
-    fn mul(self, rhs: GasQuantity<U2>) -> Self::Output {
-        mul_impl(rhs, self)
+    /// Multiply a per-unit rate by a unitless count (bytes, args, elements, size units).
+    pub fn saturating_mul(self, count: u64) -> Self {
+        Self::new(self.val.saturating_mul(count))
     }
 }
 

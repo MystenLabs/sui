@@ -4,10 +4,7 @@
 
 use crate::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::{
-    account_address::AccountAddress,
-    gas_algebra::{InternalGas, InternalGasPerArg, NumArgs},
-};
+use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use move_vm_runtime::{
     native_charge_gas_early_exit,
     native_functions::{NativeContext, NativeFunction},
@@ -34,7 +31,7 @@ fn to_le_bytes(i: u64) -> [u8; AccountAddress::LENGTH] {
 #[derive(Debug, Clone)]
 pub struct CreateSignersForTestingGasParameters {
     pub base_cost: InternalGas,
-    pub unit_cost: InternalGasPerArg,
+    pub unit_cost: InternalGas,
 }
 
 fn native_create_signers_for_testing(
@@ -51,7 +48,7 @@ fn native_create_signers_for_testing(
         (0..num_signers).map(|i| Value::signer(AccountAddress::new(to_le_bytes(i)))),
     );
 
-    let cost = gas_params.base_cost + gas_params.unit_cost * NumArgs::new(num_signers);
+    let cost = gas_params.base_cost + gas_params.unit_cost.saturating_mul(num_signers);
     native_charge_gas_early_exit!(context, cost);
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![signers]))

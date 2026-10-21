@@ -21,10 +21,7 @@ use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     partial_vm_error,
 };
-use move_core_types::{
-    gas_algebra::{InternalGas, InternalGasPerAbstractMemoryUnit, InternalGasPerArg, NumArgs},
-    vm_status::StatusCode,
-};
+use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
 use std::{collections::VecDeque, sync::Arc};
 
 /// Reads the length for gas accounting. A malformed vector argument surrenders the gas
@@ -126,7 +123,7 @@ pub fn make_native_length(gas_params: LengthGasParameters) -> NativeFunction {
 #[derive(Debug, Clone)]
 pub struct PushBackGasParameters {
     pub base: InternalGas,
-    pub legacy_per_abstract_memory_unit: InternalGasPerAbstractMemoryUnit,
+    pub legacy_per_abstract_memory_unit: InternalGas,
 }
 
 pub fn native_push_back(
@@ -154,7 +151,9 @@ pub fn native_push_back(
             traverse_references: false,
             include_vector_size: false,
         })?;
-        let cost = gas_params.legacy_per_abstract_memory_unit * std::cmp::max(size, 1.into());
+        let cost = gas_params
+            .legacy_per_abstract_memory_unit
+            .saturating_mul(std::cmp::max(u64::from(size), 1));
         native_charge_gas_early_exit!(context, cost);
     }
 
@@ -333,7 +332,7 @@ pub fn make_native_swap(gas_params: SwapGasParameters) -> NativeFunction {
 #[derive(Debug, Clone)]
 pub struct ReverseGasParameters {
     pub base: InternalGas,
-    pub per_elem: InternalGasPerArg,
+    pub per_elem: InternalGas,
 }
 
 pub fn native_reverse(
@@ -350,7 +349,7 @@ pub fn native_reverse(
     let v = pop_arg!(args, VectorRef);
     let ty = ty_args.safe_get(0)?;
     let len = vector_len_or_return!(context, v, ty, map_partial_vm_result_empty);
-    native_charge_gas_early_exit!(context, gas_params.per_elem * NumArgs::new(len));
+    native_charge_gas_early_exit!(context, gas_params.per_elem.saturating_mul(len));
 
     NativeResult::map_partial_vm_result_empty(
         context.gas_used(),
@@ -376,8 +375,8 @@ pub fn make_native_reverse(gas_params: ReverseGasParameters) -> NativeFunction {
 #[derive(Debug, Clone)]
 pub struct KeepRangeGasParameters {
     pub base: InternalGas,
-    pub per_dropped_elem: InternalGasPerArg,
-    pub per_moved_elem: InternalGasPerArg,
+    pub per_dropped_elem: InternalGas,
+    pub per_moved_elem: InternalGas,
 }
 
 /// The natives charge no per-element work for a range the VM is going to reject.
@@ -418,8 +417,8 @@ pub fn native_keep_range(
     // `VectorRef::keep` performs the actual validation. Do not charge per-element work for a
     // range which it will reject.
     let (dropped, moved) = keep_range_gas_count(len, start_arg, end_arg);
-    native_charge_gas_early_exit!(context, gas_params.per_dropped_elem * NumArgs::new(dropped));
-    native_charge_gas_early_exit!(context, gas_params.per_moved_elem * NumArgs::new(moved));
+    native_charge_gas_early_exit!(context, gas_params.per_dropped_elem.saturating_mul(dropped));
+    native_charge_gas_early_exit!(context, gas_params.per_moved_elem.saturating_mul(moved));
 
     NativeResult::map_partial_vm_result_empty(
         context.gas_used(),
@@ -487,7 +486,7 @@ pub fn make_native_copy_range(gas_params: CopyRangeGasParameters) -> NativeFunct
 #[derive(Debug, Clone)]
 pub struct ReplaceRangeGasParameters {
     pub base: InternalGas,
-    pub per_elem: InternalGasPerArg,
+    pub per_elem: InternalGas,
 }
 
 pub(crate) fn replace_range_gas_count(len: u64, i: u64, j: u64, n_in: u64) -> u64 {
@@ -525,7 +524,9 @@ pub fn native_replace_range(
     let len = vector_len_or_return!(context, v, ty, map_partial_vm_result_one);
     native_charge_gas_early_exit!(
         context,
-        gas_params.per_elem * NumArgs::new(replace_range_gas_count(len, i_arg, j_arg, n_in))
+        gas_params
+            .per_elem
+            .saturating_mul(replace_range_gas_count(len, i_arg, j_arg, n_in))
     );
 
     NativeResult::map_partial_vm_result_one(

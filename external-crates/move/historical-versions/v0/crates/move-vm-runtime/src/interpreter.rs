@@ -15,7 +15,6 @@ use move_binary_format::{
 };
 use move_core_types::{
     account_address::AccountAddress,
-    gas_algebra::{NumArgs, NumBytes},
     language_storage::TypeTag,
     vm_status::{StatusCode, StatusType},
 };
@@ -214,7 +213,7 @@ impl Interpreter {
                             self.operand_stack
                                 .last_n(func.arg_count())
                                 .map_err(|e| set_err_info!(current_frame, e))?,
-                            (func.local_count() as u64).into(),
+                            func.local_count() as u64,
                         )
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
@@ -253,7 +252,7 @@ impl Interpreter {
                             self.operand_stack
                                 .last_n(func.arg_count())
                                 .map_err(|e| set_err_info!(current_frame, e))?,
-                            (func.local_count() as u64).into(),
+                            func.local_count() as u64,
                         )
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
@@ -864,7 +863,7 @@ impl Frame {
             }
             Bytecode::LdConst(idx) => {
                 let constant = resolver.constant_at(*idx);
-                gas_meter.charge_ld_const(NumBytes::new(constant.data.len() as u64))?;
+                gas_meter.charge_ld_const(constant.data.len() as u64)?;
 
                 let val = Value::deserialize_constant(constant).ok_or_else(|| {
                     PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
@@ -1233,11 +1232,7 @@ impl Frame {
             Bytecode::VecUnpack(si, num) => {
                 let vec_val = interpreter.operand_stack.pop_as::<Vector>()?;
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
-                gas_meter.charge_vec_unpack(
-                    make_ty!(ty),
-                    NumArgs::new(*num),
-                    vec_val.elem_views(),
-                )?;
+                gas_meter.charge_vec_unpack(make_ty!(ty), *num, vec_val.elem_views())?;
                 let elements = vec_val.unpack(ty, *num)?;
                 for value in elements {
                     interpreter.operand_stack.push(value)?;

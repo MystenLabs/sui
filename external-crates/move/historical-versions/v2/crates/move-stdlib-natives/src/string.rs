@@ -6,7 +6,7 @@
 
 use crate::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::gas_algebra::{InternalGas, InternalGasPerByte, NumBytes};
+use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
     native_charge_gas_early_exit,
     native_functions::{NativeContext, NativeFunction},
@@ -36,7 +36,7 @@ use std::{collections::VecDeque, sync::Arc};
 #[derive(Debug, Clone)]
 pub struct CheckUtf8GasParameters {
     pub base: InternalGas,
-    pub per_byte: InternalGasPerByte,
+    pub per_byte: InternalGas,
 }
 
 fn native_check_utf8(
@@ -49,7 +49,10 @@ fn native_check_utf8(
 
     let s_arg = pop_arg!(args, VectorRef);
     let s_ref = s_arg.as_bytes_ref();
-    let cost = gas_params.base + gas_params.per_byte * NumBytes::new(s_ref.as_slice().len() as u64);
+    let cost = gas_params.base
+        + gas_params
+            .per_byte
+            .saturating_mul(s_ref.as_slice().len() as u64);
     // Charge before doing work
     native_charge_gas_early_exit!(context, cost);
 
@@ -116,7 +119,7 @@ pub fn make_native_is_char_boundary(gas_params: IsCharBoundaryGasParameters) -> 
 #[derive(Debug, Clone)]
 pub struct SubStringGasParameters {
     pub base: InternalGas,
-    pub per_byte: InternalGasPerByte,
+    pub per_byte: InternalGas,
 }
 
 fn native_sub_string(
@@ -136,7 +139,7 @@ fn native_sub_string(
         // TODO: what abort code should we use here?
         return Ok(NativeResult::err(context.gas_used(), 1));
     }
-    let cost = gas_params.base + gas_params.per_byte * NumBytes::new((j - i) as u64);
+    let cost = gas_params.base + gas_params.per_byte.saturating_mul((j - i) as u64);
     native_charge_gas_early_exit!(context, cost);
 
     let s_arg = pop_arg!(args, VectorRef);
@@ -166,8 +169,8 @@ pub fn make_native_sub_string(gas_params: SubStringGasParameters) -> NativeFunct
 #[derive(Debug, Clone)]
 pub struct IndexOfGasParameters {
     pub base: InternalGas,
-    pub per_byte_pattern: InternalGasPerByte,
-    pub per_byte_searched: InternalGasPerByte,
+    pub per_byte_pattern: InternalGas,
+    pub per_byte_searched: InternalGas,
 }
 
 fn native_index_of(
@@ -187,7 +190,9 @@ fn native_index_of(
     // Charge pattern fee
     native_charge_gas_early_exit!(
         context,
-        gas_params.per_byte_pattern * NumBytes::new(r_str.len() as u64)
+        gas_params
+            .per_byte_pattern
+            .saturating_mul(r_str.len() as u64)
     );
 
     let s_arg = pop_arg!(args, VectorRef);
@@ -202,7 +207,7 @@ fn native_index_of(
     // Charge search fee
     native_charge_gas_early_exit!(
         context,
-        gas_params.per_byte_searched * NumBytes::new(pos as u64)
+        gas_params.per_byte_searched.saturating_mul(pos as u64)
     );
     NativeResult::map_partial_vm_result_one(context.gas_used(), Ok(Value::u64(pos as u64)))
 }

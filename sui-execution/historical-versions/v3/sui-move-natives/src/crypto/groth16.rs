@@ -200,10 +200,10 @@ pub fn verify_groth16_proof_internal(
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
-        cost_per_public_input * (num_public_inputs as u64).into()
+        cost_per_public_input.saturating_mul(num_public_inputs as u64)
             + groth16_verify_groth16_proof_internal_cost_params
                 .groth16_verify_groth16_proof_internal_public_input_cost_per_byte
-                * (public_proof_inputs.len() as u64).into()
+                .saturating_mul(public_proof_inputs.len() as u64)
     );
 
     let cost = context.gas_used();

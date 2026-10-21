@@ -37,7 +37,7 @@ macro_rules! get_or_fetch_object {
         let child_ty = $ty_args.pop().unwrap();
         native_charge_gas_early_exit!(
             $context,
-            $ty_cost_per_byte * u64::from(child_ty.size()).into()
+            $ty_cost_per_byte.saturating_mul(u64::from(child_ty.size()))
         );
 
         assert!($ty_args.is_empty());
@@ -111,10 +111,10 @@ pub fn hash_type_and_key(
         context,
         dynamic_field_hash_type_and_key_cost_params
             .dynamic_field_hash_type_and_key_type_cost_per_byte
-            * k_ty_size.into()
+            .saturating_mul(k_ty_size)
             + dynamic_field_hash_type_and_key_cost_params
                 .dynamic_field_hash_type_and_key_value_cost_per_byte
-                * k_value_size.into()
+                .saturating_mul(k_value_size)
     );
 
     let k_tag = context.type_to_type_tag(&k_ty)?;
@@ -124,7 +124,7 @@ pub fn hash_type_and_key(
         context,
         dynamic_field_hash_type_and_key_cost_params
             .dynamic_field_hash_type_and_key_type_tag_cost_per_byte
-            * k_tag_size.into()
+            .saturating_mul(k_tag_size)
     );
 
     let cost = context.gas_used();
@@ -191,7 +191,7 @@ pub fn add_child_object(
         context,
         dynamic_field_add_child_object_cost_params
             .dynamic_field_add_child_object_value_cost_per_byte
-            * child_value_size.into()
+            .saturating_mul(child_value_size)
     );
 
     // TODO remove this copy_value, which will require VM changes
@@ -207,7 +207,7 @@ pub fn add_child_object(
         context,
         dynamic_field_add_child_object_cost_params
             .dynamic_field_add_child_object_type_cost_per_byte
-            * child_type_size.into()
+            .saturating_mul(child_type_size)
     );
 
     assert!(ty_args.is_empty());
@@ -226,7 +226,7 @@ pub fn add_child_object(
         context,
         dynamic_field_add_child_object_cost_params
             .dynamic_field_add_child_object_struct_tag_cost_per_byte
-            * struct_tag_size.into()
+            .saturating_mul(struct_tag_size)
     );
 
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
@@ -311,7 +311,7 @@ pub fn borrow_child_object(
         context,
         dynamic_field_borrow_child_object_cost_params
             .dynamic_field_borrow_child_object_child_ref_cost_per_byte
-            * u64::from(child_ref.legacy_size()).into()
+            .saturating_mul(u64::from(child_ref.legacy_size()))
     );
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![child_ref]))
@@ -379,7 +379,7 @@ pub fn remove_child_object(
         context,
         dynamic_field_remove_child_object_cost_params
             .dynamic_field_remove_child_object_child_cost_per_byte
-            * u64::from(child.legacy_size()).into()
+            .saturating_mul(u64::from(child.legacy_size()))
     );
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![child]))
@@ -466,7 +466,7 @@ pub fn has_child_object_with_ty(
         context,
         dynamic_field_has_child_object_with_ty_cost_params
             .dynamic_field_has_child_object_with_ty_type_cost_per_byte
-            * u64::from(ty.size()).into()
+            .saturating_mul(u64::from(ty.size()))
     );
 
     let tag: StructTag = match context.type_to_type_tag(&ty)? {
@@ -483,7 +483,7 @@ pub fn has_child_object_with_ty(
         context,
         dynamic_field_has_child_object_with_ty_cost_params
             .dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte
-            * u64::from(tag.abstract_size_for_gas_metering()).into()
+            .saturating_mul(u64::from(tag.abstract_size_for_gas_metering()))
     );
 
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();

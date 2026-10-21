@@ -31,10 +31,7 @@ use crate::{
 };
 
 use move_binary_format::{checked_as, errors::*, partial_vm_error};
-use move_core_types::{
-    gas_algebra::{NumArgs, NumBytes},
-    vm_status::StatusType,
-};
+use move_core_types::vm_status::StatusType;
 use move_vm_config::runtime::{VMConfig, VMRuntimeLimitsConfig};
 
 use fail::fail_point;
@@ -469,8 +466,8 @@ fn op_step_impl(
             // TODO(Gas): `const_ptr.size` is the constant's abstract value size when
             // `VMConfig::charge_ld_const_abstract_size` is set (its serialized byte length
             // otherwise). On the next version cut, rename `charge_ld_const` and change it to
-            // take an abstract size instead of `NumBytes`.
-            gas_meter.charge_ld_const(NumBytes::new(const_ptr.size))?;
+            // take an `AbstractMemorySize` instead of a plain byte count.
+            gas_meter.charge_ld_const(const_ptr.size)?;
             let val = const_ptr.value.to_value();
             gas_meter.charge_ld_const_after_deserialization(&val)?;
             state.push_operand(val)?
@@ -792,7 +789,7 @@ fn op_step_impl(
         Bytecode::VecUnpack(ty_ptr, num) => {
             let vec_val = state.pop_operand_as::<Vector>()?;
             let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
-            gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views()?)?;
+            gas_meter.charge_vec_unpack(*num, vec_val.elem_views()?)?;
             let elements = vec_val.unpack(&ty, *num)?;
             for value in elements {
                 state.push_operand(value)?;
@@ -916,14 +913,14 @@ fn call_function(
     if ty_args.is_empty() {
         // Charge for a non-generic call
         gas_meter
-            .charge_call(last_n_operands, (function.local_count() as u64).into())
+            .charge_call(last_n_operands, function.local_count() as u64)
             .map_err(|e| {
                 set_err_info!(run_context.interner(), state.call_stack.current_frame, e)
             })?;
     } else {
         // Charge for a generic call
         gas_meter
-            .charge_call_generic(last_n_operands, (function.local_count() as u64).into())
+            .charge_call_generic(last_n_operands, function.local_count() as u64)
             .map_err(|e| {
                 set_err_info!(run_context.interner(), state.call_stack.current_frame, e)
             })?;

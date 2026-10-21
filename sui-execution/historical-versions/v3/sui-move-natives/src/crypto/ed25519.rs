@@ -65,10 +65,12 @@ pub fn ed25519_verify(
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
         context,
-        ed25519_verify_cost_params.ed25519_ed25519_verify_msg_cost_per_byte
-            * (msg_ref.len() as u64).into()
-            + ed25519_verify_cost_params.ed25519_ed25519_verify_msg_cost_per_block
-                * (msg_ref.len().div_ceil(ED25519_BLOCK_SIZE) as u64).into()
+        ed25519_verify_cost_params
+            .ed25519_ed25519_verify_msg_cost_per_byte
+            .saturating_mul(msg_ref.len() as u64)
+            + ed25519_verify_cost_params
+                .ed25519_ed25519_verify_msg_cost_per_block
+                .saturating_mul(msg_ref.len().div_ceil(ED25519_BLOCK_SIZE) as u64)
     );
     let cost = context.gas_used();
 

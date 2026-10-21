@@ -143,7 +143,7 @@ pub fn read_impl(
 
     native_charge_gas_early_exit!(
         context,
-        scratch_read_value_cost * value_size(&entry.value)?.into()
+        scratch_read_value_cost.saturating_mul(value_size(&entry.value)?)
     );
     let value = entry.value.copy_value();
 
@@ -270,7 +270,7 @@ pub fn exists_with_type_impl(
 
     native_charge_gas_early_exit!(
         context,
-        scratch_exists_with_type_type_cost * u64::from(ty.size()?).into()
+        scratch_exists_with_type_type_cost.saturating_mul(u64::from(ty.size()?))
     );
 
     let scratch_runtime: &ScratchRuntime = get_extension!(context)?;

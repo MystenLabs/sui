@@ -3,10 +3,7 @@
 
 use crate::views::{TypeView, ValueView};
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::{
-    gas_algebra::{InternalGas, NumArgs, NumBytes},
-    language_storage::ModuleId,
-};
+use move_core_types::{gas_algebra::InternalGas, language_storage::ModuleId};
 
 /// Enum of instructions that do not need extra information for gas metering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -80,7 +77,7 @@ pub trait GasMeter {
         module_id: &ModuleId,
         func_name: &str,
         args: impl ExactSizeIterator<Item = impl ValueView>,
-        num_locals: NumArgs,
+        num_locals: u64,
     ) -> PartialVMResult<()>;
 
     fn charge_call_generic(
@@ -89,10 +86,10 @@ pub trait GasMeter {
         func_name: &str,
         ty_args: impl ExactSizeIterator<Item = impl TypeView>,
         args: impl ExactSizeIterator<Item = impl ValueView>,
-        num_locals: NumArgs,
+        num_locals: u64,
     ) -> PartialVMResult<()>;
 
-    fn charge_ld_const(&mut self, size: NumBytes) -> PartialVMResult<()>;
+    fn charge_ld_const(&mut self, size: u64) -> PartialVMResult<()>;
 
     fn charge_ld_const_after_deserialization(&mut self, val: impl ValueView)
     -> PartialVMResult<()>;
@@ -160,7 +157,7 @@ pub trait GasMeter {
     fn charge_vec_unpack(
         &mut self,
         ty: impl TypeView,
-        expect_num_elements: NumArgs,
+        expect_num_elements: u64,
         elems: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()>;
 
@@ -206,7 +203,7 @@ impl GasMeter for UnmeteredGasMeter {
         _module_id: &ModuleId,
         _func_name: &str,
         _args: impl IntoIterator<Item = impl ValueView>,
-        _num_locals: NumArgs,
+        _num_locals: u64,
     ) -> PartialVMResult<()> {
         Ok(())
     }
@@ -217,12 +214,12 @@ impl GasMeter for UnmeteredGasMeter {
         _func_name: &str,
         _ty_args: impl ExactSizeIterator<Item = impl TypeView>,
         _args: impl ExactSizeIterator<Item = impl ValueView>,
-        _num_locals: NumArgs,
+        _num_locals: u64,
     ) -> PartialVMResult<()> {
         Ok(())
     }
 
-    fn charge_ld_const(&mut self, _size: NumBytes) -> PartialVMResult<()> {
+    fn charge_ld_const(&mut self, _size: u64) -> PartialVMResult<()> {
         Ok(())
     }
 
@@ -325,7 +322,7 @@ impl GasMeter for UnmeteredGasMeter {
     fn charge_vec_unpack(
         &mut self,
         _ty: impl TypeView,
-        _expect_num_elements: NumArgs,
+        _expect_num_elements: u64,
         _elems: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         Ok(())
