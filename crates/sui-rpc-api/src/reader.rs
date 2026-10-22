@@ -324,10 +324,12 @@ impl StateReader {
     }
 
     /// The lower bound for checkpoint-pinned reads: the checkpoint just below
-    /// [`RpcStateReader::get_lowest_available_checkpoint_objects`]. That checkpoint's input
-    /// objects are available, and they are the object state at the end of the checkpoint before:
-    /// pruning through a checkpoint deletes only the object versions and index rows replaced at
-    /// or before it.
+    /// [`RpcStateReader::get_lowest_available_checkpoint_objects`], or the lowest checkpoint at
+    /// which the rpc indexes' history is exact if that is higher (see
+    /// [`RpcStateReader::get_lowest_checkpoint_for_pinned_reads`]). The lowest available
+    /// checkpoint's input objects are available, and they are the object state at the end of the
+    /// checkpoint before: pruning through a checkpoint deletes only the object versions and index
+    /// rows replaced at or before it.
     ///
     /// Read it after the reads, and answer every read at a checkpoint below it as pruned,
     /// whatever the read returned. Pruning can raise the floor while the reads run, and a read
@@ -337,8 +339,11 @@ impl StateReader {
     /// floor, so a read at a checkpoint this bound accepts saw no pruned data.
     pub fn at_checkpoint_lower_bound(&self) -> Result<AtCheckpointLowerBound, crate::RpcError> {
         let lowest_available_objects = self.inner().get_lowest_available_checkpoint_objects()?;
+        let pinned_read_floor = self.inner().get_lowest_checkpoint_for_pinned_reads()?;
         Ok(AtCheckpointLowerBound {
-            lowest_intact: lowest_available_objects.saturating_sub(1),
+            lowest_intact: lowest_available_objects
+                .saturating_sub(1)
+                .max(pinned_read_floor),
         })
     }
 
@@ -380,20 +385,32 @@ impl AtCheckpointUpperBound {
     /// could be wrong.
     pub fn check(&self, checkpoint: u64) -> Result<(), crate::RpcError> {
         if checkpoint > self.highest_indexed {
-            return Err(above_latest_available(
-                "at_checkpoint",
+            return Err(checkpoint_not_yet_indexed_error(
                 checkpoint,
-                self.highest_indexed.saturating_add(1),
+                self.highest_indexed,
             ));
         }
         Ok(())
     }
 }
 
+/// The error for an `at_checkpoint` read above the highest indexed checkpoint: `OutOfRange` with
+/// an `ABOVE_LATEST_AVAILABLE` [`ErrorInfo`](crate::proto::google::rpc::ErrorInfo). Shared with
+/// other implementors of the rpc services (e.g. sui-kv-rpc, which passes its served height) so
+/// every backend fails identically.
+pub fn checkpoint_not_yet_indexed_error(checkpoint: u64, highest_indexed: u64) -> crate::RpcError {
+    above_latest_available(
+        "at_checkpoint",
+        checkpoint,
+        highest_indexed.saturating_add(1),
+    )
+}
+
 /// See [`StateReader::at_checkpoint_lower_bound`].
 #[derive(Clone, Copy, Debug)]
 pub struct AtCheckpointLowerBound {
-    /// The lowest checkpoint whose object state is intact.
+    /// The lowest checkpoint whose object state is intact, raised to
+    /// [`RpcStateReader::get_lowest_checkpoint_for_pinned_reads`].
     lowest_intact: u64,
 }
 

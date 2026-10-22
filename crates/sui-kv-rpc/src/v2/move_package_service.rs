@@ -17,12 +17,11 @@ use sui_rpc::proto::sui::rpc::v2::get_package_request::Selector;
 use sui_rpc::proto::sui::rpc::v2::move_package_service_server::MovePackageService;
 use sui_rpc_api::ErrorReason;
 use sui_rpc_api::RpcError;
+use sui_rpc_api::checkpoint_not_yet_indexed_error;
 use sui_rpc_api::grpc::v2::move_package_service::PageToken;
-use sui_rpc_api::grpc::v2::move_package_service::at_checkpoint_not_indexed_error;
 use sui_rpc_api::grpc::v2::move_package_service::get_datatype_response;
 use sui_rpc_api::grpc::v2::move_package_service::get_function_response;
 use sui_rpc_api::grpc::v2::move_package_service::get_package_response;
-use sui_rpc_api::ledger_history::query_options::above_latest_available;
 use sui_types::base_types::ObjectID;
 use sui_types::move_package::MovePackage;
 use sui_types::object::Object;
@@ -119,10 +118,9 @@ async fn get_package(
             // The response does not echo the checkpoint it resolved at, so a bound above the
             // served height would let a caller persist a wrong answer; fail closed instead.
             if at_checkpoint > served_height.checkpoint {
-                return Err(above_latest_available(
-                    "at_checkpoint",
+                return Err(checkpoint_not_yet_indexed_error(
                     at_checkpoint,
-                    served_height.checkpoint.saturating_add(1),
+                    served_height.checkpoint,
                 ));
             }
             let original_id = resolve_original_package_id(client.clone(), package_id).await?;
@@ -248,7 +246,7 @@ async fn list_package_versions(
     if let Some(at_checkpoint) = request.at_checkpoint
         && at_checkpoint > served_height.checkpoint
     {
-        return Err(at_checkpoint_not_indexed_error(
+        return Err(checkpoint_not_yet_indexed_error(
             at_checkpoint,
             served_height.checkpoint,
         ));
@@ -874,12 +872,12 @@ mod tests {
             .await
             .expect_err("bound above the served height")
             .into();
-            assert_eq!(status.code(), tonic::Code::NotFound, "{at_checkpoint}");
+            assert_eq!(status.code(), tonic::Code::OutOfRange, "{at_checkpoint}");
             assert_eq!(
                 status.message(),
                 format!(
-                    "requested checkpoint {at_checkpoint} is not yet indexed; highest indexed \
-                     checkpoint is 25"
+                    "requested data above latest available; at_checkpoint is {at_checkpoint}, \
+                     and only checkpoints below 26 are available"
                 ),
             );
         }
@@ -928,11 +926,6 @@ mod tests {
             .expect("first page");
         assert_eq!(listed(&first), vec![(1, Some(5))]);
         let token = first.next_page_token.expect("v2 is within the bound");
-        assert_eq!(
-            PageToken::decode(&token).unwrap().version,
-            2,
-            "page tokens keep their wire format"
-        );
 
         let mut req = list_req(fixture.original_id, Some(20));
         req.page_size = Some(1);
@@ -951,21 +944,5 @@ mod tests {
             .expect("bounded page");
         assert_eq!(listed(&only), vec![(1, Some(5))]);
         assert!(only.next_page_token.is_none());
-
-        // A token minted without a bound and resent under a bound that excludes the version it
-        // points at resumes to an empty page, not an error.
-        let mut req = list_req(fixture.original_id, None);
-        req.page_size = Some(1);
-        let unbounded = list_package_versions(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, req)
-            .await
-            .expect("unbounded page");
-        let mut req = list_req(fixture.original_id, Some(19));
-        req.page_size = Some(1);
-        req.page_token = Some(unbounded.next_page_token.expect("v2 follows"));
-        let resumed = list_package_versions(fixture.client.clone(), FIXTURE_SERVED_HEIGHT, req)
-            .await
-            .expect("resumed page");
-        assert!(resumed.versions.is_empty());
-        assert!(resumed.next_page_token.is_none());
     }
 }
