@@ -38,7 +38,7 @@ pub use mysten_common::assert_reachable_simtest;
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 140;
+const MAX_PROTOCOL_VERSION: u64 = 141;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -424,6 +424,7 @@ const MAINNET_USDB: &str =
 //              Shuffle the block order within each round of a consensus commit on devnet.
 //              Disable the ID leak verifier.
 //              Enable check_object_funds_withdraw_in_execution on mainnet.
+// Version 141: Enable package-version forbid lists and package minversion.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4886,6 +4887,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.disable_id_leak_verifier = true;
                     cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
                 }
+                141 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
