@@ -468,6 +468,16 @@ Tried to record an enrolled upgrade more than once.
 
 
 
+<a name="sui_package_EInvalidUpgradePolicy"></a>
+
+Tried to authorize an upgrade with an unknown policy value.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_EInvalidUpgradePolicy">EInvalidUpgradePolicy</a>: u64 = 10;
+</code></pre>
+
+
+
 <a name="sui_package_COMPATIBLE"></a>
 
 Update any part of the package (function implementations, add new
@@ -1276,6 +1286,7 @@ dependencies.
 ## Function `make_immutable`
 
 Discard the <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code> to make a package immutable.
+Aborts if the capability has an outstanding upgrade authorization.
 
 
 <pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/package.md#sui_package_make_immutable">make_immutable</a>(cap: <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>)
@@ -1288,6 +1299,8 @@ Discard the <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap<
 
 
 <pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/package.md#sui_package_make_immutable">make_immutable</a>(cap: <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a>) {
+    // Authorization clears the <a href="../sui/package.md#sui_package">package</a> ID until commit; do not destroy a cap in that state.
+    <b>assert</b>!(cap.<a href="../sui/package.md#sui_package">package</a>.to_address() != @0x0, <a href="../sui/package.md#sui_package_EUpgradeInProgress">EUpgradeInProgress</a>);
     <b>let</b> <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a> { id, <a href="../sui/package.md#sui_package">package</a>: _, <a href="../sui/package.md#sui_package_version">version</a>: _, policy: _ } = cap;
     id.delete();
 }
@@ -1304,7 +1317,8 @@ Discard the <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap<
 Issue a ticket authorizing an upgrade to a particular new bytecode
 (identified by its digest).  A ticket will only be issued if one has
 not already been issued, and if the <code>policy</code> requested is at least as
-restrictive as the policy set out by the <code>cap</code>.
+restrictive as the policy set out by the <code>cap</code>. The requested policy
+must be one of the known base upgrade policies.
 
 The <code>digest</code> supplied and the <code>policy</code> will both be checked by
 validators when running the upgrade.  I.e. the bytecode supplied in
@@ -1360,6 +1374,9 @@ for the upgrade to succeed.
 ): <a href="../sui/package.md#sui_package_UpgradeTicket">UpgradeTicket</a> {
     <b>let</b> id_zero = @0x0.to_id();
     <b>assert</b>!(cap.<a href="../sui/package.md#sui_package">package</a> != id_zero, <a href="../sui/package.md#sui_package_EAlreadyAuthorized">EAlreadyAuthorized</a>);
+    // Tickets carry only a base policy. Reject packed minversion state and unknown policy bits
+    // here rather than issuing a ticket that execution will reject later.
+    <b>assert</b>!(policy == <a href="../sui/package.md#sui_package_COMPATIBLE">COMPATIBLE</a> || policy == <a href="../sui/package.md#sui_package_ADDITIVE">ADDITIVE</a> || policy == <a href="../sui/package.md#sui_package_DEP_ONLY">DEP_ONLY</a>, <a href="../sui/package.md#sui_package_EInvalidUpgradePolicy">EInvalidUpgradePolicy</a>);
     <b>assert</b>!(policy &gt;= cap.<a href="../sui/package.md#sui_package_upgrade_policy">upgrade_policy</a>(), <a href="../sui/package.md#sui_package_ETooPermissive">ETooPermissive</a>);
     <b>let</b> <a href="../sui/package.md#sui_package">package</a> = cap.<a href="../sui/package.md#sui_package">package</a>;
     cap.<a href="../sui/package.md#sui_package">package</a> = id_zero;

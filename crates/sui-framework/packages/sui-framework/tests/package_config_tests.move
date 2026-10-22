@@ -43,6 +43,38 @@ fun test_minversion_enrollment_records_current_package() {
     end(config, scenario);
 }
 
+#[test, expected_failure(abort_code = sui::package_config::EInvalidMinVersionState)]
+fun test_duplicate_minversion_enrollment_fails() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    let mut cap_a = package::test_publish(PACKAGE_A.to_id(), scenario.ctx());
+    let mut cap_b = package::test_publish(PACKAGE_A.to_id(), scenario.ctx());
+
+    let enrollment = cap_a.enable_minversion_for_testing(PACKAGE_A.to_id());
+    config.record_minversion_enrollment(enrollment, scenario.ctx());
+    let enrollment = cap_b.enable_minversion_for_testing(PACKAGE_A.to_id());
+    config.record_minversion_enrollment(enrollment, scenario.ctx());
+    abort
+}
+
+#[test, expected_failure(abort_code = sui::package_config::EInvalidMinVersionState)]
+fun test_minversion_upgrade_recording_before_enrollment_fails() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    let mut cap = package::test_publish(PACKAGE_A.to_id(), scenario.ctx());
+
+    let _enrollment = cap.enable_minversion_for_testing(PACKAGE_A.to_id());
+    let receipt = cap
+        .authorize_upgrade_for_testing(
+            PACKAGE_A.to_id(),
+            package::compatible_policy(),
+            b"digest",
+        )
+        .test_upgrade();
+    config.record_minversion_upgrade(&cap, &receipt, scenario.ctx());
+    abort
+}
+
 #[test]
 fun test_restrict_preserves_enabled_minversion() {
     let mut scenario = ts::begin(SENDER);
@@ -105,6 +137,7 @@ fun test_minversion_upgrade_can_forbid_previous_versions() {
         scenario.ctx(),
     );
     cap.commit_upgrade(receipt);
+    assert!(config.versions_forbidden_through_for_testing(PACKAGE_A.to_id()) == 1);
 
     let ticket = cap.authorize_upgrade_for_testing(
         PACKAGE_A.to_id(),
@@ -118,6 +151,7 @@ fun test_minversion_upgrade_can_forbid_previous_versions() {
         scenario.ctx(),
     );
     cap.commit_upgrade(receipt);
+    assert!(config.versions_forbidden_through_for_testing(PACKAGE_A.to_id()) == 2);
 
     assert!(config
         .minversion_version_for_testing(PACKAGE_A.to_id())
@@ -305,21 +339,218 @@ fun test_forbid_list_is_per_package() {
 }
 
 #[test]
-fun test_forbid_version_range_is_inclusive() {
+fun test_forbid_version_ranges_are_inclusive_and_can_overlap() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    let original_id = PACKAGE_A.to_id();
+
+    config.forbid_version_range_for_testing(original_id, 8, 1, 4, scenario.ctx());
+    config.forbid_version_range_for_testing(original_id, 8, 3, 6, scenario.ctx());
+    assert!(config.is_version_forbidden(original_id, 1));
+    assert!(config.is_version_forbidden(original_id, 2));
+    assert!(config.is_version_forbidden(original_id, 3));
+    assert!(config.is_version_forbidden(original_id, 4));
+    assert!(config.is_version_forbidden(original_id, 5));
+    assert!(config.is_version_forbidden(original_id, 6));
+    assert!(!config.is_version_forbidden(original_id, 7));
+    assert!(config.versions_forbidden_through_for_testing(original_id) == 6);
+
+    end(config, scenario);
+}
+
+#[test]
+fun test_filling_gap_advances_over_sparse_forbid_range() {
     let mut scenario = ts::begin(SENDER);
     let mut config = new_config(&mut scenario);
 
     config.forbid_version_range_for_testing(
         PACKAGE_A.to_id(),
         CURRENT_VERSION,
-        1u64,
+        3u64,
         4u64,
         scenario.ctx(),
     );
-    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 1u64));
-    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 2u64));
-    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 3u64));
-    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 4u64));
+    assert!(config.versions_forbidden_through_for_testing(PACKAGE_A.to_id()) == 0);
+
+    config.forbid_previous_versions_for_testing(PACKAGE_A.to_id(), 2);
+    assert!(config.versions_forbidden_through_for_testing(PACKAGE_A.to_id()) == 4);
+    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 1));
+    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 2));
+    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 3));
+    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 4));
+
+    end(config, scenario);
+}
+
+#[test]
+fun test_filling_single_version_gap_advances_over_sparse_forbid_range() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    let original_id = PACKAGE_A.to_id();
+
+    config.forbid_version_range_for_testing(original_id, 21, 1, 10, scenario.ctx());
+    config.forbid_version_range_for_testing(original_id, 21, 12, 20, scenario.ctx());
+    assert!(config.versions_forbidden_through_for_testing(original_id) == 10);
+
+    config.forbid_version_for_testing(original_id, 21, 11, scenario.ctx());
+    assert!(config.versions_forbidden_through_for_testing(original_id) == 20);
+
+    end(config, scenario);
+}
+
+#[test]
+fun test_filling_gap_advances_across_chunk_boundary() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    let original_id = PACKAGE_A.to_id();
+
+    config.forbid_version_range_for_testing(original_id, 301, 1, 255, scenario.ctx());
+    config.forbid_version_range_for_testing(original_id, 301, 257, 300, scenario.ctx());
+    assert!(config.versions_forbidden_through_for_testing(original_id) == 255);
+
+    config.forbid_version_for_testing(original_id, 301, 256, scenario.ctx());
+    assert!(config.versions_forbidden_through_for_testing(original_id) == 300);
+
+    end(config, scenario);
+}
+
+#[test]
+fun test_forbid_range_spans_chunk_boundary() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    let original_id = PACKAGE_A.to_id();
+
+    config.forbid_version_range_for_testing(original_id, 259, 255, 258, scenario.ctx());
+    assert!(!config.is_version_forbidden(original_id, 254));
+    assert!(config.is_version_forbidden(original_id, 255));
+    assert!(config.is_version_forbidden(original_id, 256));
+    assert!(config.is_version_forbidden(original_id, 257));
+    assert!(config.is_version_forbidden(original_id, 258));
+    assert!(config.forbidden_chunk_for_testing(original_id, 0) == (3u256 << 254));
+    assert!(config.forbidden_chunk_for_testing(original_id, 1) == 3u256);
+
+    end(config, scenario);
+}
+
+#[test]
+fun test_connected_forbid_ranges_advance_forbidden_prefix() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+
+    config.forbid_version_range_for_testing(
+        PACKAGE_A.to_id(),
+        CURRENT_VERSION,
+        1,
+        2,
+        scenario.ctx(),
+    );
+    config.forbid_version_range_for_testing(
+        PACKAGE_A.to_id(),
+        CURRENT_VERSION,
+        3,
+        4,
+        scenario.ctx(),
+    );
+    assert!(config.versions_forbidden_through_for_testing(PACKAGE_A.to_id()) == 4);
+
+    end(config, scenario);
+}
+
+#[test]
+fun test_forbid_range_accepts_512_versions() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+
+    config.forbid_version_range_for_testing(
+        PACKAGE_A.to_id(),
+        513,
+        1,
+        512,
+        scenario.ctx(),
+    );
+    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 1));
+    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 512));
+    assert!(config.versions_forbidden_through_for_testing(PACKAGE_A.to_id()) == 512);
+
+    end(config, scenario);
+}
+
+#[test]
+fun test_forbid_range_accepts_512_unaligned_versions() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    let original_id = PACKAGE_A.to_id();
+
+    config.forbid_version_range_for_testing(original_id, 514, 2, 513, scenario.ctx());
+    assert!(!config.is_version_forbidden(original_id, 1));
+    assert!(config.is_version_forbidden(original_id, 2));
+    assert!(config.is_version_forbidden(original_id, 513));
+    assert!(config.forbidden_chunk_for_testing(original_id, 0) != 0);
+    assert!(config.forbidden_chunk_for_testing(original_id, 1) == std::u256::max_value!());
+    assert!(config.forbidden_chunk_for_testing(original_id, 2) == 1u256);
+    assert!(config.versions_forbidden_through_for_testing(original_id) == 0);
+
+    end(config, scenario);
+}
+
+#[test, expected_failure(abort_code = sui::package_config::ETooManyVersionsToForbid)]
+fun test_forbid_range_rejects_513_versions() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    config.forbid_version_range_for_testing(
+        PACKAGE_A.to_id(),
+        514,
+        1,
+        513,
+        scenario.ctx(),
+    );
+    abort
+}
+
+#[test]
+fun test_forbid_previous_versions_accepts_512_new_versions() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+
+    config.forbid_previous_versions_for_testing(PACKAGE_A.to_id(), 512);
+    assert!(config.versions_forbidden_through_for_testing(PACKAGE_A.to_id()) == 512);
+    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 1));
+    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 512));
+
+    end(config, scenario);
+}
+
+#[test, expected_failure(abort_code = sui::package_config::ETooManyVersionsToForbid)]
+fun test_forbid_previous_versions_rejects_513_new_versions() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+    config.forbid_previous_versions_for_testing(PACKAGE_A.to_id(), 513);
+    abort
+}
+
+#[test]
+fun test_forbid_previous_versions_limits_only_new_suffix() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+
+    config.forbid_previous_versions_for_testing(PACKAGE_A.to_id(), 512);
+    config.forbid_previous_versions_for_testing(PACKAGE_A.to_id(), 513);
+    assert!(config.versions_forbidden_through_for_testing(PACKAGE_A.to_id()) == 513);
+    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 513));
+
+    end(config, scenario);
+}
+
+#[test]
+fun test_allow_resets_forbidden_prefix_for_testing() {
+    let mut scenario = ts::begin(SENDER);
+    let mut config = new_config(&mut scenario);
+
+    config.forbid_previous_versions_for_testing(PACKAGE_A.to_id(), 4);
+    config.allow_version_for_testing(PACKAGE_A.to_id(), CURRENT_VERSION, 2, scenario.ctx());
+    assert!(config.versions_forbidden_through_for_testing(PACKAGE_A.to_id()) == 1);
+    assert!(config.is_version_forbidden(PACKAGE_A.to_id(), 1));
+    assert!(!config.is_version_forbidden(PACKAGE_A.to_id(), 2));
 
     end(config, scenario);
 }

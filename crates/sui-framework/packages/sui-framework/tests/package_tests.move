@@ -169,6 +169,32 @@ fun test_failure_to_authorize_overly_permissive_upgrade() {
     abort
 }
 
+#[test, expected_failure(abort_code = sui::package::EInvalidUpgradePolicy)]
+fun test_failure_to_authorize_with_packed_policy() {
+    let mut scenario = test_scenario::begin(@0x1);
+    let mut cap = package::test_publish(@0x42.to_id(), scenario.ctx());
+
+    let _ticket = cap.authorize_upgrade(
+        package::dep_only_policy() | 0x20,
+        sui::hash::blake2b256(&b"package contents"),
+    );
+
+    abort
+}
+
+#[test, expected_failure(abort_code = sui::package::EUpgradeInProgress)]
+fun test_failure_to_make_immutable_during_upgrade() {
+    let mut scenario = test_scenario::begin(@0x1);
+    let mut cap = package::test_publish(@0x42.to_id(), scenario.ctx());
+
+    let _ticket = cap.authorize_upgrade(
+        package::compatible_policy(),
+        sui::hash::blake2b256(&b"package contents"),
+    );
+    cap.make_immutable();
+    abort
+}
+
 #[test, expected_failure(abort_code = sui::package::EAlreadyAuthorized)]
 fun test_failure_to_authorize_multiple_upgrades() {
     let mut scenario = test_scenario::begin(@0x1);

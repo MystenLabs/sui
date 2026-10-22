@@ -79,6 +79,8 @@ const EMinVersionUnavailable: u64 = 7;
 const EMinVersionUpgradeNotRecorded: u64 = 8;
 /// Tried to record an enrolled upgrade more than once.
 const EMinVersionUpgradeAlreadyRecorded: u64 = 9;
+/// Tried to authorize an upgrade with an unknown policy value.
+const EInvalidUpgradePolicy: u64 = 10;
 
 /// Update any part of the package (function implementations, add new
 /// functions or types, change dependencies)
@@ -365,7 +367,10 @@ public entry fun only_dep_upgrades(cap: &mut UpgradeCap) {
 
 #[allow(lint(public_entry))]
 /// Discard the `UpgradeCap` to make a package immutable.
+/// Aborts if the capability has an outstanding upgrade authorization.
 public entry fun make_immutable(cap: UpgradeCap) {
+    // Authorization clears the package ID until commit; do not destroy a cap in that state.
+    assert!(cap.package.to_address() != @0x0, EUpgradeInProgress);
     let UpgradeCap { id, package: _, version: _, policy: _ } = cap;
     id.delete();
 }
@@ -373,7 +378,8 @@ public entry fun make_immutable(cap: UpgradeCap) {
 /// Issue a ticket authorizing an upgrade to a particular new bytecode
 /// (identified by its digest).  A ticket will only be issued if one has
 /// not already been issued, and if the `policy` requested is at least as
-/// restrictive as the policy set out by the `cap`.
+/// restrictive as the policy set out by the `cap`. The requested policy
+/// must be one of the known base upgrade policies.
 ///
 /// The `digest` supplied and the `policy` will both be checked by
 /// validators when running the upgrade.  I.e. the bytecode supplied in
@@ -399,6 +405,9 @@ fun authorize_upgrade_impl(
 ): UpgradeTicket {
     let id_zero = @0x0.to_id();
     assert!(cap.package != id_zero, EAlreadyAuthorized);
+    // Tickets carry only a base policy. Reject packed minversion state and unknown policy bits
+    // here rather than issuing a ticket that execution will reject later.
+    assert!(policy == COMPATIBLE || policy == ADDITIVE || policy == DEP_ONLY, EInvalidUpgradePolicy);
     assert!(policy >= cap.upgrade_policy(), ETooPermissive);
 
     let package = cap.package;

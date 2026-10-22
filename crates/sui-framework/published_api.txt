@@ -3373,6 +3373,9 @@ PackageConfig
 VersionForbiddenKey
 	public struct
 	0x2::package_config
+VersionsForbiddenThroughKey
+	public struct
+	0x2::package_config
 MinVersionKey
 	public struct
 	0x2::package_config
@@ -3400,9 +3403,6 @@ record_minversion_upgrade_and_forbid_previous_versions
 create
 	fun
 	0x2::package_config
-is_forbidden_value
-	fun
-	0x2::package_config
 record_minversion_upgrade_impl
 	fun
 	0x2::package_config
@@ -3415,10 +3415,43 @@ cap_package_info
 assert_historical_version
 	fun
 	0x2::package_config
+assert_valid_forbid_range
+	fun
+	0x2::package_config
+version_location
+	fun
+	0x2::package_config
+bit_mask
+	fun
+	0x2::package_config
+prefix_mask
+	fun
+	0x2::package_config
+range_mask
+	fun
+	0x2::package_config
+forbidden_chunk_bits
+	fun
+	0x2::package_config
+mark_chunk_bits_forbidden
+	fun
+	0x2::package_config
 forbid_version_impl
 	fun
 	0x2::package_config
 forbid_version_range_impl
+	fun
+	0x2::package_config
+forbid_previous_versions_impl
+	fun
+	0x2::package_config
+scan_forbidden_through
+	fun
+	0x2::package_config
+advance_versions_forbidden_through
+	fun
+	0x2::package_config
+versions_forbidden_through
 	fun
 	0x2::package_config
 Party
