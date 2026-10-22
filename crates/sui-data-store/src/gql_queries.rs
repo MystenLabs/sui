@@ -202,46 +202,27 @@ pub(crate) mod txn_query {
 
 pub(crate) mod checkpoint_txns_query {
     use super::*;
+    use sui_types::messages_checkpoint::CheckpointContents;
 
-    /// The GraphQL server's maximum page size.
-    const PAGE_SIZE: i32 = 50;
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "Base64")]
+    pub(crate) struct Base64(pub String);
 
     #[derive(cynic::QueryVariables)]
-    pub(crate) struct CheckpointTransactionsArgs {
+    pub(crate) struct CheckpointContentsArgs {
         pub sequence_number: Option<u64>,
-        pub first: i32,
-        pub after: Option<String>,
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(variables = "CheckpointTransactionsArgs")]
+    #[cynic(variables = "CheckpointContentsArgs")]
     pub(crate) struct Query {
         #[arguments(sequenceNumber: $sequence_number)]
         checkpoint: Option<Checkpoint>,
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(variables = "CheckpointTransactionsArgs")]
     pub(crate) struct Checkpoint {
-        #[arguments(first: $first, after: $after)]
-        transactions: Option<TransactionConnection>,
-    }
-
-    #[derive(cynic::QueryFragment)]
-    pub(crate) struct TransactionConnection {
-        page_info: PageInfo,
-        nodes: Vec<Transaction>,
-    }
-
-    #[derive(cynic::QueryFragment)]
-    pub(crate) struct PageInfo {
-        has_next_page: bool,
-        end_cursor: Option<String>,
-    }
-
-    #[derive(cynic::QueryFragment)]
-    pub(crate) struct Transaction {
-        digest: String,
+        content_bcs: Option<Base64>,
     }
 
     /// Digests of the checkpoint's transactions in execution order, or `None` if the
@@ -250,33 +231,33 @@ pub(crate) mod checkpoint_txns_query {
         sequence_number: u64,
         data_store: &DataStore,
     ) -> Result<Option<Vec<String>>, Error> {
-        let mut digests = Vec::new();
-        let mut after = None;
-        loop {
-            let query = Query::build(CheckpointTransactionsArgs {
-                sequence_number: Some(sequence_number),
-                first: PAGE_SIZE,
-                after: after.clone(),
-            });
-            let response = data_store
-                .run_query(&query)
-                .await
-                .context("Failed to run checkpoint transactions query")?;
+        let query = Query::build(CheckpointContentsArgs {
+            sequence_number: Some(sequence_number),
+        });
+        let response = data_store
+            .run_query(&query)
+            .await
+            .context("Failed to run checkpoint contents query")?;
 
-            let Some(checkpoint) = response.data.and_then(|data| data.checkpoint) else {
-                return Ok(None);
-            };
-            let connection = checkpoint.transactions.ok_or_else(|| {
-                anyhow!("Missing transactions in checkpoint {sequence_number} query response")
-            })?;
-            digests.extend(connection.nodes.into_iter().map(|txn| txn.digest));
-            if !connection.page_info.has_next_page {
-                return Ok(Some(digests));
-            }
-            after = Some(connection.page_info.end_cursor.ok_or_else(|| {
-                anyhow!("Missing end cursor in checkpoint {sequence_number} query response")
-            })?);
-        }
+        let Some(checkpoint) = response.data.and_then(|data| data.checkpoint) else {
+            return Ok(None);
+        };
+        let content_bcs = checkpoint.content_bcs.ok_or_else(|| {
+            anyhow!("Checkpoint contents not available (None) for checkpoint {sequence_number}")
+        })?;
+        let contents: CheckpointContents =
+            bcs::from_bytes(&CryptoBase64::decode(&content_bcs.0).context(format!(
+                "Checkpoint contents do not decode for checkpoint {sequence_number}"
+            ))?)
+            .context(format!(
+                "Cannot deserialize checkpoint contents for checkpoint {sequence_number}"
+            ))?;
+        Ok(Some(
+            contents
+                .iter()
+                .map(|digests| digests.transaction.to_string())
+                .collect(),
+        ))
     }
 }
 
