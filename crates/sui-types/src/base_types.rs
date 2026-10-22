@@ -237,21 +237,24 @@ pub struct ConsensusObjectVersion {
 pub struct SystemObjectVersions {
     accumulator_version: Option<ConsensusObjectVersion>,
     forwarding_address_registry_version: Option<ConsensusObjectVersion>,
+    package_config_version: Option<ConsensusObjectVersion>,
 }
 
 impl SystemObjectVersions {
     pub fn new(
         accumulator_version: Option<ConsensusObjectVersion>,
         forwarding_address_registry_version: Option<ConsensusObjectVersion>,
+        package_config_version: Option<ConsensusObjectVersion>,
     ) -> Self {
         Self {
             accumulator_version,
             forwarding_address_registry_version,
+            package_config_version,
         }
     }
 
     pub fn empty() -> Self {
-        Self::new(None, None)
+        Self::new(None, None, None)
     }
 
     pub fn from_map(
@@ -260,12 +263,17 @@ impl SystemObjectVersions {
         let accumulator_version = versions.remove(&crate::SUI_ACCUMULATOR_ROOT_OBJECT_ID);
         let forwarding_address_registry_version =
             versions.remove(&crate::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID);
+        let package_config_version = versions.remove(&crate::SUI_PACKAGE_CONFIG_OBJECT_ID);
         assert!(
             versions.is_empty(),
             "{:?} are not implicitly read system objects",
             versions.keys().collect::<Vec<_>>()
         );
-        Self::new(accumulator_version, forwarding_address_registry_version)
+        Self {
+            accumulator_version,
+            forwarding_address_registry_version,
+            package_config_version,
+        }
     }
 
     pub fn get(&self, object_id: &ObjectID) -> Option<ConsensusObjectVersion> {
@@ -274,6 +282,7 @@ impl SystemObjectVersions {
             crate::SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID => {
                 self.forwarding_address_registry_version
             }
+            crate::SUI_PACKAGE_CONFIG_OBJECT_ID => self.package_config_version,
             _ => panic!("{object_id} is not an implicitly read system object"),
         }
     }

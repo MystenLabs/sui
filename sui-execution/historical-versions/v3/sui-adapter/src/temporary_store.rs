@@ -1284,6 +1284,21 @@ impl Storage for TemporaryStore<'_> {
         result
     }
 
+    fn read_minversion(
+        &self,
+        _original_id: ObjectID,
+    ) -> SuiResult<Option<sui_types::package_config::MinVersion>> {
+        unreachable!("minversion is not supported by sui-execution v3")
+    }
+
+    fn is_package_version_forbidden(
+        &self,
+        _original_id: ObjectID,
+        _package_version: u64,
+    ) -> SuiResult<bool> {
+        unreachable!("package policy is not supported by sui-execution v3")
+    }
+
     fn record_generated_object_ids(&mut self, generated_ids: BTreeSet<ObjectID>) {
         TemporaryStore::save_generated_object_ids(self, generated_ids)
     }

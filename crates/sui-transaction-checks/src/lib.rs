@@ -26,7 +26,7 @@ mod checked {
         SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
         SUI_CLOCK_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
         SUI_DISPLAY_REGISTRY_OBJECT_ID, SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID,
-        SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+        SUI_PACKAGE_CONFIG_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
@@ -602,6 +602,8 @@ mod checked {
                         // System objects that can be taken mutably
                         (SUI_FORWARDING_ADDRESS_REGISTRY_OBJECT_ID, _)
                             if protocol_config.enable_forwarding_addresses() => (),
+                        (SUI_PACKAGE_CONFIG_OBJECT_ID, _)
+                            if protocol_config.package_version_rules_enabled() => (),
                         (SUI_SYSTEM_STATE_OBJECT_ID, _)
                         | (SUI_ADDRESS_ALIAS_STATE_OBJECT_ID, _)
                         | (SUI_COIN_REGISTRY_OBJECT_ID, _)
