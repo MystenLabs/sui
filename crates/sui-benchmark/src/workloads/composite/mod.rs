@@ -4,6 +4,7 @@
 mod lifecycle;
 mod operations;
 mod party;
+mod receive;
 mod shared_deletion;
 
 use derive_more::Add;
@@ -16,10 +17,10 @@ pub use operations::{
     ImmutableObjectRead, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
     OperationDescriptor, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF, PARTY_MUTATE,
     PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
-    PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RandomnessRead, SHARED_DELETE,
-    SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT, SHARED_DELETE_RACING, SHARED_DELETE_STALE,
-    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
-    TestCoinMint, TestCoinObjectWithdraw,
+    PARTY_RETRANSFER, PARTY_UNWRAP, PARTY_WRAP, RECEIVE_CHILD, RECEIVE_CREATE_PARENT,
+    RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT,
+    SHARED_DELETE_RACING, SHARED_DELETE_STALE, SharedCounterIncrement, SharedCounterRead,
+    TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -41,6 +42,7 @@ use operations::{
 };
 use party::PartyLifecycle;
 use rand::Rng;
+use receive::ReceiveLifecycle;
 use shared_deletion::SharedDeletionLifecycle;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -323,6 +325,9 @@ pub struct CompositeWorkloadConfig {
     /// Per-batch probability that a payload with no shared-deletion lifecycle in progress
     /// starts one. Zero disables it.
     pub shared_deletion_probability: f32,
+    /// Per-batch probability that a payload with no transfer-to-object lifecycle in progress
+    /// starts one. Zero disables it.
+    pub receive_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -353,6 +358,7 @@ impl CompositeWorkloadConfig {
             alias_tx_probability: 0.3,
             party_object_probability: 0.1,
             shared_deletion_probability: 0.1,
+            receive_probability: 0.1,
             ..Default::default()
         }
     }
@@ -424,6 +430,7 @@ impl Default for CompositeWorkloadConfig {
             alias_txs_before_revoke: 3,
             party_object_probability: 0.0,
             shared_deletion_probability: 0.0,
+            receive_probability: 0.0,
             metrics: None,
         }
     }
@@ -1513,6 +1520,7 @@ impl CompositeWorkload {
     fn make_lifecycles(
         config: &CompositeWorkloadConfig,
         package_id: ObjectID,
+        sender: SuiAddress,
     ) -> Vec<Box<dyn Lifecycle>> {
         let mut lifecycles: Vec<Box<dyn Lifecycle>> = vec![];
         if config.party_object_probability > 0.0 {
@@ -1525,6 +1533,13 @@ impl CompositeWorkload {
             lifecycles.push(Box::new(SharedDeletionLifecycle::new(
                 package_id,
                 config.shared_deletion_probability as f64,
+            )));
+        }
+        if config.receive_probability > 0.0 {
+            lifecycles.push(Box::new(ReceiveLifecycle::new(
+                package_id,
+                sender,
+                config.receive_probability as f64,
             )));
         }
         lifecycles
@@ -2172,6 +2187,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
         let mut payloads: Vec<Box<dyn Payload>> = vec![];
         for i in 0..self.num_payloads {
             let gas = self.payload_gas[i as usize].clone();
+            let sender = gas.1;
             let alias_state = self
                 .alias_infos
                 .get(i as usize)
@@ -2200,7 +2216,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 alias_state,
                 partner_address,
                 allowances,
-                lifecycles: Self::make_lifecycles(&config, self.package_id.unwrap()),
+                lifecycles: Self::make_lifecycles(&config, self.package_id.unwrap(), sender),
             }));
         }
 

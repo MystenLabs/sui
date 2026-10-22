@@ -71,6 +71,12 @@ pub const SHARED_DELETE: &str = "shared_delete";
 pub const SHARED_DELETE_RACING: &str = "shared_delete_racing";
 pub const SHARED_DELETE_STALE: &str = "shared_delete_stale";
 
+pub const RECEIVE_CREATE_PARENT: &str = "receive_create_parent";
+pub const RECEIVE_CREATE_CHILD: &str = "receive_create_child";
+pub const RECEIVE_SEND_CHILD: &str = "receive_send_child";
+pub const RECEIVE_CHILD: &str = "receive_child";
+pub const RECEIVE_TOUCH_PARENT: &str = "receive_touch_parent";
+
 pub struct OperationDescriptor {
     pub name: &'static str,
     pub factory: fn() -> Box<dyn Operation>,

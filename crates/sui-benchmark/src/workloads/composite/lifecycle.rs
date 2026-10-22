@@ -17,6 +17,7 @@ use sui_types::transaction::CallArg;
 use sui_types::{Identifier, base_types::SequenceNumber};
 
 use super::party::PartyStep;
+use super::receive::ReceiveStep;
 use super::shared_deletion::SharedDeletionStep;
 use crate::ExecutionEffects;
 use crate::workloads::payload::BatchedTransactionStatus;
@@ -26,6 +27,7 @@ use crate::workloads::payload::BatchedTransactionStatus;
 pub(super) enum LifecycleStep {
     Party(PartyStep),
     SharedDeletion(SharedDeletionStep),
+    Receive(ReceiveStep),
 }
 
 #[derive(Clone, Debug)]

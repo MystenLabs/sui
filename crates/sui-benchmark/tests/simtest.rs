@@ -2181,6 +2181,7 @@ mod test {
             alias_tx_probability: if address_aliases_enabled { 0.3 } else { 0.0 },
             party_object_probability: 0.3,
             shared_deletion_probability: 0.3,
+            receive_probability: 0.3,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
@@ -2313,6 +2314,8 @@ mod test {
             PARTY_END_STREAM,
             SHARED_DELETE_CREATE,
             SHARED_DELETE,
+            RECEIVE_CREATE_PARENT,
+            RECEIVE_CHILD,
         ] {
             let success_count: u64 = metrics
                 .iter_stats()
