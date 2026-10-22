@@ -38,9 +38,19 @@ impl Subscribable for Checkpoint {
     /// Checkpoints are delivered unfiltered.
     type Filter = ();
     type ScanItem = v2::Checkpoint;
+    type Output = Edge<String, Checkpoint, EmptyFields>;
 
     fn subscription_type() -> &'static str {
         "checkpoints"
+    }
+
+    /// The checkpoints subscription never opts into progress, so `output` only ever receives a node;
+    /// every checkpoint is itself a match, so there is no match-less stretch to signal anyway.
+    fn output(cursor: String, node: Option<Checkpoint>) -> Edge<String, Checkpoint, EmptyFields> {
+        Edge::new(
+            cursor,
+            node.expect("checkpoint subscription never opts into progress"),
+        )
     }
 
     fn scan<'a>(

@@ -50,6 +50,26 @@ fn event_cursor(item: &Value) -> String {
         .to_string()
 }
 
+/// Read event payloads until a progress edge (a `null` node with no `errors`) and return its cursor.
+/// Match payloads before it are skipped. Panics if none arrives within a generous window.
+async fn next_event_progress_cursor(
+    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
+) -> String {
+    loop {
+        let item = tokio::time::timeout(Duration::from_secs(60), stream.next())
+            .await
+            .expect("timed out waiting for a progress edge")
+            .expect("stream ended before a progress edge");
+        let edge = &item["data"]["events"];
+        if edge["node"].is_null() && item["errors"].is_null() {
+            return edge["cursor"]
+                .as_str()
+                .expect("progress edge missing cursor")
+                .to_string();
+        }
+    }
+}
+
 /// The `{ "filter": <filter> }` variables wrapping an `EventFilter` input for a subscription query.
 fn filter_var(filter: Value) -> Option<Value> {
     Some(json!({ "filter": filter }))
@@ -548,6 +568,45 @@ async fn test_event_subscription_empty_backfill_hands_off_to_live() {
     // pinning required a scanned match, the backfill would never hand off and this would time out.
     emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 1000).await;
     wait_for_matching_item(&mut stream, &["1000".to_string()], event_values).await;
+}
+
+/// Live delivers progress for a sparse event filter during a quiet stretch, and resuming `after`
+/// that cursor delivers a later event without skipping or repeating. Pins the event feed's
+/// live-minted boundary cursor as a resume point.
+#[tokio::test]
+async fn test_event_subscription_live_progress_then_resume() {
+    let mut cluster =
+        SubscriptionTestCluster::new_with_ledger_history_and_progress_threshold(2).await;
+    let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+    // Live-only subscription on the package's events. The chain's own checkpoints carry none, so
+    // they form a quiet run and progress fires.
+    let query = r#"subscription($filter: EventFilter!) {
+        events(filter: $filter, progress: true) {
+            cursor
+            node { contents { json } }
+        }
+    }"#;
+    let mut stream = cluster
+        .subscribe_with_variables(query, type_filter_var(&package_id, None))
+        .await;
+
+    let progress = next_event_progress_cursor(&mut stream).await;
+    drop(stream);
+
+    // A matching event after the live progress cursor must arrive when resuming from it.
+    emit_event_harness::emit_with_value(&mut cluster.validator, package_id, 2000).await;
+    let resume_query = r#"subscription($after: String!, $filter: EventFilter!) {
+        events(after: $after, filter: $filter) {
+            node { contents { json } }
+        }
+    }"#;
+    let mut vars = type_filter_var(&package_id, None).expect("filter vars");
+    vars["after"] = json!(progress);
+    let mut stream = cluster
+        .subscribe_with_variables(resume_query, Some(vars))
+        .await;
+    wait_for_matching_item(&mut stream, &["2000".to_string()], event_values).await;
 }
 
 #[tokio::test]

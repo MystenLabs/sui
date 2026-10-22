@@ -30,6 +30,7 @@ use crate::scope::Scope;
 use crate::task::streaming::ProcessedCheckpoint;
 use crate::task::streaming::StreamedCaches;
 
+use super::EventSubscriptionEdge;
 use super::scan_then_live::Subscribable;
 
 impl Subscribable for Event {
@@ -37,9 +38,14 @@ impl Subscribable for Event {
     type Cursor = CEvent;
     type Filter = EventFilter;
     type ScanItem = v2::Event;
+    type Output = EventSubscriptionEdge;
 
     fn subscription_type() -> &'static str {
         "events"
+    }
+
+    fn output(cursor: String, node: Option<Event>) -> EventSubscriptionEdge {
+        EventSubscriptionEdge { cursor, node }
     }
 
     fn scan<'a>(
@@ -105,5 +111,43 @@ impl Subscribable for Event {
             }
         }
         Ok(edges)
+    }
+
+    fn boundary_after(checkpoint: &ProcessedCheckpoint) -> Option<CEvent> {
+        // `network_total_transactions` counts through this checkpoint, so it is the sequence number
+        // of the next checkpoint's first transaction, whose first event is index 0.
+        Some(EventToken::boundary(
+            checkpoint.summary.sequence_number + 1,
+            checkpoint.summary.network_total_transactions,
+            0,
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_rpc_cursor::CursorKind;
+    use sui_rpc_cursor::CursorToken;
+    use sui_rpc_cursor::Position;
+
+    use super::*;
+
+    /// `boundary_after` marks the start of the next checkpoint: a `Boundary` at that checkpoint's
+    /// first transaction and event index 0, so resuming after it begins at the first event of
+    /// `checkpoint + 1`.
+    #[test]
+    fn boundary_after_marks_start_of_next_checkpoint() {
+        let checkpoint = ProcessedCheckpoint::for_test(10, 42);
+        let cursor = Event::boundary_after(&checkpoint).expect("event feed mints a boundary");
+        let token = CursorToken::from(&cursor);
+        assert_eq!(token.kind, CursorKind::Boundary);
+        assert_eq!(
+            token.position,
+            Position::Events {
+                checkpoint: 11,
+                tx_seq: 42,
+                event_index: 0,
+            }
+        );
     }
 }

@@ -28,6 +28,7 @@ use crate::scope::Scope;
 use crate::task::streaming::ProcessedCheckpoint;
 use crate::task::streaming::StreamedCaches;
 
+use super::TransactionSubscriptionEdge;
 use super::scan_then_live::Subscribable;
 
 impl Subscribable for Transaction {
@@ -35,9 +36,14 @@ impl Subscribable for Transaction {
     type Cursor = CTransaction;
     type Filter = TransactionFilter;
     type ScanItem = v2::ExecutedTransaction;
+    type Output = TransactionSubscriptionEdge;
 
     fn subscription_type() -> &'static str {
         "transactions"
+    }
+
+    fn output(cursor: String, node: Option<Transaction>) -> TransactionSubscriptionEdge {
+        TransactionSubscriptionEdge { cursor, node }
     }
 
     fn scan<'a>(
@@ -85,5 +91,41 @@ impl Subscribable for Transaction {
             edges.push(Edge::new(cursor, transaction));
         }
         Ok(edges)
+    }
+
+    fn boundary_after(checkpoint: &ProcessedCheckpoint) -> Option<CTransaction> {
+        // `network_total_transactions` counts through this checkpoint, so it is the sequence number
+        // of the next checkpoint's first transaction.
+        Some(TransactionToken::boundary(
+            checkpoint.summary.sequence_number + 1,
+            checkpoint.summary.network_total_transactions,
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_rpc_cursor::CursorKind;
+    use sui_rpc_cursor::CursorToken;
+    use sui_rpc_cursor::Position;
+
+    use super::*;
+
+    /// `boundary_after` marks the start of the next checkpoint: a `Boundary` whose transaction
+    /// sequence number is the checkpoint's `network_total_transactions`, so resuming after it
+    /// begins at the first transaction of `checkpoint + 1`.
+    #[test]
+    fn boundary_after_marks_start_of_next_checkpoint() {
+        let checkpoint = ProcessedCheckpoint::for_test(10, 42);
+        let cursor = Transaction::boundary_after(&checkpoint).expect("tx feed mints a boundary");
+        let token = CursorToken::from(&cursor);
+        assert_eq!(token.kind, CursorKind::Boundary);
+        assert_eq!(
+            token.position,
+            Position::Transactions {
+                checkpoint: 11,
+                tx_seq: 42,
+            }
+        );
     }
 }

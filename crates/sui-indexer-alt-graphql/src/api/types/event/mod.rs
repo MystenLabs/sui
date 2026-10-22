@@ -374,6 +374,16 @@ impl EventToken {
             event_index,
         }))
     }
+
+    /// Mint a scan-frontier cursor at the given coordinates: resuming after it includes them.
+    pub(crate) fn boundary(checkpoint: u64, tx_seq: u64, event_index: u32) -> CEvent {
+        CEvent::new(OpaqueCursor::new(Self {
+            kind: CursorKind::Boundary,
+            checkpoint,
+            tx_seq,
+            event_index,
+        }))
+    }
 }
 
 impl CEvent {
