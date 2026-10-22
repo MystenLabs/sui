@@ -1256,7 +1256,6 @@ mod test {
         shared_counter_gas_price_multiplier: f64,
         expected_failure_weight: u32,
         expected_failure_config: ExpectedFailurePayloadCfg,
-        party_weight: u32,
         conflicting_transfer_weight: u32,
         num_contested_objects: u64,
         composite_weight: u32,
@@ -1293,8 +1292,6 @@ mod test {
                 expected_failure_config: ExpectedFailurePayloadCfg {
                     failure_type: ExpectedFailureType::try_from(0).unwrap(),
                 },
-                // TODO: Set this to 1 once party object is enabled in mainnet protocol config.
-                party_weight: 0,
                 conflicting_transfer_weight: 0,
                 num_contested_objects: 2,
                 composite_weight: 2,
@@ -1518,7 +1515,6 @@ mod test {
             expected_failure: config.expected_failure_weight,
             randomized_transaction: config.randomized_transaction_weight,
             slow: config.slow_weight,
-            party: config.party_weight,
             conflicting_transfer: config.conflicting_transfer_weight,
             composite: config.composite_weight,
             gas_double_spend: config.gas_double_spend_weight,
