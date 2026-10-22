@@ -30,7 +30,8 @@ jobs:
         run: |
           open_pr=$(gh pr list --state open \
             --search '"Fix cargo-deny advisories" in:title' \
-            --json number --jq '.[0].number // empty')
+            --json number,headRefName \
+            --jq '[.[] | select(.headRefName | startswith("autofix/cargo-deny-advisories-"))][0].number // empty')
           if [[ -n "$open_pr" ]]; then
             echo "::notice::Autofix PR #${open_pr} is already open; skipping."
           fi
