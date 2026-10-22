@@ -89,8 +89,8 @@ async fn commit_copies(
 async fn cross_commit_copies_share_one_free_or_paid_allowance() {
     for (gas_price, copies, excess) in [
         (1, [1, 2, 1, 2], [0, 0, 1, 2]),
-        // At 5x RGP the gas price buys five copies, the same count an explicit proposer
-        // set of that size is allowed; the sixth copy is the first excess one.
+        // At 5x the reference gas price, five copies are paid for. The sixth copy is
+        // the first excess one.
         (5, [1, 4, 1, 2], [0, 0, 1, 2]),
     ] {
         let (_state, mut setup, transaction) = setup(gas_price, None, false).await;
@@ -105,8 +105,8 @@ async fn cross_commit_copies_share_one_free_or_paid_allowance() {
                     .get_sample_sum(),
                 total_excess as f64,
             );
-            // Only the first occurrence enters the denominator, even when a later
-            // commit contains several copies of this already-processed transaction.
+            // The transaction counts once as a unique transaction, so the ratio equals
+            // the excess count.
             assert_eq!(
                 setup.metrics.staggered_submission_duplication_ratio.get(),
                 total_excess as f64,
@@ -121,7 +121,8 @@ async fn late_copies_activate_band_two() {
     commit_copies(&mut setup, &transaction, 1, 1).await;
     assert_eq!(setup.metrics.staggered_submission_active.get(), 0);
 
-    // The first commit finalized the transaction; only two free copies remain.
+    // The first commit used one of the three free copies. Two remain, so 600 of
+    // these copies are excess.
     commit_copies(&mut setup, &transaction, 2, 602).await;
     assert_eq!(
         setup
@@ -176,8 +177,9 @@ async fn deferred_reload_does_not_recount_unique_or_change_deferral() {
         2.0
     );
 
-    // Reloading the deferred transaction alongside two fresh copies must neither
-    // add another unique transaction nor defer it based on the lifetime count (7).
+    // The deferred transaction is reloaded with two new copies. It must not count
+    // as a new unique transaction. It must not be deferred again based on its
+    // total count of seven copies.
     commit_copies(&mut setup, &transaction, 2, 2).await;
     assert_eq!(
         setup
@@ -216,8 +218,8 @@ async fn lost_cache_history_regrants_allowance_without_recounting_unique() {
             .unwrap()
     );
 
-    // Evict the user's entry. The store still knows it was processed, but cannot
-    // recover how much of its paid/free allowance was spent before eviction.
+    // Evict the transaction from the cache. The store still knows it was processed,
+    // but the count of copies already seen is lost.
     setup
         .consensus_handler
         .processed_cache

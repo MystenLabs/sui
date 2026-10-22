@@ -202,11 +202,10 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_simulate_allowed_proposers: bool,
 
-    /// Local kill switch for the staggered-submission activation signal. When disabled,
-    /// the commit-derived duplication signal still runs in dry run (measured and logged)
-    /// but never flips staggering on this validator, regardless of the
-    /// `staggered_submission_signal` protocol flag: staggering engages only when both
-    /// this and the protocol flag are enabled.
+    /// Lets an operator disable staggered submission on this node. The
+    /// `staggered_submission_signal` protocol flag controls the network-wide rollout.
+    /// Staggering runs only when both are enabled. When this is false, the signal is
+    /// still computed and logged but never turns staggering on.
     #[serde(default = "bool_true")]
     pub enable_staggered_submission_signal: bool,
 

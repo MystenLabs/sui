@@ -1243,13 +1243,11 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     allowed_proposers: bool,
 
-    // If true, validators derive the staggered-submission activation signal from commit
-    // output: unpaid duplication of transactions without allowed proposers arms staggered
-    // consensus submission in lockstep across honest validators. Requires
-    // `allowed_proposers` (accessed through the hand-written getter that asserts it).
-    // Staggering is node-local policy, not consensus-critical, so each validator can
-    // additionally veto it via `NodeConfig::enable_staggered_submission_signal`
-    // (default enabled); it engages only when both are enabled.
+    // If true, validators turn on staggered submission when commits show too many
+    // duplicate copies of transactions without allowed proposers. Requires
+    // `allowed_proposers`. This flag coordinates the rollout across validators.
+    // `NodeConfig::enable_staggered_submission_signal` lets an operator disable it on
+    // one node. Staggering runs only when both are enabled.
     #[serde(skip_serializing_if = "is_false")]
     #[skip_protocol_config_accessor]
     staggered_submission_signal: bool,
@@ -2258,16 +2256,16 @@ pub struct ProtocolConfig {
     /// This is the threshold for activating consensus amplification.
     sip_45_consensus_amplification_threshold: Option<u64>,
 
-    /// Staggered-submission duplication signal: window, in commits, over which excess
-    /// copies of transactions without allowed proposers are measured against unique
-    /// user transactions.
+    /// Number of recent commits the staggered-submission signal looks at. It compares
+    /// excess copies of transactions without allowed proposers to unique user transactions.
     staggered_submission_signal_window_commits: Option<u64>,
-    /// Floor for leaving band 0: excess copies per window commit on average.
+    /// Average excess copies per commit in the window needed before the signal turns on.
     staggered_submission_signal_min_excess_copies_per_commit: Option<u64>,
-    /// Consecutive commits below the active band's exit ratio before de-escalating.
+    /// Number of commits the ratio must stay below a band's exit ratio before the
+    /// signal drops to a lower band.
     staggered_submission_signal_exit_dwell_commits: Option<u64>,
-    /// Band enter and exit ratios, in basis points of the window's unique user
-    /// transactions (band 1: 1.6s hold cap, band 2: 4.8s).
+    /// Ratios to enter and exit each band, in basis points (bps) of the window's unique
+    /// user transactions. Band 1 delays submissions up to 1.6s and band 2 up to 4.8s.
     staggered_submission_signal_band1_enter_ratio_bps: Option<u64>,
     staggered_submission_signal_band1_exit_ratio_bps: Option<u64>,
     staggered_submission_signal_band2_enter_ratio_bps: Option<u64>,
@@ -2423,8 +2421,8 @@ impl ProtocolConfig {
     pub fn staggered_submission_signal(&self) -> bool {
         let ret = self.feature_flags.staggered_submission_signal;
         if ret {
-            // The signal arms staggering of transactions without allowed proposers,
-            // which only exist when the allowed_proposers feature is enabled.
+            // The signal staggers transactions without allowed proposers. That
+            // distinction only exists when allowed_proposers is enabled.
             assert!(self.feature_flags.allowed_proposers);
         }
         ret
@@ -4914,8 +4912,8 @@ impl ProtocolConfig {
                     cfg.obj_access_cost_read_per_package_kb = Some(154);
                 }
                 140 => {
-                    // Staggered-submission duplication signal thresholds (measured on
-                    // every chain; applied only where `staggered_submission_signal` is on).
+                    // Signal thresholds are set on every chain. They take effect only
+                    // where `staggered_submission_signal` is enabled.
                     cfg.staggered_submission_signal_window_commits = Some(300);
                     cfg.staggered_submission_signal_min_excess_copies_per_commit = Some(2);
                     cfg.staggered_submission_signal_exit_dwell_commits = Some(6000);

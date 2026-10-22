@@ -735,10 +735,10 @@ pub struct ConsensusHandler<C> {
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
-    /// LRU cache to discard processed messages, with cumulative occurrence counts for
-    /// the local staggering signal. Deduplication depends only on membership. Counts
-    /// are lost on eviction or restart, granting the allowance again rather than
-    /// charging potentially legitimate copies as excess when their history is unknown.
+    /// LRU cache of processed messages. Deduplication only checks whether a key is
+    /// present. The value counts how many copies of the message this validator has
+    /// seen, which feeds the local staggering signal. A count is lost on eviction or
+    /// restart. The next copy then starts a fresh count, so it is not charged as excess.
     processed_cache: LruCache<SequencedConsensusTransactionKey, u64>,
     /// Using the throughput calculator to record the current consensus throughput
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
@@ -937,23 +937,24 @@ struct CommitHandlerInput {
     transaction_deny_config_updates: Vec<(AuthorityName, SharedTransactionDenyConfig)>,
 }
 
-/// One commit's inputs to the staggered-submission duplication signal, counted before
-/// deduplication so copies discarded in later commits still count.
+/// Copy counts from one commit for the staggered-submission duplication signal. They
+/// are counted before deduplication, so duplicates that get discarded still count.
 #[derive(Default)]
 struct StaggeringCommitCounts {
-    /// Copies of transactions without allowed proposers beyond their paid allowance:
-    /// the signal's numerator.
+    /// Copies beyond the number of proposers the transaction paid for. Only
+    /// transactions that do not restrict their proposers are counted. This is the
+    /// signal's numerator.
     excess_copies: u64,
-    /// First occurrences of user transactions: the signal's denominator.
+    /// The number of distinct user transactions. This is the signal's denominator.
     unique_user_txns: u64,
-    /// Duplicate copies the signal does not count, within the paid allowance...
+    /// Duplicates the transaction paid for. The signal ignores them.
     paid_duplicate_copies: u64,
-    /// ...or of transactions that restrict their proposers.
+    /// Duplicates of transactions that restrict their proposers. The signal ignores them.
     restricted_duplicate_copies: u64,
 }
 
 impl StaggeringCommitCounts {
-    /// The counts with their `staggered_submission_commit_copies` metric labels.
+    /// Returns the counts keyed by their `staggered_submission_commit_copies` label.
     fn by_kind(&self) -> [(&'static str, u64); 4] {
         [
             ("unique", self.unique_user_txns),
@@ -970,7 +971,8 @@ struct CommitHandlerState {
     output: ConsensusCommitOutput,
     indirect_state_observer: Option<IndirectStateObserver>,
     initial_reconfig_state: ReconfigState,
-    // Intra-commit occurrence counts used by the consensus-critical amplification deferral.
+    // Occurrence counts within this commit. Amplification deferral uses them, so they
+    // must be identical on every validator.
     occurrence_counts: HashMap<TransactionDigest, u32>,
     staggering_counts: StaggeringCommitCounts,
     // Transactions involved in same commit owned object lock contention (double-spend),
@@ -1863,26 +1865,23 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         ))
     }
 
-    /// Feeds the staggered-submission activation signal with this commit's duplication
-    /// among transactions that do not restrict their proposers: the duplicate copies
-    /// beyond what each transaction may legitimately reach — the free stagger slots or
-    /// its paid SIP-45 amplification, whichever is larger. Summing copies rather than
-    /// counting offending transactions makes the signal track wasted bandwidth, so a
-    /// few massively-amplified transactions weigh as much as many lightly-amplified
-    /// ones. Copies are charged as they arrive, consuming one allowance across commits
-    /// while the transaction remains in the processed cache. Counting before dedup also
-    /// keeps deferred transactions from entering the unique denominator more than once.
+    /// Passes this commit's copy counts to the staggered-submission signal and updates
+    /// the signal metrics.
     ///
-    /// The signal is measured and its transitions are tracked unconditionally; whether
-    /// a transition actually flips staggering is decided by [`StaggeredSubmission`]'s
-    /// enablement (the `staggered_submission_signal` protocol flag together with the
-    /// node-local `NodeConfig::enable_staggered_submission_signal` kill switch), so the
-    /// signal can be observed in dry run before enablement (or after a local opt-out).
+    /// The signal measures copies, not transactions, because copies are what waste
+    /// bandwidth. A copy counts as excess when the transaction has already reached
+    /// the number of proposers it paid for, or the free minimum if that is larger.
+    /// This count carries across commits while the transaction stays in the processed
+    /// cache. Copies are counted on arrival, so a deferred transaction counts as unique
+    /// only once.
+    ///
+    /// The signal always runs. It changes staggering only when both the protocol flag
+    /// and the node config enable it. Otherwise the metrics still show what it would do.
     fn record_duplication_signal(&self, state: &CommitHandlerState) {
         self.metrics
             .staggered_submission_excess_copies
             .observe(state.staggering_counts.excess_copies as f64);
-        // Counters of the signal's inputs, so the ratio can be recomputed over any window.
+        // These counters let dashboards recompute the ratio over any time window.
         for (kind, copies) in state.staggering_counts.by_kind() {
             self.metrics
                 .staggered_submission_commit_copies
@@ -1898,8 +1897,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.metrics
             .staggered_submission_duplication_ratio
             .set(outcome.duplication_ratio);
-        // Set every commit rather than on transitions so both gauges pick up the fresh
-        // per-epoch state after reconfiguration.
+        // The gauges are set on every commit so they reset when a new epoch starts.
         self.metrics
             .staggered_submission_signal_band
             .set(staggered.signal_band() as i64);
@@ -3170,8 +3168,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     (*total, true)
                 }
                 None => {
-                    // Even if this key was evicted within the commit, its local count
-                    // is still known. Only history from earlier commits is lost.
+                    // If the key was evicted during this commit, the commit's own count
+                    // is still correct. Only counts from earlier commits are lost.
                     let total = u64::from(*count);
                     self.processed_cache.put(key.clone(), total);
                     (total, false)

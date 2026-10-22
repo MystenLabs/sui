@@ -614,20 +614,20 @@ impl AuthorityMetrics {
             .unwrap(),
             staggered_submission_excess_copies: register_histogram_with_registry!(
                 "staggered_submission_excess_copies",
-                "New excess copies of transactions without allowed proposers in each commit, accounting for copies in earlier commits while cached, feeding the staggered-submission activation signal",
+                "Excess copies per commit of transactions without allowed proposers. Copies seen in earlier commits count while the transaction is cached.",
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             staggered_submission_signal_band: register_int_gauge_with_registry!(
                 "staggered_submission_signal_band",
-                "The duplication signal's current band level (0 = off; higher bands stagger with longer hold caps); staggering itself only follows when the staggered_submission_signal protocol flag and the node's enable_staggered_submission_signal config are both enabled",
+                "Current band of the duplication signal. 0 is off and higher bands hold submissions longer. Staggering follows the band only when both the protocol flag and the node config enable it.",
                 registry,
             )
             .unwrap(),
             staggered_submission_active: register_int_gauge_with_registry!(
                 "staggered_submission_active",
-                "Whether this validator is currently staggering submissions of transactions without allowed proposers (1) or not (0) — the state it reports to transaction drivers; unlike staggered_submission_signal_band it stays 0 while the signal runs in dry run",
+                "1 if this validator staggers submissions of transactions without allowed proposers, else 0. It stays 0 while the signal runs in dry run.",
                 registry,
             )
             .unwrap(),
@@ -640,7 +640,7 @@ impl AuthorityMetrics {
             .unwrap(),
             staggered_submission_commit_copies: register_int_counter_vec_with_registry!(
                 "staggered_submission_commit_copies",
-                "User transaction copies in commits by kind: unique (first occurrences, the duplication signal's denominator), excess (copies beyond the paid allowance of transactions without allowed proposers, its numerator), paid_duplicate (within the allowance), restricted_duplicate (of transactions that restrict their proposers)",
+                "User transaction copies in commits, by kind. unique counts first copies. excess counts copies past the paid allowance. paid_duplicate counts copies within the allowance. restricted_duplicate counts copies of transactions with allowed proposers.",
                 &["kind"],
                 registry,
             )
