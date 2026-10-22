@@ -51,14 +51,18 @@ impl Subscribable for Event {
         Event::scan_grpc(reader, cp_bounds, page, page.limit(), filter)
     }
 
+    fn checkpoint(payload: &v2::Event) -> Result<u64, RpcError> {
+        Ok(payload
+            .checkpoint
+            .context("ListEvents item missing checkpoint")?)
+    }
+
     fn build_node(
         caches: &Arc<StreamedCaches>,
         resolver_limits: &sui_package_resolver::Limits,
+        checkpoint: u64,
         payload: &v2::Event,
     ) -> Result<Self, RpcError> {
-        let checkpoint = payload
-            .checkpoint
-            .context("ListEvents item missing checkpoint")?;
         let scope = Scope::for_backfill(caches.clone(), resolver_limits.clone(), checkpoint);
         event_from_stream_item(scope, payload)
     }

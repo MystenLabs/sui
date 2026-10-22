@@ -65,6 +65,7 @@ pub(crate) use checkpoint_stream_task::checkpoint_field_mask;
 pub(crate) use checkpoint_stream_task::process_checkpoint;
 pub(crate) use checkpoint_stream_task::reconnect_error;
 pub(crate) use gap_recovery::wait_for_pipelines_catching_up_at;
+pub(crate) use gap_recovery::wait_for_pipelines_catching_up_at_transaction;
 pub(crate) use lifecycle::SubscriberLimit;
 pub(crate) use lifecycle::SubscriptionLifecycleGuard;
 pub(crate) use lifecycle::SubscriptionTerminationReason;
