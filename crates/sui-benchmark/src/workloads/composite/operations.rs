@@ -62,6 +62,12 @@ pub const PARTY_RESTART_STREAM: &str = "party_restart_stream";
 pub const PARTY_RETRANSFER: &str = "party_retransfer";
 pub const PARTY_HAND_OFF: &str = "party_hand_off";
 
+pub const SHARED_DELETE_CREATE: &str = "shared_delete_create";
+pub const SHARED_DELETE_INCREMENT: &str = "shared_delete_increment";
+pub const SHARED_DELETE: &str = "shared_delete";
+pub const SHARED_DELETE_RACING: &str = "shared_delete_racing";
+pub const SHARED_DELETE_STALE: &str = "shared_delete_stale";
+
 pub struct OperationDescriptor {
     pub name: &'static str,
     pub factory: fn() -> Box<dyn Operation>,

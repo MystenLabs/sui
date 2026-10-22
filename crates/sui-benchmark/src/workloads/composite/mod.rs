@@ -4,6 +4,7 @@
 mod lifecycle;
 mod operations;
 mod party;
+mod shared_deletion;
 
 use derive_more::Add;
 use mysten_common::random::get_rng;
@@ -15,7 +16,8 @@ pub use operations::{
     ImmutableObjectRead, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
     OperationDescriptor, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF, PARTY_MUTATE,
     PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
-    PARTY_RETRANSFER, RandomnessRead, SharedCounterIncrement, SharedCounterRead,
+    PARTY_RETRANSFER, RandomnessRead, SHARED_DELETE, SHARED_DELETE_CREATE, SHARED_DELETE_INCREMENT,
+    SHARED_DELETE_RACING, SHARED_DELETE_STALE, SharedCounterIncrement, SharedCounterRead,
     TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
@@ -38,6 +40,7 @@ use operations::{
 };
 use party::PartyLifecycle;
 use rand::Rng;
+use shared_deletion::SharedDeletionLifecycle;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
@@ -316,6 +319,9 @@ pub struct CompositeWorkloadConfig {
     /// finishes.
     /// Zero disables party-object operations.
     pub party_object_probability: f32,
+    /// Per-batch probability that a payload with no shared-deletion lifecycle in progress
+    /// starts one. Zero disables it.
+    pub shared_deletion_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -345,6 +351,7 @@ impl CompositeWorkloadConfig {
             probabilities,
             alias_tx_probability: 0.3,
             party_object_probability: 0.1,
+            shared_deletion_probability: 0.1,
             ..Default::default()
         }
     }
@@ -415,6 +422,7 @@ impl Default for CompositeWorkloadConfig {
             alias_tx_probability: 0.0,
             alias_txs_before_revoke: 3,
             party_object_probability: 0.0,
+            shared_deletion_probability: 0.0,
             metrics: None,
         }
     }
@@ -1510,6 +1518,12 @@ impl CompositeWorkload {
             lifecycles.push(Box::new(PartyLifecycle::new(
                 package_id,
                 config.party_object_probability as f64,
+            )));
+        }
+        if config.shared_deletion_probability > 0.0 {
+            lifecycles.push(Box::new(SharedDeletionLifecycle::new(
+                package_id,
+                config.shared_deletion_probability as f64,
             )));
         }
         lifecycles

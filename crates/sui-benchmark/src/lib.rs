@@ -242,6 +242,21 @@ impl ExecutionEffects {
         }
     }
 
+    /// True if the tx executed against a deleted shared object or an ended consensus stream.
+    pub fn is_input_object_deleted(&self) -> bool {
+        let status = match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().status(),
+            ExecutionEffects::ExecutedTransaction(txn) => txn.effects.status(),
+        };
+        matches!(
+            status,
+            ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::InputObjectDeleted,
+                ..
+            })
+        )
+    }
+
     pub fn is_insufficient_funds(&self) -> bool {
         let status = match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => effects.data().status(),

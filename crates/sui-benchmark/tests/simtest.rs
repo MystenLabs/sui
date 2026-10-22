@@ -2180,6 +2180,7 @@ mod test {
             conflicting_transaction_probability,
             alias_tx_probability: if address_aliases_enabled { 0.3 } else { 0.0 },
             party_object_probability: 0.3,
+            shared_deletion_probability: 0.3,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
@@ -2307,7 +2308,12 @@ mod test {
             );
         }
 
-        for name in [PARTY_CREATE, PARTY_END_STREAM] {
+        for name in [
+            PARTY_CREATE,
+            PARTY_END_STREAM,
+            SHARED_DELETE_CREATE,
+            SHARED_DELETE,
+        ] {
             let success_count: u64 = metrics
                 .iter_stats()
                 .filter(|(op_set, _)| op_set.contains(name))
