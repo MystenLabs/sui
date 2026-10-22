@@ -11,8 +11,10 @@ pub use operations::{
     AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AllowanceSelfWithdraw,
     AllowanceWithdraw, AuthenticatedEventEmit, CoinReservationWithdraw, INVALID_ALIAS_TX,
     ImmutableObjectRead, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
-    OperationDescriptor, RandomnessRead, SharedCounterIncrement, SharedCounterRead,
-    TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
+    OperationDescriptor, PARTY_CREATE, PARTY_END_STREAM, PARTY_MUTATE, PARTY_OLD_STREAM,
+    PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM, RandomnessRead,
+    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
+    TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -305,6 +307,11 @@ pub struct CompositeWorkloadConfig {
     pub conflicting_transaction_probability: f32,
     pub alias_tx_probability: f32,
     pub alias_txs_before_revoke: u32,
+    /// Per-batch probability that a payload with no party object in progress starts a
+    /// party-object lifecycle. A lifecycle in progress adds party calls to every batch until it
+    /// finishes.
+    /// Zero disables party-object operations.
+    pub party_object_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -333,6 +340,7 @@ impl CompositeWorkloadConfig {
         Self {
             probabilities,
             alias_tx_probability: 0.3,
+            party_object_probability: 0.1,
             ..Default::default()
         }
     }
@@ -402,6 +410,7 @@ impl Default for CompositeWorkloadConfig {
             conflicting_transaction_probability: 0.1,
             alias_tx_probability: 0.0,
             alias_txs_before_revoke: 3,
+            party_object_probability: 0.0,
             metrics: None,
         }
     }
@@ -449,6 +458,7 @@ pub struct CompositePayload {
     alias_state: Option<AliasState>,
     partner_address: SuiAddress,
     allowances: Option<PayloadAllowances>,
+    party: Option<PartyState>,
 }
 
 /// Tracks the lifecycle of an alias revoke-and-re-add cycle for a single payload.
@@ -492,7 +502,7 @@ struct AliasState {
     cycle_state: AliasRevokeCycleState,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum BatchTxKind {
     /// Standard composite PTB.
     Normal,
@@ -504,6 +514,249 @@ enum BatchTxKind {
     AliasAdd,
     /// Alias-signed transfer after revocation (expected to fail).
     InvalidPostRevocation,
+    /// Create a party object.
+    PartyCreate,
+    /// Mutate a party object on its current stream.
+    PartyMutate,
+    /// Mutate a party object on its current stream, submitted alongside the tx that ends the
+    /// stream. It may be sequenced before or after the end tx.
+    PartyRacingMutate,
+    /// End a party object's stream by transferring it to an address.
+    PartyEndStream,
+    /// Mutate a party object using a start version whose stream has ended (expected to fail).
+    PartyOldStream,
+    /// Mutate the address-owned incarnation of a formerly-party object.
+    PartyOwnedMutate,
+    /// Start a new stream by transferring an address-owned object back to a party owner.
+    PartyRestartStream,
+}
+
+impl BatchTxKind {
+    fn is_alias(self) -> bool {
+        matches!(
+            self,
+            BatchTxKind::AliasSigned
+                | BatchTxKind::AliasRemove
+                | BatchTxKind::AliasAdd
+                | BatchTxKind::InvalidPostRevocation
+        )
+    }
+
+    /// Party txs of these kinds carry no sampled ops, so their lamport versions are determined
+    /// by the party object and the gas coin alone. Inputs with higher versions would move the
+    /// owned object's versions past the ended stream's assigned versions, and they would never
+    /// collide.
+    fn is_bare_party(self) -> bool {
+        matches!(
+            self,
+            BatchTxKind::PartyOldStream
+                | BatchTxKind::PartyOwnedMutate
+                | BatchTxKind::PartyRestartStream
+        )
+    }
+
+    fn is_party(self) -> bool {
+        matches!(
+            self,
+            BatchTxKind::PartyCreate
+                | BatchTxKind::PartyMutate
+                | BatchTxKind::PartyRacingMutate
+                | BatchTxKind::PartyEndStream
+                | BatchTxKind::PartyOldStream
+                | BatchTxKind::PartyOwnedMutate
+                | BatchTxKind::PartyRestartStream
+        )
+    }
+}
+
+/// A payload's party-object lifecycle. Each acting batch advances it one step:
+/// `NeedCreate -> Live -> StreamEnded -> Owned -> (Live | NeedCreate)`. The `StreamEnded`
+/// and `Owned` steps submit txs that reference the ended stream together with txs that use
+/// the same object id under its current ownership. Their versions can collide, which
+/// exercises the check that an ended-stream input waits for its stream-ended marker.
+#[derive(Debug, Clone)]
+enum PartyPhase {
+    /// No party object is tracked; the next step creates one.
+    NeedCreate,
+    /// The object is on the consensus stream that began at `start_version`.
+    Live {
+        id: ObjectID,
+        start_version: SequenceNumber,
+        mutations: u32,
+    },
+    /// The stream that began at `ended_start_version` has ended and the object is
+    /// address-owned at `addr_ref`. The next step mutates it through both the ended stream
+    /// and its address-owned ref.
+    StreamEnded {
+        id: ObjectID,
+        ended_start_version: SequenceNumber,
+        addr_ref: ObjectRef,
+    },
+    /// The address-owned mutation executed. The next step either restarts a stream on the
+    /// same id or abandons the object and creates a new one.
+    Owned {
+        id: ObjectID,
+        ended_start_version: SequenceNumber,
+        addr_ref: ObjectRef,
+    },
+}
+
+#[derive(Debug)]
+struct PartyState {
+    phase: PartyPhase,
+}
+
+impl PartyState {
+    /// The stream ends after at most this many mutations so the lifecycle keeps progressing.
+    const MAX_MUTATIONS: u32 = 3;
+
+    fn new() -> Self {
+        Self {
+            phase: PartyPhase::NeedCreate,
+        }
+    }
+
+    fn find_object(effects: &ExecutionEffects, id: ObjectID) -> Option<(ObjectRef, Owner)> {
+        effects
+            .created()
+            .into_iter()
+            .chain(effects.mutated())
+            .find(|(obj_ref, _)| obj_ref.0 == id)
+    }
+
+    /// Advances the phase from the result of a tx that carries a call from `next_party_step`.
+    /// Sampled ops in the same PTB can abort the tx, so an executed tx advances the phase
+    /// from the object's ownership in its effects, not from its status.
+    fn handle_result(&mut self, kind: BatchTxKind, status: &BatchedTransactionStatus) {
+        let effects = match status {
+            BatchedTransactionStatus::Success { effects } => effects,
+            // A rejected tx did not change the object.
+            BatchedTransactionStatus::PermanentFailure { .. } => return,
+            BatchedTransactionStatus::RetriableFailure { .. }
+            | BatchedTransactionStatus::UnknownRejection => {
+                // These txs may have changed the object's ownership or owned version.
+                if matches!(
+                    kind,
+                    BatchTxKind::PartyEndStream
+                        | BatchTxKind::PartyOwnedMutate
+                        | BatchTxKind::PartyRestartStream
+                ) {
+                    debug!(?kind, "party tx outcome unknown, resetting lifecycle");
+                    self.phase = PartyPhase::NeedCreate;
+                }
+                return;
+            }
+        };
+
+        let next = match (kind, &self.phase) {
+            // Results of these txs never determine the phase.
+            (BatchTxKind::PartyOldStream | BatchTxKind::PartyRacingMutate, _) => {
+                if !effects.is_ok() {
+                    assert_reachable!("party tx with an ended stream input executed");
+                }
+                return;
+            }
+            (BatchTxKind::PartyCreate, PartyPhase::NeedCreate) => {
+                if !effects.is_ok() {
+                    return;
+                }
+                effects.created().into_iter().find_map(|(obj_ref, owner)| {
+                    Some(PartyPhase::Live {
+                        id: obj_ref.0,
+                        start_version: owner.start_version()?,
+                        mutations: 0,
+                    })
+                })
+            }
+            (
+                BatchTxKind::PartyMutate,
+                PartyPhase::Live {
+                    id,
+                    start_version,
+                    mutations,
+                },
+            ) => Some(PartyPhase::Live {
+                id: *id,
+                start_version: *start_version,
+                mutations: mutations + 1,
+            }),
+            (
+                BatchTxKind::PartyEndStream,
+                PartyPhase::Live {
+                    id, start_version, ..
+                },
+            ) => {
+                match Self::find_object(effects, *id) {
+                    Some((addr_ref, Owner::AddressOwner(_))) => Some(PartyPhase::StreamEnded {
+                        id: *id,
+                        ended_start_version: *start_version,
+                        addr_ref,
+                    }),
+                    // The tx aborted or was cancelled, so the stream is still live.
+                    _ => return,
+                }
+            }
+            (
+                BatchTxKind::PartyOwnedMutate,
+                PartyPhase::StreamEnded {
+                    id,
+                    ended_start_version,
+                    ..
+                },
+            )
+            | (
+                BatchTxKind::PartyRestartStream,
+                PartyPhase::Owned {
+                    id,
+                    ended_start_version,
+                    ..
+                },
+            ) => {
+                if effects.is_ok() {
+                    if matches!(kind, BatchTxKind::PartyOwnedMutate) {
+                        assert_reachable!("party object mutated as owned after its stream ended");
+                    } else {
+                        assert_reachable!("party stream restarted on an id with an ended stream");
+                    }
+                }
+                match Self::find_object(effects, *id) {
+                    Some((addr_ref, Owner::AddressOwner(_))) => Some(PartyPhase::Owned {
+                        id: *id,
+                        ended_start_version: *ended_start_version,
+                        addr_ref,
+                    }),
+                    Some((_, owner)) => {
+                        owner.start_version().map(|start_version| PartyPhase::Live {
+                            id: *id,
+                            start_version,
+                            mutations: 0,
+                        })
+                    }
+                    None => None,
+                }
+            }
+            // An earlier tx in the same batch already reset the phase.
+            (_, PartyPhase::NeedCreate) => return,
+            (kind, phase) => unreachable!("party tx {kind:?} built in phase {phase:?}"),
+        };
+
+        self.phase = next.unwrap_or_else(|| {
+            debug!(
+                ?kind,
+                "party object missing from effects, resetting lifecycle"
+            );
+            PartyPhase::NeedCreate
+        });
+    }
+}
+
+/// A party-object move call that is added to a composite PTB.
+#[derive(Clone)]
+struct PartyCall {
+    function: &'static str,
+    args: Vec<CallArg>,
+    op: &'static str,
+    kind: BatchTxKind,
 }
 
 #[derive(Clone)]
@@ -594,7 +847,9 @@ impl CompositePayload {
         }
     }
 
-    fn sample_operations(&self) -> Vec<Box<dyn Operation>> {
+    /// Samples the ops for one tx. If the tx carries a party call, isolated ops are dropped
+    /// and the result may be empty.
+    fn sample_operations(&self, with_party_call: bool) -> Vec<Box<dyn Operation>> {
         let protocol_config = self
             .system_state_observer
             .state
@@ -627,7 +882,13 @@ impl CompositePayload {
                     op.name() != AllowanceWithdraw::NAME && op.name() != AllowanceSelfWithdraw::NAME
                 });
             }
-            if !ops.is_empty() {
+            let isolated = if with_party_call {
+                false
+            } else {
+                ops.iter().any(|op| op.constraints().isolated)
+            };
+            ops.retain(|op| op.constraints().isolated == isolated);
+            if !ops.is_empty() || with_party_call {
                 return ops;
             }
         }
@@ -639,12 +900,19 @@ impl CompositePayload {
         account_state: &AccountState,
         keypair: &AccountKeyPair,
         current_epoch: u64,
+        party_call: Option<&PartyCall>,
     ) -> (Transaction, OperationSet) {
-        let ops = self.sample_operations();
+        let ops = match party_call {
+            Some(call) if call.kind.is_bare_party() => vec![],
+            _ => self.sample_operations(party_call.is_some()),
+        };
 
         let mut op_set = OperationSet::new();
         for op in &ops {
             op_set = op_set.with(op.name());
+        }
+        if let Some(call) = party_call {
+            op_set = op_set.with(call.op);
         }
         self.metrics
             .lock()
@@ -660,6 +928,18 @@ impl CompositePayload {
 
         {
             let builder = tx_builder.ptb_builder_mut();
+            // The party call goes first because some ops must be the last shared access.
+            if let Some(call) = party_call {
+                builder
+                    .move_call(
+                        self.pool.package_id,
+                        Identifier::new("party_obj").unwrap(),
+                        Identifier::new(call.function).unwrap(),
+                        vec![],
+                        call.args.clone(),
+                    )
+                    .unwrap();
+            }
             for op in &ops {
                 let resources = Self::resolve_resources_for_op(
                     op.as_ref(),
@@ -925,7 +1205,130 @@ impl CompositePayload {
             }
             (BatchTxKind::AliasSigned, _) => false,
 
-            (BatchTxKind::Normal, _) => unreachable!("Normal txs should not reach this function"),
+            (kind, _) => unreachable!("{kind:?} txs should not reach this function"),
+        }
+    }
+
+    /// Advances the party-object lifecycle one step and returns that step's party calls. Each
+    /// call is added to its own composite tx in this batch, and all of them are submitted
+    /// concurrently. Returns an empty vec if this batch has no party step. A new lifecycle
+    /// starts with probability `party_object_probability`. A lifecycle in progress advances on
+    /// every batch, so the steps after a stream ends run in consecutive batches.
+    fn next_party_step(&mut self, sender: SuiAddress) -> Vec<PartyCall> {
+        let Some(party) = self.party.as_mut() else {
+            return vec![];
+        };
+        let mut rng = get_rng();
+        if matches!(party.phase, PartyPhase::NeedCreate)
+            && !rng.gen_bool(self.config.party_object_probability as f64)
+        {
+            return vec![];
+        }
+
+        if matches!(party.phase, PartyPhase::Owned { .. }) && rng.gen_bool(0.5) {
+            // Abandon the address-owned object and start over with a new one.
+            party.phase = PartyPhase::NeedCreate;
+        }
+
+        let call = |function, args, op, kind| PartyCall {
+            function,
+            args,
+            op,
+            kind,
+        };
+        let set_value = |obj: ObjectArg, value: u64, op, kind| {
+            call(
+                "set_value",
+                vec![
+                    CallArg::Object(obj),
+                    CallArg::Pure(bcs::to_bytes(&value).unwrap()),
+                ],
+                op,
+                kind,
+            )
+        };
+        let stream = |id: ObjectID, start_version: SequenceNumber| ObjectArg::SharedObject {
+            id,
+            initial_shared_version: start_version,
+            mutability: SharedObjectMutability::Mutable,
+        };
+        let sender_arg = CallArg::Pure(bcs::to_bytes(&sender).unwrap());
+
+        match party.phase.clone() {
+            PartyPhase::NeedCreate => vec![call(
+                "create",
+                vec![CallArg::Pure(bcs::to_bytes(&0u64).unwrap()), sender_arg],
+                PARTY_CREATE,
+                BatchTxKind::PartyCreate,
+            )],
+            PartyPhase::Live {
+                id,
+                start_version,
+                mutations,
+            } => {
+                let obj = stream(id, start_version);
+                if mutations >= PartyState::MAX_MUTATIONS || rng.gen_bool(0.5) {
+                    let mut calls = vec![call(
+                        "to_address",
+                        vec![CallArg::Object(obj), sender_arg],
+                        PARTY_END_STREAM,
+                        BatchTxKind::PartyEndStream,
+                    )];
+                    if rng.gen_bool(0.5) {
+                        // A mutation sequenced after the end tx executes against the ended
+                        // stream.
+                        for value in [1, 2] {
+                            calls.push(set_value(
+                                obj,
+                                value,
+                                PARTY_RACING_MUTATE,
+                                BatchTxKind::PartyRacingMutate,
+                            ));
+                        }
+                    }
+                    calls
+                } else {
+                    vec![set_value(obj, 7, PARTY_MUTATE, BatchTxKind::PartyMutate)]
+                }
+            }
+            PartyPhase::StreamEnded {
+                id,
+                ended_start_version,
+                addr_ref,
+            } => {
+                let old_stream = stream(id, ended_start_version);
+                vec![
+                    set_value(old_stream, 1, PARTY_OLD_STREAM, BatchTxKind::PartyOldStream),
+                    set_value(old_stream, 2, PARTY_OLD_STREAM, BatchTxKind::PartyOldStream),
+                    set_value(
+                        ObjectArg::ImmOrOwnedObject(addr_ref),
+                        3,
+                        PARTY_OWNED_MUTATE,
+                        BatchTxKind::PartyOwnedMutate,
+                    ),
+                ]
+            }
+            PartyPhase::Owned {
+                id,
+                ended_start_version,
+                addr_ref,
+            } => vec![
+                call(
+                    "to_party",
+                    vec![
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(addr_ref)),
+                        sender_arg,
+                    ],
+                    PARTY_RESTART_STREAM,
+                    BatchTxKind::PartyRestartStream,
+                ),
+                set_value(
+                    stream(id, ended_start_version),
+                    4,
+                    PARTY_OLD_STREAM,
+                    BatchTxKind::PartyOldStream,
+                ),
+            ],
         }
     }
 }
@@ -946,6 +1349,13 @@ impl Payload for CompositePayload {
 
     async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         let alias_tx_needed = self.advance_alias_state().await;
+        let system_state = self.system_state_observer.state.borrow().clone();
+        let sender = self.gas.lock().unwrap().1;
+
+        self.current_batch_txs.clear();
+        self.current_batch_num_conflicting_transactions = 0;
+
+        let party_calls = self.next_party_step(sender);
         let batch_size = {
             let mut rng = get_rng();
             let max_normal_batch = if alias_tx_needed {
@@ -953,10 +1363,10 @@ impl Payload for CompositePayload {
             } else {
                 MAX_BATCH_SIZE
             };
-            rng.gen_range(1..=max_normal_batch)
+            assert!(party_calls.len() <= max_normal_batch);
+            rng.gen_range(party_calls.len().max(1)..=max_normal_batch)
         };
 
-        let system_state = self.system_state_observer.state.borrow().clone();
         let rgp = system_state.reference_gas_price;
         let current_epoch = system_state.epoch;
         let address_balance_gas_disabled =
@@ -971,8 +1381,6 @@ impl Payload for CompositePayload {
             (gas.0.clone(), gas.1, gas.2.clone())
         };
 
-        self.current_batch_txs.clear();
-        self.current_batch_num_conflicting_transactions = 0;
         let mut transactions = Vec::with_capacity(batch_size + 1);
 
         let account_state = AccountState::new(
@@ -1044,13 +1452,19 @@ impl Payload for CompositePayload {
                 TestTransactionBuilder::new(sender, *gas, rgp)
             };
 
-            let (tx, op_set) =
-                self.generate_transaction(builder, &account_state, &keypair, current_epoch);
+            let party_call = party_calls.get(i);
+            let (tx, op_set) = self.generate_transaction(
+                builder,
+                &account_state,
+                &keypair,
+                current_epoch,
+                party_call,
+            );
             self.current_batch_txs.push(BatchTxInfo {
                 gas_idx: i,
                 extra_gas_idx: extra_gas_idx_opt,
                 op_set,
-                kind: BatchTxKind::Normal,
+                kind: party_call.map_or(BatchTxKind::Normal, |call| call.kind),
             });
             transactions.push(tx);
         }
@@ -1065,8 +1479,13 @@ impl Payload for CompositePayload {
 
                 // use rgp + 1 to ensure we never make a duplicate transaction here
                 let builder = TestTransactionBuilder::new(sender, gas, rgp + 1);
-                let (tx, op_set) =
-                    self.generate_transaction(builder, &account_state, &keypair, current_epoch);
+                let (tx, op_set) = self.generate_transaction(
+                    builder,
+                    &account_state,
+                    &keypair,
+                    current_epoch,
+                    None,
+                );
                 self.current_batch_txs.push(BatchTxInfo {
                     gas_idx: *gas_idx,
                     extra_gas_idx: None,
@@ -1126,7 +1545,13 @@ impl Payload for CompositePayload {
                 "result should correspond to a gas coin"
             );
 
-            if !matches!(tx_info.kind, BatchTxKind::Normal)
+            if tx_info.kind.is_party()
+                && let Some(ref mut party) = self.party
+            {
+                party.handle_result(tx_info.kind, &result.status);
+            }
+
+            if tx_info.kind.is_alias()
                 && let Some(ref mut alias_state) = self.alias_state
                 && Self::handle_alias_tx_result(
                     alias_state,
@@ -2092,6 +2517,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 alias_state,
                 partner_address,
                 allowances,
+                party: (config.party_object_probability > 0.0).then(PartyState::new),
             }));
         }
 

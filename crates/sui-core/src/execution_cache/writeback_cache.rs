@@ -1723,11 +1723,16 @@ impl ObjectCacheRead for WritebackCache {
                     true
                 } else {
                     match key {
+                        // See multi_input_objects_available: a consensus input is not satisfied
+                        // by an object at the same version on a different stream.
                         InputKey::VersionedObject { id, version } => {
-                            matches!(
-                                self.get_object_by_key_cache_only(&id.id(), *version),
-                                CacheResult::Hit(_)
-                            )
+                            match self.get_object_by_key_cache_only(&id.id(), *version) {
+                                CacheResult::Hit(object) => {
+                                    !matches!(id, FullObjectID::Consensus(_))
+                                        || object.full_id() == *id
+                                }
+                                _ => false,
+                            }
                         }
                         InputKey::Package { id } => self.packages.contains_key(id),
                     }

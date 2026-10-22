@@ -52,6 +52,14 @@ pub const ALIAS_REMOVE: &str = "alias_remove";
 pub const ALIAS_ADD: &str = "alias_add";
 pub const INVALID_ALIAS_TX: &str = "invalid_alias_tx";
 
+pub const PARTY_CREATE: &str = "party_create";
+pub const PARTY_MUTATE: &str = "party_mutate";
+pub const PARTY_END_STREAM: &str = "party_end_stream";
+pub const PARTY_OLD_STREAM: &str = "party_old_stream";
+pub const PARTY_OWNED_MUTATE: &str = "party_owned_mutate";
+pub const PARTY_RACING_MUTATE: &str = "party_racing_mutate";
+pub const PARTY_RESTART_STREAM: &str = "party_restart_stream";
+
 pub struct OperationDescriptor {
     pub name: &'static str,
     pub factory: fn() -> Box<dyn Operation>,
@@ -95,6 +103,9 @@ pub enum ResourceRequest {
 #[derive(Debug, Clone, Default)]
 pub struct OperationConstraints {
     pub must_be_last_shared_access: bool,
+    /// The op is meant to fail validity, input, or funds checks. A failed op makes the rest of
+    /// its tx irrelevant, so an isolated op never shares a tx with ops that are not isolated.
+    pub isolated: bool,
 }
 
 pub struct OperationResources {
@@ -237,6 +248,7 @@ impl Operation for RandomnessRead {
     fn constraints(&self) -> OperationConstraints {
         OperationConstraints {
             must_be_last_shared_access: true,
+            ..Default::default()
         }
     }
 
@@ -845,6 +857,13 @@ impl Operation for AddressBalanceOverdraw {
         Self::NAME
     }
 
+    fn constraints(&self) -> OperationConstraints {
+        OperationConstraints {
+            isolated: true,
+            ..Default::default()
+        }
+    }
+
     fn resource_requests(&self) -> Vec<ResourceRequest> {
         vec![ResourceRequest::AddressBalance]
     }
@@ -957,6 +976,13 @@ impl ObjectBalanceOverdraw {
 impl Operation for ObjectBalanceOverdraw {
     fn name(&self) -> &'static str {
         Self::NAME
+    }
+
+    fn constraints(&self) -> OperationConstraints {
+        OperationConstraints {
+            isolated: true,
+            ..Default::default()
+        }
     }
 
     fn resource_requests(&self) -> Vec<ResourceRequest> {

@@ -2183,10 +2183,11 @@ mod test {
             address_balance_gas_probability: 0.2,
             conflicting_transaction_probability,
             alias_tx_probability: if address_aliases_enabled { 0.3 } else { 0.0 },
+            party_object_probability: 0.3,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
-        .with_probability(SharedCounterIncrement::NAME, 0.2)
+        .with_probability(SharedCounterIncrement::NAME, 0.35)
         .with_probability(SharedCounterRead::NAME, 0.1)
         .with_probability(RandomnessRead::NAME, 0.1)
         .with_probability(AddressBalanceDeposit::NAME, 0.1)
@@ -2200,7 +2201,7 @@ mod test {
         .with_probability(AddressBalanceOverdraw::NAME, 0.3)
         .with_probability(AccumulatorBalanceRead::NAME, 0.3)
         .with_probability(AuthenticatedEventEmit::NAME, 0.1)
-        .with_probability(CoinReservationWithdraw::NAME, 0.3)
+        .with_probability(CoinReservationWithdraw::NAME, 0.1)
         .with_probability(AllowanceWithdraw::NAME, 0.1)
         .with_probability(AllowanceSelfWithdraw::NAME, 0.1);
 
@@ -2308,6 +2309,16 @@ mod test {
                 auth_event_success_count > 0,
                 "expected at least one authenticated event emit"
             );
+        }
+
+        for name in [PARTY_CREATE, PARTY_END_STREAM] {
+            let success_count: u64 = metrics
+                .iter_stats()
+                .filter(|(op_set, _)| op_set.contains(name))
+                .map(|(_, stats)| stats.success_count)
+                .sum();
+            info!("{name} success count: {success_count}");
+            assert!(success_count > 0, "expected at least one {name} success");
         }
 
         if allowances_enabled {
