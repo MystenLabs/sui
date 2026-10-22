@@ -26,12 +26,15 @@ use mysten_common::ZipDebugEqIteratorExt;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::{BTreeSet, HashMap};
+use std::ops::Bound;
 use std::sync::Arc;
 use typed_store_error::TypedStoreError;
 
 pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
 pub type PackageVersionsIterator<'a> =
     Box<dyn Iterator<Item = Result<IndexedPackageVersion, TypedStoreError>> + 'a>;
+pub type PackagesByCheckpointIterator<'a> =
+    Box<dyn Iterator<Item = Result<(PackagePublishKey, ObjectID), TypedStoreError>> + 'a>;
 
 /// One published version of a package, as listed by
 /// [`RpcIndexes::package_versions_iter`].
@@ -52,6 +55,20 @@ pub struct IndexedPackageVersion {
     /// ([`RpcIndexes::is_history_backfill_pending`]), versions published in
     /// the part of its window it has not reached are also `None`.
     pub checkpoint: Option<CheckpointSequenceNumber>,
+}
+
+/// A package version's position in [`RpcIndexes::packages_by_checkpoint_iter`],
+/// which lists the versions of every package by the checkpoint each was
+/// published in, then by the package's original id, then by version. The
+/// derived ordering is that order.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct PackagePublishKey {
+    /// The checkpoint the version was published in.
+    pub checkpoint: CheckpointSequenceNumber,
+    /// The storage id of the package's first version, shared by every
+    /// version in its upgrade lineage.
+    pub original_id: ObjectID,
+    pub version: u64,
 }
 
 pub trait ReadStore: ObjectStore {
@@ -854,6 +871,23 @@ pub trait RpcIndexes: Send + Sync {
         end_version_exclusive: u64,
         descending: bool,
     ) -> Result<PackageVersionsIterator<'_>>;
+
+    /// Iterate the versions of every package whose keys lie between `lower`
+    /// and `upper`, in [`PackagePublishKey`] order, or in reverse when
+    /// `descending` is set. Each item is a version's key and the storage id
+    /// under which the version lives. A range with `lower` above `upper`
+    /// lists nothing.
+    ///
+    /// Only versions with a recorded publish checkpoint are listed (see
+    /// [`IndexedPackageVersion::checkpoint`]), so the versions published at a
+    /// checkpoint are complete only from where the indexes' history begins,
+    /// and once [`Self::is_history_backfill_pending`] is `false`.
+    fn packages_by_checkpoint_iter(
+        &self,
+        lower: Bound<PackagePublishKey>,
+        upper: Bound<PackagePublishKey>,
+        descending: bool,
+    ) -> Result<PackagesByCheckpointIterator<'_>>;
 
     /// Resolve the storage id holding the exact `version` of the package
     /// originally published at `original_id`.

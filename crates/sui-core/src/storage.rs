@@ -1000,6 +1000,16 @@ impl RpcIndexes for RpcStoreReadStore {
         )
     }
 
+    fn packages_by_checkpoint_iter(
+        &self,
+        lower: std::ops::Bound<sui_types::storage::PackagePublishKey>,
+        upper: std::ops::Bound<sui_types::storage::PackagePublishKey>,
+        descending: bool,
+    ) -> Result<sui_types::storage::PackagesByCheckpointIterator<'_>> {
+        self.reader
+            .packages_by_checkpoint_iter(lower, upper, descending)
+    }
+
     fn get_package_version_storage_id(
         &self,
         original_id: ObjectID,
