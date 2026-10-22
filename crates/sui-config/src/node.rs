@@ -202,6 +202,13 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_simulate_allowed_proposers: bool,
 
+    /// Lets an operator disable staggered submission on this node. The
+    /// `staggered_submission_signal` protocol flag controls the network-wide rollout.
+    /// Staggering runs only when both are enabled. When this is false, the signal is
+    /// still computed and logged but never turns staggering on.
+    #[serde(default = "bool_true")]
+    pub enable_staggered_submission_signal: bool,
+
     #[serde(default)]
     pub verifier_signing_config: VerifierSigningConfig,
 

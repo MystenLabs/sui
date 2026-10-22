@@ -28,6 +28,7 @@ use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Serialize};
+use sui_config::NodeConfig;
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
@@ -123,7 +124,7 @@ use crate::execution_cache::cache_types::CacheResult;
 use crate::fallback_fetch::do_fallback_lookup;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::*;
-use crate::staggered_submission::StaggeredSubmission;
+use crate::staggered_submission::{SignalConfig, StaggeredSubmission};
 use crate::stake_aggregator::{GenericMultiStakeAggregator, StakeAggregator};
 use sui_types::execution::ExecutionTimeObservationChunkKey;
 
@@ -867,6 +868,7 @@ impl AuthorityPerEpochStore {
         cache_metrics: Arc<ResolverMetrics>,
         signature_verifier_metrics: Arc<SignatureVerifierMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        node_config: &NodeConfig,
         chain: (ChainIdentifier, Chain),
         highest_executed_checkpoint: CheckpointSequenceNumber,
         previous_epoch_last_checkpoint: CheckpointSequenceNumber,
@@ -925,6 +927,11 @@ impl AuthorityPerEpochStore {
         // Tell antithesis which flag-gated reachability assertions are live under the config
         // this epoch actually runs with. See sui_protocol_config::reachability.
         sui_protocol_config::reachability::register_reachability_for_config(&protocol_config);
+        let staggered_submission = StaggeredSubmission::new(
+            SignalConfig::from_protocol_config(&protocol_config),
+            node_config.enable_staggered_submission_signal
+                && protocol_config.staggered_submission_signal(),
+        );
 
         let execution_component = ExecutionComponents::new(
             &protocol_config,
@@ -1080,7 +1087,7 @@ impl AuthorityPerEpochStore {
             tx_reject_reason_cache,
             submitted_transaction_cache,
             finalized_transactions_cache,
-            staggered_submission: StaggeredSubmission::new(),
+            staggered_submission,
             node_role: NodeRole::from_committee(&committee, &name, fullnode_sync_mode),
         });
 
@@ -1253,6 +1260,7 @@ impl AuthorityPerEpochStore {
         backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        node_config: &NodeConfig,
         epoch_last_checkpoint: CheckpointSequenceNumber,
         fullnode_sync_mode: Option<FullNodeSyncMode>,
     ) -> SuiResult<Arc<Self>> {
@@ -1271,6 +1279,7 @@ impl AuthorityPerEpochStore {
             self.execution_component.metrics(),
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
+            node_config,
             self.chain,
             // At epoch boundary, highest_executed_checkpoint == epoch_last_checkpoint because
             // all checkpoints must be executed before epoch transition.
@@ -1286,6 +1295,7 @@ impl AuthorityPerEpochStore {
         backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        node_config: &NodeConfig,
         epoch_last_checkpoint: CheckpointSequenceNumber,
     ) -> Arc<Self> {
         let next_epoch = self.epoch() + 1;
@@ -1301,6 +1311,7 @@ impl AuthorityPerEpochStore {
             backing_package_store,
             object_store,
             expensive_safety_check_config,
+            node_config,
             epoch_last_checkpoint,
             None,
         )
