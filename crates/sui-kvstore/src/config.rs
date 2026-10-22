@@ -304,6 +304,7 @@ pub struct PipelineLayer {
     pub transaction_bitmap_index: SequentialLayer,
     pub event_bitmap_index: SequentialLayer,
     pub object_versions_by_checkpoint: ConcurrentLayer,
+    pub object_tombstones: ConcurrentLayer,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be
