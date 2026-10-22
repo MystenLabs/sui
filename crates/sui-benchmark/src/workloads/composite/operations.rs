@@ -59,6 +59,8 @@ pub const PARTY_OLD_STREAM: &str = "party_old_stream";
 pub const PARTY_OWNED_MUTATE: &str = "party_owned_mutate";
 pub const PARTY_RACING_MUTATE: &str = "party_racing_mutate";
 pub const PARTY_RESTART_STREAM: &str = "party_restart_stream";
+pub const PARTY_RETRANSFER: &str = "party_retransfer";
+pub const PARTY_HAND_OFF: &str = "party_hand_off";
 
 pub struct OperationDescriptor {
     pub name: &'static str,

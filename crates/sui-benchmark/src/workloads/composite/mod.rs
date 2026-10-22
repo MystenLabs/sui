@@ -11,10 +11,10 @@ pub use operations::{
     AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw, AllowanceSelfWithdraw,
     AllowanceWithdraw, AuthenticatedEventEmit, CoinReservationWithdraw, INVALID_ALIAS_TX,
     ImmutableObjectRead, ObjectBalanceDeposit, ObjectBalanceOverdraw, ObjectBalanceWithdraw,
-    OperationDescriptor, PARTY_CREATE, PARTY_END_STREAM, PARTY_MUTATE, PARTY_OLD_STREAM,
-    PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM, RandomnessRead,
-    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
-    TestCoinMint, TestCoinObjectWithdraw,
+    OperationDescriptor, PARTY_CREATE, PARTY_END_STREAM, PARTY_HAND_OFF, PARTY_MUTATE,
+    PARTY_OLD_STREAM, PARTY_OWNED_MUTATE, PARTY_RACING_MUTATE, PARTY_RESTART_STREAM,
+    PARTY_RETRANSFER, RandomnessRead, SharedCounterIncrement, SharedCounterRead,
+    TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint, TestCoinObjectWithdraw,
 };
 use rand::seq::SliceRandom;
 
@@ -529,6 +529,10 @@ enum BatchTxKind {
     PartyOwnedMutate,
     /// Start a new stream by transferring an address-owned object back to a party owner.
     PartyRestartStream,
+    /// Transfer a party object by value to its current owner, which keeps its stream.
+    PartyRetransfer,
+    /// End a party object's stream by transferring it to the partner as a party owner.
+    PartyHandOff,
 }
 
 impl BatchTxKind {
@@ -565,14 +569,16 @@ impl BatchTxKind {
                 | BatchTxKind::PartyOldStream
                 | BatchTxKind::PartyOwnedMutate
                 | BatchTxKind::PartyRestartStream
+                | BatchTxKind::PartyRetransfer
+                | BatchTxKind::PartyHandOff
         )
     }
 }
 
 /// A payload's party-object lifecycle. Each acting batch advances it one step:
-/// `NeedCreate -> Live -> StreamEnded -> Owned -> (Live | NeedCreate)`. The `StreamEnded`
-/// and `Owned` steps submit txs that reference the ended stream together with txs that use
-/// the same object id under its current ownership. Their versions can collide, which
+/// `NeedCreate -> Live -> (StreamEnded -> Owned -> (Live | NeedCreate) | HandedOff -> NeedCreate)`.
+/// The steps after `Live` submit txs that reference the ended stream together with txs that
+/// use the same object id under its current ownership. Their versions can collide, which
 /// exercises the check that an ended-stream input waits for its stream-ended marker.
 #[derive(Debug, Clone)]
 enum PartyPhase {
@@ -598,6 +604,12 @@ enum PartyPhase {
         id: ObjectID,
         ended_start_version: SequenceNumber,
         addr_ref: ObjectRef,
+    },
+    /// The object moved to the partner on a new stream. The next step references the ended
+    /// stream and then abandons the object.
+    HandedOff {
+        id: ObjectID,
+        ended_start_version: SequenceNumber,
     },
 }
 
@@ -638,6 +650,7 @@ impl PartyState {
                 if matches!(
                     kind,
                     BatchTxKind::PartyEndStream
+                        | BatchTxKind::PartyHandOff
                         | BatchTxKind::PartyOwnedMutate
                         | BatchTxKind::PartyRestartStream
                 ) {
@@ -680,6 +693,51 @@ impl PartyState {
                 start_version: *start_version,
                 mutations: mutations + 1,
             }),
+            (
+                BatchTxKind::PartyRetransfer,
+                PartyPhase::Live {
+                    id,
+                    start_version,
+                    mutations,
+                },
+            ) => {
+                if effects.is_ok() {
+                    let owner = Self::find_object(effects, *id).map(|(_, owner)| owner);
+                    assert_eq!(
+                        owner.and_then(|owner| owner.start_version()),
+                        Some(*start_version),
+                        "transfer to the same party owner must keep the stream"
+                    );
+                    assert_reachable!("party object transferred to its own party owner");
+                }
+                Some(PartyPhase::Live {
+                    id: *id,
+                    start_version: *start_version,
+                    mutations: mutations + 1,
+                })
+            }
+            (
+                BatchTxKind::PartyHandOff,
+                PartyPhase::Live {
+                    id, start_version, ..
+                },
+            ) => match Self::find_object(effects, *id) {
+                Some((
+                    _,
+                    Owner::ConsensusAddressOwner {
+                        start_version: new_start,
+                        ..
+                    },
+                )) if new_start != *start_version => {
+                    assert_reachable!("party object transferred to a new party owner");
+                    Some(PartyPhase::HandedOff {
+                        id: *id,
+                        ended_start_version: *start_version,
+                    })
+                }
+                // The tx aborted or was cancelled, so the stream is still live.
+                _ => return,
+            },
             (
                 BatchTxKind::PartyEndStream,
                 PartyPhase::Live {
@@ -1215,6 +1273,7 @@ impl CompositePayload {
     /// starts with probability `party_object_probability`. A lifecycle in progress advances on
     /// every batch, so the steps after a stream ends run in consecutive batches.
     fn next_party_step(&mut self, sender: SuiAddress) -> Vec<PartyCall> {
+        let partner = self.partner_address;
         let Some(party) = self.party.as_mut() else {
             return vec![];
         };
@@ -1253,6 +1312,7 @@ impl CompositePayload {
             mutability: SharedObjectMutability::Mutable,
         };
         let sender_arg = CallArg::Pure(bcs::to_bytes(&sender).unwrap());
+        let partner_arg = CallArg::Pure(bcs::to_bytes(&partner).unwrap());
 
         match party.phase.clone() {
             PartyPhase::NeedCreate => vec![call(
@@ -1268,12 +1328,24 @@ impl CompositePayload {
             } => {
                 let obj = stream(id, start_version);
                 if mutations >= PartyState::MAX_MUTATIONS || rng.gen_bool(0.5) {
-                    let mut calls = vec![call(
-                        "to_address",
-                        vec![CallArg::Object(obj), sender_arg],
-                        PARTY_END_STREAM,
-                        BatchTxKind::PartyEndStream,
-                    )];
+                    // A single payload is its own partner, and a transfer to itself would
+                    // not end the stream.
+                    let end = if partner != sender && rng.gen_bool(0.5) {
+                        call(
+                            "to_party",
+                            vec![CallArg::Object(obj), partner_arg],
+                            PARTY_HAND_OFF,
+                            BatchTxKind::PartyHandOff,
+                        )
+                    } else {
+                        call(
+                            "to_address",
+                            vec![CallArg::Object(obj), sender_arg],
+                            PARTY_END_STREAM,
+                            BatchTxKind::PartyEndStream,
+                        )
+                    };
+                    let mut calls = vec![end];
                     if rng.gen_bool(0.5) {
                         // A mutation sequenced after the end tx executes against the ended
                         // stream.
@@ -1287,9 +1359,28 @@ impl CompositePayload {
                         }
                     }
                     calls
-                } else {
+                } else if rng.gen_bool(0.5) {
                     vec![set_value(obj, 7, PARTY_MUTATE, BatchTxKind::PartyMutate)]
+                } else {
+                    vec![call(
+                        "to_party",
+                        vec![CallArg::Object(obj), sender_arg],
+                        PARTY_RETRANSFER,
+                        BatchTxKind::PartyRetransfer,
+                    )]
                 }
+            }
+            PartyPhase::HandedOff {
+                id,
+                ended_start_version,
+            } => {
+                // The partner owns the object, so this payload can only use the ended stream.
+                party.phase = PartyPhase::NeedCreate;
+                let old_stream = stream(id, ended_start_version);
+                vec![
+                    set_value(old_stream, 5, PARTY_OLD_STREAM, BatchTxKind::PartyOldStream),
+                    set_value(old_stream, 6, PARTY_OLD_STREAM, BatchTxKind::PartyOldStream),
+                ]
             }
             PartyPhase::StreamEnded {
                 id,
