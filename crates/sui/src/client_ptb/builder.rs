@@ -34,10 +34,10 @@ use sui_json::{is_receiving_argument, primitive_type};
 use sui_rpc_api::Client;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
-    Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
+    Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_PACKAGE_CONFIG_OBJECT_ID, TypeTag,
     base_types::{ObjectID, TxContext, TxContextKind, is_primitive_type_tag},
     gas_coin::GAS,
-    move_package::MovePackage,
+    move_package::{MinVersionState, MovePackage},
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     resolve_address,
@@ -1019,7 +1019,7 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .await?;
 
-                let (upgrade_policy, compiled_package) = upgrade_package(
+                let (upgrade_cap_policy, compiled_package) = upgrade_package(
                     self.reader.clone(),
                     &root_pkg,
                     build_config.clone(),
@@ -1040,9 +1040,11 @@ impl<'a> PTBBuilder<'a> {
                 // let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
                 //     upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
 
+                let minversion_enabled =
+                    upgrade_cap_policy.minversion_state() == MinVersionState::Enabled;
                 let upgrade_arg = self
                     .ptb
-                    .pure(upgrade_policy)
+                    .pure(upgrade_cap_policy.base_policy() as u8)
                     .map_err(|e| err!(cmd_span, "{e}"))?;
                 let digest_arg = self
                     .ptb
@@ -1067,6 +1069,24 @@ impl<'a> PTBBuilder<'a> {
                         .collect::<Vec<_>>(),
                     compiled_modules,
                 );
+                if minversion_enabled {
+                    let package_config_arg = self
+                        .resolve(
+                            cmd_span.wrap(PTBArg::Address(NumericalAddress::new(
+                                SUI_PACKAGE_CONFIG_OBJECT_ID.into_bytes(),
+                                NumberFormat::Hex,
+                            ))),
+                            ToObject::default(),
+                        )
+                        .await?;
+                    self.ptb.command(Tx::Command::move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        ident_str!("package_config").to_owned(),
+                        ident_str!("record_minversion_upgrade").to_owned(),
+                        vec![],
+                        vec![package_config_arg, upgrade_cap_arg, upgrade_receipt],
+                    ));
+                }
                 let res = self.ptb.command(Tx::Command::move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
                     ident_str!("package").to_owned(),
