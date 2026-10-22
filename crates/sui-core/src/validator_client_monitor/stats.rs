@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::validator_client_monitor::{OperationFeedback, OperationType};
+use crate::validator_client_monitor::{OperationFeedback, OperationType, TransactionClass};
 use mysten_common::moving_window::MovingWindow;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -41,10 +41,12 @@ pub struct ClientObservedStats {
 /// to smooth measurements while maintaining responsiveness to changes.
 #[derive(Debug, Clone)]
 pub struct ValidatorClientStats {
-    /// Moving window of success rate (0.0 to 1.0)
+    /// Moving window of success rate (0.0 to 1.0). Reliability is class-agnostic:
+    /// holds delay transactions but do not fail them.
     pub reliability: MovingWindow<f64>,
-    /// Moving window of latencies for each operation type (Submit, Effects, HealthCheck)
-    pub average_latencies: BTreeMap<OperationType, MovingWindow<Duration>>,
+    /// Moving window of latencies per operation type and transaction class.
+    /// Class-neutral observations are recorded under both classes.
+    pub average_latencies: BTreeMap<(OperationType, TransactionClass), MovingWindow<Duration>>,
     /// Size of the moving window for latency measurements
     pub latency_moving_window_size: usize,
 }
@@ -62,16 +64,26 @@ impl ValidatorClientStats {
         }
     }
 
-    pub fn update_average_latency(&mut self, operation: OperationType, new_latency: Duration) {
-        match self.average_latencies.entry(operation) {
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().add_value(new_latency);
+    pub fn update_average_latency(
+        &mut self,
+        operation: OperationType,
+        tx_class: Option<TransactionClass>,
+        new_latency: Duration,
+    ) {
+        for class in [TransactionClass::Restricted, TransactionClass::Unrestricted] {
+            if tx_class.is_some_and(|tx_class| tx_class != class) {
+                continue;
             }
-            Entry::Vacant(entry) => {
-                entry.insert(MovingWindow::new(
-                    new_latency,
-                    self.latency_moving_window_size,
-                ));
+            match self.average_latencies.entry((operation, class)) {
+                Entry::Occupied(mut entry) => {
+                    entry.get_mut().add_value(new_latency);
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(MovingWindow::new(
+                        new_latency,
+                        self.latency_moving_window_size,
+                    ));
+                }
             }
         }
     }
@@ -103,7 +115,11 @@ impl ClientObservedStats {
         match feedback.result {
             Ok(latency) => {
                 validator_stats.reliability.add_value(1.0);
-                validator_stats.update_average_latency(feedback.operation, latency);
+                validator_stats.update_average_latency(
+                    feedback.operation,
+                    feedback.tx_class,
+                    latency,
+                );
             }
             Err(()) => {
                 validator_stats.reliability.add_value(0.0);
@@ -117,11 +133,12 @@ impl ClientObservedStats {
     pub fn get_all_validator_stats(
         &self,
         committee: &Committee,
+        tx_class: TransactionClass,
     ) -> HashMap<AuthorityName, Duration> {
         committee
             .names()
             .map(|validator| {
-                let latency = self.calculate_client_latency(validator);
+                let latency = self.calculate_client_latency(validator, tx_class);
                 (*validator, latency)
             })
             .collect()
@@ -133,13 +150,27 @@ impl ClientObservedStats {
     /// Lower values are better.
     ///
     /// Returns latency in seconds, with reliability penalty applied as a multiplier.
-    fn calculate_client_latency(&self, validator: &AuthorityName) -> Duration {
+    fn calculate_client_latency(
+        &self,
+        validator: &AuthorityName,
+        tx_class: TransactionClass,
+    ) -> Duration {
         let Some(stats) = self.validator_stats.get(validator) else {
             return MAX_LATENCY;
         };
 
         let operation = OperationType::SharedObjectFinality;
-        let Some(latency) = stats.average_latencies.get(&operation) else {
+        // While a validator has no observations in the requested class yet, fall back
+        // to the other class rather than treating it as unmeasured.
+        let other_class = match tx_class {
+            TransactionClass::Restricted => TransactionClass::Unrestricted,
+            TransactionClass::Unrestricted => TransactionClass::Restricted,
+        };
+        let Some(latency) = stats
+            .average_latencies
+            .get(&(operation, tx_class))
+            .or_else(|| stats.average_latencies.get(&(operation, other_class)))
+        else {
             // No latency measurements yet, but health checks may have already told us the
             // validator is unreachable. Rank known-unhealthy below merely-unmeasured, so that
             // cold-start selection avoids validators we know are down.
