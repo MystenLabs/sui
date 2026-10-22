@@ -424,6 +424,7 @@ const MAINNET_USDB: &str =
 //              Shuffle the block order within each round of a consensus commit on devnet.
 //              Disable the ID leak verifier.
 //              Enable check_object_funds_withdraw_in_execution on mainnet.
+//              Disable effects transaction dependencies on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4885,6 +4886,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.allow_references_in_ptbs = true;
                     cfg.feature_flags.disable_id_leak_verifier = true;
                     cfg.feature_flags.check_object_funds_withdraw_in_execution = true;
+                    cfg.feature_flags.disable_effects_tx_dependencies = true;
                 }
                 // Use this template when making changes:
                 //
