@@ -5,7 +5,7 @@
 // in committed execution, dry-run, and dev-inspect: all three modes must read the same PackageConfig
 // state and report the event emitted by BaseV2.
 //
-// The runner defaults to the current maximum protocol version (140), where selection is enabled.
+// The runner defaults to the current maximum protocol version (141), where selection is enabled.
 //# init --addresses BaseV1=0x0 BaseV2=0x0 --accounts A
 
 //# publish --upgradeable --sender A

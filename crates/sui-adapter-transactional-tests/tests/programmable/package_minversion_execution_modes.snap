@@ -7,7 +7,7 @@ processed 7 tasks
 // in committed execution, dry-run, and dev-inspect: all three modes must read the same PackageConfig
 // state and report the event emitted by BaseV2.
 //
-// The runner defaults to the current maximum protocol version (140), where selection is enabled.
+// The runner defaults to the current maximum protocol version (141), where selection is enabled.
 init:
 A: object(0,0)
 

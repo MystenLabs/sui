@@ -42,9 +42,9 @@ gas summary: computation_cost: 1000000, storage_cost: 6178800,  storage_rebate: 
 
 task 6, line 35:
 //# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 1 --sender A
-created: object(6,0)
+created: object(6,0), object(6,1)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1000000, storage_cost: 8656400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 7, lines 37-41:
 //# publish --upgradeable --dependencies MinDependencyV1 --sender A

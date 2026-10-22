@@ -45,9 +45,9 @@ task 6, lines 33-36:
 //# programmable --sender A --inputs object(0xcf6) object(1,1) 1
 //> 0: sui::package_config::forbid_version(Input(0), Input(1), Input(2));
 //> 1: BaseV1::base::ping();
-created: object(6,0)
+created: object(6,0), object(6,1)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1000000, storage_cost: 8656400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 7, lines 38-39:
 // The committed setting is visible to execution and rejects v1 in the next transaction.

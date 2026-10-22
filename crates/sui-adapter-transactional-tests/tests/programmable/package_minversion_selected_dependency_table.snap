@@ -62,9 +62,9 @@ task 8, lines 40-42:
 // BaseV1 is historical and can now be forbidden. Minversion selection happens first, so the
 // Consumer's historical BaseV1 reference resolves to BaseV2 and remains executable.
 //# run sui::package_config::forbid_version --args object(0xcf6) object(3,1) 1 --sender A
-created: object(8,0)
+created: object(8,0), object(8,1)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(3,1)
-gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 4019998, non_refundable_storage_fee: 402
+gas summary: computation_cost: 1000000, storage_cost: 8656400,  storage_rebate: 4019998, non_refundable_storage_fee: 402
 
 task 9, line 44:
 //# run Consumer::consumer::call --sender A
@@ -85,7 +85,7 @@ task 11, lines 51-53:
 //# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 2 --sender A
 created: object(11,0)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 4019998, non_refundable_storage_fee: 402
+gas summary: computation_cost: 1000000, storage_cost: 6429600,  storage_rebate: 4019998, non_refundable_storage_fee: 402
 
 task 12, line 55:
 //# run Consumer::consumer::call --sender A

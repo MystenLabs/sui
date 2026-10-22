@@ -81,7 +81,7 @@ task 10, line 68:
 //# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 2 --sender A
 created: object(10,0)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1000000, storage_cost: 6429600,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 11, lines 70-71:
 // Leaf is still type-only here, so the forbidden version remains allowed.

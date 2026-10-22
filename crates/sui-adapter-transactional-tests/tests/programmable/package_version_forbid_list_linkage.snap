@@ -45,9 +45,9 @@ gas summary: computation_cost: 1000000, storage_cost: 7873600,  storage_rebate: 
 task 6, lines 60-61:
 // Forbid the version Root resolves when it is called alone.
 //# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 1 --sender A
-created: object(6,0)
+created: object(6,0), object(6,1)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 2621738, non_refundable_storage_fee: 262
+gas summary: computation_cost: 1000000, storage_cost: 8656400,  storage_rebate: 2621738, non_refundable_storage_fee: 262
 
 task 7, lines 63-65:
 //# programmable --sender A --inputs object(4,0)
@@ -88,9 +88,8 @@ gas summary: computation_cost: 1000000, storage_cost: 7873600,  storage_rebate: 
 task 11, lines 92-93:
 // Forbid v2 as well.
 //# run sui::package_config::forbid_version --args object(0xcf6) object(1,1) 2 --sender A
-created: object(11,0)
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 4019998, non_refundable_storage_fee: 402
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(1,1), object(6,0), object(6,1)
+gas summary: computation_cost: 1000000, storage_cost: 8656400,  storage_rebate: 8655534, non_refundable_storage_fee: 866
 
 task 12, lines 95-96:
 // A forbidden type package remains allowed when no package code is executed from it.

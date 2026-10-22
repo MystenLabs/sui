@@ -86,9 +86,9 @@ gas summary: computation_cost: 1000000, storage_cost: 6832400,  storage_rebate: 
 
 task 9, line 66:
 //# run sui::package_config::forbid_version --args object(0xcf6) object(3,1) 1 --sender A
-created: object(9,0)
+created: object(9,0), object(9,1)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000cf6, object(0,0), object(3,1)
-gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 4019998, non_refundable_storage_fee: 402
+gas summary: computation_cost: 1000000, storage_cost: 8656400,  storage_rebate: 4019998, non_refundable_storage_fee: 402
 
 task 10, lines 68-72:
 // A no-init publish declaring the enrolled family's latest version succeeds.
