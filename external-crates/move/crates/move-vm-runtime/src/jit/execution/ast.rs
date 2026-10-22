@@ -142,7 +142,7 @@ pub(crate) struct Constant {
     // `VMConfig::charge_ld_const_abstract_size` is set this is the abstract value size of the
     // constant; otherwise it is the serialized byte length.
     // TODO(Gas): Once `charge_ld_const_abstract_size` is the only behavior, rename this to
-    // `abstract_size` and charge it as an abstract size rather than as `NumBytes`.
+    // `abstract_size` and charge it as an `AbstractMemorySize` rather than a byte count.
     pub size: u64,
 }
 

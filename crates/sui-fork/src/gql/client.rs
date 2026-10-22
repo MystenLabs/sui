@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsString;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -10,7 +11,8 @@ use anyhow::Result;
 use backoff::ExponentialBackoff;
 use cynic::GraphQlResponse;
 use cynic::Operation;
-use reqwest::header::USER_AGENT;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, USER_AGENT};
+use reqwest::redirect::Policy;
 
 use sui_protocol_config::Chain;
 use sui_types::base_types::ObjectID;
@@ -109,23 +111,82 @@ macro_rules! block_on {
 #[derive(Debug, Clone)]
 pub struct GraphQLClient {
     client: reqwest::Client,
-    node: Node,
-    rpc: reqwest::Url,
+    chain: Chain,
+    endpoint: reqwest::Url,
     version: String,
 }
 
 impl GraphQLClient {
-    /// Create a new GraphQL client
-    pub fn new(node: Node, version: &str) -> Result<Self, Error> {
-        let rpc = reqwest::Url::parse(node.gql_url())
+    /// Create a GraphQL client using `Name=ENV_VAR` mappings for custom headers.
+    ///
+    /// Resolve each header value from the named environment variable. Missing or invalid values
+    /// fail construction without exposing credentials. Configured headers restrict redirects to
+    /// the endpoint's origin.
+    pub fn new(node: Node, version: &str, headers: Vec<String>) -> Result<Self, Error> {
+        Self::new_with_env(node, version, &headers, |name| std::env::var_os(name))
+    }
+
+    fn new_with_env(
+        node: Node,
+        version: &str,
+        headers: &[String],
+        lookup: impl Fn(&str) -> Option<OsString>,
+    ) -> Result<Self, Error> {
+        let endpoint = reqwest::Url::parse(node.gql_url())
             .with_context(|| format!("invalid GraphQL URL '{}'", node.gql_url()))?;
+        let mut builder = reqwest::Client::builder().timeout(GQL_REQUEST_TIMEOUT);
+
+        let mut headers_map = HeaderMap::new();
+        for header in headers {
+            let (name, env_name) = header
+                .split_once('=')
+                .context("GraphQL header argument must have the form 'Name=ENV_VAR'")?;
+            let name =
+                HeaderName::from_bytes(name.as_bytes()).context("invalid GraphQL header name")?;
+            anyhow::ensure!(
+                !env_name.is_empty() && !env_name.contains(['=', '\0']),
+                "invalid environment variable name in GraphQL header argument"
+            );
+            anyhow::ensure!(
+                !headers_map.contains_key(&name),
+                "duplicate GraphQL header name: {name}"
+            );
+            let raw = lookup(env_name).with_context(|| {
+                format!("GraphQL header environment variable '{env_name}' is not set")
+            })?;
+            let value = raw.to_str().with_context(|| {
+                format!("GraphQL header environment variable '{env_name}' must be valid UTF-8")
+            })?;
+            let value = value.trim_matches([' ', '\t']);
+            anyhow::ensure!(
+                !value.is_empty(),
+                "GraphQL header environment variable '{env_name}' must have a nonempty value"
+            );
+            let mut value = HeaderValue::from_str(value).with_context(|| {
+                format!("invalid GraphQL header value in environment variable '{env_name}'")
+            })?;
+            value.set_sensitive(true);
+            headers_map.insert(name, value);
+        }
+        if !headers_map.is_empty() {
+            // Reqwest strips known credential headers on redirects, but not custom API keys.
+            let origin = endpoint.origin();
+            builder = builder.redirect(Policy::custom(move |attempt| {
+                if attempt.url().origin() != origin {
+                    attempt.error("cross-origin GraphQL redirect blocked with configured headers")
+                } else {
+                    Policy::default().redirect(attempt)
+                }
+            }));
+        }
+
         Ok(Self {
-            client: reqwest::Client::builder()
-                .timeout(GQL_REQUEST_TIMEOUT)
+            client: builder
+                .default_headers(headers_map)
                 .build()
                 .context("failed to build GraphQL HTTP client")?,
-            node,
-            rpc,
+            chain: node.chain(),
+            endpoint,
             version: version.to_string(),
         })
     }
@@ -151,7 +212,7 @@ impl GraphQLClient {
     {
         Self::run_query_internal(
             &self.client,
-            &self.rpc,
+            &self.endpoint,
             &self.version,
             operation,
             GQL_RETRY_BUDGET,
@@ -162,7 +223,7 @@ impl GraphQLClient {
     /// Retry transient transport and HTTP failures within an attempt limit and a total time budget.
     async fn run_query_internal<T, V>(
         client: &reqwest::Client,
-        rpc: &reqwest::Url,
+        endpoint: &reqwest::Url,
         version: &str,
         operation: &Operation<T, V>,
         retry_budget: Duration,
@@ -184,7 +245,7 @@ impl GraphQLClient {
             attempts += 1;
             let attempt = attempts;
             async move {
-                let result = Self::run_query_once(client, rpc, version, operation).await;
+                let result = Self::run_query_once(client, endpoint, version, operation).await;
                 match result {
                     Err(backoff::Error::Transient { err, .. }) if attempt >= GQL_MAX_ATTEMPTS => {
                         Err(backoff::Error::permanent(err))
@@ -205,7 +266,7 @@ impl GraphQLClient {
     /// Submit one query, classifying HTTP failures before attempting to decode the response body.
     async fn run_query_once<T, V>(
         client: &reqwest::Client,
-        rpc: &reqwest::Url,
+        endpoint: &reqwest::Url,
         version: &str,
         operation: &Operation<T, V>,
     ) -> Result<GraphQlResponse<T>, backoff::Error<Error>>
@@ -214,7 +275,7 @@ impl GraphQLClient {
         V: serde::Serialize,
     {
         let response = client
-            .post(rpc.clone())
+            .post(endpoint.clone())
             .header(USER_AGENT, format!("sui-fork-v{}", version))
             .json(operation)
             .send()
@@ -236,12 +297,7 @@ impl GraphQLClient {
     }
 
     pub(crate) fn chain(&self) -> Chain {
-        match self.node {
-            Node::Mainnet => Chain::Mainnet,
-            Node::Testnet => Chain::Testnet,
-            Node::Devnet => Chain::Unknown,
-            Node::Custom(_) => Chain::Unknown,
-        }
+        self.chain
     }
 }
 
@@ -380,7 +436,8 @@ mod tests {
     use crate::gql::VersionQuery;
 
     fn mock_store(server: &MockServer) -> GraphQLClient {
-        GraphQLClient::new(Node::Custom(server.uri()), "test-version").expect("store should build")
+        GraphQLClient::new(Node::Custom(server.uri()), "test-version", vec![])
+            .expect("store should build")
     }
 
     fn checkpoint_response_body(
@@ -456,6 +513,280 @@ mod tests {
                 }
             }
         })
+    }
+
+    #[tokio::test]
+    async fn test_custom_headers_are_sent_on_queries_and_retries() {
+        for (name, value) in [
+            ("Authorization", "Bearer test-secret"),
+            ("X-API-Key", "test-secret:with-colon"),
+        ] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(header(name, value))
+                .and(header("X-Project-ID", "test-project"))
+                .respond_with(ResponseTemplate::new(503))
+                .up_to_n_times(1)
+                .with_priority(1)
+                .expect(1)
+                .mount(&server)
+                .await;
+            Mock::given(method("POST"))
+                .and(header(name, value))
+                .and(header("X-Project-ID", "test-project"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "data": { "checkpoint": null }
+                })))
+                .with_priority(2)
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            let client = GraphQLClient::new_with_env(
+                Node::Custom(server.uri()),
+                "test-version",
+                &[
+                    format!("{name}=TEST_AUTH"),
+                    "X-Project-ID=TEST_PROJECT".into(),
+                ],
+                |env| match env {
+                    "TEST_AUTH" => Some(value.into()),
+                    "TEST_PROJECT" => Some("test-project".into()),
+                    _ => None,
+                },
+            )
+            .unwrap();
+            assert!(!format!("{client:?}").contains(value));
+            assert!(!format!("{client:?}").contains("test-project"));
+            let operation = CheckpointQuery::build(CheckpointArgs {
+                sequence_number: Some(7),
+            });
+            assert!(client.run_query(&operation).await.unwrap().data.is_some());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_custom_header_rejects_invalid_input_without_exposing_secrets() {
+        for value in [
+            "",
+            " \t",
+            "test-secret\r\nInjected: value",
+            "test-secret\n",
+            "test-secret\0",
+        ] {
+            let error = GraphQLClient::new_with_env(
+                Node::Mainnet,
+                "test-version",
+                &["X-API-Key=TEST_AUTH".into()],
+                |_| Some(value.into()),
+            )
+            .unwrap_err();
+            assert!(format!("{error:#}").contains("TEST_AUTH"));
+            assert!(!format!("{error:?}").contains("test-secret"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_custom_header_rejects_invalid_mappings() {
+        for mapping in [
+            "",
+            "Authorization",
+            "=TEST_AUTH",
+            "Invalid Name=TEST_AUTH",
+            "X-API-Key=",
+            "X-API-Key=BAD=NAME",
+            "X-API-Key=BAD\0NAME",
+        ] {
+            assert!(
+                GraphQLClient::new_with_env(
+                    Node::Mainnet,
+                    "test-version",
+                    &[mapping.into()],
+                    |_| panic!("invalid mappings must fail before reading the environment"),
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_custom_header_rejects_missing_environment_and_duplicate_names() {
+        let error = GraphQLClient::new_with_env(
+            Node::Mainnet,
+            "test-version",
+            &["Authorization=MISSING_AUTH".into()],
+            |_| None,
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("MISSING_AUTH"));
+        assert!(format!("{error:#}").contains("not set"));
+
+        let error = GraphQLClient::new_with_env(
+            Node::Mainnet,
+            "test-version",
+            &["X-API-Key=FIRST".into(), "x-api-key=SECOND".into()],
+            |_| Some("test-secret".into()),
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("duplicate"));
+        assert!(!format!("{error:?}").contains("test-secret"));
+    }
+
+    #[tokio::test]
+    async fn test_custom_header_from_environment() {
+        const CHILD_ENDPOINT: &str = "SUI_FORK_TEST_GRAPHQL_ENDPOINT";
+        if let Ok(endpoint) = std::env::var(CHILD_ENDPOINT) {
+            let client = GraphQLClient::new(
+                Node::Custom(endpoint),
+                "test-version",
+                vec![
+                    "Authorization=SUI_FORK_TEST_AUTH".into(),
+                    "X-Project-ID=SUI_FORK_TEST_PROJECT".into(),
+                ],
+            )
+            .unwrap();
+            let operation = CheckpointQuery::build(CheckpointArgs {
+                sequence_number: Some(7),
+            });
+            assert!(client.run_query(&operation).await.unwrap().data.is_some());
+            return;
+        }
+
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(header("Authorization", "Bearer environment-test-secret"))
+            .and(header("X-Project-ID", "environment-test-project"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": { "checkpoint": null }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        // Set the environment only in a subprocess, without mutating this multithreaded process.
+        let output = tokio::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "gql::client::tests::test_custom_header_from_environment",
+                "--nocapture",
+            ])
+            .env(CHILD_ENDPOINT, server.uri())
+            .env("SUI_FORK_TEST_AUTH", "Bearer environment-test-secret")
+            .env("SUI_FORK_TEST_PROJECT", "environment-test-project")
+            .output()
+            .await
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_custom_header_rejects_non_unicode_without_exposing_secrets() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let error = GraphQLClient::new_with_env(
+            Node::Mainnet,
+            "test-version",
+            &["X-API-Key=TEST_AUTH".into()],
+            |_| Some(OsString::from_vec(b"test-secret\xff".to_vec())),
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("TEST_AUTH"));
+        assert!(!format!("{error:?}").contains("test-secret"));
+    }
+
+    #[tokio::test]
+    async fn test_custom_header_blocks_cross_origin_redirects() {
+        let target = MockServer::start().await;
+        for location in [target.uri(), "https://example.invalid/graphql".to_owned()] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(header("X-API-Key", "test-secret"))
+                .respond_with(ResponseTemplate::new(307).insert_header("Location", location))
+                .expect(1)
+                .mount(&server)
+                .await;
+            let client = GraphQLClient::new_with_env(
+                Node::Custom(server.uri()),
+                "test-version",
+                &["X-API-Key=TEST_AUTH".into()],
+                |_| Some("test-secret".into()),
+            )
+            .unwrap();
+            let operation = CheckpointQuery::build(CheckpointArgs {
+                sequence_number: Some(7),
+            });
+            let error = client.run_query(&operation).await.err().unwrap();
+            assert!(
+                error
+                    .downcast_ref::<reqwest::Error>()
+                    .unwrap()
+                    .is_redirect()
+            );
+            assert!(!format!("{error:?}").contains("test-secret"));
+        }
+        assert!(target.received_requests().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_custom_header_follows_same_origin_redirects() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(307).insert_header("Location", "/graphql"))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .and(header("X-API-Key", "test-secret"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": { "checkpoint": null }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let client = GraphQLClient::new_with_env(
+            Node::Custom(server.uri()),
+            "test-version",
+            &["X-API-Key=TEST_AUTH".into()],
+            |_| Some("test-secret".into()),
+        )
+        .unwrap();
+        let operation = CheckpointQuery::build(CheckpointArgs {
+            sequence_number: Some(7),
+        });
+        assert!(client.run_query(&operation).await.unwrap().data.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_client_without_header_preserves_chain_and_sends_no_auth() {
+        for node in [
+            Node::Mainnet,
+            Node::Testnet,
+            Node::Devnet,
+            Node::Custom("http://localhost".into()),
+        ] {
+            let expected = node.chain();
+            let client = GraphQLClient::new(node, "test-version", vec![]).unwrap();
+            assert_eq!(client.chain(), expected);
+        }
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": { "checkpoint": null }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let client =
+            GraphQLClient::new(Node::Custom(server.uri()), "test-version", vec![]).unwrap();
+        let operation = CheckpointQuery::build(CheckpointArgs {
+            sequence_number: Some(7),
+        });
+        assert!(client.run_query(&operation).await.unwrap().data.is_some());
+        let requests = server.received_requests().await.unwrap();
+        assert!(!requests[0].headers.contains_key("authorization"));
+        assert!(!requests[0].headers.contains_key("x-api-key"));
     }
 
     #[tokio::test]
@@ -631,7 +962,7 @@ mod tests {
         });
         let error = GraphQLClient::run_query_internal(
             &store.client,
-            &store.rpc,
+            &store.endpoint,
             &store.version,
             &operation,
             Duration::from_secs(1),
@@ -711,7 +1042,7 @@ mod tests {
             requests
         });
 
-        let store = GraphQLClient::new(Node::Custom(url), "test-version").unwrap();
+        let store = GraphQLClient::new(Node::Custom(url), "test-version", vec![]).unwrap();
         let operation = CheckpointQuery::build(CheckpointArgs {
             sequence_number: Some(7),
         });

@@ -17,6 +17,7 @@ use async_graphql::connection::PageInfo;
 use async_graphql::registry::MetaField;
 use sui_indexer_alt_reader::alpha_ledger_grpc_reader::StreamPage;
 use sui_pg_db::query::Query;
+use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 use sui_rpc_cursor::CursorToken;
 use sui_sql_macro::query;
 
@@ -178,6 +179,13 @@ impl<C> Page<C> {
     /// Returns the limit + 2 for has_previous_page and has_next_page pagination calculations
     pub(crate) fn limit_with_overhead(&self) -> usize {
         self.limit() + 2
+    }
+
+    /// Returns the limit + 1 to request from a gRPC List stream, so that
+    /// [`Page::paginate_stream_results`] can tell a full page that exhausted its range from one with
+    /// more items behind it.
+    pub(crate) fn limit_with_lookahead(&self) -> usize {
+        self.limit() + 1
     }
 
     pub(crate) fn is_from_front(&self) -> bool {
@@ -351,19 +359,40 @@ where
     C: CursorType + TryFrom<CursorToken, Error = anyhow::Error>,
 {
     /// Translate a `StreamPage` into a `StreamConnection`. The server is expected to have already
-    /// applied page bounds and limit.
+    /// applied page bounds, and the request to have asked for [`Page::limit_with_lookahead`] items.
+    ///
+    /// If the lookahead item came back, it is dropped and the page reports more data in the
+    /// direction of pagination. Otherwise the stream's end reason decides. A stream that returned
+    /// at most `limit` items only ends at `ItemLimit` when the server capped the requested limit at
+    /// its own maximum, so more data may still exist.
     ///
     /// `node` converts one stream payload into the connection's node type; cursors are minted
     /// here, from the server's per-item tokens. Edges are returned in ascending order (the stream
     /// emits descending order when paginating from the back).
     pub(crate) fn paginate_stream_results<T, N: OutputType>(
         &self,
-        result: StreamPage<T>,
+        mut result: StreamPage<T>,
         node: impl Fn(&T) -> Result<N, RpcError>,
     ) -> Result<StreamConnection<N>, RpcError> {
-        let more = result.has_more();
+        let lookahead_returned = result.items.len() > self.limit();
+        result.items.truncate(self.limit());
+
+        // The page ends on its last item when the lookahead item came back, or when the stream
+        // stopped at the request's opposite cursor:
+        // - The lookahead item's cursor, or a watermark after it, would resume past the dropped
+        //   item and skip it.
+        // - A stream that stopped at the request's opposite cursor closes with a boundary at the
+        //   edge of that cursor's bound: at a `before` cursor's position, or at the first position
+        //   an `after` cursor admits. The last item's cursor resumes at or before that boundary in
+        //   scan order, so resuming from it skips nothing.
+        let ends_on_last_item =
+            lookahead_returned || result.end_reason == Some(QueryEndReason::CursorBound);
+        let end = match result.items.last() {
+            Some(item) if ends_on_last_item => Some(item.cursor.clone()),
+            _ => result.last_cursor().cloned(),
+        };
+        let more = lookahead_returned || result.has_more();
         let start = result.first_cursor().cloned();
-        let end = result.last_cursor().cloned();
         let mut items = result.items;
 
         let (has_previous_page, has_next_page, start, end) = if self.is_from_front() {

@@ -3,18 +3,26 @@
 
 use sui_rpc::proto::sui::rpc::v2::QueryEndReason;
 
-/// Effective terminal reason for a successful query stream.
+use crate::RpcError;
+
+/// Effective terminal reason for a query stream, from the reason its scan terminal ends the page
+/// with ([`ScanTerminal::reason`]).
 ///
 /// Hitting the requested item limit takes precedence over the underlying chunk
-/// scan result. The caller remains responsible for constructing and attaching
-/// `QueryEnd`.
+/// scan result, including a terminal that would fail the stream: the page ends
+/// normally at the item limit. Below the item limit, a failing terminal's error
+/// passes through; the caller sends the terminal watermark frame, then fails
+/// the stream with it. The caller remains responsible for constructing and
+/// attaching `QueryEnd`.
+///
+/// [`ScanTerminal::reason`]: crate::ledger_history::watermark::ScanTerminal::reason
 pub(super) fn effective_terminal_reason(
     produced: usize,
     limit_items: usize,
-    scan_end_reason: QueryEndReason,
-) -> QueryEndReason {
+    scan_end_reason: Result<QueryEndReason, RpcError>,
+) -> Result<QueryEndReason, RpcError> {
     if produced == limit_items {
-        QueryEndReason::ItemLimit
+        Ok(QueryEndReason::ItemLimit)
     } else {
         scan_end_reason
     }
@@ -27,6 +35,7 @@ mod tests {
 
     use prometheus::Registry;
 
+    use crate::ledger_history::query_options::below_serving_floor;
     use crate::metrics::{ListApiMetrics, ListRequestMetrics};
 
     use super::*;
@@ -34,17 +43,32 @@ mod tests {
     #[test]
     fn item_limit_takes_precedence_without_overriding_earlier_terminal_reasons() {
         assert_eq!(
-            effective_terminal_reason(3, 3, QueryEndReason::ScanLimit),
+            effective_terminal_reason(3, 3, Ok(QueryEndReason::ScanLimit)).unwrap(),
             QueryEndReason::ItemLimit
         );
         assert_eq!(
-            effective_terminal_reason(2, 3, QueryEndReason::LedgerTip),
+            effective_terminal_reason(2, 3, Ok(QueryEndReason::LedgerTip)).unwrap(),
             QueryEndReason::LedgerTip
         );
         assert_eq!(
-            effective_terminal_reason(2, 3, QueryEndReason::ScanLimit),
+            effective_terminal_reason(2, 3, Ok(QueryEndReason::ScanLimit)).unwrap(),
             QueryEndReason::ScanLimit
         );
+    }
+
+    /// A terminal that fails the stream fails it only below the item limit; a page that fills its
+    /// item limit ends normally.
+    #[test]
+    fn item_limit_takes_precedence_over_a_failing_terminal() {
+        let serving_floor = || Err(below_serving_floor(7));
+        assert_eq!(
+            effective_terminal_reason(3, 3, serving_floor()).unwrap(),
+            QueryEndReason::ItemLimit
+        );
+        let status = effective_terminal_reason(2, 3, serving_floor())
+            .expect_err("below the item limit the terminal's error passes through")
+            .into_status_proto();
+        assert_eq!(status.code, tonic::Code::OutOfRange as i32);
     }
 
     fn assert_query_end_metric(
@@ -59,7 +83,8 @@ mod tests {
         let handles = metrics.stream_metrics("list_transactions", "digest");
         let mut request_metrics = ListRequestMetrics::new(Some(handles), Instant::now());
 
-        let effective_reason = effective_terminal_reason(produced, limit_items, scan_end_reason);
+        let effective_reason =
+            effective_terminal_reason(produced, limit_items, Ok(scan_end_reason)).unwrap();
         assert_eq!(effective_reason, expected_reason);
         request_metrics.finish_success(effective_reason, None);
 

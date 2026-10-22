@@ -25,13 +25,12 @@ use move_binary_format::{
 };
 use move_core_types::{
     gas_algebra::{
-        AbstractMemorySize, GasQuantity, InternalGas, InternalGasPerAbstractMemoryUnit,
-        InternalGasUnit, NumArgs, NumBytes, ToUnit, ToUnitFractional,
+        AbstractMemorySize, GasQuantity, InternalGas, InternalGasUnit, ToUnit, ToUnitFractional,
     },
     u256,
 };
 use serde::{Deserialize, Serialize};
-use std::{ops::Mul, sync::LazyLock};
+use std::sync::LazyLock;
 
 pub enum GasUnit {}
 
@@ -186,12 +185,10 @@ impl<'a> GasStatus<'a> {
         size: AbstractMemorySize,
     ) -> PartialVMResult<()> {
         // Make sure that the size is always non-zero
-        let size = std::cmp::max(1.into(), size);
+        let size = std::cmp::max(1, u64::from(size));
         self.deduct_gas(
-            InternalGasPerAbstractMemoryUnit::new(
-                self.cost_table.instruction_cost(opcode as u8)?.total()?,
-            )
-            .mul(size),
+            InternalGas::new(self.cost_table.instruction_cost(opcode as u8)?.total()?)
+                .saturating_mul(size),
         )
     }
 
@@ -289,7 +286,7 @@ impl GasMeter for GasStatus<'_> {
     fn charge_call(
         &mut self,
         args: impl ExactSizeIterator<Item = impl ValueView>,
-        _num_locals: NumArgs,
+        _num_locals: u64,
     ) -> PartialVMResult<()> {
         self.charge_instr_with_size(Opcodes::CALL, (args.len() as u64 + 1).into())
     }
@@ -297,13 +294,13 @@ impl GasMeter for GasStatus<'_> {
     fn charge_call_generic(
         &mut self,
         args: impl ExactSizeIterator<Item = impl ValueView>,
-        _num_locals: NumArgs,
+        _num_locals: u64,
     ) -> PartialVMResult<()> {
         self.charge_instr_with_size(Opcodes::CALL_GENERIC, (args.len() as u64).into())
     }
 
-    fn charge_ld_const(&mut self, size: NumBytes) -> PartialVMResult<()> {
-        self.charge_instr_with_size(Opcodes::LD_CONST, u64::from(size).into())
+    fn charge_ld_const(&mut self, size: u64) -> PartialVMResult<()> {
+        self.charge_instr_with_size(Opcodes::LD_CONST, size.into())
     }
 
     fn charge_ld_const_after_deserialization(
@@ -443,10 +440,10 @@ impl GasMeter for GasStatus<'_> {
 
     fn charge_vec_unpack(
         &mut self,
-        expect_num_elements: NumArgs,
+        expect_num_elements: u64,
         _elems: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
-        self.charge_instr_with_size(Opcodes::VEC_UNPACK, u64::from(expect_num_elements).into())
+        self.charge_instr_with_size(Opcodes::VEC_UNPACK, expect_num_elements.into())
     }
 
     fn charge_vec_swap(&mut self) -> PartialVMResult<()> {

@@ -5,8 +5,7 @@
 use crate::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{
-    gas_algebra::{InternalGas, InternalGasPerByte, NumBytes},
-    vm_status::sub_status::NFE_BCS_SERIALIZATION_FAILURE,
+    gas_algebra::InternalGas, vm_status::sub_status::NFE_BCS_SERIALIZATION_FAILURE,
 };
 use move_vm_runtime::{
     native_charge_gas_early_exit,
@@ -33,8 +32,8 @@ use std::{collections::VecDeque, sync::Arc};
  **************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct ToBytesGasParameters {
-    pub per_byte_serialized: InternalGasPerByte,
-    pub legacy_min_output_size: NumBytes,
+    pub per_byte_serialized: InternalGas,
+    pub legacy_min_output_size: u64,
     pub failure: InternalGas,
 }
 
@@ -82,11 +81,10 @@ fn native_to_bytes(
     };
     native_charge_gas_early_exit!(
         context,
-        gas_params.per_byte_serialized
-            * std::cmp::max(
-                NumBytes::new(serialized_value.len() as u64),
-                gas_params.legacy_min_output_size,
-            )
+        gas_params.per_byte_serialized.saturating_mul(std::cmp::max(
+            serialized_value.len() as u64,
+            gas_params.legacy_min_output_size,
+        ))
     );
 
     Ok(NativeResult::ok(
