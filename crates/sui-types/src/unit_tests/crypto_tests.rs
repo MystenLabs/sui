@@ -223,7 +223,7 @@ fn mldsa65_verify_secure_intent_message() {
 
 #[test]
 fn mldsa65_standalone_gated_by_verify_params() {
-    use crate::signature::{AuthenticatorTrait, VerifyParams};
+    use crate::signature::VerifyParams;
     use crate::signature_verification::VerifiedDigestCache;
     use std::sync::Arc;
 
