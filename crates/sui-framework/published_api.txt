@@ -3364,9 +3364,6 @@ original_package_id
 original_package_id_impl
 	fun
 	0x2::package
-test_publish
-	public fun
-	0x2::package
 restrict
 	fun
 	0x2::package

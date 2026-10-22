@@ -51,7 +51,6 @@ Functions for operating on Move packages from within Move:
 -  [Function `commit_upgrade_impl`](#sui_package_commit_upgrade_impl)
 -  [Function `original_package_id`](#sui_package_original_package_id)
 -  [Function `original_package_id_impl`](#sui_package_original_package_id_impl)
--  [Function `test_publish`](#sui_package_test_publish)
 -  [Function `restrict`](#sui_package_restrict)
 
 
@@ -1581,37 +1580,6 @@ If <code>package_id</code>'s version is not <code><a href="../sui/package.md#sui
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="../sui/package.md#sui_package_original_package_id_impl">original_package_id_impl</a>(package_id: <b>address</b>, <a href="../sui/package.md#sui_package_version">version</a>: u64): <b>address</b>;
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_package_test_publish"></a>
-
-## Function `test_publish`
-
-Test-only function to simulate publishing a package at address
-<code>ID</code>, to create an <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code>.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_test_publish">test_publish</a>(<a href="../sui/package.md#sui_package">package</a>: <a href="../sui/object.md#sui_object_ID">sui::object::ID</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/package.md#sui_package_UpgradeCap">sui::package::UpgradeCap</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/package.md#sui_package_test_publish">test_publish</a>(<a href="../sui/package.md#sui_package">package</a>: ID, ctx: &<b>mut</b> TxContext): <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a> {
-    <a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a> {
-        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-        <a href="../sui/package.md#sui_package">package</a>,
-        <a href="../sui/package.md#sui_package_version">version</a>: 1,
-        policy: <a href="../sui/package.md#sui_package_COMPATIBLE">COMPATIBLE</a>,
-    }
-}
 </code></pre>
 
 

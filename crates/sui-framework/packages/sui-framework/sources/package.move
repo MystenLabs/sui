@@ -526,6 +526,7 @@ public fun enable_minversion_for_testing(
     cap.enable_minversion_impl(original_id)
 }
 
+#[test_only]
 /// Test-only function to simulate publishing a package at address
 /// `ID`, to create an `UpgradeCap`.
 public fun test_publish(package: ID, ctx: &mut TxContext): UpgradeCap {
