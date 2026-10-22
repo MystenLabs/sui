@@ -111,9 +111,10 @@ pub async fn initialize(
     version: &str,
     data_dir: Option<PathBuf>,
     seed_input: SeedInput,
+    headers: Vec<String>,
 ) -> Result<(Context, SubscriptionServiceHandle)> {
     // 1. Prepare metadata and GraphQL, then open the RPC store before constructing ForkStore.
-    let gql = GraphQLClient::new(node.clone(), version)?;
+    let gql = GraphQLClient::new(node.clone(), version, headers)?;
     let local = MetadataStore::new(&node, forked_at_checkpoint, data_dir)?;
     let network_name = node.network_name();
     crate::seed::ensure_seed_policy(&local, &seed_input)?;
