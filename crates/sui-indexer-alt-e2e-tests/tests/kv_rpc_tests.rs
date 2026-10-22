@@ -4493,15 +4493,12 @@ async fn test_list_transactions_sparse_filter_emits_watermarks() {
         next_resp.transactions.is_empty(),
         "resuming past the trailing cursor must not replay items"
     );
-    // CursorBound (resume cursor at/past tip) or LedgerTip (range strictly
-    // exceeds tip) are both legitimate empty-resume terminations.
-    let reason = next_resp.end_reason.expect("resume response must end");
-    assert!(
-        matches!(
-            reason,
-            QueryEndReason::CursorBound | QueryEndReason::LedgerTip
-        ),
-        "unexpected resume end_reason: {reason:?}"
+    // An open-ended resume from the tip has nothing left to scan and ends at the ledger tip, not
+    // at its own cursor.
+    assert_eq!(
+        next_resp.end_reason,
+        Some(QueryEndReason::LedgerTip),
+        "resuming from the tip must end at the ledger tip"
     );
 }
 
@@ -4577,13 +4574,11 @@ async fn test_list_events_sparse_filter_emits_watermarks() {
         next_resp.events.is_empty(),
         "resuming past the trailing cursor must not replay events"
     );
-    let reason = next_resp.end_reason.expect("resume response must end");
-    assert!(
-        matches!(
-            reason,
-            QueryEndReason::CursorBound | QueryEndReason::LedgerTip
-        ),
-        "unexpected resume end_reason: {reason:?}"
+    // As for transactions: an open-ended resume from the tip ends at the ledger tip.
+    assert_eq!(
+        next_resp.end_reason,
+        Some(QueryEndReason::LedgerTip),
+        "resuming from the tip must end at the ledger tip"
     );
 }
 
@@ -4896,13 +4891,14 @@ enum CursorQuery {
 }
 
 /// One page of a [`CursorQuery`]: the scan-order key and cursor of each item, every frame's
-/// cursor, and how the page ended.
+/// cursor, how the page ended, and the checkpoint its last frame claims as covered.
 struct CursorPage {
     items: Vec<(u64, u32)>,
     item_cursors: Vec<prost::bytes::Bytes>,
     cursors: Vec<prost::bytes::Bytes>,
     end_cursor: prost::bytes::Bytes,
     end_reason: QueryEndReason,
+    end_claim: Option<u64>,
 }
 
 /// A cursor's kind and the scan-order key of its position.
@@ -4980,6 +4976,9 @@ async fn cursor_page(
             .collect(),
         end_cursor: end_cursor.expect("every page carries a resume cursor"),
         end_reason: end_reason.expect("every page ends with a reason"),
+        end_claim: frames
+            .last()
+            .and_then(|(_, watermark)| watermark.checkpoint),
     }
 }
 
@@ -5379,5 +5378,151 @@ async fn test_list_descending_after_item_closing_cursor_resumes_with_the_item() 
                 "closing cursor after item {index}, sent back as `before`: {query:?}"
             );
         }
+    }
+}
+
+/// A page whose starting cursor lies strictly past its checkpoint window (`after` above it
+/// ascending, `before` below it descending) has nothing to scan. It ends with the window's reason
+/// and claims the window's last checkpoint in scan direction, so a client following the end
+/// reason stops instead of re-sending the page. It closes on the boundary where its starting
+/// cursor resumes: sent back over a wider window, in either ordering, the closing cursor neither
+/// re-serves the starting item nor skips past it.
+#[tokio::test]
+async fn test_list_starting_cursor_past_the_window_ends_with_the_window_reason() {
+    let mut cluster = list_api_cluster().await;
+    let (sender, kp, gas) = cluster.funded_account(20 * DEFAULT_GAS_BUDGET).unwrap();
+    let (pkg, mut gas) =
+        publish_package(&mut cluster, sender, &kp, gas, emit_test_event_pkg_path()).await;
+    cluster.create_checkpoint().await;
+    // Two checkpoints of two event-emitting transactions each.
+    let mut checkpoints = Vec::new();
+    for _ in 0..2 {
+        for _ in 0..2 {
+            gas = call_move(
+                &mut cluster,
+                sender,
+                &kp,
+                gas,
+                pkg,
+                "emit_test_event",
+                "emit_test_event",
+            )
+            .await
+            .1;
+        }
+        checkpoints.push(cluster.create_checkpoint().await.sequence_number);
+    }
+    let (low, high) = (checkpoints[0], checkpoints[1]);
+    let both = (Some(low), Some(high + 1));
+    let mut client = LedgerServiceClient::connect(cluster.kv_rpc_url().to_string())
+        .await
+        .unwrap();
+
+    for query in [
+        CursorQuery::Transactions(tx_sender(sender)),
+        CursorQuery::Events(Some(ev_sender(sender))),
+    ] {
+        let all = walk(&mut client, &query, both, true, None, None).await;
+        assert_eq!(all.items.len(), 4, "{query:?}");
+
+        // Ascending over `low` alone, after the first item of `high`.
+        let page = cursor_page(
+            &mut client,
+            &query,
+            (Some(low), Some(low + 1)),
+            true,
+            Some(all.item_cursors[2].clone()),
+            None,
+        )
+        .await;
+        assert!(page.items.is_empty(), "ascending: {query:?}");
+        assert_eq!(
+            page.end_reason,
+            QueryEndReason::CheckpointBound,
+            "ascending: {query:?}"
+        );
+        assert_eq!(page.end_claim, Some(low), "ascending: {query:?}");
+        assert_eq!(
+            cursor_key(&page.end_cursor).0,
+            CursorKind::Boundary,
+            "ascending: {query:?}"
+        );
+        let resumed = walk(&mut client, &query, both, true, Some(page.end_cursor), None).await;
+        assert_eq!(resumed.items, all.items[3..], "ascending: {query:?}");
+
+        // Descending over `high` alone, before the last item of `low`.
+        let page = cursor_page(
+            &mut client,
+            &query,
+            (Some(high), Some(high + 1)),
+            false,
+            Some(all.item_cursors[1].clone()),
+            None,
+        )
+        .await;
+        assert!(page.items.is_empty(), "descending: {query:?}");
+        assert_eq!(
+            page.end_reason,
+            QueryEndReason::CheckpointBound,
+            "descending: {query:?}"
+        );
+        assert_eq!(page.end_claim, Some(high), "descending: {query:?}");
+        let resumed = walk(
+            &mut client,
+            &query,
+            both,
+            false,
+            Some(page.end_cursor.clone()),
+            None,
+        )
+        .await;
+        assert_eq!(resumed.items, all.items[..1], "descending: {query:?}");
+        let turned = walk(&mut client, &query, both, true, Some(page.end_cursor), None).await;
+        assert_eq!(
+            turned.items,
+            all.items[1..],
+            "descending, turned ascending: {query:?}"
+        );
+    }
+
+    // ListCheckpoints, whose positions are checkpoints: (ascending, window, starting item,
+    // closing boundary, claim).
+    for (ascending, window, start, end, claim) in [
+        (true, (Some(low), Some(low + 1)), high, high + 1, low),
+        (false, (Some(high), Some(high + 1)), low, low, high),
+    ] {
+        let start = CursorToken::item(Position::Checkpoints { checkpoint: start }).encode();
+        let options = if ascending {
+            query_options_after(10, start)
+        } else {
+            query_options_descending_before(10, start)
+        };
+        let mut request = ListCheckpointsRequest::default();
+        request.start_checkpoint = window.0;
+        request.end_checkpoint = window.1;
+        request.read_mask = Some(FieldMask::from_paths(["sequence_number"]));
+        request.options = Some(options);
+        let result = list_checkpoints_result(&mut client, request).await;
+        let context = format!("checkpoints, ascending {ascending}");
+        assert!(result.checkpoints.is_empty(), "{context}");
+        assert_eq!(
+            result.end_reason,
+            Some(QueryEndReason::CheckpointBound),
+            "{context}"
+        );
+        assert_eq!(
+            result
+                .frames
+                .last()
+                .and_then(|(_, watermark)| watermark.checkpoint),
+            Some(claim),
+            "{context}"
+        );
+        let closing = CursorToken::decode(&result.end_cursor.expect("a closing cursor")).unwrap();
+        assert_eq!(
+            closing,
+            CursorToken::boundary(Position::Checkpoints { checkpoint: end }),
+            "{context}"
+        );
     }
 }

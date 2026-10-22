@@ -42,12 +42,10 @@ pub enum RangeExhaustion {
     LedgerTip,
     /// Reached the requested (or implicit-genesis) checkpoint range bound.
     CheckpointBound,
-    /// Truncated by a client `after`/`before` cursor. `kind` is the cursor
-    /// kind the terminal cursor must carry so resume neither repeats nor
-    /// skips an item. Item is preserved for an interval made empty by an
-    /// ascending scan's `after` Item cursor, and for a descending scan's
-    /// `after` Item cursor at the last position, which has no next position
-    /// to name as a boundary; every other site uses Boundary.
+    /// Truncated by a client `after`/`before` cursor. `kind` is the cursor kind the terminal
+    /// cursor must carry so resume neither repeats nor skips an item: Item only for an `after`
+    /// Item cursor at the last position, which has no next position to name as a boundary;
+    /// Boundary everywhere else.
     CursorBound { kind: sui_rpc_cursor::CursorKind },
     /// A descending scan with no lower bound of its own reached this server's serving floor, the
     /// lowest checkpoint it still serves; everything below is pruned. The stream sends a watermark
@@ -110,10 +108,13 @@ pub struct ResolvedScan<P> {
     pub end_position: P,
     /// Why the interval is exhausted once the scan drains it.
     pub exhaustion: RangeExhaustion,
-    /// Whether the request's checkpoint window holds any checkpoint. Cursors do not change it: a
-    /// non-empty window's natural end claims its edge even when the scan reads nothing, because
-    /// the request's starting cursor vouches for every position before it.
-    pub window_has_checkpoints: bool,
+    /// The window's terminal checkpoint in scan direction (see
+    /// [`ResolvedCheckpointRange::terminal_checkpoint`]), or `None` when the window holds no
+    /// checkpoint. Cursors do not move it, unlike `end_checkpoint`, which carries the checkpoint
+    /// field of a cursor that ends the scan: a non-empty window's natural end claims its edge even
+    /// when the scan reads nothing, because the request's starting cursor vouches for every
+    /// position before it.
+    pub window_terminal_checkpoint: Option<u64>,
 }
 
 /// How a lane reads wire cursors: the token's coordinate in the lane's
@@ -437,22 +438,19 @@ where
                 Ordering::Descending => range.start,
             },
             exhaustion: cp_range.exhaustion,
-            window_has_checkpoints: !cp_range.is_empty(),
+            window_terminal_checkpoint: (!cp_range.is_empty())
+                .then(|| cp_range.terminal_checkpoint(options.ordering)),
         }
         .apply_cursor_bounds(options);
 
         if !cp_range.is_empty()
             && resolved.bounds.admits_no_position()
-            && starting_cursor_at_window_edge(options, &range)
+            && let Some((checkpoint, position)) =
+                starting_cursor_end(options, &cp_range.range, &range)
         {
-            // The starting cursor sits at the window's edge in scan direction, and no far cursor
-            // stops the scan first: the window's edge is what ends this page, as it ended the
-            // page that handed the cursor back. A far cursor at that edge, or one that leaves
-            // nothing to scan before it, ends the page instead.
-            let (checkpoint, position) = match options.ordering {
-                Ordering::Ascending => (cp_range.range.end, range.end),
-                Ordering::Descending => (cp_range.range.start, range.start),
-            };
+            // The starting cursor leaves the window nothing to scan, and no far cursor stops the
+            // scan first: the page ends with the window's reason, where `starting_cursor_end`
+            // places it. A far cursor at or before the window's edge ends the page instead.
             return Ok(Self {
                 bounds: ScanBounds::empty_at(position),
                 end_checkpoint: checkpoint,
@@ -469,17 +467,16 @@ where
     }
 
     /// The checkpoint this scan's natural end reports as fully covered in `Watermark.checkpoint`:
-    /// the checkpoint just below `end_checkpoint` ascending (the window's exclusive upper edge), or
-    /// `end_checkpoint` itself descending (its inclusive lower edge). A scan that drains its window
-    /// has covered every checkpoint up to that edge. `None` when the window has no checkpoint, or
-    /// when an ascending scan ends at genesis.
+    /// the window's last checkpoint in scan direction, just below its exclusive upper edge
+    /// ascending, or its inclusive lower edge descending. A scan that drains its window has
+    /// covered every checkpoint up to that edge, and so has a scan its starting cursor leaves
+    /// empty, because the cursor vouches for every position before it. `None` when the window
+    /// has no checkpoint.
     pub fn natural_end_claim(&self, options: &QueryOptions) -> Option<u64> {
-        if !self.window_has_checkpoints {
-            return None;
-        }
+        let window_terminal_checkpoint = self.window_terminal_checkpoint?;
         match options.ordering {
-            Ordering::Ascending => self.end_checkpoint.checked_sub(1),
-            Ordering::Descending => Some(self.end_checkpoint),
+            Ordering::Ascending => window_terminal_checkpoint.checked_sub(1),
+            Ordering::Descending => Some(window_terminal_checkpoint),
         }
     }
 
@@ -565,9 +562,9 @@ where
             return None;
         }
 
-        // Report the cursor that emptied the bound.
-        //
-        // An ascending interval made empty by an `after` Item cursor must retain Item kind.
+        // Report the cursor that emptied the bound. An ascending `after` cursor reports its own
+        // position and kind; `ResolvedScan::resolve` restates it as the boundary at the first
+        // position it admits. An Item at the last position admits none, so it keeps Item kind.
         if options.is_ascending() {
             Some((checkpoint, position, cursor.kind))
         } else {
@@ -736,43 +733,68 @@ impl ResolvedCheckpointRange {
     }
 }
 
-/// Whether the request's starting cursor sits exactly at the window's edge in scan direction,
-/// `window.end` ascending or `window.start` descending, with no far cursor stopping the scan at
-/// or before that edge. An `after` cursor starts an ascending scan at the first position it
-/// admits; a `before` cursor starts a descending scan below its position. A far cursor stops the
-/// scan as `apply_cursor_bounds` applies it: a `before` at or below the window's end, an `after`
-/// at or above the window's start. A starting cursor past the edge sits outside the window, and
-/// its page ends at the cursor.
-fn starting_cursor_at_window_edge<P: ScanPosition>(
+/// Where a page ends when its starting cursor sits at or past the window's edge in scan
+/// direction, `window.end` ascending or `window.start` descending, and no far cursor stops the
+/// scan at or before that edge, as `(checkpoint field, boundary position)`. An `after` cursor
+/// starts an ascending scan at the first position it admits; a `before` cursor starts a
+/// descending scan below its position. A far cursor stops the scan as `apply_cursor_bounds`
+/// applies it: a `before` at or below the window's end, an `after` at or above the window's
+/// start.
+///
+/// - At the edge, the page ends at the window's edge, as the page that handed the cursor back
+///   did.
+/// - Past the edge, the page ends at the boundary where the starting cursor resumes, under the
+///   cursor's own checkpoint field: the boundary after an `after` Item cursor's item, or a
+///   `before` cursor's position. Ending at the window's edge instead would hand back a cursor
+///   behind the client's, which replays the positions in between when resumed without the
+///   window.
+///
+/// `None` otherwise, including for an `after` Item cursor at the last position, which names no
+/// boundary after it.
+fn starting_cursor_end<P: ScanPosition>(
     options: &QueryOptions,
+    checkpoints: &Range<u64>,
     window: &Range<P>,
-) -> bool
+) -> Option<(u64, P)>
 where
     CursorToken: ScanCursor<P>,
 {
     let position = |cursor: &CursorToken| -> P { cursor.coordinate() };
     match options.ordering {
         Ordering::Ascending => {
-            options.after.as_ref().is_some_and(|after| {
-                let first_admitted = match after.kind {
-                    sui_rpc_cursor::CursorKind::Item => position(after).successor(),
-                    sui_rpc_cursor::CursorKind::Boundary => Some(position(after)),
-                };
-                first_admitted == Some(window.end)
-            }) && options
+            if options
                 .before
                 .as_ref()
-                .is_none_or(|before| position(before) > window.end)
+                .is_some_and(|before| position(before) <= window.end)
+            {
+                return None;
+            }
+            let after = options.after.as_ref()?;
+            let first_admitted = match after.kind {
+                sui_rpc_cursor::CursorKind::Item => position(after).successor()?,
+                sui_rpc_cursor::CursorKind::Boundary => position(after),
+            };
+            match first_admitted.cmp(&window.end) {
+                std::cmp::Ordering::Less => None,
+                std::cmp::Ordering::Equal => Some((checkpoints.end, window.end)),
+                std::cmp::Ordering::Greater => Some((after.position.checkpoint(), first_admitted)),
+            }
         }
         Ordering::Descending => {
-            options
-                .before
+            if options
+                .after
                 .as_ref()
-                .is_some_and(|before| position(before) == window.start)
-                && options
-                    .after
-                    .as_ref()
-                    .is_none_or(|after| position(after) < window.start)
+                .is_some_and(|after| position(after) >= window.start)
+            {
+                return None;
+            }
+            let before = options.before.as_ref()?;
+            let upper = position(before);
+            match upper.cmp(&window.start) {
+                std::cmp::Ordering::Greater => None,
+                std::cmp::Ordering::Equal => Some((checkpoints.start, window.start)),
+                std::cmp::Ordering::Less => Some((before.position.checkpoint(), upper)),
+            }
         }
     }
 }
@@ -928,7 +950,7 @@ mod tests {
             end_position: 20,
             exhaustion: RangeExhaustion::CheckpointBound,
             entry_checkpoint: 0,
-            window_has_checkpoints: true,
+            window_terminal_checkpoint: Some(20),
         }
     }
 
@@ -944,7 +966,7 @@ mod tests {
             end_position,
             exhaustion,
             entry_checkpoint: 0,
-            window_has_checkpoints: true,
+            window_terminal_checkpoint: Some(20),
         }
     }
 
@@ -985,7 +1007,7 @@ mod tests {
             end_checkpoint: 9,
             end_position: IntraTxCoordinate::start_of_tx(10),
             exhaustion: RangeExhaustion::CheckpointBound,
-            window_has_checkpoints: true,
+            window_terminal_checkpoint: Some(9),
         }
     }
 
@@ -1047,7 +1069,7 @@ mod tests {
             end_position: 100,
             exhaustion: RangeExhaustion::CheckpointBound,
             entry_checkpoint: 0,
-            window_has_checkpoints: true,
+            window_terminal_checkpoint: Some(20),
         };
         resolved.apply_serving_floor(50, 10, &asc).unwrap();
         assert_eq!(resolved.natural_end_claim(&asc), Some(19));
@@ -1065,10 +1087,9 @@ mod tests {
             end_position: 0,
             exhaustion: RangeExhaustion::CheckpointBound,
             entry_checkpoint: 20,
-            window_has_checkpoints: true,
+            window_terminal_checkpoint: Some(0),
         };
         resolved.apply_serving_floor(50, 10, &desc).unwrap();
-        assert_eq!(resolved.natural_end_claim(&desc), Some(10));
         assert_eq!(resolved.range(), 50..100);
         assert_eq!(resolved.entry_checkpoint, 20);
         assert_eq!(resolved.end_checkpoint, 10);
@@ -1089,7 +1110,7 @@ mod tests {
                 end_position: 40,
                 exhaustion: RangeExhaustion::CheckpointBound,
                 entry_checkpoint: 0,
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(8),
             };
             assert_below_serving_floor(resolved.apply_serving_floor(floor_tx, 10, &asc), 10);
 
@@ -1099,7 +1120,7 @@ mod tests {
                 end_position: 0,
                 exhaustion: RangeExhaustion::CheckpointBound,
                 entry_checkpoint: 8,
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(0),
             };
             assert_below_serving_floor(resolved.apply_serving_floor(floor_tx, 10, &desc), 10);
         }
@@ -1122,7 +1143,7 @@ mod tests {
             end_position: IntraTxCoordinate::start_of_tx(100),
             exhaustion: RangeExhaustion::CheckpointBound,
             entry_checkpoint: 0,
-            window_has_checkpoints: true,
+            window_terminal_checkpoint: Some(20),
         };
         resolved
             .apply_serving_floor(IntraTxCoordinate::start_of_tx(50), 10, &asc)
@@ -1146,12 +1167,11 @@ mod tests {
             end_position: IntraTxCoordinate::start_of_tx(0),
             exhaustion: RangeExhaustion::CheckpointBound,
             entry_checkpoint: 20,
-            window_has_checkpoints: true,
+            window_terminal_checkpoint: Some(0),
         };
         resolved
             .apply_serving_floor(IntraTxCoordinate::start_of_tx(50), 10, &desc)
             .unwrap();
-        assert_eq!(resolved.natural_end_claim(&desc), Some(10));
         assert_eq!(
             resolved.bounds.lo,
             Bound::Included(IntraTxCoordinate::start_of_tx(50))
@@ -1177,7 +1197,7 @@ mod tests {
                 end_position: IntraTxCoordinate::start_of_tx(40),
                 exhaustion: RangeExhaustion::CheckpointBound,
                 entry_checkpoint: 0,
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(8),
             };
             assert_below_serving_floor(
                 resolved.apply_serving_floor(IntraTxCoordinate::start_of_tx(floor_tx), 10, &asc),
@@ -1192,7 +1212,7 @@ mod tests {
                 end_position: IntraTxCoordinate::start_of_tx(0),
                 exhaustion: RangeExhaustion::CheckpointBound,
                 entry_checkpoint: 8,
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(0),
             };
             assert_below_serving_floor(
                 resolved.apply_serving_floor(IntraTxCoordinate::start_of_tx(floor_tx), 10, &desc),
@@ -1201,29 +1221,33 @@ mod tests {
         }
     }
 
-    /// A natural end claims the window's edge in scan direction: `end_checkpoint - 1` ascending
-    /// (the exclusive upper edge) and `end_checkpoint` descending (the inclusive lower edge). An
-    /// ascending scan ending at genesis, or an empty window, claims nothing.
+    /// A natural end claims the window's edge in scan direction, whatever checkpoint field its
+    /// terminal carries: the checkpoint below the window's exclusive upper edge ascending, and its
+    /// inclusive lower edge descending. An ascending window ending at genesis, or an empty window,
+    /// claims nothing.
     #[test]
     fn natural_end_claims_the_window_edge() {
         let asc = directional_options(true);
         let desc = directional_options(false);
         let resolved = ResolvedScan {
-            end_checkpoint: 10,
+            // A cursor that ends the scan leaves its checkpoint field in `end_checkpoint`; the
+            // claim reads the window's edge alone.
+            end_checkpoint: 3,
+            window_terminal_checkpoint: Some(10),
             ..resolved_range(0..100)
         };
         assert_eq!(resolved.natural_end_claim(&asc), Some(9));
         assert_eq!(resolved.natural_end_claim(&desc), Some(10));
 
         let at_genesis = ResolvedScan {
-            end_checkpoint: 0,
+            window_terminal_checkpoint: Some(0),
             ..resolved_range(0..100)
         };
         assert_eq!(at_genesis.natural_end_claim(&asc), None);
         assert_eq!(at_genesis.natural_end_claim(&desc), Some(0));
 
         let empty_window = ResolvedScan {
-            window_has_checkpoints: false,
+            window_terminal_checkpoint: None,
             ..resolved
         };
         assert_eq!(empty_window.natural_end_claim(&asc), None);
@@ -1250,13 +1274,11 @@ mod tests {
                 reached_floor.exhaustion,
                 reached_floor.end_checkpoint,
                 reached_floor.end_position,
-                reached_floor.natural_end_claim(&walk),
             ),
             (
                 RangeExhaustion::ServingFloor { floor_checkpoint },
                 floor_checkpoint,
                 floor,
-                Some(floor_checkpoint),
             )
         );
 
@@ -1503,7 +1525,7 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(20),
             }
         );
         assert!(crossed.range().is_empty());
@@ -1588,7 +1610,7 @@ mod tests {
                 end_checkpoint: 20,
                 end_position: IntraTxCoordinate::start_of_tx(100),
                 exhaustion: RangeExhaustion::LedgerTip,
-                window_has_checkpoints: false,
+                window_terminal_checkpoint: None,
             }
         );
     }
@@ -1652,7 +1674,7 @@ mod tests {
                     end_checkpoint: 10,
                     end_position: IntraTxCoordinate::start_of_tx(100),
                     exhaustion: RangeExhaustion::CheckpointBound,
-                    window_has_checkpoints: false,
+                    window_terminal_checkpoint: None,
                 }
             );
         }
@@ -1721,65 +1743,39 @@ mod tests {
         assert_eq!(resolved.end_position, IntraTxCoordinate::start_of_tx(100));
     }
 
-    /// (ascending, after at the window's end coordinate): empties the bounds at the
-    /// cursor, and the terminal keeps the cursor's kind — an after-Item echo must stay
-    /// Item so resume doesn't re-serve it.
+    /// (ascending, `after` past the window's end): the page ends with the window's reason at the
+    /// boundary where the cursor resumes, under the cursor's checkpoint field, and claims the
+    /// window's last checkpoint. An Item cursor's boundary sits after its event, so resuming from
+    /// it does not re-serve the event.
     #[test]
-    fn event_after_item_empty_interval_retains_item_kind() {
-        let position = Position::Events {
-            checkpoint: 1,
-            tx_seq: 3,
-            event_index: 0,
-        };
-        let resolved = ResolvedScan {
-            bounds: IntraTxScanBounds::from_range(
-                IntraTxCoordinate::start_of_tx(0)..IntraTxCoordinate::start_of_tx(3),
+    fn event_after_cursor_past_window_ends_where_it_resumes() {
+        // Checkpoints 1..4, transactions 5..20.
+        let window = (Some(1), Some(4));
+        for (cursor, end_position) in [
+            (
+                ev_item(5, 25, 0),
+                IntraTxCoordinate {
+                    tx_seq: 25,
+                    index: 1,
+                },
             ),
-            end_checkpoint: 1,
-            end_position: IntraTxCoordinate::start_of_tx(3),
-            exhaustion: RangeExhaustion::CheckpointBound,
-            entry_checkpoint: 0,
-            window_has_checkpoints: true,
-        };
-
-        let mut request = ProtoQueryOptions::default();
-        request.after = Some(CursorToken::item(position).encode());
-        let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
-        let item_bounded = resolved.clone().apply_cursor_bounds(&options);
-
-        assert!(item_bounded.is_empty());
-        assert_eq!(
-            item_bounded.end_position,
-            IntraTxCoordinate {
-                tx_seq: 3,
-                index: 0,
-            }
-        );
-        assert_eq!(
-            item_bounded.exhaustion,
-            RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Item,
-            }
-        );
-
-        request.after = Some(CursorToken::boundary(position).encode());
-        let options = QueryOptions::events_from_proto(Some(&request), 100, 100).unwrap();
-        let boundary_bounded = resolved.apply_cursor_bounds(&options);
-
-        assert!(boundary_bounded.is_empty());
-        assert_eq!(
-            boundary_bounded.end_position,
-            IntraTxCoordinate {
-                tx_seq: 3,
-                index: 0,
-            }
-        );
-        assert_eq!(
-            boundary_bounded.exhaustion,
-            RangeExhaustion::CursorBound {
-                kind: sui_rpc_cursor::CursorKind::Boundary,
-            }
-        );
+            (ev_boundary(5, 25, 0), IntraTxCoordinate::start_of_tx(25)),
+        ] {
+            let options = after_options(Ordering::Ascending, cursor.clone());
+            let resolved = resolve_event_request(window, &options).unwrap();
+            assert!(resolved.is_empty(), "{cursor:?}");
+            assert_eq!(
+                resolved.exhaustion,
+                RangeExhaustion::CheckpointBound,
+                "{cursor:?}"
+            );
+            assert_eq!(
+                (resolved.end_checkpoint, resolved.end_position),
+                (5, end_position),
+                "{cursor:?}"
+            );
+            assert_eq!(resolved.natural_end_claim(&options), Some(3), "{cursor:?}");
+        }
     }
 
     /// `before` cursor that empties the interval sets end_position, and exhaustion to CursorBound.
@@ -1796,7 +1792,7 @@ mod tests {
             end_checkpoint: 3,
             end_position: IntraTxCoordinate::start_of_tx(100),
             exhaustion: RangeExhaustion::CheckpointBound,
-            window_has_checkpoints: true,
+            window_terminal_checkpoint: Some(3),
         };
 
         // This cursor empties the interval; the entry checkpoint stays at the window's.
@@ -1824,7 +1820,7 @@ mod tests {
                     exhaustion: RangeExhaustion::CursorBound {
                         kind: sui_rpc_cursor::CursorKind::Boundary,
                     },
-                    window_has_checkpoints: true,
+                    window_terminal_checkpoint: Some(3),
                 }
             );
         }
@@ -1945,7 +1941,7 @@ mod tests {
             end_checkpoint: 3,
             end_position: IntraTxCoordinate::start_of_tx(3),
             exhaustion: RangeExhaustion::CheckpointBound,
-            window_has_checkpoints: true,
+            window_terminal_checkpoint: Some(3),
         };
 
         let emptied_at = |coordinate| ResolvedScan {
@@ -1956,7 +1952,7 @@ mod tests {
             exhaustion: RangeExhaustion::CursorBound {
                 kind: sui_rpc_cursor::CursorKind::Boundary,
             },
-            window_has_checkpoints: true,
+            window_terminal_checkpoint: Some(3),
         };
 
         let options = after_options(Ordering::Descending, ev_item(100, 100, 10));
@@ -2038,7 +2034,7 @@ mod tests {
             exhaustion: RangeExhaustion::CursorBound {
                 kind: sui_rpc_cursor::CursorKind::Boundary,
             },
-            window_has_checkpoints: true,
+            window_terminal_checkpoint: Some(9),
         };
         let options = before_options(Ordering::Ascending, ev_boundary(6, 5, 1));
         assert_eq!(resolved_intra_tx().apply_cursor_bounds(&options), expected);
@@ -2073,31 +2069,31 @@ mod tests {
         assert_eq!(seed.apply_cursor_bounds(&options), expected);
     }
 
-    /// (ascending, after and before both present): if only the after files, its
-    /// frame stands (Item kind retained); if both file, the before wins at the min
-    /// position.
+    /// (ascending, after and before both present): a `before` past the window's end does not stop
+    /// the scan, so an `after` past the window ends the page with the window's reason where it
+    /// resumes; if both empty the interval, the before wins at the min position.
     #[test]
     fn ascending_with_both_cursors_picks_the_terminal_owner() {
-        // The before cursor falls out of the range so it is rejected. The after cursor empties the
-        // range, and is attributed to the exhaustion reason.
+        // Checkpoints 1..4, transactions 5..20. The before cursor lies past the window's end, and
+        // the after cursor past it empties the window.
         let options = QueryOptions {
             limit_items: 100,
             ordering: Ordering::Ascending,
-            after: Some(ev_item(12, 12, 0)),
-            before: Some(ev_boundary(14, 14, 0)),
+            after: Some(ev_item(5, 25, 0)),
+            before: Some(ev_boundary(6, 30, 0)),
         };
+        let resolved = resolve_event_request((Some(1), Some(4)), &options).unwrap();
+        assert!(resolved.is_empty());
+        assert_eq!(resolved.exhaustion, RangeExhaustion::CheckpointBound);
         assert_eq!(
-            resolved_intra_tx().apply_cursor_bounds(&options),
-            ResolvedScan {
-                bounds: IntraTxScanBounds::empty_at(IntraTxCoordinate::start_of_tx(12)),
-                entry_checkpoint: 2,
-                end_checkpoint: 12,
-                end_position: IntraTxCoordinate::start_of_tx(12),
-                exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Item,
-                },
-                window_has_checkpoints: true,
-            }
+            (resolved.end_checkpoint, resolved.end_position),
+            (
+                5,
+                IntraTxCoordinate {
+                    tx_seq: 25,
+                    index: 1
+                }
+            )
         );
 
         // When both cursors would empty, `before` cursor attribution remains.
@@ -2117,7 +2113,7 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(9),
             }
         );
     }
@@ -2144,7 +2140,7 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(9),
             }
         );
 
@@ -2171,7 +2167,7 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(9),
             }
         );
 
@@ -2193,7 +2189,7 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(9),
             }
         );
     }
@@ -2233,7 +2229,7 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(9),
             }
         );
 
@@ -2250,7 +2246,7 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(9),
             }
         );
     }
@@ -2311,7 +2307,7 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(20),
             }
         );
         let options = after_options(Ordering::Descending, tx_boundary(3, 13));
@@ -2325,7 +2321,7 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(20),
             }
         );
     }
@@ -2347,7 +2343,7 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(20),
             }
         );
         let options = after_options(Ordering::Descending, tx_item(9, 24));
@@ -2361,46 +2357,39 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(20),
             }
         );
     }
 
-    /// after-Item at n and after-Boundary at n + 1 admit the same interval
-    /// (here both empty the window); each terminal echoes its own raw
-    /// coordinate and kind.
+    /// after-Item at n and after-Boundary at n + 1 admit the same interval, and a page they leave
+    /// empty past the window ends on the same terminal: the boundary at n + 1.
     #[test]
     fn tx_after_item_and_successor_boundary_admit_the_same_interval() {
-        // Item at 24 and Boundary at 25 scan the same exclusive edge, but the
-        // terminal echoes each cursor's raw coordinate and kind: the Item echo
-        // keeps Item so resume does not re-serve.
-        let options = after_options(Ordering::Ascending, tx_item(5, 24));
+        let item = after_options(Ordering::Ascending, tx_item(4, 24));
+        let successor = after_options(Ordering::Ascending, tx_boundary(4, 25));
+
+        // Checkpoints 1..6, transactions 5..30: both admit 25..30.
+        let wide = (Some(1), Some(6));
+        assert_eq!(resolve_tx_request(wide, &item).unwrap().range(), 25..30);
         assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            ResolvedScan {
-                bounds: ScanBounds::from_range(24..24),
-                entry_checkpoint: 0,
-                end_checkpoint: 5,
-                end_position: 24,
-                exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Item,
-                },
-                window_has_checkpoints: true,
-            }
+            resolve_tx_request(wide, &successor).unwrap().range(),
+            25..30
         );
-        let options = after_options(Ordering::Ascending, tx_boundary(5, 25));
+
+        // Checkpoints 1..4, transactions 5..20: both leave the window empty and end at the
+        // boundary at 25 with the window's reason.
+        let narrow = (Some(1), Some(4));
+        let resolved = resolve_tx_request(narrow, &item).unwrap();
+        assert_eq!(resolved, resolve_tx_request(narrow, &successor).unwrap());
+        assert!(resolved.is_empty());
         assert_eq!(
-            resolved_range(10..20).apply_cursor_bounds(&options),
-            ResolvedScan {
-                bounds: ScanBounds::from_range(25..25),
-                entry_checkpoint: 0,
-                end_checkpoint: 5,
-                end_position: 25,
-                exhaustion: RangeExhaustion::CursorBound {
-                    kind: sui_rpc_cursor::CursorKind::Boundary,
-                },
-                window_has_checkpoints: true,
-            }
+            (
+                resolved.exhaustion,
+                resolved.end_checkpoint,
+                resolved.end_position
+            ),
+            (RangeExhaustion::CheckpointBound, 4, 25)
         );
     }
 
@@ -2443,7 +2432,7 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(20),
             }
         );
 
@@ -2468,35 +2457,8 @@ mod tests {
                 exhaustion: RangeExhaustion::CursorBound {
                     kind: sui_rpc_cursor::CursorKind::Boundary,
                 },
-                window_has_checkpoints: true,
+                window_terminal_checkpoint: Some(20),
             }
-        );
-    }
-
-    /// Resume-equivalence witness for the raw cursor echo: an after-Item at n
-    /// admits exactly what the successor-form echo it replaced (Boundary at
-    /// n + 1) admits, so feeding either token back scans the same interval.
-    /// Descending, both end on the same terminal, the boundary at n + 1, as pinned by
-    /// [`tx_descending_after_cursor_sets_terminal_and_tightens`].
-    #[test]
-    fn raw_after_item_echo_resumes_like_successor_boundary() {
-        let item = after_options(Ordering::Ascending, tx_item(3, 24));
-        let successor = after_options(Ordering::Ascending, tx_boundary(3, 25));
-
-        // Item(3, 24) results in the same range as Boundary(3, 25)
-        assert_eq!(
-            resolved_range(10..30).apply_cursor_bounds(&item).range(),
-            resolved_range(10..30)
-                .apply_cursor_bounds(&successor)
-                .range(),
-        );
-
-        // Drained window: both resumptions admit nothing.
-        assert!(resolved_range(10..20).apply_cursor_bounds(&item).is_empty());
-        assert!(
-            resolved_range(10..20)
-                .apply_cursor_bounds(&successor)
-                .is_empty()
         );
     }
 
@@ -2968,10 +2930,12 @@ mod tests {
     ///   position past the tip, and then with `OutOfRange`;
     /// - in a non-empty window, its entry checkpoint is the window's first checkpoint in scan
     ///   direction, whatever its cursors' checkpoint fields;
-    /// - in a non-empty window, it ends at the window's edge with the window's reason exactly
-    ///   when no cursor stops the scan first: ascending, a `before` at or below the window's end,
-    ///   or an `after` admitting nothing up to it; descending, an `after` at or above the
-    ///   window's start, or a `before` below it.
+    /// - in a non-empty window, it ends with the window's reason and claims the window's last
+    ///   checkpoint in scan direction exactly when no far cursor stops the scan at or before the
+    ///   window's edge (ascending, a `before` at or below the window's end; descending, an
+    ///   `after` at or above the window's start), and otherwise with `CursorBound`. It ends at
+    ///   the window's edge, or past it, where a starting cursor beyond the edge resumes: the
+    ///   first position an `after` cursor admits, or a `before` cursor's position.
     fn check_request<P: ScanPosition + std::fmt::Debug>(
         window: Window,
         options: &QueryOptions,
@@ -3039,50 +3003,69 @@ mod tests {
                 sui_rpc_cursor::CursorKind::Boundary => Some(key(position)),
             }
         };
-        let (entry, edge, reason, ends_at_edge) = match options.ordering {
+        // Where the page ends with the window's reason, or `None` when a far cursor stops the
+        // scan at or before the window's edge.
+        let (entry, claim, reason, window_reason_end) = match options.ordering {
             Ordering::Ascending => (
                 window_start,
-                window_hi,
+                window_end - 1,
                 if window_reaches_tip {
                     RangeExhaustion::LedgerTip
                 } else {
                     RangeExhaustion::CheckpointBound
                 },
-                options
+                if options
                     .before
                     .as_ref()
-                    .is_none_or(|before| cursor_key(before) > window_hi)
-                    && options.after.as_ref().is_none_or(|after| {
-                        first_admitted_key(after).is_some_and(|first| first <= window_hi)
-                    }),
+                    .is_some_and(|before| cursor_key(before) <= window_hi)
+                {
+                    None
+                } else {
+                    match options.after.as_ref() {
+                        None => Some(window_hi),
+                        Some(after) => first_admitted_key(after).map(|first| first.max(window_hi)),
+                    }
+                },
             ),
             Ordering::Descending => (
                 window_end - 1,
-                window_lo,
+                window_start,
                 RangeExhaustion::CheckpointBound,
-                options
+                if options
                     .after
                     .as_ref()
-                    .is_none_or(|after| cursor_key(after) < window_lo)
-                    && options
-                        .before
-                        .as_ref()
-                        .is_none_or(|before| cursor_key(before) >= window_lo),
+                    .is_some_and(|after| cursor_key(after) >= window_lo)
+                {
+                    None
+                } else {
+                    Some(
+                        options
+                            .before
+                            .as_ref()
+                            .map_or(window_lo, |before| cursor_key(before).min(window_lo)),
+                    )
+                },
             ),
         };
         assert_eq!(
             resolved.entry_checkpoint, entry,
             "entry checkpoint: {context}"
         );
-        if ends_at_edge {
-            assert_eq!(resolved.exhaustion, reason, "end reason: {context}");
-            assert_eq!(key(resolved.end_position), edge, "end position: {context}");
-        } else {
-            assert!(
+        match window_reason_end {
+            Some(end) => {
+                assert_eq!(resolved.exhaustion, reason, "end reason: {context}");
+                assert_eq!(key(resolved.end_position), end, "end position: {context}");
+                assert_eq!(
+                    resolved.natural_end_claim(options),
+                    Some(claim),
+                    "checkpoint claim: {context}"
+                );
+            }
+            None => assert!(
                 matches!(resolved.exhaustion, RangeExhaustion::CursorBound { .. }),
                 "end reason: {context}: {:?}",
                 resolved.exhaustion
-            );
+            ),
         }
     }
 
@@ -3250,6 +3233,120 @@ mod tests {
         }
     }
 
+    /// A page its starting cursor leaves empty in a non-empty window, and that ends with the
+    /// window's reason, closes on a cursor that resumes without the window exactly where the
+    /// starting cursor does: it neither re-serves an `after` Item cursor's item nor falls back to
+    /// the window's edge. (In a zero-width window the page closes at the window's edge.)
+    fn check_empty_page_closing_cursor<P: ScanPosition + std::fmt::Debug>(
+        window: Window,
+        options: &QueryOptions,
+        resolve: impl Fn(Window, &QueryOptions) -> Result<ResolvedScan<P>, RpcError>,
+        positions: &[P],
+        position_at: impl Fn(u64, P) -> Position,
+    ) where
+        CursorToken: ScanCursor<P>,
+    {
+        let Ok(resolved) = resolve(window, options) else {
+            return;
+        };
+        if !resolved.is_empty()
+            || matches!(resolved.exhaustion, RangeExhaustion::CursorBound { .. })
+        {
+            return;
+        }
+        let context = format!("window {window:?}, {options:?}");
+        let closing = terminal_cursor(&resolved, position_at);
+        let resume = if options.is_ascending() {
+            options_with(options.ordering, Some(closing.clone()), None)
+        } else {
+            options_with(options.ordering, None, Some(closing.clone()))
+        };
+        let admitted = |options: &QueryOptions| {
+            resolve((None, None), options).map(|resolved| {
+                positions
+                    .iter()
+                    .copied()
+                    .filter(|position| resolved.bounds.contains(*position))
+                    .collect::<Vec<P>>()
+            })
+        };
+        match (admitted(options), admitted(&resume)) {
+            (Ok(starting), Ok(resumed)) => {
+                assert_eq!(resumed, starting, "{closing:?} resumes: {context}")
+            }
+            (Err(_), Err(_)) => {}
+            (starting, resumed) => panic!(
+                "{closing:?} resumes as {:?}, the starting cursor as {:?}: {context}",
+                resumed.map_err(status),
+                starting.map_err(status),
+            ),
+        }
+    }
+
+    /// Requests that start from each of `cursors`: `after` ascending, `before` descending.
+    fn starting_cursor_requests(cursors: &[CursorToken]) -> Vec<(Window, QueryOptions)> {
+        let mut requests = Vec::new();
+        for window in WINDOWS {
+            for cursor in cursors {
+                requests.push((
+                    window,
+                    options_with(Ordering::Ascending, Some(cursor.clone()), None),
+                ));
+                requests.push((
+                    window,
+                    options_with(Ordering::Descending, None, Some(cursor.clone())),
+                ));
+            }
+        }
+        requests
+    }
+
+    #[test]
+    fn transaction_empty_pages_close_where_their_starting_cursor_resumes() {
+        let positions = ledger_txs();
+        for (window, options) in starting_cursor_requests(&every_tx_cursor(0..=first_tx(TIP))) {
+            check_empty_page_closing_cursor(
+                window,
+                &options,
+                resolve_tx_request,
+                &positions,
+                |checkpoint, tx_seq| Position::Transactions { checkpoint, tx_seq },
+            );
+        }
+    }
+
+    #[test]
+    fn event_empty_pages_close_where_their_starting_cursor_resumes() {
+        let positions = ledger_event_slots();
+        for (window, options) in starting_cursor_requests(&every_event_cursor(0..=first_tx(TIP))) {
+            check_empty_page_closing_cursor(
+                window,
+                &options,
+                resolve_event_request,
+                &positions,
+                |checkpoint, position| Position::Events {
+                    checkpoint,
+                    tx_seq: position.tx_seq,
+                    event_index: position.index,
+                },
+            );
+        }
+    }
+
+    #[test]
+    fn checkpoint_empty_pages_close_where_their_starting_cursor_resumes() {
+        let positions: Vec<u64> = (0..TIP).collect();
+        for (window, options) in starting_cursor_requests(&every_checkpoint_cursor()) {
+            check_empty_page_closing_cursor(
+                window,
+                &options,
+                resolve_checkpoint_request,
+                &positions,
+                |_, checkpoint| Position::Checkpoints { checkpoint },
+            );
+        }
+    }
+
     /// Regression: a descending scan bounded by `after: Item(X)` excludes X, so its closing
     /// cursor is the boundary at the position after X, under the item's checkpoint field. Sent
     /// back as `before`, it resumes with X.
@@ -3306,16 +3403,21 @@ mod tests {
         );
     }
 
-    #[test]
-    fn checkpoint_cursors_admit_their_positions_in_either_direction() {
-        let cursors: Vec<_> = (0..=TIP)
+    /// An Item and a Boundary cursor at every checkpoint up to the tip.
+    fn every_checkpoint_cursor() -> Vec<CursorToken> {
+        (0..=TIP)
             .flat_map(|checkpoint| {
                 [
                     cp_item(checkpoint),
                     CursorToken::boundary(Position::Checkpoints { checkpoint }),
                 ]
             })
-            .collect();
+            .collect()
+    }
+
+    #[test]
+    fn checkpoint_cursors_admit_their_positions_in_either_direction() {
+        let cursors = every_checkpoint_cursor();
         let positions: Vec<u64> = (0..TIP).collect();
         for (window, options) in requests(&cursors, &cursors) {
             check_request(

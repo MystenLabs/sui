@@ -113,9 +113,9 @@ pub fn boundary_watermark(position: Position, boundary: Option<u64>) -> Watermar
 }
 
 /// Build a watermark whose cursor kind has been resolved by query-range
-/// bookkeeping (see [`RangeExhaustion::CursorBound`]): an interval made empty
-/// by an `after` Item cursor keeps Item kind where changing the raw coordinate
-/// to Boundary would re-include the item on resume.
+/// bookkeeping (see [`RangeExhaustion::CursorBound`]): an `after` Item cursor
+/// at the last position names no boundary after it, so its closing cursor keeps
+/// Item kind where a Boundary at its position would re-include the item on resume.
 fn cursor_watermark(
     position: Position,
     boundary: Option<u64>,
