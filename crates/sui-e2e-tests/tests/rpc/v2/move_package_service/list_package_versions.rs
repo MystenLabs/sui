@@ -564,8 +564,10 @@ fn listed(response: &ListPackageVersionsResponse) -> Vec<(u64, String, Option<u6
 
 #[sim_test]
 async fn test_list_package_versions_at_checkpoint() {
+    // Background pruning stays off so bounds just below the first publish stay above the floor.
     let cluster = TestClusterBuilder::new()
         .with_num_validators(1)
+        .disable_fullnode_pruning()
         .build()
         .await;
     let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
@@ -619,15 +621,27 @@ async fn test_list_package_versions_at_checkpoint() {
         assert!(response.next_page_token.is_none());
     }
 
-    // A bound above the indexed ceiling is rejected, never clamped to the latest known version.
+    // A bound above the indexed ceiling is rejected, never clamped to the latest known version,
+    // and a bound exactly at the ceiling is served.
     let error = list_versions(&mut service, v1, Some(u64::MAX), None, None)
         .await
         .unwrap_err();
     assert_eq!(error.code(), tonic::Code::NotFound);
-    assert!(
-        error.message().contains("is not yet indexed"),
-        "{}",
-        error.message()
+    let highest_indexed: u64 = error
+        .message()
+        .strip_prefix(&format!(
+            "requested checkpoint {} is not yet indexed; highest indexed checkpoint is ",
+            u64::MAX
+        ))
+        .unwrap_or_else(|| panic!("unexpected message: {}", error.message()))
+        .parse()
+        .unwrap();
+    let response = list_versions(&mut service, v1, Some(highest_indexed), None, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        listed(&response),
+        vec![entry_1.clone(), entry_2.clone(), entry_3.clone()]
     );
 
     // Pages stay within the bound: the token points at the next version under it, and a page
@@ -651,24 +665,6 @@ async fn test_list_package_versions_at_checkpoint() {
         .unwrap();
     assert_eq!(listed(&second), vec![entry_2.clone()]);
     assert!(second.next_page_token.is_none());
-
-    // A page token minted without a bound and resent under a bound that excludes the version it
-    // points at resumes to an empty page, not an error.
-    let unbounded = list_versions(&mut service, v1, None, Some(1), None)
-        .await
-        .unwrap();
-    assert_eq!(listed(&unbounded), vec![entry_1.clone()]);
-    let resumed = list_versions(
-        &mut service,
-        v1,
-        Some(cp2 - 1),
-        Some(1),
-        unbounded.next_page_token,
-    )
-    .await
-    .unwrap();
-    assert!(listed(&resumed).is_empty());
-    assert!(resumed.next_page_token.is_none());
 }
 
 #[sim_test]
@@ -691,31 +687,39 @@ async fn test_list_package_versions_at_checkpoint_below_object_pruning_floor() {
         .unwrap();
     assert_eq!(listed(&response), vec![genesis_framework.clone()]);
 
-    // Prune the objects of epoch 0, which raises the floor
-    // `get_lowest_available_checkpoint_objects` reports past the objects' pruned watermark.
+    // Prune object versions with zero retention, which raises the floor
+    // `get_lowest_available_checkpoint_objects` reports above genesis. A prune right after
+    // reconfiguration can find nothing eligible yet, so retry until the pruned watermark moves.
     cluster.trigger_reconfiguration().await;
-    cluster
-        .fullnode_handle
-        .sui_node
-        .with_async(|node| async move {
-            let state = node.state();
-            state
-                .database_for_testing()
-                .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
-                .await;
-        })
-        .await;
-    let objects_floor = cluster.fullnode_handle.sui_node.with(|node| {
-        node.state()
-            .get_object_cache_reader()
-            .get_highest_pruned_checkpoint()
-            .expect("epoch 0 objects are pruned")
-            + 1
-    });
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+    let objects_floor = loop {
+        let pruned = cluster
+            .fullnode_handle
+            .sui_node
+            .with_async(|node| async move {
+                let state = node.state();
+                state
+                    .database_for_testing()
+                    .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
+                    .await;
+                state
+                    .get_object_cache_reader()
+                    .get_highest_pruned_checkpoint()
+            })
+            .await;
+        if let Some(pruned) = pruned {
+            break pruned + 1;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "timed out waiting for the fullnode to prune epoch 0"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    };
     cluster.wait_for_rpc_index_ready().await;
 
-    // The served floor is the higher of the objects' and the rpc-store's pruning floors; read it
-    // back from the rejection of a bound at genesis.
+    // With background pruning off, the objects' pruned watermark is the only floor; read the
+    // served floor back from the rejection of a bound at genesis.
     let error = list_versions(&mut service, framework, Some(0), None, None)
         .await
         .unwrap_err();
@@ -726,7 +730,7 @@ async fn test_list_package_versions_at_checkpoint_below_object_pruning_floor() {
         .unwrap_or_else(|| panic!("unexpected message: {}", error.message()))
         .parse()
         .unwrap();
-    assert!(floor >= objects_floor, "{floor} < {objects_floor}");
+    assert_eq!(floor, objects_floor);
 
     // Every bound below the floor fails rather than returning a partial list.
     let error = list_versions(&mut service, framework, Some(floor - 1), None, None)

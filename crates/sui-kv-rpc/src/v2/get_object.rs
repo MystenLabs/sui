@@ -462,14 +462,7 @@ impl AtCheckpointReads {
 /// checkpoint it was read at, so answering from a partially indexed table could hand the caller
 /// a wrong answer to persist; fail closed instead.
 fn not_yet_indexed(checkpoint: u64, served_height: ServedHeight) -> RpcError {
-    RpcError::new(
-        tonic::Code::NotFound,
-        format!(
-            "requested checkpoint {checkpoint} is not yet indexed; highest indexed checkpoint is \
-             {}",
-            served_height.checkpoint,
-        ),
-    )
+    sui_rpc_api::checkpoint_not_yet_indexed_error(checkpoint, served_height.checkpoint)
 }
 
 #[cfg(test)]

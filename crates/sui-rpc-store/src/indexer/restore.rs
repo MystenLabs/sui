@@ -94,16 +94,19 @@ pub const LIVE_COHORT: &[&str] = &[ObjectByOwner::NAME, ObjectByType::NAME, Bala
 /// `object_version_by_checkpoint` and `package_versions` are the
 /// exceptions: when some prefix of the chain has been pruned
 /// (`L > 0`) they are *both* restored and backfilled.
-/// [`restore_indexes`] bulk-loads their floor rows at the tip `T` (the
-/// versions live in the snapshot but predate the available window, so a
-/// checkpoint-bounded read treats them as having always existed), and
-/// the history seed then rewinds their `__watermark` to `L-1` so they
-/// also backfill the per-checkpoint detail over `(L, T]` --
+/// [`restore_indexes`] bulk-loads their floor rows at the tip `T` (one
+/// per version live in the snapshot, whenever it was published, which a
+/// checkpoint-bounded read treats as having always existed), and the
+/// history seed then rewinds their `__watermark` to `L-1` so they also
+/// backfill the per-checkpoint detail over `(L, T]` --
 /// `object_version_by_checkpoint`'s per-checkpoint changes, and
 /// `package_versions`'s real publish checkpoint for versions published
-/// in the window. The embedded bootstrap runs the restore before the
-/// seed, so the `L-1` watermark wins. When nothing has been pruned
-/// (`L == 0`) the backfill covers the whole chain and rebuilds both
+/// in the window. Until that backfill reaches `T`, floor rows for
+/// versions published in the part of the window it has not reached are
+/// wrong below `T`, so checkpoint-bounded reads wait for it
+/// ([`history_backfill_pending`]). The embedded bootstrap runs the
+/// restore before the seed, so the `L-1` watermark wins. When nothing
+/// has been pruned (`L == 0`) the backfill covers the whole chain and rebuilds both
 /// CFs in full, so the embedded bootstrap skips restoring them
 /// entirely ([`RestoreLayer::live_only`]) -- restoring them would
 /// waste bulk-load work and stamp `__watermark = T` rows that would

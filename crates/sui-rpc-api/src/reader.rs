@@ -285,7 +285,9 @@ impl StateReader {
         Ok(AtCheckpointUpperBound { highest_indexed })
     }
 
-    /// The lower bound for checkpoint-pinned reads: the lowest available checkpoint.
+    /// The lower bound for checkpoint-pinned reads: the lowest available checkpoint, or the
+    /// lowest checkpoint at which the rpc indexes' history is exact if that is higher (see
+    /// [`RpcStateReader::get_lowest_checkpoint_for_pinned_reads`]).
     ///
     /// Read it after the reads, and answer every read at a checkpoint below it as pruned,
     /// whatever the read returned. Pruning can raise the floor while the reads run, and a read
@@ -293,8 +295,11 @@ impl StateReader {
     /// the same commit, only deletes data that reads below the new floor need, and never lowers
     /// the floor, so a read at a checkpoint this bound accepts saw no pruned data.
     pub fn at_checkpoint_lower_bound(&self) -> Result<AtCheckpointLowerBound, crate::RpcError> {
+        let pinned_read_floor = self.inner().get_lowest_checkpoint_for_pinned_reads()?;
         Ok(AtCheckpointLowerBound {
-            lowest_available: self.get_lowest_available_checkpoint()?,
+            lowest_available: self
+                .get_lowest_available_checkpoint()?
+                .max(pinned_read_floor),
         })
     }
 
@@ -334,23 +339,33 @@ impl AtCheckpointUpperBound {
     /// so an answer could be wrong.
     pub fn check(&self, checkpoint: u64) -> Result<(), crate::RpcError> {
         if checkpoint > self.highest_indexed {
-            return Err(crate::RpcError::new(
-                tonic::Code::NotFound,
-                format!(
-                    "requested checkpoint {checkpoint} is not yet indexed; highest indexed \
-                     checkpoint is {}",
-                    self.highest_indexed,
-                ),
+            return Err(checkpoint_not_yet_indexed_error(
+                checkpoint,
+                self.highest_indexed,
             ));
         }
         Ok(())
     }
 }
 
+/// The error for a checkpoint-pinned read above the highest indexed checkpoint. Shared with other
+/// implementors of the rpc services (e.g. sui-kv-rpc, which passes its served height) so every
+/// backend fails identically.
+pub fn checkpoint_not_yet_indexed_error(checkpoint: u64, highest_indexed: u64) -> crate::RpcError {
+    crate::RpcError::new(
+        tonic::Code::NotFound,
+        format!(
+            "requested checkpoint {checkpoint} is not yet indexed; highest indexed checkpoint is \
+             {highest_indexed}",
+        ),
+    )
+}
+
 /// See [`StateReader::at_checkpoint_lower_bound`].
 #[derive(Clone, Copy, Debug)]
 pub struct AtCheckpointLowerBound {
-    /// [`StateReader::get_lowest_available_checkpoint`].
+    /// [`StateReader::get_lowest_available_checkpoint`], raised to
+    /// [`RpcStateReader::get_lowest_checkpoint_for_pinned_reads`].
     lowest_available: u64,
 }
 

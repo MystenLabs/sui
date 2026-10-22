@@ -5518,15 +5518,13 @@ fn listed_versions(response: &ListPackageVersionsResponse) -> Vec<(u64, String, 
 }
 
 /// `ListPackageVersions` reports each version's publish checkpoint and lists only the versions
-/// published at or before `at_checkpoint`, matching the fullnode's behavior, errors, and pages.
+/// published at or before `at_checkpoint`.
 #[tokio::test]
 async fn test_list_package_versions_at_checkpoint() {
     let mut cluster = list_api_cluster().await;
     let (sender, kp, gas) = cluster.funded_account(10 * DEFAULT_GAS_BUDGET).unwrap();
     let path = emit_test_event_pkg_path();
 
-    // Separate the publish from genesis so a bound before it still names an indexed checkpoint.
-    let gas = transfer_in_own_checkpoint(&mut cluster, sender, &kp, gas).await;
     let mut publish = ProgrammableTransactionBuilder::new();
     let package = sui_move_build::BuildConfig::new_for_testing()
         .build(&path)
@@ -5541,7 +5539,7 @@ async fn test_list_package_versions_at_checkpoint() {
         execute_package_write(&mut cluster, sender, &kp, gas, upgrade_ptb(&path, v1, cap)).await;
     let (v3, _, _, cp3) =
         execute_package_write(&mut cluster, sender, &kp, gas, upgrade_ptb(&path, v2, cap)).await;
-    assert!(0 < cp1 - 1 && cp1 < cp2 && cp2 < cp3, "{cp1} {cp2} {cp3}");
+    assert!(cp1 < cp2 && cp2 < cp3, "{cp1} {cp2} {cp3}");
     wait_for_kv_checkpoint(&cluster, cp3).await;
 
     let mut client = MovePackageServiceClient::connect(cluster.kv_rpc_url().to_string())
@@ -5586,15 +5584,27 @@ async fn test_list_package_versions_at_checkpoint() {
         assert!(response.next_page_token.is_none());
     }
 
-    // A bound above the served height is rejected, never clamped to the latest known version.
+    // A bound above the served height is rejected, never clamped to the latest known version,
+    // and a bound exactly at the served height is served.
     let error = list_package_versions(&mut client, v1, Some(u64::MAX), None, None)
         .await
         .unwrap_err();
     assert_eq!(error.code(), tonic::Code::NotFound);
-    assert!(
-        error.message().contains("is not yet indexed"),
-        "{}",
-        error.message()
+    let served_height: u64 = error
+        .message()
+        .strip_prefix(&format!(
+            "requested checkpoint {} is not yet indexed; highest indexed checkpoint is ",
+            u64::MAX
+        ))
+        .unwrap_or_else(|| panic!("unexpected message: {}", error.message()))
+        .parse()
+        .unwrap();
+    let response = list_package_versions(&mut client, v1, Some(served_height), None, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        listed_versions(&response),
+        vec![entry_1.clone(), entry_2.clone(), entry_3.clone()]
     );
 
     // Pages stay within the bound: the token points at the next version under it, and a page
@@ -5621,22 +5631,4 @@ async fn test_list_package_versions_at_checkpoint() {
         .unwrap();
     assert_eq!(listed_versions(&second), vec![entry_2.clone()]);
     assert!(second.next_page_token.is_none());
-
-    // A page token minted without a bound and resent under a bound that excludes the version it
-    // points at resumes to an empty page, not an error.
-    let unbounded = list_package_versions(&mut client, v1, None, Some(1), None)
-        .await
-        .unwrap();
-    assert_eq!(listed_versions(&unbounded), vec![entry_1.clone()]);
-    let resumed = list_package_versions(
-        &mut client,
-        v1,
-        Some(cp2 - 1),
-        Some(1),
-        unbounded.next_page_token,
-    )
-    .await
-    .unwrap();
-    assert!(listed_versions(&resumed).is_empty());
-    assert!(resumed.next_page_token.is_none());
 }

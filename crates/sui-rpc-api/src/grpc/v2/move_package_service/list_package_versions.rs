@@ -29,23 +29,11 @@ impl PageToken {
     }
 }
 
-/// The error for a `ListPackageVersions` `at_checkpoint` above the highest indexed checkpoint.
-/// Shared with other implementors of `MovePackageService` so the backends fail identically.
-pub fn at_checkpoint_not_indexed_error(at_checkpoint: u64, highest_indexed: u64) -> RpcError {
-    RpcError::new(
-        tonic::Code::NotFound,
-        format!(
-            "requested checkpoint {at_checkpoint} is not yet indexed; highest indexed checkpoint \
-             is {highest_indexed}",
-        ),
-    )
-}
-
 /// List the versions of a package's upgrade lineage, optionally only those published at or
 /// before `at_checkpoint`.
 ///
-/// Restore-floor rows (versions with no recorded publish checkpoint) are listed with
-/// `checkpoint` unset; see the `at_checkpoint` floor check below for why a bound may include them.
+/// Versions with no recorded publish checkpoint are listed with `checkpoint` unset; see the
+/// `at_checkpoint` bounds below for why a bound may include them.
 #[tracing::instrument(skip(service))]
 pub fn list_package_versions(
     service: &RpcService,
@@ -86,22 +74,30 @@ pub fn list_package_versions(
         .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc indexes are disabled"))?;
 
     if let Some(at_checkpoint) = request.at_checkpoint {
-        // The floor makes unset publish checkpoints safe to include under a bound; it is not
-        // guarding against pruned reads. A store restored from a live-object snapshot records no
-        // publish checkpoint for the versions it restored: they were all published before the
-        // lowest checkpoint available at restore time, `L`. The restore stamps the rpc-store
-        // pruning floor at `L`, and the objects floor read here includes that floor, so it never
-        // drops below `L`. A bound at or above it is therefore at or above `L`, and every unset
-        // version was published before the bound. Below the floor, an unset version may have been
-        // published after the bound, so the request is rejected rather than answered wrongly.
+        // Above the highest indexed checkpoint the index may be missing versions, and while a
+        // restore is still backfilling history, versions published in the part of its window it
+        // has not reached still have no recorded checkpoint, so a bound anywhere could include
+        // versions published after it. Both are rejected before the read, like `GetPackage`.
+        service
+            .reader
+            .at_checkpoint_upper_bound()?
+            .check(at_checkpoint)?;
+
+        // A version with no recorded publish checkpoint was published before the history the
+        // index holds begins, so it belongs under any bound at or above that point. On a node
+        // that backfilled after restoring from a snapshot, that point is the lowest checkpoint
+        // available at restore time, and the rpc-store floor the restore stamped there keeps the
+        // objects floor at or above it. A store that never backfills, such as a fork, reports
+        // its own point through `get_lowest_checkpoint_for_pinned_reads`. Below the floor, an
+        // unset version may have been published after the bound, so the request is rejected.
         //
         // Unlike `GetObject`'s `at_checkpoint`, this check can run before the read: pruning never
         // deletes `package_versions` rows, and the floor only rises, so a bound that passes stays
         // correct for rows read afterwards.
-        let lowest_available = service
-            .reader
-            .inner()
-            .get_lowest_available_checkpoint_objects()?;
+        let inner = service.reader.inner();
+        let lowest_available = inner
+            .get_lowest_available_checkpoint_objects()?
+            .max(inner.get_lowest_checkpoint_for_pinned_reads()?);
         if at_checkpoint < lowest_available {
             return Err(RpcError::new(
                 tonic::Code::OutOfRange,
@@ -109,17 +105,6 @@ pub fn list_package_versions(
                     "requested checkpoint {at_checkpoint} has been pruned; lowest available \
                      checkpoint is {lowest_available}",
                 ),
-            ));
-        }
-
-        let highest_indexed = indexes
-            .get_highest_indexed_checkpoint_seq_number()
-            .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
-            .ok_or_else(|| RpcError::new(tonic::Code::Unavailable, "rpc index is empty"))?;
-        if at_checkpoint > highest_indexed {
-            return Err(at_checkpoint_not_indexed_error(
-                at_checkpoint,
-                highest_indexed,
             ));
         }
     }
@@ -132,9 +117,9 @@ pub fn list_package_versions(
     for result in iter.take(page_size + 1) {
         let entry = result.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
-        // Publish checkpoints are non-decreasing in version, so the first version published
-        // after the bound ends the scan. A version with no recorded publish checkpoint predates
-        // the lowest available checkpoint, which the bound was checked against above.
+        // Recorded publish checkpoints are non-decreasing in version, so the first version
+        // published after the bound ends the scan. Versions with no recorded checkpoint come
+        // first and were published before the floor checked above.
         if let (Some(at_checkpoint), Some(published)) = (request.at_checkpoint, entry.checkpoint)
             && published > at_checkpoint
         {

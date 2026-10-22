@@ -2247,7 +2247,8 @@ impl KeyValueStoreReader for BigTableClient {
         // Versions along one lineage are published in non-decreasing checkpoint order. An
         // ascending scan therefore passes a prefix of rows and ends at the first row above
         // `cp_bound`, so the server can stop at `limit`. A descending scan meets the rows above
-        // `cp_bound` first, so the server cannot cap it, and the client skips past them.
+        // `cp_bound` first and this scan sends no checkpoint filter to the server, so the server
+        // cannot cap it, and the client skips past them.
         let rows_limit = if cp_bound == u64::MAX || !descending {
             limit as i64
         } else {
@@ -3189,6 +3190,14 @@ mod tests {
         assert_eq!(versions(30, None, 10, false).await, vec![1, 2, 3]);
         assert_eq!(versions(35, Some(1), 10, false).await, vec![2, 3]);
         assert_eq!(versions(35, None, 2, false).await, vec![1, 2]);
+        // With rows above the bound present, the server still caps the ascending scan at `limit`.
+        let packages_calls = mock
+            .read_rows_calls()
+            .await
+            .into_iter()
+            .filter(|c| c.table == tables::packages::NAME)
+            .collect::<Vec<_>>();
+        assert_eq!(packages_calls.last().unwrap().row_keys.len(), 2);
         assert_eq!(versions(9, None, 10, false).await, Vec::<u64>::new());
 
         // Descending scans skip the versions published after the bound.
